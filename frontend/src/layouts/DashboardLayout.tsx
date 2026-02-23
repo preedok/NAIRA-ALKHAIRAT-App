@@ -49,6 +49,12 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
   },
   {
+    title: 'MoU Saya',
+    icon: <FileText className="w-5 h-5" />,
+    path: '/dashboard/owner/mou',
+    roles: ['owner']
+  },
+  {
     title: 'Products',
     icon: <Package className="w-5 h-5" />,
     path: '/dashboard/products',
@@ -375,11 +381,12 @@ const DashboardLayout: React.FC = () => {
     );
   };
 
-  /* Mobile bottom nav: 4 key travel app actions (seperti Traveloka/Agoda) */
+  /* Mobile bottom nav: key actions; owner juga dapat MoU Saya */
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
     { path: '/dashboard/products', label: 'Paket', icon: Package },
+    ...(user?.role === 'owner' ? [{ path: '/dashboard/owner/mou', label: 'MoU', icon: FileText }] : []),
   ];
   const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices' || m.path === '/dashboard/products');
 

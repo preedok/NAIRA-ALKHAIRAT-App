@@ -33,20 +33,24 @@ function getTransporter() {
  * @returns {Promise<boolean>} - true jika terkirim
  */
 async function sendMouToOwner(toEmail, ownerName, newPassword, mouFilePath) {
+  if (!emailConfig.from && !emailConfig.user) {
+    logger.warn('Email tidak dikonfigurasi: set SMTP_HOST, SMTP_USER, SMTP_PASSWORD (dan EMAIL_FROM opsional) di .env. MOU tidak dikirim ke ' + toEmail);
+    return false;
+  }
   const trans = getTransporter();
   if (!trans) {
-    logger.warn('Email tidak dikonfigurasi (SMTP). MOU tidak dikirim ke ' + toEmail);
+    logger.warn('Email tidak dikonfigurasi (SMTP). Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD di .env agar MOU terkirim ke owner. Target: ' + toEmail);
     return false;
   }
   const mouFilename = path.basename(mouFilePath);
   const attachments = [];
-  if (fs.existsSync(mouFilePath)) {
+  if (mouFilePath && fs.existsSync(mouFilePath)) {
     attachments.push({
       filename: mouFilename,
       content: fs.createReadStream(mouFilePath)
     });
   } else {
-    logger.warn('File MOU tidak ditemukan: ' + mouFilePath);
+    logger.warn('File MOU tidak ditemukan (email tetap dikirim tanpa lampiran): ' + mouFilePath);
   }
 
   const subject = 'Aktivasi Akun Partner – Surat MoU & Password Baru | Bintang Global Group';
@@ -67,16 +71,21 @@ async function sendMouToOwner(toEmail, ownerName, newPassword, mouFilePath) {
     <p class="value">${(newPassword || '').replace(/</g, '&lt;')}</p>
   </div>
   <p>Password yang Anda buat saat pendaftaran tidak lagi berlaku. Gunakan password di atas untuk login.</p>
-  <p>Surat MoU resmi terlampir dalam email ini. Silakan unduh dan simpan.</p>
+  <p>Surat MoU resmi terlampir dalam email ini. Silakan unduh dan simpan. Anda juga dapat melihat dan mengunduh surat MoU kapan saja di aplikasi: masuk ke dashboard lalu menu <strong>MoU Saya</strong>.</p>
   <p class="footer">Email ini dikirim otomatis oleh sistem Bintang Global Group. Pengirim: ${(emailConfig.fromName || 'Admin Pusat').replace(/</g, '&lt;')}.</p>
 </body>
 </html>`;
 
   const text = `Aktivasi Akun Partner\n\nHalo ${ownerName},\n\nAkun Anda telah diaktivasi.\n\nEmail login: ${toEmail}\nPassword baru: ${newPassword}\n\nPassword lama tidak berlaku. Surat MoU terlampir.\n\n— ${emailConfig.fromName}`;
 
+  const fromAddr = emailConfig.from || emailConfig.user;
+  if (!fromAddr) {
+    logger.warn('EMAIL_FROM atau SMTP_USER wajib untuk pengirim. MOU tidak dikirim ke ' + toEmail);
+    return false;
+  }
   try {
     await trans.sendMail({
-      from: `"${emailConfig.fromName}" <${emailConfig.from}>`,
+      from: `"${(emailConfig.fromName || 'Bintang Global').replace(/"/g, '')}" <${fromAddr}>`,
       to: toEmail,
       subject,
       text,
@@ -86,7 +95,7 @@ async function sendMouToOwner(toEmail, ownerName, newPassword, mouFilePath) {
     logger.info('Email MOU terkirim ke ' + toEmail);
     return true;
   } catch (err) {
-    logger.error('Gagal kirim email MOU ke ' + toEmail, err.message);
+    logger.error('Gagal kirim email MOU ke ' + toEmail + ': ' + (err.message || String(err)));
     return false;
   }
 }

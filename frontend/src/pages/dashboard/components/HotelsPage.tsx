@@ -160,6 +160,16 @@ const HotelsPage: React.FC = () => {
     fetchProducts();
   }, [page, limit, sortBy, sortOrder]);
 
+  const filteredHotels = hotels.filter((hotel: HotelProduct) => {
+    const matchesSearch =
+      hotel.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const loc = hotel.meta?.location?.toLowerCase();
+    const matchesLocation =
+      locationFilter === 'all' ||
+      (loc && (loc === 'makkah' || loc === 'madinah') && loc === locationFilter);
+    return matchesSearch && (locationFilter === 'all' || matchesLocation);
+  });
+
   /** Fetch availability realtime untuk setiap hotel di halaman (rentang 30 hari), + refresh tiap 60s */
   const availabilityFrom = (() => { const d = new Date(); return d.toISOString().slice(0, 10); })();
   const availabilityTo = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
@@ -228,16 +238,6 @@ const HotelsPage: React.FC = () => {
   if (user?.role === 'role_hotel') {
     return <HotelWorkPage />;
   }
-
-  const filteredHotels = hotels.filter((hotel: HotelProduct) => {
-    const matchesSearch =
-      hotel.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const loc = hotel.meta?.location?.toLowerCase();
-    const matchesLocation =
-      locationFilter === 'all' ||
-      (loc && (loc === 'makkah' || loc === 'madinah') && loc === locationFilter);
-    return matchesSearch && (locationFilter === 'all' || matchesLocation);
-  });
 
   const stats = [
     {

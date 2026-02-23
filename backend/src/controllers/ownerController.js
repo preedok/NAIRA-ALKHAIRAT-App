@@ -422,14 +422,16 @@ const activate = asyncHandler(async (req, res) => {
     activated_at: new Date(),
     activated_by: req.user.id,
     mou_generated_url,
-    assigned_branch_id: profile.assigned_branch_id || profile.preferred_branch_id
+    assigned_branch_id: profile.assigned_branch_id || profile.preferred_branch_id,
+    activation_generated_password: newPassword // simpan ke DB agar tampil di Admin Pusat (list + edit)
   });
   await User.update(
     { branch_id: profile.assigned_branch_id || profile.preferred_branch_id },
     { where: { id: user.id } }
   );
 
-  const mouFilePath = path.join(uploadConfig.UPLOAD_ROOT, uploadConfig.SUBDIRS.MOU, path.basename(mou_generated_url));
+  const mouDir = uploadConfig.getDir(uploadConfig.SUBDIRS.MOU);
+  const mouFilePath = path.join(mouDir, path.basename(mou_generated_url));
   const emailSent = await sendMouToOwner(user.email, user.name, newPassword, mouFilePath);
 
   res.json({

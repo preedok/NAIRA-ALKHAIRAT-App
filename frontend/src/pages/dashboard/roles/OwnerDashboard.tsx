@@ -7,14 +7,15 @@ import {
   DollarSign, 
   Plus,
   MapPin,
-  Bell
+  Bell,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { formatIDR } from '../../../utils';
-import { invoicesApi, type InvoicesSummaryData } from '../../../services/api';
+import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
@@ -24,19 +25,23 @@ const OwnerDashboard: React.FC = () => {
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ownerProfile, setOwnerProfile] = useState<{ mou_generated_url?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
-        const [summaryRes, listRes] = await Promise.all([
+        const [summaryRes, listRes, meRes] = await Promise.all([
           invoicesApi.getSummary({}),
-          invoicesApi.list({ limit: 10, sort_by: 'created_at', sort_order: 'desc' })
+          invoicesApi.list({ limit: 10, sort_by: 'created_at', sort_order: 'desc' }),
+          ownersApi.getMe().catch(() => ({ data: { success: false, data: undefined } }))
         ]);
         if (cancelled) return;
         if (summaryRes.data.success && summaryRes.data.data) setSummary(summaryRes.data.data);
         if (listRes.data.success && Array.isArray(listRes.data.data)) setRecentInvoices(listRes.data.data);
+        const meData = (meRes.data as { success?: boolean; data?: { mou_generated_url?: string } } | undefined)?.data;
+        if (meData) setOwnerProfile(meData);
       } catch {
         if (!cancelled) setSummary(null);
         if (!cancelled) setRecentInvoices([]);
@@ -112,6 +117,27 @@ const OwnerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 w-full">
+      {/* Notifikasi: Akun telah diaktivasi, MoU tersedia */}
+      {ownerProfile?.mou_generated_url && (
+        <Card className="bg-primary-50 border-primary-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-primary-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-stone-900">Akun Anda telah diaktivasi</p>
+                <p className="text-sm text-slate-600 mt-0.5">Surat MoU dan password baru telah dikirim ke email Anda. Anda juga dapat melihat dan mengunduh surat MoU di aplikasi.</p>
+              </div>
+            </div>
+            <Button variant="primary" onClick={() => navigate('/dashboard/owner/mou')} className="gap-2 shrink-0">
+              <FileText className="w-4 h-4" />
+              Lihat MoU Saya
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Travel-style Hero */}
       <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

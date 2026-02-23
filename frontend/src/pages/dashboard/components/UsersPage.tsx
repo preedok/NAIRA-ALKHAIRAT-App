@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, X } from 'lucide-react';
+import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, X, Copy } from 'lucide-react';
 import { ROLE_NAMES, TableColumn, OWNER_STATUS_LABELS } from '../../../types';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -19,15 +19,30 @@ const roleLabel = (role: string): string =>
   (ROLE_NAMES as Record<string, string>)[role] || role;
 const ownerStatusLabel = (s: string) => (OWNER_STATUS_LABELS as Record<string, string>)[s] || s;
 
+const REGISTRATION_REJECTION_REASONS = [
+  { value: '', label: '— Pilih alasan (jika tolak) —' },
+  { value: 'bukti_tidak_terbaca', label: 'Bukti transfer tidak terbaca / blur' },
+  { value: 'nominal_tidak_sesuai', label: 'Nominal tidak sesuai' },
+  { value: 'rekening_tujuan_salah', label: 'Rekening tujuan salah' },
+  { value: 'bukan_bukti_transfer', label: 'Dokumen bukan bukti transfer' },
+  { value: 'tanggal_transfer_tidak_jelas', label: 'Tanggal transfer tidak jelas' },
+  { value: 'data_tidak_lengkap', label: 'Data tidak lengkap' },
+  { value: 'lainnya', label: 'Lainnya' }
+];
+
 const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { showToast } = useToast();
   const [users, setUsers] = useState<UserListItem[]>([]);
-  const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; code: string; name: string; city?: string; provinsi_id?: string }[]>([]);
+  const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
+  const [provincesList, setProvincesList] = useState<{ id: string; name: string; wilayah_id?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [tabFilter, setTabFilter] = useState<'all' | 'divisi' | 'owner'>('all');
+  const [wilayahId, setWilayahId] = useState<string>('');
+  const [provinsiId, setProvinsiId] = useState<string>('');
   const [branchId, setBranchId] = useState<string>('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -37,6 +52,7 @@ const UsersPage: React.FC = () => {
 
   const [editUser, setEditUser] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<{ name: string; email: string; phone: string; company_name: string; is_active: boolean; password: string }>({ name: '', email: '', phone: '', company_name: '', is_active: true, password: '' });
+  const [editActivationPassword, setEditActivationPassword] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -51,13 +67,31 @@ const UsersPage: React.FC = () => {
   const isAdminPusat = currentUser?.role === 'admin_pusat';
 
   useEffect(() => {
-    branchesApi.list({ limit: 500, page: 1 }).then((res) => {
-      if (res.data?.data) setBranches(res.data.data);
+    branchesApi.listWilayah().then((res) => {
+      if (res.data?.data) setWilayahList(res.data.data);
+    }).catch(() => {});
+    branchesApi.listProvinces().then((res) => {
+      if (res.data?.data) setProvincesList(Array.isArray(res.data.data) ? (res.data.data as { id: string; name: string; wilayah_id?: string }[]).map((p: any) => ({ id: p.id, name: p.name || p.nama, wilayah_id: p.wilayah_id })) : []);
     }).catch(() => {});
   }, []);
 
+  const provincesFiltered = wilayahId
+    ? provincesList.filter((p) => p.wilayah_id === wilayahId)
+    : provincesList;
+
+  useEffect(() => {
+    const params: { limit: number; page: number; provinsi_id?: string; wilayah_id?: string } = { limit: 500, page: 1 };
+    if (provinsiId) params.provinsi_id = provinsiId;
+    else if (wilayahId) params.wilayah_id = wilayahId;
+    branchesApi.list(params).then((res) => {
+      if (res.data?.data) setBranches(res.data.data);
+    }).catch(() => {});
+  }, [wilayahId, provinsiId]);
+
   const openEdit = useCallback(async (user: UserListItem) => {
     setEditUser(user);
+    const listPw = (user as UserListItem & { activation_generated_password?: string | null }).activation_generated_password;
+    setEditActivationPassword(listPw && String(listPw).trim() ? String(listPw).trim() : null);
     setEditForm({
       name: user.name || '',
       email: user.email || '',
@@ -69,7 +103,7 @@ const UsersPage: React.FC = () => {
     try {
       const res = await adminPusatApi.getUserById(user.id);
       if (res.data?.success && res.data?.data) {
-        const d = res.data.data;
+        const d = res.data.data as { name?: string; email?: string; phone?: string; company_name?: string; is_active?: boolean; activation_generated_password?: string | null; OwnerProfile?: { activation_generated_password?: string | null } };
         setEditForm((f) => ({
           ...f,
           name: d.name || '',
@@ -78,8 +112,10 @@ const UsersPage: React.FC = () => {
           company_name: d.company_name ?? '',
           is_active: d.is_active !== false
         }));
+        const activationPw = d.activation_generated_password ?? d.OwnerProfile?.activation_generated_password;
+        if (activationPw && String(activationPw).trim()) setEditActivationPassword(String(activationPw).trim());
       }
-    } catch {
+      } catch {
       setEditForm((f) => ({ ...f, name: user.name || '', email: user.email || '' }));
     }
   }, []);
@@ -157,8 +193,10 @@ const UsersPage: React.FC = () => {
     if (!canListUsers) return;
     setLoading(true);
     setError(null);
-    const params: { role?: string; branch_id?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' } = { limit, page, sort_by: sortBy, sort_order: sortOrder };
+    const params: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' } = { limit, page, sort_by: sortBy, sort_order: sortOrder };
     if (branchId) params.branch_id = branchId;
+    if (wilayahId) params.wilayah_id = wilayahId;
+    if (provinsiId) params.provinsi_id = provinsiId;
     if (tabFilter === 'owner') params.role = 'owner';
     else if (tabFilter === 'divisi') params.role = 'divisi';
     adminPusatApi
@@ -172,7 +210,7 @@ const UsersPage: React.FC = () => {
         setError(err.response?.data?.message || 'Gagal memuat daftar user');
       })
       .finally(() => setLoading(false));
-  }, [canListUsers, branchId, tabFilter, page, limit, sortBy, sortOrder]);
+  }, [canListUsers, branchId, wilayahId, provinsiId, tabFilter, page, limit, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchUsers();
@@ -180,7 +218,7 @@ const UsersPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [branchId, tabFilter]);
+  }, [branchId, wilayahId, provinsiId, tabFilter]);
 
   const filteredUsers = users.filter((user: UserListItem) => {
     const matchesSearch =
@@ -202,7 +240,10 @@ const UsersPage: React.FC = () => {
     { id: 'role', label: 'Role', align: 'left', sortable: true },
     { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'wilayah', label: 'Wilayah', align: 'left' },
+    { id: 'provinsi', label: 'Provinsi', align: 'left' },
     { id: 'status', label: 'Status', align: 'center' },
+    { id: 'password_aktivasi', label: 'Password (aktivasi)', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'center' }
   ];
 
@@ -210,10 +251,12 @@ const UsersPage: React.FC = () => {
     const ownerStatus = (user as UserListItem & { owner_status?: string }).owner_status;
     const ownerProfileId = user.owner_profile_id;
     const isOwner = user.role === 'owner';
-    const items: ActionsMenuItem[] = [
-      { id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => openEdit(user) },
-      { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => setDeleteTarget(user), danger: true }
-    ];
+    const hideEdit = isOwner && ownerStatus != null && ownerStatus !== 'active';
+    const items: ActionsMenuItem[] = [];
+    if (!hideEdit) {
+      items.push({ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => openEdit(user) });
+    }
+    items.push({ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => setDeleteTarget(user), danger: true });
     if (isOwner && ownerProfileId) {
       if (ownerStatus === 'pending_registration_verification') {
         items.unshift({ id: 'verify_reg', label: 'Verifikasi Bukti Bayar', icon: <FileCheck className="w-4 h-4" />, onClick: () => setVerifyRegPaymentUser(user) });
@@ -300,8 +343,8 @@ const UsersPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex-1 relative">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 items-stretch sm:items-center">
+          <div className="flex-1 min-w-0 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
             <input
               type="text"
@@ -312,17 +355,41 @@ const UsersPage: React.FC = () => {
             />
           </div>
           {isAdminPusat && (
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[180px]"
-              title="Filter cabang"
-            >
-              <option value="">Semua cabang</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
-              ))}
-            </select>
+            <>
+              <select
+                value={wilayahId}
+                onChange={(e) => { setWilayahId(e.target.value); setProvinsiId(''); setBranchId(''); }}
+                className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[140px] sm:min-w-[160px]"
+                title="Filter wilayah"
+              >
+                <option value="">Semua wilayah</option>
+                {wilayahList.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+              <select
+                value={provinsiId}
+                onChange={(e) => { setProvinsiId(e.target.value); setBranchId(''); }}
+                className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[140px] sm:min-w-[160px]"
+                title="Filter provinsi"
+              >
+                <option value="">Semua provinsi</option>
+                {provincesFiltered.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[160px] sm:min-w-[200px]"
+                title="Filter cabang (kota)"
+              >
+                <option value="">Semua cabang</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.code} - {b.name}{b.city ? ` (${b.city})` : ''}</option>
+                ))}
+              </select>
+            </>
           )}
         </div>
 
@@ -348,7 +415,7 @@ const UsersPage: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-semibold text-slate-900">{user.name}</p>
-                    <p className="text-xs text-slate-500">{user.Branch?.name || '-'}</p>
+                    <p className="text-xs text-slate-500">{user.branch_name || user.Branch?.name || '-'}</p>
                   </div>
                 </div>
               </td>
@@ -366,8 +433,10 @@ const UsersPage: React.FC = () => {
               </td>
               <td className="px-6 py-4 text-slate-700">{user.company_name || '-'}</td>
               <td className="px-6 py-4 text-slate-700">
-                {user.Branch ? `${user.Branch.code} - ${user.Branch.name}` : '-'}
+                {user.branch_name ? (user.branch_code ? `${user.branch_code} - ${user.branch_name}` : user.branch_name) + (user.city ? ` (${user.city})` : '') : '-'}
               </td>
+              <td className="px-6 py-4 text-slate-700">{user.wilayah_name ?? '-'}</td>
+              <td className="px-6 py-4 text-slate-700">{user.provinsi_name ?? '-'}</td>
               <td className="px-6 py-4 text-center">
                 {user.role === 'owner' ? (
                   (() => {
@@ -386,6 +455,20 @@ const UsersPage: React.FC = () => {
                 )}
               </td>
               <td className="px-6 py-4">
+                {user.role === 'owner' && user.activation_generated_password ? (
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded break-all max-w-[120px] truncate" title={user.activation_generated_password}>
+                      {user.activation_generated_password}
+                    </code>
+                    <Button type="button" size="sm" variant="ghost" className="shrink-0 p-1" onClick={() => { navigator.clipboard.writeText(user.activation_generated_password!); showToast('Password disalin', 'success'); }} title="Salin">
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-slate-400">—</span>
+                )}
+              </td>
+              <td className="px-6 py-4">
                 <div className="flex justify-center">
                   <ActionsMenu
                     align="right"
@@ -399,7 +482,7 @@ const UsersPage: React.FC = () => {
       </Card>
 
       {/* Modal Edit User */}
-      <Modal open={!!editUser} onClose={() => setEditUser(null)}>
+      <Modal open={!!editUser} onClose={() => { setEditUser(null); setEditActivationPassword(null); }}>
         {editUser && (
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
@@ -423,8 +506,27 @@ const UsersPage: React.FC = () => {
                 <label className="block text-xs font-medium text-slate-500 mb-1">Perusahaan</label>
                 <input type="text" value={editForm.company_name} onChange={(e) => setEditForm((f) => ({ ...f, company_name: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Opsional" />
               </div>
+              {editUser.role === 'owner' && (
+                <div>
+                  {editActivationPassword ? (
+                    <>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Password saat ini (dari aktivasi sistem)</label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono break-all">
+                          {editActivationPassword}
+                        </code>
+                        <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(editActivationPassword); showToast('Password disalin', 'success'); }}>
+                          Salin
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">Password dari aktivasi hanya tampil untuk owner yang diaktivasi setelah fitur ini. Gunakan &quot;Ubah password&quot; di bawah untuk set password baru.</p>
+                  )}
+                </div>
+              )}
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Password baru (kosongkan jika tidak diubah)</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Ubah password (kosongkan jika tidak diubah)</label>
                 <input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Min. 6 karakter" autoComplete="new-password" />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -455,46 +557,60 @@ const UsersPage: React.FC = () => {
       </Modal>
 
       {/* Modal Verifikasi Bukti Bayar: view dokumen + setujui/aktifkan */}
-      <Modal open={!!verifyRegPaymentUser} onClose={() => setVerifyRegPaymentUser(null)}>
-        {verifyRegPaymentUser && (
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">Verifikasi Bukti Bayar MoU (diupload owner)</h2>
-              <p className="text-sm text-slate-600 mt-1">{verifyRegPaymentUser.name} – {verifyRegPaymentUser.email}</p>
-              {(verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount != null && (
-                <p className="text-sm text-slate-700 mt-1">
-                  Jumlah yang diinput: <strong>Rp {new Intl.NumberFormat('id-ID').format((verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount!)}</strong>
-                </p>
-              )}
-            </div>
-            <div className="p-4 flex-1 overflow-auto space-y-4">
-              {verifyRegPaymentUser.registration_payment_proof_url ? (
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-2">Bukti bayar yang diupload owner</label>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                    <iframe
-                      title="Bukti bayar MoU yang diupload owner"
-                      src={`${UPLOAD_BASE}${verifyRegPaymentUser.registration_payment_proof_url}`}
-                      className="w-full h-[360px] min-h-[240px]"
-                    />
+      <Modal open={!!verifyRegPaymentUser} onClose={() => { setVerifyRegPaymentUser(null); setVerifyRegPaymentReject(''); }}>
+        {verifyRegPaymentUser && (() => {
+          const proofPath = verifyRegPaymentUser.registration_payment_proof_url;
+          const proofUrl = proofPath
+            ? `${(UPLOAD_BASE || '').replace(/\/$/, '')}${proofPath.startsWith('/') ? '' : '/'}${proofPath}`
+            : '';
+          return (
+            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+              <div className="p-4 border-b border-slate-200">
+                <h2 className="text-lg font-semibold text-slate-900">Verifikasi Bukti Bayar MoU (diupload owner)</h2>
+                <p className="text-sm text-slate-600 mt-1">{verifyRegPaymentUser.name} – {verifyRegPaymentUser.email}</p>
+                {(verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount != null && (
+                  <p className="text-sm text-slate-700 mt-1">
+                    Jumlah yang diinput: <strong>Rp {new Intl.NumberFormat('id-ID').format((verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount!)}</strong>
+                  </p>
+                )}
+              </div>
+              <div className="p-4 flex-1 overflow-auto space-y-4">
+                {proofPath ? (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-2">Bukti bayar yang diupload owner</label>
+                    <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50 min-h-[240px]">
+                      <iframe
+                        title="Bukti bayar yang diupload owner"
+                        src={proofUrl}
+                        className="w-full h-[360px] min-h-[240px] border-0"
+                      />
+                    </div>
+                    <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline mt-1 inline-block">Buka dokumen di tab baru</a>
                   </div>
-                  <a href={`${UPLOAD_BASE}${verifyRegPaymentUser.registration_payment_proof_url}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline mt-1 inline-block">Buka dokumen di tab baru</a>
+                ) : (
+                  <p className="text-sm text-slate-500">Owner belum mengupload bukti bayar.</p>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (wajib jika tolak)</label>
+                  <select
+                    value={verifyRegPaymentReject}
+                    onChange={(e) => setVerifyRegPaymentReject(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    {REGISTRATION_REJECTION_REASONS.map((opt) => (
+                      <option key={opt.value || 'empty'} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <p className="text-sm text-slate-500">Owner belum mengupload bukti bayar.</p>
-              )}
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (wajib jika tolak)</label>
-                <textarea value={verifyRegPaymentReject} onChange={(e) => setVerifyRegPaymentReject(e.target.value)} placeholder="Opsional jika setujui" rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+                <Button variant="outline" onClick={() => { setVerifyRegPaymentUser(null); setVerifyRegPaymentReject(''); }}>Batal</Button>
+                <Button variant="outline" onClick={() => handleVerifyRegistrationPayment(false)} disabled={verifyingRegPayment || !verifyRegPaymentReject.trim()}>Tolak</Button>
+                <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>{verifyingRegPayment ? 'Memproses...' : 'Setujui Bukti Bayar'}</Button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
-              <Button variant="outline" onClick={() => setVerifyRegPaymentUser(null)}>Batal</Button>
-              <Button variant="outline" onClick={() => handleVerifyRegistrationPayment(false)} disabled={verifyingRegPayment || !verifyRegPaymentReject.trim()}>Tolak</Button>
-              <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>{verifyingRegPayment ? 'Memproses...' : 'Setujui Bukti Bayar'}</Button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* Modal Hasil Aktivasi */}

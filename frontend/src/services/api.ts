@@ -340,15 +340,21 @@ export interface UserListItem {
   is_active: boolean;
   created_at: string;
   Branch?: { id: string; code: string; name: string } | null;
+  branch_name?: string | null;
+  branch_code?: string | null;
+  city?: string | null;
+  provinsi_name?: string | null;
+  wilayah_name?: string | null;
   owner_profile_id?: string;
   owner_status?: string;
   registration_payment_proof_url?: string | null;
   registration_payment_amount?: number | null;
+  activation_generated_password?: string | null;
 }
 export const adminPusatApi = {
   getDashboard: (params?: { branch_id?: string; date_from?: string; date_to?: string; status?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: AdminPusatDashboardData }>('/admin-pusat/dashboard', { params }),
-  listUsers: (params?: { role?: string; branch_id?: string; is_active?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  listUsers: (params?: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; is_active?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get<{ success: boolean; data: UserListItem[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/admin-pusat/users', { params }),
   getUserById: (id: string) =>
     api.get<{ success: boolean; data: UserListItem & { OwnerProfile?: any; address?: string; whatsapp?: string; npwp?: string; preferred_branch_id?: string } }>(`/admin-pusat/users/${id}`),
@@ -762,6 +768,8 @@ export interface OwnerProfile {
   mou_generated_url?: string;
   mou_rejected_reason?: string;
   assigned_branch_id?: string;
+  activated_at?: string;
+  activated_by?: string;
   User?: { id: string; name: string; email: string; company_name?: string };
   AssignedBranch?: { id: string; code: string; name: string };
 }

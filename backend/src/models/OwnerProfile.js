@@ -108,6 +108,11 @@ const OwnerProfile = sequelize.define('OwnerProfile', {
     type: DataTypes.STRING(500),
     allowNull: true,
     comment: 'MOU PDF yang digenerate sistem saat aktivasi'
+  },
+  activation_generated_password: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Password yang digenerate saat aktivasi; ditampilkan di Admin Pusat; dikosongkan bila admin ubah password'
   }
 }, {
   tableName: 'owner_profiles',

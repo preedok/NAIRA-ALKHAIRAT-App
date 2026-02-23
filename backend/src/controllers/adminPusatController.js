@@ -240,20 +240,44 @@ const getDashboard = asyncHandler(async (req, res) => {
 const USER_ALLOWED_SORT = ['name', 'email', 'role', 'created_at'];
 
 const listUsers = asyncHandler(async (req, res) => {
-  const { role, branch_id, region, is_active, limit = 25, page = 1, sort_by, sort_order } = req.query;
+  const { role, branch_id, wilayah_id, provinsi_id, region, is_active, limit = 25, page = 1, sort_by, sort_order } = req.query;
   const where = {};
   if (role === 'divisi') {
     where.role = { [Op.ne]: ROLES.OWNER };
   } else if (role) {
     where.role = role;
   }
-  if (branch_id) where.branch_id = branch_id;
   if (region) where.region = region;
   // Filter is_active: 'true'/'1' = aktif, 'false'/'0' = nonaktif, undefined = hanya aktif (default)
   if (is_active !== undefined && is_active !== '') {
     where.is_active = is_active === 'true' || is_active === '1';
   } else {
     where.is_active = true; // default: hanya tampilkan akun aktif (yang belum dihapus)
+  }
+
+  let branchIds = null;
+  if (wilayah_id || provinsi_id) {
+    const branchWhere = {};
+    if (provinsi_id) branchWhere.provinsi_id = provinsi_id;
+    const branchOpts = { attributes: ['id'] };
+    if (wilayah_id && !provinsi_id) {
+      branchOpts.include = [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }];
+    }
+    const branches = await Branch.findAll({ where: branchWhere, ...branchOpts });
+    branchIds = branches.map((b) => b.id);
+    if (branchIds.length === 0) branchIds = [null];
+  }
+  if (branch_id) {
+    branchIds = [branch_id];
+  }
+
+  if (branchIds != null) {
+    where[Op.or] = [
+      { branch_id: { [Op.in]: branchIds } },
+      { '$OwnerProfile.preferred_branch_id$': { [Op.in]: branchIds } }
+    ];
+  } else if (branch_id) {
+    where.branch_id = branch_id;
   }
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
@@ -263,27 +287,65 @@ const listUsers = asyncHandler(async (req, res) => {
   const sortCol = USER_ALLOWED_SORT.includes(sort_by) ? sort_by : 'created_at';
   const sortDir = (sort_order || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
+  const includeBranch = {
+    model: Branch,
+    as: 'Branch',
+    attributes: ['id', 'code', 'name', 'city', 'provinsi_id'],
+    required: false,
+    include: [
+      { model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }
+    ]
+  };
+
+  const includeOwnerProfile = {
+    model: OwnerProfile,
+    as: 'OwnerProfile',
+    attributes: ['id', 'status', 'preferred_branch_id', 'registration_payment_proof_url', 'registration_payment_amount', 'activation_generated_password'],
+    required: false,
+    include: [
+      {
+        model: Branch,
+        as: 'PreferredBranch',
+        attributes: ['id', 'code', 'name', 'city', 'provinsi_id'],
+        required: false,
+        include: [
+          { model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }
+        ]
+      }
+    ]
+  };
+
   const { count, rows } = await User.findAndCountAll({
     where,
     attributes: ['id', 'email', 'name', 'phone', 'role', 'branch_id', 'region', 'company_name', 'is_active', 'created_at'],
     include: [
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
-      { model: OwnerProfile, as: 'OwnerProfile', attributes: ['id', 'status', 'registration_payment_proof_url', 'registration_payment_amount'], required: false }
+      includeBranch,
+      includeOwnerProfile
     ],
     order: [[sortCol, sortDir]],
     limit: lim,
     offset,
     distinct: true
   });
+
   const data = rows.map((u) => {
     const j = u.toJSON();
+    const isOwner = j.role === ROLES.OWNER;
+    const branchSource = isOwner && j.OwnerProfile?.PreferredBranch ? j.OwnerProfile.PreferredBranch : j.Branch;
+    j.branch_name = branchSource?.name ?? null;
+    j.branch_code = branchSource?.code ?? null;
+    j.city = branchSource?.city ?? null;
+    j.provinsi_name = branchSource?.Provinsi?.name ?? null;
+    j.wilayah_name = branchSource?.Provinsi?.Wilayah?.name ?? null;
     if (j.OwnerProfile) {
       j.owner_profile_id = j.OwnerProfile.id;
       j.owner_status = j.OwnerProfile.status;
       j.registration_payment_proof_url = j.OwnerProfile.registration_payment_proof_url || null;
       j.registration_payment_amount = j.OwnerProfile.registration_payment_amount != null ? parseFloat(j.OwnerProfile.registration_payment_amount) : null;
+      j.activation_generated_password = j.OwnerProfile.activation_generated_password != null ? String(j.OwnerProfile.activation_generated_password) : null;
       delete j.OwnerProfile;
     }
+    delete j.Branch;
     return j;
   });
   const totalPages = Math.ceil(count / lim) || 1;
@@ -304,7 +366,7 @@ const getUserById = asyncHandler(async (req, res) => {
     attributes: ['id', 'email', 'name', 'phone', 'role', 'branch_id', 'company_name', 'is_active', 'created_at'],
     include: [
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
-      { model: OwnerProfile, as: 'OwnerProfile', required: false }
+      { model: OwnerProfile, as: 'OwnerProfile', attributes: ['id', 'status', 'activation_generated_password'], required: false }
     ]
   });
   if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
@@ -312,6 +374,7 @@ const getUserById = asyncHandler(async (req, res) => {
   if (j.OwnerProfile) {
     j.owner_profile_id = j.OwnerProfile.id;
     j.owner_status = j.OwnerProfile.status;
+    j.activation_generated_password = j.OwnerProfile.activation_generated_password != null ? String(j.OwnerProfile.activation_generated_password) : null;
   }
   res.json({ success: true, data: j });
 });
@@ -400,6 +463,7 @@ const updateUser = asyncHandler(async (req, res) => {
       if (whatsapp !== undefined) profileUpdates.whatsapp = whatsapp != null ? String(whatsapp).trim() : null;
       if (npwp !== undefined) profileUpdates.npwp = npwp != null ? String(npwp).trim() : null;
       if (preferred_branch_id !== undefined) profileUpdates.preferred_branch_id = preferred_branch_id || null;
+      if (password && String(password).length >= 6) profileUpdates.activation_generated_password = null;
       if (Object.keys(profileUpdates).length > 0) await profile.update(profileUpdates);
     }
   }

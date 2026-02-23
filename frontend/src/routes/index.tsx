@@ -20,6 +20,7 @@ import SettingsPage from '../pages/dashboard/components/SettingsPage';
 import ProfilePage from '../pages/dashboard/components/ProfilePage';
 import KoordinatorOwnersPage from '../pages/dashboard/components/KoordinatorOwnersPage';
 import OwnerActivationPage from '../pages/dashboard/owner/OwnerActivationPage';
+import OwnerMouPage from '../pages/dashboard/owner/OwnerMouPage';
 import AdminPusatCreateUserPage from '../pages/dashboard/adminpusat/AdminPusatCreateUserPage';
 import OrdersInvoicesPage from '../pages/dashboard/adminpusat/OrdersInvoicesPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
@@ -56,6 +57,10 @@ const router = createBrowserRouter([
           {
             path: 'owner-activation',
             element: <OwnerActivationPage />
+          },
+          {
+            path: 'owner/mou',
+            element: <OwnerMouPage />
           },
           // Fallback for direct path (optional): /dashboard/super-admin
           {
