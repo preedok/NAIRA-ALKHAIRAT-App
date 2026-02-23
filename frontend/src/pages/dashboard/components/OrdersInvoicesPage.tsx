@@ -1149,19 +1149,31 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Data Jamaah & Status Visa/Tiket/Hotel/Bus — role_hotel hanya item hotel, role_bus hanya item bus */}
+                  {/* Data Jamaah & Status Visa/Tiket/Hotel/Bus — tampil sesuai divisi: visa_koordinator hanya visa, tiket_koordinator hanya tiket, role_hotel hanya hotel, role_bus hanya bus; role lain lihat semua */}
                   {(() => {
                     const order = viewInvoice?.Order;
                     const isRoleHotel = user?.role === 'role_hotel';
                     const isRoleBus = user?.role === 'role_bus';
+                    const isVisaKoordinator = user?.role === 'visa_koordinator';
+                    const isTiketKoordinator = user?.role === 'tiket_koordinator';
                     const items = (order?.OrderItems || []).filter((i: any) => {
                       const t = (i.type || i.product_type);
                       if (isRoleHotel) return t === 'hotel';
                       if (isRoleBus) return t === 'bus';
+                      if (isVisaKoordinator) return t === 'visa';
+                      if (isTiketKoordinator) return t === 'ticket';
                       return t === 'visa' || t === 'ticket' || t === 'hotel';
                     });
                     if (items.length === 0) return null;
-                    const sectionTitle = isRoleHotel ? 'Data & Status Hotel' : isRoleBus ? 'Data & Status Bus' : 'Data Jamaah & Status Visa / Tiket / Hotel';
+                    const sectionTitle = isRoleHotel
+                      ? 'Data & Status Hotel'
+                      : isRoleBus
+                        ? 'Data & Status Bus'
+                        : isVisaKoordinator
+                          ? 'Data Jamaah & Status Visa'
+                          : isTiketKoordinator
+                            ? 'Data Jamaah & Status Tiket'
+                            : 'Data Jamaah & Status Visa / Tiket / Hotel';
                     return (
                       <div className="space-y-4">
                         <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
