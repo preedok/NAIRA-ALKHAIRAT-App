@@ -9,8 +9,8 @@ router.use(requireRole(ROLES.VISA_KOORDINATOR));
 
 router.get('/dashboard', visaController.getDashboard);
 router.get('/export-excel', visaController.exportExcel);
-router.get('/orders', visaController.listOrders);
-router.get('/orders/:id', visaController.getOrder);
+router.get('/invoices', visaController.listInvoices);
+router.get('/invoices/:id', visaController.getInvoice);
 router.patch('/order-items/:orderItemId/progress', visaController.updateItemProgress);
 router.post('/order-items/:orderItemId/upload-visa', visaController.uploadVisa);
 

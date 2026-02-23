@@ -47,7 +47,7 @@ const VisaDashboard: React.FC = () => {
   }
 
   const byStatus = data?.by_status || {};
-  const totalOrders = data?.total_orders ?? 0;
+  const totalInvoices = data?.total_invoices ?? 0;
   const totalItems = data?.total_visa_items ?? 0;
 
   return (
@@ -66,10 +66,10 @@ const VisaDashboard: React.FC = () => {
         <Card className="p-4">
           <div className="flex items-center gap-2 text-slate-600 mb-1">
             <ClipboardList className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase tracking-wide">Total Order</span>
+            <span className="text-xs font-medium uppercase tracking-wide">Total Invoice</span>
           </div>
-          <div className="text-2xl font-bold text-slate-900">{totalOrders}</div>
-          <p className="text-xs text-slate-500 mt-1">Order dengan item visa</p>
+          <div className="text-2xl font-bold text-slate-900">{totalInvoices}</div>
+          <p className="text-xs text-slate-500 mt-1">Invoice dengan item visa</p>
         </Card>
         <Card className="p-4">
           <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">Total Item Visa</div>

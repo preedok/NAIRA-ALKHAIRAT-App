@@ -131,8 +131,8 @@ export const hotelApi = {
 
 export const ticketApi = {
   getDashboard: () => api.get<{ success: boolean; data: TicketDashboardData }>('/ticket/dashboard'),
-  listOrders: (params?: { status?: string }) => api.get<{ success: boolean; data: Order[] }>('/ticket/orders', { params }),
-  getOrder: (id: string) => api.get<{ success: boolean; data: Order }>(`/ticket/orders/${id}`),
+  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/ticket/invoices', { params }),
+  getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/ticket/invoices/${id}`),
   updateItemProgress: (orderItemId: string, body: { status?: string; notes?: string }) =>
     api.patch(`/ticket/order-items/${orderItemId}/progress`, body),
   uploadTicket: (orderItemId: string, formData: FormData, setStatusIssued?: boolean) => {
@@ -144,8 +144,8 @@ export const ticketApi = {
 
 export const visaApi = {
   getDashboard: () => api.get<{ success: boolean; data: VisaDashboardData }>('/visa/dashboard'),
-  listOrders: (params?: { status?: string }) => api.get<{ success: boolean; data: Order[] }>('/visa/orders', { params }),
-  getOrder: (id: string) => api.get<{ success: boolean; data: Order }>(`/visa/orders/${id}`),
+  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/visa/invoices', { params }),
+  getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/visa/invoices/${id}`),
   updateItemProgress: (orderItemId: string, body: { status?: string; notes?: string }) =>
     api.patch(`/visa/order-items/${orderItemId}/progress`, body),
   uploadVisa: (orderItemId: string, formData: FormData, setStatusIssued?: boolean) => {
@@ -166,12 +166,14 @@ export const busApi = {
   exportPdf: () => api.get('/bus/export-pdf', { responseType: 'blob' })
 };
 
-// Minimal types for ticket dashboard/orders
+// Minimal types for ticket dashboard (invoice-based)
 export interface TicketDashboardData {
-  total_orders: number;
+  total_invoices: number;
   total_ticket_items: number;
   by_status: Record<string, number>;
   pending_list: Array<{
+    invoice_id?: string;
+    invoice_number?: string;
     order_id: string;
     order_number: string;
     order_item_id: string;
@@ -232,10 +234,12 @@ interface BusProduct {
 }
 
 export interface VisaDashboardData {
-  total_orders: number;
+  total_invoices: number;
   total_visa_items: number;
   by_status: Record<string, number>;
   pending_list: Array<{
+    invoice_id?: string;
+    invoice_number?: string;
     order_id: string;
     order_number: string;
     order_item_id: string;

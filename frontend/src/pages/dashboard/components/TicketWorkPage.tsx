@@ -32,13 +32,13 @@ const RECAP_STATUS_LABELS: Record<string, string> = {
 
 const TicketWorkPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const orderIdParam = searchParams.get('order');
+  const invoiceIdParam = searchParams.get('invoice');
   const { showToast } = useToast();
 
   const [dashboard, setDashboard] = useState<TicketDashboardData | null>(null);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [detailOrder, setDetailOrder] = useState<any | null>(null);
+  const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
@@ -52,41 +52,41 @@ const TicketWorkPage: React.FC = () => {
     }
   }, []);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchInvoices = useCallback(async () => {
     try {
-      const res = await ticketApi.listOrders({});
-      if (res.data.success) setOrders(res.data.data || []);
+      const res = await ticketApi.listInvoices({});
+      if (res.data.success) setInvoices(res.data.data || []);
     } catch {
-      setOrders([]);
+      setInvoices([]);
     }
   }, []);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchDashboard(), fetchOrders()]).finally(() => setLoading(false));
-  }, [fetchDashboard, fetchOrders]);
+    Promise.all([fetchDashboard(), fetchInvoices()]).finally(() => setLoading(false));
+  }, [fetchDashboard, fetchInvoices]);
 
   useEffect(() => {
     refetchAll();
   }, [refetchAll]);
 
   useEffect(() => {
-    if (orderIdParam) {
-      ticketApi.getOrder(orderIdParam)
-        .then((res: any) => res.data.success && setDetailOrder(res.data.data))
-        .catch(() => setDetailOrder(null));
+    if (invoiceIdParam) {
+      ticketApi.getInvoice(invoiceIdParam)
+        .then((res: any) => res.data.success && setDetailInvoice(res.data.data))
+        .catch(() => setDetailInvoice(null));
     } else {
-      setDetailOrder(null);
+      setDetailInvoice(null);
     }
-  }, [orderIdParam]);
+  }, [invoiceIdParam]);
 
   const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
     try {
       await ticketApi.updateItemProgress(orderItemId, payload);
-      if (detailOrder?.id) {
-        const res = await ticketApi.getOrder(detailOrder.id);
-        if (res.data.success) setDetailOrder(res.data.data);
+      if (detailInvoice?.id) {
+        const res = await ticketApi.getInvoice(detailInvoice.id);
+        if (res.data.success) setDetailInvoice(res.data.data);
       }
       refetchAll();
     } catch (e: any) {
@@ -107,9 +107,9 @@ const TicketWorkPage: React.FC = () => {
       formData.append('ticket_file', file);
       await ticketApi.uploadTicket(orderItemId, formData, uploadSetIssued[orderItemId]);
       showToast('Dokumen tiket berhasil diupload.', 'success');
-      if (detailOrder?.id) {
-        const res = await ticketApi.getOrder(detailOrder.id);
-        if (res.data.success) setDetailOrder(res.data.data);
+      if (detailInvoice?.id) {
+        const res = await ticketApi.getInvoice(detailInvoice.id);
+        if (res.data.success) setDetailInvoice(res.data.data);
       }
       refetchAll();
     } catch (e: any) {
@@ -119,19 +119,22 @@ const TicketWorkPage: React.FC = () => {
     }
   };
 
-  const ticketItems = detailOrder?.OrderItems?.filter((i: any) => i.type === 'ticket') || [];
+  const ticketItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'ticket') || [];
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
 
   const byStatus = dashboard?.by_status || {};
-  const totalOrders = dashboard?.total_orders ?? 0;
+  const totalInvoices = dashboard?.total_invoices ?? 0;
   const totalItems = dashboard?.total_ticket_items ?? 0;
-  const hasTicketOrders = orders.length > 0;
+  const hasTicketInvoices = invoices.length > 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
-        <h1 className="text-2xl font-bold text-slate-900">Tiket – Penerbitan & Dokumen</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Tiket – Penerbitan & Dokumen</h1>
+          <p className="text-slate-600 text-sm mt-1">Data order yang sudah punya invoice (tagihan). Proses penerbitan tiket, update status, dan upload dokumen tiket terbit. Owner dapat mengunduh dokumen terbit di menu Invoice.</p>
+        </div>
         <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
       </div>
 
@@ -140,9 +143,9 @@ const TicketWorkPage: React.FC = () => {
         <Card className="p-4">
           <div className="flex items-center gap-2 text-slate-600 mb-1">
             <ClipboardList className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase tracking-wide">Total Order</span>
+            <span className="text-xs font-medium uppercase tracking-wide">Total Invoice</span>
           </div>
-          <div className="text-2xl font-bold text-slate-900">{loading ? '–' : totalOrders}</div>
+          <div className="text-2xl font-bold text-slate-900">{loading ? '–' : totalInvoices}</div>
         </Card>
         <Card className="p-4">
           <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">Total Item Tiket</div>
@@ -156,19 +159,20 @@ const TicketWorkPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Tabel order tiket – hanya tampil jika ada order tiket */}
+      {/* Tabel invoice tiket – hanya tampil jika ada invoice dengan item tiket */}
       <Card>
         {loading ? (
           <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
           </div>
-        ) : !hasTicketOrders ? (
-          <div className="py-12 text-center text-slate-500">Belum ada order dengan item tiket di cabang Anda. Data di atas menampilkan rekap pekerjaan tiket.</div>
+        ) : !hasTicketInvoices ? (
+          <div className="py-12 text-center text-slate-500">Belum ada invoice dengan item tiket di cabang Anda. Buat order & invoice dari menu Order/Invoice terlebih dahulu.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="text-left py-3 px-4">Invoice</th>
                   <th className="text-left py-3 px-4">Order</th>
                   <th className="text-left py-3 px-4">Owner</th>
                   <th className="text-right py-3 px-4">Item Tiket</th>
@@ -177,17 +181,20 @@ const TicketWorkPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o) => {
+                {invoices.map((inv: any) => {
+                  const o = inv.Order;
+                  if (!o) return null;
                   const ticketCount = (o.OrderItems || []).filter((i: any) => i.type === 'ticket').length;
                   const firstStatus = (o.OrderItems || []).find((i: any) => i.type === 'ticket')?.TicketProgress?.status || 'pending';
                   return (
-                    <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 font-mono font-medium text-slate-800">{inv.invoice_number ?? '–'}</td>
                       <td className="py-3 px-4 font-medium">{o.order_number}</td>
-                      <td className="py-3 px-4">{o.User?.name}</td>
+                      <td className="py-3 px-4">{inv.User?.name ?? o.User?.name}</td>
                       <td className="py-3 px-4 text-right">{ticketCount}</td>
                       <td className="py-3 px-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
                       <td className="py-3 px-4">
-                        <Button size="sm" variant="outline" onClick={() => setSearchParams({ order: o.id })}>
+                        <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
                           <Eye className="w-4 h-4 mr-1" /> Detail
                         </Button>
                       </td>
@@ -200,14 +207,14 @@ const TicketWorkPage: React.FC = () => {
         )}
       </Card>
 
-      <Modal open={!!detailOrder} onClose={() => setSearchParams({})}>
-        {detailOrder && (
+      <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
+        {detailInvoice && (
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-slate-900">Order {detailOrder.order_number}</h2>
+              <h2 className="text-xl font-bold text-slate-900">Invoice {detailInvoice.invoice_number}</h2>
               <button className="p-2 hover:bg-slate-100 rounded-lg" onClick={() => setSearchParams({})}>×</button>
             </div>
-            <p className="text-sm text-slate-600 mb-4">Owner: {detailOrder.User?.name}</p>
+            <p className="text-sm text-slate-600 mb-4">Order: <span className="font-mono font-medium">{detailInvoice.Order?.order_number}</span> · Owner: {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name}</p>
             <div className="space-y-4">
               {ticketItems.map((item: any) => {
                 const prog = item.TicketProgress;

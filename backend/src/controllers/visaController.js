@@ -40,7 +40,7 @@ const uploadVisaFile = multer({ storage, limits: { fileSize: 15 * 1024 * 1024 } 
 
 /**
  * GET /api/v1/visa/dashboard
- * Rekapitulasi pekerjaan visa: total, per status, list pending.
+ * Rekapitulasi pekerjaan visa berdasarkan invoice: total invoice, total item visa, per status.
  */
 const getDashboard = asyncHandler(async (req, res) => {
   const branchIds = await getVisaBranchIds(req.user);
@@ -55,19 +55,18 @@ const getDashboard = asyncHandler(async (req, res) => {
   if (orderIdsFromVisa.length === 0) {
     return res.json({
       success: true,
-      data: { total_orders: 0, total_visa_items: 0, by_status: {}, pending_list: [] }
+      data: { total_invoices: 0, total_visa_items: 0, by_status: {}, pending_list: [] }
     });
   }
 
   const invoices = await Invoice.findAll({
-    where: { order_id: orderIdsFromVisa },
-    attributes: ['order_id'],
+    where: { order_id: orderIdsFromVisa, branch_id: { [Op.in]: branchIds } },
+    attributes: ['id', 'invoice_number', 'order_id'],
     raw: true
   });
-  const orderIdsWithInvoice = [...new Set(invoices.map(i => i.order_id))];
-
+  const orderIds = [...new Set(invoices.map(i => i.order_id))];
   const orders = await Order.findAll({
-    where: { id: orderIdsWithInvoice, branch_id: { [Op.in]: branchIds } },
+    where: { id: orderIds },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
@@ -92,7 +91,10 @@ const getDashboard = asyncHandler(async (req, res) => {
       const status = prog?.status || VISA_PROGRESS_STATUS.DOCUMENT_RECEIVED;
       byStatus[status] = (byStatus[status] || 0) + 1;
       if (status !== VISA_PROGRESS_STATUS.ISSUED) {
+        const inv = invoices.find(i => i.order_id === o.id);
         pendingList.push({
+          invoice_id: inv?.id,
+          invoice_number: inv?.invoice_number,
           order_id: o.id,
           order_number: o.order_number,
           order_item_id: item.id,
@@ -112,7 +114,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      total_orders: orders.length,
+      total_invoices: invoices.length,
       total_visa_items: totalVisaItems,
       by_status: byStatus,
       pending_list: pendingList.slice(0, 50)
@@ -121,10 +123,10 @@ const getDashboard = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/v1/visa/orders
- * List orders that have visa items and have invoice (current branch). Hanya order yang sudah punya invoice.
+ * GET /api/v1/visa/invoices
+ * List invoices yang punya item visa (scope cabang/wilayah role visa).
  */
-const listOrders = asyncHandler(async (req, res) => {
+const listInvoices = asyncHandler(async (req, res) => {
   const { status } = req.query;
   const branchIds = await getVisaBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Role visa harus terikat cabang atau wilayah' });
@@ -139,59 +141,69 @@ const listOrders = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [] });
   }
 
-  const invoices = await Invoice.findAll({
-    where: { order_id: orderIdsFromVisa },
-    attributes: ['order_id'],
-    raw: true
-  });
-  const orderIdsWithInvoice = [...new Set(invoices.map(i => i.order_id))];
-
-  const where = { id: orderIdsWithInvoice, branch_id: { [Op.in]: branchIds } };
+  const where = { order_id: orderIdsFromVisa, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
-  const orders = await Order.findAll({
+  const invoices = await Invoice.findAll({
     where,
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       {
-        model: OrderItem,
-        as: 'OrderItems',
-        where: { type: ORDER_ITEM_TYPE.VISA },
-        required: true,
-        include: [{ model: VisaProgress, as: 'VisaProgress', required: false }]
+        model: Order,
+        as: 'Order',
+        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            where: { type: ORDER_ITEM_TYPE.VISA },
+            required: true,
+            include: [{ model: VisaProgress, as: 'VisaProgress', required: false }]
+          }
+        ]
       }
     ],
     order: [['created_at', 'DESC']]
   });
 
-  res.json({ success: true, data: orders });
+  res.json({ success: true, data: invoices });
 });
 
 /**
- * GET /api/v1/visa/orders/:id
- * Order detail with visa items, manifest, progress.
+ * GET /api/v1/visa/invoices/:id
+ * Detail invoice dengan item visa, progress, manifest.
  */
-const getOrder = asyncHandler(async (req, res) => {
+const getInvoice = asyncHandler(async (req, res) => {
   const branchIds = await getVisaBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Role visa harus terikat cabang atau wilayah' });
-  const order = await Order.findByPk(req.params.id, {
+
+  const invoice = await Invoice.findByPk(req.params.id, {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
-      { model: Branch, as: 'Branch' },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       {
-        model: OrderItem,
-        as: 'OrderItems',
-        include: [{ model: VisaProgress, as: 'VisaProgress', required: false }]
+        model: Order,
+        as: 'Order',
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          { model: Branch, as: 'Branch' },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            include: [{ model: VisaProgress, as: 'VisaProgress', required: false }]
+          }
+        ]
       }
     ]
   });
-  if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  if (!branchIds.includes(order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
-  const visaItems = (order.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.VISA);
-  if (visaItems.length === 0) return res.status(404).json({ success: false, message: 'Order tidak memiliki item visa' });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+  const visaItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.VISA);
+  if (visaItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item visa' });
 
-  res.json({ success: true, data: order });
+  res.json({ success: true, data: invoice });
 });
 
 /**
@@ -347,12 +359,12 @@ const exportExcel = asyncHandler(async (req, res) => {
     return res.end();
   }
 
-  const invoices = await Invoice.findAll({
-    where: { order_id: orderIdsFromVisa },
-    attributes: ['order_id'],
+  const invoicesForExport = await Invoice.findAll({
+    where: { order_id: orderIdsFromVisa, branch_id: { [Op.in]: branchIds } },
+    attributes: ['order_id', 'invoice_number'],
     raw: true
   });
-  const orderIdsWithInvoice = [...new Set(invoices.map(i => i.order_id))];
+  const orderIdsWithInvoice = [...new Set(invoicesForExport.map(i => i.order_id))];
 
   const orders = await Order.findAll({
     where: { id: orderIdsWithInvoice, branch_id: { [Op.in]: branchIds } },
@@ -375,6 +387,7 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   sheet.columns = [
     { header: 'No', key: 'no', width: 6 },
+    { header: 'Invoice Number', key: 'invoice_number', width: 22 },
     { header: 'Order Number', key: 'order_number', width: 20 },
     { header: 'Owner', key: 'owner_name', width: 25 },
     { header: 'Product Ref', key: 'product_ref_id', width: 38 },
@@ -389,11 +402,13 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   let no = 1;
   orders.forEach(o => {
+    const invRow = invoicesForExport.find(i => i.order_id === o.id);
     (o.OrderItems || []).forEach(item => {
       const prog = item.VisaProgress;
       const status = prog?.status || VISA_PROGRESS_STATUS.DOCUMENT_RECEIVED;
       sheet.addRow({
         no: no++,
+        invoice_number: invRow?.invoice_number || '',
         order_number: o.order_number,
         owner_name: o.User?.name || '',
         product_ref_id: item.product_ref_id || '',
@@ -415,8 +430,8 @@ const exportExcel = asyncHandler(async (req, res) => {
 
 module.exports = {
   getDashboard,
-  listOrders,
-  getOrder,
+  listInvoices,
+  getInvoice,
   updateItemProgress,
   uploadVisa,
   exportExcel

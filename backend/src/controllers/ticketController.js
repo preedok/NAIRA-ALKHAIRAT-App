@@ -46,19 +46,19 @@ const getDashboard = asyncHandler(async (req, res) => {
   if (orderIdsFromTicket.length === 0) {
     return res.json({
       success: true,
-      data: { total_orders: 0, total_ticket_items: 0, by_status: {}, pending_list: [] }
+      data: { total_invoices: 0, total_ticket_items: 0, by_status: {}, pending_list: [] }
     });
   }
 
   const invoices = await Invoice.findAll({
-    where: { order_id: orderIdsFromTicket },
-    attributes: ['order_id'],
+    where: { order_id: orderIdsFromTicket, branch_id: branchId },
+    attributes: ['id', 'invoice_number', 'order_id'],
     raw: true
   });
   const orderIdsWithInvoice = [...new Set(invoices.map(i => i.order_id))];
 
   const orders = await Order.findAll({
-    where: { id: orderIdsWithInvoice, branch_id: branchId },
+    where: { id: orderIdsWithInvoice },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
@@ -83,7 +83,10 @@ const getDashboard = asyncHandler(async (req, res) => {
       const status = prog?.status || TICKET_PROGRESS_STATUS.PENDING;
       byStatus[status] = (byStatus[status] || 0) + 1;
       if (status !== TICKET_PROGRESS_STATUS.TICKET_ISSUED) {
+        const inv = invoices.find(i => i.order_id === o.id);
         pendingList.push({
+          invoice_id: inv?.id,
+          invoice_number: inv?.invoice_number,
           order_id: o.id,
           order_number: o.order_number,
           order_item_id: item.id,
@@ -103,7 +106,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      total_orders: orders.length,
+      total_invoices: invoices.length,
       total_ticket_items: totalTicketItems,
       by_status: byStatus,
       pending_list: pendingList.slice(0, 50)
@@ -112,10 +115,10 @@ const getDashboard = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/v1/ticket/orders
- * List orders that have ticket items and have invoice (current branch). Hanya order yang sudah punya invoice.
+ * GET /api/v1/ticket/invoices
+ * List invoices yang punya item tiket (scope cabang role tiket).
  */
-const listOrders = asyncHandler(async (req, res) => {
+const listInvoices = asyncHandler(async (req, res) => {
   const { status } = req.query;
   const branchId = req.user.branch_id;
   if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
@@ -130,58 +133,69 @@ const listOrders = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [] });
   }
 
-  const invoices = await Invoice.findAll({
-    where: { order_id: orderIdsFromTicket },
-    attributes: ['order_id'],
-    raw: true
-  });
-  const orderIdsWithInvoice = [...new Set(invoices.map(i => i.order_id))];
-
-  const where = { id: orderIdsWithInvoice, branch_id: branchId };
+  const where = { order_id: orderIdsFromTicket, branch_id: branchId };
   if (status) where.status = status;
 
-  const orders = await Order.findAll({
+  const invoices = await Invoice.findAll({
     where,
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       {
-        model: OrderItem,
-        as: 'OrderItems',
-        where: { type: ORDER_ITEM_TYPE.TICKET },
-        required: true,
-        include: [{ model: TicketProgress, as: 'TicketProgress', required: false }]
+        model: Order,
+        as: 'Order',
+        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            where: { type: ORDER_ITEM_TYPE.TICKET },
+            required: true,
+            include: [{ model: TicketProgress, as: 'TicketProgress', required: false }]
+          }
+        ]
       }
     ],
     order: [['created_at', 'DESC']]
   });
 
-  res.json({ success: true, data: orders });
+  res.json({ success: true, data: invoices });
 });
 
 /**
- * GET /api/v1/ticket/orders/:id
- * Order detail with ticket items, manifest, progress.
+ * GET /api/v1/ticket/invoices/:id
+ * Detail invoice dengan item tiket, progress, manifest.
  */
-const getOrder = asyncHandler(async (req, res) => {
+const getInvoice = asyncHandler(async (req, res) => {
   const branchId = req.user.branch_id;
-  const order = await Order.findByPk(req.params.id, {
+  if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
+
+  const invoice = await Invoice.findByPk(req.params.id, {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
-      { model: Branch, as: 'Branch' },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       {
-        model: OrderItem,
-        as: 'OrderItems',
-        include: [{ model: TicketProgress, as: 'TicketProgress', required: false }]
+        model: Order,
+        as: 'Order',
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          { model: Branch, as: 'Branch' },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            include: [{ model: TicketProgress, as: 'TicketProgress', required: false }]
+          }
+        ]
       }
     ]
   });
-  if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  if (order.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
-  const ticketItems = (order.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.TICKET);
-  if (ticketItems.length === 0) return res.status(404).json({ success: false, message: 'Order tidak memiliki item tiket' });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (invoice.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  const ticketItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.TICKET);
+  if (ticketItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item tiket' });
 
-  res.json({ success: true, data: order });
+  res.json({ success: true, data: invoice });
 });
 
 /**
@@ -320,14 +334,30 @@ const exportExcel = asyncHandler(async (req, res) => {
   const branchId = req.user.branch_id;
   if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
 
-  const orderIds = await OrderItem.findAll({
+  const orderIdsFromTicket = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.TICKET },
     attributes: ['order_id'],
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
+  if (orderIdsFromTicket.length === 0) {
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=rekap-tiket-${Date.now()}.xlsx`);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Rekap Tiket');
+    await workbook.xlsx.write(res);
+    return res.end();
+  }
+
+  const invoicesForExport = await Invoice.findAll({
+    where: { order_id: orderIdsFromTicket, branch_id: branchId },
+    attributes: ['order_id', 'invoice_number'],
+    raw: true
+  });
+  const orderIdsWithInvoice = [...new Set(invoicesForExport.map(i => i.order_id))];
+
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: branchId },
+    where: { id: orderIdsWithInvoice },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
@@ -347,6 +377,7 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   sheet.columns = [
     { header: 'No', key: 'no', width: 6 },
+    { header: 'Invoice Number', key: 'invoice_number', width: 22 },
     { header: 'Order Number', key: 'order_number', width: 20 },
     { header: 'Owner', key: 'owner_name', width: 25 },
     { header: 'Product Ref', key: 'product_ref_id', width: 38 },
@@ -361,11 +392,13 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   let no = 1;
   orders.forEach(o => {
+    const invRow = invoicesForExport.find(i => i.order_id === o.id);
     (o.OrderItems || []).forEach(item => {
       const prog = item.TicketProgress;
       const status = prog?.status || TICKET_PROGRESS_STATUS.PENDING;
       sheet.addRow({
         no: no++,
+        invoice_number: invRow?.invoice_number || '',
         order_number: o.order_number,
         owner_name: o.User?.name || '',
         product_ref_id: item.product_ref_id || '',
@@ -387,8 +420,8 @@ const exportExcel = asyncHandler(async (req, res) => {
 
 module.exports = {
   getDashboard,
-  listOrders,
-  getOrder,
+  listInvoices,
+  getInvoice,
   updateItemProgress,
   uploadTicket,
   exportExcel
