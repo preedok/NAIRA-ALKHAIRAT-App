@@ -1,0 +1,38 @@
+node_modules/
+.env
+.env.local
+logs/
+*.log
+.DS_Store
+uploads/
+temp/
+coverage/
+dist/
+build/
+# Gradle
+mobile/android/.gradle/
+mobile/android/gradle/wrapper/_extract/
+mobile/android/gradle/wrapper/*.zip
+**/.gradle/
+**/gradle/wrapper/_extract/
+**/*.zip
+
+**/.gradle/
+**/gradle/wrapper/*.zip
+
+# dependencies
+node_modules/
+
+# android
+android/.gradle/
+android/app/build/
+android/build/
+
+# gradle wrapper cache (IMPORTANT)
+**/gradle/wrapper/_extract/
+**/gradle/wrapper/*.zip
+
+# misc
+.env
+*.keystore
+*.jks

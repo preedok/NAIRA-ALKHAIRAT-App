@@ -1,0 +1,48 @@
+{
+  "name": "bintang-global-group",
+  "version": "1.0.0",
+  "description": "Enterprise B2B Platform for Umroh Services - Bintang Global Group",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install --legacy-peer-deps && cd ../mobile && npm install && cd ..",
+    "start": "concurrently -n be,fe,mobile,android \"npm run start:backend\" \"npm run start:frontend\" \"npm run start:mobile\" \"npm run start:android\"",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm start",
+    "start:mobile": "cd mobile && npm start",
+    "start:android": "node scripts/run-android.js",
+    "predev": "cross-env NODE_ENV=development npm run db:migrate",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "test": "concurrently \"npm run test:backend\" \"npm run test:frontend\"",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "migrate": "cd backend && npm run migrate",
+    "migrate:undo": "cd backend && npm run migrate:undo",
+    "seed": "cd backend && npm run seed",
+    "seed:undo": "cd backend && npm run seed:undo",
+    "db:migrate": "cd backend && npm run migrate",
+    "db:update": "cd backend && npm run db:update",
+    "generate:payment-proofs": "cd backend && npm run generate:payment-proofs",
+    "db:recreate": "cd backend && npm run db:recreate",
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules"
+  },
+  "keywords": [
+    "umroh",
+    "b2b",
+    "enterprise",
+    "hotel",
+    "visa",
+    "ticket",
+    "travel",
+    "postgresql"
+  ],
+  "author": "Bintang Global Group",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  }
+}

@@ -1,0 +1,585 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, CheckCircle, Eye, FileCheck, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import Card from '../../../components/common/Card';
+import Button from '../../../components/common/Button';
+import Badge from '../../../components/common/Badge';
+import Modal from '../../../components/common/Modal';
+import { PageFilter, AutoRefreshControl } from '../../../components/common';
+import ActionsMenu from '../../../components/common/ActionsMenu';
+import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
+import { ownersApi, branchesApi } from '../../../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useToast } from '../../../contexts/ToastContext';
+import { API_BASE_URL } from '../../../utils/constants';
+
+const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
+
+const OWNER_STATUS_LABELS: Record<string, string> = {
+  pending_registration_payment: 'Upload Bukti Bayar',
+  pending_registration_verification: 'Verifikasi Bukti Bayar',
+  deposit_verified: 'Siap Aktivasi',
+  assigned_to_branch: 'Siap Aktivasi',
+  active: 'Aktif',
+  rejected: 'Ditolak',
+  registered_pending_mou: 'Pending MoU',
+  pending_mou_approval: 'Menunggu Approve MoU',
+  pending_deposit_payment: 'Bayar Deposit',
+  pending_deposit_verification: 'Verifikasi Deposit'
+};
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Semua status' },
+  ...Object.entries(OWNER_STATUS_LABELS).map(([value, label]) => ({ value, label }))
+];
+
+const KoordinatorOwnersPage: React.FC = () => {
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const [list, setList] = useState<any[]>([]);
+  const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [branchesForFilter, setBranchesForFilter] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterWilayahId, setFilterWilayahId] = useState<string>('');
+  const [filterBranchId, setFilterBranchId] = useState<string>('');
+  const [filterSearch, setFilterSearch] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 25;
+  const [detailOwner, setDetailOwner] = useState<any | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showVerifyMouModal, setShowVerifyMouModal] = useState(false);
+  const [verifyMouProfile, setVerifyMouProfile] = useState<any | null>(null);
+  const [verifyMouRejectReason, setVerifyMouRejectReason] = useState('');
+  const [verifyingMou, setVerifyingMou] = useState(false);
+  const [showVerifyRegPaymentModal, setShowVerifyRegPaymentModal] = useState(false);
+  const [verifyRegPaymentProfile, setVerifyRegPaymentProfile] = useState<any | null>(null);
+  const [verifyRegPaymentRejectReason, setVerifyRegPaymentRejectReason] = useState('');
+  const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
+  const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
+
+  const isAdminKoordinator = user?.role === 'admin_koordinator';
+  const isInvoiceKoordinator = user?.role === 'invoice_koordinator';
+  const canAssignOrActivate = isAdminKoordinator || isInvoiceKoordinator;
+  const canVerifyDeposit = isAdminKoordinator;
+  const isAdminPusatOrSuperAdmin = user?.role === 'admin_pusat' || user?.role === 'super_admin';
+  const canVerifyMou = isAdminPusatOrSuperAdmin;
+
+  const fetchOwners = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: { status?: string; wilayah_id?: string; branch_id?: string; q?: string; page?: number; limit?: number } = {
+        page,
+        limit
+      };
+      if (filterStatus) params.status = filterStatus;
+      if (filterWilayahId) params.wilayah_id = filterWilayahId;
+      if (filterBranchId) params.branch_id = filterBranchId;
+      if (filterSearch.trim()) params.q = filterSearch.trim();
+      const res = await ownersApi.list(params);
+      if (res.data.success) {
+        setList(res.data.data || []);
+        setTotal(res.data.total ?? 0);
+      } else {
+        setList([]);
+        setTotal(0);
+      }
+    } catch {
+      setList([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterStatus, filterWilayahId, filterBranchId, filterSearch, page, limit]);
+
+  const fetchBranches = useCallback(async () => {
+    if (!canAssignOrActivate) return;
+    try {
+      const params: { limit?: number; wilayah_id?: string } = { limit: 500 };
+      if (user?.wilayah_id) params.wilayah_id = user.wilayah_id;
+      const res = await branchesApi.list(params);
+      if (res.data.success) setBranches(res.data.data || []);
+      else setBranches([]);
+    } catch {
+      setBranches([]);
+    }
+  }, [canAssignOrActivate, user?.wilayah_id]);
+
+  const fetchWilayahList = useCallback(async () => {
+    if (!isAdminPusatOrSuperAdmin) return;
+    try {
+      const res = await branchesApi.listWilayah();
+      if (res.data?.success && Array.isArray(res.data.data)) setWilayahList(res.data.data);
+      else setWilayahList([]);
+    } catch {
+      setWilayahList([]);
+    }
+  }, [isAdminPusatOrSuperAdmin]);
+
+  const fetchBranchesForFilter = useCallback(async () => {
+    if (!isAdminPusatOrSuperAdmin) return;
+    try {
+      const params: { limit?: number; wilayah_id?: string } = { limit: 500 };
+      if (filterWilayahId) params.wilayah_id = filterWilayahId;
+      const res = await branchesApi.list(params);
+      if (res.data.success) setBranchesForFilter(res.data.data || []);
+      else setBranchesForFilter([]);
+    } catch {
+      setBranchesForFilter([]);
+    }
+  }, [isAdminPusatOrSuperAdmin, filterWilayahId]);
+
+  useEffect(() => {
+    fetchOwners();
+  }, [fetchOwners]);
+
+  useEffect(() => {
+    if (canAssignOrActivate) fetchBranches();
+  }, [canAssignOrActivate, fetchBranches]);
+
+  useEffect(() => {
+    fetchWilayahList();
+  }, [fetchWilayahList]);
+
+  useEffect(() => {
+    fetchBranchesForFilter();
+  }, [fetchBranchesForFilter]);
+
+  const openDetail = useCallback(async (owner: any) => {
+    setDetailOwner(owner);
+    setShowDetailModal(true);
+    try {
+      const res = await ownersApi.getById(owner.id);
+      if (res.data?.success && res.data?.data) setDetailOwner(res.data.data);
+    } catch {
+      setShowDetailModal(false);
+    }
+  }, []);
+
+  const openVerifyMou = (owner: any) => {
+    setVerifyMouProfile(owner);
+    setVerifyMouRejectReason('');
+    setShowVerifyMouModal(true);
+  };
+
+  const handleVerifyMou = async (approved: boolean) => {
+    if (!verifyMouProfile) return;
+    if (!approved && !verifyMouRejectReason.trim()) {
+      showToast('Isi alasan penolakan.', 'warning');
+      return;
+    }
+    setVerifyingMou(true);
+    try {
+      await ownersApi.verifyMou(verifyMouProfile.id, { approved, rejection_reason: verifyMouRejectReason.trim() || undefined });
+      showToast(approved ? 'MoU disetujui.' : 'MoU ditolak.', 'success');
+      setShowVerifyMouModal(false);
+      setVerifyMouProfile(null);
+      fetchOwners();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal', 'error');
+    } finally {
+      setVerifyingMou(false);
+    }
+  };
+
+  const openVerifyRegPayment = (owner: any) => {
+    setVerifyRegPaymentProfile(owner);
+    setVerifyRegPaymentRejectReason('');
+    setShowVerifyRegPaymentModal(true);
+  };
+
+  const handleVerifyRegistrationPayment = async (approved: boolean) => {
+    if (!verifyRegPaymentProfile) return;
+    if (!approved && !verifyRegPaymentRejectReason.trim()) {
+      showToast('Isi alasan penolakan.', 'warning');
+      return;
+    }
+    setVerifyingRegPayment(true);
+    try {
+      await ownersApi.verifyRegistrationPayment(verifyRegPaymentProfile.id, { approved, rejection_reason: verifyRegPaymentRejectReason.trim() || undefined });
+      showToast(approved ? 'Bukti bayar disetujui.' : 'Bukti bayar ditolak.', 'success');
+      setShowVerifyRegPaymentModal(false);
+      setVerifyRegPaymentProfile(null);
+      fetchOwners();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal', 'error');
+    } finally {
+      setVerifyingRegPayment(false);
+    }
+  };
+
+  const handleVerifyDeposit = async (profileId: string) => {
+    if (!canVerifyDeposit) return;
+    setActingId(profileId);
+    try {
+      await ownersApi.verifyDeposit(profileId);
+      showToast('Deposit terverifikasi.', 'success');
+      fetchOwners();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal verifikasi deposit', 'error');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleActivate = async (profileId: string) => {
+    if (!canAssignOrActivate) return;
+    setActingId(profileId);
+    try {
+      const res = await ownersApi.activate(profileId);
+      const data = res.data?.data;
+      if (data?.generated_password != null && data?.mou_generated_url) {
+        setActivateResult({ password: data.generated_password, mouUrl: data.mou_generated_url });
+      } else {
+        showToast('Owner berhasil diaktifkan.', 'success');
+      }
+      fetchOwners();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal aktivasi', 'error');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const resetFilters = () => {
+    setFilterStatus('');
+    setFilterWilayahId('');
+    setFilterBranchId('');
+    setFilterSearch('');
+    setPage(1);
+  };
+
+  const applyFilters = () => {
+    setPage(1);
+    fetchOwners();
+  };
+
+  const hasActiveFilters = !!(filterStatus || filterWilayahId || filterBranchId || filterSearch.trim());
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Owners Wilayah</h1>
+          <p className="text-slate-600 mt-1">
+            {isAdminPusatOrSuperAdmin
+              ? 'Daftar owner per wilayah. Filter menurut wilayah, cabang, status, dan cari nama/email.'
+              : 'Owner yang dilayani koordinator wilayah Anda. Verifikasi bukti bayar/deposit lalu aktivasi (cabang dari data pendaftaran).'}
+          </p>
+        </div>
+        <AutoRefreshControl onRefresh={fetchOwners} disabled={loading} />
+      </div>
+
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={applyFilters}
+        loading={loading}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        toolbar={
+          <Button variant="outline" size="sm" onClick={() => fetchOwners()} disabled={loading} aria-label="Segarkan">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        }
+        className="w-full"
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {isAdminPusatOrSuperAdmin && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Wilayah</label>
+                <select
+                  value={filterWilayahId}
+                  onChange={(e) => {
+                    setFilterWilayahId(e.target.value);
+                    setFilterBranchId('');
+                    setPage(1);
+                  }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Semua wilayah</option>
+                  {wilayahList.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Cabang</label>
+                <select
+                  value={filterBranchId}
+                  onChange={(e) => { setFilterBranchId(e.target.value); setPage(1); }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Semua cabang</option>
+                  {branchesForFilter.map((b) => (
+                    <option key={b.id} value={b.id}>{b.code} – {b.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Status</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Cari nama / email</label>
+            <input
+              type="text"
+              value={filterSearch}
+              onChange={(e) => { setFilterSearch(e.target.value); setPage(1); }}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              placeholder="Nama, perusahaan, email..."
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+      </PageFilter>
+
+      <Card>
+        {loading ? (
+          <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
+            <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
+          </div>
+        ) : list.length === 0 ? (
+          <div className="py-12 text-center text-slate-500">
+            {hasActiveFilters ? 'Tidak ada owner sesuai filter.' : 'Belum ada owner di wilayah Anda.'}
+          </div>
+        ) : (
+          <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left py-3 px-4">Nama / Perusahaan</th>
+                  <th className="text-left py-3 px-4">Email</th>
+                  <th className="text-left py-3 px-4">Status</th>
+                  <th className="text-left py-3 px-4">Cabang</th>
+                  <th className="text-left py-3 px-4 w-32">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((o) => (
+                  <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">
+                      <p className="font-medium">{o.User?.name}</p>
+                      {o.User?.company_name && <p className="text-xs text-slate-500">{o.User.company_name}</p>}
+                    </td>
+                    <td className="py-3 px-4">{o.User?.email}</td>
+                    <td className="py-3 px-4">{OWNER_STATUS_LABELS[o.status] || o.status}</td>
+                    <td className="py-3 px-4">{o.AssignedBranch?.name || '-'}</td>
+                    <td className="py-3 px-4">
+                      {(() => {
+                        const items: ActionsMenuItem[] = [];
+                        items.push({
+                          id: 'detail',
+                          label: 'Lihat Detail',
+                          icon: <Eye className="w-4 h-4" />,
+                          onClick: () => openDetail(o)
+                        });
+                        if (o.status === 'pending_registration_verification' && canVerifyMou) {
+                          items.push({
+                            id: 'verify-reg-payment',
+                            label: 'Verifikasi Bukti Bayar',
+                            icon: <FileCheck className="w-4 h-4" />,
+                            onClick: () => openVerifyRegPayment(o)
+                          });
+                        }
+                        if (o.status === 'pending_mou_approval' && canVerifyMou) {
+                          items.push({
+                            id: 'verify-mou',
+                            label: 'Verifikasi MoU',
+                            icon: <FileCheck className="w-4 h-4" />,
+                            onClick: () => openVerifyMou(o)
+                          });
+                        }
+                        if (o.status === 'pending_deposit_verification' && canVerifyDeposit) {
+                          items.push({
+                            id: 'verify-deposit',
+                            label: 'Verifikasi Deposit',
+                            icon: <CheckCircle className="w-4 h-4" />,
+                            onClick: () => handleVerifyDeposit(o.id),
+                            disabled: actingId !== null
+                          });
+                        }
+                        if ((o.status === 'assigned_to_branch' || o.status === 'deposit_verified') && canAssignOrActivate) {
+                          items.push({
+                            id: 'activate',
+                            label: 'Aktivasi',
+                            icon: <CheckCircle className="w-4 h-4" />,
+                            onClick: () => handleActivate(o.id),
+                            disabled: actingId !== null
+                          });
+                        }
+                        return <ActionsMenu align="right" items={items} />;
+                      })()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {total > limit && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50">
+              <span className="text-sm text-slate-600">
+                Menampilkan {from}–{to} dari {total}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1 || loading}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm text-slate-600 px-1">
+                  Halaman {page} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || loading}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
+        )}
+      </Card>
+
+      {/* Modal Detail Owner */}
+      <Modal open={showDetailModal && !!detailOwner} onClose={() => setShowDetailModal(false)}>
+        {detailOwner && (
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Detail Owner</h2>
+              <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setShowDetailModal(false)}><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-3 text-sm">
+              <div><span className="text-slate-500">Nama</span><p className="font-medium">{detailOwner.User?.name || '-'}</p></div>
+              <div><span className="text-slate-500">Perusahaan</span><p className="font-medium">{detailOwner.User?.company_name || '-'}</p></div>
+              <div><span className="text-slate-500">Email</span><p>{detailOwner.User?.email || '-'}</p></div>
+              <div><span className="text-slate-500">Telepon</span><p>{detailOwner.User?.phone || detailOwner.phone || '-'}</p></div>
+              <div><span className="text-slate-500">Status</span><p><Badge variant={detailOwner.status === 'active' ? 'success' : detailOwner.status === 'rejected' ? 'error' : 'warning'}>{OWNER_STATUS_LABELS[detailOwner.status] || detailOwner.status}</Badge></p></div>
+              <div><span className="text-slate-500">Cabang</span><p>{detailOwner.AssignedBranch ? `${detailOwner.AssignedBranch.code} – ${detailOwner.AssignedBranch.name}` : '-'}</p></div>
+              {detailOwner.User?.address && <div><span className="text-slate-500">Alamat</span><p>{detailOwner.User.address}</p></div>}
+              {detailOwner.User?.whatsapp && <div><span className="text-slate-500">WhatsApp</span><p>{detailOwner.User.whatsapp}</p></div>}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Verifikasi Bukti Bayar Pendaftaran */}
+      <Modal open={showVerifyRegPaymentModal && !!verifyRegPaymentProfile} onClose={() => setShowVerifyRegPaymentModal(false)}>
+        {verifyRegPaymentProfile && (
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Verifikasi Bukti Bayar Pendaftaran</h2>
+              <p className="text-sm text-slate-600 mt-1">{verifyRegPaymentProfile.User?.name || verifyRegPaymentProfile.User?.company_name} – {verifyRegPaymentProfile.User?.email}</p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (jika tolak)</label>
+                <textarea
+                  value={verifyRegPaymentRejectReason}
+                  onChange={(e) => setVerifyRegPaymentRejectReason(e.target.value)}
+                  placeholder="Opsional jika setujui"
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+              <Button variant="outline" onClick={() => setShowVerifyRegPaymentModal(false)}>Batal</Button>
+              <Button variant="outline" onClick={() => handleVerifyRegistrationPayment(false)} disabled={verifyingRegPayment || !verifyRegPaymentRejectReason.trim()}>Tolak</Button>
+              <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>{verifyingRegPayment ? 'Memproses...' : 'Setujui Bukti Bayar'}</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Verifikasi MoU */}
+      <Modal open={showVerifyMouModal && !!verifyMouProfile} onClose={() => setShowVerifyMouModal(false)}>
+        {verifyMouProfile && (
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-4 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">Verifikasi MoU</h2>
+              <p className="text-sm text-slate-600 mt-1">{verifyMouProfile.User?.name || verifyMouProfile.User?.company_name} – {verifyMouProfile.User?.email}</p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (jika tolak)</label>
+                <textarea
+                  value={verifyMouRejectReason}
+                  onChange={(e) => setVerifyMouRejectReason(e.target.value)}
+                  placeholder="Opsional jika setujui"
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+              <Button variant="outline" onClick={() => setShowVerifyMouModal(false)}>Batal</Button>
+              <Button variant="outline" onClick={() => handleVerifyMou(false)} disabled={verifyingMou || !verifyMouRejectReason.trim()}>Tolak</Button>
+              <Button variant="primary" onClick={() => handleVerifyMou(true)} disabled={verifyingMou}>{verifyingMou ? 'Memproses...' : 'Setujui MoU'}</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Hasil Aktivasi: password baru + link MOU */}
+      <Modal open={!!activateResult} onClose={() => setActivateResult(null)}>
+        {activateResult && (
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
+              <h2 className="text-lg font-semibold text-slate-900">Owner Diaktivasi</h2>
+              <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setActivateResult(null)}><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm text-slate-600 mb-3">Berikan data berikut kepada owner. Password lama tidak berlaku.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Password baru</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 bg-slate-100 rounded-lg font-mono text-sm break-all">{activateResult.password}</code>
+                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(activateResult.password); showToast('Disalin', 'success'); }}>Salin</Button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Surat MoU</label>
+                <a href={`${UPLOAD_BASE}${activateResult.mouUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline text-sm">
+                  Unduh / Buka MoU (PDF)
+                </a>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-200">
+              <Button variant="primary" className="w-full" onClick={() => setActivateResult(null)}>Tutup</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default KoordinatorOwnersPage;

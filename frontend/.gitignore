@@ -1,0 +1,8 @@
+node_modules/
+/build
+.env.local
+.DS_Store
+# Gradle
+mobile/android/.gradle/
+mobile/android/gradle/wrapper/_extract/
+mobile/android/gradle/wrapper/*.zip
