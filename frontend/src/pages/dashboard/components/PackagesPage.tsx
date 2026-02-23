@@ -72,7 +72,7 @@ const PackagesPage: React.FC = () => {
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
 
   const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat';
-  const canAddToOrder = user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -95,8 +95,9 @@ const PackagesPage: React.FC = () => {
   const fetchPackages = useCallback(() => {
     setLoading(true);
     setError(null);
+    const params = { is_package: 'true', with_prices: 'true', include_inactive: 'false', limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi
-      .list({ is_package: 'true', with_prices: 'true', include_inactive: 'false', limit, page, sort_by: sortBy, sort_order: sortOrder })
+      .list(params)
       .then((res) => {
         if (res.data?.data) setPackages(res.data.data as PackageProduct[]);
         const p = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
@@ -107,7 +108,7 @@ const PackagesPage: React.FC = () => {
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder]);
+  }, [page, limit, sortBy, sortOrder, user?.role]);
 
   useEffect(() => {
     fetchPackages();

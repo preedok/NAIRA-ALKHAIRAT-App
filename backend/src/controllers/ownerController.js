@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const crypto = require('crypto');
 const path = require('path');
 const { Op } = require('sequelize');
-const { User, OwnerProfile, Branch } = require('../models');
+const { User, OwnerProfile, Branch, OwnerBalanceTransaction } = require('../models');
 const { ROLES, OWNER_STATUS, MOU_REGISTRATION_FEE_IDR } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { generateMouPdf } = require('../utils/mouPdf');
@@ -167,6 +167,36 @@ const getMyProfile = asyncHandler(async (req, res) => {
   });
   if (!profile) return res.status(404).json({ success: false, message: 'Profil tidak ditemukan' });
   res.json({ success: true, data: profile });
+});
+
+/**
+ * GET /api/v1/owners/me/balance
+ * Saldo owner + riwayat transaksi (untuk order baru atau alokasi ke tagihan).
+ */
+const getMyBalance = asyncHandler(async (req, res) => {
+  const profile = await OwnerProfile.findOne({ where: { user_id: req.user.id } });
+  const balance = profile ? parseFloat(profile.balance) || 0 : 0;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
+  const transactions = await OwnerBalanceTransaction.findAll({
+    where: { owner_id: req.user.id },
+    order: [['created_at', 'DESC']],
+    limit
+  });
+  res.json({
+    success: true,
+    data: {
+      balance,
+      transactions: transactions.map((t) => ({
+        id: t.id,
+        amount: parseFloat(t.amount),
+        type: t.type,
+        reference_type: t.reference_type,
+        reference_id: t.reference_id,
+        notes: t.notes,
+        created_at: t.created_at
+      }))
+    }
+  });
 });
 
 /**
@@ -453,6 +483,7 @@ module.exports = {
   uploadRegistrationPayment,
   uploadMou,
   getMyProfile,
+  getMyBalance,
   list,
   getById,
   verifyMou,

@@ -49,7 +49,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   const [penaltyCurrency, setPenaltyCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
   const [menengahCurrency, setMenengahCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
   const [kecilCurrency, setKecilCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
-  const canAddToOrder = user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [loadingBusProducts, setLoadingBusProducts] = useState(false);
 
@@ -91,14 +91,15 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   const fetchBusProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingBusProducts(true);
-    productsApi.list({ type: 'bus', with_prices: 'true', include_inactive: 'false', limit: 50 })
+    const params = { type: 'bus', with_prices: 'true', include_inactive: 'false', limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    productsApi.list(params)
       .then((res) => {
         const data = (res.data as { data?: BusProduct[] })?.data;
         setBusProducts(Array.isArray(data) ? data : []);
       })
       .catch(() => setBusProducts([]))
       .finally(() => setLoadingBusProducts(false));
-  }, [canAddToOrder, embedInProducts]);
+  }, [canAddToOrder, embedInProducts, user?.role]);
 
   useEffect(() => {
     fetchBusProducts();

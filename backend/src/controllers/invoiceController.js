@@ -3,7 +3,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
-const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress } = require('../models');
+const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerProfile, OwnerBalanceTransaction } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -116,9 +116,21 @@ const list = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
+  // Role hotel: hanya tampilkan invoice yang order-nya punya item hotel (pekerjaan hotel di menu Invoice).
+  if (req.user.role === 'role_hotel') {
+    const hotelRows = await OrderItem.findAll({ where: { type: 'hotel' }, attributes: ['order_id'], raw: true });
+    const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))];
+    where.order_id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
+  }
+  // Role bus: hanya tampilkan invoice yang order-nya punya item bus (pekerjaan bus di menu Invoice).
+  if (req.user.role === 'role_bus') {
+    const busRows = await OrderItem.findAll({ where: { type: 'bus' }, attributes: ['order_id'], raw: true });
+    const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))];
+    where.order_id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
+  }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
-  // role_accounting, role_invoice, role_invoice_saudi, invoice: lihat semua invoice; tidak di-scope ke satu cabang.
-  if (req.user.branch_id && req.user.role !== 'owner' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice', 'invoice', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  // role_accounting, role_invoice, role_invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice', 'invoice', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
 
@@ -145,7 +157,7 @@ const list = asyncHandler(async (req, res) => {
       orderInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
-      { model: PaymentProof, as: 'PaymentProofs', required: false }
+      { model: PaymentProof, as: 'PaymentProofs', required: false, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }
     ],
     order: orderBy,
     limit: lim,
@@ -437,10 +449,11 @@ async function createInvoiceForOrder(order, opts = {}) {
 const getById = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: VisaProgress, as: 'VisaProgress', required: false }, { model: TicketProgress, as: 'TicketProgress', required: false }] }] },
+      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: VisaProgress, as: 'VisaProgress', required: false }, { model: TicketProgress, as: 'TicketProgress', required: false }, { model: HotelProgress, as: 'HotelProgress', required: false }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
-      { model: PaymentProof, as: 'PaymentProofs' }
+      { model: PaymentProof, as: 'PaymentProofs', include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] },
+      { model: Refund, as: 'Refunds', required: false, order: [['created_at', 'DESC']] }
     ]
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
@@ -450,6 +463,16 @@ const getById = asyncHandler(async (req, res) => {
   if (isKoordinatorRole(req.user.role)) {
     const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
     if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+  }
+  if (req.user.role === 'role_hotel') {
+    const order = invoice.Order || await Order.findByPk(invoice.order_id, { include: [{ model: OrderItem, as: 'OrderItems', attributes: ['type'] }] });
+    const hasHotel = (order?.OrderItems || []).some((it) => it.type === 'hotel');
+    if (!hasHotel) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item hotel' });
+  }
+  if (req.user.role === 'role_bus') {
+    const order = invoice.Order || await Order.findByPk(invoice.order_id, { include: [{ model: OrderItem, as: 'OrderItems', attributes: ['type'] }] });
+    const hasBus = (order?.OrderItems || []).some((it) => it.type === 'bus');
+    if (!hasBus) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item bus' });
   }
   await ensureBlockedStatus(invoice);
   // Sinkronkan paid_amount dari jumlah semua bukti terverifikasi (KES + transfer) jika tidak sesuai
@@ -572,7 +595,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
       await invoice.update({ paid_amount: newPaid, remaining_amount: remaining, status: newStatus });
     }
   }
-  const full = await Invoice.findByPk(invoice.id, { include: [{ model: PaymentProof, as: 'PaymentProofs' }] });
+  const full = await Invoice.findByPk(invoice.id, { include: [{ model: PaymentProof, as: 'PaymentProofs', include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }] });
   res.json({ success: true, data: full });
 });
 
@@ -611,6 +634,57 @@ const handleOverpaid = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/invoices/:id/allocate-balance
+ * Owner (atau invoice koordinator): alokasikan saldo ke tagihan invoice.
+ * Body: { amount: number }. Mengurangi saldo owner dan menambah paid_amount invoice.
+ */
+const allocateBalance = asyncHandler(async (req, res) => {
+  const invoice = await Invoice.findByPk(req.params.id);
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  const canAllocate = req.user.role === 'owner' && invoice.owner_id === req.user.id ||
+    ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+  if (!canAllocate) return res.status(403).json({ success: false, message: 'Tidak dapat mengalokasikan saldo ke invoice ini' });
+
+  const amount = parseFloat(req.body && req.body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'amount harus angka positif' });
+
+  const profile = await OwnerProfile.findOne({ where: { user_id: invoice.owner_id } });
+  if (!profile) return res.status(400).json({ success: false, message: 'Profil owner tidak ditemukan' });
+  const balance = parseFloat(profile.balance) || 0;
+  if (balance < amount) return res.status(400).json({ success: false, message: `Saldo tidak cukup. Saldo: Rp ${balance.toLocaleString('id-ID')}, dibutuhkan: Rp ${amount.toLocaleString('id-ID')}` });
+
+  const remaining = parseFloat(invoice.remaining_amount) || 0;
+  const allocateAmount = Math.min(amount, remaining);
+  if (allocateAmount <= 0) return res.status(400).json({ success: false, message: 'Invoice tidak memiliki sisa tagihan' });
+
+  const newBalance = balance - allocateAmount;
+  const newPaid = (parseFloat(invoice.paid_amount) || 0) + allocateAmount;
+  const newRemaining = Math.max(0, parseFloat(invoice.total_amount) - newPaid);
+  let newStatus = invoice.status;
+  if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
+  else if (newPaid >= (parseFloat(invoice.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+
+  await profile.update({ balance: newBalance });
+  await invoice.update({ paid_amount: newPaid, remaining_amount: newRemaining, status: newStatus });
+  await OwnerBalanceTransaction.create({
+    owner_id: invoice.owner_id,
+    amount: -allocateAmount,
+    type: 'allocation',
+    reference_type: 'invoice',
+    reference_id: invoice.id,
+    notes: `Alokasi ke invoice ${invoice.invoice_number}. Saldo -${allocateAmount.toLocaleString('id-ID')}`
+  });
+
+  const full = await Invoice.findByPk(invoice.id, {
+    include: [
+      { model: Order, as: 'Order', attributes: ['id', 'order_number'] },
+      { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
+    ]
+  });
+  res.json({ success: true, data: full, message: `Saldo Rp ${allocateAmount.toLocaleString('id-ID')} berhasil dialokasikan ke invoice ${invoice.invoice_number}` });
+});
+
+/**
  * GET /api/v1/invoices/:id/pdf
  * Unduh invoice dalam format PDF. File disimpan ke disk (local) dan metadata ke DB.
  */
@@ -620,7 +694,7 @@ const getPdf = asyncHandler(async (req, res) => {
       { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
-      { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']] }
+      { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }
     ]
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
@@ -700,6 +774,7 @@ module.exports = {
   unblock,
   verifyPayment,
   handleOverpaid,
+  allocateBalance,
   ensureBlockedStatus,
   syncInvoiceFromOrder
 };

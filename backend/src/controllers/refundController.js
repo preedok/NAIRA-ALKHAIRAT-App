@@ -1,0 +1,155 @@
+const { Op } = require('sequelize');
+const asyncHandler = require('express-async-handler');
+const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction } = require('../models');
+const { REFUND_STATUS, REFUND_SOURCE } = require('../constants');
+
+const REFUND_STATUS_LABELS = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
+
+/**
+ * POST /api/v1/refunds (request refund dari saldo - owner)
+ * Body: { amount, bank_name, account_number } untuk tarik saldo ke rekening.
+ */
+const createFromBalance = asyncHandler(async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ success: false, message: 'Hanya owner yang dapat meminta refund dari saldo' });
+  const { amount: amountRaw, bank_name, account_number } = req.body || {};
+  const amount = parseFloat(amountRaw);
+  if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'amount wajib angka positif' });
+  const bank = bank_name ? String(bank_name).trim() : '';
+  const account = account_number ? String(account_number).trim() : '';
+  if (!bank || !account) return res.status(400).json({ success: false, message: 'bank_name dan account_number wajib diisi' });
+
+  const profile = await OwnerProfile.findOne({ where: { user_id: req.user.id } });
+  if (!profile) return res.status(404).json({ success: false, message: 'Profil owner tidak ditemukan' });
+  const balance = parseFloat(profile.balance) || 0;
+  if (balance < amount) return res.status(400).json({ success: false, message: `Saldo tidak cukup. Saldo: Rp ${balance.toLocaleString('id-ID')}` });
+
+  const r = await Refund.create({
+    invoice_id: null,
+    order_id: null,
+    owner_id: req.user.id,
+    amount,
+    status: REFUND_STATUS.REQUESTED,
+    source: REFUND_SOURCE.BALANCE,
+    bank_name: bank,
+    account_number: account,
+    reason: 'Penarikan saldo ke rekening',
+    requested_by: req.user.id
+  });
+
+  const full = await Refund.findByPk(r.id, {
+    include: [{ model: User, as: 'Owner', attributes: ['id', 'name'], required: false }]
+  });
+  res.status(201).json({ success: true, data: full, message: 'Permintaan refund saldo telah dicatat. Admin/accounting akan memproses.' });
+});
+
+/**
+ * GET /api/v1/refunds
+ * Admin pusat & accounting: semua permintaan refund. Owner: hanya milik sendiri.
+ */
+const list = asyncHandler(async (req, res) => {
+  const { status, owner_id, limit = 50, page = 1 } = req.query;
+  const where = {};
+  if (status) where.status = status;
+  if (req.user.role === 'owner') where.owner_id = req.user.id;
+  else if (owner_id) where.owner_id = owner_id;
+
+  const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * lim;
+
+  const { rows, count } = await Refund.findAndCountAll({
+    where,
+    include: [
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'order_id', 'total_amount', 'paid_amount'], required: false },
+      { model: Order, as: 'Order', attributes: ['id', 'order_number'], required: false },
+      { model: User, as: 'Owner', attributes: ['id', 'name', 'email', 'company_name'], required: false },
+      { model: User, as: 'RequestedBy', attributes: ['id', 'name'], required: false },
+      { model: User, as: 'ApprovedBy', attributes: ['id', 'name'], required: false }
+    ],
+    order: [['created_at', 'DESC']],
+    limit: lim,
+    offset,
+    distinct: true
+  });
+
+  res.json({
+    success: true,
+    data: rows,
+    pagination: { total: count, page: Math.floor(offset / lim) + 1, limit: lim, totalPages: Math.ceil(count / lim) || 1 },
+    status_labels: REFUND_STATUS_LABELS
+  });
+});
+
+/**
+ * GET /api/v1/refunds/:id
+ */
+const getById = asyncHandler(async (req, res) => {
+  const r = await Refund.findByPk(req.params.id, {
+    include: [
+      { model: Invoice, as: 'Invoice', required: false },
+      { model: Order, as: 'Order', required: false },
+      { model: User, as: 'Owner', attributes: ['id', 'name', 'email', 'company_name'], required: false },
+      { model: User, as: 'RequestedBy', attributes: ['id', 'name'], required: false },
+      { model: User, as: 'ApprovedBy', attributes: ['id', 'name'], required: false }
+    ]
+  });
+  if (!r) return res.status(404).json({ success: false, message: 'Refund tidak ditemukan' });
+  if (req.user.role === 'owner' && r.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Akses ditolak' });
+  res.json({ success: true, data: r, status_labels: REFUND_STATUS_LABELS });
+});
+
+/**
+ * PATCH /api/v1/refunds/:id
+ * Admin pusat & accounting: update status (approved, rejected, refunded).
+ * Body: { status: 'approved'|'rejected'|'refunded', rejection_reason? }
+ * Saat status = refunded dan source = balance: kurangi saldo owner.
+ */
+const updateStatus = asyncHandler(async (req, res) => {
+  const allowed = ['admin_pusat', 'super_admin', 'role_accounting'].includes(req.user.role);
+  if (!allowed) return res.status(403).json({ success: false, message: 'Hanya admin pusat dan accounting yang dapat memproses refund' });
+
+  const r = await Refund.findByPk(req.params.id);
+  if (!r) return res.status(404).json({ success: false, message: 'Refund tidak ditemukan' });
+
+  const { status, rejection_reason } = req.body || {};
+  const valid = [REFUND_STATUS.APPROVED, REFUND_STATUS.REJECTED, REFUND_STATUS.REFUNDED].includes(status);
+  if (!valid) return res.status(400).json({ success: false, message: 'status harus approved, rejected, atau refunded' });
+
+  if (status === REFUND_STATUS.REJECTED && rejection_reason) await r.update({ rejection_reason: String(rejection_reason).trim() });
+
+  const updates = { status };
+  if (status === REFUND_STATUS.APPROVED || status === REFUND_STATUS.REFUNDED) {
+    updates.approved_by = req.user.id;
+    updates.approved_at = new Date();
+  }
+  if (status === REFUND_STATUS.REFUNDED) updates.refunded_at = new Date();
+
+  await r.update(updates);
+
+  if (status === REFUND_STATUS.REFUNDED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
+    const profile = await OwnerProfile.findOne({ where: { user_id: r.owner_id } });
+    if (profile) {
+      const current = parseFloat(profile.balance) || 0;
+      const amount = parseFloat(r.amount) || 0;
+      const newBalance = Math.max(0, current - amount);
+      await profile.update({ balance: newBalance });
+      await OwnerBalanceTransaction.create({
+        owner_id: r.owner_id,
+        amount: -amount,
+        type: 'refund_debit',
+        reference_type: 'refund',
+        reference_id: r.id,
+        notes: `Refund saldo ke rekening. Saldo -${amount.toLocaleString('id-ID')}`
+      });
+    }
+  }
+
+  const updated = await Refund.findByPk(r.id, {
+    include: [
+      { model: User, as: 'Owner', attributes: ['id', 'name'], required: false },
+      { model: User, as: 'ApprovedBy', attributes: ['id', 'name'], required: false }
+    ]
+  });
+  res.json({ success: true, data: updated, message: `Status refund diubah menjadi ${REFUND_STATUS_LABELS[status] || status}` });
+});
+
+module.exports = { list, getById, updateStatus, createFromBalance };

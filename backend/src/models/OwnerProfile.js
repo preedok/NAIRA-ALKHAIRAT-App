@@ -113,6 +113,12 @@ const OwnerProfile = sequelize.define('OwnerProfile', {
     type: DataTypes.STRING(255),
     allowNull: true,
     comment: 'Password yang digenerate saat aktivasi; ditampilkan di Admin Pusat; dikosongkan bila admin ubah password'
+  },
+  balance: {
+    type: DataTypes.DECIMAL(18, 2),
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Saldo owner dari pembatalan order (jadikan saldo); dipakai untuk order baru atau alokasi ke tagihan'
   }
 }, {
   tableName: 'owner_profiles',

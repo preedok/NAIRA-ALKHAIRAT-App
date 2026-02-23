@@ -98,7 +98,9 @@ const list = asyncHandler(async (req, res) => {
   });
 
   if (with_prices === 'true') {
-    const bid = branch_id || req.user?.branch_id || null;
+    // Role hotel di menu Products: tampilkan harga umum (pusat) saja, sama seperti admin pusat
+    const viewAsPusat = req.query.view_as_pusat === 'true' && req.user?.role === 'role_hotel';
+    const bid = viewAsPusat ? null : (branch_id || req.user?.branch_id || null);
     const oid = owner_id || null;
     const result = (products || []).map(p => {
       const prices = p.ProductPrices || [];

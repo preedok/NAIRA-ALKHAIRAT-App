@@ -10,6 +10,7 @@ const Invoice = require('./Invoice');
 const InvoiceFile = require('./InvoiceFile');
 const PaymentProof = require('./PaymentProof');
 const Refund = require('./Refund');
+const OwnerBalanceTransaction = require('./OwnerBalanceTransaction');
 const AuditLog = require('./AuditLog');
 const Notification = require('./Notification');
 const AppSetting = require('./AppSetting');
@@ -72,8 +73,9 @@ Order.hasOne(Invoice, { foreignKey: 'order_id' });
 
 PaymentProof.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 PaymentProof.belongsTo(User, { foreignKey: 'uploaded_by' });
-PaymentProof.belongsTo(User, { foreignKey: 'verified_by' });
+PaymentProof.belongsTo(User, { foreignKey: 'verified_by', as: 'VerifiedBy' });
 Invoice.hasMany(PaymentProof, { foreignKey: 'invoice_id', as: 'PaymentProofs' });
+Invoice.hasMany(Refund, { foreignKey: 'invoice_id', as: 'Refunds' });
 Invoice.hasOne(InvoiceFile, { foreignKey: 'invoice_id', as: 'InvoiceFile' });
 InvoiceFile.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 InvoiceFile.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
@@ -82,8 +84,13 @@ InvoiceFile.belongsTo(User, { foreignKey: 'generated_by', as: 'GeneratedBy' });
 // Refund
 Refund.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 Refund.belongsTo(Order, { foreignKey: 'order_id' });
-Refund.belongsTo(User, { foreignKey: 'requested_by' });
-Refund.belongsTo(User, { foreignKey: 'approved_by' });
+Refund.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
+Refund.belongsTo(User, { foreignKey: 'requested_by', as: 'RequestedBy' });
+Refund.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
+
+// Owner balance (saldo)
+User.hasMany(OwnerBalanceTransaction, { foreignKey: 'owner_id' });
+OwnerBalanceTransaction.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 
 // AuditLog
 AuditLog.belongsTo(User, { foreignKey: 'user_id' });
@@ -184,6 +191,7 @@ const db = {
   InvoiceFile,
   PaymentProof,
   Refund,
+  OwnerBalanceTransaction,
   AuditLog,
   Notification,
   AppSetting,

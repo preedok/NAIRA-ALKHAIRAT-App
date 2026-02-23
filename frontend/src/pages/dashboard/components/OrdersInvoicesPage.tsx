@@ -13,7 +13,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
-import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, type InvoicesSummaryData } from '../../../services/api';
+import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, type InvoicesSummaryData } from '../../../services/api';
 
 /** Base URL untuk file uploads (supaya foto bukti bayar tampil; pakai origin saat proxy) */
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -27,7 +27,8 @@ const getFileUrl = (path: string) => {
 };
 
 /**
- * Order & Invoice - Satu halaman gabungan untuk Admin Pusat & Admin Cabang.
+ * Order & Invoice - Satu halaman untuk semua role yang mengerjakan order/invoice:
+ * owner, invoice_koordinator, role_invoice_saudi, role_hotel (pekerjaan hotel), admin pusat/cabang, accounting, dll.
  * Modal Detail Invoice: tab Invoice & Order & tab Bukti Bayar, file preview inline.
  */
 type ApiOrder = {
@@ -89,6 +90,17 @@ const OrdersInvoicesPage: React.FC = () => {
   const [payAmountSaudi, setPayAmountSaudi] = useState<string>('');
   const [uploadingJamaahItemId, setUploadingJamaahItemId] = useState<string | null>(null);
   const [jamaahLinkInput, setJamaahLinkInput] = useState<Record<string, string>>({});
+  const [hotelProgressSaving, setHotelProgressSaving] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelTargetInv, setCancelTargetInv] = useState<any | null>(null);
+  const [cancelAction, setCancelAction] = useState<'to_balance' | 'refund'>('to_balance');
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelBankName, setCancelBankName] = useState('');
+  const [cancelAccountNumber, setCancelAccountNumber] = useState('');
+  const [ownerBalance, setOwnerBalance] = useState<number | null>(null);
+  const [ownerBalanceLoading, setOwnerBalanceLoading] = useState(false);
+  const [allocateAmount, setAllocateAmount] = useState('');
+  const [allocating, setAllocating] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
   const isAccounting = user?.role === 'role_accounting';
@@ -208,14 +220,74 @@ const OrdersInvoicesPage: React.FC = () => {
     } catch {}
   };
 
+  const openCancelModal = (inv: any) => {
+    if (!canOrderAction || !inv?.order_id) return;
+    setCancelTargetInv(inv);
+    setCancelAction('to_balance');
+    setCancelReason('');
+    setCancelBankName('');
+    setCancelAccountNumber('');
+    setShowCancelModal(true);
+  };
+
+  const fetchOwnerBalance = useCallback(() => {
+    if (user?.role !== 'owner') return;
+    setOwnerBalanceLoading(true);
+    ownersApi.getMyBalance()
+      .then((res) => { if (res.data?.success && res.data?.data) setOwnerBalance(res.data.data.balance); })
+      .catch(() => setOwnerBalance(null))
+      .finally(() => setOwnerBalanceLoading(false));
+  }, [user?.role]);
+
   const handleDeleteOrder = async (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
+    const paidAmount = parseFloat(inv.paid_amount) || 0;
+    if (paidAmount > 0) {
+      openCancelModal(inv);
+      return;
+    }
     if (!window.confirm(`Batalkan invoice "${inv.invoice_number || inv.id}"?`)) return;
     setDeletingOrderId(inv.order_id);
     try {
       await ordersApi.delete(inv.order_id);
       showToast('Order dibatalkan', 'success');
       fetchInvoices();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
+  const submitCancelModal = async () => {
+    if (!cancelTargetInv?.order_id) return;
+    const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
+    if (paid > 0 && cancelAction === 'refund' && (!cancelBankName.trim() || !cancelAccountNumber.trim())) {
+      showToast('Untuk refund wajib isi Nama Bank dan Nomor Rekening', 'error');
+      return;
+    }
+    setDeletingOrderId(cancelTargetInv.order_id);
+    try {
+      const body: { action?: 'to_balance' | 'refund'; reason?: string; bank_name?: string; account_number?: string } = {};
+      if (paid > 0) {
+        body.action = cancelAction;
+        if (cancelReason.trim()) body.reason = cancelReason.trim();
+        if (cancelAction === 'refund') {
+          body.bank_name = cancelBankName.trim();
+          body.account_number = cancelAccountNumber.trim();
+        }
+      }
+      const res = await ordersApi.delete(cancelTargetInv.order_id, body);
+      const msg = (res.data as any)?.message || 'Order dibatalkan.';
+      showToast(msg, 'success');
+      setShowCancelModal(false);
+      setCancelTargetInv(null);
+      setCancelReason('');
+      setCancelBankName('');
+      setCancelAccountNumber('');
+      fetchInvoices();
+      if (viewInvoice?.id === cancelTargetInv.id) setViewInvoice(null);
+      if (user?.role === 'owner') fetchOwnerBalance();
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
     } finally {
@@ -267,6 +339,14 @@ const OrdersInvoicesPage: React.FC = () => {
   useEffect(() => {
     fetchSummary();
   }, [branchId, wilayahId, provinsiId, filterStatus, filterOwnerId, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus]);
+
+  useEffect(() => {
+    if (user?.role === 'owner') fetchOwnerBalance();
+  }, [user?.role, fetchOwnerBalance]);
+
+  useEffect(() => {
+    if (viewInvoice && user?.role === 'owner') fetchOwnerBalance();
+  }, [viewInvoice?.id, user?.role, fetchOwnerBalance]);
 
   const summaryFromTable = (() => {
     if (invoices.length === 0) return null;
@@ -368,6 +448,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const VISA_STATUS_LABELS: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
   const TICKET_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
+  const HOTEL_STATUS_LABELS: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
 
   const handleUploadJamaahData = async (orderId: string, itemId: string, file: File | null, link: string) => {
     if (!file && !link?.trim()) {
@@ -619,7 +700,7 @@ const OrdersInvoicesPage: React.FC = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-stone-900">Invoice</h1>
           <p className="text-stone-600 mt-1">
-            {(isAdminPusat || isAccounting) ? 'Semua invoice dalam satu daftar.' : isInvoiceSaudi ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD (Saudi) otomatis update invoice.' : (user?.role === 'owner' ? 'Invoice Anda.' : 'Invoice cabang Anda.')}
+            {user?.role === 'role_hotel' ? 'Pekerjaan hotel: daftar order yang berisi item hotel. Buka invoice untuk update status & nomor kamar.' : user?.role === 'role_bus' ? 'Pekerjaan bus: daftar order yang berisi item bus. Buka invoice untuk detail.' : (isAdminPusat || isAccounting) ? 'Semua invoice dalam satu daftar.' : isInvoiceSaudi ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD (Saudi) otomatis update invoice.' : (user?.role === 'owner' ? 'Invoice Anda.' : 'Invoice cabang Anda.')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -873,8 +954,11 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <><span className="text-stone-500">IDR:</span> {formatIDR(amt)} · <span className="text-stone-500">SAR:</span> {formatSAR(sar, false)} · <span className="text-stone-500">USD:</span> {formatUSD(usd, false)}</>
                                   )}
                                 </div>
-                                <div className="mt-1">
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                   <Badge variant={ps.variant} className="text-xs">{statusLabel}</Badge>
+                                  {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
+                                    <span className="text-slate-500">oleh {(p as any).VerifiedBy.name}</span>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -894,7 +978,7 @@ const OrdersInvoicesPage: React.FC = () => {
                             { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
                             { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
                             ...(canOrderAction && inv.order_id
-                              ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => { if (window.confirm('Batalkan invoice ini?')) handleDeleteOrder(inv); }, danger: true, disabled: deletingOrderId === inv.order_id }]
+                              ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
                               : []),
                           ].filter(Boolean) as ActionsMenuItem[]}
                         />
@@ -1065,32 +1149,45 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Data Jamaah & Status Visa/Tiket */}
+                  {/* Data Jamaah & Status Visa/Tiket/Hotel/Bus — role_hotel hanya item hotel, role_bus hanya item bus */}
                   {(() => {
                     const order = viewInvoice?.Order;
-                    const items = (order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa' || (i.type || i.product_type) === 'ticket');
+                    const isRoleHotel = user?.role === 'role_hotel';
+                    const isRoleBus = user?.role === 'role_bus';
+                    const items = (order?.OrderItems || []).filter((i: any) => {
+                      const t = (i.type || i.product_type);
+                      if (isRoleHotel) return t === 'hotel';
+                      if (isRoleBus) return t === 'bus';
+                      return t === 'visa' || t === 'ticket' || t === 'hotel';
+                    });
                     if (items.length === 0) return null;
+                    const sectionTitle = isRoleHotel ? 'Data & Status Hotel' : isRoleBus ? 'Data & Status Bus' : 'Data Jamaah & Status Visa / Tiket / Hotel';
                     return (
                       <div className="space-y-4">
                         <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                          <FileText className="w-4 h-4" /> Data Jamaah & Status Visa / Tiket
+                          <FileText className="w-4 h-4" /> {sectionTitle}
                         </h4>
                         {items.map((item: any) => {
                           const isVisa = (item.type || item.product_type) === 'visa';
-                          const progress = isVisa ? item.VisaProgress : item.TicketProgress;
-                          const statusLabels = isVisa ? VISA_STATUS_LABELS : TICKET_STATUS_LABELS;
-                          const status = progress?.status ? (statusLabels[progress.status] || progress.status) : (isVisa ? 'Menunggu data' : 'Menunggu data');
+                          const isTicket = (item.type || item.product_type) === 'ticket';
+                          const isHotel = (item.type || item.product_type) === 'hotel';
+                          const isBus = (item.type || item.product_type) === 'bus';
+                          const progress = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : item.HotelProgress;
+                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : HOTEL_STATUS_LABELS;
+                          const status = isBus ? 'Item bus' : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : (isVisa ? 'Menunggu data' : 'Menunggu data')));
                           const hasJamaah = item.jamaah_data_type && item.jamaah_data_value;
                           const jamaahUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
+                          const productLabel = item.Product?.name || item.product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
+                          const badgeVariant = isBus ? 'default' : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
                           return (
                             <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-medium text-slate-800">{item.Product?.name || item.product_name || (isVisa ? 'Visa' : 'Tiket')}</span>
-                                <Badge variant={progress?.status === 'issued' || progress?.status === 'ticket_issued' ? 'success' : 'info'}>{status}</Badge>
+                                <span className="font-medium text-slate-800">{productLabel}</span>
+                                <Badge variant={badgeVariant}>{status}</Badge>
                               </div>
                               {hasJamaah && (
                                 <div className="text-sm text-slate-600">
-                                  Data jamaah: {item.jamaah_data_type === 'link' ? (
+                                  Dokumen (ZIP/link): {item.jamaah_data_type === 'link' ? (
                                     <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
                                       <LinkIcon className="w-3.5 h-3.5" /> Link Google Drive
                                     </a>
@@ -1103,7 +1200,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   )}
                                 </div>
                               )}
-                              {(progress?.visa_file_url || progress?.ticket_file_url) && (
+                              {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
                                 <div className="text-sm text-slate-600">
                                   Hasil terbit:{' '}
                                   <a
@@ -1116,9 +1213,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </a>
                                 </div>
                               )}
-                              {canOrderAction && viewInvoice?.order_id && (
+                              {canOrderAction && viewInvoice?.order_id && !isBus && (
                                 <div className="pt-2 border-t border-slate-200 space-y-2">
-                                  <p className="text-xs text-slate-500">Upload data jamaah (ZIP atau link Google Drive) untuk diproses tim visa/tiket:</p>
+                                  <p className="text-xs text-slate-500">Upload dokumen (ZIP atau link Google Drive) untuk divisi visa/tiket/hotel:</p>
                                   <div className="flex flex-wrap gap-2 items-end">
                                     <label className="flex flex-col gap-1 text-xs">
                                       <span>File ZIP</span>
@@ -1156,12 +1253,125 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </div>
                                 </div>
                               )}
+                              {isRoleHotel && isHotel && (
+                                <div className="pt-2 border-t border-slate-200 space-y-2">
+                                  <p className="text-xs font-medium text-slate-600">Update progress hotel</p>
+                                  <form
+                                    className="flex flex-wrap gap-3 items-end"
+                                    onSubmit={async (e) => {
+                                      e.preventDefault();
+                                      const form = e.currentTarget;
+                                      const fd = new FormData(form);
+                                      const status = (fd.get('status') as string) || undefined;
+                                      const room_number = (fd.get('room_number') as string)?.trim() || undefined;
+                                      const meal_status = (fd.get('meal_status') as string) || undefined;
+                                      setHotelProgressSaving(item.id);
+                                      try {
+                                        await hotelApi.updateItemProgress(item.id, { status, room_number, meal_status });
+                                        showToast('Status hotel berhasil diperbarui', 'success');
+                                        if (viewInvoice?.id) fetchInvoiceDetail(viewInvoice.id);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal update progress hotel', 'error');
+                                      } finally {
+                                        setHotelProgressSaving(null);
+                                      }
+                                    }}
+                                  >
+                                    <label className="flex flex-col gap-1 text-xs">
+                                      <span>Status</span>
+                                      <select name="status" defaultValue={progress?.status || 'waiting_confirmation'} className="text-sm border border-slate-300 rounded px-2 py-1.5">
+                                        {Object.entries(HOTEL_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                      </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-xs">
+                                      <span>No. Kamar</span>
+                                      <input type="text" name="room_number" defaultValue={progress?.room_number || ''} placeholder="Contoh: 301" className="text-sm border border-slate-300 rounded px-2 py-1.5 w-24" />
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-xs">
+                                      <span>Makan</span>
+                                      <select name="meal_status" defaultValue={progress?.meal_status || 'pending'} className="text-sm border border-slate-300 rounded px-2 py-1.5">
+                                        <option value="pending">Pending</option>
+                                        <option value="confirmed">Dikonfirmasi</option>
+                                        <option value="completed">Selesai</option>
+                                      </select>
+                                    </label>
+                                    <Button type="submit" size="sm" variant="primary" disabled={!!hotelProgressSaving}>
+                                      {hotelProgressSaving === item.id ? 'Menyimpan...' : 'Simpan'}
+                                    </Button>
+                                  </form>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
                     );
                   })()}
+
+                  {/* Info Refund (jika invoice dibatalkan dengan pembayaran) */}
+                  {(viewInvoice?.Refunds?.length ?? 0) > 0 && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <Receipt className="w-4 h-4" /> Permintaan Refund
+                      </h4>
+                      <p className="text-xs text-slate-500">Pembatalan invoice dengan pembayaran akan membuat permintaan refund. Status berikut menunggu proses oleh tim keuangan.</p>
+                      <ul className="space-y-2">
+                        {(viewInvoice.Refunds as any[]).map((r: any) => (
+                          <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm p-3 bg-white rounded-lg border border-slate-200">
+                            <span className="font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</span>
+                            <Badge variant={r.status === 'refunded' ? 'success' : r.status === 'rejected' ? 'error' : 'warning'}>
+                              {r.status === 'requested' ? 'Menunggu proses' : r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Sudah direfund'}
+                            </Badge>
+                            {(r.bank_name || r.account_number) && <span className="text-slate-600 text-xs w-full mt-1">Rekening: {r.bank_name} {r.account_number}</span>}
+                            {r.reason && <span className="text-slate-600 text-xs w-full mt-1">Alasan: {r.reason}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Saldo owner & alokasi ke invoice ini */}
+                  {user?.role === 'owner' && viewInvoice?.owner_id === user?.id && (
+                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 space-y-3">
+                      <h4 className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
+                        <Wallet className="w-4 h-4" /> Saldo Akun Anda
+                      </h4>
+                      {ownerBalanceLoading ? (
+                        <p className="text-sm text-slate-500">Memuat saldo...</p>
+                      ) : (
+                        <>
+                          <p className="text-lg font-bold text-emerald-700">{formatIDR(ownerBalance ?? 0)}</p>
+                          <p className="text-xs text-slate-600">Saldo dapat digunakan untuk order baru atau dialokasikan ke tagihan (DP/lunas).</p>
+                          {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
+                            <div className="pt-2 border-t border-emerald-200 flex flex-wrap gap-2 items-end">
+                              <label className="flex flex-col gap-1 text-xs">
+                                <span>Alokasikan ke invoice ini (IDR)</span>
+                                <input type="number" min="1" max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} className="w-40 text-sm border border-slate-300 rounded-lg px-3 py-2" placeholder="Jumlah" />
+                              </label>
+                              <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
+                                const amt = parseFloat(allocateAmount);
+                                if (!Number.isFinite(amt) || amt <= 0) return;
+                                setAllocating(true);
+                                try {
+                                  await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
+                                  showToast(`Saldo Rp ${amt.toLocaleString('id-ID')} berhasil dialokasikan`, 'success');
+                                  setAllocateAmount('');
+                                  fetchInvoiceDetail(viewInvoice.id);
+                                  fetchOwnerBalance();
+                                } catch (e: any) {
+                                  showToast(e.response?.data?.message || 'Gagal alokasi', 'error');
+                                } finally {
+                                  setAllocating(false);
+                                }
+                              }}>
+                                {allocating ? 'Memproses...' : 'Alokasikan'}
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {canPayInvoice(viewInvoice) && (
                     <div className="flex flex-wrap items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
@@ -1237,6 +1447,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </>
                                 )}
                                 <Badge variant={ps.variant}>{ps.label}</Badge>
+                                {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
+                                  <span className="text-xs text-slate-600">Diverifikasi oleh: <strong>{(p as any).VerifiedBy.name}</strong></span>
+                                )}
                                 {p.transfer_date && <span className="text-xs text-slate-500">Tgl transfer: {formatDate(p.transfer_date)}</span>}
                                 {p.created_at && <span className="text-xs text-slate-500">Upload: {new Date(p.created_at).toLocaleString('id-ID')}</span>}
                               </div>
@@ -1275,6 +1488,59 @@ const OrdersInvoicesPage: React.FC = () => {
 
             <div className="px-6 py-3 border-t border-slate-200 bg-slate-50/50">
               <Button variant="outline" onClick={closeModal}>Tutup</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Batalkan Invoice: pilih Jadikan saldo atau Minta refund (isi bank & rekening) */}
+      {showCancelModal && cancelTargetInv && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => !deletingOrderId && setShowCancelModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">Batalkan Invoice</h3>
+            {(() => {
+              const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
+              if (paid > 0) {
+                return (
+                  <>
+                    <p className="text-sm text-slate-600">
+                      Invoice <strong>{cancelTargetInv.invoice_number}</strong> memiliki pembayaran <strong className="text-emerald-600">{formatIDR(paid)}</strong>. Pilih salah satu:
+                    </p>
+                    <div className="space-y-3">
+                      <label className="flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer border-slate-200 hover:border-emerald-300">
+                        <input type="radio" name="cancelAction" checked={cancelAction === 'to_balance'} onChange={() => setCancelAction('to_balance')} className="mt-1" />
+                        <div>
+                          <span className="font-medium text-slate-800">Jadikan saldo</span>
+                          <p className="text-xs text-slate-500 mt-0.5">Dana masuk ke saldo akun Anda. Bisa dipakai untuk order baru atau alokasi ke tagihan lain.</p>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer border-slate-200 hover:border-emerald-300">
+                        <input type="radio" name="cancelAction" checked={cancelAction === 'refund'} onChange={() => setCancelAction('refund')} className="mt-1" />
+                        <div>
+                          <span className="font-medium text-slate-800">Minta refund ke rekening</span>
+                          <p className="text-xs text-slate-500 mt-0.5">Admin/accounting akan memproses pengembalian ke rekening Anda.</p>
+                        </div>
+                      </label>
+                    </div>
+                    {cancelAction === 'refund' && (
+                      <div className="space-y-2 pt-2 border-t border-slate-200">
+                        <p className="text-xs font-medium text-slate-600">Rekening tujuan refund (wajib)</p>
+                        <input type="text" value={cancelBankName} onChange={(e) => setCancelBankName(e.target.value)} placeholder="Nama Bank (contoh: BCA, Mandiri)" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!deletingOrderId} />
+                        <input type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!deletingOrderId} />
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-500">Alasan pembatalan (opsional):</p>
+                    <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 min-h-[60px] resize-y" disabled={!!deletingOrderId} />
+                  </>
+                );
+              }
+              return <p className="text-sm text-slate-600">Batalkan invoice <strong>{cancelTargetInv.invoice_number}</strong>? Tindakan ini tidak dapat dibatalkan.</p>;
+            })()}
+            <div className="flex gap-3 justify-end pt-2">
+              <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancelTargetInv(null); setCancelReason(''); setCancelBankName(''); setCancelAccountNumber(''); }} disabled={!!deletingOrderId}>Batal</Button>
+              <Button variant="primary" onClick={submitCancelModal} disabled={!!deletingOrderId} className="bg-red-600 hover:bg-red-700">
+                {deletingOrderId ? 'Memproses...' : (parseFloat(cancelTargetInv.paid_amount) || 0) > 0 ? (cancelAction === 'to_balance' ? 'Ya, batalkan & jadikan saldo' : 'Ya, batalkan & minta refund') : 'Ya, batalkan'}
+              </Button>
             </div>
           </div>
         </div>

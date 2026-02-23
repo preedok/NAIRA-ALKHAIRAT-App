@@ -20,9 +20,9 @@ import SettingsPage from '../pages/dashboard/components/SettingsPage';
 import ProfilePage from '../pages/dashboard/components/ProfilePage';
 import KoordinatorOwnersPage from '../pages/dashboard/components/KoordinatorOwnersPage';
 import OwnerActivationPage from '../pages/dashboard/owner/OwnerActivationPage';
-import OwnerMouPage from '../pages/dashboard/owner/OwnerMouPage';
 import AdminPusatCreateUserPage from '../pages/dashboard/adminpusat/AdminPusatCreateUserPage';
-import OrdersInvoicesPage from '../pages/dashboard/adminpusat/OrdersInvoicesPage';
+import OrdersInvoicesPage from '../pages/dashboard/components/OrdersInvoicesPage';
+import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
 import AccountingAgingPage from '../pages/dashboard/accounting/AccountingAgingPage';
 import AccountingChartOfAccountsPage from '../pages/dashboard/accounting/AccountingChartOfAccountsPage';
@@ -60,7 +60,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'owner/mou',
-            element: <OwnerMouPage />
+            element: <Navigate to="/dashboard/profile" replace />
           },
           // Fallback for direct path (optional): /dashboard/super-admin
           {
@@ -127,6 +127,10 @@ const router = createBrowserRouter([
           {
             path: 'invoices',
             element: <Navigate to="/dashboard/orders-invoices" replace />
+          },
+          {
+            path: 'refunds',
+            element: <RefundsPage />
           },
           {
             path: 'users',

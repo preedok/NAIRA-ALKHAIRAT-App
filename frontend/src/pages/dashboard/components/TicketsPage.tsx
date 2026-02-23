@@ -124,14 +124,15 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
   const fetchTicketProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingTicketProducts(true);
-    productsApi.list({ type: 'ticket', with_prices: 'true', include_inactive: 'false', limit: 50 })
+    const params = { type: 'ticket', with_prices: 'true', include_inactive: 'false', limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    productsApi.list(params)
       .then((res) => {
         const data = (res.data as { data?: TicketProduct[] })?.data;
         setTicketProducts(Array.isArray(data) ? data : []);
       })
       .catch(() => setTicketProducts([]))
       .finally(() => setLoadingTicketProducts(false));
-  }, [canAddToOrder, embedInProducts]);
+  }, [canAddToOrder, embedInProducts, user?.role]);
 
   const refetchAll = useCallback(() => {
     fetchTicketList();

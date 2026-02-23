@@ -49,16 +49,10 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
   },
   {
-    title: 'MoU Saya',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/owner/mou',
-    roles: ['owner']
-  },
-  {
     title: 'Products',
     icon: <Package className="w-5 h-5" />,
     path: '/dashboard/products',
-    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'owner']
+    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'role_invoice_saudi', 'owner']
   },
   {
     title: 'Visa',
@@ -76,7 +70,13 @@ const menuItems: MenuItem[] = [
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner', 'super_admin', 'role_invoice_saudi']
+    roles: ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner', 'super_admin', 'role_invoice_saudi', 'role_hotel', 'role_bus']
+  },
+  {
+    title: 'Refund',
+    icon: <Receipt className="w-5 h-5" />,
+    path: '/dashboard/refunds',
+    roles: ['admin_pusat', 'super_admin', 'role_accounting', 'owner']
   },
   {
     title: 'Users',
@@ -381,12 +381,12 @@ const DashboardLayout: React.FC = () => {
     );
   };
 
-  /* Mobile bottom nav: key actions; owner juga dapat MoU Saya */
+  /* Mobile bottom nav: key actions; owner bisa akses Profile (berisi MoU & ubah password) */
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
     { path: '/dashboard/products', label: 'Paket', icon: Package },
-    ...(user?.role === 'owner' ? [{ path: '/dashboard/owner/mou', label: 'MoU', icon: FileText }] : []),
+    ...(user?.role === 'owner' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
   const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices' || m.path === '/dashboard/products');
 

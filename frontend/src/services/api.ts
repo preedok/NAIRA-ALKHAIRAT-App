@@ -85,7 +85,7 @@ export const notificationsApi = {
 };
 
 export const productsApi = {
-  list: (params?: { type?: string; with_prices?: string; branch_id?: string; owner_id?: string; is_package?: string; include_inactive?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get('/products', { params }),
+  list: (params?: { type?: string; with_prices?: string; branch_id?: string; owner_id?: string; view_as_pusat?: string; is_package?: string; include_inactive?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get('/products', { params }),
   getById: (id: string) => api.get(`/products/${id}`),
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),
   getAvailability: (id: string, params: { from: string; to: string }) =>
@@ -110,7 +110,8 @@ export const ordersApi = {
   getById: (id: string) => api.get(`/orders/${id}`),
   create: (body: object) => api.post('/orders', body),
   update: (id: string, body: object) => api.patch(`/orders/${id}`, body),
-  delete: (id: string) => api.delete(`/orders/${id}`),
+  /** Batalkan order. Jika ada pembayaran: body.action = 'to_balance' | 'refund'; jika refund wajib bank_name & account_number. */
+  delete: (id: string, body?: { action?: 'to_balance' | 'refund'; reason?: string; bank_name?: string; account_number?: string }) => api.delete(`/orders/${id}`, { data: body }),
   sendResult: (orderId: string, channel?: 'email' | 'whatsapp' | 'both') => api.post(`/orders/${orderId}/send-result`, { channel }),
   /** Upload data jamaah (ZIP file atau link Google Drive) untuk order item visa/tiket */
   uploadJamaahData: (orderId: string, itemId: string, data: FormData | { jamaah_data_link: string }) =>
@@ -268,7 +269,15 @@ export const invoicesApi = {
   verifyPayment: (id: string, body: { payment_proof_id: string; verified: boolean; notes?: string }) => api.post(`/invoices/${id}/verify-payment`, body),
   handleOverpaid: (id: string, body: { handling: string; target_invoice_id?: string; target_order_id?: string }) => api.patch(`/invoices/${id}/overpaid`, body),
   uploadPaymentProof: (id: string, formData: FormData) => api.post(`/invoices/${id}/payment-proofs`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  getPaymentProofFile: (invoiceId: string, proofId: string) => api.get(`/invoices/${invoiceId}/payment-proofs/${proofId}/file`, { responseType: 'blob' })
+  getPaymentProofFile: (invoiceId: string, proofId: string) => api.get(`/invoices/${invoiceId}/payment-proofs/${proofId}/file`, { responseType: 'blob' }),
+  allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body)
+};
+
+export const refundsApi = {
+  list: (params?: { status?: string; owner_id?: string; limit?: number; page?: number }) => api.get('/refunds', { params }),
+  getById: (id: string) => api.get(`/refunds/${id}`),
+  updateStatus: (id: string, body: { status: string; rejection_reason?: string }) => api.patch(`/refunds/${id}`, body),
+  createFromBalance: (body: { amount: number; bank_name: string; account_number: string }) => api.post('/refunds', body)
 };
 
 export interface ProvinceItem {
@@ -747,7 +756,8 @@ export const ownersApi = {
     api.patch<{ success: boolean; message?: string; data?: { owner_status: string } }>(`/owners/${id}/verify-registration-payment`, body),
   assignBranch: (ownerId: string, branchId: string) => api.patch(`/owners/${ownerId}/assign-branch`, { branch_id: branchId }),
   verifyDeposit: (ownerId: string) => api.patch(`/owners/${ownerId}/verify-deposit`),
-  activate: (ownerId: string) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`)
+  activate: (ownerId: string) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`),
+  getMyBalance: () => api.get<{ success: boolean; data: { balance: number; transactions: Array<{ id: string; amount: number; type: string; reference_type?: string; reference_id?: string; notes?: string; created_at: string }> } }>('/owners/me/balance')
 };
 
 export interface KoordinatorDashboardData {

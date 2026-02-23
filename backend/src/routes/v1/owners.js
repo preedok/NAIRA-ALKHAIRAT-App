@@ -39,6 +39,7 @@ router.post('/register', uploadRegPaymentAtRegister.single('registration_payment
 router.use(auth);
 
 router.get('/me', requireRole(ROLES.OWNER), ownerController.getMyProfile);
+router.get('/me/balance', requireRole(ROLES.OWNER), ownerController.getMyBalance);
 router.post('/upload-registration-payment', requireRole(ROLES.OWNER), uploadRegPayment.single('file'), ownerController.uploadRegistrationPayment);
 router.post('/upload-mou', requireRole(ROLES.OWNER), upload.single('mou_file'), ownerController.uploadMou);
 

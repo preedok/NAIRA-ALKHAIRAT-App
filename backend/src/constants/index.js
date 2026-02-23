@@ -74,6 +74,12 @@ const REFUND_STATUS = {
   REFUNDED: 'refunded'
 };
 
+// Sumber permintaan refund: cancel = saat batalkan order; balance = tarik saldo
+const REFUND_SOURCE = {
+  CANCEL: 'cancel',
+  BALANCE: 'balance'
+};
+
 // VI. Hotel progress (Role Hotel)
 const HOTEL_PROGRESS_STATUS = {
   WAITING_CONFIRMATION: 'waiting_confirmation',
@@ -259,6 +265,7 @@ module.exports = {
   OWNER_STATUS,
   INVOICE_STATUS,
   REFUND_STATUS,
+  REFUND_SOURCE,
   ACCOUNTING_DOC_STATUS,
   JOURNAL_ENTRY_STATUS,
   ACCOUNT_TYPE,

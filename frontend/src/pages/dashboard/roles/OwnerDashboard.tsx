@@ -130,9 +130,9 @@ const OwnerDashboard: React.FC = () => {
                 <p className="text-sm text-slate-600 mt-0.5">Surat MoU dan password baru telah dikirim ke email Anda. Anda juga dapat melihat dan mengunduh surat MoU di aplikasi.</p>
               </div>
             </div>
-            <Button variant="primary" onClick={() => navigate('/dashboard/owner/mou')} className="gap-2 shrink-0">
+            <Button variant="primary" onClick={() => navigate('/dashboard/profile')} className="gap-2 shrink-0">
               <FileText className="w-4 h-4" />
-              Lihat MoU Saya
+              Lihat MoU di Profil
             </Button>
           </div>
         </Card>

@@ -172,7 +172,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     include: [{ model: Order, as: 'Order' }, { model: HotelProgress, as: 'HotelProgress', required: false }]
   });
   if (!item || item.type !== ORDER_ITEM_TYPE.HOTEL) return res.status(404).json({ success: false, message: 'Order item hotel tidak ditemukan' });
-  if (item.Order.branch_id !== req.user.branch_id) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+  // Role hotel: jika punya branch_id hanya boleh update order cabang tersebut; tanpa branch_id (tim pusat) boleh update semua.
+  if (req.user.branch_id && item.Order.branch_id !== req.user.branch_id) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
 
   const validStatuses = Object.values(HOTEL_PROGRESS_STATUS);
   if (status && !validStatuses.includes(status)) return res.status(400).json({ success: false, message: 'Status tidak valid' });

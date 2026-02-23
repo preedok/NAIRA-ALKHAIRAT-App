@@ -34,7 +34,7 @@ const ProductsPage: React.FC = () => {
     setSearchParams({ tab: id });
   };
 
-  const canAddToOrder = user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
   const showDraftBar = canAddToOrder && draftCount > 0;
 
   return (
@@ -45,7 +45,7 @@ const ProductsPage: React.FC = () => {
           <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-xl bg-primary-50 border border-primary-200">
             <span className="text-sm font-medium text-primary-800 flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-primary-600" />
-              {draftCount} item siap untuk invoice
+              {draftCount} item dipilih
             </span>
             <Button
               variant="primary"
@@ -53,7 +53,7 @@ const ProductsPage: React.FC = () => {
               className="shrink-0"
               onClick={() => navigate('/dashboard/orders/new')}
             >
-              Buat invoice
+              Lanjut ke form order
             </Button>
           </div>
         </div>
@@ -85,7 +85,7 @@ const ProductsPage: React.FC = () => {
 
       {/* Tab content - consistent padding and min height */}
       <div className="flex-1 min-h-[420px] pt-2">
-        {tab === 'hotels' && <HotelsPage />}
+        {tab === 'hotels' && <HotelsPage embedInProducts />}
         {tab === 'visa' && <VisaPage embedInProducts />}
         {tab === 'tickets' && <TicketsPage embedInProducts />}
         {tab === 'bus' && <BusPage embedInProducts />}

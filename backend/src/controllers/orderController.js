@@ -3,9 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
-const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS } = require('../constants');
+const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE } = require('../constants');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
@@ -450,22 +450,77 @@ const update = asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/v1/orders/:id
- * Batalkan order (soft: status = cancelled). Hanya owner (order sendiri) dan invoice_koordinator.
+ * Batalkan order (soft: status = cancelled). Jika ada pembayaran (paid_amount > 0), body wajib: action = 'to_balance' | 'refund'.
+ * - to_balance: saldo ditambahkan ke akun owner (untuk order baru atau alokasi ke tagihan).
+ * - refund: buat permintaan refund; body wajib bank_name, account_number (owner memasukkan untuk proses refund).
  */
 const destroy = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id);
-  if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  const canDelete = ['invoice_koordinator', 'role_invoice_saudi'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
+  if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+  const canDelete = ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
   if (!canDelete) {
-    return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau invoice koordinator/Saudi yang dapat membatalkan order' });
+    return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau tim invoice/admin yang dapat membatalkan order' });
   }
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa dibatalkan saat draft/tentative/confirmed/processing' });
   }
-  await order.update({ status: 'cancelled' });
+
   const inv = await Invoice.findOne({ where: { order_id: order.id } });
+  const paidAmount = inv ? parseFloat(inv.paid_amount) || 0 : 0;
+  const action = req.body && (req.body.action === 'to_balance' || req.body.action === 'refund') ? req.body.action : (paidAmount > 0 ? null : null);
+  const reason = req.body && req.body.reason ? String(req.body.reason).trim() || null : null;
+  const bankName = req.body && req.body.bank_name ? String(req.body.bank_name).trim() || null : null;
+  const accountNumber = req.body && req.body.account_number ? String(req.body.account_number).trim() || null : null;
+
+  if (paidAmount > 0 && !action) {
+    return res.status(400).json({ success: false, message: 'Ada pembayaran. Pilih action: to_balance (jadikan saldo) atau refund (minta refund ke rekening). Kirim bank_name dan account_number jika refund.' });
+  }
+  if (action === 'refund' && (!bankName || !accountNumber)) {
+    return res.status(400).json({ success: false, message: 'Untuk refund wajib isi bank_name dan account_number (rekening tujuan pengembalian).' });
+  }
+
+  let refund = null;
+  let balanceAdded = null;
+
+  if (inv && paidAmount > 0 && action === 'to_balance') {
+    const profile = await OwnerProfile.findOne({ where: { user_id: order.owner_id } });
+    if (profile) {
+      const currentBalance = parseFloat(profile.balance) || 0;
+      const newBalance = currentBalance + paidAmount;
+      await profile.update({ balance: newBalance });
+      await OwnerBalanceTransaction.create({
+        owner_id: order.owner_id,
+        amount: paidAmount,
+        type: 'cancel_credit',
+        reference_type: 'order',
+        reference_id: order.id,
+        notes: `Pembatalan order ${order.order_number}; invoice ${inv.invoice_number}. Saldo +${Number(paidAmount).toLocaleString('id-ID')}`
+      });
+      balanceAdded = { previous: currentBalance, new: newBalance };
+    }
+  } else if (inv && paidAmount > 0 && action === 'refund') {
+    refund = await Refund.create({
+      invoice_id: inv.id,
+      order_id: order.id,
+      owner_id: order.owner_id,
+      amount: paidAmount,
+      status: REFUND_STATUS.REQUESTED,
+      source: REFUND_SOURCE.CANCEL,
+      reason: reason || null,
+      bank_name: bankName,
+      account_number: accountNumber,
+      requested_by: req.user.id
+    });
+  }
+
+  await order.update({ status: 'cancelled' });
   if (inv) await inv.update({ status: 'canceled' });
-  res.json({ success: true, message: 'Invoice dibatalkan', data: order });
+
+  let message = 'Invoice dibatalkan.';
+  if (balanceAdded != null) message = `Invoice dibatalkan. Saldo akun ditambah Rp ${Number(paidAmount).toLocaleString('id-ID')}. Dapat digunakan untuk order baru atau alokasi ke tagihan.`;
+  else if (refund) message = `Invoice dibatalkan. Permintaan refund Rp ${Number(paidAmount).toLocaleString('id-ID')} ke ${bankName} ${accountNumber} telah dicatat. Admin/accounting akan memproses.`;
+
+  res.json({ success: true, message, data: { order, refund, balance_added: balanceAdded } });
 });
 
 /**
@@ -533,8 +588,8 @@ const uploadJamaahData = [
 
     const item = order.OrderItems.find(i => i.id === itemId);
     if (!item) return res.status(404).json({ success: false, message: 'Order item tidak ditemukan' });
-    if (item.type !== ORDER_ITEM_TYPE.VISA && item.type !== ORDER_ITEM_TYPE.TICKET) {
-      return res.status(400).json({ success: false, message: 'Data jamaah hanya untuk item visa atau tiket' });
+    if (item.type !== ORDER_ITEM_TYPE.VISA && item.type !== ORDER_ITEM_TYPE.TICKET && item.type !== ORDER_ITEM_TYPE.HOTEL) {
+      return res.status(400).json({ success: false, message: 'Data jamaah hanya untuk item visa, tiket, atau hotel' });
     }
 
     const link = (req.body.jamaah_data_link != null ? String(req.body.jamaah_data_link).trim() : '') || null;
@@ -593,10 +648,11 @@ const uploadJamaahData = [
     const updated = await OrderItem.findByPk(item.id, {
       include: [
         { model: VisaProgress, as: 'VisaProgress', required: false },
-        { model: TicketProgress, as: 'TicketProgress', required: false }
+        { model: TicketProgress, as: 'TicketProgress', required: false },
+        { model: HotelProgress, as: 'HotelProgress', required: false }
       ]
     });
-    res.json({ success: true, data: updated, message: 'Data jamaah berhasil disimpan. Tim visa/tiket dapat memproses ke Nusuk.' });
+    res.json({ success: true, data: updated, message: 'Data jamaah berhasil disimpan. Divisi visa/tiket/hotel dapat mengambil dokumen untuk proses penerbitan.' });
   })
 ];
 

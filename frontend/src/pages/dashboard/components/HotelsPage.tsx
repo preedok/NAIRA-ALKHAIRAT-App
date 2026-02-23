@@ -67,7 +67,9 @@ export interface HotelProduct {
   prices_by_room?: RoomBreakdown;
 }
 
-const HotelsPage: React.FC = () => {
+type HotelsPageProps = { embedInProducts?: boolean };
+
+const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
@@ -119,7 +121,7 @@ const HotelsPage: React.FC = () => {
   const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   /** Owner tidak boleh edit/hapus product; hanya role yang diizinkan backend */
   const canEditProduct = ['super_admin', 'admin_pusat', 'admin_koordinator'].includes(user?.role ?? '');
-  const canAddToOrder = user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -142,8 +144,9 @@ const HotelsPage: React.FC = () => {
   const fetchProducts = () => {
     setLoading(true);
     setError(null);
+    const params = { type: 'hotel' as const, with_prices: 'true' as const, limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}) };
     productsApi
-      .list({ type: 'hotel', with_prices: 'true', limit, page, sort_by: sortBy, sort_order: sortOrder })
+      .list(params)
       .then((res) => {
         if (res.data?.data) setHotels(res.data.data as HotelProduct[]);
         const p = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
@@ -158,7 +161,7 @@ const HotelsPage: React.FC = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, [page, limit, sortBy, sortOrder]);
+  }, [page, limit, sortBy, sortOrder, user?.role]);
 
   const filteredHotels = hotels.filter((hotel: HotelProduct) => {
     const matchesSearch =
@@ -235,7 +238,7 @@ const HotelsPage: React.FC = () => {
     }
   };
 
-  if (user?.role === 'role_hotel') {
+  if (user?.role === 'role_hotel' && !embedInProducts) {
     return <HotelWorkPage />;
   }
 
@@ -606,7 +609,7 @@ const HotelsPage: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Hotel</h2>
-          <p className="text-slate-600 text-sm">Harga & ketersediaan dikelola Admin Pusat</p>
+          <p className="text-slate-600 text-sm">{embedInProducts && !canAddHotel ? 'Lihat saja. Pekerjaan hotel di menu Invoice.' : 'Harga & ketersediaan dikelola Admin Pusat'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <AutoRefreshControl onRefresh={fetchProducts} disabled={loading} />

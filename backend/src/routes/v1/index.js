@@ -32,6 +32,7 @@ router.use('/owners', require('./owners'));
 router.use('/branches', require('./branches'));
 router.use('/orders', require('./orders'));
 router.use('/invoices', require('./invoices'));
+router.use('/refunds', require('./refunds'));
 router.post('/products/hotels', auth, requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createHotel);
 router.use('/products', require('./products'));
 router.use('/business-rules', require('./businessRules'));

@@ -97,14 +97,15 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
   const fetchVisaProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingVisaProducts(true);
-    productsApi.list({ type: 'visa', with_prices: 'true', include_inactive: 'false', limit: 50 })
+    const params = { type: 'visa', with_prices: 'true', include_inactive: 'false', limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    productsApi.list(params)
       .then((res) => {
         const data = (res.data as { data?: VisaProduct[] })?.data;
         setVisaProducts(Array.isArray(data) ? data : []);
       })
       .catch(() => setVisaProducts([]))
       .finally(() => setLoadingVisaProducts(false));
-  }, [canAddToOrder, embedInProducts]);
+  }, [canAddToOrder, embedInProducts, user?.role]);
 
   useEffect(() => {
     fetchVisaProducts();
