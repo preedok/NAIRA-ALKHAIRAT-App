@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -101,8 +101,15 @@ const OrdersInvoicesPage: React.FC = () => {
   const [ownerBalanceLoading, setOwnerBalanceLoading] = useState(false);
   const [allocateAmount, setAllocateAmount] = useState('');
   const [allocating, setAllocating] = useState(false);
+  const [showReallocateModal, setShowReallocateModal] = useState(false);
+  const [reallocateRows, setReallocateRows] = useState<Array<{ source_invoice_id: string; target_invoice_id: string; amount: string }>>([]);
+  const [reallocateNotes, setReallocateNotes] = useState('');
+  const [reallocateSubmitting, setReallocateSubmitting] = useState(false);
+  const [reallocateInvoiceList, setReallocateInvoiceList] = useState<any[]>([]);
+  const [reallocateListLoading, setReallocateListLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
+  const canReallocate = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'].includes(user?.role || '');
   const isAccounting = user?.role === 'role_accounting';
   const isInvoiceSaudi = user?.role === 'role_invoice_saudi';
   const canPayInvoice = (inv: any) => {
@@ -705,6 +712,20 @@ const OrdersInvoicesPage: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <AutoRefreshControl onRefresh={fetchInvoices} disabled={loading} />
+          {canReallocate && (
+            <Button variant="outline" onClick={() => {
+              setShowReallocateModal(true);
+              setReallocateRows([{ source_invoice_id: '', target_invoice_id: '', amount: '' }]);
+              setReallocateNotes('');
+              setReallocateListLoading(true);
+              invoicesApi.list({ limit: 300, page: 1 }).then((r) => {
+                if (r.data.success && Array.isArray(r.data.data)) setReallocateInvoiceList(r.data.data);
+                else setReallocateInvoiceList([]);
+              }).catch(() => setReallocateInvoiceList([])).finally(() => setReallocateListLoading(false));
+            }} className="shrink-0">
+              <ArrowRightLeft className="w-5 h-5 mr-2" /> Pemindahan Dana
+            </Button>
+          )}
           {canOrderAction && (
             <Button variant="primary" onClick={() => navigate('/dashboard/orders/new')} className="shrink-0">
               <Plus className="w-5 h-5 mr-2" /> Tambah Invoice
@@ -1557,6 +1578,182 @@ const OrdersInvoicesPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Pemindahan Dana (alokasi dari invoice sumber ke penerima) */}
+      {showReallocateModal && (() => {
+        const list = reallocateInvoiceList || [];
+        const sourceCandidates = list.filter((i: any) => {
+          const st = (i.status || '').toLowerCase();
+          const paid = parseFloat(i.paid_amount || 0);
+          const overpaid = parseFloat(i.overpaid_amount || 0);
+          return (st === 'canceled' || st === 'cancelled') ? paid > 0 : overpaid > 0;
+        });
+        const targetCandidates = list.filter((i: any) => {
+          const st = (i.status || '').toLowerCase();
+          const remain = parseFloat(i.remaining_amount || 0);
+          return st !== 'canceled' && st !== 'cancelled' && remain > 0;
+        });
+        const getReleasable = (inv: any) => {
+          const st = (inv?.status || '').toLowerCase();
+          if (st === 'canceled' || st === 'cancelled') return parseFloat(inv?.paid_amount || 0);
+          return parseFloat(inv?.overpaid_amount || 0);
+        };
+        const addRow = () => setReallocateRows((prev) => [...prev, { source_invoice_id: '', target_invoice_id: '', amount: '' }]);
+        const removeRow = (idx: number) => setReallocateRows((prev) => prev.filter((_, i) => i !== idx));
+        const updateRow = (idx: number, field: 'source_invoice_id' | 'target_invoice_id' | 'amount', value: string) => {
+          setReallocateRows((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+        };
+        const transfers = reallocateRows
+          .map((r) => ({ ...r, amount: parseFloat(String(r.amount).replace(/,/g, '')) || 0 }))
+          .filter((t) => t.source_invoice_id && t.target_invoice_id && t.amount > 0);
+        const totalFromSources: Record<string, number> = {};
+        const sourceReleasable: Record<string, number> = {};
+        sourceCandidates.forEach((i: any) => { sourceReleasable[i.id] = getReleasable(i); });
+        transfers.forEach((t) => { totalFromSources[t.source_invoice_id] = (totalFromSources[t.source_invoice_id] || 0) + t.amount; });
+        const sourceOk = Object.entries(totalFromSources).every(([id, sum]) => sum <= (sourceReleasable[id] || 0));
+        const totalAmount = transfers.reduce((s, t) => s + t.amount, 0);
+        const canSubmit = transfers.length > 0 && sourceOk;
+
+        const submitReallocate = async () => {
+          if (!canSubmit) return;
+          setReallocateSubmitting(true);
+          try {
+            const res = await invoicesApi.reallocatePayments({
+              transfers: transfers.map((t) => ({ source_invoice_id: t.source_invoice_id, target_invoice_id: t.target_invoice_id, amount: t.amount })),
+              notes: reallocateNotes.trim() || undefined
+            });
+            const msg = (res.data as any)?.message || 'Pemindahan dana berhasil.';
+            showToast(msg, 'success');
+            setShowReallocateModal(false);
+            setReallocateRows([]);
+            setReallocateNotes('');
+            fetchInvoices();
+            fetchSummary();
+            if (viewInvoice?.id) fetchInvoiceDetail(viewInvoice.id);
+          } catch (e: any) {
+            showToast(e.response?.data?.message || 'Gagal memindahkan dana', 'error');
+          } finally {
+            setReallocateSubmitting(false);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => !reallocateSubmitting && setShowReallocateModal(false)}>
+            <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="px-6 py-4 border-b border-slate-200">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <ArrowRightLeft className="w-5 h-5" /> Pemindahan Dana Antar Invoice
+                </h3>
+                <p className="text-sm text-slate-600 mt-1">
+                  Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Bisa satu atau lebih sumber dan satu atau lebih penerima.
+                </p>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                {reallocateListLoading ? (
+                  <p className="text-slate-500">Memuat daftar invoice...</p>
+                ) : (
+                  <>
+                    {sourceCandidates.length === 0 && (
+                      <p className="text-amber-700 bg-amber-50 p-3 rounded-xl text-sm">Tidak ada invoice sumber (invoice dibatalkan dengan pembayaran, atau invoice dengan kelebihan bayar).</p>
+                    )}
+                    {targetCandidates.length === 0 && (
+                      <p className="text-amber-700 bg-amber-50 p-3 rounded-xl text-sm">Tidak ada invoice penerima (invoice aktif dengan sisa tagihan).</p>
+                    )}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-slate-700">Detail alokasi</span>
+                        <Button variant="outline" size="sm" onClick={addRow}>Tambah baris</Button>
+                      </div>
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                              <th className="text-left py-2 px-3">Invoice Sumber</th>
+                              <th className="text-left py-2 px-3">Invoice Penerima</th>
+                              <th className="text-left py-2 px-3">Jumlah (IDR)</th>
+                              <th className="w-10" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reallocateRows.map((row, idx) => (
+                              <tr key={idx} className="border-b border-slate-100 last:border-0">
+                                <td className="py-2 px-3">
+                                  <select
+                                    value={row.source_invoice_id}
+                                    onChange={(e) => updateRow(idx, 'source_invoice_id', e.target.value)}
+                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                                  >
+                                    <option value="">Pilih sumber</option>
+                                    {sourceCandidates.map((i: any) => (
+                                      <option key={i.id} value={i.id}>
+                                        {i.invoice_number} — {formatIDR(getReleasable(i))} tersedia
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <select
+                                    value={row.target_invoice_id}
+                                    onChange={(e) => updateRow(idx, 'target_invoice_id', e.target.value)}
+                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                                  >
+                                    <option value="">Pilih penerima</option>
+                                    {targetCandidates.map((i: any) => (
+                                      <option key={i.id} value={i.id}>
+                                        {i.invoice_number} — sisa {formatIDR(parseFloat(i.remaining_amount || 0))}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="text"
+                                    value={row.amount}
+                                    onChange={(e) => updateRow(idx, 'amount', e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                                    placeholder="0"
+                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                                  />
+                                </td>
+                                <td className="py-2 px-2">
+                                  <button type="button" onClick={() => removeRow(idx)} className="p-1.5 text-slate-400 hover:text-red-600" title="Hapus baris">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {transfers.length > 0 && (
+                        <p className="text-sm text-slate-600">
+                          Total dipindahkan: <strong>{formatIDR(totalAmount)}</strong>
+                          {!sourceOk && <span className="text-red-600 ml-2"> — Jumlah dari salah satu sumber melebihi dana yang tersedia.</span>}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Catatan (opsional)</label>
+                      <input
+                        type="text"
+                        value={reallocateNotes}
+                        onChange={(e) => setReallocateNotes(e.target.value)}
+                        placeholder="Contoh: Alokasi dari pembatalan order #X ke invoice #Y"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowReallocateModal(false)} disabled={reallocateSubmitting}>Batal</Button>
+                <Button variant="primary" onClick={submitReallocate} disabled={reallocateSubmitting || !canSubmit}>
+                  {reallocateSubmitting ? 'Memproses...' : 'Proses Pemindahan'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal Pembayaran (Transfer Bank / VA / QRIS) */}
       {showPaymentModal && viewInvoice && (

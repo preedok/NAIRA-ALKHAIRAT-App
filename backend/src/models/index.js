@@ -36,6 +36,7 @@ const PayrollSetting = require('./PayrollSetting');
 const EmployeeSalary = require('./EmployeeSalary');
 const PayrollRun = require('./PayrollRun');
 const PayrollItem = require('./PayrollItem');
+const PaymentReallocation = require('./PaymentReallocation');
 
 // Wilayah -> Provinsi -> Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
@@ -177,6 +178,14 @@ PayrollItem.belongsTo(PayrollRun, { foreignKey: 'payroll_run_id', as: 'PayrollRu
 PayrollItem.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
 User.hasMany(PayrollItem, { foreignKey: 'user_id', as: 'PayrollItems' });
 
+// Payment reallocation (pemindahan dana antar invoice)
+PaymentReallocation.belongsTo(Invoice, { foreignKey: 'source_invoice_id', as: 'SourceInvoice' });
+PaymentReallocation.belongsTo(Invoice, { foreignKey: 'target_invoice_id', as: 'TargetInvoice' });
+PaymentReallocation.belongsTo(User, { foreignKey: 'performed_by', as: 'PerformedBy' });
+Invoice.hasMany(PaymentReallocation, { foreignKey: 'source_invoice_id', as: 'ReallocationsOut' });
+Invoice.hasMany(PaymentReallocation, { foreignKey: 'target_invoice_id', as: 'ReallocationsIn' });
+User.hasMany(PaymentReallocation, { foreignKey: 'performed_by', as: 'PaymentReallocations' });
+
 const db = {
   sequelize,
   Sequelize: require('sequelize'),
@@ -216,7 +225,8 @@ const db = {
   PayrollSetting,
   EmployeeSalary,
   PayrollRun,
-  PayrollItem
+  PayrollItem,
+  PaymentReallocation
 };
 
 module.exports = db;

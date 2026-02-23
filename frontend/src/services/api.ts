@@ -274,7 +274,14 @@ export const invoicesApi = {
   handleOverpaid: (id: string, body: { handling: string; target_invoice_id?: string; target_order_id?: string }) => api.patch(`/invoices/${id}/overpaid`, body),
   uploadPaymentProof: (id: string, formData: FormData) => api.post(`/invoices/${id}/payment-proofs`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getPaymentProofFile: (invoiceId: string, proofId: string) => api.get(`/invoices/${invoiceId}/payment-proofs/${proofId}/file`, { responseType: 'blob' }),
-  allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body)
+  allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body),
+  /** Pemindahan dana: banyak sumber -> banyak penerima. Body: { transfers: [{ source_invoice_id, target_invoice_id, amount }], notes? } */
+  reallocatePayments: (body: { transfers: Array<{ source_invoice_id: string; target_invoice_id: string; amount: number }>; notes?: string }) =>
+    api.post<{ success: boolean; message?: string; data?: { transfers: number; total_amount: number } }>('/invoices/reallocate-payments', body),
+  listReallocations: (params?: { invoice_id?: string; limit?: number; page?: number }) =>
+    api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/invoices/reallocations', { params }),
+  getReleasable: (id: string) =>
+    api.get<{ success: boolean; data: { invoice_id: string; invoice_number: string; releasable_amount: number } }>(`/invoices/${id}/releasable`)
 };
 
 export const refundsApi = {

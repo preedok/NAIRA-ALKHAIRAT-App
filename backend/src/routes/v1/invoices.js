@@ -10,8 +10,11 @@ router.use(auth);
 router.get('/', invoiceController.list);
 router.get('/summary', invoiceController.getSummary);
 router.post('/', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
+router.post('/reallocate-payments', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.ADMIN_KOORDINATOR, ROLES.SUPER_ADMIN), invoiceController.reallocatePayments);
+router.get('/reallocations', invoiceController.listReallocations);
 router.get('/:id/pdf', invoiceController.getPdf);
 router.get('/:id/payment-proofs/:proofId/file', paymentProofController.getFile);
+router.get('/:id/releasable', invoiceController.getReleasable);
 router.get('/:id', invoiceController.getById);
 router.patch('/:id/unblock', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.ADMIN_KOORDINATOR, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.unblock);
 // Verifikasi hanya untuk karyawan (bukan owner/pembeli). role_invoice + 'invoice' + accounting + admin

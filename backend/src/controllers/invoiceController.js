@@ -3,7 +3,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
-const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerProfile, OwnerBalanceTransaction } = require('../models');
+const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -764,6 +764,242 @@ async function syncInvoiceFromOrder(order) {
   return invoice;
 }
 
+/**
+ * Jumlah yang bisa dialihkan dari invoice: canceled = paid_amount; else overpaid_amount.
+ */
+function getReleasableAmount(invoice) {
+  const status = (invoice.status || '').toLowerCase();
+  const paid = parseFloat(invoice.paid_amount) || 0;
+  const overpaid = parseFloat(invoice.overpaid_amount) || 0;
+  if (status === 'canceled' || status === 'cancelled') return Math.max(0, paid);
+  return Math.max(0, overpaid);
+}
+
+/**
+ * Cek apakah user boleh mengakses invoice untuk reallocation (sumber atau target).
+ */
+async function canAccessInvoiceForReallocation(invoiceId, user) {
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'owner_id', 'branch_id'] });
+  if (!invoice) return { ok: false, message: 'Invoice tidak ditemukan' };
+  if (user.role === 'owner' && invoice.owner_id !== user.id) return { ok: false, message: 'Bukan invoice Anda' };
+  if (isKoordinatorRole(user.role)) {
+    const branchIds = await getBranchIdsForWilayah(user.wilayah_id);
+    if (!branchIds.includes(invoice.branch_id)) return { ok: false, message: 'Invoice bukan di wilayah Anda' };
+  }
+  if (user.branch_id && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'role_invoice_saudi', 'owner'].includes(user.role) && !isKoordinatorRole(user.role)) {
+    if (invoice.branch_id !== user.branch_id) return { ok: false, message: 'Invoice bukan di cabang Anda' };
+  }
+  return { ok: true, invoice };
+}
+
+/**
+ * POST /api/v1/invoices/reallocate-payments
+ * Body: { transfers: [ { source_invoice_id, target_invoice_id, amount }, ... ], notes? }
+ * Pemindahan dana dari invoice sumber (canceled/overpaid) ke invoice penerima. Bisa banyak sumber -> banyak penerima.
+ */
+const reallocatePayments = asyncHandler(async (req, res) => {
+  const allowed = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'];
+  if (!allowed.includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Hanya owner atau role invoice yang dapat memindahkan dana' });
+  }
+  const transfers = req.body?.transfers;
+  if (!Array.isArray(transfers) || transfers.length === 0) {
+    return res.status(400).json({ success: false, message: 'Body harus berisi array transfers: [{ source_invoice_id, target_invoice_id, amount }]' });
+  }
+
+  const parsed = [];
+  for (const t of transfers) {
+    const amount = parseFloat(t?.amount);
+    if (!t?.source_invoice_id || !t?.target_invoice_id || !Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Setiap transfer wajib: source_invoice_id, target_invoice_id, amount (angka positif)' });
+    }
+    if (t.source_invoice_id === t.target_invoice_id) {
+      return res.status(400).json({ success: false, message: 'Invoice sumber dan penerima tidak boleh sama' });
+    }
+    parsed.push({ source_invoice_id: t.source_invoice_id, target_invoice_id: t.target_invoice_id, amount });
+  }
+
+  const sourceIds = [...new Set(parsed.map(p => p.source_invoice_id))];
+  const targetIds = [...new Set(parsed.map(p => p.target_invoice_id))];
+  const allInvoiceIds = [...new Set([...sourceIds, ...targetIds])];
+  const invoices = await Invoice.findAll({ where: { id: { [Op.in]: allInvoiceIds } }, raw: true });
+  const invoiceMap = new Map(invoices.map(i => [i.id, i]));
+
+  for (const id of allInvoiceIds) {
+    const access = await canAccessInvoiceForReallocation(id, req.user);
+    if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  }
+
+  const sourceTotalByInvoice = {};
+  for (const p of parsed) {
+    sourceTotalByInvoice[p.source_invoice_id] = (sourceTotalByInvoice[p.source_invoice_id] || 0) + p.amount;
+  }
+  for (const [invId, totalDeduct] of Object.entries(sourceTotalByInvoice)) {
+    const inv = invoiceMap.get(invId);
+    if (!inv) return res.status(404).json({ success: false, message: 'Invoice sumber tidak ditemukan' });
+    const releasable = getReleasableAmount(inv);
+    if (totalDeduct > releasable) {
+      return res.status(400).json({
+        success: false,
+        message: `Invoice ${inv.invoice_number} hanya dapat dialihkan maksimal Rp ${releasable.toLocaleString('id-ID')}. Requested: Rp ${totalDeduct.toLocaleString('id-ID')}`
+      });
+    }
+  }
+
+  for (const p of parsed) {
+    const target = invoiceMap.get(p.target_invoice_id);
+    if (!target) return res.status(404).json({ success: false, message: 'Invoice penerima tidak ditemukan' });
+    const status = (target.status || '').toLowerCase();
+    if (status === 'canceled' || status === 'cancelled') {
+      return res.status(400).json({ success: false, message: `Invoice penerima ${target.invoice_number} dalam status dibatalkan` });
+    }
+  }
+
+  const notes = (req.body?.notes && String(req.body.notes).trim()) || null;
+
+  await sequelize.transaction(async (tx) => {
+    const sourceDeduct = {};
+    for (const p of parsed) {
+      sourceDeduct[p.source_invoice_id] = (sourceDeduct[p.source_invoice_id] || 0) + p.amount;
+    }
+    for (const [invId, deduct] of Object.entries(sourceDeduct)) {
+      const inv = await Invoice.findByPk(invId, { transaction: tx });
+      const paid = parseFloat(inv.paid_amount) || 0;
+      const overpaid = parseFloat(inv.overpaid_amount) || 0;
+      const totalAmount = parseFloat(inv.total_amount) || 0;
+      const isCanceled = (inv.status || '').toLowerCase() === 'canceled' || (inv.status || '').toLowerCase() === 'cancelled';
+      let newPaid = paid - deduct;
+      let newOverpaid = overpaid;
+      if (isCanceled) {
+        newPaid = Math.max(0, paid - deduct);
+      } else {
+        const fromOverpaid = Math.min(deduct, overpaid);
+        const fromPaid = deduct - fromOverpaid;
+        newOverpaid = Math.max(0, overpaid - fromOverpaid);
+        newPaid = Math.max(0, paid - fromPaid);
+      }
+      const newRemaining = Math.max(0, totalAmount - newPaid);
+      let newStatus = inv.status;
+      if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
+      else if (newPaid >= (parseFloat(inv.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+      else newStatus = INVOICE_STATUS.TENTATIVE;
+      await inv.update({
+        paid_amount: newPaid,
+        remaining_amount: newRemaining,
+        overpaid_amount: newOverpaid,
+        status: newStatus
+      }, { transaction: tx });
+    }
+
+    const targetAdd = {};
+    for (const p of parsed) {
+      targetAdd[p.target_invoice_id] = (targetAdd[p.target_invoice_id] || 0) + p.amount;
+    }
+    for (const [invId, add] of Object.entries(targetAdd)) {
+      const inv = await Invoice.findByPk(invId, { transaction: tx });
+      const paid = parseFloat(inv.paid_amount) || 0;
+      const totalAmount = parseFloat(inv.total_amount) || 0;
+      const newPaid = paid + add;
+      const newRemaining = Math.max(0, totalAmount - newPaid);
+      let newStatus = inv.status;
+      if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
+      else if (newPaid >= (parseFloat(inv.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+      await inv.update({
+        paid_amount: newPaid,
+        remaining_amount: newRemaining,
+        status: newStatus
+      }, { transaction: tx });
+    }
+
+    for (const p of parsed) {
+      await PaymentReallocation.create({
+        source_invoice_id: p.source_invoice_id,
+        target_invoice_id: p.target_invoice_id,
+        amount: p.amount,
+        performed_by: req.user.id,
+        notes
+      }, { transaction: tx });
+    }
+  });
+
+  const totalAmount = parsed.reduce((s, p) => s + p.amount, 0);
+  res.json({
+    success: true,
+    message: `Pemindahan dana Rp ${totalAmount.toLocaleString('id-ID')} berhasil (${parsed.length} alokasi).`,
+    data: { transfers: parsed.length, total_amount: totalAmount }
+  });
+});
+
+/**
+ * GET /api/v1/invoices/reallocations
+ * Query: invoice_id (optional, filter sebagai sumber atau target), limit, page
+ */
+const listReallocations = asyncHandler(async (req, res) => {
+  const allowed = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin', 'role_accounting'];
+  if (!allowed.includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Tidak berwenang melihat riwayat pemindahan dana' });
+  }
+  const { invoice_id, limit = 50, page = 1 } = req.query;
+  const where = {};
+  if (invoice_id) {
+    where[Op.or] = [{ source_invoice_id: invoice_id }, { target_invoice_id: invoice_id }];
+  }
+  const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const pg = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (pg - 1) * lim;
+
+  if (invoice_id && (req.user.role === 'owner')) {
+    const inv = await Invoice.findByPk(invoice_id, { attributes: ['id', 'owner_id'] });
+    if (!inv || inv.owner_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Invoice bukan milik Anda' });
+    }
+  }
+  if (invoice_id && isKoordinatorRole(req.user.role)) {
+    const inv = await Invoice.findByPk(invoice_id, { attributes: ['id', 'branch_id'] });
+    if (inv) {
+      const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+      if (!branchIds.includes(inv.branch_id)) {
+        return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+      }
+    }
+  }
+
+  const { count, rows } = await PaymentReallocation.findAndCountAll({
+    where,
+    limit: lim,
+    offset,
+    order: [['created_at', 'DESC']],
+    include: [
+      { model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number', 'order_id'], required: false },
+      { model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number', 'order_id'], required: false },
+      { model: User, as: 'PerformedBy', attributes: ['id', 'name', 'email'], required: false }
+    ]
+  });
+
+  res.json({
+    success: true,
+    data: rows,
+    pagination: { total: count, page: pg, limit: lim, totalPages: Math.ceil(count / lim) }
+  });
+});
+
+/**
+ * GET /api/v1/invoices/:id/releasable
+ * Mengembalikan jumlah yang bisa dialihkan dari invoice ini (untuk UI).
+ */
+const getReleasable = asyncHandler(async (req, res) => {
+  const invoice = await Invoice.findByPk(req.params.id, { attributes: ['id', 'invoice_number', 'status', 'paid_amount', 'overpaid_amount', 'owner_id', 'branch_id'] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  const access = await canAccessInvoiceForReallocation(invoice.id, req.user);
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const allowed = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'];
+  if (!allowed.includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Tidak berwenang' });
+  }
+  const releasable = getReleasableAmount(invoice);
+  res.json({ success: true, data: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, releasable_amount: releasable } });
+});
+
 module.exports = {
   list,
   getSummary,
@@ -776,5 +1012,8 @@ module.exports = {
   handleOverpaid,
   allocateBalance,
   ensureBlockedStatus,
-  syncInvoiceFromOrder
+  syncInvoiceFromOrder,
+  reallocatePayments,
+  listReallocations,
+  getReleasable
 };
