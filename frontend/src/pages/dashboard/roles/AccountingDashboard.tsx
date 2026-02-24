@@ -125,7 +125,7 @@ const InvoiceListModal: React.FC<{
             <div className="flex flex-wrap gap-4 mb-4 p-3 bg-slate-50 rounded-lg text-sm">
               <span>Total: <strong>{summary.total_invoices}</strong> invoice</span>
               <span>Total amount: <strong>{formatIDR(parseFloat(summary.total_amount || 0))}</strong></span>
-              <span>Terbayar: <strong className="text-emerald-600">{formatIDR(parseFloat(summary.total_paid || 0))}</strong></span>
+              <span>Terbayar: <strong className="text-blue-600">{formatIDR(parseFloat(summary.total_paid || 0))}</strong></span>
               <span>Sisa: <strong className="text-amber-600">{formatIDR(parseFloat(summary.total_remaining || 0))}</strong></span>
             </div>
           )}
@@ -156,7 +156,7 @@ const InvoiceListModal: React.FC<{
                       <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
                       <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
                       <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                      <td className="px-4 py-3 text-emerald-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                      <td className="px-4 py-3 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
                       <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
                       <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
                     </tr>
@@ -312,9 +312,9 @@ const AccountingDashboard: React.FC = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-600 mb-1">Total Terbayar</p>
-                  <p className="text-2xl font-bold text-emerald-600">{formatIDR(summary.total_paid)}</p>
+                  <p className="text-2xl font-bold text-blue-600">{formatIDR(summary.total_paid)}</p>
                 </div>
-                <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                   <DollarSign className="w-6 h-6" />
                 </div>
               </div>
@@ -362,7 +362,7 @@ const AccountingDashboard: React.FC = () => {
             <Card className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-emerald-500" />
+                  <Building2 className="w-5 h-5 text-blue-500" />
                   Per Cabang
                 </h3>
                 <Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('branch')}>
@@ -451,7 +451,7 @@ const AccountingDashboard: React.FC = () => {
                       <td className="py-3 pr-4">{inv.User?.name ?? '-'}</td>
                       <td className="py-3 pr-4">{inv.Branch?.name ?? '-'}</td>
                       <td className="py-3 pr-4">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                      <td className="py-3 pr-4 text-emerald-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                      <td className="py-3 pr-4 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
                       <td className="py-3 pr-4">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
                       <td className="py-3"><Badge variant="info">{inv.status}</Badge></td>
                     </tr>
