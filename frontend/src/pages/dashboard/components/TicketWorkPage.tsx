@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, FileText, Download, ClipboardList } from 'lucide-react';
+import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
@@ -29,6 +29,24 @@ const RECAP_STATUS_LABELS: Record<string, string> = {
   booking: 'Booking',
   payment_airline: 'Bayar Maskapai',
   ticket_issued: 'Terbit'
+};
+
+const RECAP_STATUS_ICONS: Record<string, React.ReactNode> = {
+  pending: <Clock className="h-5 w-5" />,
+  data_received: <Inbox className="h-5 w-5" />,
+  seat_reserved: <Armchair className="h-5 w-5" />,
+  booking: <CalendarCheck className="h-5 w-5" />,
+  payment_airline: <CreditCard className="h-5 w-5" />,
+  ticket_issued: <CheckCircle className="h-5 w-5" />
+};
+
+const RECAP_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-600',
+  data_received: 'bg-sky-100 text-sky-600',
+  seat_reserved: 'bg-violet-100 text-violet-600',
+  booking: 'bg-teal-100 text-teal-600',
+  payment_airline: 'bg-orange-100 text-orange-600',
+  ticket_issued: 'bg-emerald-100 text-emerald-600'
 };
 
 const TicketWorkPage: React.FC = () => {
@@ -139,23 +157,41 @@ const TicketWorkPage: React.FC = () => {
         <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
       </div>
 
-      {/* Rekap statistik pekerjaan tiket – selalu tampil */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
-        <Card className="p-4">
-          <div className="flex items-center gap-2 text-slate-600 mb-1">
-            <ClipboardList className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase tracking-wide">Total Invoice</span>
+      {/* Rekap statistik pekerjaan tiket */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3 p-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-stone-600">Total Invoice</p>
+              <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : totalInvoices}</p>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900">{loading ? '–' : totalInvoices}</div>
         </Card>
-        <Card className="p-4">
-          <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">Total Item Tiket</div>
-          <div className="text-2xl font-bold text-slate-900">{loading ? '–' : totalItems}</div>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3 p-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <Ticket className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-stone-600">Item Tiket</p>
+              <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : totalItems}</p>
+            </div>
+          </div>
         </Card>
         {STATUS_OPTIONS.map((opt) => (
-          <Card key={opt.value} className="p-4">
-            <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">{RECAP_STATUS_LABELS[opt.value] || opt.label}</div>
-            <div className="text-xl font-bold text-slate-800">{loading ? '–' : (byStatus[opt.value] ?? 0)}</div>
+          <Card key={opt.value} hover className="travel-card">
+            <div className="flex items-center gap-3 p-4">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${RECAP_STATUS_COLORS[opt.value] || 'bg-slate-100 text-slate-600'}`}>
+                {RECAP_STATUS_ICONS[opt.value] || <Ticket className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-stone-600">{RECAP_STATUS_LABELS[opt.value] || opt.label}</p>
+                <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : (byStatus[opt.value] ?? 0)}</p>
+              </div>
+            </div>
           </Card>
         ))}
       </div>

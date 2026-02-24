@@ -18,7 +18,7 @@ Wilayah (master wilayah: Sumatra, Jawa, dll.)
 ### users
 - `id` (UUID, PK), `email`, `password_hash`, `name`, `phone`, `role`, `branch_id`, `wilayah_id`, `region`, `company_name`, `is_active`, `created_at`, `updated_at`, `last_login`
 - **role**: ENUM — gunakan hanya: super_admin, admin_pusat, admin_koordinator, invoice_koordinator, tiket_koordinator, visa_koordinator, role_hotel, role_bus, role_invoice_saudi, role_accounting, owner. (admin_cabang deprecated; role_visa, role_ticket, role_invoice dihapus — pakai visa_koordinator, tiket_koordinator, invoice_koordinator.)
-- **branch_id**: untuk user yang terikat satu cabang (contoh: role_hotel, role_bus).
+- **branch_id**: opsional. Untuk user terikat satu cabang isi branch_id; role_hotel dan role_bus boleh NULL (scope oleh backend: wilayah atau semua cabang).
 - **wilayah_id**: untuk koordinator (scope wilayah).
 
 ### owner_profiles

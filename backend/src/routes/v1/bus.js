@@ -5,7 +5,7 @@ const { ROLES } = require('../../constants');
 const busController = require('../../controllers/busController');
 
 router.use(auth);
-router.use(requireRole(ROLES.ROLE_BUS));
+router.use(requireRole(ROLES.ROLE_BUS, ROLES.ADMIN_KOORDINATOR, ROLES.SUPER_ADMIN));
 
 router.get('/dashboard', busController.getDashboard);
 router.get('/invoices', busController.listInvoices);

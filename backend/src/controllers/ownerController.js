@@ -220,13 +220,9 @@ const getById = asyncHandler(async (req, res) => {
   res.json({ success: true, data: profile });
 });
 
-/**
- * GET /api/v1/owners (Admin Pusat / Super Admin / Koordinator / Accounting)
- * Query: status, branch_id, wilayah_id, search (q), page, limit.
- * Koordinator: hanya owner yang assigned ke cabang di wilayah mereka, atau DEPOSIT_VERIFIED.
- */
-const list = asyncHandler(async (req, res) => {
-  const { status, branch_id, wilayah_id: queryWilayahId, q: search, page = 1, limit = 50 } = req.query;
+/** Build where clause for owner list/stats (shared by list and getStats) */
+async function buildOwnerWhere(req) {
+  const { status, branch_id, wilayah_id: queryWilayahId } = req.query;
   const where = {};
   if (status) where.status = status;
 
@@ -251,6 +247,62 @@ const list = asyncHandler(async (req, res) => {
       { status: OWNER_STATUS.DEPOSIT_VERIFIED }
     ];
   }
+  return where;
+}
+
+/**
+ * GET /api/v1/owners/stats
+ * Returns counts for Owners Wilayah (same scope as list: koordinator wilayah, optional status/branch_id/wilayah_id).
+ */
+const getStats = asyncHandler(async (req, res) => {
+  const where = await buildOwnerWhere(req);
+  const sequelize = OwnerProfile.sequelize;
+
+  const total = await OwnerProfile.count({ where });
+
+  const rows = await OwnerProfile.findAll({
+    where,
+    attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+    group: ['status'],
+    raw: true
+  });
+
+  const byStatus = {};
+  Object.values(OWNER_STATUS).forEach((s) => { byStatus[s] = 0; });
+  rows.forEach((r) => {
+    byStatus[r.status] = parseInt(r.count, 10) || 0;
+  });
+
+  const active = byStatus[OWNER_STATUS.ACTIVE] || 0;
+  const siapAktivasi = (byStatus[OWNER_STATUS.DEPOSIT_VERIFIED] || 0) + (byStatus[OWNER_STATUS.ASSIGNED_TO_BRANCH] || 0);
+  const pendingVerifikasi = (byStatus[OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION] || 0) + (byStatus[OWNER_STATUS.PENDING_DEPOSIT_VERIFICATION] || 0);
+  const pendingMoU = (byStatus[OWNER_STATUS.REGISTERED_PENDING_MOU] || 0) + (byStatus[OWNER_STATUS.PENDING_MOU_APPROVAL] || 0);
+  const rejected = byStatus[OWNER_STATUS.REJECTED] || 0;
+  const pendingBayar = (byStatus[OWNER_STATUS.PENDING_REGISTRATION_PAYMENT] || 0) + (byStatus[OWNER_STATUS.PENDING_DEPOSIT_PAYMENT] || 0);
+
+  res.json({
+    success: true,
+    data: {
+      total_owners: total,
+      active,
+      siap_aktivasi: siapAktivasi,
+      pending_verifikasi: pendingVerifikasi,
+      pending_mou: pendingMoU,
+      pending_bayar: pendingBayar,
+      rejected,
+      by_status: byStatus
+    }
+  });
+});
+
+/**
+ * GET /api/v1/owners (Admin Pusat / Super Admin / Koordinator / Accounting)
+ * Query: status, branch_id, wilayah_id, search (q), page, limit.
+ * Koordinator: hanya owner yang assigned ke cabang di wilayah mereka, atau DEPOSIT_VERIFIED.
+ */
+const list = asyncHandler(async (req, res) => {
+  const { q: search, page = 1, limit = 50 } = req.query;
+  const where = await buildOwnerWhere(req);
 
   const userWhere = {};
   if (search && String(search).trim()) {
@@ -484,6 +536,7 @@ module.exports = {
   uploadMou,
   getMyProfile,
   getMyBalance,
+  getStats,
   list,
   getById,
   verifyMou,

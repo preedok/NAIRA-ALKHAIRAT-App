@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, CheckCircle, Eye, FileCheck, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, CheckCircle, Eye, FileCheck, X, ChevronLeft, ChevronRight, Users, Zap, Clock, CreditCard, XCircle } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -7,7 +7,7 @@ import Modal from '../../../components/common/Modal';
 import { PageFilter, AutoRefreshControl } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
-import { ownersApi, branchesApi } from '../../../services/api';
+import { ownersApi, branchesApi, type OwnerStats } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL } from '../../../utils/constants';
@@ -36,6 +36,7 @@ const KoordinatorOwnersPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [list, setList] = useState<any[]>([]);
+  const [stats, setStats] = useState<OwnerStats | null>(null);
   const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
   const [branchesForFilter, setBranchesForFilter] = useState<{ id: string; code: string; name: string }[]>([]);
@@ -67,6 +68,16 @@ const KoordinatorOwnersPage: React.FC = () => {
   const canVerifyDeposit = isAdminKoordinator;
   const isAdminPusatOrSuperAdmin = user?.role === 'admin_pusat' || user?.role === 'super_admin';
   const canVerifyMou = isAdminPusatOrSuperAdmin;
+
+  const fetchStats = useCallback(() => {
+    const params: { status?: string; wilayah_id?: string; branch_id?: string } = {};
+    if (filterStatus) params.status = filterStatus;
+    if (filterWilayahId) params.wilayah_id = filterWilayahId;
+    if (filterBranchId) params.branch_id = filterBranchId;
+    ownersApi.getStats(params)
+      .then((r) => { if (r.data.success && r.data.data) setStats(r.data.data); })
+      .catch(() => setStats(null));
+  }, [filterStatus, filterWilayahId, filterBranchId]);
 
   const fetchOwners = useCallback(async () => {
     setLoading(true);
@@ -131,6 +142,10 @@ const KoordinatorOwnersPage: React.FC = () => {
       setBranchesForFilter([]);
     }
   }, [isAdminPusatOrSuperAdmin, filterWilayahId]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   useEffect(() => {
     fetchOwners();
@@ -273,7 +288,87 @@ const KoordinatorOwnersPage: React.FC = () => {
               : 'Owner yang dilayani koordinator wilayah Anda. Verifikasi bukti bayar/deposit lalu aktivasi (cabang dari data pendaftaran).'}
           </p>
         </div>
-        <AutoRefreshControl onRefresh={fetchOwners} disabled={loading} />
+        <AutoRefreshControl onRefresh={() => { fetchStats(); fetchOwners(); }} disabled={loading} />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-card">
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Total Owner</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.total_owners ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Aktif</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.active ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Siap Aktivasi</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.siap_aktivasi ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Pending Verifikasi</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.pending_verifikasi ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-violet-100 text-violet-600">
+              <FileCheck className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Pending MoU</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.pending_mou ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-teal-100 text-teal-600">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Pending Bayar</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.pending_bayar ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-red-100 text-red-600">
+              <XCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Ditolak</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.rejected ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <PageFilter

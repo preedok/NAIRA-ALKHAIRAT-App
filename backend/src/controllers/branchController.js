@@ -72,6 +72,65 @@ const listPublic = asyncHandler(async (req, res) => {
 });
 
 const KOORDINATOR_ROLES = [ROLES.ADMIN_KOORDINATOR, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
+
+const getStats = asyncHandler(async (req, res) => {
+  const sequelize = Branch.sequelize;
+  let wilayah_id = req.query.wilayah_id;
+  if (KOORDINATOR_ROLES.includes(req.user?.role) && req.user?.wilayah_id) {
+    wilayah_id = req.user.wilayah_id;
+  }
+  const baseWhere = {};
+  const includeOpt = wilayah_id ? [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }] : [];
+
+  const [total, active, inactive, withManager] = await Promise.all([
+    Branch.count({ where: baseWhere, include: includeOpt, distinct: true }),
+    Branch.count({ where: { ...baseWhere, is_active: true }, include: includeOpt, distinct: true }),
+    Branch.count({ where: { ...baseWhere, is_active: false }, include: includeOpt, distinct: true }),
+    Branch.count({
+      where: {
+        ...baseWhere,
+        manager_name: { [Op.and]: [{ [Op.ne]: null }, { [Op.not]: '' }] }
+      },
+      include: includeOpt,
+      distinct: true
+    })
+  ]);
+
+  let total_provinces = 0;
+  let total_wilayah = 0;
+  if (includeOpt.length > 0) {
+    const branchRows = await Branch.findAll({ where: baseWhere, include: includeOpt, attributes: ['id', 'provinsi_id'], raw: true });
+    const branchIds = branchRows.map((r) => r.id);
+    const provinsiIds = [...new Set(branchRows.map((r) => r.provinsi_id).filter(Boolean))];
+    total_provinces = provinsiIds.length;
+    total_wilayah = 1;
+  } else {
+    const { QueryTypes } = require('sequelize');
+    const pRows = await sequelize.query(
+      'SELECT COUNT(DISTINCT provinsi_id)::int AS c FROM branches WHERE provinsi_id IS NOT NULL',
+      { type: QueryTypes.SELECT }
+    );
+    const wRows = await sequelize.query(
+      'SELECT COUNT(DISTINCT p.wilayah_id)::int AS c FROM branches b LEFT JOIN provinsi p ON b.provinsi_id = p.id WHERE p.wilayah_id IS NOT NULL',
+      { type: QueryTypes.SELECT }
+    );
+    total_provinces = pRows[0]?.c ?? 0;
+    total_wilayah = wRows[0]?.c ?? 0;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      total_branches: total,
+      active_branches: active,
+      inactive_branches: inactive,
+      branches_with_manager: withManager,
+      total_provinces: total_provinces,
+      total_wilayah: total_wilayah
+    }
+  });
+});
+
 const list = asyncHandler(async (req, res) => {
   const { limit = 25, page = 1, include_inactive, search, region, provinsi_id, wilayah_id: qWilayahId, city, is_active, sort_by, sort_order } = req.query;
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
@@ -352,6 +411,7 @@ const update = asyncHandler(async (req, res) => {
 
 module.exports = {
   listPublic,
+  getStats,
   list,
   listProvinces,
   listWilayah,

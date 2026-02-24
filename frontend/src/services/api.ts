@@ -207,7 +207,7 @@ interface OrderItem {
   BusProgress?: { id: string; bus_ticket_status: string; bus_ticket_info?: string; arrival_status: string; departure_status: string; return_status: string; notes?: string };
 }
 
-interface BusDashboardData {
+export interface BusDashboardData {
   total_orders: number;
   total_bus_items: number;
   bus_ticket: { pending: number; issued: number };
@@ -288,8 +288,22 @@ export const invoicesApi = {
     api.get<{ success: boolean; data: { invoice_id: string; invoice_number: string; releasable_amount: number } }>(`/invoices/${id}/releasable`)
 };
 
+export interface RefundStats {
+  total_refunds: number;
+  requested: number;
+  approved: number;
+  rejected: number;
+  refunded: number;
+  amount_requested: number;
+  amount_refunded: number;
+  amount_pending: number;
+  by_status: Record<string, number>;
+  amount_by_status: Record<string, number>;
+}
+
 export const refundsApi = {
   list: (params?: { status?: string; owner_id?: string; limit?: number; page?: number }) => api.get('/refunds', { params }),
+  getStats: (params?: { status?: string; owner_id?: string }) => api.get<{ success: boolean; data: RefundStats }>('/refunds/stats', { params }),
   getById: (id: string) => api.get(`/refunds/${id}`),
   updateStatus: (id: string, body: { status: string; rejection_reason?: string }) => api.patch(`/refunds/${id}`, body),
   createFromBalance: (body: { amount: number; bank_name: string; account_number: string }) => api.post('/refunds', body)
@@ -309,8 +323,18 @@ export interface KabupatenItem {
   nama: string;
 }
 
+export interface BranchStats {
+  total_branches: number;
+  active_branches: number;
+  inactive_branches: number;
+  branches_with_manager: number;
+  total_provinces: number;
+  total_wilayah: number;
+}
+
 export const branchesApi = {
   list: (params?: { limit?: number; page?: number; include_inactive?: string; search?: string; region?: string; provinsi_id?: string; wilayah_id?: string; city?: string; is_active?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get<{ success: boolean; data: Branch[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/branches', { params }),
+  getStats: (params?: { wilayah_id?: string }) => api.get<{ success: boolean; data: BranchStats }>('/branches/stats', { params }),
   listPublic: (params?: { search?: string; region?: string; limit?: number }) => api.get<{ success: boolean; data: Branch[] }>('/branches/public', { params }),
   listProvinces: () => api.get<{ success: boolean; data: ProvinceItem[] }>('/branches/provinces'),
   listWilayah: () => api.get<{ success: boolean; data: Array<{ id: string; name: string }> }>('/branches/wilayah'),
@@ -756,6 +780,17 @@ export const koordinatorApi = {
   getDashboard: () => api.get<{ success: boolean; data: KoordinatorDashboardData }>('/koordinator/dashboard')
 };
 
+export interface OwnerStats {
+  total_owners: number;
+  active: number;
+  siap_aktivasi: number;
+  pending_verifikasi: number;
+  pending_mou: number;
+  pending_bayar: number;
+  rejected: number;
+  by_status: Record<string, number>;
+}
+
 export const ownersApi = {
   /** Registrasi + upload bukti bayar MoU + jumlah. Body: FormData dengan field form + registration_payment_file + registration_payment_amount */
   register: (formData: FormData) =>
@@ -765,6 +800,8 @@ export const ownersApi = {
     api.post<{ success: boolean; message?: string; data?: { owner_status: string } }>('/owners/upload-registration-payment', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   list: (params?: { status?: string; branch_id?: string; wilayah_id?: string; q?: string; page?: number; limit?: number }) =>
     api.get<{ success: boolean; data: OwnerProfile[]; total?: number; page?: number; limit?: number }>('/owners', { params }),
+  getStats: (params?: { status?: string; branch_id?: string; wilayah_id?: string }) =>
+    api.get<{ success: boolean; data: OwnerStats }>('/owners/stats', { params }),
   getById: (id: string) => api.get<{ success: boolean; data: OwnerProfile }>(`/owners/${id}`),
   verifyMou: (id: string, body: { approved: boolean; rejection_reason?: string }) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string } }>(`/owners/${id}/verify-mou`, body),
   verifyRegistrationPayment: (id: string, body: { approved: boolean; rejection_reason?: string }) =>

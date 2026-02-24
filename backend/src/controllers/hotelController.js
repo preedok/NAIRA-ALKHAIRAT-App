@@ -1,17 +1,42 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Product, ProductPrice, HotelProgress, Invoice } = require('../models');
-const { ORDER_ITEM_TYPE } = require('../constants');
+const { ORDER_ITEM_TYPE, ROLES } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
+const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+
+/**
+ * Hotel controller: scope cabang via getHotelBranchIds (sama seperti bus/tiket).
+ * branch_id user TIDAK wajib: super_admin = semua cabang, admin_koordinator = wilayah,
+ * role_hotel tanpa cabang/wilayah = fallback semua cabang. Tidak ada pesan "Role hotel harus terikat cabang".
+ */
+/** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, role hotel = cabang/wilayah. Fallback semua cabang agar tidak 403. */
+async function getHotelBranchIds(user) {
+  if (user.role === ROLES.SUPER_ADMIN) {
+    const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+    return branches.map(b => b.id);
+  }
+  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+    const ids = await getBranchIdsForWilayah(user.wilayah_id);
+    if (ids.length > 0) return ids;
+  }
+  if (user.branch_id) return [user.branch_id];
+  if (user.wilayah_id) {
+    const ids = await getBranchIdsForWilayah(user.wilayah_id);
+    if (ids.length > 0) return ids;
+  }
+  const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+  return branches.map(b => b.id);
+}
 
 /**
  * GET /api/v1/hotel/invoices
- * List invoices that have hotel items (scope cabang). Sama pola dengan visa/ticket.
+ * List invoices that have hotel items (scope cabang). Sama pola dengan visa/ticket/bus.
  */
 const listInvoices = asyncHandler(async (req, res) => {
   const { status } = req.query;
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role hotel harus terikat cabang' });
+  const branchIds = await getHotelBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIdsFromHotel = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.HOTEL },
@@ -21,7 +46,7 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [] });
 
-  const where = { order_id: orderIdsFromHotel, branch_id: branchId };
+  const where = { order_id: orderIdsFromHotel, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
   const invoices = await Invoice.findAll({
@@ -56,8 +81,8 @@ const listInvoices = asyncHandler(async (req, res) => {
  * Detail invoice dengan item hotel dan progress.
  */
 const getInvoice = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role hotel harus terikat cabang' });
+  const branchIds = await getHotelBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
@@ -79,7 +104,7 @@ const getInvoice = asyncHandler(async (req, res) => {
     ]
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  if (invoice.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
   const hotelItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item hotel' });
 
@@ -92,8 +117,8 @@ const getInvoice = asyncHandler(async (req, res) => {
  */
 const listOrders = asyncHandler(async (req, res) => {
   const { status } = req.query;
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role hotel harus terikat cabang' });
+  const branchIds = await getHotelBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIds = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.HOTEL },
@@ -101,7 +126,7 @@ const listOrders = asyncHandler(async (req, res) => {
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
-  const where = { id: orderIds, branch_id: branchId };
+  const where = { id: orderIds, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
   const orders = await Order.findAll({
@@ -128,7 +153,9 @@ const listOrders = asyncHandler(async (req, res) => {
  * Order detail with hotel items and progress (for role hotel).
  */
 const getOrder = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
+  const branchIds = await getHotelBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
+
   const order = await Order.findByPk(req.params.id, {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
@@ -141,7 +168,7 @@ const getOrder = asyncHandler(async (req, res) => {
     ]
   });
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  if (order.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+  if (!branchIds.includes(order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
   const hotelItems = (order.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Order tidak memiliki item hotel' });
 
@@ -153,7 +180,8 @@ const getOrder = asyncHandler(async (req, res) => {
  * Product hotel (dan makan dari meta) - informasi ketersediaan & harga (read-only). General, cabang, invoice.
  */
 const listProducts = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
+  const branchIds = await getHotelBranchIds(req.user);
+  const branchId = branchIds[0] || req.user.branch_id; // untuk tampilan harga cabang
   const products = await Product.findAll({
     where: { type: ORDER_ITEM_TYPE.HOTEL, is_active: true },
     include: [{ model: ProductPrice, as: 'ProductPrices', required: false }],
@@ -182,8 +210,8 @@ const listProducts = asyncHandler(async (req, res) => {
  * Rekapitulasi pekerjaan role hotel: total, per status, list pending.
  */
 const getDashboard = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role hotel harus terikat cabang' });
+  const branchIds = await getHotelBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIds = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.HOTEL },
@@ -192,7 +220,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: branchId },
+    where: { id: orderIds, branch_id: { [Op.in]: branchIds } },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
@@ -254,8 +282,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     include: [{ model: Order, as: 'Order' }, { model: HotelProgress, as: 'HotelProgress', required: false }]
   });
   if (!item || item.type !== ORDER_ITEM_TYPE.HOTEL) return res.status(404).json({ success: false, message: 'Order item hotel tidak ditemukan' });
-  // Role hotel: jika punya branch_id hanya boleh update order cabang tersebut; tanpa branch_id (tim pusat) boleh update semua.
-  if (req.user.branch_id && item.Order.branch_id !== req.user.branch_id) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+  const branchIdsProgress = await getHotelBranchIds(req.user);
+  if (branchIdsProgress.length === 0 || !branchIdsProgress.includes(item.Order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
 
   const validStatuses = Object.values(HOTEL_PROGRESS_STATUS);
   if (status && !validStatuses.includes(status)) return res.status(400).json({ success: false, message: 'Status tidak valid' });

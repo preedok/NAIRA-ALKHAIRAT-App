@@ -108,11 +108,19 @@ const HotelDashboard: React.FC = () => {
         </Card>
       )}
 
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Pekerjaan Hotel</h3>
+            <p className="text-sm text-slate-600 mt-0.5">Kelola invoice hotel, alokasi kamar, konfirmasi & meal di menu Hotel.</p>
+          </div>
+          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/hotels')}>
+            <Hotel className="w-4 h-4 mr-2" /> Buka Menu Hotel
+          </Button>
+        </div>
+      </Card>
       <div className="flex gap-2">
-        <Button variant="outline" onClick={() => navigate('/dashboard/hotels')}>
-          Daftar Order Hotel
-        </Button>
-        <Button variant="ghost" onClick={() => navigate('/dashboard/hotels?tab=products')}>
+        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/hotels?tab=products')}>
           Lihat Produk & Harga (read-only)
         </Button>
       </div>

@@ -38,19 +38,25 @@ const HotelWorkPage: React.FC = () => {
     try {
       const res = await hotelApi.getDashboard();
       if (res.data.success && res.data.data) setDashboard(res.data.data);
-    } catch {
+      else setDashboard(null);
+    } catch (e: any) {
       setDashboard(null);
+      const msg = e.response?.data?.message;
+      if (e.response?.status === 403 && msg) showToast(msg, 'error');
     }
-  }, []);
+  }, [showToast]);
 
   const fetchInvoices = useCallback(async () => {
     try {
       const res = await hotelApi.listInvoices({});
       if (res.data.success) setInvoices(res.data.data || []);
-    } catch {
+      else setInvoices([]);
+    } catch (e: any) {
       setInvoices([]);
+      const msg = e.response?.data?.message;
+      if (e.response?.status === 403 && msg) showToast(msg, 'error');
     }
-  }, []);
+  }, [showToast]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);

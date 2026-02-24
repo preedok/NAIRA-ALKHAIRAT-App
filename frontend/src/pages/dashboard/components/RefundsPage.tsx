@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Receipt, RefreshCw, Building2, User } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Receipt, RefreshCw, Wallet, Clock, CheckCircle, XCircle, Banknote } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR } from '../../../utils';
-import { refundsApi } from '../../../services/api';
+import { refundsApi, type RefundStats } from '../../../services/api';
 
 /** Refund - halaman untuk admin pusat & role accounting (lihat & update status permintaan refund). */
 
@@ -17,13 +17,22 @@ const RefundsPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [list, setList] = useState<any[]>([]);
+  const [stats, setStats] = useState<RefundStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
 
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
 
-  const fetchRefunds = () => {
+  const fetchStats = useCallback(() => {
+    const params: { status?: string } = {};
+    if (statusFilter) params.status = statusFilter;
+    refundsApi.getStats(params)
+      .then((r) => { if (r.data.success && r.data.data) setStats(r.data.data); })
+      .catch(() => setStats(null));
+  }, [statusFilter]);
+
+  const fetchRefunds = useCallback(() => {
     setLoading(true);
     const params: { limit?: number; page?: number; status?: string; owner_id?: string } = { limit: 100, page: 1 };
     if (statusFilter) params.status = statusFilter;
@@ -34,19 +43,26 @@ const RefundsPage: React.FC = () => {
       })
       .catch(() => setList([]))
       .finally(() => setLoading(false));
-  };
+  }, [statusFilter]);
 
-  useEffect(() => { fetchRefunds(); }, [statusFilter]);
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { fetchRefunds(); }, [fetchRefunds]);
 
   const handleUpdateStatus = (id: string, status: string, rejection_reason?: string) => {
     setUpdatingId(id);
     refundsApi.updateStatus(id, { status, rejection_reason })
       .then(() => {
         showToast(`Status diubah menjadi ${STATUS_LABELS[status] || status}`, 'success');
+        fetchStats();
         fetchRefunds();
       })
       .catch((e: any) => showToast(e.response?.data?.message || 'Gagal update status', 'error'))
       .finally(() => setUpdatingId(null));
+  };
+
+  const onRefresh = () => {
+    fetchStats();
+    fetchRefunds();
   };
 
   return (
@@ -63,10 +79,85 @@ const RefundsPage: React.FC = () => {
             <option value="">Semua status</option>
             {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <Button variant="outline" size="sm" onClick={fetchRefunds} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-card">
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Total Refund</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.total_refunds ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Menunggu</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.requested ?? '–'}</p>
+              {(stats?.amount_pending ?? 0) > 0 && (
+                <p className="text-xs text-stone-500 mt-0.5">{formatIDR(stats!.amount_pending)}</p>
+              )}
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Disetujui</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.approved ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-red-100 text-red-600">
+              <XCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Ditolak</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.rejected ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Sudah direfund</p>
+              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.refunded ?? '–'}</p>
+              {(stats?.amount_refunded ?? 0) > 0 && (
+                <p className="text-xs text-stone-500 mt-0.5">{formatIDR(stats!.amount_refunded)}</p>
+              )}
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-teal-100 text-teal-600">
+              <Banknote className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-stone-600">Nominal Pending</p>
+              <p className="text-lg font-bold text-stone-900 tabular-nums">{formatIDR(stats?.amount_requested ?? 0)}</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <Card className="overflow-hidden">

@@ -42,16 +42,67 @@ const createFromBalance = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: full, message: 'Permintaan refund saldo telah dicatat. Admin/accounting akan memproses.' });
 });
 
+/** Build where for list/stats (status, owner scope) */
+function buildRefundWhere(req) {
+  const { status, owner_id } = req.query;
+  const where = {};
+  if (status) where.status = status;
+  if (req.user.role === 'owner') where.owner_id = req.user.id;
+  else if (owner_id) where.owner_id = owner_id;
+  return where;
+}
+
+/**
+ * GET /api/v1/refunds/stats
+ * Counts and amounts by status (same scope as list).
+ */
+const getStats = asyncHandler(async (req, res) => {
+  const where = buildRefundWhere(req);
+  const sequelize = Refund.sequelize;
+
+  const total = await Refund.count({ where });
+
+  const rows = await Refund.findAll({
+    where,
+    attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count'], [sequelize.fn('COALESCE', sequelize.fn('SUM', sequelize.col('amount')), 0), 'total_amount']],
+    group: ['status'],
+    raw: true
+  });
+
+  const byStatus = { requested: 0, approved: 0, rejected: 0, refunded: 0 };
+  const amountByStatus = { requested: 0, approved: 0, rejected: 0, refunded: 0 };
+  rows.forEach((r) => {
+    byStatus[r.status] = parseInt(r.count, 10) || 0;
+    amountByStatus[r.status] = parseFloat(r.total_amount) || 0;
+  });
+
+  const totalAmountRequested = amountByStatus.requested + amountByStatus.approved;
+  const totalAmountRefunded = amountByStatus.refunded;
+
+  res.json({
+    success: true,
+    data: {
+      total_refunds: total,
+      requested: byStatus.requested,
+      approved: byStatus.approved,
+      rejected: byStatus.rejected,
+      refunded: byStatus.refunded,
+      amount_requested: totalAmountRequested,
+      amount_refunded: totalAmountRefunded,
+      amount_pending: amountByStatus.requested,
+      by_status: byStatus,
+      amount_by_status: amountByStatus
+    }
+  });
+});
+
 /**
  * GET /api/v1/refunds
  * Admin pusat & accounting: semua permintaan refund. Owner: hanya milik sendiri.
  */
 const list = asyncHandler(async (req, res) => {
-  const { status, owner_id, limit = 50, page = 1 } = req.query;
-  const where = {};
-  if (status) where.status = status;
-  if (req.user.role === 'owner') where.owner_id = req.user.id;
-  else if (owner_id) where.owner_id = owner_id;
+  const { limit = 50, page = 1 } = req.query;
+  const where = buildRefundWhere(req);
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
   const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * lim;
@@ -152,4 +203,4 @@ const updateStatus = asyncHandler(async (req, res) => {
   res.json({ success: true, data: updated, message: `Status refund diubah menjadi ${REFUND_STATUS_LABELS[status] || status}` });
 });
 
-module.exports = { list, getById, updateStatus, createFromBalance };
+module.exports = { getStats, list, getById, updateStatus, createFromBalance };

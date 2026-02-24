@@ -2,10 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { auth, requireRole } = require('../../middleware/auth');
 const { ROLES } = require('../../constants');
-const productController = require('../../controllers/productController');
 const adminPusatController = require('../../controllers/adminPusatController');
-const accountingController = require('../../controllers/accountingController');
-const superAdminController = require('../../controllers/superAdminController');
 
 router.get('/', (req, res) => {
   res.json({
@@ -33,7 +30,6 @@ router.use('/branches', require('./branches'));
 router.use('/orders', require('./orders'));
 router.use('/invoices', require('./invoices'));
 router.use('/refunds', require('./refunds'));
-router.post('/products/hotels', auth, requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createHotel);
 router.use('/products', require('./products'));
 router.use('/business-rules', require('./businessRules'));
 router.use('/hotel', require('./hotel'));

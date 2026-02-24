@@ -8,6 +8,7 @@ router.use(auth);
 
 router.post('/', requireRole(ROLES.OWNER), refundController.createFromBalance);
 router.get('/', requireRole(ROLES.OWNER, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), refundController.list);
+router.get('/stats', requireRole(ROLES.OWNER, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), refundController.getStats);
 router.get('/:id', requireRole(ROLES.OWNER, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.getById);
 router.patch('/:id', requireRole(ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.updateStatus);
 

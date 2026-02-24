@@ -67,6 +67,18 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_koordinator', 'tiket_koordinator']
   },
   {
+    title: 'Hotel',
+    icon: <Hotel className="w-5 h-5" />,
+    path: '/dashboard/hotels',
+    roles: ['super_admin', 'admin_koordinator', 'role_hotel']
+  },
+  {
+    title: 'Bus',
+    icon: <Bus className="w-5 h-5" />,
+    path: '/dashboard/bus',
+    roles: ['super_admin', 'admin_koordinator', 'role_bus']
+  },
+  {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',

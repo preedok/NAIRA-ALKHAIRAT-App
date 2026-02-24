@@ -5,7 +5,7 @@ const { ROLES } = require('../../constants');
 const hotelController = require('../../controllers/hotelController');
 
 router.use(auth);
-router.use(requireRole(ROLES.ROLE_HOTEL));
+router.use(requireRole(ROLES.ROLE_HOTEL, ROLES.ADMIN_KOORDINATOR, ROLES.SUPER_ADMIN));
 
 router.get('/dashboard', hotelController.getDashboard);
 router.get('/invoices', hotelController.listInvoices);

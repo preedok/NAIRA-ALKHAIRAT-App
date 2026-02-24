@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Building2, Plus, Edit, Search, Filter, MapPin, Globe, UserPlus } from 'lucide-react';
+import { Building2, Edit, Search, Filter, MapPin, Globe, UserPlus, CheckCircle, XCircle, Users } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -7,7 +7,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import { branchesApi, adminPusatApi, type Branch, type ProvinceItem, type UserListItem } from '../../../services/api';
+import { branchesApi, adminPusatApi, type Branch, type BranchStats, type ProvinceItem, type UserListItem } from '../../../services/api';
 import { TableColumn } from '../../../types';
 
 type AddAccountMode = 'akun_wilayah' | 'akun_provinsi';
@@ -15,6 +15,7 @@ type AddAccountMode = 'akun_wilayah' | 'akun_provinsi';
 const BranchesPage: React.FC = () => {
   const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [stats, setStats] = useState<BranchStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
@@ -69,6 +70,12 @@ const BranchesPage: React.FC = () => {
 
   const hasActiveFilters = searchText || filterWilayah || filterProvinsi || filterCity || filterStatus !== 'all';
 
+  const fetchStats = useCallback(() => {
+    branchesApi.getStats({ wilayah_id: filterWilayah || undefined })
+      .then((r) => { if (r.data.success && r.data.data) setStats(r.data.data); })
+      .catch(() => setStats(null));
+  }, [filterWilayah]);
+
   const fetchBranches = useCallback(async () => {
     setLoading(true);
     try {
@@ -101,6 +108,10 @@ const BranchesPage: React.FC = () => {
   useEffect(() => {
     setPage(1);
   }, [searchText, filterWilayah, filterProvinsi, filterCity, filterStatus]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   useEffect(() => {
     fetchBranches();
@@ -268,39 +279,87 @@ const BranchesPage: React.FC = () => {
           <p className="text-stone-600 mt-1">Daftar cabang dan tambah akun admin cabang, wilayah, atau provinsi</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <AutoRefreshControl onRefresh={fetchBranches} disabled={loading} />
+          <AutoRefreshControl onRefresh={() => { fetchStats(); fetchBranches(); }} disabled={loading} />
           {canCreateBranch && (
             <Button variant="primary" onClick={openAddAccount}><UserPlus className="w-5 h-5 mr-2" />Tambah Akun</Button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card hover className="travel-card">
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-card">
               <Building2 className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-stone-600">Total Cabang</p>
-              <p className="text-2xl font-bold text-stone-900">{pagination?.total ?? branches.length}</p>
+              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.total_branches ?? '–'}</p>
             </div>
           </div>
         </Card>
-        {hasActiveFilters && (
-          <Card hover className="travel-card">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary-100 text-primary-600">
-                <Filter className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm text-stone-600">Filter aktif</p>
-                <p className="text-2xl font-bold text-stone-900">{pagination?.total ?? 0} tampil</p>
-              </div>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600">
+              <CheckCircle className="w-5 h-5" />
             </div>
-          </Card>
-        )}
+            <div className="min-w-0">
+              <p className="text-sm text-stone-600">Cabang Aktif</p>
+              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.active_branches ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-amber-100 text-amber-600">
+              <XCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-stone-600">Cabang Nonaktif</p>
+              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.inactive_branches ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-sky-100 text-sky-600">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-stone-600">Provinsi</p>
+              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.total_provinces ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-violet-100 text-violet-600">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-stone-600">Wilayah</p>
+              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.total_wilayah ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-teal-100 text-teal-600">
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-stone-600">Punya Manager</p>
+              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.branches_with_manager ?? '–'}</p>
+            </div>
+          </div>
+        </Card>
       </div>
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
+          <Filter className="w-4 h-4" />
+          <span>Filter aktif: menampilkan {pagination?.total ?? 0} cabang</span>
+        </div>
+      )}
 
       <Card className="travel-card">
         {loading ? (

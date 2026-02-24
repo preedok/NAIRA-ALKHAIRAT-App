@@ -5,6 +5,7 @@ const { auth, requireRole } = require('../../middleware/auth');
 const { ROLES } = require('../../constants');
 
 router.get('/public', branchController.listPublic);
+router.get('/stats', auth, branchController.getStats);
 router.get('/provinces', auth, branchController.listProvinces);
 router.get('/wilayah', auth, branchController.listWilayah);
 router.get('/kabupaten/:provinceId', auth, branchController.listKabupaten);

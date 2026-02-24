@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const { Op } = require('sequelize');
 const {
   Order,
   OrderItem,
@@ -11,15 +12,35 @@ const {
   BusProgress,
   Invoice
 } = require('../models');
-const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS } = require('../constants');
+const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES } = require('../constants');
+const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+
+/** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, role bus = cabang/wilayah. Fallback semua cabang agar tidak 403. */
+async function getBusBranchIds(user) {
+  if (user.role === ROLES.SUPER_ADMIN) {
+    const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+    return branches.map(b => b.id);
+  }
+  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+    const ids = await getBranchIdsForWilayah(user.wilayah_id);
+    if (ids.length > 0) return ids;
+  }
+  if (user.branch_id) return [user.branch_id];
+  if (user.wilayah_id) {
+    const ids = await getBranchIdsForWilayah(user.wilayah_id);
+    if (ids.length > 0) return ids;
+  }
+  const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+  return branches.map(b => b.id);
+}
 
 /**
  * GET /api/v1/bus/dashboard
  * Rekapitulasi pekerjaan bus: total order, item bus, per status tiket/kedatangan/keberangkatan/kepulangan.
  */
 const getDashboard = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIds = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
@@ -28,7 +49,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: branchId },
+    where: { id: orderIds, branch_id: { [Op.in]: branchIds } },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
@@ -95,12 +116,13 @@ const getDashboard = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/bus/invoices
- * List invoices that have bus items (scope cabang). Sama pola dengan visa/ticket.
+ * List invoice yang punya order bus (sumber data sama dengan menu Invoice: hanya invoice yang order-nya ada item bus).
+ * Scope cabang role bus. Sama pola dengan visa/ticket.
  */
 const listInvoices = asyncHandler(async (req, res) => {
   const { status } = req.query;
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIdsFromBus = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
@@ -110,7 +132,7 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [] });
 
-  const where = { order_id: orderIdsFromBus, branch_id: branchId };
+  const where = { order_id: orderIdsFromBus, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
   const invoices = await Invoice.findAll({
@@ -145,8 +167,8 @@ const listInvoices = asyncHandler(async (req, res) => {
  * Detail invoice dengan item bus dan progress.
  */
 const getInvoice = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
@@ -168,7 +190,7 @@ const getInvoice = asyncHandler(async (req, res) => {
     ]
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  if (invoice.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
   const busItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.BUS);
   if (busItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item bus' });
 
@@ -181,8 +203,8 @@ const getInvoice = asyncHandler(async (req, res) => {
  */
 const listOrders = asyncHandler(async (req, res) => {
   const { status } = req.query;
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIds = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
@@ -190,7 +212,7 @@ const listOrders = asyncHandler(async (req, res) => {
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
-  const where = { id: orderIds, branch_id: branchId };
+  const where = { id: orderIds, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
   const orders = await Order.findAll({
@@ -217,7 +239,9 @@ const listOrders = asyncHandler(async (req, res) => {
  * Order detail with bus items and progress.
  */
 const getOrder = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
+
   const order = await Order.findByPk(req.params.id, {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
@@ -230,7 +254,7 @@ const getOrder = asyncHandler(async (req, res) => {
     ]
   });
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  if (order.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+  if (!branchIds.includes(order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
   const busItems = (order.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.BUS);
   if (busItems.length === 0) return res.status(404).json({ success: false, message: 'Order tidak memiliki item bus' });
 
@@ -242,7 +266,8 @@ const getOrder = asyncHandler(async (req, res) => {
  * Produk bus dengan harga: general (pusat), cabang (admin cabang), khusus (role invoice per owner). Read-only.
  */
 const listProducts = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
+  const branchIds = await getBusBranchIds(req.user);
+  const branchId = branchIds[0] || req.user.branch_id; // untuk tampilan harga cabang
   const products = await Product.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS, is_active: true },
     include: [
@@ -285,7 +310,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     include: [{ model: Order, as: 'Order' }, { model: BusProgress, as: 'BusProgress', required: false }]
   });
   if (!item || item.type !== ORDER_ITEM_TYPE.BUS) return res.status(404).json({ success: false, message: 'Order item bus tidak ditemukan' });
-  if (item.Order.branch_id !== req.user.branch_id) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+  const branchIdsProgress = await getBusBranchIds(req.user);
+  if (branchIdsProgress.length === 0 || !branchIdsProgress.includes(item.Order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
 
   const validTicket = Object.values(BUS_TICKET_STATUS);
   const validTrip = Object.values(BUS_TRIP_STATUS);
@@ -326,8 +352,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
  * Export rekap pekerjaan bus ke Excel (lengkap dan detail).
  */
 const exportExcel = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIds = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
@@ -336,7 +362,7 @@ const exportExcel = asyncHandler(async (req, res) => {
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: branchId },
+    where: { id: orderIds, branch_id: { [Op.in]: branchIds } },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
@@ -398,8 +424,8 @@ const exportExcel = asyncHandler(async (req, res) => {
  * Export rekap pekerjaan bus ke PDF (lengkap dan detail).
  */
 const exportPdf = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIds = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
@@ -408,7 +434,7 @@ const exportPdf = asyncHandler(async (req, res) => {
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: branchId },
+    where: { id: orderIds, branch_id: { [Op.in]: branchIds } },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {

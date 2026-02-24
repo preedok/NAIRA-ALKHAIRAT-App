@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plane, RefreshCw, ClipboardList } from 'lucide-react';
+import { Plane, RefreshCw, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import { ticketApi } from '../../../services/api';
@@ -16,6 +16,24 @@ const RECAP_STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_ORDER = ['pending', 'data_received', 'seat_reserved', 'booking', 'payment_airline', 'ticket_issued'];
+
+const STATUS_ICONS: Record<string, React.ReactNode> = {
+  pending: <Clock className="h-5 w-5" />,
+  data_received: <Inbox className="h-5 w-5" />,
+  seat_reserved: <Armchair className="h-5 w-5" />,
+  booking: <CalendarCheck className="h-5 w-5" />,
+  payment_airline: <CreditCard className="h-5 w-5" />,
+  ticket_issued: <CheckCircle className="h-5 w-5" />
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-600',
+  data_received: 'bg-sky-100 text-sky-600',
+  seat_reserved: 'bg-violet-100 text-violet-600',
+  booking: 'bg-teal-100 text-teal-600',
+  payment_airline: 'bg-orange-100 text-orange-600',
+  ticket_issued: 'bg-emerald-100 text-emerald-600'
+};
 
 const TicketDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -50,6 +68,9 @@ const TicketDashboard: React.FC = () => {
   const byStatus = data?.by_status || {};
   const totalInvoices = data?.total_invoices ?? 0;
   const totalItems = data?.total_ticket_items ?? 0;
+  const pendingList = data?.pending_list ?? [];
+  const ticketIssued = byStatus.ticket_issued ?? 0;
+  const completionPct = totalItems > 0 ? Math.round((ticketIssued / totalItems) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -63,27 +84,76 @@ const TicketDashboard: React.FC = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-2 text-slate-600 mb-1">
-            <ClipboardList className="w-4 h-4" />
-            <span className="text-xs font-medium uppercase tracking-wide">Total Invoice</span>
+      {/* Rekap statistik lengkap */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3 p-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-stone-600">Total Invoice</p>
+              <p className="text-xl font-bold tabular-nums text-stone-900">{totalInvoices}</p>
+              <p className="text-[10px] text-stone-500 mt-0.5">Invoice dengan item tiket</p>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900">{totalInvoices}</div>
-          <p className="text-xs text-slate-500 mt-1">Invoice dengan item tiket</p>
         </Card>
-        <Card className="p-4">
-          <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">Total Item Tiket</div>
-          <div className="text-2xl font-bold text-slate-900">{totalItems}</div>
-          <p className="text-xs text-slate-500 mt-1">Item tiket di cabang</p>
+        <Card hover className="travel-card">
+          <div className="flex items-center gap-3 p-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <Ticket className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-stone-600">Item Tiket</p>
+              <p className="text-xl font-bold tabular-nums text-stone-900">{totalItems}</p>
+              <p className="text-[10px] text-stone-500 mt-0.5">Item tiket di cabang</p>
+            </div>
+          </div>
         </Card>
         {STATUS_ORDER.map((status) => (
-          <Card key={status} className="p-4">
-            <div className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-1">{RECAP_STATUS_LABELS[status] || status}</div>
-            <div className="text-xl font-bold text-slate-800">{byStatus[status] ?? 0}</div>
+          <Card key={status} hover className="travel-card">
+            <div className="flex items-center gap-3 p-4">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
+                {STATUS_ICONS[status] || <Ticket className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-stone-600">{RECAP_STATUS_LABELS[status] || status}</p>
+                <p className="text-xl font-bold tabular-nums text-stone-900">{byStatus[status] ?? 0}</p>
+              </div>
+            </div>
           </Card>
         ))}
       </div>
+
+      {/* Progress & Perlu Tindakan */}
+      {totalItems > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border-primary-100 bg-primary-50/30">
+            <p className="text-sm font-medium text-stone-700 mb-2">Progress Penerbitan</p>
+            <div className="flex items-center gap-3">
+              <div className="h-3 flex-1 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, completionPct)}%` }} />
+              </div>
+              <span className="text-sm font-bold tabular-nums text-stone-800 min-w-[3rem]">{Math.min(100, completionPct)}%</span>
+            </div>
+            <p className="text-xs text-stone-500 mt-1.5">Item dengan status Tiket Terbit</p>
+          </Card>
+          {pendingList.length > 0 && (
+            <Card className="border-amber-200/60 bg-amber-50/30">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-stone-800">{pendingList.length} item perlu tindakan</p>
+                  <p className="text-xs text-stone-500">Belum status Terbit (update status & upload dokumen di menu Tiket)</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/dashboard/tickets')}>
+                Kelola di Menu Tiket <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Card>
+          )}
+        </div>
+      )}
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-4">
