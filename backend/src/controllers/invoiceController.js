@@ -129,8 +129,8 @@ const list = asyncHandler(async (req, res) => {
     where.order_id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
   }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
-  // role_accounting, role_invoice, role_invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
-  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice', 'invoice', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  // role_accounting, role_invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
 
@@ -296,7 +296,7 @@ const getSummary = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
-  if (req.user.branch_id && req.user.role !== 'owner' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice', 'invoice', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  if (req.user.branch_id && req.user.role !== 'owner' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
   if (req.user.wilayah_id && isKoordinatorRole(req.user.role)) {
@@ -600,7 +600,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
   const proof = await PaymentProof.findByPk(payment_proof_id);
   if (!proof || proof.invoice_id !== req.params.id) return res.status(404).json({ success: false, message: 'Bukti bayar tidak ditemukan' });
   // Hanya karyawan (bukan owner/pembeli) yang boleh verifikasi
-  const allowedVerify = ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_invoice', 'invoice', 'role_accounting', 'super_admin'];
+  const allowedVerify = ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_accounting', 'super_admin'];
   if (!allowedVerify.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang verifikasi' });
   }

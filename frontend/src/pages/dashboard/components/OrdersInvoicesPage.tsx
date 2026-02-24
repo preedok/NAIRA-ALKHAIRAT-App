@@ -28,7 +28,7 @@ const getFileUrl = (path: string) => {
 
 /**
  * Order & Invoice - Satu halaman untuk semua role yang mengerjakan order/invoice:
- * owner, invoice_koordinator, role_invoice_saudi, role_hotel (pekerjaan hotel), admin pusat/cabang, accounting, dll.
+ * owner, invoice_koordinator, role_invoice_saudi, role_hotel (pekerjaan hotel), admin pusat/cabang, accounting, dll. (role_invoice dihapus — pakai invoice_koordinator.)
  * Modal Detail Invoice: tab Invoice & Order & tab Bukti Bayar, file preview inline.
  */
 type ApiOrder = {
@@ -486,7 +486,7 @@ const OrdersInvoicesPage: React.FC = () => {
     inv?.is_blocked && ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'].includes(user?.role || '');
 
   // Hanya karyawan (bukan owner) yang boleh konfirmasi/tolak bukti bayar
-  const canVerify = ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_invoice', 'invoice', 'role_accounting', 'super_admin'].includes(user?.role || '');
+  const canVerify = ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_accounting', 'super_admin'].includes(user?.role || '');
 
   const rates = viewInvoice?.currency_rates || currencyRates;
   const sarToIdr = rates.SAR_TO_IDR || 4200;

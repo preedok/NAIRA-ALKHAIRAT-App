@@ -140,7 +140,6 @@ export const PAYMENT_METHOD_LABELS = {
 export const USER_ROLES = {
   SUPER_ADMIN: 'super_admin',
   ADMIN_PUSAT: 'admin_pusat',
-  ROLE_INVOICE: 'role_invoice',
   ROLE_HOTEL: 'role_hotel',
   ROLE_BUS: 'role_bus',
   ROLE_ACCOUNTING: 'role_accounting',

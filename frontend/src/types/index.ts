@@ -17,7 +17,6 @@ export type UserRole =
   | 'role_invoice_saudi'
   | 'admin_cabang'
   | 'owner'
-  | 'role_invoice'
   | 'role_hotel'
   | 'role_bus'
   | 'role_accounting';
@@ -75,7 +74,6 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   role_invoice_saudi: 'Invoice Saudi',
   admin_cabang: 'Admin Cabang',
   owner: 'Owner',
-  role_invoice: 'Invoice',
   role_hotel: 'Hotel',
   role_bus: 'Bus',
   role_accounting: 'Accounting'

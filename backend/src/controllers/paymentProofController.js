@@ -149,7 +149,7 @@ const getFile = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(proof.invoice_id, { attributes: ['owner_id'] });
   const canAccess = invoice && (
     invoice.owner_id === req.user.id ||
-    ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_invoice', 'invoice', 'role_accounting'].includes(req.user.role)
+    ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_accounting'].includes(req.user.role)
   );
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
   // Ekstrak nama file: terima /uploads/payment-proofs/xxx, uploads/payment-proofs/xxx, atau URL penuh

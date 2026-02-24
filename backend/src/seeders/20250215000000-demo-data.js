@@ -29,7 +29,7 @@ module.exports = {
       { id: 'b0000000-0000-0000-0000-000000000003', email: 'admincabang.jkt@bintangglobal.com', name: 'Admin Cabang Jakarta', role: ROLES.ADMIN_CABANG, branch_id: BRANCH_JKT },
       { id: 'b0000000-0000-0000-0000-000000000004', email: 'admincabang.sby@bintangglobal.com', name: 'Admin Cabang Surabaya', role: ROLES.ADMIN_CABANG, branch_id: BRANCH_SBY },
       { id: 'b0000000-0000-0000-0000-000000000014', email: 'admincabang.bdg@bintangglobal.com', name: 'Admin Cabang Bandung', role: ROLES.ADMIN_CABANG, branch_id: BRANCH_BDG },
-      { id: 'b0000000-0000-0000-0000-000000000005', email: 'invoice@bintangglobal.com', name: 'Staff Invoice', role: ROLES.ROLE_INVOICE, branch_id: BRANCH_JKT },
+      { id: 'b0000000-0000-0000-0000-000000000005', email: 'invoice@bintangglobal.com', name: 'Koordinator Invoice', role: ROLES.INVOICE_KOORDINATOR, branch_id: BRANCH_JKT },
       { id: 'b0000000-0000-0000-0000-000000000006', email: 'hotel@bintangglobal.com', name: 'Staff Hotel', role: ROLES.ROLE_HOTEL, branch_id: BRANCH_JKT },
       { id: 'b0000000-0000-0000-0000-000000000007', email: 'visa@bintangglobal.com', name: 'Koordinator Visa', role: ROLES.VISA_KOORDINATOR, branch_id: null, wilayah_id: null },
       { id: 'b0000000-0000-0000-0000-000000000008', email: 'ticket@bintangglobal.com', name: 'Koordinator Tiket', role: ROLES.TIKET_KOORDINATOR, branch_id: null, wilayah_id: null },

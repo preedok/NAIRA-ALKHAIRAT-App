@@ -22,7 +22,6 @@ const ROLES = {
   ADMIN_PROVINSI: 'admin_provinsi',
   ADMIN_WILAYAH: 'admin_wilayah',
   ADMIN_CABANG: 'admin_cabang',
-  ROLE_INVOICE: 'role_invoice',
   ROLE_HANDLING: 'role_handling'
 };
 

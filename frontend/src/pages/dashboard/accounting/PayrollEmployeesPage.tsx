@@ -113,7 +113,6 @@ const PayrollEmployeesPage: React.FC = () => {
       super_admin: 'Super Admin',
       admin_pusat: 'Admin Pusat',
       role_accounting: 'Accounting',
-      role_invoice: 'Invoice (legacy)',
       invoice_koordinator: 'Invoice Koordinator',
       role_invoice_saudi: 'Invoice Saudi',
       role_hotel: 'Hotel',
