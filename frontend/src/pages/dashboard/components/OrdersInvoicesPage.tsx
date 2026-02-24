@@ -909,6 +909,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   <th className="pb-2 pr-4 text-right">Dibayar<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
                   <th className="pb-2 pr-4 text-right">Sisa<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
                   <th className="pb-2 pr-4">Status Invoice<br /><span className="text-xs font-normal text-stone-400">% dibayar dari total</span></th>
+                  <th className="pb-2 pr-4">Status Tiket<br /><span className="text-xs font-normal text-stone-400">Penerbitan tiket</span></th>
                   <th className="pb-2 pr-4">Bukti Bayar<br /><span className="text-xs font-normal text-stone-400">Jumlah (IDR·SAR·USD) + Konfirmasi</span></th>
                   <th className="pb-2 pr-4">Tgl</th>
                   <th className="pb-2 pr-4 w-12">Aksi</th>
@@ -951,6 +952,24 @@ const OrdersInvoicesPage: React.FC = () => {
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
                         const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
                         return <div className="text-xs text-stone-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>;
+                      })()}
+                    </td>
+                    <td className="py-3 pr-4">
+                      {(() => {
+                        const ticketItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'ticket');
+                        if (ticketItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        const labels: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
+                        const statuses = ticketItems.map((i: any) => labels[i.TicketProgress?.status] || i.TicketProgress?.status || 'Menunggu');
+                        return (
+                          <div className="text-xs">
+                            <span className="font-medium text-stone-700">{ticketItems.length} item</span>
+                            <div className="mt-0.5 flex flex-wrap gap-1">
+                              {statuses.map((s: string, idx: number) => (
+                                <Badge key={idx} variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        );
                       })()}
                     </td>
                     <td className="py-3 pr-4">

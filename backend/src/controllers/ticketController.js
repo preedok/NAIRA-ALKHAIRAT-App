@@ -16,6 +16,27 @@ const {
 } = require('../models');
 const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES } = require('../constants');
 const uploadConfig = require('../config/uploads');
+const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+
+/** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, tiket_koordinator = cabang/wilayah. Jika belum terikat, fallback semua cabang agar tidak 403. */
+async function getTicketBranchIds(user) {
+  if (user.role === ROLES.SUPER_ADMIN) {
+    const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+    return branches.map(b => b.id);
+  }
+  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+    const ids = await getBranchIdsForWilayah(user.wilayah_id);
+    if (ids.length > 0) return ids;
+  }
+  if (user.branch_id) return [user.branch_id];
+  if (user.wilayah_id) {
+    const ids = await getBranchIdsForWilayah(user.wilayah_id);
+    if (ids.length > 0) return ids;
+  }
+  // Fallback: tiket_koordinator tanpa cabang/wilayah tetap bisa akses (semua cabang) agar data tampil
+  const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+  return branches.map(b => b.id);
+}
 
 const ticketDir = uploadConfig.getDir(uploadConfig.SUBDIRS.TICKET_DOCS);
 const storage = multer.diskStorage({
@@ -30,12 +51,17 @@ const storage = multer.diskStorage({
 const uploadTicketFile = multer({ storage, limits: { fileSize: 15 * 1024 * 1024 } });
 
 /**
+ * Data menu tiket diambil hanya dari data INVOICE yang order-nya memiliki item tiket.
+ * Semua endpoint (dashboard, listInvoices, getInvoice, exportExcel) memakai invoice sebagai sumber.
+ */
+
+/**
  * GET /api/v1/ticket/dashboard
- * Rekapitulasi pekerjaan tiket: total, per status, list pending.
+ * Rekapitulasi pekerjaan tiket: total, per status, list pending. Hanya invoice yang order-nya punya item tiket.
  */
 const getDashboard = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
+  const branchIds = await getTicketBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIdsFromTicket = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.TICKET },
@@ -51,7 +77,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   }
 
   const invoices = await Invoice.findAll({
-    where: { order_id: orderIdsFromTicket, branch_id: branchId },
+    where: { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } },
     attributes: ['id', 'invoice_number', 'order_id'],
     raw: true
   });
@@ -116,12 +142,12 @@ const getDashboard = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/ticket/invoices
- * List invoices yang punya item tiket (scope cabang role tiket).
+ * List invoice saja yang order-nya punya item tiket (scope cabang role tiket).
  */
 const listInvoices = asyncHandler(async (req, res) => {
   const { status } = req.query;
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
+  const branchIds = await getTicketBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIdsFromTicket = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.TICKET },
@@ -133,7 +159,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [] });
   }
 
-  const where = { order_id: orderIdsFromTicket, branch_id: branchId };
+  const where = { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
   const invoices = await Invoice.findAll({
@@ -165,11 +191,11 @@ const listInvoices = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/ticket/invoices/:id
- * Detail invoice dengan item tiket, progress, manifest.
+ * Detail invoice (hanya yang order-nya punya item tiket); return 404 jika tidak ada item tiket.
  */
 const getInvoice = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
+  const branchIds = await getTicketBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
@@ -191,7 +217,7 @@ const getInvoice = asyncHandler(async (req, res) => {
     ]
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  if (invoice.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
   const ticketItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.TICKET);
   if (ticketItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item tiket' });
 
@@ -210,7 +236,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     include: [{ model: Order, as: 'Order' }, { model: TicketProgress, as: 'TicketProgress', required: false }]
   });
   if (!item || item.type !== ORDER_ITEM_TYPE.TICKET) return res.status(404).json({ success: false, message: 'Order item tiket tidak ditemukan' });
-  if (item.Order.branch_id !== req.user.branch_id) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+  const branchIdsProgress = await getTicketBranchIds(req.user);
+  if (branchIdsProgress.length === 0 || !branchIdsProgress.includes(item.Order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
 
   const validStatuses = Object.values(TICKET_PROGRESS_STATUS);
   if (status && !validStatuses.includes(status)) return res.status(400).json({ success: false, message: 'Status tidak valid' });
@@ -250,7 +277,8 @@ const uploadTicket = [
       include: [{ model: Order, as: 'Order' }, { model: TicketProgress, as: 'TicketProgress', required: false }]
     });
     if (!item || item.type !== ORDER_ITEM_TYPE.TICKET) return res.status(404).json({ success: false, message: 'Order item tiket tidak ditemukan' });
-    if (item.Order.branch_id !== req.user.branch_id) return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+    const branchIdsUpload = await getTicketBranchIds(req.user);
+    if (branchIdsUpload.length === 0 || !branchIdsUpload.includes(item.Order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
 
     if (!req.file) return res.status(400).json({ success: false, message: 'File tiket wajib diupload' });
     const orderNumber = item.Order?.order_number || 'ORD';
@@ -328,11 +356,11 @@ const uploadTicket = [
 
 /**
  * GET /api/v1/ticket/export-excel
- * Export rekap pekerjaan tiket ke Excel (dashboard data).
+ * Export rekap pekerjaan tiket ke Excel; data dari invoice yang order-nya punya item tiket.
  */
 const exportExcel = asyncHandler(async (req, res) => {
-  const branchId = req.user.branch_id;
-  if (!branchId) return res.status(403).json({ success: false, message: 'Role tiket harus terikat cabang' });
+  const branchIds = await getTicketBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
   const orderIdsFromTicket = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.TICKET },
@@ -350,7 +378,7 @@ const exportExcel = asyncHandler(async (req, res) => {
   }
 
   const invoicesForExport = await Invoice.findAll({
-    where: { order_id: orderIdsFromTicket, branch_id: branchId },
+    where: { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } },
     attributes: ['order_id', 'invoice_number'],
     raw: true
   });

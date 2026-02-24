@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation } = require('../models');
-const { INVOICE_STATUS, NOTIFICATION_TRIGGER } = require('../constants');
+const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
@@ -134,7 +134,14 @@ const list = asyncHandler(async (req, res) => {
     where.branch_id = req.user.branch_id;
   }
 
-  const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at'] };
+  const orderInclude = {
+    model: Order,
+    as: 'Order',
+    attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at'],
+    include: [
+      { model: OrderItem, as: 'OrderItems', where: { type: ORDER_ITEM_TYPE.TICKET }, required: false, attributes: ['id', 'type', 'quantity'], include: [{ model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] }] }
+    ]
+  };
   if (order_status || order_number) {
     orderInclude.required = true;
     orderInclude.where = {};
