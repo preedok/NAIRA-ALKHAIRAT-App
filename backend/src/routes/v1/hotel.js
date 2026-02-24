@@ -8,6 +8,8 @@ router.use(auth);
 router.use(requireRole(ROLES.ROLE_HOTEL));
 
 router.get('/dashboard', hotelController.getDashboard);
+router.get('/invoices', hotelController.listInvoices);
+router.get('/invoices/:id', hotelController.getInvoice);
 router.get('/products', hotelController.listProducts);
 router.get('/orders', hotelController.listOrders);
 router.get('/orders/:id', hotelController.getOrder);

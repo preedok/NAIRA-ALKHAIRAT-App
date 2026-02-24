@@ -23,8 +23,6 @@ const ROLES = {
   ADMIN_WILAYAH: 'admin_wilayah',
   ADMIN_CABANG: 'admin_cabang',
   ROLE_INVOICE: 'role_invoice',
-  ROLE_VISA: 'role_visa',
-  ROLE_TICKET: 'role_ticket',
   ROLE_HANDLING: 'role_handling'
 };
 

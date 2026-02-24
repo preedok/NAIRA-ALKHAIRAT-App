@@ -1,8 +1,90 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Product, ProductPrice, HotelProgress } = require('../models');
+const { Order, OrderItem, User, Branch, Product, ProductPrice, HotelProgress, Invoice } = require('../models');
 const { ORDER_ITEM_TYPE } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
+
+/**
+ * GET /api/v1/hotel/invoices
+ * List invoices that have hotel items (scope cabang). Sama pola dengan visa/ticket.
+ */
+const listInvoices = asyncHandler(async (req, res) => {
+  const { status } = req.query;
+  const branchId = req.user.branch_id;
+  if (!branchId) return res.status(403).json({ success: false, message: 'Role hotel harus terikat cabang' });
+
+  const orderIdsFromHotel = await OrderItem.findAll({
+    where: { type: ORDER_ITEM_TYPE.HOTEL },
+    attributes: ['order_id'],
+    raw: true
+  }).then(rows => [...new Set(rows.map(r => r.order_id))]);
+
+  if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [] });
+
+  const where = { order_id: orderIdsFromHotel, branch_id: branchId };
+  if (status) where.status = status;
+
+  const invoices = await Invoice.findAll({
+    where,
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      {
+        model: Order,
+        as: 'Order',
+        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            where: { type: ORDER_ITEM_TYPE.HOTEL },
+            required: true,
+            include: [{ model: HotelProgress, as: 'HotelProgress', required: false }]
+          }
+        ]
+      }
+    ],
+    order: [['created_at', 'DESC']]
+  });
+
+  res.json({ success: true, data: invoices });
+});
+
+/**
+ * GET /api/v1/hotel/invoices/:id
+ * Detail invoice dengan item hotel dan progress.
+ */
+const getInvoice = asyncHandler(async (req, res) => {
+  const branchId = req.user.branch_id;
+  if (!branchId) return res.status(403).json({ success: false, message: 'Role hotel harus terikat cabang' });
+
+  const invoice = await Invoice.findByPk(req.params.id, {
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      {
+        model: Order,
+        as: 'Order',
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          { model: Branch, as: 'Branch' },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            include: [{ model: HotelProgress, as: 'HotelProgress', required: false }]
+          }
+        ]
+      }
+    ]
+  });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (invoice.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  const hotelItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
+  if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item hotel' });
+
+  res.json({ success: true, data: invoice });
+});
 
 /**
  * GET /api/v1/hotel/orders
@@ -201,6 +283,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  listInvoices,
+  getInvoice,
   listOrders,
   getOrder,
   listProducts,

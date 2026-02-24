@@ -12,6 +12,8 @@ import SuperAdminMaintenancePage from '../pages/dashboard/superadmin/SuperAdminM
 import ProductsPage from '../pages/dashboard/components/ProductsPage';
 import VisaPage from '../pages/dashboard/components/VisaPage';
 import TicketsPage from '../pages/dashboard/components/TicketsPage';
+import HotelsPage from '../pages/dashboard/components/HotelsPage';
+import BusPage from '../pages/dashboard/components/BusPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
 import BranchesPage from '../pages/dashboard/components/BranchesPage';
@@ -85,7 +87,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'hotels',
-            element: <Navigate to="/dashboard/products?tab=hotels" replace />
+            element: <HotelsPage />
           },
           {
             path: 'visa',
@@ -97,7 +99,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'bus',
-            element: <Navigate to="/dashboard/products?tab=bus" replace />
+            element: <BusPage />
           },
           {
             path: 'handling',

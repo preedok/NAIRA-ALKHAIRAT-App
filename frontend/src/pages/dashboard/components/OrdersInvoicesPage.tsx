@@ -456,6 +456,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const VISA_STATUS_LABELS: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
   const TICKET_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
   const HOTEL_STATUS_LABELS: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
+  const BUS_TICKET_LABELS: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
 
   const handleUploadJamaahData = async (orderId: string, itemId: string, file: File | null, link: string) => {
     if (!file && !link?.trim()) {
@@ -911,6 +912,8 @@ const OrdersInvoicesPage: React.FC = () => {
                   <th className="pb-2 pr-4">Status Invoice<br /><span className="text-xs font-normal text-stone-400">% dibayar dari total</span></th>
                   <th className="pb-2 pr-4">Status Visa<br /><span className="text-xs font-normal text-stone-400">Pekerjaan visa</span></th>
                   <th className="pb-2 pr-4">Status Tiket<br /><span className="text-xs font-normal text-stone-400">Penerbitan tiket</span></th>
+                  <th className="pb-2 pr-4">Status Hotel<br /><span className="text-xs font-normal text-stone-400">Alokasi kamar</span></th>
+                  <th className="pb-2 pr-4">Status Bus<br /><span className="text-xs font-normal text-stone-400">Tiket bis & perjalanan</span></th>
                   <th className="pb-2 pr-4">Bukti Bayar<br /><span className="text-xs font-normal text-stone-400">Jumlah (IDR·SAR·USD) + Konfirmasi</span></th>
                   <th className="pb-2 pr-4">Tgl</th>
                   <th className="pb-2 pr-4 w-12">Aksi</th>
@@ -985,6 +988,42 @@ const OrdersInvoicesPage: React.FC = () => {
                             <div className="mt-0.5 flex flex-wrap gap-1">
                               {statuses.map((s: string, idx: number) => (
                                 <Badge key={idx} variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-3 pr-4">
+                      {(() => {
+                        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
+                        if (hotelItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
+                        const statuses = hotelItems.map((i: any) => labels[i.HotelProgress?.status] || i.HotelProgress?.status || 'Menunggu');
+                        return (
+                          <div className="text-xs">
+                            <span className="font-medium text-stone-700">{hotelItems.length} item</span>
+                            <div className="mt-0.5 flex flex-wrap gap-1">
+                              {statuses.map((s: string, idx: number) => (
+                                <Badge key={idx} variant={s === 'Selesai' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-3 pr-4">
+                      {(() => {
+                        const busItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'bus');
+                        if (busItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        const labels: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
+                        const statuses = busItems.map((i: any) => labels[i.BusProgress?.bus_ticket_status] || i.BusProgress?.bus_ticket_status || 'Pending');
+                        return (
+                          <div className="text-xs">
+                            <span className="font-medium text-stone-700">{busItems.length} item</span>
+                            <div className="mt-0.5 flex flex-wrap gap-1">
+                              {statuses.map((s: string, idx: number) => (
+                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
                               ))}
                             </div>
                           </div>
@@ -1241,7 +1280,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       if (isRoleBus) return t === 'bus';
                       if (isVisaKoordinator) return t === 'visa';
                       if (isTiketKoordinator) return t === 'ticket';
-                      return t === 'visa' || t === 'ticket' || t === 'hotel';
+                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus';
                     });
                     if (items.length === 0) return null;
                     const sectionTitle = isRoleHotel
@@ -1252,7 +1291,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           ? 'Data Jamaah & Status Visa'
                           : isTiketKoordinator
                             ? 'Data Jamaah & Status Tiket'
-                            : 'Data Jamaah & Status Visa / Tiket / Hotel';
+                            : 'Data Jamaah & Status Visa / Tiket / Hotel / Bus';
                     return (
                       <div className="space-y-4">
                         <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -1264,12 +1303,12 @@ const OrdersInvoicesPage: React.FC = () => {
                           const isHotel = (item.type || item.product_type) === 'hotel';
                           const isBus = (item.type || item.product_type) === 'bus';
                           const progress = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : item.HotelProgress;
-                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : HOTEL_STATUS_LABELS;
-                          const status = isBus ? 'Item bus' : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : (isVisa ? 'Menunggu data' : 'Menunggu data')));
+                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
+                          const status = isBus ? (progress?.bus_ticket_status ? (BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status) : 'Pending') : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : (isVisa ? 'Menunggu data' : 'Menunggu data')));
                           const hasJamaah = item.jamaah_data_type && item.jamaah_data_value;
                           const jamaahUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
                           const productLabel = item.Product?.name || item.product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
-                          const badgeVariant = isBus ? 'default' : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
+                          const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
                           return (
                             <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1617,12 +1656,12 @@ const OrdersInvoicesPage: React.FC = () => {
                           const isHotel = (item.type || item.product_type) === 'hotel';
                           const isBus = (item.type || item.product_type) === 'bus';
                           const progress = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : item.HotelProgress;
-                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : HOTEL_STATUS_LABELS;
-                          const status = isBus ? 'Item bus' : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : 'Menunggu data'));
+                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
+                          const status = isBus ? (progress?.bus_ticket_status ? (BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status) : 'Pending') : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : 'Menunggu data'));
                           const hasJamaah = item.jamaah_data_type && item.jamaah_data_value;
                           const jamaahUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
                           const productLabel = item.Product?.name || item.product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
-                          const badgeVariant = isBus ? 'default' : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
+                          const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
                           return (
                             <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">

@@ -18,7 +18,7 @@ Dokumen ini menjelaskan workflow per role dan integrasi backend–frontend–dat
 | **Owner**               | Order sendiri  | Customer; hanya order miliknya; boleh tambah/edit/hapus order sendiri.       |
 | **Accounting**          | Sesuai filter  | Laporan keuangan, aging, payroll; filter branch/wilayah.                     |
 
-*(Role `role_visa` dan `role_ticket` telah dihapus; pekerjaan visa/tiket ditangani oleh visa_koordinator dan tiket_koordinator.)*
+*(Role `role_visa` dan `role_ticket` tidak ada; pekerjaan visa/tiket ditangani oleh visa_koordinator dan tiket_koordinator.)*
 
 
 ## 2. Sumber Data Terpadu (Backend)

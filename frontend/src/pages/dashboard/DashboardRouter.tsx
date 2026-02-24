@@ -8,8 +8,8 @@ import VisaDashboard from './roles/VisaDashboard';
 import TicketDashboard from './roles/TicketDashboard';
 import OwnerDashboard from './roles/OwnerDashboard';
 import InvoiceDashboard from './roles/InvoiceDashboard';
-import HotelDashboard from './roles/HotelDashboard';
-import BusDashboard from './roles/BusDashboard';
+import HotelWorkPage from './components/HotelWorkPage';
+import BusWorkPage from './components/BusWorkPage';
 import AccountingDashboard from './roles/AccountingDashboard';
 import { isKoordinatorRole } from '../../types';
 import Card from '../../components/common/Card';
@@ -54,13 +54,9 @@ const DashboardRouter: React.FC = () => {
     case 'role_invoice_saudi':
       return <InvoiceDashboard />;
     case 'role_hotel':
-      return <HotelDashboard />;
-    case 'role_visa':
-      return <RoleDeprecatedMessage label="Role Visa" />;
-    case 'role_ticket':
-      return <RoleDeprecatedMessage label="Role Tiket" />;
+      return <HotelWorkPage />;
     case 'role_bus':
-      return <BusDashboard />;
+      return <BusWorkPage />;
     case 'role_accounting':
       return <AccountingDashboard />;
     default:

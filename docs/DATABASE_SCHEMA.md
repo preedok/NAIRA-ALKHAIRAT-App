@@ -17,7 +17,7 @@ Wilayah (master wilayah: Sumatra, Jawa, dll.)
 
 ### users
 - `id` (UUID, PK), `email`, `password_hash`, `name`, `phone`, `role`, `branch_id`, `wilayah_id`, `region`, `company_name`, `is_active`, `created_at`, `updated_at`, `last_login`
-- **role**: ENUM — gunakan hanya: super_admin, admin_pusat, admin_koordinator, invoice_koordinator, tiket_koordinator, visa_koordinator, role_hotel, role_bus, role_invoice_saudi, role_accounting, owner. (admin_cabang, role_visa, role_ticket deprecated.)
+- **role**: ENUM — gunakan hanya: super_admin, admin_pusat, admin_koordinator, invoice_koordinator, tiket_koordinator, visa_koordinator, role_hotel, role_bus, role_invoice_saudi, role_accounting, owner. (admin_cabang deprecated; role_visa, role_ticket dihapus — pakai visa_koordinator, tiket_koordinator.)
 - **branch_id**: untuk user yang terikat satu cabang (contoh: role_hotel, role_bus).
 - **wilayah_id**: untuk koordinator (scope wilayah).
 
@@ -72,5 +72,5 @@ Wilayah (master wilayah: Sumatra, Jawa, dll.)
 
 ## Migrasi
 
-- **Role deprecated:** `20250219000002-migrate-deprecated-roles.js` — ubah user dengan role `admin_cabang`, `role_visa`, `role_ticket` ke role pengganti.
+- **Role deprecated:** `20250219000002-migrate-deprecated-roles.js` — migrasi lama: user `admin_cabang`/`role_visa`/`role_ticket` ke role pengganti. role_visa/role_ticket sudah dihapus dari aplikasi.
 - **Tabel non-core dihapus:** `20250219000003-drop-non-core-tables.js` — drop `flyer_templates` dan `ui_templates` (fitur di luar core workflow bisnis).

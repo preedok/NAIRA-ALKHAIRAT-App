@@ -122,6 +122,8 @@ export const ordersApi = {
 
 export const hotelApi = {
   getDashboard: () => api.get('/hotel/dashboard'),
+  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/hotel/invoices', { params }),
+  getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/hotel/invoices/${id}`),
   listOrders: (params?: { status?: string }) => api.get('/hotel/orders', { params }),
   getOrder: (id: string) => api.get(`/hotel/orders/${id}`),
   listProducts: () => api.get('/hotel/products'),
@@ -157,6 +159,8 @@ export const visaApi = {
 
 export const busApi = {
   getDashboard: () => api.get<{ success: boolean; data: BusDashboardData }>('/bus/dashboard'),
+  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/bus/invoices', { params }),
+  getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/bus/invoices/${id}`),
   listOrders: (params?: { status?: string }) => api.get<{ success: boolean; data: Order[] }>('/bus/orders', { params }),
   getOrder: (id: string) => api.get<{ success: boolean; data: Order }>(`/bus/orders/${id}`),
   listProducts: () => api.get<{ success: boolean; data: BusProduct[] }>('/bus/products'),

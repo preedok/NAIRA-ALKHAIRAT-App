@@ -3,7 +3,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
-const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation } = require('../models');
+const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -142,12 +142,14 @@ const list = asyncHandler(async (req, res) => {
       {
         model: OrderItem,
         as: 'OrderItems',
-        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET] } },
+        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
         required: false,
         attributes: ['id', 'type', 'quantity'],
         include: [
           { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
-          { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] }
+          { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] },
+          { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number'] },
+          { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] }
         ]
       }
     ]
@@ -196,10 +198,12 @@ const list = asyncHandler(async (req, res) => {
   let orderItemsByOrderId = {};
   if (orderIdsFromRows.length > 0) {
     const items = await OrderItem.findAll({
-      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET] } },
+      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
       include: [
         { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
-        { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] }
+        { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] },
+        { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number'] },
+        { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] }
       ],
       attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url']
     });
@@ -497,7 +501,7 @@ async function createInvoiceForOrder(order, opts = {}) {
 const getById = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: VisaProgress, as: 'VisaProgress', required: false }, { model: TicketProgress, as: 'TicketProgress', required: false }, { model: HotelProgress, as: 'HotelProgress', required: false }] }] },
+      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: VisaProgress, as: 'VisaProgress', required: false }, { model: TicketProgress, as: 'TicketProgress', required: false }, { model: HotelProgress, as: 'HotelProgress', required: false }, { model: BusProgress, as: 'BusProgress', required: false }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
       { model: PaymentProof, as: 'PaymentProofs', include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] },

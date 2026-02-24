@@ -8,7 +8,8 @@ const {
   Branch,
   Product,
   ProductPrice,
-  BusProgress
+  BusProgress,
+  Invoice
 } = require('../models');
 const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS } = require('../constants');
 
@@ -90,6 +91,88 @@ const getDashboard = asyncHandler(async (req, res) => {
       pending_list: pendingList.slice(0, 50)
     }
   });
+});
+
+/**
+ * GET /api/v1/bus/invoices
+ * List invoices that have bus items (scope cabang). Sama pola dengan visa/ticket.
+ */
+const listInvoices = asyncHandler(async (req, res) => {
+  const { status } = req.query;
+  const branchId = req.user.branch_id;
+  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+
+  const orderIdsFromBus = await OrderItem.findAll({
+    where: { type: ORDER_ITEM_TYPE.BUS },
+    attributes: ['order_id'],
+    raw: true
+  }).then(rows => [...new Set(rows.map(r => r.order_id))]);
+
+  if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [] });
+
+  const where = { order_id: orderIdsFromBus, branch_id: branchId };
+  if (status) where.status = status;
+
+  const invoices = await Invoice.findAll({
+    where,
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      {
+        model: Order,
+        as: 'Order',
+        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            where: { type: ORDER_ITEM_TYPE.BUS },
+            required: true,
+            include: [{ model: BusProgress, as: 'BusProgress', required: false }]
+          }
+        ]
+      }
+    ],
+    order: [['created_at', 'DESC']]
+  });
+
+  res.json({ success: true, data: invoices });
+});
+
+/**
+ * GET /api/v1/bus/invoices/:id
+ * Detail invoice dengan item bus dan progress.
+ */
+const getInvoice = asyncHandler(async (req, res) => {
+  const branchId = req.user.branch_id;
+  if (!branchId) return res.status(403).json({ success: false, message: 'Role bus harus terikat cabang' });
+
+  const invoice = await Invoice.findByPk(req.params.id, {
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      {
+        model: Order,
+        as: 'Order',
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+          { model: Branch, as: 'Branch' },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            include: [{ model: BusProgress, as: 'BusProgress', required: false }]
+          }
+        ]
+      }
+    ]
+  });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (invoice.branch_id !== branchId) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  const busItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.BUS);
+  if (busItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item bus' });
+
+  res.json({ success: true, data: invoice });
 });
 
 /**
@@ -403,6 +486,8 @@ const exportPdf = asyncHandler(async (req, res) => {
 
 module.exports = {
   getDashboard,
+  listInvoices,
+  getInvoice,
   listOrders,
   getOrder,
   listProducts,
