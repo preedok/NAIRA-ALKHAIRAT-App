@@ -139,7 +139,17 @@ const list = asyncHandler(async (req, res) => {
     as: 'Order',
     attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at'],
     include: [
-      { model: OrderItem, as: 'OrderItems', where: { type: ORDER_ITEM_TYPE.TICKET }, required: false, attributes: ['id', 'type', 'quantity'], include: [{ model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] }] }
+      {
+        model: OrderItem,
+        as: 'OrderItems',
+        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET] } },
+        required: false,
+        attributes: ['id', 'type', 'quantity'],
+        include: [
+          { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
+          { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] }
+        ]
+      }
     ]
   };
   if (order_status || order_number) {
@@ -175,6 +185,37 @@ const list = asyncHandler(async (req, res) => {
   for (const inv of rows) await ensureBlockedStatus(inv);
   const totalPages = Math.ceil(count / lim) || 1;
 
+  // Serialize list; nested OrderItems bisa tidak ter-load dengan findAndCountAll+distinct, jadi load terpisah lalu merge
+  const data = rows.map((row) => {
+    const plain = row.get ? row.get({ plain: true }) : (typeof row.toJSON === 'function' ? row.toJSON() : row);
+    if (plain.Order && !Array.isArray(plain.Order.OrderItems)) plain.Order.OrderItems = [];
+    return plain;
+  });
+
+  const orderIdsFromRows = [...new Set(data.map((d) => d.order_id).filter(Boolean))];
+  let orderItemsByOrderId = {};
+  if (orderIdsFromRows.length > 0) {
+    const items = await OrderItem.findAll({
+      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET] } },
+      include: [
+        { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
+        { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] }
+      ],
+      attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url']
+    });
+    for (const it of items) {
+      const oid = it.order_id;
+      if (!orderItemsByOrderId[oid]) orderItemsByOrderId[oid] = [];
+      orderItemsByOrderId[oid].push(it.get ? it.get({ plain: true }) : it);
+    }
+  }
+  for (const d of data) {
+    if (d.order_id) {
+      if (!d.Order) d.Order = {};
+      d.Order.OrderItems = orderItemsByOrderId[d.order_id] || [];
+    }
+  }
+
   const [totalAmount, totalPaid, totalRemaining, invoiceRows, orderRows] = await Promise.all([
     Invoice.sum('total_amount', { where }),
     Invoice.sum('paid_amount', { where }),
@@ -205,7 +246,7 @@ const list = asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.json({
     success: true,
-    data: rows,
+    data,
     pagination: { total: count, page: pg, limit: lim, totalPages },
     summary: {
       total_invoices: count,

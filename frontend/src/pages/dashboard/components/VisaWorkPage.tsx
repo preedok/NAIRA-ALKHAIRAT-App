@@ -8,7 +8,8 @@ import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { visaApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { API_BASE_URL } from '../../../utils/constants';
+import { API_BASE_URL, INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { formatInvoiceDisplay } from '../../../utils';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -170,8 +171,7 @@ const VisaWorkPage: React.FC = () => {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="text-left py-3 px-4">Invoice</th>
-                  <th className="text-left py-3 px-4">Order</th>
+                  <th className="text-left py-3 px-4">No. Invoice</th>
                   <th className="text-left py-3 px-4">Owner</th>
                   <th className="text-right py-3 px-4">Item Visa</th>
                   <th className="text-left py-3 px-4">Status</th>
@@ -181,14 +181,13 @@ const VisaWorkPage: React.FC = () => {
               <tbody>
                 {invoices.map((inv: any) => {
                   const o = inv.Order;
-                  if (!o) return null;
-                  const visaCount = (o.OrderItems || []).filter((i: any) => i.type === 'visa').length;
-                  const firstStatus = (o.OrderItems || []).find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
+                  const orderItems = o?.OrderItems || [];
+                  const visaCount = orderItems.filter((i: any) => i.type === 'visa').length;
+                  const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
                   return (
                     <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4 font-mono font-medium text-slate-800">{inv.invoice_number ?? '–'}</td>
-                      <td className="py-3 px-4 font-medium">{o.order_number}</td>
-                      <td className="py-3 px-4">{inv.User?.name ?? o.User?.name}</td>
+                      <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
+                      <td className="py-3 px-4">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
                       <td className="py-3 px-4 text-right">{visaCount}</td>
                       <td className="py-3 px-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
                       <td className="py-3 px-4">
@@ -209,10 +208,10 @@ const VisaWorkPage: React.FC = () => {
         {detailInvoice && (
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-slate-900">Invoice {detailInvoice.invoice_number}</h2>
+              <h2 className="text-xl font-bold text-slate-900">{formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}</h2>
               <button className="p-2 hover:bg-slate-100 rounded-lg" onClick={() => setSearchParams({})}>×</button>
             </div>
-            <p className="text-sm text-slate-600 mb-4">Order: <span className="font-mono font-medium">{detailInvoice.Order?.order_number}</span> · Owner: {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name}</p>
+            <p className="text-sm text-slate-600 mb-4">Owner: {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name}</p>
             <div className="space-y-4">
               {visaItems.map((item: any) => {
                 const prog = item.VisaProgress;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -71,7 +71,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
-  const [detailTab, setDetailTab] = useState<'invoice' | 'payments'>('invoice');
+  const [detailTab, setDetailTab] = useState<'invoice' | 'payments' | 'progress'>('invoice');
   const [invoicePdfUrl, setInvoicePdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -902,13 +902,14 @@ const OrdersInvoicesPage: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-200 text-left text-stone-600 bg-stone-50/80">
-                  <th className="pb-2 pr-4 pt-3 pl-4">Invoice</th>
+                  <th className="pb-2 pr-4 pt-3 pl-4">No. Invoice</th>
                   <th className="pb-2 pr-4">Owner</th>
                   <th className="pb-2 pr-4">Cabang</th>
                   <th className="pb-2 pr-4 text-right">Total<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
                   <th className="pb-2 pr-4 text-right">Dibayar<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
                   <th className="pb-2 pr-4 text-right">Sisa<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
                   <th className="pb-2 pr-4">Status Invoice<br /><span className="text-xs font-normal text-stone-400">% dibayar dari total</span></th>
+                  <th className="pb-2 pr-4">Status Visa<br /><span className="text-xs font-normal text-stone-400">Pekerjaan visa</span></th>
                   <th className="pb-2 pr-4">Status Tiket<br /><span className="text-xs font-normal text-stone-400">Penerbitan tiket</span></th>
                   <th className="pb-2 pr-4">Bukti Bayar<br /><span className="text-xs font-normal text-stone-400">Jumlah (IDR·SAR·USD) + Konfirmasi</span></th>
                   <th className="pb-2 pr-4">Tgl</th>
@@ -952,6 +953,24 @@ const OrdersInvoicesPage: React.FC = () => {
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
                         const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
                         return <div className="text-xs text-stone-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>;
+                      })()}
+                    </td>
+                    <td className="py-3 pr-4">
+                      {(() => {
+                        const visaItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa');
+                        if (visaItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        const labels: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
+                        const statuses = visaItems.map((i: any) => labels[i.VisaProgress?.status] || i.VisaProgress?.status || 'Menunggu');
+                        return (
+                          <div className="text-xs">
+                            <span className="font-medium text-stone-700">{visaItems.length} item</span>
+                            <div className="mt-0.5 flex flex-wrap gap-1">
+                              {statuses.map((s: string, idx: number) => (
+                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        );
                       })()}
                     </td>
                     <td className="py-3 pr-4">
@@ -1110,6 +1129,16 @@ const OrdersInvoicesPage: React.FC = () => {
                   <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">{paymentProofs.length}</span>
                 )}
               </button>
+              <button
+                onClick={() => setDetailTab('progress')}
+                className={`flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ${
+                  detailTab === 'progress'
+                    ? 'border-emerald-600 text-emerald-600'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ClipboardList className="w-4 h-4" /> Status Pekerjaan
+              </button>
             </div>
 
             {/* Tab content */}
@@ -1189,6 +1218,16 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Link ke tab Status Pekerjaan */}
+                  {(viewInvoice?.Order?.OrderItems || []).some((i: any) => ['visa', 'ticket', 'hotel', 'bus'].includes((i.type || i.product_type))) && (
+                    <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm text-slate-700">Status pekerjaan visa, tiket, hotel: lihat di tab <strong>Status Pekerjaan</strong>.</p>
+                      <Button variant="outline" size="sm" onClick={() => setDetailTab('progress')}>
+                        <ClipboardList className="w-4 h-4 mr-1" /> Buka tab Status Pekerjaan
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Data Jamaah & Status Visa/Tiket/Hotel/Bus — tampil sesuai divisi: visa_koordinator hanya visa, tiket_koordinator hanya tiket, role_hotel hanya hotel, role_bus hanya bus; role lain lihat semua */}
                   {(() => {
                     const order = viewInvoice?.Order;
@@ -1252,16 +1291,31 @@ const OrdersInvoicesPage: React.FC = () => {
                                   )}
                                 </div>
                               )}
+                              {(isTicket || isVisa) && item.manifest_file_url && (
+                                <div className="text-sm text-slate-600">
+                                  Manifest jamaah:{' '}
+                                  <a
+                                    href={getFileUrl(item.manifest_file_url) || item.manifest_file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                    className="text-blue-600 hover:underline inline-flex items-center gap-1 font-medium"
+                                  >
+                                    <Download className="w-3.5 h-3.5" /> Unduh manifest
+                                  </a>
+                                </div>
+                              )}
                               {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
                                 <div className="text-sm text-slate-600">
-                                  Hasil terbit:{' '}
+                                  {isVisa ? 'Dokumen visa terbit (upload role visa):' : 'Dokumen tiket terbit (upload role tiket):'}{' '}
                                   <a
                                     href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    download
                                     className="text-emerald-600 hover:underline inline-flex items-center gap-1 font-medium"
                                   >
-                                    <Download className="w-3.5 h-3.5" /> Unduh {isVisa ? 'visa terbit' : 'tiket terbit'}
+                                    <Download className="w-3.5 h-3.5" /> Unduh {isVisa ? 'dokumen visa terbit' : 'dokumen tiket terbit'}
                                   </a>
                                 </div>
                               )}
@@ -1534,6 +1588,99 @@ const OrdersInvoicesPage: React.FC = () => {
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+              {detailTab === 'progress' && (
+                <div className="space-y-6">
+                  <p className="text-sm text-slate-600">Status pekerjaan visa, tiket, dan hotel untuk invoice ini. Diupdate oleh divisi Visa, Tiket, dan Hotel.</p>
+                  {(() => {
+                    const order = viewInvoice?.Order;
+                    const items = (order?.OrderItems || []).filter((i: any) => {
+                      const t = (i.type || i.product_type);
+                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus';
+                    });
+                    if (items.length === 0) {
+                      return (
+                        <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
+                          <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                          <p className="text-slate-600 font-medium">Tidak ada item visa / tiket / hotel</p>
+                          <p className="text-sm text-slate-500 mt-1">Invoice ini tidak memiliki item dengan status pekerjaan (visa, tiket, hotel, bus).</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-4">
+                        {items.map((item: any) => {
+                          const isVisa = (item.type || item.product_type) === 'visa';
+                          const isTicket = (item.type || item.product_type) === 'ticket';
+                          const isHotel = (item.type || item.product_type) === 'hotel';
+                          const isBus = (item.type || item.product_type) === 'bus';
+                          const progress = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : item.HotelProgress;
+                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : HOTEL_STATUS_LABELS;
+                          const status = isBus ? 'Item bus' : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : 'Menunggu data'));
+                          const hasJamaah = item.jamaah_data_type && item.jamaah_data_value;
+                          const jamaahUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
+                          const productLabel = item.Product?.name || item.product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
+                          const badgeVariant = isBus ? 'default' : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
+                          return (
+                            <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-medium text-slate-800">{productLabel}</span>
+                                <Badge variant={badgeVariant}>{status}</Badge>
+                              </div>
+                              {hasJamaah && (
+                                <div className="text-sm text-slate-600">
+                                  Dokumen (ZIP/link): {item.jamaah_data_type === 'link' ? (
+                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                                      <LinkIcon className="w-3.5 h-3.5" /> Link Google Drive
+                                    </a>
+                                  ) : jamaahUrl ? (
+                                    <a href={jamaahUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                                      <Download className="w-3.5 h-3.5" /> Unduh file
+                                    </a>
+                                  ) : (
+                                    <span>File diunggah</span>
+                                  )}
+                                </div>
+                              )}
+                              {(isTicket || isVisa) && item.manifest_file_url && (
+                                <div className="text-sm text-slate-600">
+                                  Manifest jamaah:{' '}
+                                  <a
+                                    href={getFileUrl(item.manifest_file_url) || item.manifest_file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                    className="text-blue-600 hover:underline inline-flex items-center gap-1 font-medium"
+                                  >
+                                    <Download className="w-3.5 h-3.5" /> Unduh manifest
+                                  </a>
+                                </div>
+                              )}
+                              {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
+                                <div className="text-sm text-slate-600">
+                                  {isVisa ? 'Dokumen visa terbit (upload role visa):' : 'Dokumen tiket terbit (upload role tiket):'}{' '}
+                                  <a
+                                    href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                    className="text-emerald-600 hover:underline inline-flex items-center gap-1 font-medium"
+                                  >
+                                    <Download className="w-3.5 h-3.5" /> Unduh {isVisa ? 'dokumen visa terbit' : 'dokumen tiket terbit'}
+                                  </a>
+                                </div>
+                              )}
+                              {progress?.issued_at && (
+                                <p className="text-xs text-slate-500">Terbit: {new Date(progress.issued_at).toLocaleString('id-ID')}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
