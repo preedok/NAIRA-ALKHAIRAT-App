@@ -90,6 +90,21 @@ export const productsApi = {
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),
   getAvailability: (id: string, params: { from: string; to: string }) =>
     api.get<{ success: boolean; data: { byDate: Record<string, Record<string, { total: number; booked: number; available: number }> >; byRoomType: Record<string, number> } }>(`/products/${id}/availability`, { params }),
+  getHotelCalendar: (id: string, params: { from: string; to: string }) =>
+    api.get<{
+      success: boolean;
+      data: {
+        productName: string;
+        byDate: Record<string, {
+          _noSeason?: boolean;
+          seasonId?: string;
+          seasonName?: string;
+          roomTypes?: Record<string, { total: number; booked: number; available: number }>;
+          bookings?: { order_id: string; owner_id: string; owner_name: string; total_jamaah: number; by_room_type: Record<string, number> }[];
+        }>;
+        byRoomType: Record<string, number>;
+      };
+    }>(`/products/${id}/hotel-calendar`, { params }),
   listPrices: (params?: { product_id?: string; branch_id?: string }) => api.get('/products/prices', { params }),
   create: (body: { type: string; code?: string; name: string; description?: string; is_package?: boolean; meta?: object }) => api.post('/products', body),
   createHotel: (body: { name: string; description?: string; meta?: object }) => api.post('/products/hotels', body),

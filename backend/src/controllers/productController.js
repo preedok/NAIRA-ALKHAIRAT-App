@@ -1,7 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig } = require('../models');
-const { getAvailabilityByDateRange } = require('../services/hotelAvailabilityService');
+const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { ROLES } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
 
@@ -426,11 +426,26 @@ const getAvailability = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
+/**
+ * GET /api/v1/products/:id/hotel-calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * Kalender hotel: per tanggal ada availability per room type + daftar booking (owner, jamaah per room type). Hanya product type hotel.
+ */
+const getHotelCalendarHandler = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type', 'name'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
+  const from = req.query.from || new Date().toISOString().slice(0, 10);
+  const to = req.query.to || from;
+  const data = await getHotelCalendar(product.id, from, to);
+  res.json({ success: true, data: { ...data, productName: product.name } });
+});
+
 module.exports = {
   list,
   getById,
   getPrice,
   getAvailability,
+  getHotelCalendar: getHotelCalendarHandler,
   create,
   createHotel,
   update,

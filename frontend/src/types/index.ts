@@ -84,13 +84,15 @@ export function isKoordinatorRole(role: UserRole): boolean {
   return KOORDINATOR_ROLES.includes(role);
 }
 
-// Sidebar menu item (icon is ReactNode from layout)
+// Sidebar menu item (icon is ReactNode from layout). If children is set, path is used for default/active match.
 export interface MenuItem {
   title: string;
   icon: ReactNode;
   path: string;
   roles: UserRole[];
   badge?: string;
+  /** Submenu items (collapse). When present, this item expands to show children. */
+  children?: MenuItem[];
 }
 
 // ==================== BRANCH ====================

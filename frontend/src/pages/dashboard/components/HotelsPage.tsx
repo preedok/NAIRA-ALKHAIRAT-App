@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Hotel as HotelIcon,
   Plus,
@@ -11,7 +11,9 @@ import {
   Settings,
   ChevronDown,
   ChevronUp,
-  ShoppingCart
+  ShoppingCart,
+  Calendar,
+  ArrowLeft
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -50,6 +52,10 @@ export interface HotelProduct {
   meta?: {
     room_types?: string[];
     location?: string;
+    /** Tipe: allotment / non allotment */
+    allotment_type?: 'allotment' | 'non_allotment';
+    /** Meal: fullboard / room only */
+    meal_plan?: 'fullboard' | 'room_only';
     currency?: string;
     meal_price?: number;
     meal_price_type?: 'per_day' | 'per_trip';
@@ -67,9 +73,13 @@ export interface HotelProduct {
   prices_by_room?: RoomBreakdown;
 }
 
-type HotelsPageProps = { embedInProducts?: boolean };
+type HotelsPageProps = {
+  embedInProducts?: boolean;
+  /** When set, open the seasons modal for this hotel (e.g. from calendar "add room"). Cleared after opening. */
+  openSeasonsForHotelId?: string | null;
+};
 
-const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
+const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsForHotelId }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
@@ -82,9 +92,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
   const [editingHotel, setEditingHotel] = useState<HotelProduct | null>(null);
   const [editFormLoading, setEditFormLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Form Tambah/Edit Hotel: hanya nama, lokasi, type allotment, meal plan */
   const [addForm, setAddForm] = useState({
     name: '',
     location: 'makkah' as 'makkah' | 'madinah',
+    allotment_type: 'allotment' as 'allotment' | 'non_allotment',
+    meal_plan: 'fullboard' as 'fullboard' | 'room_only'
+  });
+  /** Form Pengaturan Jumlah Kamar: jumlah + harga kamar, harga makan, mata uang */
+  const [quantityModalPriceForm, setQuantityModalPriceForm] = useState({
     currency: 'IDR' as 'IDR' | 'SAR' | 'USD',
     meal_price: 0,
     meal_price_type: 'per_day' as 'per_day' | 'per_trip',
@@ -112,16 +128,40 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
   const [inventorySaving, setInventorySaving] = useState(false);
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
   const [quantityModalHotel, setQuantityModalHotel] = useState<HotelProduct | null>(null);
-  const [quantityForm, setQuantityForm] = useState<Record<string, number>>({});
+  /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
+  const [quantityForm, setQuantityForm] = useState<Record<string, string>>({});
   const [quantityFormLoading, setQuantityFormLoading] = useState(false);
   const [quantityFormSaving, setQuantityFormSaving] = useState(false);
-  /** Availability realtime per hotel (untuk rentang 30 hari ke depan) */
-  const [availabilityByHotelId, setAvailabilityByHotelId] = useState<Record<string, { byRoomType: Record<string, number> } | 'loading' | null>>({});
+  /** Availability realtime per hotel (rentang 30 hari): byRoomType + byDate untuk popup kalender */
+  type AvailabilityData = {
+    byRoomType: Record<string, number>;
+    byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>>;
+  };
+  const [availabilityByHotelId, setAvailabilityByHotelId] = useState<Record<string, AvailabilityData | 'loading' | null>>({});
+  const [availabilityPopupHotelId, setAvailabilityPopupHotelId] = useState<string | null>(null);
+  /** Popup "Tambah jumlah kamar" di dalam popup Ketersediaan per tanggal (tanggal full) */
+  type AvailabilityAddQuantity = { dateStr: string; seasonId: string; seasonName: string; roomTypes: Record<string, { total: number; booked: number; available: number }> };
+  const [availabilityAddQuantity, setAvailabilityAddQuantity] = useState<AvailabilityAddQuantity | null>(null);
+  const [availabilityAddQuantityInputs, setAvailabilityAddQuantityInputs] = useState<Record<string, string>>({});
+  const [availabilityAddQuantitySaving, setAvailabilityAddQuantitySaving] = useState(false);
 
   const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   /** Owner tidak boleh edit/hapus product; hanya role yang diizinkan backend */
   const canEditProduct = ['super_admin', 'admin_pusat', 'admin_koordinator'].includes(user?.role ?? '');
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+
+  useEffect(() => {
+    if (openSeasonsForHotelId && hotels.length > 0) {
+      const hotel = hotels.find((h) => h.id === openSeasonsForHotelId);
+      if (hotel) {
+        setSeasonsModalHotel(hotel);
+        setSeasonForm({ name: '', start_date: '', end_date: '' });
+        setEditingSeasonId(null);
+        setInventoryForSeason(null);
+        adminPusatApi.listSeasons(hotel.id).then((r) => setSeasonsList((r.data as { data?: HotelSeason[] })?.data ?? [])).catch(() => setSeasonsList([]));
+      }
+    }
+  }, [openSeasonsForHotelId, hotels]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -189,20 +229,42 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
     list.forEach((h) => {
       productsApi.getAvailability(h.id, { from: availabilityFrom, to: availabilityTo })
         .then((res) => {
-          const data = (res.data as { data?: { byRoomType?: Record<string, number> } })?.data;
-          setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: data?.byRoomType ? { byRoomType: data.byRoomType } : null }));
+          const data = (res.data as { data?: { byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
+          if (!data?.byRoomType) {
+            setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: null }));
+            return;
+          }
+          setAvailabilityByHotelId((prev) => ({
+            ...prev,
+            [h.id]: { byRoomType: data.byRoomType!, byDate: data.byDate ?? {} }
+          }));
         })
         .catch(() => setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: null })));
     });
   }, [hotelIdsKey, availabilityFrom, availabilityTo]);
+
+  const refetchAvailabilityForHotel = useCallback((productId: string) => {
+    productsApi.getAvailability(productId, { from: availabilityFrom, to: availabilityTo })
+      .then((res) => {
+        const data = (res.data as { data?: { byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
+        if (!data?.byRoomType) return;
+        setAvailabilityByHotelId((prev) => ({ ...prev, [productId]: { byRoomType: data.byRoomType!, byDate: data.byDate ?? {} } }));
+      })
+      .catch(() => {});
+  }, [availabilityFrom, availabilityTo]);
+
   useEffect(() => {
     const t = setInterval(() => {
       const list = filteredHotels.length ? filteredHotels : hotels;
       list.forEach((h) => {
         productsApi.getAvailability(h.id, { from: availabilityFrom, to: availabilityTo })
           .then((res) => {
-            const data = (res.data as { data?: { byRoomType?: Record<string, number> } })?.data;
-            setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: data?.byRoomType ? { byRoomType: data.byRoomType } : null }));
+            const data = (res.data as { data?: { byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
+            if (!data?.byRoomType) return;
+            setAvailabilityByHotelId((prev) => ({
+              ...prev,
+              [h.id]: { byRoomType: data.byRoomType!, byDate: data.byDate ?? {} }
+            }));
           })
           .catch(() => {});
       });
@@ -292,11 +354,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
     { id: 'code', label: 'Kode', align: 'left', sortable: true },
     { id: 'name', label: 'Nama Hotel', align: 'left', sortable: true },
     { id: 'location', label: 'Lokasi', align: 'left' },
+    { id: 'type_meal', label: 'Type / Meal', align: 'left' },
     { id: 'currency', label: 'Mata Uang', align: 'center' },
     { id: 'meal', label: 'Harga Makan', align: 'left' },
-    { id: 'room_breakdown', label: 'Tipe Kamar (Jml + Harga)', align: 'left' },
+    { id: 'room_price_type', label: 'Harga Kamar', align: 'left' },
     { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
-    { id: 'room_price_type', label: 'Tipe Kamar', align: 'center' },
     { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
     { id: 'actions', label: 'Aksi', align: 'center' }
   ];
@@ -306,13 +368,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
     setAddForm({
       name: '',
       location: 'makkah',
-      currency: 'IDR',
-      meal_price: 0,
-      meal_price_type: 'per_day',
-      room_price_type: 'per_day',
-      pricing_mode: 'single',
-      single_price: 0,
-      rooms: { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } }
+      allotment_type: 'allotment',
+      meal_plan: 'fullboard'
     });
     setShowAddModal(true);
   };
@@ -327,36 +384,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
       const data = (res.data as { data?: ProductDetail })?.data;
       if (!data) throw new Error('Data hotel tidak ditemukan');
       const meta = (data.meta as Record<string, unknown>) || {};
-      const avMeta = (data.ProductAvailability?.meta as Record<string, unknown>) || {};
-      const roomMeta = (avMeta.room_types as Record<string, number>) || {};
-      const prices = (data.ProductPrices as ProductPriceItem[]) || [];
-      const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
-      const byRoomMeal: Record<string, number> = {};
-      generalPrices.forEach((p) => {
-        const rt = (p.meta?.room_type as string) || 'single';
-        const withMeal = p.meta?.with_meal === true;
-        byRoomMeal[`${rt}_${withMeal}`] = Number(p.amount) || 0;
-      });
-      const mealPrice = Number(meta.meal_price) || 0;
-      const rooms = { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } };
-      ROOM_TYPES.forEach((rt) => {
-        const qty = Number(roomMeta[rt]) || 0;
-        const basePrice = byRoomMeal[`${rt}_false`] ?? (byRoomMeal[`${rt}_true`] != null ? byRoomMeal[`${rt}_true`] - mealPrice : 0);
-        rooms[rt] = { quantity: qty, price: basePrice || 0 };
-      });
-      const firstPrice = generalPrices[0];
-      const pricingMode = (meta.pricing_mode as 'single' | 'per_type') || 'single';
-      const singlePrice = pricingMode === 'single' && firstPrice ? Number(firstPrice.amount) || 0 : 0;
       setAddForm({
         name: data.name || '',
         location: (meta.location as 'makkah' | 'madinah') || 'makkah',
-        currency: (meta.currency as 'IDR' | 'SAR' | 'USD') || (firstPrice?.currency as 'IDR' | 'SAR' | 'USD') || 'IDR',
-        meal_price: mealPrice,
-        meal_price_type: (meta.meal_price_type as 'per_day' | 'per_trip') || 'per_day',
-        room_price_type: (meta.room_price_type as 'per_day' | 'per_lasten') || 'per_day',
-        pricing_mode: pricingMode,
-        single_price: singlePrice || (rooms.single?.price ?? 0),
-        rooms
+        allotment_type: (meta.allotment_type as 'allotment' | 'non_allotment') || 'allotment',
+        meal_plan: (meta.meal_plan as 'fullboard' | 'room_only') || 'fullboard'
       });
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -375,10 +407,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
   };
   type ProductPriceItem = { id: string; amount: number; currency?: string; branch_id?: string; owner_id?: string; meta?: { room_type?: string; with_meal?: boolean } };
 
-  const curr = CURRENCIES.find((c) => c.id === addForm.currency) || CURRENCIES[0];
-  const formatAmount = (n: number) => (n > 0 ? `${curr.symbol} ${Number(n).toLocaleString(curr.locale)}` : '-');
-
-  /** Buka modal Pengaturan Jumlah: load jumlah saat ini (dari ProductAvailability / room_breakdown) */
+  /** Buka modal Pengaturan Jumlah: load jumlah + harga kamar, harga makan, mata uang */
   const handleOpenQuantityModal = async (hotel: HotelProduct) => {
     if (!canAddHotel) return;
     setQuantityModalHotel(hotel);
@@ -387,14 +416,44 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
     try {
       const res = await productsApi.getById(hotel.id);
       const data = (res.data as { data?: ProductDetail })?.data;
+      const meta = (data?.meta as Record<string, unknown>) || {};
       const avMeta = (data?.ProductAvailability?.meta as Record<string, number>) || {};
-      const roomMeta = (data?.meta as Record<string, unknown>)?.room_types as Record<string, number> | undefined;
+      const roomMeta = (meta.room_types as Record<string, number>) || {};
       const fromBreakdown = hotel.room_breakdown || hotel.prices_by_room || {};
-      const initial: Record<string, number> = {};
+      const initial: Record<string, string> = {};
       ROOM_TYPES.forEach((rt) => {
-        initial[rt] = Number(avMeta[rt] ?? roomMeta?.[rt] ?? fromBreakdown[rt]?.quantity ?? 0) || 0;
+        const num = Number(avMeta[rt] ?? roomMeta?.[rt] ?? fromBreakdown[rt]?.quantity ?? 0) || 0;
+        initial[rt] = String(num);
       });
       setQuantityForm(initial);
+
+      const prices = (data?.ProductPrices as ProductPriceItem[]) || [];
+      const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
+      const byRoomMeal: Record<string, number> = {};
+      generalPrices.forEach((p) => {
+        const rt = (p.meta?.room_type as string) || 'single';
+        const withMeal = p.meta?.with_meal === true;
+        byRoomMeal[`${rt}_${withMeal}`] = Number(p.amount) || 0;
+      });
+      const mealPrice = Number(meta.meal_price) || 0;
+      const rooms = { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } };
+      ROOM_TYPES.forEach((rt) => {
+        const qty = Number(roomMeta[rt]) || 0;
+        const basePrice = byRoomMeal[`${rt}_false`] ?? (byRoomMeal[`${rt}_true`] != null ? byRoomMeal[`${rt}_true`] - mealPrice : 0);
+        rooms[rt] = { quantity: qty, price: basePrice || 0 };
+      });
+      const firstPrice = generalPrices[0];
+      const pricingMode = (meta.pricing_mode as 'single' | 'per_type') || 'single';
+      const singlePrice = pricingMode === 'single' && firstPrice ? Number(firstPrice.amount) || 0 : 0;
+      setQuantityModalPriceForm({
+        currency: (meta.currency as 'IDR' | 'SAR' | 'USD') || (firstPrice?.currency as 'IDR' | 'SAR' | 'USD') || 'IDR',
+        meal_price: mealPrice,
+        meal_price_type: (meta.meal_price_type as 'per_day' | 'per_trip') || 'per_day',
+        room_price_type: (meta.room_price_type as 'per_day' | 'per_lasten') || 'per_day',
+        pricing_mode: pricingMode,
+        single_price: singlePrice || (rooms.single?.price ?? 0),
+        rooms
+      });
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       showToast(err.response?.data?.message || 'Gagal memuat data hotel', 'error');
@@ -406,13 +465,64 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
 
   const handleSaveQuantity = async () => {
     if (!quantityModalHotel) return;
-    const totalQty = ROOM_TYPES.reduce((s, rt) => s + (quantityForm[rt] ?? 0), 0);
+    const parseQty = (v: string | undefined) => Math.max(0, parseInt(String(v || ''), 10) || 0);
+    const totalQty = ROOM_TYPES.reduce((s, rt) => s + parseQty(quantityForm[rt]), 0);
     const roomMeta: Record<string, number> = {};
-    ROOM_TYPES.forEach((rt) => { roomMeta[rt] = quantityForm[rt] ?? 0; });
+    ROOM_TYPES.forEach((rt) => { roomMeta[rt] = parseQty(quantityForm[rt]); });
+    const pf = quantityModalPriceForm;
     setQuantityFormSaving(true);
     try {
+      const existingMeta = (quantityModalHotel.meta as Record<string, unknown>) || {};
+      await productsApi.update(quantityModalHotel.id, {
+        meta: {
+          ...existingMeta,
+          currency: pf.currency,
+          meal_price: pf.meal_price,
+          meal_price_type: pf.meal_price_type,
+          room_price_type: pf.room_price_type,
+          pricing_mode: pf.pricing_mode,
+          room_types: ROOM_TYPES
+        }
+      });
+
+      const pricesRes = await productsApi.listPrices({ product_id: quantityModalHotel.id });
+      const prices = (pricesRes.data as { data?: ProductPriceItem[] })?.data ?? [];
+      const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
+      for (const p of generalPrices) {
+        await productsApi.deletePrice(p.id);
+      }
+      const pricesToCreate: Array<{ roomType: string; price: number }> = [];
+      if (pf.pricing_mode === 'single') {
+        if (pf.single_price > 0) {
+          ROOM_TYPES.forEach((rt) => pricesToCreate.push({ roomType: rt, price: pf.single_price }));
+        }
+      } else {
+        ROOM_TYPES.forEach((rt) => {
+          const p = pf.rooms[rt].price;
+          if (p > 0) pricesToCreate.push({ roomType: rt, price: p });
+        });
+      }
+      for (const { roomType, price } of pricesToCreate) {
+        await productsApi.createPrice({
+          product_id: quantityModalHotel.id,
+          branch_id: null,
+          owner_id: null,
+          currency: pf.currency,
+          amount: price,
+          meta: { room_type: roomType, with_meal: false }
+        });
+        await productsApi.createPrice({
+          product_id: quantityModalHotel.id,
+          branch_id: null,
+          owner_id: null,
+          currency: pf.currency,
+          amount: price + pf.meal_price,
+          meta: { room_type: roomType, with_meal: true }
+        });
+      }
+
       await adminPusatApi.setProductAvailability(quantityModalHotel.id, { quantity: totalQty, meta: { room_types: roomMeta } });
-      showToast('Jumlah kamar disimpan. Untuk ketersediaan per tanggal, atur di Data per Musim.', 'success');
+      showToast('Jumlah kamar, harga, dan mata uang disimpan. Untuk ketersediaan per tanggal, atur di Data per Musim.', 'success');
       setQuantityModalHotel(null);
       fetchProducts();
     } catch (e: unknown) {
@@ -447,60 +557,19 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
       const meta: Record<string, unknown> = {
         location: addForm.location,
         room_types: ROOM_TYPES,
-        currency: addForm.currency,
-        meal_price: addForm.meal_price,
-        meal_price_type: addForm.meal_price_type,
-        room_price_type: addForm.room_price_type,
-        pricing_mode: addForm.pricing_mode
+        allotment_type: addForm.allotment_type,
+        meal_plan: addForm.meal_plan
       };
-      const createRes = await productsApi.createHotel({
+      await productsApi.createHotel({
         name: addForm.name.trim(),
         meta
       });
-      const productId = (createRes.data as { data?: { id: string } })?.data?.id;
-      if (!productId) throw new Error('Product id tidak ditemukan');
-
-      const pricesToCreate: Array<{ roomType: string; price: number }> = [];
-      if (addForm.pricing_mode === 'single') {
-        if (addForm.single_price > 0) {
-          ROOM_TYPES.forEach((rt) => pricesToCreate.push({ roomType: rt, price: addForm.single_price }));
-        }
-      } else {
-        ROOM_TYPES.forEach((rt) => {
-          const p = addForm.rooms[rt].price;
-          if (p > 0) pricesToCreate.push({ roomType: rt, price: p });
-        });
-      }
-
-      for (const { roomType, price } of pricesToCreate) {
-        await productsApi.createPrice({
-          product_id: productId,
-          branch_id: null,
-          owner_id: null,
-          currency: addForm.currency,
-          amount: price,
-          meta: { room_type: roomType, with_meal: false }
-        });
-        await productsApi.createPrice({
-          product_id: productId,
-          branch_id: null,
-          owner_id: null,
-          currency: addForm.currency,
-          amount: price + addForm.meal_price,
-          meta: { room_type: roomType, with_meal: true }
-        });
-      }
-
-      const totalQty = ROOM_TYPES.reduce((s, rt) => s + addForm.rooms[rt].quantity, 0);
-      const roomMeta: Record<string, number> = {};
-      ROOM_TYPES.forEach((rt) => { roomMeta[rt] = addForm.rooms[rt].quantity; });
-      await adminPusatApi.setProductAvailability(productId, { quantity: totalQty, meta: { room_types: roomMeta } });
-
-      showToast('Hotel berhasil ditambahkan', 'success');
+      showToast('Hotel berhasil ditambahkan. Gunakan "Pengaturan Jumlah" untuk mengisi jumlah kamar, harga, dan mata uang.', 'success');
       setShowAddModal(false);
       fetchProducts();
-    } catch (e: any) {
-      showToast(e.response?.data?.message || 'Gagal menambah hotel', 'error');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      showToast(err.response?.data?.message || 'Gagal menambah hotel', 'error');
     } finally {
       setSaving(false);
     }
@@ -514,60 +583,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
     }
     setSaving(true);
     try {
+      const existingMeta = (editingHotel.meta as Record<string, unknown>) || {};
       const meta: Record<string, unknown> = {
+        ...existingMeta,
         location: addForm.location,
-        room_types: ROOM_TYPES,
-        currency: addForm.currency,
-        meal_price: addForm.meal_price,
-        meal_price_type: addForm.meal_price_type,
-        room_price_type: addForm.room_price_type,
-        pricing_mode: addForm.pricing_mode
+        room_types: existingMeta.room_types ?? ROOM_TYPES,
+        allotment_type: addForm.allotment_type,
+        meal_plan: addForm.meal_plan
       };
       await productsApi.update(editingHotel.id, { name: addForm.name.trim(), meta });
-
-      const pricesRes = await productsApi.listPrices({ product_id: editingHotel.id });
-      const prices = (pricesRes.data as { data?: ProductPriceItem[] })?.data ?? [];
-      const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
-      for (const p of generalPrices) {
-        await productsApi.deletePrice(p.id);
-      }
-
-      const pricesToCreate: Array<{ roomType: string; price: number }> = [];
-      if (addForm.pricing_mode === 'single') {
-        if (addForm.single_price > 0) {
-          ROOM_TYPES.forEach((rt) => pricesToCreate.push({ roomType: rt, price: addForm.single_price }));
-        }
-      } else {
-        ROOM_TYPES.forEach((rt) => {
-          const p = addForm.rooms[rt].price;
-          if (p > 0) pricesToCreate.push({ roomType: rt, price: p });
-        });
-      }
-
-      for (const { roomType, price } of pricesToCreate) {
-        await productsApi.createPrice({
-          product_id: editingHotel.id,
-          branch_id: null,
-          owner_id: null,
-          currency: addForm.currency,
-          amount: price,
-          meta: { room_type: roomType, with_meal: false }
-        });
-        await productsApi.createPrice({
-          product_id: editingHotel.id,
-          branch_id: null,
-          owner_id: null,
-          currency: addForm.currency,
-          amount: price + addForm.meal_price,
-          meta: { room_type: roomType, with_meal: true }
-        });
-      }
-
-      const totalQty = ROOM_TYPES.reduce((s, rt) => s + addForm.rooms[rt].quantity, 0);
-      const roomMeta: Record<string, number> = {};
-      ROOM_TYPES.forEach((rt) => { roomMeta[rt] = addForm.rooms[rt].quantity; });
-      await adminPusatApi.setProductAvailability(editingHotel.id, { quantity: totalQty, meta: { room_types: roomMeta } });
-
       showToast('Hotel berhasil diubah', 'success');
       setShowAddModal(false);
       setEditingHotel(null);
@@ -768,10 +792,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
             </button>
           </div>
         </div>
-        <div className="mb-4">
-          <h3 className="text-base font-semibold text-slate-900">Daftar Hotel</h3>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {filteredHotels.length} dari {pagination?.total ?? hotels.length} hotel ┬╖ Tipe kamar (jumlah + harga) dan ketersediaan tampil terpisah per tipe kamar agar mudah dibaca. Statistik ketersediaan di atas untuk ringkasan cepat.
+        <div className="mb-5">
+          <h3 className="text-lg font-semibold text-slate-900">Daftar Hotel</h3>
+          <p className="text-sm text-slate-500 mt-1">
+            {filteredHotels.length} dari {pagination?.total ?? hotels.length} hotel. Ketersediaan per tanggal: ketika owner order dan sudah dibooking, kamar tinggal berkurang. Jika semua tipe kamar penuh di satu tanggal, tanggal tersebut full. Klik kolom <strong>Ketersediaan</strong> untuk lihat detail per tanggal.
           </p>
         </div>
 
@@ -795,74 +819,98 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
             const roomPriceType = hotel.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : hotel.meta?.room_price_type === 'per_day' ? 'Per hari' : '-';
             const pricingMode = hotel.meta?.pricing_mode === 'per_type' ? 'Per tipe' : hotel.meta?.pricing_mode === 'single' ? 'Satu harga' : '-';
             const fmt = (n: number) => (n > 0 ? `${Number(n).toLocaleString('id-ID')} ${cur}` : '-');
-            const rooms = hotel.room_breakdown || hotel.prices_by_room || {};
-            const singlePrice = hotel.price_general ?? hotel.price_branch ?? hotel.price_special ?? 0;
+            const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
+            const isSinglePrice = hotel.meta?.pricing_mode === 'single';
+            const singlePriceVal = isSinglePrice ? (Number(hotel.price_branch ?? hotel.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
             const avail = availabilityByHotelId[hotel.id];
             return (
-              <tr key={hotel.id} className="hover:bg-slate-50 transition-colors border-b border-slate-200 last:border-b-0">
-                <td className="px-4 py-4 text-sm text-slate-700 font-mono align-top">{hotel.code || '-'}</td>
-                <td className="px-4 py-4 align-top">
+              <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
+                <td className="px-4 py-3.5 text-sm text-slate-600 font-mono align-middle">{hotel.code || '-'}</td>
+                <td className="px-4 py-3.5 align-middle">
                   <p className="font-semibold text-slate-900">{hotel.name}</p>
                   {hotel.description && (
-                    <p className="text-sm text-slate-600 line-clamp-1">{hotel.description}</p>
+                    <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{hotel.description}</p>
                   )}
                 </td>
-                <td className="px-4 py-4 align-top">
-                  <span className="capitalize text-slate-700">{hotel.meta?.location || '-'}</span>
+                <td className="px-4 py-3.5 align-middle">
+                  <span className="inline-flex items-center gap-1 capitalize text-slate-700 text-sm">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    {hotel.meta?.location || '-'}
+                  </span>
                 </td>
-                <td className="px-4 py-4 text-center text-sm text-slate-700 align-top">{cur}</td>
-                <td className="px-4 py-4 text-sm text-slate-700 align-top">
-                  <span>{fmt(mealPrice)}</span>
-                  <span className="text-slate-500 text-xs block">{mealType}</span>
-                </td>
-                <td className="px-4 py-4 align-top">
-                  <div className="flex flex-nowrap gap-2 overflow-x-auto">
-                    {ROOM_TYPES.map((rt) => {
-                      const r = rooms[rt] || { quantity: 0, price: 0 };
-                      const price = hotel.meta?.pricing_mode === 'single' ? singlePrice : r.price;
-                      return (
-                        <div key={rt} className="shrink-0 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 w-[72px]">
-                          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide capitalize">{rt}</p>
-                          <p className="text-sm font-semibold text-slate-800">Jml: {r.quantity ?? 0}</p>
-                          <p className="text-xs text-slate-600 truncate" title={fmt(price)}>{fmt(price)}</p>
-                        </div>
-                      );
-                    })}
+                <td className="px-4 py-3.5 align-middle">
+                  <div className="text-xs text-slate-600">
+                    <span className="font-medium">{hotel.meta?.allotment_type === 'non_allotment' ? 'Non allotment' : hotel.meta?.allotment_type === 'allotment' ? 'Allotment' : '-'}</span>
+                    <span className="text-slate-400 mx-1">/</span>
+                    <span>{hotel.meta?.meal_plan === 'room_only' ? 'Room only' : hotel.meta?.meal_plan === 'fullboard' ? 'Fullboard' : '-'}</span>
                   </div>
                 </td>
-                <td className="px-4 py-4 align-top">
-                  {avail === 'loading' && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-700 text-sm">MemuatΓÇª</div>
-                  )}
-                  {avail === null && <span className="text-slate-400 text-sm">ΓÇö</span>}
-                  {avail && typeof avail === 'object' && avail.byRoomType && (
-                    <div className="flex flex-nowrap gap-2 overflow-x-auto">
-                      {Object.entries(avail.byRoomType).map(([rt, n]) => (
-                        <div
-                          key={rt}
-                          className={`shrink-0 rounded-lg border px-3 py-2 w-[72px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
-                        >
-                          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide capitalize">{rt}</p>
-                          {n === 0 ? (
-                            <p className="text-sm font-bold text-red-600">Penuh</p>
-                          ) : (
-                            <p className="text-sm font-bold text-emerald-600">{n} tersedia</p>
-                          )}
-                        </div>
-                      ))}
+                <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
+                <td className="px-4 py-3.5 text-sm text-slate-700 align-middle">
+                  <span>{fmt(mealPrice)}</span>
+                  <span className="text-slate-400 text-xs block">{mealType}</span>
+                </td>
+                <td className="px-4 py-3.5 text-sm text-slate-700 align-middle">
+                  {isSinglePrice ? (
+                    <div>
+                      <span className="font-semibold tabular-nums">{fmt(singlePriceVal)}</span>
+                      <span className="text-slate-500 text-xs block">{roomPriceType}</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        {ROOM_TYPES.map((rt) => {
+                          const pr = breakdown[rt]?.price;
+                          const label = rt === 'single' ? 'S' : rt === 'double' ? 'D' : rt === 'triple' ? 'T' : rt === 'quad' ? 'Q' : 'Qu';
+                          return (
+                            <span key={rt} className="tabular-nums">
+                              <span className="text-slate-500">{label}:</span>{' '}
+                              <span className={pr != null && pr > 0 ? 'font-medium text-slate-800' : 'text-slate-400'}>{pr != null && pr > 0 ? fmt(pr) : '—'}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <span className="text-slate-500 text-xs block">{roomPriceType}</span>
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-4 text-center text-xs text-slate-600 align-top">
-                  <span className="block">{roomPriceType}</span>
-                  <span className="text-slate-500">{pricingMode}</span>
+                <td className="px-4 py-3.5 align-middle">
+                  {avail === 'loading' && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-700 text-xs">Memuat…</div>
+                  )}
+                  {avail === null && <span className="text-slate-400 text-sm">—</span>}
+                  {avail && typeof avail === 'object' && avail.byRoomType && (
+                    <button
+                      type="button"
+                      onClick={() => setAvailabilityPopupHotelId(hotel.id)}
+                      className="w-full text-left rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-emerald-50/80 hover:border-emerald-200 transition-colors p-2 group"
+                      title="Klik untuk lihat tanggal dengan kamar tersedia"
+                    >
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(avail.byRoomType).map(([rt, n]) => (
+                          <div
+                            key={rt}
+                            className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[56px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
+                          >
+                            <p className="text-[10px] font-medium text-slate-500 uppercase capitalize">{rt}</p>
+                            {n === 0 ? (
+                              <p className="text-xs font-bold text-red-600">Penuh</p>
+                            ) : (
+                              <p className="text-xs font-bold text-emerald-600 tabular-nums">{n}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1.5 group-hover:text-emerald-600">Klik untuk lihat per tanggal →</p>
+                    </button>
+                  )}
                 </td>
-                <td className="px-4 py-4 text-center align-top">
+                <td className="px-4 py-3.5 text-center align-middle">
                   <Badge variant={hotel.is_active ? 'success' : 'error'}>
                     {hotel.is_active ? 'Aktif' : 'Nonaktif'}
                   </Badge>
                 </td>
-                <td className="px-4 py-4 align-top">
+                <td className="px-4 py-3.5 align-middle">
                   <div className="flex justify-center gap-1 flex-wrap">
                     {canAddToOrder && (
                       <Button
@@ -910,355 +958,903 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts }) => {
         />
       </Card>
 
+      {/* Popup Ketersediaan per tanggal: lebar, layout rapi, per tipe kamar */}
+      {availabilityPopupHotelId && (() => {
+        const hotel = hotels.find((h) => h.id === availabilityPopupHotelId) || filteredHotels.find((h) => h.id === availabilityPopupHotelId);
+        const availData = availabilityPopupHotelId ? availabilityByHotelId[availabilityPopupHotelId] : null;
+        const byDate = availData && typeof availData === 'object' && availData.byDate ? availData.byDate : {};
+        const dateKeys = Object.keys(byDate).sort();
+        const formatDateLabel = (s: string) => {
+          const d = new Date(s + 'T12:00:00');
+          return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+        };
+        const roomTypeLabels: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+        const popupCurrency = (hotel?.currency || hotel?.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
+        const popupCurrInfo = CURRENCIES.find((c) => c.id === popupCurrency) || CURRENCIES[0];
+        const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');
+        const roomPriceTypeLabel = hotel?.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : 'Per hari';
+        const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
+        const isSinglePrice = hotel?.meta?.pricing_mode === 'single';
+        const singlePriceValue = isSinglePrice ? (Number(hotel?.price_branch ?? hotel?.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setAvailabilityPopupHotelId(null)}>
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-emerald-600">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Ketersediaan per tanggal</h3>
+                    <p className="text-sm text-slate-600 mt-0.5">{hotel?.name ?? 'Hotel'} — data realtime per tipe kamar</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setAvailabilityPopupHotelId(null)} className="p-2.5 hover:bg-slate-200 rounded-xl transition-colors">
+                  <XCircle className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 min-h-0">
+                {/* Harga Kamar Per hari — satu harga atau per tipe */}
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
+                  <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50">
+                    <h4 className="text-sm font-semibold text-slate-800">Harga Kamar {roomPriceTypeLabel}</h4>
+                  </div>
+                  <div className="px-4 py-3">
+                    {isSinglePrice ? (
+                      <p className="text-slate-700">
+                        <span className="font-semibold tabular-nums">{formatPrice(singlePriceValue)}</span>
+                        <span className="text-slate-500 text-sm ml-2">/ kamar · semua tipe</span>
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-x-6 gap-y-2">
+                        {ROOM_TYPES.map((rt) => {
+                          const pr = breakdown[rt]?.price;
+                          if (pr == null) return null;
+                          return (
+                            <span key={rt} className="inline-flex items-center gap-2">
+                              <span className="text-slate-500 text-sm">{roomTypeLabels[rt]}:</span>
+                              <span className="font-semibold tabular-nums text-slate-800">{formatPrice(pr)}</span>
+                            </span>
+                          );
+                        })}
+                        {ROOM_TYPES.every((rt) => breakdown[rt]?.price == null) && (
+                          <span className="text-slate-400 text-sm">Belum diatur di Pengaturan Jumlah</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {dateKeys.length === 0 ? (
+                  <div className="py-16 text-center rounded-2xl bg-slate-50 border border-slate-200">
+                    <Calendar className="w-14 h-14 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-600 font-medium">Belum ada data per tanggal</p>
+                    <p className="text-slate-400 text-sm mt-1">Atur musim dan inventori di Data per Musim.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Legenda & kode tipe — satu bar rapi */}
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+                      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Legenda:</span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-6 h-5 rounded bg-emerald-200 border border-emerald-300" />
+                        <span className="text-sm text-slate-700">Tipe ada kamar kosong</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-6 h-5 rounded bg-red-200 border border-red-300" />
+                        <span className="text-sm text-slate-700">Tipe full</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-6 h-5 rounded bg-slate-100 border border-slate-200" />
+                        <span className="text-sm text-slate-500">Tanpa musim</span>
+                      </span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-xs text-slate-500">Kode: S=Single · D=Double · T=Triple · Q=Quad · Qu=Quint</span>
+                      {canAddHotel && (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <span className="text-xs text-emerald-600">Tanggal full: klik <Plus className="w-3 h-3 inline" /> di sel untuk tambah jumlah kamar</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Satu tampilan: Kalender + detail per tanggal (tabel gabungan) */}
+                    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+                        <h4 className="text-sm font-semibold text-slate-800">Ketersediaan 30 hari</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">Tanggal + jumlah tersedia per tipe kamar. Hijau = ada kosong, merah = full.</p>
+                      </div>
+                      <div className="overflow-auto max-h-[min(60vh,420px)]">
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-200 z-10 shadow-sm">
+                            <tr>
+                              <th className="text-left py-3 px-3 font-semibold text-slate-700 w-[100px]">Tanggal</th>
+                              {ROOM_TYPES.map((rt) => (
+                                <th key={rt} className="text-center py-3 px-2 font-semibold text-slate-700 min-w-[72px]">{roomTypeLabels[rt] || rt}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dateKeys.map((dateStr, idx) => {
+                              const day = byDate[dateStr] as (Record<string, { total?: number; booked?: number; available?: number }> & { _noSeason?: boolean; seasonId?: string; seasonName?: string }) | undefined;
+                              const noSeason = day && (day as { _noSeason?: boolean })._noSeason;
+                              const rec = noSeason ? null : (day as Record<string, { total?: number; booked?: number; available?: number }> | undefined);
+                              const getAvail = (rt: string) => (rec && rec[rt] != null ? (rec[rt]?.available ?? 0) : 0);
+                              const hasAvailable = !noSeason && rec && ROOM_TYPES.some((rt) => getAvail(rt) > 0);
+                              const seasonId = !noSeason && day ? (day as { seasonId?: string }).seasonId : undefined;
+                              const seasonName = !noSeason && day ? (day as { seasonName?: string }).seasonName : undefined;
+                              const d = new Date(dateStr + 'T12:00:00');
+                              const openAddQty = () => {
+                                if (!rec || !seasonId || !availabilityPopupHotelId) return;
+                                const roomTypes: Record<string, { total: number; booked: number; available: number }> = {};
+                                ROOM_TYPES.forEach((rt) => {
+                                  const r = rec[rt];
+                                  roomTypes[rt] = r ? { total: r.total ?? 0, booked: r.booked ?? 0, available: r.available ?? 0 } : { total: 0, booked: 0, available: 0 };
+                                });
+                                setAvailabilityAddQuantity({ dateStr, seasonId, seasonName: seasonName || '', roomTypes });
+                                const initial: Record<string, string> = {};
+                                ROOM_TYPES.forEach((rt) => { initial[rt] = ''; });
+                                setAvailabilityAddQuantityInputs(initial);
+                              };
+                              return (
+                                <tr
+                                  key={dateStr}
+                                  className={`border-b border-slate-100 last:border-0 transition-colors ${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'} hover:bg-emerald-50/40`}
+                                >
+                                  <td className="py-2 px-3 align-middle">
+                                    <div
+                                      className={`inline-flex flex-col items-center justify-center rounded-xl border-2 min-w-[76px] py-2 px-2 ${
+                                        noSeason
+                                          ? 'bg-slate-50 border-slate-200 text-slate-400'
+                                          : hasAvailable
+                                            ? 'bg-emerald-50 border-emerald-200'
+                                            : 'bg-red-50 border-red-200'
+                                      }`}
+                                    >
+                                      <span className="text-[10px] uppercase tracking-wide text-slate-500">{d.toLocaleDateString('id-ID', { month: 'short' })}</span>
+                                      <span className="text-xl font-bold tabular-nums text-slate-800 leading-none mt-0.5">{d.getDate()}</span>
+                                      <span className="text-[10px] text-slate-500 mt-0.5">{d.toLocaleDateString('id-ID', { weekday: 'short' })}</span>
+                                    </div>
+                                  </td>
+                                  {ROOM_TYPES.map((rt) => {
+                                    const a = rec && rec[rt] != null ? (rec[rt]?.available ?? 0) : null;
+                                    if (noSeason || a === null) {
+                                      return <td key={rt} className="py-2 px-2 text-center align-middle text-slate-400">—</td>;
+                                    }
+                                    const isFull = a <= 0;
+                                    const showAddBtn = canAddHotel && isFull && seasonId;
+                                    return (
+                                      <td key={rt} className="py-2 px-2 text-center align-middle">
+                                        <div className="inline-flex items-center justify-center gap-1">
+                                          <span
+                                            className={`inline-flex items-center justify-center min-w-[44px] py-1.5 px-2 rounded-lg font-semibold tabular-nums text-sm ${
+                                              a > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                                            }`}
+                                          >
+                                            {a > 0 ? a : 'Full'}
+                                          </span>
+                                          {showAddBtn && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); openAddQty(); }}
+                                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors shrink-0"
+                                              title="Tambah jumlah kamar"
+                                            >
+                                              <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Sub-popup: Tambah jumlah kamar (di dalam popup Ketersediaan) */}
+              {availabilityAddQuantity && availabilityPopupHotelId && (
+                <div
+                  className="absolute inset-0 bg-black/40 flex items-center justify-center z-10 rounded-2xl"
+                  onClick={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)}
+                >
+                  <div
+                    className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <Plus className="w-5 h-5 text-emerald-600" />
+                        <h3 className="text-lg font-semibold text-slate-900">Tambah jumlah kamar</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)}
+                        className="p-2 hover:bg-slate-200 rounded-xl transition-colors"
+                      >
+                        <XCircle className="w-5 h-5 text-slate-500" />
+                      </button>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <p className="text-sm text-slate-600">
+                        Tanggal <strong>{new Date(availabilityAddQuantity.dateStr + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                        {availabilityAddQuantity.seasonName && <> · Musim: <strong>{availabilityAddQuantity.seasonName}</strong></>}
+                      </p>
+                      <p className="text-xs text-slate-500">Isi jumlah tambahan per tipe. Total baru = total saat ini + tambahan.</p>
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                              <th className="text-left py-2.5 px-3 font-semibold text-slate-700">Tipe</th>
+                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Total</th>
+                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Dipesan</th>
+                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Tersedia</th>
+                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Tambah</th>
+                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Total baru</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ROOM_TYPES.map((rt) => {
+                              const r = availabilityAddQuantity.roomTypes[rt];
+                              const total = r?.total ?? 0;
+                              const booked = r?.booked ?? 0;
+                              const available = r?.available ?? 0;
+                              const add = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
+                              const newTotal = total + add;
+                              return (
+                                <tr key={rt} className="border-b border-slate-100 last:border-0">
+                                  <td className="py-2 px-3 font-medium text-slate-800 capitalize">{roomTypeLabels[rt] || rt}</td>
+                                  <td className="py-2 px-2 text-center tabular-nums text-slate-700">{total}</td>
+                                  <td className="py-2 px-2 text-center tabular-nums text-slate-600">{booked}</td>
+                                  <td className={`py-2 px-2 text-center tabular-nums font-medium ${available <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{available}</td>
+                                  <td className="py-2 px-2">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={availabilityAddQuantityInputs[rt] ?? ''}
+                                      onChange={(e) => setAvailabilityAddQuantityInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
+                                      className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                      placeholder="0"
+                                    />
+                                  </td>
+                                  <td className="py-2 px-2 text-center font-semibold tabular-nums text-slate-800">{newTotal}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 bg-slate-50">
+                      <Button variant="outline" size="sm" onClick={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)} disabled={availabilityAddQuantitySaving}>
+                        Batal
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={availabilityAddQuantitySaving}
+                        onClick={async () => {
+                          if (!availabilityPopupHotelId || !availabilityAddQuantity) return;
+                          setAvailabilityAddQuantitySaving(true);
+                          try {
+                            const inventory = ROOM_TYPES.map((rt) => {
+                              const current = availabilityAddQuantity.roomTypes[rt]?.total ?? 0;
+                              const addVal = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
+                              return { room_type: rt, total_rooms: current + addVal };
+                            });
+                            await adminPusatApi.setSeasonInventory(availabilityPopupHotelId, availabilityAddQuantity.seasonId, { inventory });
+                            showToast('Inventori musim berhasil diperbarui', 'success');
+                            setAvailabilityAddQuantity(null);
+                            refetchAvailabilityForHotel(availabilityPopupHotelId);
+                          } catch (e: unknown) {
+                            const err = e as { response?: { data?: { message?: string } } };
+                            showToast(err.response?.data?.message || 'Gagal menyimpan inventori', 'error');
+                          } finally {
+                            setAvailabilityAddQuantitySaving(false);
+                          }
+                        }}
+                      >
+                        {availabilityAddQuantitySaving ? 'Menyimpan…' : 'Simpan'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600">
-                  <HotelIcon className="w-4 h-4" />
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-teal-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-emerald-100 text-emerald-600">
+                  <HotelIcon className="w-5 h-5" />
                 </div>
-                <h2 className="text-base font-bold text-slate-900">{editingHotel ? 'Edit Hotel' : 'Tambah Hotel Baru'}</h2>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">{editingHotel ? 'Edit Hotel' : 'Tambah Hotel Baru'}</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Isi data hotel. Harga & jumlah kamar atur di Pengaturan Jumlah.</p>
+                </div>
               </div>
-              <button type="button" onClick={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))} className="p-1.5 hover:bg-slate-200 rounded-lg">
+              <button type="button" onClick={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
                 <XCircle className="w-5 h-5 text-slate-500" />
               </button>
             </div>
 
-            {/* Content - 2 kolom, no scroll */}
             {editFormLoading ? (
               <div className="p-12 text-center text-slate-500">Memuat data hotel...</div>
             ) : (
-            <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Kolom kiri */}
-              <div className="space-y-3">
-                {editingHotel && (
-                  <div className="p-2 rounded-lg bg-slate-100 text-sm">
-                    <span className="text-slate-500">Kode: </span>
-                    <span className="font-mono font-medium text-slate-800">{editingHotel.code}</span>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nama Hotel *</label>
-                  <input
-                    value={addForm.name}
-                    onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    placeholder="Contoh: Hotel Al Haram"
-                  />
+            <div className="p-6 space-y-6">
+              {editingHotel && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200">
+                  <span className="text-slate-500 text-sm">Kode:</span>
+                  <span className="font-mono font-semibold text-slate-800">{editingHotel.code}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Lokasi</label>
-                    <select
-                      value={addForm.location}
-                      onChange={(e) => setAddForm((f) => ({ ...f, location: e.target.value as 'makkah' | 'madinah' }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="makkah">Makkah</option>
-                      <option value="madinah">Madinah</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Mata uang input</label>
-                    <select
-                      value={addForm.currency}
-                      onChange={(e) => {
-                        const newCur = e.target.value as 'IDR' | 'SAR' | 'USD';
-                        const tripleMeal = fillFromSource(addForm.currency, addForm.meal_price || 0, currencyRates);
-                        const tripleSingle = fillFromSource(addForm.currency, addForm.single_price || 0, currencyRates);
-                        const newMeal = newCur === 'IDR' ? tripleMeal.idr : newCur === 'SAR' ? tripleMeal.sar : tripleMeal.usd;
-                        const newSingle = newCur === 'IDR' ? tripleSingle.idr : newCur === 'SAR' ? tripleSingle.sar : tripleSingle.usd;
-                        setAddForm((f) => ({ ...f, currency: newCur, meal_price: newMeal, single_price: newSingle }));
-                      }}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                    >
-                      {CURRENCIES.map((c) => (
-                        <option key={c.id} value={c.id}>{c.label}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-500 mt-0.5">Harga makan & kamar hanya bisa diisi dalam mata uang ini; lainnya konversi otomatis.</p>
-                  </div>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Harga Makan per Kamar (Per hari / Per trip)</label>
-                  <div className="inline-flex p-0.5 bg-slate-200/60 rounded gap-0.5 mb-2">
-                    <button type="button" onClick={() => setAddForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
-                      className={`px-2 py-1 rounded text-xs font-medium ${addForm.meal_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'}`}>Per hari</button>
-                    <button type="button" onClick={() => setAddForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
-                      className={`px-2 py-1 rounded text-xs font-medium ${addForm.meal_price_type === 'per_trip' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'}`}>Per trip</button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                      const triple = fillFromSource(addForm.currency, addForm.meal_price || 0, currencyRates);
-                      const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                      const isEditable = addForm.currency === curKey;
-                      return (
-                        <div key={curKey}>
-                          <span className="text-slate-500 text-xs block mb-0.5">{curKey}{!isEditable && ' (konversi)'}</span>
-                          <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
-                            readOnly={!isEditable}
-                            onChange={isEditable ? (e) => setAddForm((f) => ({ ...f, meal_price: parseFloat(e.target.value) || 0 })) : undefined}
-                            className={`w-full border rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 ${isEditable ? 'border-slate-200 bg-white' : 'border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed'}`}
-                            placeholder="0" />
-                        </div>
-                      );
-                    })}
-                  </div>
+              )}
+
+              {/* Nama Hotel */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Nama Hotel <span className="text-rose-500">*</span></label>
+                <input
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
+                  placeholder="Contoh: Hotel Al Haram"
+                />
+              </div>
+
+              {/* Lokasi — Tab */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Lokasi</label>
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setAddForm((f) => ({ ...f, location: 'makkah' }))}
+                    className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${
+                      addForm.location === 'makkah'
+                        ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    Makkah
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddForm((f) => ({ ...f, location: 'madinah' }))}
+                    className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${
+                      addForm.location === 'madinah'
+                        ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    Madinah
+                  </button>
                 </div>
               </div>
 
-              {/* Kolom kanan */}
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Harga Kamar (Per hari / Per lasten, Satu harga / Per tipe)</label>
-                  <div className="inline-flex p-0.5 bg-slate-200/60 rounded gap-0.5 mb-2">
-                    <button type="button" onClick={() => setAddForm((f) => ({ ...f, room_price_type: 'per_day' }))}
-                      className={`px-2 py-1 rounded text-xs font-medium ${addForm.room_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'}`}>Per hari</button>
-                    <button type="button" onClick={() => setAddForm((f) => ({ ...f, room_price_type: 'per_lasten' }))}
-                      className={`px-2 py-1 rounded text-xs font-medium ${addForm.room_price_type === 'per_lasten' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'}`}>Per lasten</button>
+              {/* Type & Meal — dua kartu berdampingan */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">Type</label>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, allotment_type: 'allotment' }))}
+                      className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
+                        addForm.allotment_type === 'allotment'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      Allotment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, allotment_type: 'non_allotment' }))}
+                      className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
+                        addForm.allotment_type === 'non_allotment'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      Non allotment
+                    </button>
                   </div>
-                  <div className="inline-flex p-0.5 bg-slate-200/60 rounded gap-0.5 mb-2">
-                    <button type="button" onClick={() => setAddForm((f) => ({ ...f, pricing_mode: 'single' }))}
-                      className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${addForm.pricing_mode === 'single' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'}`}>Satu harga</button>
-                    <button type="button" onClick={() => setAddForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
-                      className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${addForm.pricing_mode === 'per_type' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'}`}>Per tipe</button>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">Meal</label>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, meal_plan: 'fullboard' }))}
+                      className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
+                        addForm.meal_plan === 'fullboard'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      Fullboard
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, meal_plan: 'room_only' }))}
+                      className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
+                        addForm.meal_plan === 'room_only'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      Room only
+                    </button>
                   </div>
-                  {addForm.pricing_mode === 'single' && (
-                    <div className="mb-2">
-                      <p className="text-xs text-slate-500 mb-1">Satu harga untuk semua tipe (mata uang mengikuti pilihan di atas; hanya field {addForm.currency} yang bisa diisi):</p>
-                      <div className="flex flex-wrap gap-2">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource(addForm.currency, addForm.single_price || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const isEditable = addForm.currency === curKey;
-                          return (
-                            <div key={curKey} className="flex items-center gap-1">
-                              <span className="text-slate-500 text-xs">{curKey}{!isEditable && ' (konversi)'}</span>
-                              <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
-                                readOnly={!isEditable}
-                                onChange={isEditable ? (e) => setAddForm((f) => ({ ...f, single_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                className={`w-24 border rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 ${isEditable ? 'border-slate-200 bg-white' : 'bg-slate-100 text-slate-600 cursor-not-allowed'}`}
-                                placeholder="0" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-lg border border-slate-200 overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="text-left py-1.5 px-2 font-medium text-slate-600">Tipe</th>
-                        <th className="text-center py-1.5 px-2 font-medium text-slate-600 w-16">Jml</th>
-                        <th className="text-right py-1.5 px-2 font-medium text-slate-600">Harga</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ROOM_TYPES.map((rt) => (
-                        <tr key={rt} className="border-b border-slate-100 last:border-0">
-                          <td className="py-1 px-2 capitalize text-slate-700">{rt}</td>
-                          <td className="py-1 px-2">
-                            <input type="number" min={0} value={addForm.rooms[rt].quantity || ''}
-                              onChange={(e) => setAddForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], quantity: Number(e.target.value) || 0 } } }))}
-                              className="w-full text-center border border-slate-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-emerald-500" placeholder="0" />
-                          </td>
-                          <td className="py-1 px-2">
-                            {addForm.pricing_mode === 'per_type' ? (
-                              <div className="flex items-center gap-0.5 justify-end">
-                                <span className="text-slate-500 text-xs shrink-0">{curr.symbol}</span>
-                                <input type="number" min={0} value={addForm.rooms[rt].price || ''}
-                                  onChange={(e) => setAddForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } } }))}
-                                  className="w-20 text-right border border-slate-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-emerald-500" placeholder="0" />
-                              </div>
-                            ) : (
-                              <span className="text-slate-500 text-xs">{formatAmount(addForm.single_price || 0)}</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex items-center gap-4 py-2 px-3 rounded-lg bg-emerald-50 border border-emerald-100 text-xs">
-                  <span><span className="text-slate-600">Total kamar: </span><span className="font-semibold text-slate-900">{ROOM_TYPES.reduce((s, rt) => s + addForm.rooms[rt].quantity, 0)}</span></span>
-                  <span><span className="text-slate-600">Total: </span><span className="font-semibold text-emerald-700">
-                    {addForm.pricing_mode === 'single' ? formatAmount(ROOM_TYPES.reduce((s, rt) => s + addForm.rooms[rt].quantity, 0) * addForm.single_price)
-                      : formatAmount(ROOM_TYPES.reduce((s, rt) => s + addForm.rooms[rt].quantity * addForm.rooms[rt].price, 0))}
-                  </span></span>
                 </div>
               </div>
             </div>
             )}
 
             {/* Footer */}
-            <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-white">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
               <Button variant="outline" size="sm" onClick={() => (setShowAddModal(false), setEditingHotel(null))} disabled={saving || editFormLoading}>Batal</Button>
-              <Button variant="primary" size="sm" onClick={editingHotel ? handleEditHotel : handleAddHotel} disabled={saving || editFormLoading} className="min-w-[100px]">{saving ? 'Menyimpan...' : editingHotel ? 'Simpan Perubahan' : 'Simpan'}</Button>
+              <Button variant="primary" size="sm" onClick={editingHotel ? handleEditHotel : handleAddHotel} disabled={saving || editFormLoading} className="min-w-[120px]">{saving ? 'Menyimpan...' : editingHotel ? 'Simpan Perubahan' : 'Simpan'}</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Pengaturan Jumlah: tambah/kurangi jumlah kamar (bisa saat full maupun available) */}
-      {quantityModalHotel && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !quantityFormSaving && !quantityFormLoading && setQuantityModalHotel(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/50">
-              <h2 className="text-base font-bold text-slate-900">Pengaturan Jumlah Kamar ΓÇö {quantityModalHotel.name}</h2>
-              <button type="button" onClick={() => !quantityFormSaving && !quantityFormLoading && setQuantityModalHotel(null)} className="p-1.5 hover:bg-slate-200 rounded-lg"><XCircle className="w-5 h-5 text-slate-500" /></button>
-            </div>
-            <div className="p-4">
-              <p className="text-sm text-slate-600 mb-4">Jumlah kamar bisa ditambah baik saat status <strong>Penuh</strong> maupun <strong>Tersedia</strong>. Untuk ketersediaan per tanggal (realtime), atur juga di Data per Musim.</p>
-              {quantityFormLoading ? (
-                <p className="text-slate-500 text-sm">MemuatΓÇª</p>
-              ) : (
-                <>
-                  <div className="space-y-3">
-                    {ROOM_TYPES.map((rt) => (
-                      <div key={rt} className="flex items-center gap-3">
-                        <span className="capitalize w-20 text-sm font-medium text-slate-700">{rt}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={quantityForm[rt] ?? ''}
-                          onChange={(e) => setQuantityForm((prev) => ({ ...prev, [rt]: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                          className="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                        />
-                        <span className="text-slate-500 text-xs">kamar</span>
+      {/* Modal Pengaturan Jumlah: jumlah kamar + Harga Kamar, Harga Makan, Mata uang */}
+      {quantityModalHotel && (() => {
+        const qCurr = CURRENCIES.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCIES[0];
+        const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
+        const pf = quantityModalPriceForm;
+        const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !quantityFormSaving && !quantityFormLoading && setQuantityModalHotel(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-emerald-600">
+                    <Settings className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Pengaturan Jumlah Kamar</h2>
+                    <p className="text-sm text-slate-600 mt-0.5">{quantityModalHotel.name}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => !quantityFormSaving && !quantityFormLoading && setQuantityModalHotel(null)} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
+                  <XCircle className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1">
+                {quantityFormLoading ? (
+                  <div className="py-12 text-center text-slate-500">Memuat data…</div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Section: Jumlah kamar per tipe */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          <Bed className="w-4 h-4 text-emerald-600" />
+                          Jumlah kamar per tipe
+                        </h3>
+                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">
+                          Total: {totalRooms} kamar
+                        </span>
                       </div>
-                    ))}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                        {ROOM_TYPES.map((rt) => (
+                          <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide capitalize mb-1.5">{rt}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={quantityForm[rt] ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
+                              }}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              placeholder="0"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Section: Mata uang & Harga */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Mata uang + Harga Makan */}
+                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                        <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan</h3>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-1.5">Mata uang input</label>
+                          <select
+                            value={pf.currency}
+                            onChange={(e) => {
+                              const newCur = e.target.value as 'IDR' | 'SAR' | 'USD';
+                              const tripleMeal = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
+                              const tripleSingle = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
+                              setQuantityModalPriceForm((f) => ({
+                                ...f,
+                                currency: newCur,
+                                meal_price: newCur === 'IDR' ? tripleMeal.idr : newCur === 'SAR' ? tripleMeal.sar : tripleMeal.usd,
+                                single_price: newCur === 'IDR' ? tripleSingle.idr : newCur === 'SAR' ? tripleSingle.sar : tripleSingle.usd
+                              }));
+                            }}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          >
+                            {CURRENCIES.map((c) => (
+                              <option key={c.id} value={c.id}>{c.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-2">Harga Makan per Kamar</label>
+                          <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
+                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
+                          </div>
+                          <div className="flex gap-3">
+                            {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
+                              const triple = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
+                              const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
+                              const isEditable = pf.currency === curKey;
+                              return (
+                                <div key={curKey} className="flex-1 min-w-0">
+                                  <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
+                                  <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
+                                    readOnly={!isEditable}
+                                    onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, meal_price: parseFloat(e.target.value) || 0 })) : undefined}
+                                    className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Harga Kamar */}
+                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                        <h3 className="text-sm font-semibold text-slate-800">Harga Kamar</h3>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-2">Satuan</label>
+                          <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
+                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_day' }))}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_lasten' }))}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_lasten' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per lasten</button>
+                          </div>
+                          <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
+                          <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
+                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'single' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Satu harga</button>
+                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
+                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'per_type' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per tipe</button>
+                          </div>
+                        </div>
+                        {pf.pricing_mode === 'single' && (
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-2">Satu harga untuk semua tipe</label>
+                            <div className="flex gap-3">
+                              {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
+                                const triple = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
+                                const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
+                                const isEditable = pf.currency === curKey;
+                                return (
+                                  <div key={curKey} className="flex-1 min-w-0">
+                                    <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
+                                    <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
+                                      readOnly={!isEditable}
+                                      onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, single_price: parseFloat(e.target.value) || 0 })) : undefined}
+                                      className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tabel ringkasan */}
+                    <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                        <h3 className="text-sm font-semibold text-slate-800">Ringkasan per tipe kamar</h3>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-100/80 border-b border-slate-200">
+                            <th className="text-left py-3 px-4 font-medium text-slate-600">Tipe</th>
+                            <th className="text-center py-3 px-4 font-medium text-slate-600">Jumlah</th>
+                            <th className="text-right py-3 px-4 font-medium text-slate-600">Harga (room only)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ROOM_TYPES.map((rt) => (
+                            <tr key={rt} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                              <td className="py-3 px-4 capitalize font-medium text-slate-800">{rt}</td>
+                              <td className="py-3 px-4 text-center text-slate-700">{Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0)}</td>
+                              <td className="py-3 px-4 text-right">
+                                {pf.pricing_mode === 'per_type' ? (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
+                                    <input type="number" min={0} value={pf.rooms[rt].price || ''}
+                                      onChange={(e) => setQuantityModalPriceForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } } }))}
+                                      className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-700 font-medium">{qFormatAmount(pf.single_price || 0)}</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Footer actions */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                      <p className="text-xs text-slate-500">Ketersediaan per tanggal: atur di <strong>Data per Musim</strong>.</p>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm"
+                          onClick={() => {
+                            setQuantityModalHotel(null);
+                            setSeasonsModalHotel(quantityModalHotel);
+                            setSeasonForm({ name: '', start_date: '', end_date: '' });
+                            setEditingSeasonId(null);
+                            setInventoryForSeason(null);
+                            adminPusatApi.listSeasons(quantityModalHotel.id).then((r) => setSeasonsList((r.data as { data?: HotelSeason[] })?.data ?? [])).catch(() => setSeasonsList([]));
+                          }}
+                        >
+                          Data per Musim
+                        </Button>
+                        <Button size="sm" disabled={quantityFormSaving} onClick={handleSaveQuantity}>
+                          {quantityFormSaving ? 'Menyimpan…' : 'Simpan Jumlah & Harga'}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-500">Total: <strong>{ROOM_TYPES.reduce((s, rt) => s + (quantityForm[rt] ?? 0), 0)}</strong> kamar</p>
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    <Button size="sm" disabled={quantityFormSaving} onClick={handleSaveQuantity}>
-                      {quantityFormSaving ? 'Menyimpan...' : 'Simpan Jumlah'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setQuantityModalHotel(null);
-                        setSeasonsModalHotel(quantityModalHotel);
-                        setSeasonForm({ name: '', start_date: '', end_date: '' });
-                        setEditingSeasonId(null);
-                        setInventoryForSeason(null);
-                        adminPusatApi.listSeasons(quantityModalHotel.id).then((r) => setSeasonsList((r.data as { data?: HotelSeason[] })?.data ?? [])).catch(() => setSeasonsList([]));
-                      }}
-                    >
-                      Data per Musim
-                    </Button>
-                  </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Modal Data per Musim (admin pusat): musim + inventori kamar per tanggal ΓåÆ availability realtime */}
+      {/* Modal Data per Musim: musim + inventori kamar per tanggal → availability realtime */}
       {seasonsModalHotel && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !seasonSaving && !inventorySaving && setSeasonsModalHotel(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50/50">
-              <h2 className="text-base font-bold text-slate-900">Data per Musim ΓÇö {seasonsModalHotel.name}</h2>
-              <button type="button" onClick={() => !seasonSaving && !inventorySaving && setSeasonsModalHotel(null)} className="p-1.5 hover:bg-slate-200 rounded-lg"><XCircle className="w-5 h-5 text-slate-500" /></button>
-            </div>
-            <div className="p-4 overflow-y-auto flex-1">
-              <p className="text-sm text-slate-600 mb-4">Atur musim (periode tanggal) dan jumlah kamar per tipe. Availability per tanggal dihitung otomatis dari order (realtime).</p>
-              {inventoryForSeason ? (
-                <div>
-                  <button type="button" onClick={() => setInventoryForSeason(null)} className="text-sm text-emerald-600 hover:underline mb-2">ΓåÉ Kembali ke daftar musim</button>
-                  <h3 className="font-medium text-slate-800 mb-2">Inventori: {inventoryForSeason.seasonName}</h3>
-                  <div className="space-y-2">
-                    {ROOM_TYPES.map((rt) => (
-                      <div key={rt} className="flex items-center gap-2">
-                        <span className="capitalize w-20 text-sm text-slate-700">{rt}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={inventoryInputs[rt] !== undefined && inventoryInputs[rt] !== null ? inventoryInputs[rt] : String(inventoryRows.find((r) => r.room_type === rt)?.total_rooms ?? 0)}
-                          onChange={(e) => setInventoryInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
-                          onBlur={() => {
-                            const raw = inventoryInputs[rt];
-                            const n = raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0);
-                            setInventoryRows((prev) => prev.map((r) => r.room_type === rt ? { ...r, total_rooms: n } : r));
-                            setInventoryInputs((prev) => ({ ...prev, [rt]: String(n) }));
-                          }}
-                          className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
-                        />
-                        <span className="text-slate-500 text-xs">kamar</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button className="mt-3" size="sm" disabled={inventorySaving} onClick={async () => {
-                    if (!seasonsModalHotel || !inventoryForSeason) return;
-                    setInventorySaving(true);
-                    try {
-                      const list = ROOM_TYPES.map((rt) => {
-                        const raw = inventoryInputs[rt];
-                        const total_rooms = raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0);
-                        return { room_type: rt, total_rooms };
-                      });
-                      await adminPusatApi.setSeasonInventory(seasonsModalHotel.id, inventoryForSeason.seasonId, { inventory: list });
-                      showToast('Inventori disimpan', 'success');
-                      const res = await adminPusatApi.listSeasons(seasonsModalHotel.id);
-                      setSeasonsList((res.data as { data?: HotelSeason[] })?.data ?? []);
-                      setInventoryForSeason(null);
-                    } catch (err: unknown) {
-                      const e = err as { response?: { data?: { message?: string } } };
-                      showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
-                    } finally {
-                      setInventorySaving(false);
-                    }
-                  }}>{inventorySaving ? 'Menyimpan...' : 'Simpan Inventori'}</Button>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-emerald-600">
+                  <Calendar className="w-5 h-5" />
                 </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <input placeholder="Nama musim" value={seasonForm.name} onChange={(e) => setSeasonForm((f) => ({ ...f, name: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-40" />
-                    <input type="date" value={seasonForm.start_date} onChange={(e) => setSeasonForm((f) => ({ ...f, start_date: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                    <span className="self-center text-slate-500">s/d</span>
-                    <input type="date" value={seasonForm.end_date} onChange={(e) => setSeasonForm((f) => ({ ...f, end_date: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                    <Button size="sm" disabled={seasonSaving || !seasonForm.name || !seasonForm.start_date || !seasonForm.end_date} onClick={async () => {
-                      if (!seasonsModalHotel) return;
-                      setSeasonSaving(true);
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Data per Musim</h2>
+                  <p className="text-sm text-slate-600 mt-0.5">{seasonsModalHotel.name}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => !seasonSaving && !inventorySaving && setSeasonsModalHotel(null)} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
+                <XCircle className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              {inventoryForSeason ? (
+                /* View: Atur inventori untuk satu musim */
+                <div className="space-y-5">
+                  <button
+                    type="button"
+                    onClick={() => setInventoryForSeason(null)}
+                    className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Kembali ke daftar musim
+                  </button>
+                  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-slate-800">Inventori kamar</h3>
+                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium">
+                        {inventoryForSeason.seasonName}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-4">Jumlah kamar per tipe untuk periode musim ini. Ketersediaan per tanggal dihitung realtime dari order.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                      {ROOM_TYPES.map((rt) => (
+                        <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide capitalize mb-1.5">{rt}</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={inventoryInputs[rt] !== undefined && inventoryInputs[rt] !== null ? inventoryInputs[rt] : String(inventoryRows.find((r) => r.room_type === rt)?.total_rooms ?? 0)}
+                            onChange={(e) => setInventoryInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
+                            onBlur={() => {
+                              const raw = inventoryInputs[rt];
+                              const n = raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0);
+                              setInventoryRows((prev) => prev.map((r) => r.room_type === rt ? { ...r, total_rooms: n } : r));
+                              setInventoryInputs((prev) => ({ ...prev, [rt]: String(n) }));
+                            }}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            placeholder="0"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <Button className="mt-4" size="sm" disabled={inventorySaving} onClick={async () => {
+                      if (!seasonsModalHotel || !inventoryForSeason) return;
+                      setInventorySaving(true);
                       try {
-                        await adminPusatApi.createSeason(seasonsModalHotel.id, { name: seasonForm.name, start_date: seasonForm.start_date, end_date: seasonForm.end_date });
-                        showToast('Musim ditambah', 'success');
-                        setSeasonForm({ name: '', start_date: '', end_date: '' });
+                        const list = ROOM_TYPES.map((rt) => {
+                          const raw = inventoryInputs[rt];
+                          const total_rooms = raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0);
+                          return { room_type: rt, total_rooms };
+                        });
+                        await adminPusatApi.setSeasonInventory(seasonsModalHotel.id, inventoryForSeason.seasonId, { inventory: list });
+                        showToast('Inventori disimpan', 'success');
                         const res = await adminPusatApi.listSeasons(seasonsModalHotel.id);
                         setSeasonsList((res.data as { data?: HotelSeason[] })?.data ?? []);
+                        setInventoryForSeason(null);
                       } catch (err: unknown) {
                         const e = err as { response?: { data?: { message?: string } } };
-                        showToast(e.response?.data?.message || 'Gagal', 'error');
+                        showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
                       } finally {
-                        setSeasonSaving(false);
+                        setInventorySaving(false);
                       }
-                    }}>{seasonSaving ? '...' : 'Tambah Musim'}</Button>
+                    }}>
+                      {inventorySaving ? 'Menyimpan…' : 'Simpan Inventori'}
+                    </Button>
                   </div>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead><tr className="bg-slate-50 border-b border-slate-200"><th className="text-left py-2 px-3 font-medium text-slate-600">Nama</th><th className="text-left py-2 px-3 font-medium text-slate-600">Periode</th><th className="text-right py-2 px-3 font-medium text-slate-600">Aksi</th></tr></thead>
-                      <tbody>
-                        {seasonsList.map((s) => (
-                          <tr key={s.id} className="border-b border-slate-100">
-                            <td className="py-2 px-3 text-slate-800">{s.name}</td>
-                            <td className="py-2 px-3 text-slate-600">{s.start_date} ΓÇö {s.end_date}</td>
-                            <td className="py-2 px-3 text-right">
-                              <button type="button" className="text-emerald-600 hover:underline text-sm mr-2" onClick={() => { setInventoryForSeason({ seasonId: s.id, seasonName: s.name }); const existing = (s as { RoomInventory?: { room_type: string; total_rooms: number }[] }).RoomInventory ?? []; const rows = ROOM_TYPES.map((rt) => ({ room_type: rt, total_rooms: existing.find((r) => r.room_type === rt)?.total_rooms ?? 0 })); setInventoryRows(rows); setInventoryInputs(ROOM_TYPES.reduce<Record<string, string>>((acc, rt) => { acc[rt] = String(rows.find((r) => r.room_type === rt)?.total_rooms ?? 0); return acc; }, {})); }}>Atur inventori</button>
-                              {canAddHotel && (
-                                <button type="button" className="text-red-600 hover:underline text-sm ml-1" onClick={async () => { if (!window.confirm('Hapus musim ini?')) return; try { await adminPusatApi.deleteSeason(seasonsModalHotel!.id, s.id); setSeasonsList((prev) => prev.filter((x) => x.id !== s.id)); showToast('Musim dihapus', 'success'); } catch (err: unknown) { const e = err as { response?: { data?: { message?: string } } }; showToast(e.response?.data?.message || 'Gagal hapus musim', 'error'); }}}>Hapus</button>
-                              )}
-                            </td>
+                </div>
+              ) : (
+                /* View: Daftar musim + form tambah musim */
+                <>
+                  <p className="text-sm text-slate-600 mb-5">Buat periode musim (tanggal mulai–selesai) lalu atur jumlah kamar per tipe. Ketersediaan per tanggal dihitung otomatis dari order.</p>
+
+                  {/* Form tambah musim */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 mb-6">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-4">Tambah musim baru</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-4">
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Nama musim</label>
+                        <input
+                          placeholder="Contoh: Ramadhan 2026"
+                          value={seasonForm.name}
+                          onChange={(e) => setSeasonForm((f) => ({ ...f, name: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Tanggal mulai</label>
+                        <input
+                          type="date"
+                          value={seasonForm.start_date}
+                          onChange={(e) => setSeasonForm((f) => ({ ...f, start_date: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Tanggal selesai</label>
+                        <input
+                          type="date"
+                          value={seasonForm.end_date}
+                          onChange={(e) => setSeasonForm((f) => ({ ...f, end_date: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Button
+                          size="sm"
+                          className="w-full"
+                          disabled={seasonSaving || !seasonForm.name.trim() || !seasonForm.start_date || !seasonForm.end_date}
+                          onClick={async () => {
+                            if (!seasonsModalHotel) return;
+                            setSeasonSaving(true);
+                            try {
+                              await adminPusatApi.createSeason(seasonsModalHotel.id, { name: seasonForm.name.trim(), start_date: seasonForm.start_date, end_date: seasonForm.end_date });
+                              showToast('Musim ditambah', 'success');
+                              setSeasonForm({ name: '', start_date: '', end_date: '' });
+                              const res = await adminPusatApi.listSeasons(seasonsModalHotel.id);
+                              setSeasonsList((res.data as { data?: HotelSeason[] })?.data ?? []);
+                            } catch (err: unknown) {
+                              const e = err as { response?: { data?: { message?: string } } };
+                              showToast(e.response?.data?.message || 'Gagal menambah musim', 'error');
+                            } finally {
+                              setSeasonSaving(false);
+                            }
+                          }}
+                        >
+                          {seasonSaving ? 'Menambah…' : 'Tambah'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Daftar musim */}
+                  <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <h3 className="text-sm font-semibold text-slate-800">Daftar musim</h3>
+                    </div>
+                    {seasonsList.length === 0 ? (
+                      <div className="py-12 px-4 text-center">
+                        <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                        <p className="text-slate-500 text-sm">Belum ada musim.</p>
+                        <p className="text-slate-400 text-xs mt-1">Isi form di atas lalu klik Tambah untuk membuat musim pertama.</p>
+                      </div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-100/80 border-b border-slate-200">
+                            <th className="text-left py-3 px-4 font-medium text-slate-600">Nama</th>
+                            <th className="text-left py-3 px-4 font-medium text-slate-600">Periode</th>
+                            <th className="text-right py-3 px-4 font-medium text-slate-600">Aksi</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {seasonsList.length === 0 && <p className="py-4 text-center text-slate-500 text-sm">Belum ada musim. Tambah musim dan atur inventori kamar per tipe.</p>}
+                        </thead>
+                        <tbody>
+                          {seasonsList.map((s) => (
+                            <tr key={s.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                              <td className="py-3 px-4 font-medium text-slate-800">{s.name}</td>
+                              <td className="py-3 px-4 text-slate-600">{s.start_date} — {s.end_date}</td>
+                              <td className="py-3 px-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="!py-1.5 !px-3 text-xs"
+                                    onClick={() => {
+                                      setInventoryForSeason({ seasonId: s.id, seasonName: s.name });
+                                      const existing = (s as { RoomInventory?: { room_type: string; total_rooms: number }[] }).RoomInventory ?? [];
+                                      const rows = ROOM_TYPES.map((rt) => ({ room_type: rt, total_rooms: existing.find((r) => r.room_type === rt)?.total_rooms ?? 0 }));
+                                      setInventoryRows(rows);
+                                      setInventoryInputs(ROOM_TYPES.reduce<Record<string, string>>((acc, rt) => { acc[rt] = String(rows.find((r) => r.room_type === rt)?.total_rooms ?? 0); return acc; }, {}));
+                                    }}
+                                  >
+                                    Atur inventori
+                                  </Button>
+                                  {canAddHotel && (
+                                    <button
+                                      type="button"
+                                      className="text-red-600 hover:text-red-700 text-xs font-medium py-1.5 px-2 rounded-lg hover:bg-red-50"
+                                      onClick={async () => {
+                                        if (!window.confirm('Hapus musim ini? Data inventori akan ikut terhapus.')) return;
+                                        try {
+                                          await adminPusatApi.deleteSeason(seasonsModalHotel!.id, s.id);
+                                          setSeasonsList((prev) => prev.filter((x) => x.id !== s.id));
+                                          showToast('Musim dihapus', 'success');
+                                        } catch (err: unknown) {
+                                          const e = err as { response?: { data?: { message?: string } } };
+                                          showToast(e.response?.data?.message || 'Gagal hapus musim', 'error');
+                                        }
+                                      }}
+                                    >
+                                      Hapus
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </>
               )}

@@ -29,6 +29,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { OrderDraftProvider } from '../contexts/OrderDraftContext';
 import { MenuItem, UserRole, ROLE_NAMES } from '../types';
+import ProductDraftBar from '../components/ProductDraftBar';
 import Dropdown from '../components/common/Dropdown';
 import Badge from '../components/common/Badge';
 import MaintenanceBanner from '../components/MaintenanceBanner';
@@ -52,30 +53,27 @@ const menuItems: MenuItem[] = [
     title: 'Products',
     icon: <Package className="w-5 h-5" />,
     path: '/dashboard/products',
-    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'role_invoice_saudi', 'owner']
-  },
-  {
-    title: 'Visa',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/visa',
-    roles: ['super_admin', 'admin_koordinator', 'visa_koordinator']
-  },
-  {
-    title: 'Tiket',
-    icon: <Plane className="w-5 h-5" />,
-    path: '/dashboard/tickets',
-    roles: ['super_admin', 'admin_koordinator', 'tiket_koordinator']
+    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'role_invoice_saudi', 'owner'],
+    children: [
+      { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Daftar Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'visa_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Pekerjaan Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa/pekerjaan', roles: ['super_admin', 'admin_koordinator', 'visa_koordinator'] },
+      { title: 'Daftar Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Pekerjaan Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets/pekerjaan', roles: ['super_admin', 'admin_koordinator', 'tiket_koordinator'] },
+      { title: 'Bus', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_bus', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
+    ]
   },
   {
     title: 'Hotel',
     icon: <Hotel className="w-5 h-5" />,
-    path: '/dashboard/hotels',
+    path: '/dashboard/products/hotel',
     roles: ['super_admin', 'admin_koordinator', 'role_hotel']
   },
   {
     title: 'Bus',
     icon: <Bus className="w-5 h-5" />,
-    path: '/dashboard/bus',
+    path: '/dashboard/products/bus',
     roles: ['super_admin', 'admin_koordinator', 'role_bus']
   },
   {
@@ -158,6 +156,7 @@ const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [expandedMenuPath, setExpandedMenuPath] = useState<string | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -250,14 +249,33 @@ const DashboardLayout: React.FC = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
-  // Filter menu based on user role. Super Admin HANYA akses: Dashboard + Monitoring, Logs, Maintenance, Language, Deploy (tidak ada Invoice, dll)
+  // Filter menu based on user role. For items with children, filter children by role and show parent if any child visible.
   const filteredMenuItems = user
     ? user.role === 'super_admin'
       ? menuItems.filter(item => item.roles.includes('super_admin') && (item.path === '/dashboard' || item.path.startsWith('/dashboard/super-admin') || item.path === '/dashboard/reports'))
-      : menuItems.filter(item => item.roles.includes(user.role))
+      : menuItems.filter((item) => {
+          if (item.children?.length) {
+            const visibleChildren = item.children.filter(c => c.roles.includes(user.role));
+            return visibleChildren.length > 0 || item.roles.includes(user.role);
+          }
+          return item.roles.includes(user.role);
+        }).map((item) => {
+          if (item.children?.length) {
+            return { ...item, children: item.children.filter(c => user && c.roles.includes(user.role)) };
+          }
+          return item;
+        })
     : [];
 
-  const currentPage = filteredMenuItems.find(item => item.path === location.pathname);
+  const currentPage = filteredMenuItems.find(item => item.path === location.pathname)
+    || filteredMenuItems.flatMap(item => item.children || []).find(c => c.path === location.pathname);
+
+  // Auto-expand Products when on a product sub-path
+  useEffect(() => {
+    if (location.pathname.startsWith('/dashboard/products')) {
+      setExpandedMenuPath('/dashboard/products');
+    }
+  }, [location.pathname]);
 
   const userMenuItems = [
     ...(user?.role !== 'super_admin'
@@ -312,29 +330,74 @@ const DashboardLayout: React.FC = () => {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
           {filteredMenuItems.map((item) => {
+            const hasChildren = item.children && item.children.length > 0;
+            const isExpanded = expandedMenuPath === item.path;
+            const isParentActive = location.pathname.startsWith(item.path + '/') || location.pathname === item.path;
+
+            if (hasChildren) {
+              return (
+                <div key={item.path} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => !isCollapsed && setExpandedMenuPath((p) => (p === item.path ? null : item.path))}
+                    className={`w-full flex items-center ${isCollapsed ? 'justify-center px-3' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      isParentActive ? 'bg-white/10 text-primary-200' : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
+                    }`}
+                    title={isCollapsed ? item.title : ''}
+                  >
+                    <span className="text-slate-400">{item.icon}</span>
+                    {!isCollapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.title}</span>
+                        <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </>
+                    )}
+                  </button>
+                  {!isCollapsed && isExpanded && (
+                    <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-white/10 pl-2">
+                      {item.children!.map((child) => {
+                        const isChildActive = location.pathname === child.path;
+                        return (
+                          <button
+                            key={child.path}
+                            type="button"
+                            onClick={() => handleNavigate(child.path)}
+                            className={`w-full flex items-center gap-2 py-2 px-2 rounded-lg text-sm transition-all ${
+                              isChildActive ? 'bg-primary-500 text-white' : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
+                            }`}
+                          >
+                            <span className={isChildActive ? 'text-white' : 'text-slate-400'}>{child.icon}</span>
+                            <span className="flex-1 text-left">{child.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {isCollapsed && (
+                    <div className="fixed ml-20 px-3 py-2 bg-primary-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
+                      {item.title}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             const isActive = location.pathname === item.path;
             return (
               <div key={item.path} className="relative group">
                 <button
+                  type="button"
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center ${isCollapsed ? 'justify-center px-3' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-primary-500 text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
+                    isActive ? 'bg-primary-500 text-white shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
                   }`}
                   title={isCollapsed ? item.title : ''}
                 >
-                  <span className={isActive ? 'text-white' : 'text-slate-400'}>
-                    {item.icon}
-                  </span>
+                  <span className={isActive ? 'text-white' : 'text-slate-400'}>{item.icon}</span>
                   {!isCollapsed && (
                     <>
                       <span className="flex-1 text-left">{item.title}</span>
-                      {item.badge && (
-                        <Badge variant="error" size="sm">
-                          {item.badge}
-                        </Badge>
-                      )}
+                      {item.badge && <Badge variant="error" size="sm">{item.badge}</Badge>}
                       {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
                     </>
                   )}
@@ -397,7 +460,7 @@ const DashboardLayout: React.FC = () => {
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
-    { path: '/dashboard/products', label: 'Paket', icon: Package },
+    { path: '/dashboard/products/packages', label: 'Paket', icon: Package },
     ...(user?.role === 'owner' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
   const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices' || m.path === '/dashboard/products');
@@ -527,6 +590,7 @@ const DashboardLayout: React.FC = () => {
             <Navigate to="/dashboard" replace />
           ) : (
             <OrderDraftProvider>
+              <ProductDraftBar />
               <Outlet />
             </OrderDraftProvider>
           )}

@@ -22,6 +22,7 @@ router.get('/', productController.list);
 router.get('/:id', productController.getById);
 router.get('/:id/price', productController.getPrice);
 router.get('/:id/availability', productController.getAvailability);
+router.get('/:id/hotel-calendar', productController.getHotelCalendar);
 router.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.create);
 router.patch('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ADMIN_KOORDINATOR), productController.update);
 router.delete('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.remove);

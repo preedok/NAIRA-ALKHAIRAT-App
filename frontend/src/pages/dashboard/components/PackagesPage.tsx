@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Package, Plus, Edit, Trash2, XCircle, ShoppingCart } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -34,7 +34,14 @@ interface PackageProduct {
   code: string;
   name: string;
   description?: string | null;
-  meta?: { includes?: string[]; discount_percent?: number; days?: number; currency?: string } | null;
+  meta?: {
+    includes?: string[];
+    discount_percent?: number;
+    days?: number;
+    currency?: string;
+    hotel_makkah_id?: string;
+    hotel_madinah_id?: string;
+  } | null;
   is_active: boolean;
   is_package?: boolean;
   price_general?: number | null;
@@ -45,16 +52,32 @@ interface PackageProduct {
   currency?: string;
 }
 
+/** Hotel option untuk dropdown paket */
+interface HotelOption {
+  id: string;
+  name: string;
+  meta?: { location?: string } | null;
+}
+
 type FormState = {
   name: string;
-  /** Harga paket dalam IDR; sistem otomatis membuat SAR & USD dari kurs */
   price_idr: number;
   days: number;
   discountPercent: number;
   includes: string[];
+  hotel_makkah_id: string;
+  hotel_madinah_id: string;
 };
 
-const emptyForm: FormState = { name: '', price_idr: 0, days: 1, discountPercent: 0, includes: [] };
+const emptyForm: FormState = {
+  name: '',
+  price_idr: 0,
+  days: 1,
+  discountPercent: 0,
+  includes: [],
+  hotel_makkah_id: '',
+  hotel_madinah_id: ''
+};
 
 const PackagesPage: React.FC = () => {
   const { user } = useAuth();
@@ -70,9 +93,25 @@ const PackagesPage: React.FC = () => {
   /** Tampilan input Lama (hari) agar user bisa mengosongkan dan mengubah dari 1 */
   const [daysInput, setDaysInput] = useState('1');
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
+  const [hotels, setHotels] = useState<HotelOption[]>([]);
+  const [hotelsLoading, setHotelsLoading] = useState(false);
 
   const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+
+  useEffect(() => {
+    if (canCreatePackage) {
+      setHotelsLoading(true);
+      productsApi
+        .list({ type: 'hotel', with_prices: 'true', include_inactive: 'false', limit: 500 })
+        .then((res) => {
+          const data = (res.data?.data as HotelOption[]) ?? [];
+          setHotels(data);
+        })
+        .catch(() => setHotels([]))
+        .finally(() => setHotelsLoading(false));
+    }
+  }, [canCreatePackage]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -114,6 +153,9 @@ const PackagesPage: React.FC = () => {
     fetchPackages();
   }, [fetchPackages]);
 
+  const hotelsMakkah = useMemo(() => hotels.filter((h) => (h.meta?.location ?? '').toLowerCase() === 'makkah'), [hotels]);
+  const hotelsMadinah = useMemo(() => hotels.filter((h) => (h.meta?.location ?? '').toLowerCase() === 'madinah'), [hotels]);
+
   const stats = [
     { label: 'Total Paket', value: pagination?.total ?? packages.length, color: 'from-blue-500 to-cyan-500' },
     { label: 'Aktif', value: packages.filter((p) => p.is_active).length, color: 'from-emerald-500 to-teal-500' },
@@ -124,6 +166,8 @@ const PackagesPage: React.FC = () => {
     { id: 'code', label: 'Kode', align: 'left', sortable: true, sortKey: 'code' },
     { id: 'name', label: 'Nama Paket', align: 'left', sortable: true },
     { id: 'days', label: 'Hari', align: 'center' },
+    { id: 'hotel_makkah', label: 'Hotel Mekkah', align: 'left' },
+    { id: 'hotel_madinah', label: 'Hotel Madinah', align: 'left' },
     { id: 'price_idr', label: 'Harga (IDR)', align: 'right' },
     { id: 'price_sar', label: 'Harga (SAR)', align: 'right' },
     { id: 'price_usd', label: 'Harga (USD)', align: 'right' },
@@ -146,10 +190,16 @@ const PackagesPage: React.FC = () => {
   };
 
   const toggleInclude = (id: string) => {
-    setForm((f) => ({
-      ...f,
-      includes: f.includes.includes(id) ? f.includes.filter((x) => x !== id) : [...f.includes, id]
-    }));
+    setForm((f) => {
+      const willRemove = f.includes.includes(id);
+      const nextIncludes = willRemove ? f.includes.filter((x) => x !== id) : [...f.includes, id];
+      const next: FormState = { ...f, includes: nextIncludes };
+      if (id === 'hotel' && willRemove) {
+        next.hotel_makkah_id = '';
+        next.hotel_madinah_id = '';
+      }
+      return next;
+    });
   };
 
   const openAdd = () => {
@@ -161,7 +211,7 @@ const PackagesPage: React.FC = () => {
 
   const openEdit = (pkg: PackageProduct) => {
     setEditingPackage(pkg);
-    const meta = pkg.meta as { includes?: string[]; discount_percent?: number; days?: number; currency?: string } | undefined;
+    const meta = pkg.meta as PackageProduct['meta'];
     const days = Number(meta?.days ?? 1);
     let priceIdr = pkg.price_general_idr ?? 0;
     const priceSar = pkg.price_general_sar ?? 0;
@@ -181,7 +231,9 @@ const PackagesPage: React.FC = () => {
       price_idr: priceIdr,
       days,
       discountPercent: Number(meta?.discount_percent ?? 0),
-      includes: meta?.includes ?? []
+      includes: meta?.includes ?? [],
+      hotel_makkah_id: meta?.hotel_makkah_id ?? '',
+      hotel_madinah_id: meta?.hotel_madinah_id ?? ''
     });
     setDaysInput(days >= 1 ? String(days) : '1');
     setShowModal(true);
@@ -201,6 +253,10 @@ const PackagesPage: React.FC = () => {
       showToast('Nama paket wajib', 'error');
       return;
     }
+    if (form.includes.includes('hotel') && !form.hotel_makkah_id && !form.hotel_madinah_id) {
+      showToast('Jika memilih Hotel di Include, pilih minimal Hotel Mekkah atau Hotel Madinah', 'error');
+      return;
+    }
     const parsedDays = parseInt(daysInput.trim(), 10);
     const days = (Number.isNaN(parsedDays) || parsedDays < 1) ? 1 : parsedDays;
     const triplePrice = fillFromSource('IDR', form.price_idr || 0, currencyRates);
@@ -210,7 +266,9 @@ const PackagesPage: React.FC = () => {
       const meta = {
         includes: form.includes,
         days,
-        ...(editingPackage ? { discount_percent: form.discountPercent } : {})
+        ...(editingPackage ? { discount_percent: form.discountPercent } : {}),
+        ...(form.hotel_makkah_id ? { hotel_makkah_id: form.hotel_makkah_id } : {}),
+        ...(form.hotel_madinah_id ? { hotel_madinah_id: form.hotel_madinah_id } : {})
       };
       if (editingPackage) {
         await productsApi.update(editingPackage.id, {
@@ -367,6 +425,9 @@ const PackagesPage: React.FC = () => {
             const basePriceIdr = Number(priceIdr) || 0;
             const priceAfterIdr = discountPercent > 0 ? getPriceAfterDiscount(basePriceIdr, discountPercent) : null;
             const includesList = (pkg.meta?.includes as string[] | undefined) ?? [];
+            const pkgMeta = pkg.meta as PackageProduct['meta'];
+            const hotelMakkahName = pkgMeta?.hotel_makkah_id ? (hotels.find((h) => h.id === pkgMeta.hotel_makkah_id)?.name ?? '-') : '-';
+            const hotelMadinahName = pkgMeta?.hotel_madinah_id ? (hotels.find((h) => h.id === pkgMeta.hotel_madinah_id)?.name ?? '-') : '-';
             return (
               <tr key={pkg.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-b-0">
                 <td className="px-4 py-3 text-sm font-mono text-slate-600 whitespace-nowrap">{pkg.code || '-'}</td>
@@ -374,6 +435,8 @@ const PackagesPage: React.FC = () => {
                   <span className="font-semibold text-slate-900">{pkg.name}</span>
                 </td>
                 <td className="px-4 py-3 text-center text-slate-700 whitespace-nowrap">{days} hari</td>
+                <td className="px-4 py-3 text-sm text-slate-700">{hotelMakkahName}</td>
+                <td className="px-4 py-3 text-sm text-slate-700">{hotelMadinahName}</td>
                 <td className="px-4 py-3 text-right text-slate-800 whitespace-nowrap tabular-nums">
                   {priceIdr != null && Number(priceIdr) > 0 ? formatPrice(Number(priceIdr), 'IDR') : '-'}
                 </td>
@@ -465,28 +528,86 @@ const PackagesPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Lama (hari) *</label>
-                <p className="text-xs text-slate-500 mb-1">Harga di bawah adalah total untuk seluruh hari (bukan per hari)</p>
-                <input
-                  type="number"
-                  min={1}
-                  value={daysInput}
-                  onChange={(e) => setDaysInput(e.target.value)}
-                  onBlur={() => {
-                    const v = parseInt(daysInput.trim(), 10);
-                    const norm = (Number.isNaN(v) || v < 1) ? 1 : v;
-                    setForm((f) => ({ ...f, days: norm }));
-                    setDaysInput(String(norm));
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="9"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-2">Include – pilih yang termasuk (klik untuk pilih)</label>
+                <div className="flex flex-wrap gap-2">
+                  {INCLUDE_OPTIONS.map((opt) => {
+                    const selected = form.includes.includes(opt.id);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => toggleInclude(opt.id)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          selected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-slate-500 mt-1.5">Jika pilih Hotel, isi hotel Mekkah & Madinah di bawah.</p>
               </div>
+              {canCreatePackage && form.includes.includes('hotel') && (
+                <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+                  <p className="text-sm font-medium text-emerald-800">Hotel yang termasuk dalam paket</p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Hotel Mekkah</label>
+                    <select
+                      value={form.hotel_makkah_id}
+                      onChange={(e) => setForm((f) => ({ ...f, hotel_makkah_id: e.target.value }))}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                    >
+                      <option value="">-- Pilih hotel Mekkah --</option>
+                      {hotelsMakkah.map((h) => (
+                        <option key={h.id} value={h.id}>{h.name}</option>
+                      ))}
+                      {hotelsLoading && hotelsMakkah.length === 0 && <option value="">Memuat...</option>}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Hotel Madinah</label>
+                    <select
+                      value={form.hotel_madinah_id}
+                      onChange={(e) => setForm((f) => ({ ...f, hotel_madinah_id: e.target.value }))}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                    >
+                      <option value="">-- Pilih hotel Madinah --</option>
+                      {hotelsMadinah.map((h) => (
+                        <option key={h.id} value={h.id}>{h.name}</option>
+                      ))}
+                      {hotelsLoading && hotelsMadinah.length === 0 && <option value="">Memuat...</option>}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {canCreatePackage && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Lama (hari) *</label>
+                    <p className="text-xs text-slate-500 mb-1">Contoh: 9 hari = paket 9 hari full. Harga di bawah adalah total untuk lama hari ini per jamaah.</p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={daysInput}
+                      onChange={(e) => setDaysInput(e.target.value)}
+                      onBlur={() => {
+                        const v = parseInt(daysInput.trim(), 10);
+                        const norm = (Number.isNaN(v) || v < 1) ? 1 : v;
+                        setForm((f) => ({ ...f, days: norm }));
+                        setDaysInput(String(norm));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="9"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Harga (IDR) – total untuk {(() => { const v = parseInt(daysInput.trim(), 10); return (Number.isNaN(v) || v < 1) ? 1 : v; })()} hari
+                  Harga (IDR) – total {(() => { const v = parseInt(daysInput.trim(), 10); return (Number.isNaN(v) || v < 1) ? 1 : v; })()} hari full per jamaah
                 </label>
-                <p className="text-xs text-slate-500 mb-2">Isi harga dalam Rupiah. Sistem otomatis membuat harga SAR dan USD dari kurs.</p>
+                <p className="text-xs text-slate-500 mb-2">Harga sesuai lama hari di atas (mis. 9 hari = harga paket 9 hari full per jamaah). Isi dalam Rupiah. Sistem otomatis membuat SAR & USD dari kurs.</p>
                 <input
                   type="number"
                   min={0}
@@ -530,26 +651,6 @@ const PackagesPage: React.FC = () => {
                   )}
                 </>
               )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Include – pilih yang termasuk (klik untuk pilih)</label>
-                <div className="flex flex-wrap gap-2">
-                  {INCLUDE_OPTIONS.map((opt) => {
-                    const selected = form.includes.includes(opt.id);
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => toggleInclude(opt.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          selected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
               <div className="flex gap-2 pt-4">
                 <Button variant="outline" onClick={closeModal} disabled={saving}>Batal</Button>
                 <Button variant="primary" onClick={handleSubmit} disabled={saving}>

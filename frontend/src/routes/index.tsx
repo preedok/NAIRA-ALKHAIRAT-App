@@ -10,10 +10,14 @@ import SuperAdminDashboard from '../pages/dashboard/roles/SuperAdminDashboard';
 import SuperAdminLogsPage from '../pages/dashboard/superadmin/SuperAdminLogsPage';
 import SuperAdminMaintenancePage from '../pages/dashboard/superadmin/SuperAdminMaintenancePage';
 import ProductsPage from '../pages/dashboard/components/ProductsPage';
+import ProductHotelPage from '../pages/dashboard/components/ProductHotelPage';
 import VisaPage from '../pages/dashboard/components/VisaPage';
+import VisaWorkPage from '../pages/dashboard/components/VisaWorkPage';
 import TicketsPage from '../pages/dashboard/components/TicketsPage';
+import TicketWorkPage from '../pages/dashboard/components/TicketWorkPage';
 import HotelsPage from '../pages/dashboard/components/HotelsPage';
 import BusPage from '../pages/dashboard/components/BusPage';
+import PackagesPage from '../pages/dashboard/components/PackagesPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
 import BranchesPage from '../pages/dashboard/components/BranchesPage';
@@ -83,31 +87,59 @@ const router = createBrowserRouter([
           },
           {
             path: 'products',
-            element: <ProductsPage />
+            element: <Navigate to="/dashboard/products/hotel" replace />
+          },
+          {
+            path: 'products/hotel',
+            element: <ProductHotelPage />
+          },
+          {
+            path: 'products/visa',
+            element: <VisaPage embedInProducts />
+          },
+          {
+            path: 'products/visa/pekerjaan',
+            element: <VisaWorkPage />
+          },
+          {
+            path: 'products/tickets',
+            element: <TicketsPage embedInProducts />
+          },
+          {
+            path: 'products/tickets/pekerjaan',
+            element: <TicketWorkPage />
+          },
+          {
+            path: 'products/bus',
+            element: <BusPage embedInProducts />
+          },
+          {
+            path: 'products/packages',
+            element: <PackagesPage />
           },
           {
             path: 'hotels',
-            element: <HotelsPage />
+            element: <Navigate to="/dashboard/products/hotel" replace />
           },
           {
             path: 'visa',
-            element: <VisaPage />
+            element: <Navigate to="/dashboard/products/visa" replace />
           },
           {
             path: 'tickets',
-            element: <TicketsPage />
+            element: <Navigate to="/dashboard/products/tickets" replace />
           },
           {
             path: 'bus',
-            element: <BusPage />
+            element: <Navigate to="/dashboard/products/bus" replace />
           },
           {
             path: 'handling',
-            element: <Navigate to="/dashboard/products?tab=hotels" replace />
+            element: <Navigate to="/dashboard/products/hotel" replace />
           },
           {
             path: 'packages',
-            element: <Navigate to="/dashboard/products?tab=packages" replace />
+            element: <Navigate to="/dashboard/products/packages" replace />
           },
           // Invoice: satu menu untuk semua role. Data sesuai hak akses. Tambah/Edit/Hapus invoice hanya owner & invoice_koordinator.
           {
