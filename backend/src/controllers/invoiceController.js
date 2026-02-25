@@ -175,7 +175,7 @@ const list = asyncHandler(async (req, res) => {
     include: [
       orderInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }
     ],
     order: orderBy,
@@ -262,6 +262,71 @@ const list = asyncHandler(async (req, res) => {
       by_order_status: byOrderStatus
     }
   });
+});
+
+/**
+ * GET /api/v1/invoices/draft-orders
+ * Mengembalikan order dengan status draft yang belum punya invoice (untuk ditampilkan di daftar invoice).
+ */
+const listDraftOrders = asyncHandler(async (req, res) => {
+  const branchFilter = await resolveBranchFilterList(req.query.branch_id, req.query.provinsi_id, req.query.wilayah_id, req.user);
+  const withInvIds = (await Invoice.findAll({ attributes: ['order_id'], raw: true })).map((r) => r.order_id).filter(Boolean);
+  const orderWhereDraft = { status: 'draft', id: { [Op.notIn]: withInvIds.length ? withInvIds : [null] } };
+  if (req.user.role === 'owner') orderWhereDraft.owner_id = req.user.id;
+  if (Object.keys(branchFilter).length) Object.assign(orderWhereDraft, branchFilter);
+  if (req.user.role === 'role_hotel') {
+    const hotelRows = await OrderItem.findAll({ where: { type: 'hotel' }, attributes: ['order_id'], raw: true });
+    const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))].filter((id) => !withInvIds.includes(id));
+    orderWhereDraft.id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
+  }
+  if (req.user.role === 'role_bus') {
+    const busRows = await OrderItem.findAll({ where: { type: 'bus' }, attributes: ['order_id'], raw: true });
+    const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))].filter((id) => !withInvIds.includes(id));
+    orderWhereDraft.id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
+  }
+  const draftOrderInclude = [
+    { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+    { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
+    {
+      model: OrderItem,
+      as: 'OrderItems',
+      where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
+      required: false,
+      attributes: ['id', 'type', 'quantity'],
+      include: [
+        { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
+        { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] },
+        { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number'] },
+        { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] }
+      ]
+    }
+  ];
+  const draftOrders = await Order.findAll({
+    where: orderWhereDraft,
+    include: draftOrderInclude,
+    order: [['created_at', 'DESC']]
+  });
+  const data = draftOrders.map((ord) => {
+    const plain = ord.get ? ord.get({ plain: true }) : ord;
+    const total = parseFloat(plain.total_amount) || 0;
+    return {
+      id: `draft-${plain.id}`,
+      order_id: plain.id,
+      status: 'draft',
+      invoice_number: null,
+      issued_at: plain.created_at,
+      created_at: plain.created_at,
+      total_amount: total,
+      paid_amount: 0,
+      remaining_amount: total,
+      Order: { ...plain, OrderItems: plain.OrderItems || [] },
+      User: plain.User,
+      Branch: plain.Branch,
+      PaymentProofs: [],
+      is_draft_order: true
+    };
+  });
+  res.json({ success: true, data });
 });
 
 /**
@@ -495,11 +560,17 @@ async function createInvoiceForOrder(order, opts = {}) {
   return invoice;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * GET /api/v1/invoices/:id
  */
 const getById = asyncHandler(async (req, res) => {
-  const invoice = await Invoice.findByPk(req.params.id, {
+  const id = req.params.id;
+  if (!id || !UUID_REGEX.test(id)) {
+    return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  }
+  const invoice = await Invoice.findByPk(id, {
     include: [
       { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: VisaProgress, as: 'VisaProgress', required: false }, { model: TicketProgress, as: 'TicketProgress', required: false }, { model: HotelProgress, as: 'HotelProgress', required: false }, { model: BusProgress, as: 'BusProgress', required: false }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
@@ -1054,6 +1125,7 @@ const getReleasable = asyncHandler(async (req, res) => {
 
 module.exports = {
   list,
+  listDraftOrders,
   getSummary,
   create,
   createInvoiceForOrder,

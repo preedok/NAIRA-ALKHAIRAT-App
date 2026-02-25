@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -107,13 +107,16 @@ const OrdersInvoicesPage: React.FC = () => {
   const [reallocateSubmitting, setReallocateSubmitting] = useState(false);
   const [reallocateInvoiceList, setReallocateInvoiceList] = useState<any[]>([]);
   const [reallocateListLoading, setReallocateListLoading] = useState(false);
+  const [draftOrders, setDraftOrders] = useState<any[]>([]);
+  const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
 
   const isAdminPusat = user?.role === 'admin_pusat';
   const canReallocate = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'].includes(user?.role || '');
   const isAccounting = user?.role === 'role_accounting';
   const isInvoiceSaudi = user?.role === 'role_invoice_saudi';
+  const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
   const canPayInvoice = (inv: any) => {
-    if (!inv || parseFloat(inv.remaining_amount || 0) <= 0) return false;
+    if (!inv || isDraftRow(inv) || parseFloat(inv.remaining_amount || 0) <= 0) return false;
     return inv.owner_id === user?.id || ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   };
 
@@ -187,13 +190,13 @@ const OrdersInvoicesPage: React.FC = () => {
     setLoading(true);
     try {
       const params = buildListParams();
-      const res = await invoicesApi.list(params);
-      if (res.data.success) {
-        const data = res.data.data || [];
+      const listRes = await invoicesApi.list(params);
+      if (listRes.data.success) {
+        const data = listRes.data.data || [];
         setInvoices(data);
-        const pag = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
+        const pag = (listRes.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
         setPagination(pag || (data.length > 0 ? { total: data.length, page: 1, limit: data.length, totalPages: 1 } : null));
-        const summaryPayload = (res.data as { summary?: InvoicesSummaryData }).summary;
+        const summaryPayload = (listRes.data as { summary?: InvoicesSummaryData }).summary;
         if (summaryPayload) setSummary(summaryPayload);
       } else {
         setPagination(null);
@@ -205,6 +208,14 @@ const OrdersInvoicesPage: React.FC = () => {
       setSummary(null);
     } finally {
       setLoading(false);
+    }
+    // Draft orders dipanggil terpisah agar jika gagal (mis. 500) daftar invoice tetap tampil
+    try {
+      const draftRes = await invoicesApi.getDraftOrders({ branch_id: branchId || undefined, wilayah_id: wilayahId || undefined, provinsi_id: provinsiId || undefined });
+      if (draftRes.data.success) setDraftOrders(draftRes.data.data || []);
+      else setDraftOrders([]);
+    } catch {
+      setDraftOrders([]);
     }
   };
 
@@ -245,6 +256,20 @@ const OrdersInvoicesPage: React.FC = () => {
       .catch(() => setOwnerBalance(null))
       .finally(() => setOwnerBalanceLoading(false));
   }, [user?.role]);
+
+  const handleTerbitkanDraft = async (inv: any) => {
+    if (!inv?.order_id || !isDraftRow(inv)) return;
+    setPublishingDraftOrderId(inv.order_id);
+    try {
+      await invoicesApi.create({ order_id: inv.order_id });
+      showToast('Invoice diterbitkan. Pembayaran dapat dilakukan sekarang.', 'success');
+      fetchInvoices();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal menerbitkan invoice', 'error');
+    } finally {
+      setPublishingDraftOrderId(null);
+    }
+  };
 
   const handleDeleteOrder = async (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
@@ -719,10 +744,15 @@ const OrdersInvoicesPage: React.FC = () => {
               setReallocateRows([{ source_invoice_id: '', target_invoice_id: '', amount: '' }]);
               setReallocateNotes('');
               setReallocateListLoading(true);
-              invoicesApi.list({ limit: 300, page: 1 }).then((r) => {
-                if (r.data.success && Array.isArray(r.data.data)) setReallocateInvoiceList(r.data.data);
-                else setReallocateInvoiceList([]);
-              }).catch(() => setReallocateInvoiceList([])).finally(() => setReallocateListLoading(false));
+              const params = { ...buildListParams(), limit: 300, page: 1 };
+              invoicesApi.list(params)
+                .then((r) => {
+                  const raw = r?.data;
+                  const arr = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+                  setReallocateInvoiceList(arr);
+                })
+                .catch(() => setReallocateInvoiceList([]))
+                .finally(() => setReallocateListLoading(false));
             }} className="shrink-0">
               <ArrowRightLeft className="w-5 h-5 mr-2" /> Pemindahan Dana
             </Button>
@@ -895,41 +925,50 @@ const OrdersInvoicesPage: React.FC = () => {
       {loading ? (
         <div className="py-12 text-center text-stone-500">Memuat...</div>
       ) : (
-        <Card className="travel-card">
-          <h2 className="text-lg font-bold text-stone-900 mb-4 flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-primary-600" /> Daftar Invoice ({pagination?.total ?? invoices.length})
-          </h2>
-          <div className="overflow-x-auto rounded-travel">
-            <table className="w-full text-sm">
+        <Card className="travel-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-primary-600" /> Daftar Invoice ({(pagination?.total ?? invoices.length) + draftOrders.length})
+            </h2>
+            <p className="text-xs text-slate-500 hidden sm:block">Geser horizontal jika tabel tidak muat</p>
+          </div>
+          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-sm" style={{ minWidth: 'max-content' }}>
               <thead>
-                <tr className="border-b border-stone-200 text-left text-stone-600 bg-stone-50/80">
-                  <th className="pb-2 pr-4 pt-3 pl-4">No. Invoice</th>
-                  <th className="pb-2 pr-4">Owner</th>
-                  <th className="pb-2 pr-4">Cabang</th>
-                  <th className="pb-2 pr-4 text-right">Total<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
-                  <th className="pb-2 pr-4 text-right">Dibayar<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
-                  <th className="pb-2 pr-4 text-right">Sisa<br /><span className="text-xs font-normal text-stone-400">IDR · SAR · USD</span></th>
-                  <th className="pb-2 pr-4">Status Invoice<br /><span className="text-xs font-normal text-stone-400">% dibayar dari total</span></th>
-                  <th className="pb-2 pr-4">Status Visa<br /><span className="text-xs font-normal text-stone-400">Pekerjaan visa</span></th>
-                  <th className="pb-2 pr-4">Status Tiket<br /><span className="text-xs font-normal text-stone-400">Penerbitan tiket</span></th>
-                  <th className="pb-2 pr-4">Status Hotel<br /><span className="text-xs font-normal text-stone-400">Alokasi kamar</span></th>
-                  <th className="pb-2 pr-4">Status Bus<br /><span className="text-xs font-normal text-stone-400">Tiket bis & perjalanan</span></th>
-                  <th className="pb-2 pr-4">Bukti Bayar<br /><span className="text-xs font-normal text-stone-400">Jumlah (IDR·SAR·USD) + Konfirmasi</span></th>
-                  <th className="pb-2 pr-4">Tgl</th>
-                  <th className="pb-2 pr-4 w-12">Aksi</th>
+                <tr className="border-b border-slate-200 bg-slate-50/95">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[140px]">No. Invoice</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Owner</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Perusahaan</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">Wilayah</th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Total <span className="font-normal normal-case text-slate-400">(IDR·SAR·USD)</span></th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Dibayar <span className="font-normal normal-case text-slate-400">(IDR·SAR·USD)</span></th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Sisa <span className="font-normal normal-case text-slate-400">(IDR·SAR·USD)</span></th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">Status Invoice</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Visa</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Tiket</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Hotel</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px]">Status Bus</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px]">Bukti Bayar</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[100px]">Tgl</th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[80px] sticky right-0 bg-slate-50/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-stone-100 hover:bg-stone-50/60">
-                    <td className="py-3 pl-4 pr-2 font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</td>
-                    <td className="py-3 pr-4">{inv.User?.name || inv.User?.company_name || '-'}</td>
-                    <td className="py-3 pr-4">{inv.Branch?.name || inv.Branch?.code || '-'}</td>
-                    <td className="py-3 pr-4 text-right font-medium">
+                {(page === 1 ? [...draftOrders, ...invoices] : invoices).map((inv) => (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
+                      {isDraftRow(inv) ? `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}` : formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}
+                    </td>
+                    <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name || inv.User?.company_name || '-'}</td>
+                    <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '-'}</td>
+                    <td className="py-3 px-4 text-slate-600 align-top text-xs">
+                      {[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
                       <div>{formatIDR(parseFloat(inv.total_amount || 0))}</div>
                       {(() => { const t = amountTriple(parseFloat(inv.total_amount || 0)); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
                     </td>
-                    <td className="py-3 pr-4 text-right text-emerald-600 font-medium">
+                    <td className="py-3 px-4 text-right text-emerald-600 font-medium align-top">
                       {(() => {
                         const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
@@ -937,7 +976,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div>{formatIDR(paid)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>;
                       })()}
                     </td>
-                    <td className="py-3 pr-4 text-right text-red-600 font-medium">
+                    <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
                       {(() => {
                         const totalInv = parseFloat(inv.total_amount || 0);
                         const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
@@ -947,94 +986,94 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div>{formatIDR(remaining)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>;
                       })()}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-4 align-top">
                       <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
                       {inv.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}
-                      {(() => {
+                      {isDraftRow(inv) ? (
+                        <div className="text-xs text-slate-500 mt-1">Belum diterbitkan — pembayaran belum tersedia</div>
+                      ) : (() => {
                         const total = parseFloat(inv.total_amount || 0);
                         const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
                         const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
-                        return <div className="text-xs text-stone-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>;
+                        return <div className="text-xs text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>;
                       })()}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-4 align-top">
                       {(() => {
                         const visaItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa');
-                        if (visaItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        if (visaItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
                         const statuses = visaItems.map((i: any) => labels[i.VisaProgress?.status] || i.VisaProgress?.status || 'Menunggu');
                         return (
                           <div className="text-xs">
-                            <span className="font-medium text-stone-700">{visaItems.length} item</span>
-                            <div className="mt-0.5 flex flex-wrap gap-1">
+                            <div className="grid grid-cols-2 gap-1">
                               {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
                               ))}
                             </div>
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-4 align-top">
                       {(() => {
                         const ticketItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'ticket');
-                        if (ticketItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        if (ticketItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
                         const statuses = ticketItems.map((i: any) => labels[i.TicketProgress?.status] || i.TicketProgress?.status || 'Menunggu');
                         return (
                           <div className="text-xs">
-                            <span className="font-medium text-stone-700">{ticketItems.length} item</span>
-                            <div className="mt-0.5 flex flex-wrap gap-1">
+                            <div className="grid grid-cols-2 gap-1">
                               {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                                <Badge key={idx} variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
                               ))}
                             </div>
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-4 align-top">
                       {(() => {
                         const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
-                        if (hotelItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
                         const statuses = hotelItems.map((i: any) => labels[i.HotelProgress?.status] || i.HotelProgress?.status || 'Menunggu');
                         return (
                           <div className="text-xs">
-                            <span className="font-medium text-stone-700">{hotelItems.length} item</span>
-                            <div className="mt-0.5 flex flex-wrap gap-1">
+                            <div className="grid grid-cols-2 gap-1">
                               {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Selesai' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                                <Badge key={idx} variant={s === 'Selesai' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
                               ))}
                             </div>
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 px-4 align-top">
                       {(() => {
                         const busItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'bus');
-                        if (busItems.length === 0) return <span className="text-stone-400 text-xs">–</span>;
+                        if (busItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
                         const statuses = busItems.map((i: any) => labels[i.BusProgress?.bus_ticket_status] || i.BusProgress?.bus_ticket_status || 'Pending');
                         return (
                           <div className="text-xs">
-                            <span className="font-medium text-stone-700">{busItems.length} item</span>
-                            <div className="mt-0.5 flex flex-wrap gap-1">
+                            <div className="grid grid-cols-2 gap-1">
                               {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs">{s}</Badge>
+                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
                               ))}
                             </div>
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="py-3 pr-4">
-                      {(inv.PaymentProofs?.length ?? 0) === 0 ? (
-                        <span className="text-stone-400 text-xs">-</span>
+                    <td className="py-3 px-4 align-top">
+                      {isDraftRow(inv) ? (
+                        <span className="text-slate-400 text-xs">Tidak tersedia (belum diterbitkan)</span>
+                      ) : (inv.PaymentProofs?.length ?? 0) === 0 ? (
+                        <span className="text-slate-400 text-xs">–</span>
                       ) : (
-                        <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-1 gap-2 min-w-[160px]">
                           {inv.PaymentProofs?.map((p: any) => {
                             const ps = getProofStatus(p);
                             const amt = parseFloat(p.amount || 0);
@@ -1043,19 +1082,19 @@ const OrdersInvoicesPage: React.FC = () => {
                             const isKesNominal = p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR';
                             const statusLabel = ps.status === 'verified' ? 'Sudah konfirmasi' : ps.status === 'rejected' ? 'Ditolak' : 'Belum konfirmasi';
                             return (
-                              <div key={p.id} className="rounded-lg border border-stone-200 bg-stone-50/80 px-2.5 py-2 text-xs">
-                                <div className="font-semibold text-stone-700">{getProofDisplayLabel(p)}</div>
-                                <div className="text-stone-600 mt-0.5">
+                              <div key={p.id} className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2 text-xs">
+                                <div className="font-semibold text-slate-700 truncate">{getProofDisplayLabel(p)}</div>
+                                <div className="text-slate-600 mt-0.5 truncate">
                                   {isKesNominal ? (
-                                    <><span className="text-stone-500">Nominal:</span> {p.payment_currency === 'SAR' ? formatSAR(Number(p.amount_original)) : formatUSD(Number(p.amount_original))} = {formatIDR(amt)}</>
+                                    <><span className="text-slate-500">Nominal:</span> {p.payment_currency === 'SAR' ? formatSAR(Number(p.amount_original)) : formatUSD(Number(p.amount_original))} = {formatIDR(amt)}</>
                                   ) : (
-                                    <><span className="text-stone-500">IDR:</span> {formatIDR(amt)} · <span className="text-stone-500">SAR:</span> {formatSAR(sar, false)} · <span className="text-stone-500">USD:</span> {formatUSD(usd, false)}</>
+                                    <><span className="text-slate-500">IDR:</span> {formatIDR(amt)} · <span className="text-slate-500">SAR:</span> {formatSAR(sar, false)} · <span className="text-slate-500">USD:</span> {formatUSD(usd, false)}</>
                                   )}
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                   <Badge variant={ps.variant} className="text-xs">{statusLabel}</Badge>
                                   {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
-                                    <span className="text-slate-500">oleh {(p as any).VerifiedBy.name}</span>
+                                    <span className="text-slate-500 truncate">oleh {(p as any).VerifiedBy.name}</span>
                                   )}
                                 </div>
                               </div>
@@ -1064,22 +1103,36 @@ const OrdersInvoicesPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="py-3 pr-4">{formatDate(inv.issued_at || inv.created_at)}</td>
-                    <td className="py-3">
+                    <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
+                    <td className="py-3 px-4 sticky right-0 bg-white hover:bg-slate-50/80 border-l border-slate-100 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                       <div className="flex justify-center">
-                        <ActionsMenu
-                          align="right"
-                          items={[
-                            ...(canOrderAction && inv.order_id
-                              ? [{ id: 'edit-order', label: 'Edit Invoice', icon: <Edit className="w-4 h-4" />, onClick: () => navigate(`/dashboard/orders/${inv.order_id}/edit`) }]
-                              : []),
-                            { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
-                            { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                            ...(canOrderAction && inv.order_id
-                              ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
-                              : []),
-                          ].filter(Boolean) as ActionsMenuItem[]}
-                        />
+                        {isDraftRow(inv) ? (
+                          <ActionsMenu
+                            align="right"
+                            items={[
+                              ...(canOrderAction && inv.order_id
+                                ? [
+                                    { id: 'lanjutkan', label: 'Lanjutkan', icon: <Pencil className="w-4 h-4" />, onClick: () => navigate(`/dashboard/orders/${inv.order_id}/edit`) },
+                                    { id: 'terbitkan', label: 'Terbitkan invoice', icon: <Send className="w-4 h-4" />, onClick: () => handleTerbitkanDraft(inv), disabled: publishingDraftOrderId === inv.order_id },
+                                  ]
+                                : []),
+                            ].filter(Boolean) as ActionsMenuItem[]}
+                          />
+                        ) : (
+                          <ActionsMenu
+                            align="right"
+                            items={[
+                              ...(canOrderAction && inv.order_id
+                                ? [{ id: 'edit-order', label: 'Edit Invoice', icon: <Edit className="w-4 h-4" />, onClick: () => navigate(`/dashboard/orders/${inv.order_id}/edit`) }]
+                                : []),
+                              { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
+                              { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
+                              ...(canOrderAction && inv.order_id
+                                ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
+                                : []),
+                            ].filter(Boolean) as ActionsMenuItem[]}
+                          />
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1087,17 +1140,19 @@ const OrdersInvoicesPage: React.FC = () => {
               </tbody>
             </table>
           </div>
-          {invoices.length === 0 && <p className="text-stone-500 py-6 text-center">Belum ada invoice</p>}
+          {(page === 1 ? draftOrders.length + invoices.length : invoices.length) === 0 && (
+            <p className="text-slate-500 py-8 text-center text-sm">Belum ada invoice</p>
+          )}
           {pagination && pagination.total > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-stone-200 bg-stone-50/50 mt-2 rounded-b-travel">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50 rounded-b-xl">
               <div className="flex items-center gap-3">
-                <span className="text-sm text-stone-600">
-                  Menampilkan {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}-{Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total}
+                <span className="text-sm text-slate-600">
+                  Menampilkan {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–{Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total}
                 </span>
                 <select
                   value={limit}
                   onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
-                  className="px-2 py-1 border border-stone-200 rounded-lg text-stone-700 bg-white text-sm"
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-700 bg-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   {[25, 50, 100, 200, 500].map((n) => (
                     <option key={n} value={n}>{n} per halaman</option>
@@ -1105,8 +1160,8 @@ const OrdersInvoicesPage: React.FC = () => {
                 </select>
               </div>
               <div className="flex gap-1">
-                <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page <= 1} className="p-2 rounded-lg border border-stone-200 bg-white disabled:opacity-50 text-stone-600"><ChevronLeft className="w-4 h-4" /></button>
-                <button type="button" onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={pagination.page >= pagination.totalPages} className="p-2 rounded-lg border border-stone-200 bg-white disabled:opacity-50 text-stone-600"><ChevronRight className="w-4 h-4" /></button>
+                <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page <= 1} className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-50 text-slate-600 hover:bg-slate-50 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+                <button type="button" onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={pagination.page >= pagination.totalPages} className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-50 text-slate-600 hover:bg-slate-50 transition-colors"><ChevronRight className="w-4 h-4" /></button>
               </div>
             </div>
           )}

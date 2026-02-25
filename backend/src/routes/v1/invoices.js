@@ -7,11 +7,13 @@ const { ROLES } = require('../../constants');
 
 router.use(auth);
 
-router.get('/', invoiceController.list);
+// Route statis harus sebelum /:id agar tidak tertangkap sebagai id (e.g. "draft-orders")
 router.get('/summary', invoiceController.getSummary);
+router.get('/reallocations', invoiceController.listReallocations);
+router.get('/draft-orders', invoiceController.listDraftOrders);
+router.get('/', invoiceController.list);
 router.post('/', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
 router.post('/reallocate-payments', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.ADMIN_KOORDINATOR, ROLES.SUPER_ADMIN), invoiceController.reallocatePayments);
-router.get('/reallocations', invoiceController.listReallocations);
 router.get('/:id/pdf', invoiceController.getPdf);
 router.get('/:id/payment-proofs/:proofId/file', paymentProofController.getFile);
 router.get('/:id/releasable', invoiceController.getReleasable);
