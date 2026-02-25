@@ -11,9 +11,10 @@ router.use(auth);
 router.get('/payroll/my-slips', payrollController.listMySlips);
 router.get('/payroll/my-slips/:itemId/slip', payrollController.getMySlipPdf);
 
-// Export laporan keuangan: boleh diakses super_admin, admin_pusat, role_accounting
+// Export laporan keuangan & daftar invoice: boleh diakses super_admin, admin_pusat, role_accounting
 router.get('/export-financial-excel', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), accountingController.exportFinancialExcel);
 router.get('/export-financial-pdf', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), accountingController.exportFinancialPdf);
+router.get('/export-invoices-excel', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), accountingController.exportInvoicesExcel);
 
 router.use(requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING));
 

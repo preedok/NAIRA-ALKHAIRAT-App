@@ -625,6 +625,162 @@ const listInvoices = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/accounting/export-invoices-excel
+ * Export semua data invoice lengkap ke Excel (role accounting). Filter: branch_id, provinsi_id, wilayah_id, owner_id, status, date_from, date_to, invoice_number.
+ */
+const exportInvoicesExcel = asyncHandler(async (req, res) => {
+  const { branch_id, provinsi_id, wilayah_id, owner_id, status, date_from, date_to, invoice_number } = req.query;
+  const where = {};
+  const branchFilter = await resolveBranchFilter(branch_id, provinsi_id, wilayah_id, req.user);
+  if (Object.keys(branchFilter).length) Object.assign(where, branchFilter);
+  if (owner_id) where.owner_id = owner_id;
+  if (status) {
+    const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
+    if (statuses.length) where.status = { [Op.in]: statuses };
+  }
+  if (date_from || date_to) {
+    where.issued_at = where.issued_at || {};
+    if (date_from) where.issued_at[Op.gte] = new Date(date_from);
+    if (date_to) {
+      const d = new Date(date_to);
+      d.setHours(23, 59, 59, 999);
+      where.issued_at[Op.lte] = d;
+    }
+  }
+  if (invoice_number && String(invoice_number).trim()) {
+    where.invoice_number = { [Op.iLike]: `%${String(invoice_number).trim()}%` };
+  }
+
+  const branchIncludeExport = {
+    model: Branch,
+    as: 'Branch',
+    attributes: ['id', 'code', 'name', 'city'],
+    required: false,
+    include: [
+      { model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }
+    ]
+  };
+
+  const invoices = await Invoice.findAll({
+    where,
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      branchIncludeExport,
+      { model: Order, as: 'Order', attributes: ['id', 'order_number', 'status', 'total_amount'], required: false, include: [{ model: OrderItem, as: 'OrderItems', required: false }] },
+      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_currency', 'verified_status', 'payment_location', 'amount_original'] }
+    ],
+    order: [['issued_at', 'DESC'], ['created_at', 'DESC']]
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Bintang Global Group';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Daftar Invoice', { views: [{ state: 'frozen', ySplit: 1 }] });
+  const headers = [
+    'No. Invoice', 'No. Order', 'Tanggal Terbit', 'Jatuh Tempo DP', 'Owner', 'Nama Perusahaan', 'Cabang', 'Kode Cabang',
+    'Wilayah', 'Provinsi', 'Kota', 'Total (IDR)', 'Dibayar (IDR)', 'Sisa (IDR)', 'Status Invoice', 'Status Order',
+    'Diblokir', 'Jumlah Bukti Bayar', 'Detail Bukti Bayar', 'Item Hotel', 'Item Visa', 'Item Tiket', 'Item Bus', 'Catatan'
+  ];
+  sheet.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: i >= 11 && i <= 13 ? 16 : 14 }));
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true };
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7EC' } };
+  headerRow.alignment = { wrapText: true, vertical: 'middle' };
+
+  const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }));
+  const fmtDate = (d) => (!d ? '' : new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }));
+
+  invoices.forEach((inv) => {
+    const j = inv.toJSON ? inv.toJSON() : inv;
+    const order = j.Order || {};
+    const items = order.OrderItems || [];
+    const hotel = items.filter(i => (i.type || '').toLowerCase() === 'hotel').length;
+    const visa = items.filter(i => (i.type || '').toLowerCase() === 'visa').length;
+    const ticket = items.filter(i => (i.type || '').toLowerCase() === 'ticket').length;
+    const bus = items.filter(i => (i.type || '').toLowerCase() === 'bus').length;
+    const proofs = j.PaymentProofs || [];
+    const proofDetail = proofs.map(p => {
+      const amt = parseFloat(p.amount) || 0;
+      const cur = p.payment_currency || 'IDR';
+      const ver = p.verified_status === 'verified' ? '✓' : p.verified_status === 'rejected' ? '✗' : '?';
+      return `${cur} ${fmtNum(amt)} ${ver}`;
+    }).join('; ') || '-';
+    const total = parseFloat(j.total_amount) || 0;
+    const paid = parseFloat(j.paid_amount) || 0;
+    const remaining = parseFloat(j.remaining_amount) != null ? parseFloat(j.remaining_amount) : Math.max(0, total - paid);
+    const wilayahName = j.Branch?.Provinsi?.Wilayah?.name || '';
+    const provinsiName = j.Branch?.Provinsi?.name || '';
+    const city = j.Branch?.city || '';
+
+    sheet.addRow([
+      j.invoice_number || '-',
+      order.order_number || '-',
+      fmtDate(j.issued_at || j.created_at),
+      fmtDate(j.due_date_dp),
+      j.User?.name || '-',
+      j.User?.company_name || j.User?.name || '-',
+      j.Branch?.name || '-',
+      j.Branch?.code || '-',
+      wilayahName,
+      provinsiName,
+      city,
+      fmtNum(total),
+      fmtNum(paid),
+      fmtNum(remaining),
+      j.status || '-',
+      order.status || '-',
+      j.is_blocked ? 'Ya' : 'Tidak',
+      proofs.length,
+      proofDetail,
+      hotel,
+      visa,
+      ticket,
+      bus,
+      (j.terms && Array.isArray(j.terms) ? j.terms.join('; ') : '') || ''
+    ]);
+  });
+
+  sheet.getRow(1).height = 22;
+  for (let i = 2; i <= sheet.rowCount; i++) {
+    sheet.getRow(i).alignment = { vertical: 'middle', wrapText: true };
+  }
+
+  const summarySheet = workbook.addWorksheet('Ringkasan', { views: [{ state: 'frozen', ySplit: 1 }] });
+  summarySheet.columns = [{ header: 'Keterangan', width: 28 }, { header: 'Nilai', width: 20 }];
+  summarySheet.getRow(1).font = { bold: true };
+  summarySheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7EC' } };
+  const totalAmount = invoices.reduce((s, inv) => s + (parseFloat(inv.total_amount) || 0), 0);
+  const totalPaid = invoices.reduce((s, inv) => s + (parseFloat(inv.paid_amount) || 0), 0);
+  const totalRemaining = invoices.reduce((s, inv) => {
+    const total = parseFloat(inv.total_amount) || 0;
+    const paid = parseFloat(inv.paid_amount) || 0;
+    const rem = inv.remaining_amount != null && inv.remaining_amount !== '' ? parseFloat(inv.remaining_amount) : Math.max(0, total - paid);
+    return s + rem;
+  }, 0);
+  const byStatus = {};
+  invoices.forEach(inv => {
+    const st = inv.status || 'other';
+    byStatus[st] = (byStatus[st] || 0) + 1;
+  });
+  summarySheet.addRows([
+    ['Total Invoice', invoices.length],
+    ['Total Tagihan (IDR)', fmtNum(totalAmount)],
+    ['Total Dibayar (IDR)', fmtNum(totalPaid)],
+    ['Total Sisa (IDR)', fmtNum(totalRemaining)],
+    ['', ''],
+    ['Per Status', '']
+  ]);
+  Object.entries(byStatus).forEach(([st, count]) => summarySheet.addRow([st, count]));
+
+  const buf = await workbook.xlsx.writeBuffer();
+  const filename = `export-invoice-lengkap-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(Buffer.from(buf));
+});
+
+/**
  * GET /api/v1/accounting/orders
  * Daftar order untuk accounting: filter branch_id (opsional). Tanpa branch_id = semua cabang, terbaru dulu.
  */
@@ -1633,6 +1789,7 @@ module.exports = {
   exportAgingPdf,
   getPaymentsList,
   listInvoices,
+  exportInvoicesExcel,
   listOrders,
   getFinancialReport,
   exportFinancialExcel,

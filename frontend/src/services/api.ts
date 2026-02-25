@@ -516,6 +516,8 @@ export const accountingApi = {
     api.get<{ success: boolean; data: any[] }>('/accounting/payments', { params }),
   listInvoices: (params?: { status?: string; branch_id?: string }) =>
     api.get<{ success: boolean; data: any[] }>('/accounting/invoices', { params }),
+  exportInvoicesExcel: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; date_from?: string; date_to?: string; invoice_number?: string }) =>
+    api.get('/accounting/export-invoices-excel', { params, responseType: 'blob' }),
   listOrders: (params?: { branch_id?: string; status?: string; limit?: number }) =>
     api.get<{ success: boolean; data: any[] }>('/accounting/orders', { params }),
   getFinancialReport: (params?: { period?: string; year?: string; month?: string; date_from?: string; date_to?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; order_status?: string; product_type?: string; search?: string; min_amount?: number; max_amount?: number; page?: number; limit?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>

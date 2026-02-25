@@ -13,7 +13,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
-import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, type InvoicesSummaryData } from '../../../services/api';
+import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, type InvoicesSummaryData } from '../../../services/api';
 
 /** Base URL untuk file uploads (supaya foto bukti bayar tampil; pakai origin saat proxy) */
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -78,6 +78,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [exportingInvoicesExcel, setExportingInvoicesExcel] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'va' | 'qris' | 'saudi'>('bank');
@@ -738,6 +739,44 @@ const OrdersInvoicesPage: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <AutoRefreshControl onRefresh={fetchInvoices} disabled={loading} />
+          {isAccounting && (
+            <Button
+              variant="outline"
+              disabled={exportingInvoicesExcel}
+              onClick={async () => {
+                setExportingInvoicesExcel(true);
+                try {
+                  const params = buildListParams();
+                  const res = await accountingApi.exportInvoicesExcel({
+                    branch_id: params.branch_id as string | undefined,
+                    provinsi_id: params.provinsi_id as string | undefined,
+                    wilayah_id: params.wilayah_id as string | undefined,
+                    owner_id: params.owner_id as string | undefined,
+                    status: params.status as string | undefined,
+                    date_from: params.date_from as string | undefined,
+                    date_to: params.date_to as string | undefined,
+                    invoice_number: params.invoice_number as string | undefined
+                  });
+                  const blob = res.data instanceof Blob ? res.data : new Blob([res.data]);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  showToast('Export Excel berhasil diunduh.', 'success');
+                } catch {
+                  showToast('Gagal export Excel.', 'error');
+                } finally {
+                  setExportingInvoicesExcel(false);
+                }
+              }}
+              className="shrink-0"
+            >
+              <FileSpreadsheet className="w-5 h-5 mr-2" />
+              {exportingInvoicesExcel ? 'Mengunduh...' : 'Export Excel'}
+            </Button>
+          )}
           {canReallocate && (
             <Button variant="outline" onClick={() => {
               setShowReallocateModal(true);
