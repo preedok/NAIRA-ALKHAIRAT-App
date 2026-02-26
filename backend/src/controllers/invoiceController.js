@@ -814,9 +814,9 @@ const allocateBalance = asyncHandler(async (req, res) => {
 const getPdf = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }] },
+      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }
     ]
   });
@@ -825,6 +825,12 @@ const getPdf = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Akses ditolak' });
   }
   const data = invoice.toJSON();
+  try {
+    const rules = await getRulesForBranch(invoice.branch_id);
+    data.currency_rates = rules.currency_rates || {};
+  } catch (e) {
+    data.currency_rates = {};
+  }
   const buf = await buildInvoicePdfBuffer(data);
 
   // Simpan ke disk (local - uploads/invoices/)

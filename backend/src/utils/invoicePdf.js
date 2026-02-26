@@ -1,14 +1,18 @@
 /**
- * Invoice PDF generator - layout modern dan rapi
- * Mendukung semua status invoice
+ * Invoice PDF generator - layout modern, user-friendly, informasi lengkap
+ * Termasuk: qty per item, harga satuan, subtotal, rincian pembayaran, jumlah pembayaran, dll.
  */
 const PDFDocument = require('pdfkit');
 
 const formatIDR = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
+const formatDateShort = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 const formatDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 const paymentTypeLabel = (t) => (t === 'dp' ? 'DP' : t === 'partial' ? 'Cicilan' : t === 'full' ? 'Lunas' : t || '-');
 const verifiedStatusLabel = (s) => (s === 'verified' ? 'Diverifikasi' : s === 'rejected' ? 'Ditolak' : 'Menunggu');
+const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[String(t).toLowerCase()] || t);
+const mealStatusLabel = (s) => ({ pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' }[String(s).toLowerCase()] || s || '-');
+const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '-');
 
 const STATUS_LABELS = {
   draft: 'Draft',
@@ -28,173 +32,351 @@ const STATUS_LABELS = {
   overpaid_refund_pending: 'Sisa Pengembalian'
 };
 
-/**
- * @param {PDFDocument} doc
- * @param {object} data - invoice data (dari DB atau contoh)
- */
-function renderInvoicePdf(doc, data) {
-  const margin = 50;
-  const pageWidth = doc.page.width - margin * 2;
-  let y = margin;
+function formatAmount(amount, currency) {
+  const n = parseFloat(amount || 0);
+  if (!currency || currency === 'IDR') return formatIDR(n);
+  if (currency === 'SAR') return `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n)} SAR`;
+  if (currency === 'USD') return `$${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(n)}`;
+  return `${n} ${currency}`;
+}
 
-  // Header - Logo area & Company
-  doc.fontSize(24).fillColor('#0f766e').text('BINTANG GLOBAL GROUP', margin, y);
-  y += 32;
-  doc.fontSize(10).fillColor('#64748b').text('Travel & Umroh | Invoice Resmi', margin, y);
-  y += 24;
+const formatSAR = (n) => `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n || 0)} SAR`;
+const formatUSD = (n) => `$${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)}`;
 
-  // Garis pemisah
-  doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(margin, y).lineTo(doc.page.width - margin, y).stroke();
-  y += 20;
+/** Konversi IDR ke SAR dan USD dari currency_rates (SAR_TO_IDR, USD_TO_IDR) */
+function idrToSarUsd(idr, currencyRates) {
+  const cr = currencyRates || {};
+  const SAR_TO_IDR = typeof cr.SAR_TO_IDR === 'number' ? cr.SAR_TO_IDR : 4200;
+  const USD_TO_IDR = typeof cr.USD_TO_IDR === 'number' ? cr.USD_TO_IDR : 15500;
+  const n = parseFloat(idr) || 0;
+  return { sar: n / SAR_TO_IDR, usd: n / USD_TO_IDR };
+}
 
-  // Baris 1: Invoice # | Status | Tanggal
-  const statusLabel = STATUS_LABELS[data.status] || data.status;
-  doc.fontSize(11).fillColor('#334155');
-  doc.text(`Invoice: ${data.invoice_number || 'INV-2025-00001'}`, margin, y);
-  doc.text(`Status: ${statusLabel}`, margin + pageWidth * 0.5, y);
-  doc.text(`Tanggal: ${formatDate(data.issued_at || data.created_at)}`, margin + pageWidth * 0.75, y);
-  y += 22;
-
-  // Info Owner & Cabang (nomor/status dari invoice saja)
-  doc.fontSize(10).fillColor('#64748b');
-  doc.text(`Owner: ${data.User?.name || data.User?.company_name || '-'}`, margin, y);
-  doc.text(`Cabang: ${data.Branch?.name || data.Branch?.code || '-'}`, margin + pageWidth * 0.5, y);
-  y += 28;
-
-  // Tabel item (ringkas)
-  doc.fontSize(10).fillColor('#0f172a');
-  doc.text('Rincian', margin, y);
-  y += 18;
-
-  const tableTop = y;
-  doc.rect(margin, tableTop, pageWidth, 24).fillAndStroke('#f8fafc', '#e2e8f0');
-  doc.fontSize(9).fillColor('#475569');
-  doc.text('Deskripsi', margin + 12, tableTop + 8);
-  doc.text('Jumlah', margin + pageWidth - 100, tableTop + 8);
-  y = tableTop + 28;
-
-  const items = data.Order?.OrderItems || [];
-  const totalAmount = parseFloat(data.total_amount || 0);
-  if (items.length > 0) {
-    items.forEach((item, i) => {
-      const desc = item.Product?.name || item.product_name || `Item ${i + 1}`;
-      const amt = parseFloat(item.subtotal || item.unit_price || 0);
-      doc.fontSize(9).fillColor('#334155');
-      doc.text(String(desc).slice(0, 50), margin + 12, y);
-      doc.text(formatIDR(amt), margin + pageWidth - 100, y);
-      y += 20;
-    });
-  } else {
-    doc.fontSize(9).fillColor('#64748b').text('Paket Umroh / Layanan', margin + 12, y);
-    doc.text(formatIDR(totalAmount), margin + pageWidth - 100, y);
-    y += 20;
+function checkNewPage(doc, y, margin, need) {
+  if (y + need > doc.page.height - 60) {
+    doc.addPage();
+    return margin;
   }
-
-  y += 12;
-
-  // Summary box
-  const boxTop = y;
-  doc.rect(margin, boxTop, pageWidth * 0.4, 100).fillAndStroke('#f0fdfa', '#99f6e4');
-  y = boxTop + 14;
-  doc.fontSize(9).fillColor('#0f766e');
-  doc.text('Total Tagihan', margin + 14, y);
-  doc.text(formatIDR(totalAmount), margin + pageWidth * 0.4 - 110, y, { width: 90, align: 'right' });
-  y += 18;
-  doc.text('DP (30%)', margin + 14, y);
-  doc.text(formatIDR(data.dp_amount || totalAmount * 0.3), margin + pageWidth * 0.4 - 110, y, { width: 90, align: 'right' });
-  y += 18;
-  doc.text('Dibayar', margin + 14, y);
-  doc.text(formatIDR(data.paid_amount || 0), margin + pageWidth * 0.4 - 110, y, { width: 90, align: 'right' });
-  y += 18;
-  doc.text('Sisa', margin + 14, y);
-  doc.text(formatIDR(data.remaining_amount || totalAmount), margin + pageWidth * 0.4 - 110, y, { width: 90, align: 'right' });
-
-  if (parseFloat(data.overpaid_amount || 0) > 0) {
-    y += 18;
-    doc.fillColor('#b45309').text('Kelebihan Bayar', margin + 14, y);
-    doc.text(formatIDR(data.overpaid_amount), margin + pageWidth * 0.4 - 110, y, { width: 90, align: 'right' });
-  }
-
-  y = boxTop + 110;
-
-  // Riwayat Pembayaran & Bukti Bayar
-  const proofs = (data.PaymentProofs || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-  if (proofs.length > 0) {
-    if (y > doc.page.height - 180) { doc.addPage(); y = margin; }
-    doc.fontSize(10).fillColor('#0f172a').text('Riwayat Pembayaran & Bukti Bayar', margin, y);
-    y += 16;
-
-    const payTableTop = y;
-    const cw = [0.035, 0.12, 0.12, 0.07, 0.13, 0.15, 0.10, 0.13, 0.145]; // No, TglTransfer, TglUpload, Tipe, Jumlah, Bank, Status, TglVerif, File
-    const x0 = margin + 6;
-    const x = (i) => margin + pageWidth * cw.slice(0, i).reduce((s, w) => s + w, 0) + 4;
-    const w = (i) => pageWidth * cw[i] - 8;
-    doc.rect(margin, payTableTop, pageWidth, 20).fillAndStroke('#f1f5f9', '#e2e8f0');
-    doc.fontSize(8).fillColor('#475569');
-    doc.text('No', x0, payTableTop + 6, { width: w(0) });
-    doc.text('Tgl Transfer', x(1), payTableTop + 6, { width: w(1) });
-    doc.text('Tgl Upload', x(2), payTableTop + 6, { width: w(2) });
-    doc.text('Tipe', x(3), payTableTop + 6, { width: w(3) });
-    doc.text('Jumlah', x(4), payTableTop + 6, { width: w(4) });
-    doc.text('Bank / Rekening', x(5), payTableTop + 6, { width: w(5) });
-    doc.text('Status', x(6), payTableTop + 6, { width: w(6) });
-    doc.text('Tgl Verifikasi', x(7), payTableTop + 6, { width: w(7) });
-    doc.text('File Bukti', x(8), payTableTop + 6, { width: w(8) });
-    y = payTableTop + 22;
-
-    proofs.forEach((p, idx) => {
-      if (y > doc.page.height - 50) { doc.addPage(); y = margin; }
-      const tglTransfer = formatDate(p.transfer_date);
-      const tglUpload = p.created_at ? formatDateTime(p.created_at) : '-';
-      const tipe = paymentTypeLabel(p.payment_type);
-      const jumlah = formatIDR(parseFloat(p.amount || 0));
-      const bank = [p.bank_name, p.account_number].filter(Boolean).join(' ') || '-';
-      const status = verifiedStatusLabel(p.verified_status);
-      const tglVerif = p.verified_at ? formatDateTime(p.verified_at) : '-';
-      let fileInfo = '-';
-      if (p.proof_file_url && p.proof_file_url !== 'issued-saudi') {
-        const match = p.proof_file_url.match(/\/([^/]+)$/);
-        fileInfo = match ? match[1] : 'Lampiran';
-      } else if (p.proof_file_url === 'issued-saudi') fileInfo = 'Pembayaran Saudi';
-      doc.fontSize(8).fillColor('#334155');
-      doc.text(String(idx + 1), x0, y, { width: w(0) });
-      doc.text(tglTransfer, x(1), y, { width: w(1) });
-      doc.text(tglUpload, x(2), y, { width: w(2) });
-      doc.text(tipe, x(3), y, { width: w(3) });
-      doc.text(jumlah, x(4), y, { width: w(4) });
-      doc.text(String(bank).slice(0, 22), x(5), y, { width: w(5) });
-      doc.text(status, x(6), y, { width: w(6) });
-      doc.text(tglVerif, x(7), y, { width: w(7) });
-      doc.text(String(fileInfo).slice(0, 26), x(8), y, { width: w(8) });
-      y += 18;
-    });
-    y += 14;
-  }
-
-  // Terms
-  const terms = data.terms || [];
-  if (terms.length > 0) {
-    if (y > doc.page.height - 120) { doc.addPage(); y = margin; }
-    doc.fontSize(9).fillColor('#64748b').text('Ketentuan:', margin, y);
-    y += 14;
-    terms.forEach((t) => {
-      doc.text(`• ${t}`, margin + 8, y);
-      y += 14;
-    });
-    y += 8;
-  }
-
-  // Footer
-  doc.fontSize(8).fillColor('#94a3b8');
-  doc.text(`Generated: ${new Date().toLocaleString('id-ID')} | Bintang Global Group`, margin, doc.page.height - 40, { align: 'center', width: pageWidth });
+  return y;
 }
 
 /**
- * Generate PDF buffer dari data invoice
+ * @param {PDFDocument} doc
+ * @param {object} data - invoice data (dari DB)
  */
+function renderInvoicePdf(doc, data) {
+  const margin = 48;
+  const pageWidth = doc.page.width - margin * 2;
+  let y = margin;
+
+  // ---- Header modern: strip warna + judul ----
+  doc.rect(0, 0, doc.page.width, 72).fill('#0f766e');
+  doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('BINTANG GLOBAL GROUP', margin, 22);
+  doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.9)').text('Travel & Umroh | Invoice Resmi', margin, 48);
+  doc.fillColor('#0f766e').fontSize(14).font('Helvetica-Bold').text('INVOICE', doc.page.width - margin - 80, 28);
+  doc.fillColor('#334155');
+  y = 88;
+
+  // ---- Info utama: grid 2 baris x 3 kolom (rapi, tidak tumpang tindih) ----
+  const statusLabel = STATUS_LABELS[data.status] || data.status;
+  const infoColW = pageWidth / 3;
+  const infoX = (col) => margin + col * infoColW + 10;
+  doc.fontSize(9).fillColor('#64748b');
+  doc.text('No. Invoice', infoX(0), y);
+  doc.text('Status', infoX(1), y);
+  doc.text('No. Order', infoX(2), y);
+  y += 12;
+  doc.fontSize(10).fillColor('#0f172a');
+  doc.text(data.invoice_number || '-', infoX(0), y, { width: infoColW - 20 });
+  doc.font('Helvetica-Bold').fillColor('#0f766e').text(statusLabel, infoX(1), y, { width: infoColW - 20 }).font('Helvetica').fillColor('#0f172a');
+  doc.text(data.Order?.order_number || '-', infoX(2), y, { width: infoColW - 20 });
+  y += 18;
+  doc.fontSize(9).fillColor('#64748b');
+  doc.text('Tanggal Terbit', infoX(0), y);
+  doc.text('Jatuh Tempo DP', infoX(1), y);
+  doc.text('Jatuh Tempo Lunas', infoX(2), y);
+  y += 12;
+  doc.fontSize(10).fillColor('#334155');
+  doc.text(formatDate(data.issued_at || data.created_at), infoX(0), y, { width: infoColW - 20 });
+  doc.text(formatDate(data.due_date_dp) || '-', infoX(1), y, { width: infoColW - 20 });
+  doc.text(formatDate(data.due_date_full) || '-', infoX(2), y, { width: infoColW - 20 });
+  y += 26;
+
+  // ---- Dua kolom: Bill To | Cabang (garis pemisah, nilai dibatasi lebar) ----
+  const col2StartX = margin + Math.floor(pageWidth * 0.5);
+  const valW1 = col2StartX - margin - 90;
+  const valW2 = pageWidth - (col2StartX - margin) - 20;
+  const boxH = 80;
+  doc.rect(margin, y, pageWidth, boxH).fillAndStroke('#f8fafc', '#e2e8f0');
+  doc.moveTo(col2StartX, y).lineTo(col2StartX, y + boxH).stroke('#cbd5e1');
+  y += 10;
+  doc.fontSize(8).fillColor('#64748b').text('DITAGIH KEPADA', margin + 12, y);
+  doc.text('CABANG & LOKASI', col2StartX + 12, y);
+  y += 15;
+  doc.fontSize(9).fillColor('#334155');
+  doc.text('Nama', margin + 12, y);
+  doc.text(String(data.User?.name || '-'), margin + 92, y, { width: valW1 });
+  doc.text('Cabang', col2StartX + 12, y);
+  doc.text(String(data.Branch?.name || data.Branch?.code || '-'), col2StartX + 92, y, { width: valW2 - 82 });
+  y += 14;
+  doc.text('Perusahaan', margin + 12, y);
+  doc.text(String(data.User?.company_name || '-'), margin + 92, y, { width: valW1 });
+  const wilayahStr = [data.Branch?.Provinsi?.Wilayah?.name, data.Branch?.Provinsi?.name, data.Branch?.city].filter(Boolean).join(', ') || '-';
+  doc.text('Wilayah / Kota', col2StartX + 12, y);
+  doc.text(String(wilayahStr), col2StartX + 92, y, { width: valW2 - 82 });
+  y += 14;
+  doc.text('Email', margin + 12, y);
+  doc.text(String(data.User?.email || '-'), margin + 92, y, { width: valW1 });
+  doc.text('Kode Cabang', col2StartX + 12, y);
+  doc.text(String(data.Branch?.code || '-'), col2StartX + 92, y, { width: valW2 - 82 });
+  y += 22;
+
+  // ---- Tabel Item: No | Tipe | Deskripsi | Qty | Harga Satuan | Subtotal ----
+  y = checkNewPage(doc, y, margin, 120);
+  doc.fontSize(11).fillColor('#0f172a').text('Rincian Barang / Jasa', margin, y);
+  y += 18;
+
+  const tableTop = y;
+  const colW = [0.04, 0.09, 0.28, 0.06, 0.24, 0.24]; // No, Tipe, Deskripsi, Qty, Harga Satuan (IDR+SAR+USD), Subtotal (IDR+SAR+USD)
+  const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 8;
+  const w = (i) => pageWidth * colW[i] - 12;
+  const rowH = 22;
+  const dataRowH = 34;
+  const rates = data.currency_rates || {};
+  doc.rect(margin, tableTop, pageWidth, rowH).fillAndStroke('#0f766e', '#0d9488');
+  doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
+  doc.text('No', x(0), tableTop + 7, { width: w(0) });
+  doc.text('Tipe', x(1), tableTop + 7, { width: w(1) });
+  doc.text('Deskripsi', x(2), tableTop + 7, { width: w(2) });
+  doc.text('Qty', x(3), tableTop + 7, { width: w(3) });
+  doc.text('Harga Satuan (IDR · SAR · USD)', x(4), tableTop + 7, { width: w(4) });
+  doc.text('Subtotal (IDR · SAR · USD)', x(5), tableTop + 7, { width: w(5) });
+  y = tableTop + rowH;
+
+  const items = data.Order?.OrderItems || [];
+  const totalAmount = parseFloat(String(data.total_amount || 0));
+  // Tanggal referensi: check-in hotel paling awal (untuk visa = sesuai check-in, tiket = 1 hari sebelum check-in)
+  let hotelCheckIn = null;
+  items.forEach((it) => {
+    if ((it.type || '').toLowerCase() !== 'hotel') return;
+    const meta = it.meta && typeof it.meta === 'object' ? it.meta : {};
+    const ci = meta.check_in ? new Date(meta.check_in) : null;
+    if (ci && (!hotelCheckIn || ci < hotelCheckIn)) hotelCheckIn = ci;
+  });
+  const hasTicketOrVisa = items.some((it) => { const t = (it.type || '').toLowerCase(); return t === 'ticket' || t === 'visa'; });
+  const ticketDeparture = hotelCheckIn && hasTicketOrVisa ? new Date(hotelCheckIn) : null;
+  if (ticketDeparture) ticketDeparture.setDate(ticketDeparture.getDate() - 1);
+
+  doc.fillColor('#334155').font('Helvetica');
+  if (items.length > 0) {
+    items.forEach((item, i) => {
+      const itemType = (item.type || '').toLowerCase();
+      const desc = item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`;
+      let dateLine = '';
+      let mealLine = '';
+      if (itemType === 'hotel') {
+        const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
+        const ci = meta.check_in ? formatDateShort(meta.check_in) : null;
+        const co = meta.check_out ? formatDateShort(meta.check_out) : null;
+        if (ci || co) dateLine = `Check-in: ${ci || '-'}, Check-out: ${co || '-'}`;
+        const withMeal = meta.meal === true || meta.with_meal === true;
+        const mealStatus = item.HotelProgress?.meal_status;
+        const roomType = meta.room_type;
+        const nights = meta.nights != null ? Number(meta.nights) : 0;
+        const qtyRooms = item.quantity != null ? Number(item.quantity) : 1;
+        const parts = [];
+        if (nights > 0) parts.push(`${qtyRooms} kamar × ${nights} malam`);
+        parts.push(`Paket makan: ${withMeal ? 'Ya' : 'Tidak'}`);
+        if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);
+        if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
+        if (parts.length) mealLine = parts.join('  |  ');
+      } else if (itemType === 'visa' && hotelCheckIn) {
+        dateLine = `Tanggal sesuai check-in hotel: ${formatDateShort(hotelCheckIn)}`;
+      } else if (itemType === 'ticket' && ticketDeparture) {
+        dateLine = `Keberangkatan: ${formatDateShort(ticketDeparture)} (1 hari sebelum check-in)`;
+      }
+      const hasExtraLines = dateLine || mealLine;
+      const rowH = hasExtraLines ? (mealLine ? 50 : 42) : dataRowH;
+      y = checkNewPage(doc, y, margin, rowH + 4);
+      const qty = item.quantity != null ? Number(item.quantity) : 1;
+      const metaForQty = itemType === 'hotel' && item.meta && typeof item.meta === 'object' ? item.meta : {};
+      const nightsForDisplay = metaForQty.nights != null ? Number(metaForQty.nights) : 0;
+      const qtyLabel = (itemType === 'hotel' && nightsForDisplay > 0) ? `${qty} × ${nightsForDisplay}` : String(qty);
+      const unitPrice = parseFloat(String(item.unit_price || 0));
+      const subtotal = parseFloat(String(item.subtotal || 0)) || (nightsForDisplay > 0 ? unitPrice * qty * nightsForDisplay : unitPrice * qty);
+      const unitSarUsd = idrToSarUsd(unitPrice, rates);
+      const subSarUsd = idrToSarUsd(subtotal, rates);
+      doc.rect(margin, y - 4, pageWidth, rowH).stroke('#e2e8f0');
+      doc.fontSize(9);
+      doc.text(String(i + 1), x(0), y + 4, { width: w(0) });
+      doc.text(typeLabel(item.type), x(1), y + 4, { width: w(1) });
+      doc.text(String(desc).slice(0, 40), x(2), y + 2, { width: w(2) });
+      if (dateLine) {
+        doc.fontSize(7).fillColor('#64748b');
+        doc.text(dateLine, x(2), y + 14, { width: w(2) });
+      }
+      if (mealLine) {
+        doc.fontSize(7).fillColor('#64748b');
+        doc.text(mealLine, x(2), y + 22, { width: w(2) });
+      }
+      if (dateLine || mealLine) doc.fontSize(9).fillColor('#334155');
+      doc.text(qtyLabel, x(3), y + (rowH === dataRowH ? 4 : (mealLine ? 12 : 8)), { width: w(3) });
+      doc.text(formatIDR(unitPrice), x(4), y + 2, { width: w(4) });
+      doc.fontSize(7).fillColor('#64748b');
+      doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
+      doc.fontSize(9).fillColor('#334155');
+      doc.text(formatIDR(subtotal), x(5), y + 2, { width: w(5) });
+      doc.fontSize(7).fillColor('#64748b');
+      doc.text(`${formatSAR(subSarUsd.sar)}  |  ${formatUSD(subSarUsd.usd)}`, x(5), y + 14, { width: w(5) });
+      doc.fontSize(9).fillColor('#334155');
+      y += rowH;
+    });
+  } else {
+    const totalSarUsd = idrToSarUsd(totalAmount, rates);
+    doc.rect(margin, y - 4, pageWidth, dataRowH).stroke('#e2e8f0');
+    doc.fontSize(9);
+    doc.text('1', x(0), y + 4, { width: w(0) });
+    doc.text('Paket', x(1), y + 4, { width: w(1) });
+    doc.text('Layanan Umroh', x(2), y + 4, { width: w(2) });
+    doc.text('1', x(3), y + 4, { width: w(3) });
+    doc.text(formatIDR(totalAmount), x(4), y + 2, { width: w(4) });
+    doc.fontSize(7).fillColor('#64748b');
+    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
+    doc.fontSize(9).fillColor('#334155');
+    doc.text(formatIDR(totalAmount), x(5), y + 2, { width: w(5) });
+    doc.fontSize(7).fillColor('#64748b');
+    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(5), y + 14, { width: w(5) });
+    doc.fontSize(9).fillColor('#334155');
+    y += dataRowH;
+  }
+  y += 16;
+
+  // ---- Ringkasan Keuangan (card + SAR/USD untuk kemudahan pembayaran) ----
+  y = checkNewPage(doc, y, margin, 165);
+  const boxW = 300;
+  const amountBoxW = 165;
+  const boxLeft = doc.page.width - margin - boxW;
+  const dpPct = parseInt(data.dp_percentage, 10) || 30;
+  const dpAmount = parseFloat(data.dp_amount || 0) || Math.round(totalAmount * dpPct / 100);
+  const paidAmount = parseFloat(data.paid_amount || 0);
+  const remainingAmount = parseFloat(String(data.remaining_amount ?? (totalAmount - paidAmount)));
+  const overpaidAmount = parseFloat(data.overpaid_amount || 0);
+  const totalSarUsd = idrToSarUsd(totalAmount, rates);
+  const remainingSarUsd = idrToSarUsd(remainingAmount, rates);
+  doc.rect(boxLeft, y, boxW, 155).fillAndStroke('#f0fdfa', '#99f6e4');
+  let by = y + 12;
+  const amountX = boxLeft + boxW - 14 - amountBoxW;
+  doc.fontSize(10).fillColor('#0f766e');
+  doc.text('Total Tagihan', boxLeft + 14, by);
+  doc.text(formatIDR(totalAmount), amountX, by, { width: amountBoxW, align: 'right' });
+  by += 11;
+  doc.fontSize(7).fillColor('#64748b');
+  doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, amountX, by, { width: amountBoxW, align: 'right' });
+  by += 16;
+  doc.fontSize(10).fillColor('#0f766e');
+  doc.text(`DP (${dpPct}%)`, boxLeft + 14, by);
+  doc.text(formatIDR(dpAmount), amountX, by, { width: amountBoxW, align: 'right' });
+  by += 18;
+  doc.font('Helvetica-Bold').text('Total Dibayar', boxLeft + 14, by);
+  doc.text(formatIDR(paidAmount), amountX, by, { width: amountBoxW, align: 'right' });
+  by += 18;
+  doc.font('Helvetica').text('Sisa Tagihan', boxLeft + 14, by);
+  doc.text(formatIDR(remainingAmount), amountX, by, { width: amountBoxW, align: 'right' });
+  by += 11;
+  doc.fontSize(7).fillColor('#64748b');
+  doc.text(`${formatSAR(remainingSarUsd.sar)}  |  ${formatUSD(remainingSarUsd.usd)}`, amountX, by, { width: amountBoxW, align: 'right' });
+  by += 16;
+  if (overpaidAmount > 0) {
+    doc.fontSize(10).fillColor('#b45309').text('Kelebihan Bayar', boxLeft + 14, by);
+    doc.text(formatIDR(overpaidAmount), amountX, by, { width: amountBoxW, align: 'right' });
+    by += 18;
+  }
+  y += 162;
+
+  // ---- Rincian Pembayaran (jumlah pembayaran per bukti) ----
+  const proofs = (data.PaymentProofs || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  if (proofs.length > 0) {
+    y = checkNewPage(doc, y, margin, 100);
+    doc.fontSize(11).fillColor('#0f172a').text('Rincian Pembayaran', margin, y);
+    y += 6;
+    doc.fontSize(9).fillColor('#64748b').text('Jumlah pembayaran per bukti transfer beserta status verifikasi.', margin, y);
+    y += 18;
+
+    const payTableTop = y;
+    const pc = [0.04, 0.14, 0.08, 0.18, 0.10, 0.18, 0.12, 0.16]; // No, Tgl Transfer, Tipe, Jumlah Pembayaran, Mata Uang, Bank, Status, Verifikasi
+    const px = (i) => margin + pageWidth * pc.slice(0, i).reduce((s, w) => s + w, 0) + 6;
+    const pw = (i) => pageWidth * pc[i] - 10;
+    doc.rect(margin, payTableTop, pageWidth, 20).fillAndStroke('#f1f5f9', '#e2e8f0');
+    doc.fontSize(8).fillColor('#475569').font('Helvetica-Bold');
+    doc.text('No', px(0), payTableTop + 6, { width: pw(0) });
+    doc.text('Tgl Transfer', px(1), payTableTop + 6, { width: pw(1) });
+    doc.text('Tipe', px(2), payTableTop + 6, { width: pw(2) });
+    doc.text('Jumlah Pembayaran', px(3), payTableTop + 6, { width: pw(3) });
+    doc.text('Mata Uang', px(4), payTableTop + 6, { width: pw(4) });
+    doc.text('Bank / Rekening', px(5), payTableTop + 6, { width: pw(5) });
+    doc.text('Status', px(6), payTableTop + 6, { width: pw(6) });
+    doc.text('Diverifikasi oleh', px(7), payTableTop + 6, { width: pw(7) });
+    y = payTableTop + 22;
+
+    proofs.forEach((p, idx) => {
+      y = checkNewPage(doc, y, margin, 22);
+      const currency = (p.payment_currency || 'IDR').toUpperCase();
+      const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
+        ? formatAmount(p.amount_original, currency)
+        : formatIDR(parseFloat(p.amount || 0));
+      const bank = [p.bank_name, p.account_number].filter(Boolean).join(' ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '-');
+      const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '-');
+      doc.rect(margin, y - 3, pageWidth, 18).stroke('#f1f5f9');
+      doc.fontSize(8).fillColor('#334155').font('Helvetica');
+      doc.text(String(idx + 1), px(0), y + 2, { width: pw(0) });
+      doc.text(formatDate(p.transfer_date), px(1), y + 2, { width: pw(1) });
+      doc.text(paymentTypeLabel(p.payment_type), px(2), y + 2, { width: pw(2) });
+      doc.text(amountDisplay, px(3), y + 2, { width: pw(3) });
+      doc.text(currency || 'IDR', px(4), y + 2, { width: pw(4) });
+      doc.text(String(bank).slice(0, 24), px(5), y + 2, { width: pw(5) });
+      doc.text(verifiedStatusLabel(p.verified_status), px(6), y + 2, { width: pw(6) });
+      doc.text(verifier, px(7), y + 2, { width: pw(7) });
+      y += 20;
+    });
+    y += 8;
+    doc.fontSize(9).fillColor('#0f766e').font('Helvetica-Bold');
+    const totalPaidFromProofs = proofs.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+    doc.text(`Total Jumlah Pembayaran (dari ${proofs.length} bukti): ${formatIDR(totalPaidFromProofs)}`, margin, y);
+    y += 22;
+  }
+
+  // ---- Terms & Catatan (wrap teks agar tidak terpotong) ----
+  const terms = Array.isArray(data.terms) ? data.terms : (data.terms ? [data.terms] : []);
+  if (terms.length > 0 || (data.notes && String(data.notes).trim())) {
+    y = checkNewPage(doc, y, margin, 80);
+    doc.fontSize(10).fillColor('#475569').text('Ketentuan & Catatan', margin, y);
+    y += 14;
+    doc.fontSize(9).fillColor('#64748b');
+    const termsWidth = pageWidth - 24;
+    terms.forEach((t) => {
+      const line = `• ${String(t)}`;
+      const h = doc.heightOfString(line, { width: termsWidth });
+      doc.text(line, margin + 8, y, { width: termsWidth });
+      y += h + 4;
+    });
+    if (data.notes && String(data.notes).trim()) {
+      const noteLine = `Catatan: ${data.notes}`;
+      const h = doc.heightOfString(noteLine, { width: termsWidth });
+      doc.text(noteLine, margin + 8, y, { width: termsWidth });
+      y += h + 8;
+    } else {
+      y += 8;
+    }
+  }
+
+  // ---- Footer ----
+  doc.fontSize(8).fillColor('#94a3b8');
+  doc.text(`Dokumen ini dicetak pada ${new Date().toLocaleString('id-ID')} | Bintang Global Group - Travel & Umroh`, margin, doc.page.height - 36, { align: 'center', width: pageWidth });
+}
+
 function buildInvoicePdfBuffer(data) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = new PDFDocument({ margin: 48, size: 'A4' });
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));

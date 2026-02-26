@@ -18,6 +18,15 @@ const generateOrderNumber = () => {
   return `ORD-${y}-${String(n).padStart(5, '0')}`;
 };
 
+/** Jumlah malam dari check_in s/d check_out (tanggal saja, tanpa waktu). Return 0 jika invalid. */
+function getNights(checkIn, checkOut) {
+  if (!checkIn || !checkOut) return 0;
+  const a = new Date(String(checkIn).slice(0, 10));
+  const b = new Date(String(checkOut).slice(0, 10));
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || b <= a) return 0;
+  return Math.floor((b - a) / (24 * 60 * 60 * 1000));
+}
+
 /**
  * GET /api/v1/orders
  */
@@ -222,15 +231,23 @@ const create = asyncHandler(async (req, res) => {
       unitPrice = await getEffectivePrice(productId, finalBranchId, effectiveOwnerId, it.meta || {}, it.currency || 'IDR');
       if (unitPrice == null) return res.status(400).json({ success: false, message: `Harga tidak ditemukan untuk product ${productId}` });
     }
+    const checkIn = it.check_in || it.meta?.check_in;
+    const checkOut = it.check_out || it.meta?.check_out;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
-      const checkIn = it.check_in || it.meta?.check_in;
-      const checkOut = it.check_out || it.meta?.check_out;
       if (checkIn && checkOut) {
         const avail = await checkAvailability(it.product_id, it.room_type, checkIn, checkOut, qty, null);
         if (!avail.ok) return res.status(400).json({ success: false, message: avail.message || 'Kamar tidak tersedia untuk tanggal yang dipilih' });
       }
     }
-    const st = qty * unitPrice;
+    // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out)
+    let st;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+      const nights = getNights(checkIn, checkOut);
+      const multiplier = nights > 0 ? nights : 1;
+      st = qty * unitPrice * multiplier;
+    } else {
+      st = qty * unitPrice;
+    }
     subtotal += st;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.room_type && ROOM_CAPACITY[it.room_type] != null) {
       totalJamaah += qty * ROOM_CAPACITY[it.room_type];
@@ -250,6 +267,10 @@ const create = asyncHandler(async (req, res) => {
     };
     if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_in || it.meta?.check_in)) meta.check_in = it.check_in || it.meta.check_in;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_out || it.meta?.check_out)) meta.check_out = it.check_out || it.meta.check_out;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+      const nights = getNights(checkIn, checkOut);
+      if (nights > 0) meta.nights = nights;
+    }
     orderItems.push({
       type: it.type,
       product_ref_id: it.product_id,
@@ -396,15 +417,23 @@ const update = asyncHandler(async (req, res) => {
           unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, it.currency || 'IDR') || 0;
         }
       }
+      const checkIn = it.check_in || it.meta?.check_in;
+      const checkOut = it.check_out || it.meta?.check_out;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
-        const checkIn = it.check_in || it.meta?.check_in;
-        const checkOut = it.check_out || it.meta?.check_out;
         if (checkIn && checkOut) {
           const avail = await checkAvailability(it.product_id, it.room_type, checkIn, checkOut, qty, order.id);
           if (!avail.ok) return res.status(400).json({ success: false, message: avail.message || 'Kamar tidak tersedia untuk tanggal yang dipilih' });
         }
       }
-      const st = qty * (unitPrice || 0);
+      // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out)
+      let st;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+        const nights = getNights(checkIn, checkOut);
+        const multiplier = nights > 0 ? nights : 1;
+        st = qty * (unitPrice || 0) * multiplier;
+      } else {
+        st = qty * (unitPrice || 0);
+      }
       subtotal += st;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.room_type && ROOM_CAPACITY[it.room_type] != null) {
         totalJamaah += qty * ROOM_CAPACITY[it.room_type];
@@ -420,6 +449,10 @@ const update = asyncHandler(async (req, res) => {
       const meta = { room_type: it.room_type, meal: it.meal, ...(it.meta || {}) };
       if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_in || it.meta?.check_in)) meta.check_in = it.check_in || it.meta.check_in;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_out || it.meta?.check_out)) meta.check_out = it.check_out || it.meta.check_out;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+        const nights = getNights(checkIn, checkOut);
+        if (nights > 0) meta.nights = nights;
+      }
       await OrderItem.create({
         order_id: order.id,
         type: it.type,

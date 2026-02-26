@@ -33,6 +33,10 @@ npm start
 - **Frontend** dan **backend** jalan bersamaan; buka http://localhost:3000 untuk UI, API di http://localhost:5000/api/v1.
 - **Port sibuk?** Gunakan `run-project.bat` untuk membebaskan port 5000 dan 3000 lalu start, atau `stop-project.bat` hanya untuk stop.
 
+## Dokumentasi & Presentasi
+
+- **Workflow proses bisnis (untuk presentasi klien):** Satu dokumen PDF berisi semua alur bisnis aplikasi ada di **docs/WORKFLOW_PROSES_BISNIS_PRESENTASI.pdf**. Sumber: **docs/WORKFLOW_PROSES_BISNIS_PRESENTASI.md**. Untuk generate ulang PDF: `node backend/scripts/generate-workflow-pdf.js` (dari root project).
+
 ## Akun setelah seed
 
 Password semua: **Password123**
