@@ -5,7 +5,7 @@ const multer = require('multer');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
-const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE } = require('../constants');
+const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES } = require('../constants');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
@@ -126,10 +126,24 @@ const list = asyncHandler(async (req, res) => {
   });
 });
 
+/** Cek apakah order items punya visa yang wajib hotel; jika ya, items harus ada hotel. */
+async function visaRequiresHotel(items) {
+  const visaProductIds = (items || [])
+    .filter(i => i.type === ORDER_ITEM_TYPE.VISA && i.product_id)
+    .map(i => i.product_id);
+  if (visaProductIds.length === 0) return false;
+  const products = await Product.findAll({
+    where: { id: visaProductIds },
+    attributes: ['id', 'meta'],
+    raw: true
+  });
+  return products.some(p => (p.meta && p.meta.require_hotel === true));
+}
+
 /**
  * POST /api/v1/orders
  * Items: [{ product_id, type, quantity, unit_price (optional - resolved if not sent), room_type?, meal?, meta? }]
- * Validasi: require_hotel_with_visa, bus min pack penalty from business rules.
+ * Validasi: visa wajib hotel dari product.meta.require_hotel; bus min pack penalty from business rules.
  */
 const create = asyncHandler(async (req, res) => {
   const { items, branch_id, owner_id, notes } = req.body;
@@ -209,9 +223,9 @@ const create = asyncHandler(async (req, res) => {
   }
 
   const rules = await getRulesForBranch(finalBranchId);
-  const hasVisa = items.some(i => i.type === ORDER_ITEM_TYPE.VISA);
   const hasHotel = items.some(i => i.type === ORDER_ITEM_TYPE.HOTEL);
-  if (rules.require_hotel_with_visa && hasVisa && !hasHotel) {
+  const visaNeedsHotel = await visaRequiresHotel(items);
+  if (visaNeedsHotel && !hasHotel) {
     return res.status(400).json({ success: false, message: 'Visa wajib bersama hotel' });
   }
 
@@ -223,6 +237,15 @@ const create = asyncHandler(async (req, res) => {
   const orderItems = [];
 
   for (const it of items) {
+    if (it.type === ORDER_ITEM_TYPE.TICKET) {
+      const bandara = it.meta?.bandara;
+      if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
+        return res.status(400).json({ success: false, message: 'Item tiket wajib pilih bandara (BTH, CGK, SBY, atau UPG)' });
+      }
+      if (it.meta?.trip_type && !TICKET_TRIP_TYPES.includes(it.meta.trip_type)) {
+        return res.status(400).json({ success: false, message: 'trip_type tiket harus one_way, return_only, atau round_trip' });
+      }
+    }
     const qty = parseInt(it.quantity, 10) || 1;
     let unitPrice = parseFloat(it.unit_price);
     if (unitPrice == null || isNaN(unitPrice)) {
@@ -400,6 +423,11 @@ const update = asyncHandler(async (req, res) => {
   }
   const { items, notes } = req.body;
   if (items && Array.isArray(items)) {
+    const hasHotel = items.some(i => i.type === ORDER_ITEM_TYPE.HOTEL);
+    const visaNeedsHotel = await visaRequiresHotel(items);
+    if (visaNeedsHotel && !hasHotel) {
+      return res.status(400).json({ success: false, message: 'Visa wajib bersama hotel' });
+    }
     const rules = await getRulesForBranch(order.branch_id);
     const busMinPack = rules.bus_min_pack ?? 35;
     const busPenaltyIdr = rules.bus_penalty_idr ?? 500000;
@@ -407,6 +435,15 @@ const update = asyncHandler(async (req, res) => {
     let subtotal = 0, totalJamaah = 0, penaltyAmount = 0;
     const isOwner = req.user.role === 'owner';
     for (const it of items) {
+      if (it.type === ORDER_ITEM_TYPE.TICKET) {
+        const bandara = it.meta?.bandara;
+        if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
+          return res.status(400).json({ success: false, message: 'Item tiket wajib pilih bandara (BTH, CGK, SBY, atau UPG)' });
+        }
+        if (it.meta?.trip_type && !TICKET_TRIP_TYPES.includes(it.meta.trip_type)) {
+          return res.status(400).json({ success: false, message: 'trip_type tiket harus one_way, return_only, atau round_trip' });
+        }
+      }
       const qty = parseInt(it.quantity, 10) || 1;
       let unitPrice;
       if (isOwner) {

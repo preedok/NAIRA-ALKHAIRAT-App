@@ -14,6 +14,8 @@ export interface OrderDraftItem {
   room_breakdown?: { id: string; room_type: string; quantity: number; unit_price: number; with_meal?: boolean }[];
   check_in?: string;
   check_out?: string;
+  /** Untuk tiket: { bandara: 'BTH'|'CGK'|'SBY'|'UPG' }; untuk hotel/order: check_in, check_out, room_type, dll */
+  meta?: Record<string, unknown>;
 }
 
 /** Input untuk addItem: id dan room_breakdown[].id opsional */

@@ -131,6 +131,31 @@ const ORDER_ITEM_TYPE = {
   PACKAGE: 'package'
 };
 
+// Jenis produk visa (admin pusat): only = Visa Only, tasreh = Visa + Tasreh, premium = Visa Premium
+const VISA_KIND = {
+  ONLY: 'only',
+  TASREH: 'tasreh',
+  PREMIUM: 'premium'
+};
+
+// Bandara untuk produk tiket: harga dan kuota seat per bandara (bukan per wilayah)
+const BANDARA_TIKET = [
+  { code: 'BTH', name: 'Batam' },
+  { code: 'CGK', name: 'Jakarta' },
+  { code: 'SBY', name: 'Surabaya' },
+  { code: 'UPG', name: 'Makassar' }
+];
+const BANDARA_TIKET_CODES = BANDARA_TIKET.map(b => b.code);
+
+// Periode harga/kuota tiket per bandara: default, per bulan (YYYY-MM), per minggu (YYYY-MM-DD Senin), per hari (YYYY-MM-DD)
+const TICKET_PERIOD_TYPES = ['default', 'month', 'week', 'day'];
+
+// Workflow tiket: pergi saja / pulang saja / pulang pergi
+const TICKET_TRIP_ONE_WAY = 'one_way';
+const TICKET_TRIP_RETURN_ONLY = 'return_only';
+const TICKET_TRIP_ROUND_TRIP = 'round_trip';
+const TICKET_TRIP_TYPES = [TICKET_TRIP_ONE_WAY, TICKET_TRIP_RETURN_ONLY, TICKET_TRIP_ROUND_TRIP];
+
 // Room types for hotel (single, double, triple, quad, quint) → kapasitas jamaah per kamar
 const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'];
 const ROOM_CAPACITY = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
@@ -274,6 +299,14 @@ module.exports = {
   VISA_PROGRESS_STATUS,
   TICKET_PROGRESS_STATUS,
   ORDER_ITEM_TYPE,
+  VISA_KIND,
+  BANDARA_TIKET,
+  BANDARA_TIKET_CODES,
+  TICKET_PERIOD_TYPES,
+  TICKET_TRIP_ONE_WAY,
+  TICKET_TRIP_RETURN_ONLY,
+  TICKET_TRIP_ROUND_TRIP,
+  TICKET_TRIP_TYPES,
   ORDER_STATUS,
   ROOM_TYPES,
   ROOM_CAPACITY,

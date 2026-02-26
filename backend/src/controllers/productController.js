@@ -2,8 +2,21 @@ const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
-const { ROLES } = require('../constants');
+const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
+const sequelize = require('../config/sequelize');
+
+const VISA_KIND_VALUES = Object.values(VISA_KIND);
+
+/** Senin dari minggu yang berisi dateStr (YYYY-MM-DD). Return YYYY-MM-DD. */
+function getWeekStart(dateStr) {
+  const d = new Date(String(dateStr).slice(0, 10));
+  if (isNaN(d.getTime())) return null;
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
 
 /** Ambil kurs dari business rules (global) */
 async function getCurrencyRates() {
@@ -28,33 +41,69 @@ function fillTriple(sourceCurrency, value, rates) {
 
 /**
  * Resolve effective price: special owner > branch > general (pusat).
+ * Untuk produk tiket: jika meta.bandara diisi, cari harga general dengan meta.bandara yang sama.
  */
 async function getEffectivePrice(productId, branchId, ownerId, meta = {}, currency = 'IDR') {
   const today = new Date().toISOString().slice(0, 10);
-  const where = { product_id: productId, currency };
   const effectiveWhere = {
-    [Op.or]: [{ effective_from: null }, { effective_from: { [Op.lte]: today } }],
-    [Op.or]: [{ effective_until: null }, { effective_until: { [Op.gte]: today } }]
+    [Op.and]: [
+      { [Op.or]: [{ effective_from: null }, { effective_from: { [Op.lte]: today } }] },
+      { [Op.or]: [{ effective_until: null }, { effective_until: { [Op.gte]: today } }] }
+    ]
   };
 
+  const bandara = meta && meta.bandara && BANDARA_TIKET_CODES.includes(meta.bandara) ? meta.bandara : null;
+  if (bandara) {
+    const av = await ProductAvailability.findOne({ where: { product_id: productId } });
+    const schedules = (av?.meta && av.meta.bandara_schedules && av.meta.bandara_schedules[bandara]) ? av.meta.bandara_schedules[bandara] : null;
+    if (schedules) {
+      let slot = null;
+      const dateStr = meta.date ? String(meta.date).slice(0, 10) : null;
+      if (dateStr && schedules.day && schedules.day[dateStr]) slot = schedules.day[dateStr];
+      if (!slot && dateStr && schedules.week) {
+        const weekKey = getWeekStart(dateStr);
+        if (weekKey && schedules.week[weekKey]) slot = schedules.week[weekKey];
+      }
+      if (!slot && dateStr && schedules.month) {
+        const monthKey = dateStr.slice(0, 7);
+        if (schedules.month[monthKey]) slot = schedules.month[monthKey];
+      }
+      if (!slot && schedules.default) slot = schedules.default;
+      if (slot && slot.price_idr != null) return parseFloat(slot.price_idr);
+    }
+    const price = await ProductPrice.findOne({
+      where: {
+        product_id: productId,
+        branch_id: null,
+        owner_id: null,
+        currency,
+        ...effectiveWhere,
+        [Op.and]: [sequelize.where(sequelize.literal("meta->>'bandara'"), Op.eq, bandara)]
+      },
+      order: [['created_at', 'DESC']]
+    });
+    return price ? parseFloat(price.amount) : null;
+  }
+
+  const where = { product_id: productId, currency, ...effectiveWhere };
   let special = null;
   let branch = null;
   let general = null;
 
   if (ownerId) {
     special = await ProductPrice.findOne({
-      where: { ...where, owner_id: ownerId, branch_id: branchId, ...effectiveWhere },
+      where: { ...where, owner_id: ownerId, branch_id: branchId },
       order: [['created_at', 'DESC']]
     });
   }
   if (branchId) {
     branch = await ProductPrice.findOne({
-      where: { ...where, branch_id: branchId, owner_id: null, ...effectiveWhere },
+      where: { ...where, branch_id: branchId, owner_id: null },
       order: [['created_at', 'DESC']]
     });
   }
   general = await ProductPrice.findOne({
-    where: { ...where, branch_id: null, owner_id: null, ...effectiveWhere },
+    where: { ...where, branch_id: null, owner_id: null },
     order: [['created_at', 'DESC']]
   });
 
@@ -85,7 +134,7 @@ const list = asyncHandler(async (req, res) => {
   const includeList = with_prices === 'true'
     ? [
         { model: ProductPrice, as: 'ProductPrices', required: false },
-        ...(type === 'hotel' ? [{ model: ProductAvailability, as: 'ProductAvailability', required: false }] : [])
+        ...(type === 'hotel' || type === 'visa' || type === 'ticket' ? [{ model: ProductAvailability, as: 'ProductAvailability', required: false }] : [])
       ]
     : [];
   const { count, rows: products } = await Product.findAndCountAll({
@@ -139,6 +188,32 @@ const list = asyncHandler(async (req, res) => {
         });
         base.room_breakdown = rooms;
         base.prices_by_room = rooms;
+      }
+      if (type === 'visa') {
+        const av = p.ProductAvailability;
+        base.quota = av && av.quantity != null ? Number(av.quantity) : 0;
+      }
+      if (type === 'ticket') {
+        const av = p.ProductAvailability;
+        const bandaraSchedules = (av?.meta && av.meta.bandara_schedules) ? av.meta.bandara_schedules : {};
+        const prices = p.ProductPrices || [];
+        const generalTicket = prices.filter(pr => !pr.branch_id && !pr.owner_id);
+        const bandaraSeats = (av?.meta && av.meta.bandara_seats) ? av.meta.bandara_seats : {};
+        base.bandara_options = BANDARA_TIKET.map(({ code, name }) => {
+          const s = bandaraSchedules[code] || {};
+          const defaultSlot = s.default || {};
+          const priceRow = generalTicket.find(pr => pr.meta && pr.meta.bandara === code);
+          if (priceRow && !defaultSlot.price_idr) defaultSlot.price_idr = parseFloat(priceRow.amount);
+          if (bandaraSeats[code] != null && defaultSlot.seat_quota == null) defaultSlot.seat_quota = Number(bandaraSeats[code]) || 0;
+          return {
+            bandara: code,
+            name,
+            default: { price_idr: Number(defaultSlot.price_idr) || 0, seat_quota: Number(defaultSlot.seat_quota) || 0 },
+            month: s.month && typeof s.month === 'object' ? s.month : {},
+            week: s.week && typeof s.week === 'object' ? s.week : {},
+            day: s.day && typeof s.day === 'object' ? s.day : {}
+          };
+        });
       }
       return base;
     });
@@ -204,6 +279,133 @@ async function generateHotelCode(name, location) {
   return `${prefix}${String(nextSeq).padStart(3, '0')}`;
 }
 
+/** Generate kode unik untuk product visa berdasarkan visa_kind (only, tasreh, premium) */
+async function generateVisaCode(visaKind) {
+  const suffix = (VISA_KIND_VALUES.includes(visaKind) ? visaKind.toUpperCase() : 'ONLY').slice(0, 7);
+  const prefix = `VIS-${suffix}-`;
+  const existing = await Product.findAll({
+    where: { type: 'visa', code: { [Op.like]: `${prefix}%` } },
+    attributes: ['code']
+  });
+  const nums = existing
+    .map(p => parseInt(String(p.code || '').replace(prefix, '') || '0', 10))
+    .filter(n => !Number.isNaN(n));
+  const nextSeq = nums.length === 0 ? 1 : Math.max(...nums) + 1;
+  return `${prefix}${String(nextSeq).padStart(2, '0')}`;
+}
+
+/**
+ * POST /api/v1/products/visas - buat produk visa (Visa Only / Visa + Tasreh / Visa Premium)
+ * Body: name, description?, visa_kind, require_hotel? (boolean, default false)
+ */
+const createVisa = asyncHandler(async (req, res) => {
+  const { name, description, visa_kind, require_hotel } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
+  const kind = (visa_kind && VISA_KIND_VALUES.includes(visa_kind)) ? visa_kind : VISA_KIND.ONLY;
+  const code = await generateVisaCode(kind);
+  const product = await Product.create({
+    type: 'visa',
+    code,
+    name: name.trim(),
+    description: description || null,
+    is_package: false,
+    meta: { visa_kind: kind, require_hotel: require_hotel === true || require_hotel === 'true' },
+    created_by: req.user.id
+  });
+  res.status(201).json({ success: true, data: product });
+});
+
+/** Generate kode unik untuk product tiket (TKT-001, TKT-002, ...) */
+async function generateTicketCode() {
+  const prefix = 'TKT-';
+  const existing = await Product.findAll({
+    where: { type: 'ticket', code: { [Op.like]: `${prefix}%` } },
+    attributes: ['code']
+  });
+  const nums = existing
+    .map(p => parseInt(String(p.code || '').replace(prefix, '') || '0', 10))
+    .filter(n => !Number.isNaN(n));
+  const nextSeq = nums.length === 0 ? 1 : Math.max(...nums) + 1;
+  return `${prefix}${String(nextSeq).padStart(3, '0')}`;
+}
+
+/**
+ * POST /api/v1/products/tickets - buat produk tiket (workflow: pergi saja / pulang saja / pulang pergi)
+ * Body: name, description?, trip_type? ('one_way' | 'return_only' | 'round_trip')
+ */
+const createTicket = asyncHandler(async (req, res) => {
+  const { name, description, trip_type } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
+  const tripType = (trip_type && TICKET_TRIP_TYPES.includes(trip_type)) ? trip_type : 'round_trip';
+  const code = await generateTicketCode();
+  const product = await Product.create({
+    type: 'ticket',
+    code,
+    name: name.trim(),
+    description: description || null,
+    is_package: false,
+    meta: { trip_type: tripType },
+    created_by: req.user.id
+  });
+  res.status(201).json({ success: true, data: product });
+});
+
+/**
+ * PUT /api/v1/products/:id/ticket-bandara - set harga & kuota per bandara per periode
+ * Body: { bandara, period_type: 'default'|'month'|'week'|'day', period_key?: string, price_idr, seat_quota }
+ * period_key: month = '2026-01', week = '2026-01-13' (Senin), day = '2026-01-15'
+ */
+const setTicketBandara = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id);
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
+
+  const { bandara, period_type, period_key, price_idr, seat_quota } = req.body;
+  if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
+    return res.status(400).json({ success: false, message: 'bandara wajib: BTH, CGK, SBY, atau UPG' });
+  }
+  const pt = (period_type && TICKET_PERIOD_TYPES.includes(period_type)) ? period_type : 'default';
+  const key = pt === 'default' ? 'default' : (period_key && String(period_key).trim()) || null;
+  if (pt !== 'default' && !key) return res.status(400).json({ success: false, message: 'period_key wajib untuk month/week/day' });
+
+  const priceIdr = Math.max(0, parseFloat(price_idr) || 0);
+  const quota = Math.max(0, parseInt(seat_quota, 10) || 0);
+
+  let av = await ProductAvailability.findOne({ where: { product_id: product.id } });
+  const meta = av?.meta && typeof av.meta === 'object' ? { ...av.meta } : {};
+  meta.bandara_schedules = meta.bandara_schedules || {};
+  meta.bandara_schedules[bandara] = meta.bandara_schedules[bandara] || { default: { price_idr: 0, seat_quota: 0 }, month: {}, week: {}, day: {} };
+  const s = meta.bandara_schedules[bandara];
+  if (!s.month) s.month = {};
+  if (!s.week) s.week = {};
+  if (!s.day) s.day = {};
+
+  if (pt === 'default') {
+    s.default = { price_idr: priceIdr, seat_quota: quota };
+  } else if (pt === 'month') {
+    s.month[key] = { price_idr: priceIdr, seat_quota: quota };
+  } else if (pt === 'week') {
+    s.week[key] = { price_idr: priceIdr, seat_quota: quota };
+  } else {
+    s.day[key] = { price_idr: priceIdr, seat_quota: quota };
+  }
+
+  if (!av) {
+    av = await ProductAvailability.create({
+      product_id: product.id,
+      quantity: 0,
+      meta,
+      updated_by: req.user.id
+    });
+  } else {
+    av.meta = meta;
+    av.updated_by = req.user.id;
+    await av.save();
+  }
+
+  res.json({ success: true, message: 'Harga dan kuota bandara disimpan' });
+});
+
 /**
  * POST /api/v1/products/hotels - buat hotel, type & code otomatis dari system
  */
@@ -230,17 +432,26 @@ const createHotel = asyncHandler(async (req, res) => {
 const create = asyncHandler(async (req, res) => {
   const { type, code, name, description, is_package, meta } = req.body;
   if (!type || !name) return res.status(400).json({ success: false, message: 'type dan name wajib' });
+  let finalMeta = meta && typeof meta === 'object' ? { ...meta } : {};
+  if (type === 'visa') {
+    const kind = (finalMeta.visa_kind && VISA_KIND_VALUES.includes(finalMeta.visa_kind)) ? finalMeta.visa_kind : VISA_KIND.ONLY;
+    finalMeta.visa_kind = kind;
+    if (typeof finalMeta.require_hotel !== 'boolean') finalMeta.require_hotel = finalMeta.require_hotel === true || finalMeta.require_hotel === 'true';
+  }
   let finalCode = code;
   if (type === 'hotel' && (!finalCode || finalCode.trim() === '')) {
-    const location = meta?.location || 'makkah';
+    const location = finalMeta.location || 'makkah';
     finalCode = await generateHotelCode(name, location);
+  }
+  if (type === 'visa' && (!finalCode || finalCode.trim() === '')) {
+    finalCode = await generateVisaCode(finalMeta.visa_kind);
   }
   if (!finalCode || finalCode.trim() === '') return res.status(400).json({ success: false, message: 'code wajib' });
   const product = await Product.create({
     type, code: finalCode, name,
     description: description || null,
     is_package: !!is_package,
-    meta: meta || {},
+    meta: finalMeta,
     created_by: req.user.id
   });
   res.status(201).json({ success: true, data: product });
@@ -257,7 +468,17 @@ const update = asyncHandler(async (req, res) => {
   if (name !== undefined) product.name = name;
   if (description !== undefined) product.description = description;
   if (is_package !== undefined) product.is_package = is_package;
-  if (meta !== undefined) product.meta = meta;
+  if (meta !== undefined) {
+    const nextMeta = { ...(product.meta || {}), ...(meta && typeof meta === 'object' ? meta : {}) };
+    if (product.type === 'visa') {
+      if (nextMeta.visa_kind && !VISA_KIND_VALUES.includes(nextMeta.visa_kind)) nextMeta.visa_kind = VISA_KIND.ONLY;
+      if (typeof nextMeta.require_hotel !== 'boolean') nextMeta.require_hotel = nextMeta.require_hotel === true || nextMeta.require_hotel === 'true';
+    }
+    if (product.type === 'ticket' && nextMeta.trip_type && !TICKET_TRIP_TYPES.includes(nextMeta.trip_type)) {
+      nextMeta.trip_type = 'round_trip';
+    }
+    product.meta = nextMeta;
+  }
   if (is_active !== undefined) product.is_active = is_active;
   await product.save();
   res.json({ success: true, data: product });
@@ -448,6 +669,9 @@ module.exports = {
   getHotelCalendar: getHotelCalendarHandler,
   create,
   createHotel,
+  createVisa,
+  createTicket,
+  setTicketBandara,
   update,
   remove,
   listPrices,

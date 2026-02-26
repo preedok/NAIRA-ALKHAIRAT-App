@@ -34,6 +34,20 @@ const ROOM_TYPES = [
   { id:'quint',  label:'Quint',  cap:5 },
 ] as const;
 
+const BANDARA_TIKET = [
+  { code: 'BTH', name: 'Batam' },
+  { code: 'CGK', name: 'Jakarta' },
+  { code: 'SBY', name: 'Surabaya' },
+  { code: 'UPG', name: 'Makassar' },
+] as const;
+
+type TicketTripType = 'one_way' | 'return_only' | 'round_trip';
+const TICKET_TRIP_OPTIONS: { value: TicketTripType; label: string }[] = [
+  { value: 'one_way', label: 'Pergi saja' },
+  { value: 'return_only', label: 'Pulang saja' },
+  { value: 'round_trip', label: 'Pulang pergi' },
+];
+
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
 
@@ -43,9 +57,10 @@ interface ProductOption {
   price_branch?:number|null; price_owner?:number|null;
   currency?:string; meta?:{meal_price?:number;[k:string]:unknown};
   room_breakdown?:Record<string,any>; prices_by_room?:Record<string,any>;
+  bandara_options?: Array<{ bandara: string; name: string; default: { price_idr: number; seat_quota?: number } }>;
 }
 interface HotelRoomLine { id:string; room_type:RoomTypeId; quantity:number; unit_price:number; with_meal?:boolean; }
-interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; }
+interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; meta?:Record<string,unknown>; }
 interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
 
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
@@ -164,7 +179,8 @@ const OrderFormPage: React.FC = () => {
         unit_price:d.unit_price_idr,
         room_breakdown: d.type==='hotel'?room_breakdown:undefined,
         check_in:d.check_in,
-        check_out:d.check_out
+        check_out:d.check_out,
+        meta:(d as { meta?: Record<string,unknown> }).meta
       };
     });
     setItems(rows.length?rows:[newRow()]);
@@ -204,7 +220,7 @@ const OrderFormPage: React.FC = () => {
           });
         }
       } else {
-        rows.push({ id:oi.id||`row-${uid()}`, type:t, product_id:productRefId, product_name:productName, quantity:Math.max(0,qty(oi)), room_type:(meta.room_type??getVal(oi,'room_type')) as RoomTypeId|undefined, unit_price:unitPrice });
+        rows.push({ id:oi.id||`row-${uid()}`, type:t, product_id:productRefId, product_name:productName, quantity:Math.max(0,qty(oi)), room_type:(meta.room_type??getVal(oi,'room_type')) as RoomTypeId|undefined, unit_price:unitPrice, meta:Object.keys(meta).length?meta:undefined });
       }
     }
     setItems(rows.length?rows:[newRow()]);
@@ -233,6 +249,7 @@ const OrderFormPage: React.FC = () => {
   /* helpers */
   const byType=(type:ItemType)=> type==='package'?products.filter(p=>p.is_package):products.filter(p=>!p.is_package&&p.type===type);
   const effP=(p:ProductOption)=>{ const n=p.price_owner??p.price_branch??p.price_general; return typeof n==='number'&&!isNaN(n)?n:0; };
+  const ticketPrice=(p:ProductOption|undefined,bandara:string)=>{ if(!p?.bandara_options) return 0; const opt=p.bandara_options.find(b=>b.bandara===bandara); return (opt?.default?.price_idr != null && !isNaN(opt.default.price_idr)) ? Number(opt.default.price_idr) : 0; };
   const hrp=(p:ProductOption|undefined,rt:RoomTypeId,meal:boolean)=>{ if(!p) return 0; const rb=p.room_breakdown??p.prices_by_room??{}; const base=rb[rt]?.price??effP(p); return meal?base+((p.meta?.meal_price as number|undefined)??0):base; };
   const rowCur=(row:OrderItemRow):'SAR'|'IDR'=> products.find(x=>x.id===row.product_id)?.currency==='SAR'?'SAR':'IDR';
   const toIDR=(price:number,row:OrderItemRow)=> rowCur(row)==='SAR'?price*(rates.SAR_TO_IDR||4200):price;
@@ -246,7 +263,7 @@ const OrderFormPage: React.FC = () => {
   const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const prod=byType('hotel').find(p=>p.id===row.product_id); const line:HotelRoomLine={id:`rl-${uid()}`,room_type:'quad',quantity:1,unit_price:hrp(prod,'quad',false),with_meal:false}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
   const removeLine=(rowId:string,lineId:string)=>setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:(r.room_breakdown||[]).filter(l=>l.id!==lineId)}));
   const updLine=(rowId:string,lineId:string,upd:Partial<HotelRoomLine>)=>setItems(p=>p.map(r=>{ if(r.id!==rowId||!r.room_breakdown) return r; return{...r,room_breakdown:r.room_breakdown.map(l=>l.id!==lineId?l:{...l,...upd})}; }));
-  const updateRow=(rowId:string,upd:Partial<OrderItemRow>)=>setItems(p=>p.map(r=>{ if(r.id!==rowId) return r; const next={...r,...upd}; if(upd.product_id!=null){ const prod=byType(next.type).find(x=>x.id===upd.product_id); if(prod){ next.product_name=prod.name; if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod); if(next.type==='hotel'&&!(next.room_breakdown?.length)) next.room_breakdown=[{id:`rl-${uid()}`,room_type:'quad',quantity:1,unit_price:hrp(prod,'quad',false),with_meal:false}]; } } if(upd.type!=null&&upd.type!==r.type){ next.product_id=''; next.product_name=''; next.unit_price=0; if(upd.type!=='hotel'){ next.room_type=undefined; next.room_breakdown=undefined; } else next.room_breakdown=next.room_breakdown??[]; } return next; }));
+  const updateRow=(rowId:string,upd:Partial<OrderItemRow>)=>setItems(p=>p.map(r=>{ if(r.id!==rowId) return r; const next={...r,...upd}; if(upd.product_id!=null){ const prod=byType(next.type).find(x=>x.id===upd.product_id); if(prod){ next.product_name=prod.name; if(next.type==='ticket'){ const bandara=(next.meta?.bandara as string)||(prod.bandara_options?.[0]?.bandara)||'BTH'; next.meta={ ...(next.meta||{}), bandara, trip_type:(next.meta?.trip_type as TicketTripType)||'round_trip' }; next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?ticketPrice(prod,bandara):next.unit_price; } else { if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod); } if(next.type==='hotel'&&!(next.room_breakdown?.length)) next.room_breakdown=[{id:`rl-${uid()}`,room_type:'quad',quantity:1,unit_price:hrp(prod,'quad',false),with_meal:false}]; } } if(upd.meta!=null&&next.type==='ticket'){ const prod=byType('ticket').find(x=>x.id===next.product_id); const bandara=(upd.meta.bandara as string)||(next.meta?.bandara as string); if(prod&&bandara) next.unit_price=ticketPrice(prod,bandara); } if(upd.type!=null&&upd.type!==r.type){ next.product_id=''; next.product_name=''; next.unit_price=0; next.meta=undefined; if(upd.type!=='hotel'){ next.room_type=undefined; next.room_breakdown=undefined; } else next.room_breakdown=next.room_breakdown??[]; } return next; }));
 
   /* totals */
   const rowSub=(r:OrderItemRow)=> r.type==='hotel'&&r.room_breakdown?.length ? r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*(l.unit_price||0),0) : Math.max(0,r.quantity)*(r.unit_price||0);
@@ -264,6 +281,8 @@ const OrderFormPage: React.FC = () => {
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
     const hotelWithoutDates=valid.filter(r=>r.type==='hotel'&&(!r.check_in||!r.check_out));
     if(hotelWithoutDates.length){ showToast('Item hotel wajib isi tanggal Check-in dan Check-out','warning'); return; }
+    const ticketWithoutBandara=valid.filter(r=>r.type==='ticket'&&!r.meta?.bandara);
+    if(ticketWithoutBandara.length){ showToast('Item tiket wajib pilih bandara','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -273,7 +292,7 @@ const OrderFormPage: React.FC = () => {
     for(const r of valid){
       if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
       else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
-      else{ payload.push({product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}); }
+      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
     if(isEdit&&orderId){
@@ -298,6 +317,8 @@ const OrderFormPage: React.FC = () => {
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
     const hotelWithoutDates=valid.filter(r=>r.type==='hotel'&&(!r.check_in||!r.check_out));
     if(hotelWithoutDates.length){ showToast('Item hotel wajib isi tanggal Check-in dan Check-out','warning'); return; }
+    const ticketWithoutBandara=valid.filter(r=>r.type==='ticket'&&!r.meta?.bandara);
+    if(ticketWithoutBandara.length){ showToast('Item tiket wajib pilih bandara','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -307,7 +328,7 @@ const OrderFormPage: React.FC = () => {
     for(const r of valid){
       if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
       else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
-      else{ payload.push({product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}); }
+      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
     if(isEdit&&orderId){
@@ -592,6 +613,29 @@ const OrderFormPage: React.FC = () => {
                             </>
                           ) : (
                             <div className="flex flex-wrap items-end gap-4">
+                              {row.type==='ticket' && (
+                                <>
+                                  <div className="min-w-[120px]">
+                                    <label className={labelClass}>Bandara</label>
+                                    <select className={selectClass} value={(row.meta?.bandara as string)||''}
+                                      onChange={e=>{ const bandara=e.target.value; updateRow(row.id,{ meta: { ...(row.meta||{}), bandara, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }}>
+                                      <option value="">— Pilih bandara —</option>
+                                      {BANDARA_TIKET.map(b=>(
+                                        <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="min-w-[140px]">
+                                    <label className={labelClass}>Perjalanan</label>
+                                    <select className={selectClass} value={(row.meta?.trip_type as TicketTripType)||'round_trip'}
+                                      onChange={e=>{ const trip_type=e.target.value as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, bandara:(row.meta?.bandara as string)||'BTH' } }); }}>
+                                      {TICKET_TRIP_OPTIONS.map(o=>(
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
                               <div className="w-24">
                                 <label className={labelClass}>Qty</label>
                                 <input type="number" min="0" className={inputClass} value={row.quantity||''}

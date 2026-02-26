@@ -18,8 +18,20 @@ router.use('/prices', pricesRouter);
 const hotelsRouter = express.Router({ mergeParams: true });
 hotelsRouter.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createHotel);
 router.use('/hotels', hotelsRouter);
+
+// Sub-router untuk /visas - POST /products/visas (buat visa: Visa Only / Visa + Tasreh / Visa Premium)
+const visasRouter = express.Router({ mergeParams: true });
+visasRouter.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createVisa);
+router.use('/visas', visasRouter);
+
+// Sub-router untuk /tickets - POST /products/tickets (buat tiket, harga & kuota per bandara)
+const ticketsRouter = express.Router({ mergeParams: true });
+ticketsRouter.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createTicket);
+router.use('/tickets', ticketsRouter);
+
 router.get('/', productController.list);
 router.get('/:id', productController.getById);
+router.put('/:id/ticket-bandara', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandara);
 router.get('/:id/price', productController.getPrice);
 router.get('/:id/availability', productController.getAvailability);
 router.get('/:id/hotel-calendar', productController.getHotelCalendar);
