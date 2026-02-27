@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
-const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES } = require('../constants');
+const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES, BUS_ROUTE_TYPES, BUS_TRIP_TYPES } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
 const sequelize = require('../config/sequelize');
 
@@ -44,6 +44,13 @@ function fillTriple(sourceCurrency, value, rates) {
  * Untuk produk tiket: jika meta.bandara diisi, cari harga general dengan meta.bandara yang sama.
  */
 async function getEffectivePrice(productId, branchId, ownerId, meta = {}, currency = 'IDR') {
+  if (meta.route_type && BUS_ROUTE_TYPES.includes(meta.route_type)) {
+    const product = await Product.findByPk(productId, { attributes: ['id', 'type', 'meta'] });
+    if (product && product.type === 'bus' && product.meta && product.meta.route_prices && typeof product.meta.route_prices[meta.route_type] === 'number') {
+      return product.meta.route_prices[meta.route_type];
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const effectiveWhere = {
     [Op.and]: [
@@ -398,12 +405,60 @@ const setTicketBandara = asyncHandler(async (req, res) => {
       updated_by: req.user.id
     });
   } else {
-    av.meta = meta;
+    av.meta = JSON.parse(JSON.stringify(meta));
     av.updated_by = req.user.id;
+    av.changed('meta', true);
     await av.save();
   }
 
   res.json({ success: true, message: 'Harga dan kuota bandara disimpan' });
+});
+
+/**
+ * PUT /api/v1/products/:id/ticket-bandara-bulk - set harga & kuota default untuk semua bandara sekaligus
+ * Body: { bandara_defaults: { BTH: { price_idr?, seat_quota? }, CGK: {...}, SBY: {...}, UPG: {...} } }
+ */
+const setTicketBandaraBulk = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id);
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
+
+  const { bandara_defaults } = req.body;
+  const defaults = bandara_defaults && typeof bandara_defaults === 'object' ? bandara_defaults : {};
+
+  let av = await ProductAvailability.findOne({ where: { product_id: product.id } });
+  const meta = av?.meta && typeof av.meta === 'object' ? { ...av.meta } : {};
+  meta.bandara_schedules = meta.bandara_schedules && typeof meta.bandara_schedules === 'object' ? { ...meta.bandara_schedules } : {};
+
+  for (const code of BANDARA_TIKET_CODES) {
+    const def = defaults[code];
+    const priceIdr = Math.max(0, parseFloat(def?.price_idr) || 0);
+    const quota = Math.max(0, parseInt(def?.seat_quota, 10) || 0);
+    meta.bandara_schedules[code] = meta.bandara_schedules[code] && typeof meta.bandara_schedules[code] === 'object'
+      ? { ...meta.bandara_schedules[code] }
+      : { default: { price_idr: 0, seat_quota: 0 }, month: {}, week: {}, day: {} };
+    const s = meta.bandara_schedules[code];
+    if (!s.month) s.month = {};
+    if (!s.week) s.week = {};
+    if (!s.day) s.day = {};
+    s.default = { price_idr: priceIdr, seat_quota: quota };
+  }
+
+  if (!av) {
+    av = await ProductAvailability.create({
+      product_id: product.id,
+      quantity: 0,
+      meta,
+      updated_by: req.user.id
+    });
+  } else {
+    av.meta = JSON.parse(JSON.stringify(meta));
+    av.updated_by = req.user.id;
+    av.changed('meta', true);
+    await av.save();
+  }
+
+  res.json({ success: true, message: 'Harga dan kuota semua bandara disimpan' });
 });
 
 /**
@@ -476,6 +531,17 @@ const update = asyncHandler(async (req, res) => {
     }
     if (product.type === 'ticket' && nextMeta.trip_type && !TICKET_TRIP_TYPES.includes(nextMeta.trip_type)) {
       nextMeta.trip_type = 'round_trip';
+    }
+    if (product.type === 'bus') {
+      if (nextMeta.trip_type && !BUS_TRIP_TYPES.includes(nextMeta.trip_type)) nextMeta.trip_type = 'round_trip';
+      if (nextMeta.route_prices && typeof nextMeta.route_prices === 'object') {
+        const sanitized = {};
+        BUS_ROUTE_TYPES.forEach(rt => {
+          const v = nextMeta.route_prices[rt];
+          if (typeof v === 'number' && !isNaN(v) && v >= 0) sanitized[rt] = Math.round(v);
+        });
+        nextMeta.route_prices = sanitized;
+      }
     }
     product.meta = nextMeta;
   }
@@ -672,6 +738,7 @@ module.exports = {
   createVisa,
   createTicket,
   setTicketBandara,
+  setTicketBandaraBulk,
   update,
   remove,
   listPrices,

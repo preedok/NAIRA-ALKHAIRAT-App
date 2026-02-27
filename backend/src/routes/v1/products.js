@@ -32,6 +32,7 @@ router.use('/tickets', ticketsRouter);
 router.get('/', productController.list);
 router.get('/:id', productController.getById);
 router.put('/:id/ticket-bandara', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandara);
+router.put('/:id/ticket-bandara-bulk', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandaraBulk);
 router.get('/:id/price', productController.getPrice);
 router.get('/:id/availability', productController.getAvailability);
 router.get('/:id/hotel-calendar', productController.getHotelCalendar);

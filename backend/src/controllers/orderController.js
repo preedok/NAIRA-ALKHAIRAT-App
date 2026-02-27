@@ -245,6 +245,16 @@ const create = asyncHandler(async (req, res) => {
       if (it.meta?.trip_type && !TICKET_TRIP_TYPES.includes(it.meta.trip_type)) {
         return res.status(400).json({ success: false, message: 'trip_type tiket harus one_way, return_only, atau round_trip' });
       }
+      const tripType = it.meta?.trip_type || 'round_trip';
+      if (tripType === 'round_trip' && (!it.meta?.departure_date || !it.meta?.return_date)) {
+        return res.status(400).json({ success: false, message: 'Tiket pulang pergi wajib isi tanggal keberangkatan dan tanggal kepulangan' });
+      }
+      if (tripType === 'one_way' && !it.meta?.departure_date) {
+        return res.status(400).json({ success: false, message: 'Tiket pergi saja wajib isi tanggal keberangkatan' });
+      }
+      if (tripType === 'return_only' && !it.meta?.return_date) {
+        return res.status(400).json({ success: false, message: 'Tiket pulang saja wajib isi tanggal kepulangan' });
+      }
     }
     const qty = parseInt(it.quantity, 10) || 1;
     let unitPrice = parseFloat(it.unit_price);
@@ -442,6 +452,16 @@ const update = asyncHandler(async (req, res) => {
         }
         if (it.meta?.trip_type && !TICKET_TRIP_TYPES.includes(it.meta.trip_type)) {
           return res.status(400).json({ success: false, message: 'trip_type tiket harus one_way, return_only, atau round_trip' });
+        }
+        const tripType = it.meta?.trip_type || 'round_trip';
+        if (tripType === 'round_trip' && (!it.meta?.departure_date || !it.meta?.return_date)) {
+          return res.status(400).json({ success: false, message: 'Tiket pulang pergi wajib isi tanggal keberangkatan dan tanggal kepulangan' });
+        }
+        if (tripType === 'one_way' && !it.meta?.departure_date) {
+          return res.status(400).json({ success: false, message: 'Tiket pergi saja wajib isi tanggal keberangkatan' });
+        }
+        if (tripType === 'return_only' && !it.meta?.return_date) {
+          return res.status(400).json({ success: false, message: 'Tiket pulang saja wajib isi tanggal kepulangan' });
         }
       }
       const qty = parseInt(it.quantity, 10) || 1;

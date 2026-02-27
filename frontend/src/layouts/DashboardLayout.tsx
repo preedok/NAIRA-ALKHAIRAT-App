@@ -56,9 +56,9 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'role_invoice_saudi', 'owner'],
     children: [
       { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
-      { title: 'Daftar Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'visa_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'visa_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
       { title: 'Pekerjaan Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa/pekerjaan', roles: ['super_admin', 'admin_koordinator', 'visa_koordinator'] },
-      { title: 'Daftar Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
       { title: 'Pekerjaan Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets/pekerjaan', roles: ['super_admin', 'admin_koordinator', 'tiket_koordinator'] },
       { title: 'Bus', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_bus', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
       { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },

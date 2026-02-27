@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plane, ShoppingCart, Plus, Pencil, ChevronDown, ChevronRight, X, Package, MapPin, ArrowRight, ArrowLeft, ArrowLeftRight } from 'lucide-react';
+import { Plane, ShoppingCart, Plus, Pencil, X, Package, MapPin, ArrowRight, ArrowLeft, ArrowLeftRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
@@ -56,11 +56,6 @@ function getWeekStart(dateStr: string): string {
 }
 
 const formatRp = (n: number) => (n > 0 ? `Rp ${Number(n).toLocaleString('id-ID')}` : '—');
-const formatMonth = (key: string) => {
-  const [y, m] = key.split('-');
-  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-  return `${months[parseInt(m, 10) - 1] || m} ${y}`;
-};
 
 type PeriodType = 'default' | 'month' | 'week' | 'day';
 
@@ -72,9 +67,6 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [ticketProducts, setTicketProducts] = useState<TicketProduct[]>([]);
   const [loadingTicketProducts, setLoadingTicketProducts] = useState(false);
-  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
-  const [expandedBandara, setExpandedBandara] = useState<string | null>(null);
-
   const [editModal, setEditModal] = useState<{
     product: TicketProduct;
     bandaraCode: string;
@@ -188,21 +180,18 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
       });
       const product = (createRes.data as { data?: { id: string } })?.data;
       const productId = product?.id;
-      if (productId && addForm.bandara_defaults) {
-        for (const b of BANDARA_TIKET) {
-          const def = addForm.bandara_defaults[b.code];
-          const price = def?.price_idr ?? 0;
-          const quota = def?.seat_quota ?? 0;
-          if (def && (price > 0 || quota > 0)) {
-            await productsApi.setTicketBandara(productId, {
-              bandara: b.code,
-              price_idr: Math.round(price) || 0,
-              seat_quota: Math.max(0, Math.floor(quota) || 0)
-            });
-          }
-        }
+      if (productId) {
+        const bandara_defaults = BANDARA_TIKET.reduce((acc, b) => {
+          const def = addForm.bandara_defaults?.[b.code];
+          acc[b.code] = {
+            price_idr: def?.price_idr ?? 0,
+            seat_quota: def?.seat_quota ?? 0
+          };
+          return acc;
+        }, {} as Record<string, { price_idr: number; seat_quota: number }>);
+        await productsApi.setTicketBandaraBulk(productId, { bandara_defaults });
       }
-      showToast(productId && Object.values(addForm.bandara_defaults || {}).some(d => (d.price_idr ?? 0) > 0 || (d.seat_quota ?? 0) > 0) ? 'Produk tiket dan harga default bandara berhasil ditambahkan' : 'Produk tiket berhasil ditambahkan', 'success');
+      showToast('Produk tiket dan harga/kuota bandara (BTH, CGK, SBY, UPG) berhasil ditambahkan', 'success');
       setShowAddModal(false);
       setAddForm({
         name: '',
@@ -286,200 +275,74 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
           ) : ticketProducts.length === 0 ? (
             <p className="text-slate-500 text-sm py-4">Belum ada produk tiket. {isPusat ? 'Klik "Tambah produk tiket".' : 'Tambah di master produk (admin pusat).'}</p>
           ) : (
-            <div className="space-y-3">
-              {ticketProducts.map((p) => {
-                const isProductExpanded = expandedProduct === p.id;
-                return (
-                  <div key={p.id} className="rounded-xl border border-slate-200 bg-slate-50/30 overflow-hidden">
-                    <button
-                      type="button"
-                      className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-100/50"
-                      onClick={() => setExpandedProduct(isProductExpanded ? null : p.id)}
-                    >
-                      <span className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-slate-900">{p.code} — {p.name}</span>
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-slate-200">
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Kode</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Nama Produk</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Workflow</th>
+                    {BANDARA_TIKET.map((b) => (
+                      <th key={b.code} className="text-left py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">{b.name} ({b.code})</th>
+                    ))}
+                    <th className="text-right py-3 px-4 font-semibold text-slate-700">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ticketProducts.map((p) => (
+                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <td className="py-2 px-4 font-medium text-slate-900">{p.code}</td>
+                      <td className="py-2 px-4 text-slate-800">{p.name}</td>
+                      <td className="py-2 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-primary-100 text-primary-700">
                           {TICKET_TRIP_LABELS[(p.meta?.trip_type as TicketTripType) || 'round_trip']}
                         </span>
-                      </span>
-                      {canAddToOrder && (
-                        <span className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                          {BANDARA_TIKET.map((b) => {
-                            const s = getSchedule(p, b.code);
-                            const priceIdr = s?.default?.price_idr ?? 0;
-                            if (priceIdr <= 0) return null;
-                            return (
-                              <Button
-                                key={b.code}
-                                variant="outline"
-                                size="sm"
-                                className="p-1.5 text-xs"
-                                onClick={() => handleAddToOrder(p, b.code, b.name)}
-                                title={`Tambah ke order (${b.name})`}
-                              >
-                                <ShoppingCart className="w-3.5 h-3.5 mr-1" /> {b.code}
-                              </Button>
-                            );
-                          })}
-                        </span>
-                      )}
-                      {isProductExpanded ? <ChevronDown className="w-5 h-5 text-slate-500" /> : <ChevronRight className="w-5 h-5 text-slate-500" />}
-                    </button>
-
-                    {isProductExpanded && (
-                      <div className="border-t border-slate-200 p-4 space-y-4">
-                        {isPusat && (
-                          <div className="flex justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditProductModal({
-                                product: p,
-                                name: p.name,
-                                description: p.description ?? '',
-                                trip_type: (p.meta?.trip_type as TicketTripType) || 'round_trip'
-                              })}
-                            >
-                              <Pencil className="w-4 h-4 mr-1" /> Edit produk
-                            </Button>
-                          </div>
-                        )}
-                        {BANDARA_TIKET.map((b) => {
-                          const s = getSchedule(p, b.code);
-                          const def = s?.default ?? { price_idr: 0, seat_quota: 0 };
-                          const monthEntries = s?.month && typeof s.month === 'object' ? Object.entries(s.month) : [];
-                          const weekEntries = s?.week && typeof s.week === 'object' ? Object.entries(s.week) : [];
-                          const dayEntries = s?.day && typeof s.day === 'object' ? Object.entries(s.day) : [];
-                          const bandaraKey = `${p.id}-${b.code}`;
-                          const isBandaraExpanded = expandedBandara === bandaraKey;
-
-                          return (
-                            <div key={b.code} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-                              <button
-                                type="button"
-                                className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50"
-                                onClick={() => setExpandedBandara(isBandaraExpanded ? null : bandaraKey)}
-                              >
-                                <span className="font-medium text-slate-800">{b.name} ({b.code})</span>
-                                <span className="text-sm text-slate-500">Default: {formatRp(def.price_idr)} · Kuota: {def.seat_quota || '—'}</span>
-                                {isBandaraExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                              </button>
-
-                              {isBandaraExpanded && isPusat && (
-                                <div className="border-t border-slate-100 p-4 space-y-4">
-                                  {/* Default */}
-                                  <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
-                                    <div>
-                                      <span className="text-sm font-medium text-slate-700">Default (harga & kuota dasar)</span>
-                                      <p className="text-xs text-slate-500 mt-0.5">{formatRp(def.price_idr)} · Kuota: {def.seat_quota || '—'}</p>
-                                    </div>
-                                    <Button variant="outline" size="sm" onClick={() => openEdit(p, b.code, b.name, 'default', def)}>
-                                      <Pencil className="w-4 h-4 mr-1" /> Edit
-                                    </Button>
-                                  </div>
-
-                                  {/* Per bulan */}
-                                  <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-sm font-medium text-slate-700">Per bulan</span>
-                                      <Button variant="outline" size="sm" onClick={() => openEdit(p, b.code, b.name, 'month', { price_idr: 0, seat_quota: 0 }, undefined)}>
-                                        <Plus className="w-4 h-4 mr-1" /> Tambah bulan
-                                      </Button>
-                                    </div>
-                                    {monthEntries.length === 0 ? (
-                                      <p className="text-xs text-slate-500 py-2">Belum ada. Klik Tambah bulan.</p>
-                                    ) : (
-                                      <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                          <thead><tr className="border-b"><th className="text-left py-2">Bulan</th><th className="text-right py-2">Harga</th><th className="text-right py-2">Kuota</th><th className="w-20" /></tr></thead>
-                                          <tbody>
-                                            {monthEntries.map(([key, slot]) => (
-                                              <tr key={key} className="border-b border-slate-100">
-                                                <td className="py-2">{formatMonth(key)}</td>
-                                                <td className="text-right">{formatRp(slot.price_idr)}</td>
-                                                <td className="text-right">{slot.seat_quota || '—'}</td>
-                                                <td>
-                                                  <Button variant="outline" size="sm" className="p-1" onClick={() => openEdit(p, b.code, b.name, 'month', slot, key)}><Pencil className="w-3.5 h-3.5" /></Button>
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Per minggu */}
-                                  <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-sm font-medium text-slate-700">Per minggu (tanggal Senin)</span>
-                                      <Button variant="outline" size="sm" onClick={() => openEdit(p, b.code, b.name, 'week', { price_idr: 0, seat_quota: 0 }, undefined)}>
-                                        <Plus className="w-4 h-4 mr-1" /> Tambah minggu
-                                      </Button>
-                                    </div>
-                                    {weekEntries.length === 0 ? (
-                                      <p className="text-xs text-slate-500 py-2">Belum ada. Klik Tambah minggu.</p>
-                                    ) : (
-                                      <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                          <thead><tr className="border-b"><th className="text-left py-2">Minggu (Senin)</th><th className="text-right py-2">Harga</th><th className="text-right py-2">Kuota</th><th className="w-20" /></tr></thead>
-                                          <tbody>
-                                            {weekEntries.map(([key, slot]) => (
-                                              <tr key={key} className="border-b border-slate-100">
-                                                <td className="py-2">{key}</td>
-                                                <td className="text-right">{formatRp(slot.price_idr)}</td>
-                                                <td className="text-right">{slot.seat_quota || '—'}</td>
-                                                <td>
-                                                  <Button variant="outline" size="sm" className="p-1" onClick={() => openEdit(p, b.code, b.name, 'week', slot, key)}><Pencil className="w-3.5 h-3.5" /></Button>
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Per hari */}
-                                  <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-sm font-medium text-slate-700">Per hari</span>
-                                      <Button variant="outline" size="sm" onClick={() => openEdit(p, b.code, b.name, 'day', { price_idr: 0, seat_quota: 0 }, undefined)}>
-                                        <Plus className="w-4 h-4 mr-1" /> Tambah hari
-                                      </Button>
-                                    </div>
-                                    {dayEntries.length === 0 ? (
-                                      <p className="text-xs text-slate-500 py-2">Belum ada. Klik Tambah hari.</p>
-                                    ) : (
-                                      <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                          <thead><tr className="border-b"><th className="text-left py-2">Tanggal</th><th className="text-right py-2">Harga</th><th className="text-right py-2">Kuota</th><th className="w-20" /></tr></thead>
-                                          <tbody>
-                                            {dayEntries.map(([key, slot]) => (
-                                              <tr key={key} className="border-b border-slate-100">
-                                                <td className="py-2">{key}</td>
-                                                <td className="text-right">{formatRp(slot.price_idr)}</td>
-                                                <td className="text-right">{slot.seat_quota || '—'}</td>
-                                                <td>
-                                                  <Button variant="outline" size="sm" className="p-1" onClick={() => openEdit(p, b.code, b.name, 'day', slot, key)}><Pencil className="w-3.5 h-3.5" /></Button>
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
+                      </td>
+                      {BANDARA_TIKET.map((b) => {
+                        const s = getSchedule(p, b.code);
+                        const def = s?.default ?? { price_idr: 0, seat_quota: 0 };
+                        const priceIdr = def.price_idr ?? 0;
+                        return (
+                          <td key={b.code} className="py-2 px-4 align-top">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-slate-600">{formatRp(priceIdr)}</span>
+                              <span className="text-xs text-slate-500">Kuota: {def.seat_quota ?? '—'}</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {isPusat && (
+                                  <Button variant="outline" size="sm" className="p-1 min-w-0 h-7" onClick={() => openEdit(p, b.code, b.name, 'default', def)} title="Edit default">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                {canAddToOrder && priceIdr > 0 && (
+                                  <Button variant="outline" size="sm" className="p-1 min-w-0 h-7" onClick={() => handleAddToOrder(p, b.code, b.name)} title={`Tambah ke order (${b.name})`}>
+                                    <ShoppingCart className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 px-4 text-right">
+                        {isPusat && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditProductModal({
+                              product: p,
+                              name: p.name,
+                              description: p.description ?? '',
+                              trip_type: (p.meta?.trip_type as TicketTripType) || 'round_trip'
+                            })}
+                          >
+                            <Pencil className="w-4 h-4 mr-1" /> Edit produk
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </Card>

@@ -111,6 +111,7 @@ export const productsApi = {
   createVisa: (body: { name: string; description?: string; visa_kind: 'only' | 'tasreh' | 'premium'; require_hotel?: boolean }) => api.post('/products/visas', body),
   createTicket: (body: { name: string; description?: string; trip_type?: 'one_way' | 'return_only' | 'round_trip' }) => api.post('/products/tickets', body),
   setTicketBandara: (productId: string, body: { bandara: string; period_type?: 'default' | 'month' | 'week' | 'day'; period_key?: string; price_idr: number; seat_quota: number }) => api.put(`/products/${productId}/ticket-bandara`, body),
+  setTicketBandaraBulk: (productId: string, body: { bandara_defaults: Record<string, { price_idr?: number; seat_quota?: number }> }) => api.put(`/products/${productId}/ticket-bandara-bulk`, body),
   update: (id: string, body: object) => api.patch(`/products/${id}`, body),
   delete: (id: string) => api.delete(`/products/${id}`),
   createPrice: (body: object) => api.post('/products/prices', body),
