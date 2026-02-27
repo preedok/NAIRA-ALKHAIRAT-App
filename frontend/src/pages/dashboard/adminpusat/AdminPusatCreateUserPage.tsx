@@ -345,6 +345,7 @@ const AdminPusatCreateUserPage: React.FC = () => {
             columns={tableColumns}
             data={users}
             emptyMessage="Belum ada akun Role Bus atau Hotel"
+            stickyActionsColumn
             pagination={
               pagination
                 ? {

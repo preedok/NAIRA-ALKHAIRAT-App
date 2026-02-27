@@ -148,7 +148,7 @@ const HotelWorkPage: React.FC = () => {
                   <th className="text-left py-3 px-4">Owner</th>
                   <th className="text-right py-3 px-4">Item Hotel</th>
                   <th className="text-left py-3 px-4">Status</th>
-                  <th className="text-left py-3 px-4">Aksi</th>
+                  <th className="text-left py-3 px-4 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -163,7 +163,7 @@ const HotelWorkPage: React.FC = () => {
                       <td className="py-3 px-4">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
                       <td className="py-3 px-4 text-right">{hotelCount}</td>
                       <td className="py-3 px-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
                           <Eye className="w-4 h-4 mr-1" /> Detail
                         </Button>

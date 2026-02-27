@@ -175,7 +175,7 @@ const RefundsPage: React.FC = () => {
                   <th className="text-right py-3 px-4 font-semibold text-slate-700">Jumlah</th>
                   <th className="text-left py-3 px-4 font-semibold text-slate-700">Rekening</th>
                   <th className="text-left py-3 px-4 font-semibold text-slate-700">Status</th>
-                  {canUpdateStatus && <th className="text-left py-3 px-4 font-semibold text-slate-700">Aksi</th>}
+                  {canUpdateStatus && <th className="text-left py-3 px-4 font-semibold text-slate-700 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -194,7 +194,7 @@ const RefundsPage: React.FC = () => {
                       <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                     </td>
                     {canUpdateStatus && (
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         {r.status === 'requested' && (
                           <div className="flex flex-wrap gap-1">
                             <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'approved')}>Setujui</Button>

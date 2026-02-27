@@ -10,8 +10,9 @@ import {
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import TablePagination from '../../../components/common/TablePagination';
+import Table from '../../../components/common/Table';
 import { useAuth } from '../../../contexts/AuthContext';
+import type { TableColumn } from '../../../types';
 import {
   reportsApi,
   type ReportType,
@@ -475,28 +476,23 @@ const ReportsPage: React.FC = () => {
           {series.length > 0 && (
             <Card className="travel-card">
               <h3 className="text-lg font-bold text-slate-900 mb-4">Trend per Periode</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-600">
-                      <th className="pb-2 pr-4">Periode</th>
-                      <th className="pb-2 pr-4 text-right">Jumlah</th>
-                      <th className="pb-2 pr-4 text-right">Revenue</th>
-                      <th className="pb-2 text-right">Jamaah</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {series.map((s) => (
-                      <tr key={s.period} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-2 pr-4 font-medium">{s.period}</td>
-                        <td className="py-2 pr-4 text-right">{s.count ?? 0}</td>
-                        <td className="py-2 pr-4 text-right">{s.revenue != null ? formatIDR(s.revenue) : '-'}</td>
-                        <td className="py-2 text-right">{s.jamaah ?? 0}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table
+                columns={[
+                  { id: 'period', label: 'Periode', align: 'left' },
+                  { id: 'count', label: 'Jumlah', align: 'right' },
+                  { id: 'revenue', label: 'Revenue', align: 'right' },
+                  { id: 'jamaah', label: 'Jamaah', align: 'right' }
+                ] as TableColumn[]}
+                data={series}
+                renderRow={(s) => (
+                  <tr key={s.period} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-medium text-slate-900">{s.period}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{s.count ?? 0}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{s.revenue != null ? formatIDR(s.revenue) : '-'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{s.jamaah ?? 0}</td>
+                  </tr>
+                )}
+              />
             </Card>
           )}
 
@@ -505,25 +501,22 @@ const ReportsPage: React.FC = () => {
             {breakdown.by_branch && breakdown.by_branch.length > 0 && (
               <Card className="travel-card">
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Per Cabang</h3>
-                <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-600">
-                        <th className="pb-2 pr-4">Cabang</th>
-                        <th className="pb-2 pr-4 text-right">Jumlah</th>
-                        <th className="pb-2 text-right">Revenue</th>
+                <div className="max-h-64 overflow-y-auto">
+                  <Table
+                    columns={[
+                      { id: 'branch', label: 'Cabang', align: 'left' },
+                      { id: 'count', label: 'Jumlah', align: 'right' },
+                      { id: 'revenue', label: 'Revenue', align: 'right' }
+                    ] as TableColumn[]}
+                    data={breakdown.by_branch}
+                    renderRow={(row: any) => (
+                      <tr key={row.branch_id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4 text-slate-700">{row.branch_name ?? row.code ?? row.branch_id}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.count ?? row.invoice_count ?? 0}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {breakdown.by_branch.map((row: any) => (
-                        <tr key={row.branch_id} className="border-b border-slate-100">
-                          <td className="py-2 pr-4">{row.branch_name ?? row.code ?? row.branch_id}</td>
-                          <td className="py-2 pr-4 text-right">{row.count ?? row.invoice_count ?? 0}</td>
-                          <td className="py-2 text-right">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    )}
+                  />
                 </div>
               </Card>
             )}
@@ -543,50 +536,44 @@ const ReportsPage: React.FC = () => {
             {breakdown.by_provinsi && breakdown.by_provinsi.length > 0 && (
               <Card className="travel-card">
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Per Provinsi</h3>
-                <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-600">
-                        <th className="pb-2 pr-4">Provinsi</th>
-                        <th className="pb-2 pr-4 text-right">Jumlah</th>
-                        <th className="pb-2 text-right">Revenue</th>
+                <div className="max-h-64 overflow-y-auto">
+                  <Table
+                    columns={[
+                      { id: 'provinsi', label: 'Provinsi', align: 'left' },
+                      { id: 'count', label: 'Jumlah', align: 'right' },
+                      { id: 'revenue', label: 'Revenue', align: 'right' }
+                    ] as TableColumn[]}
+                    data={breakdown.by_provinsi}
+                    renderRow={(row: any) => (
+                      <tr key={row.provinsi_id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4 text-slate-700">{row.provinsi_name ?? row.provinsi_id}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.count ?? row.invoice_count ?? 0}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {breakdown.by_provinsi.map((row: any) => (
-                        <tr key={row.provinsi_id} className="border-b border-slate-100">
-                          <td className="py-2 pr-4">{row.provinsi_name ?? row.provinsi_id}</td>
-                          <td className="py-2 pr-4 text-right">{row.count ?? row.invoice_count ?? 0}</td>
-                          <td className="py-2 text-right">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    )}
+                  />
                 </div>
               </Card>
             )}
             {breakdown.by_wilayah && breakdown.by_wilayah.length > 0 && (
               <Card className="travel-card">
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Per Wilayah</h3>
-                <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-600">
-                        <th className="pb-2 pr-4">Wilayah</th>
-                        <th className="pb-2 pr-4 text-right">Jumlah</th>
-                        <th className="pb-2 text-right">Revenue</th>
+                <div className="max-h-64 overflow-y-auto">
+                  <Table
+                    columns={[
+                      { id: 'wilayah', label: 'Wilayah', align: 'left' },
+                      { id: 'count', label: 'Jumlah', align: 'right' },
+                      { id: 'revenue', label: 'Revenue', align: 'right' }
+                    ] as TableColumn[]}
+                    data={breakdown.by_wilayah}
+                    renderRow={(row: any) => (
+                      <tr key={row.wilayah_id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4 text-slate-700">{row.wilayah_name ?? row.wilayah_id}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.count ?? row.invoice_count ?? 0}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {breakdown.by_wilayah.map((row: any) => (
-                        <tr key={row.wilayah_id} className="border-b border-slate-100">
-                          <td className="py-2 pr-4">{row.wilayah_name ?? row.wilayah_id}</td>
-                          <td className="py-2 pr-4 text-right">{row.count ?? row.invoice_count ?? 0}</td>
-                          <td className="py-2 text-right">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    )}
+                  />
                 </div>
               </Card>
             )}
@@ -597,121 +584,100 @@ const ReportsPage: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-900 mb-4">
               {reportType === 'logs' ? 'Log Entri' : reportType === 'financial' ? 'Detail Invoice' : 'Detail Order'}
             </h3>
-            <div className="overflow-x-auto">
-              {reportType === 'logs' ? (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-600">
-                      <th className="pb-2 pr-4">Waktu</th>
-                      <th className="pb-2 pr-4">Sumber</th>
-                      <th className="pb-2 pr-4">Level</th>
-                      <th className="pb-2">Pesan</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((log: any, i) => (
-                      <tr key={log.id || i} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-2 pr-4 whitespace-nowrap">{log.created_at ? new Date(log.created_at).toLocaleString('id-ID') : '-'}</td>
-                        <td className="py-2 pr-4">{log.source ?? '-'}</td>
-                        <td className="py-2 pr-4"><Badge variant="info">{log.level ?? '-'}</Badge></td>
-                        <td className="py-2 max-w-md truncate">{log.message ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : reportType === 'financial' ? (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-600">
-                      <th className="pb-2 pr-4">No. Invoice</th>
-                      <th className="pb-2 pr-4">Cabang</th>
-                      <th className="pb-2 pr-4">Owner</th>
-                      <th className="pb-2 pr-4 text-right">Total</th>
-                      <th className="pb-2 pr-4 text-right">Terbayar</th>
-                      <th className="pb-2 pr-4 text-right">Sisa</th>
-                      <th className="pb-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((inv: any) => (
-                      <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-2 pr-4 font-mono">{inv.invoice_number}</td>
-                        <td className="py-2 pr-4">{inv.branch_name ?? '-'}</td>
-                        <td className="py-2 pr-4">{inv.owner_name ?? '-'}</td>
-                        <td className="py-2 pr-4 text-right">{formatIDR(inv.total_amount ?? 0)}</td>
-                        <td className="py-2 pr-4 text-right text-primary-600">{formatIDR(inv.paid_amount ?? 0)}</td>
-                        <td className="py-2 pr-4 text-right">{formatIDR(inv.remaining_amount ?? 0)}</td>
-                        <td className="py-2"><Badge variant="info">{inv.status ?? '-'}</Badge></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-600">
-                        <th className="pb-2 pr-4">No. Order</th>
-                        <th className="pb-2 pr-4">Wilayah</th>
-                        <th className="pb-2 pr-4">Provinsi</th>
-                        <th className="pb-2 pr-4">Cabang</th>
-                        <th className="pb-2 pr-4">Owner</th>
-                        <th className="pb-2 pr-4">Role</th>
-                        <th className="pb-2 pr-4 text-right">Subtotal</th>
-                        <th className="pb-2 pr-4 text-right">Diskon</th>
-                        <th className="pb-2 pr-4 text-right">Penalty</th>
-                        <th className="pb-2 pr-4 text-right">Total</th>
-                        <th className="pb-2 pr-4">Currency</th>
-                        <th className="pb-2 pr-4 text-right">Jamaah</th>
-                        <th className="pb-2 pr-4">Item Types</th>
-                        <th className="pb-2 pr-4">Tanggal</th>
-                        <th className="pb-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((o: any) => (
-                        <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="py-2 pr-4 font-mono">{o.order_number}</td>
-                          <td className="py-2 pr-4">{o.wilayah_name ?? '-'}</td>
-                          <td className="py-2 pr-4">{o.provinsi_name ?? '-'}</td>
-                          <td className="py-2 pr-4">{o.branch_name ?? '-'}</td>
-                          <td className="py-2 pr-4">{o.owner_name ?? '-'}</td>
-                          <td className="py-2 pr-4">{o.role ?? '-'}</td>
-                          <td className="py-2 pr-4 text-right">{formatIDR(o.subtotal ?? 0)}</td>
-                          <td className="py-2 pr-4 text-right">{o.discount ? formatIDR(o.discount) : '-'}</td>
-                          <td className="py-2 pr-4 text-right">{o.penalty_amount ? formatIDR(o.penalty_amount) : '-'}</td>
-                          <td className="py-2 pr-4 text-right font-medium">{formatIDR(o.total_amount ?? 0)}</td>
-                          <td className="py-2 pr-4">{o.currency ?? 'IDR'}</td>
-                          <td className="py-2 pr-4 text-right">{o.total_jamaah ?? 0}</td>
-                          <td className="py-2 pr-4">
-                            {o.item_types && o.item_types.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {o.item_types.map((t: string, i: number) => (
-                                  <Badge key={i} variant="info" className="text-xs">{t}</Badge>
-                                ))}
-                              </div>
-                            ) : '-'}
-                          </td>
-                          <td className="py-2 pr-4 whitespace-nowrap">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID') : '-'}</td>
-                          <td className="py-2"><Badge variant="info">{o.status ?? '-'}</Badge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            {rows.length === 0 && (
-              <p className="text-slate-500 py-6 text-center">Tidak ada data</p>
-            )}
-            {reportType !== 'logs' && pagination.totalPages > 1 && (
-              <TablePagination
-                total={pagination.total}
-                page={pagination.page}
-                limit={pagination.limit}
-                onPageChange={setPage}
-                onLimitChange={setLimit}
-                loading={loading}
+            {reportType === 'logs' ? (
+              <Table
+                columns={[
+                  { id: 'created_at', label: 'Waktu', align: 'left' },
+                  { id: 'source', label: 'Sumber', align: 'left' },
+                  { id: 'level', label: 'Level', align: 'left' },
+                  { id: 'message', label: 'Pesan', align: 'left' }
+                ] as TableColumn[]}
+                data={rows}
+                emptyMessage="Tidak ada data"
+                renderRow={(log: any, i) => (
+                  <tr key={log.id || i} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">{log.created_at ? new Date(log.created_at).toLocaleString('id-ID') : '-'}</td>
+                    <td className="py-3 px-4 text-slate-700">{log.source ?? '-'}</td>
+                    <td className="py-3 px-4"><Badge variant="info">{log.level ?? '-'}</Badge></td>
+                    <td className="py-3 px-4 max-w-md truncate text-slate-700">{log.message ?? '-'}</td>
+                  </tr>
+                )}
+              />
+            ) : reportType === 'financial' ? (
+              <Table
+                columns={[
+                  { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+                  { id: 'branch_name', label: 'Cabang', align: 'left' },
+                  { id: 'owner_name', label: 'Owner', align: 'left' },
+                  { id: 'total_amount', label: 'Total', align: 'right' },
+                  { id: 'paid_amount', label: 'Terbayar', align: 'right' },
+                  { id: 'remaining_amount', label: 'Sisa', align: 'right' },
+                  { id: 'status', label: 'Status', align: 'left' }
+                ] as TableColumn[]}
+                data={rows}
+                emptyMessage="Tidak ada data"
+                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: setLimit } : undefined}
+                renderRow={(inv: any) => (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-mono text-slate-900">{inv.invoice_number}</td>
+                    <td className="py-3 px-4 text-slate-700">{inv.branch_name ?? '-'}</td>
+                    <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '-'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.total_amount ?? 0)}</td>
+                    <td className="py-3 px-4 text-right text-primary-600">{formatIDR(inv.paid_amount ?? 0)}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.remaining_amount ?? 0)}</td>
+                    <td className="py-3 px-4"><Badge variant="info">{inv.status ?? '-'}</Badge></td>
+                  </tr>
+                )}
+              />
+            ) : (
+              <Table
+                columns={[
+                  { id: 'order_number', label: 'No. Order', align: 'left' },
+                  { id: 'wilayah_name', label: 'Wilayah', align: 'left' },
+                  { id: 'provinsi_name', label: 'Provinsi', align: 'left' },
+                  { id: 'branch_name', label: 'Cabang', align: 'left' },
+                  { id: 'owner_name', label: 'Owner', align: 'left' },
+                  { id: 'role', label: 'Role', align: 'left' },
+                  { id: 'subtotal', label: 'Subtotal', align: 'right' },
+                  { id: 'discount', label: 'Diskon', align: 'right' },
+                  { id: 'penalty_amount', label: 'Penalty', align: 'right' },
+                  { id: 'total_amount', label: 'Total', align: 'right' },
+                  { id: 'currency', label: 'Currency', align: 'left' },
+                  { id: 'total_jamaah', label: 'Jamaah', align: 'right' },
+                  { id: 'item_types', label: 'Item Types', align: 'left' },
+                  { id: 'created_at', label: 'Tanggal', align: 'left' },
+                  { id: 'status', label: 'Status', align: 'left' }
+                ] as TableColumn[]}
+                data={rows}
+                emptyMessage="Tidak ada data"
+                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: setLimit } : undefined}
+                renderRow={(o: any) => (
+                  <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-mono text-slate-900">{o.order_number}</td>
+                    <td className="py-3 px-4 text-slate-700">{o.wilayah_name ?? '-'}</td>
+                    <td className="py-3 px-4 text-slate-700">{o.provinsi_name ?? '-'}</td>
+                    <td className="py-3 px-4 text-slate-700">{o.branch_name ?? '-'}</td>
+                    <td className="py-3 px-4 text-slate-700">{o.owner_name ?? '-'}</td>
+                    <td className="py-3 px-4 text-slate-700">{o.role ?? '-'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(o.subtotal ?? 0)}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{o.discount ? formatIDR(o.discount) : '-'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{o.penalty_amount ? formatIDR(o.penalty_amount) : '-'}</td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(o.total_amount ?? 0)}</td>
+                    <td className="py-3 px-4 text-slate-700">{o.currency ?? 'IDR'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{o.total_jamaah ?? 0}</td>
+                    <td className="py-3 px-4">
+                      {o.item_types && o.item_types.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {o.item_types.map((t: string, i: number) => (
+                            <Badge key={i} variant="info" className="text-xs">{t}</Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-slate-400">-</span>}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID') : '-'}</td>
+                    <td className="py-3 px-4"><Badge variant="info">{o.status ?? '-'}</Badge></td>
+                  </tr>
+                )}
               />
             )}
           </Card>

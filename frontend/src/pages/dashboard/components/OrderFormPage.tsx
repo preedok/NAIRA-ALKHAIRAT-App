@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, Trash2, ArrowLeft, Hotel, Plane, FileText,
   Bus, Package, Users, Utensils, X, ChevronRight,
-  Star, CreditCard, Building2, Loader2
+  Star, CreditCard, Building2, Loader2, GripVertical
 } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -65,14 +65,27 @@ const BUS_TYPE_OPTIONS: { value: BusType; label: string }[] = [
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
 
+type DisplayCurrency = 'SAR' | 'IDR' | 'USD';
+
 interface ProductOption {
   id:string; name:string; code:string; type:string;
   is_package?:boolean; price_general?:number|null;
+  price_general_idr?:number|null; price_general_sar?:number|null; price_general_usd?:number|null;
   price_branch?:number|null; price_owner?:number|null;
-  currency?:string; meta?:{meal_price?:number;[k:string]:unknown};
-  room_breakdown?:Record<string,any>; prices_by_room?:Record<string,any>;
+  currency?:string; meta?:{meal_price?:number;route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
+  room_breakdown?:Record<string,{ price: number }>; prices_by_room?:Record<string,{ price: number }>;
   bandara_options?: Array<{ bandara: string; name: string; default: { price_idr: number; seat_quota?: number } }>;
   route_prices?: Partial<Record<BusRouteType, number>>;
+}
+
+/** Mata uang tampilan per tipe: Hotel SAR, Bus SAR, Tiket IDR, Visa USD. Lainnya dari product.currency atau IDR. */
+function getDisplayCurrency(type: ItemType, product?: ProductOption | null): DisplayCurrency {
+  if (type === 'hotel' || type === 'bus') return 'SAR';
+  if (type === 'ticket') return 'IDR';
+  if (type === 'visa') return 'USD';
+  const c = product?.currency?.toUpperCase();
+  if (c === 'SAR' || c === 'USD') return c as DisplayCurrency;
+  return 'IDR';
 }
 interface HotelRoomLine { id:string; room_type:RoomTypeId; quantity:number; unit_price:number; with_meal?:boolean; }
 interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; }
@@ -221,16 +234,18 @@ const OrderFormPage: React.FC = () => {
     const ois:any[]=Array.isArray(rawItems)?rawItems:[];
     if(ois.length===0){ setItems([newRow()]); return; }
     const s2i=rates.SAR_TO_IDR||4200;
+    const u2i=rates.USD_TO_IDR||15500;
     const getVal=(o:any,k:string)=>o[k]??o[k.replace(/([A-Z])/g,'_$1').toLowerCase().replace(/^_/,'')];
     const qty=(o:any)=>Math.max(0,Number(getVal(o,'quantity'))||0);
-    const disp=(p:number,pid:string)=>{ const pr=products.find(x=>x.id===pid); return pr?.currency==='SAR'?(p||0)/s2i:(p||0); };
+    /** Konversi unit_price dari backend (IDR) ke mata uang tampilan produk */
+    const disp=(idr:number,pid:string,itemType:ItemType)=>{ const pr=products.find(x=>x.id===pid); const cur=getDisplayCurrency(itemType,pr); if(cur==='SAR') return (idr||0)/s2i; if(cur==='USD') return (idr||0)/u2i; return idr||0; };
     const seen=new Set<string>(); const rows:OrderItemRow[]=[];
     for(const oi of ois){
       const meta=typeof oi.meta==='object'?oi.meta:{};
       const typeVal=getVal(oi,'type');
       const t=(typeVal||'hotel') as ItemType;
       const productRefId=getVal(oi,'product_ref_id')||'';
-      const unitPrice=disp(parseFloat(getVal(oi,'unit_price'))||0,productRefId);
+      const unitPrice=disp(parseFloat(getVal(oi,'unit_price'))||0,productRefId,t);
       const productName=oi.Product?.name??getVal(oi,'Product')?.name??'';
       if(t==='hotel'&&productRefId){
         if(!seen.has(productRefId)){
@@ -248,7 +263,7 @@ const OrderFormPage: React.FC = () => {
             check_out:checkOut||undefined,
             check_in_time:checkInTime,
             check_out_time:checkOutTime,
-            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId), with_meal:!!(m.with_meal??m.meal) }; })
+            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId,'hotel'), with_meal:!!(m.with_meal??m.meal) }; })
           });
         }
       } else {
@@ -256,7 +271,7 @@ const OrderFormPage: React.FC = () => {
       }
     }
     setItems(rows.length?rows:[newRow()]);
-  },[orderId,order,products,rates.SAR_TO_IDR]);
+  },[orderId,order,products,rates.SAR_TO_IDR,rates.USD_TO_IDR]);
 
   /* fetch availability for hotel rows that have product_id + check_in + check_out */
   const hotelAvailabilityKeys = items.filter(r => r.type === 'hotel' && r.product_id && r.check_in && r.check_out).map(r => `${r.id}\t${r.product_id}\t${r.check_in}\t${r.check_out}`).sort().join('|');
@@ -280,20 +295,45 @@ const OrderFormPage: React.FC = () => {
 
   /* helpers */
   const byType=(type:ItemType)=> type==='package'?products.filter(p=>p.is_package):products.filter(p=>!p.is_package&&p.type===type);
-  const effP=(p:ProductOption)=>{ const n=p.price_owner??p.price_branch??p.price_general; return typeof n==='number'&&!isNaN(n)?n:0; };
+  const s2i=rates.SAR_TO_IDR||4200;
+  const u2iR=rates.USD_TO_IDR||15500;
+  const effP=(p:ProductOption,type?:ItemType)=>{ const cur=type?getDisplayCurrency(type,p):'IDR'; const n=p.price_owner??p.price_branch??p.price_general; const raw=typeof n==='number'&&!isNaN(n)?n:0; if(cur==='SAR') return (p.price_general_sar ?? (raw&&p.currency==='IDR'?raw/s2i:raw))??0; if(cur==='USD') return (p.price_general_usd ?? (raw&&p.currency==='USD'?raw:raw/u2iR))??0; return (p.price_general_idr ?? raw)??0; };
   const ticketPrice=(p:ProductOption|undefined,bandara:string)=>{ if(!p?.bandara_options) return 0; const opt=p.bandara_options.find(b=>b.bandara===bandara); return (opt?.default?.price_idr != null && !isNaN(opt.default.price_idr)) ? Number(opt.default.price_idr) : 0; };
-  const busRoutePrice=(p:ProductOption|undefined,route:BusRouteType)=>{ if(!p) return 0; const rp=p.meta?.route_prices as Record<string,number>|undefined; if(rp&&typeof rp[route]==='number') return rp[route]; return effP(p); };
-  const hrp=(p:ProductOption|undefined,rt:RoomTypeId,meal:boolean)=>{ if(!p) return 0; const rb=p.room_breakdown??p.prices_by_room??{}; const base=rb[rt]?.price??effP(p); return meal?base+((p.meta?.meal_price as number|undefined)??0):base; };
-  const rowCur=(row:OrderItemRow):'SAR'|'IDR'=> products.find(x=>x.id===row.product_id)?.currency==='SAR'?'SAR':'IDR';
-  const toIDR=(price:number,row:OrderItemRow)=> rowCur(row)==='SAR'?price*(rates.SAR_TO_IDR||4200):price;
+  const busRoutePrice=(p:ProductOption|undefined,route:BusRouteType)=>{ if(!p) return 0; const rp=p.meta?.route_prices as Record<string,number>|undefined; const byTrip=p.meta?.route_prices_by_trip as Record<string,number>|undefined; const raw=rp?.[route] ?? byTrip?.round_trip ?? byTrip?.one_way ?? p.price_general_idr ?? p.price_general ?? 0; if(p.price_general_sar != null && p.price_general_sar > 0) return p.price_general_sar; return (typeof raw==='number'?raw:0)/s2i; };
+  const hrp=(p:ProductOption|undefined,rt:RoomTypeId,meal:boolean)=>{
+    if(!p) return 0;
+    const rb=p.room_breakdown??p.prices_by_room??{};
+    const rtEntry=rb[rt];
+    const rtPrice=typeof rtEntry==='object'&&rtEntry!==null&&'price' in rtEntry?Number(rtEntry.price):typeof rtEntry==='number'?rtEntry:0;
+    const fallbackGeneral=p.price_general_sar ?? (p.price_general_idr ?? 0)/s2i;
+    const fallbackAnyRoom=Object.values(rb).find((v:unknown)=>typeof v==='object'&&v!==null&&'price' in (v as object)&&Number((v as {price?:unknown}).price)>0);
+    const anyRoomPrice=fallbackAnyRoom?Number((fallbackAnyRoom as {price:number}).price):0;
+    const base=rtPrice>0?rtPrice:(anyRoomPrice>0?anyRoomPrice:fallbackGeneral);
+    const cur=(p.currency||'IDR').toUpperCase();
+    const toSar=(x:number)=>cur==='SAR'?x:cur==='USD'?x*u2iR/s2i:x/s2i;
+    const roomSar=toSar(base);
+    return meal?roomSar+toSar((p.meta?.meal_price as number|undefined)??0):roomSar;
+  };
+  const rowCur=(row:OrderItemRow):DisplayCurrency=> getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
+  const toIDR=(price:number,row:OrderItemRow)=>{ const c=rowCur(row); if(c==='SAR') return price*(rates.SAR_TO_IDR||4200); if(c==='USD') return price*(rates.USD_TO_IDR||15500); return price; };
   const getInC=(priceInRow:number,row:OrderItemRow,cur:'IDR'|'SAR'|'USD')=>{ const idr=toIDR(priceInRow,row); const t=fillFromSource('IDR',idr,rates); return cur==='IDR'?t.idr:cur==='SAR'?t.sar:t.usd; };
-  const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(rates.SAR_TO_IDR||4200):val*(rates.USD_TO_IDR||15500); updateRow(rowId,{unit_price:rowCur(row)==='SAR'?idr/(rates.SAR_TO_IDR||4200):idr}); };
-  const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(rates.SAR_TO_IDR||4200):val*(rates.USD_TO_IDR||15500); updLine(rowId,lineId,{unit_price:rowCur(row)==='SAR'?idr/(rates.SAR_TO_IDR||4200):idr}); };
+  const toRowCurrency=(idr:number,row:OrderItemRow)=>{ const c=rowCur(row); const s2i=rates.SAR_TO_IDR||4200; const u2i=rates.USD_TO_IDR||15500; if(c==='SAR') return idr/s2i; if(c==='USD') return idr/u2i; return idr; };
+  const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(rates.SAR_TO_IDR||4200):val*(rates.USD_TO_IDR||15500); updateRow(rowId,{unit_price:toRowCurrency(idr,row)}); };
+  const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(rates.SAR_TO_IDR||4200):val*(rates.USD_TO_IDR||15500); updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row)}); };
 
   /* mutations */
   const addRow   =()=>setItems(p=>[...p,newRow()]);
   const removeRow=(id:string)=>setItems(p=>{ const n=p.filter(r=>r.id!==id); return n.length?n:[newRow()]; });
-  const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const prod=byType('hotel').find(p=>p.id===row.product_id); const line:HotelRoomLine={id:`rl-${uid()}`,room_type:'quad',quantity:1,unit_price:hrp(prod,'quad',false),with_meal:false}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
+  const moveItem =(fromIndex:number, toIndex:number)=>{
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setItems(p=>{
+      const next=[...p];
+      const [removed]=next.splice(fromIndex,1);
+      next.splice(toIndex,0,removed);
+      return next;
+    });
+  };
+  const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const prod=byType('hotel').find(p=>p.id===row.product_id); const rb=prod?.room_breakdown??prod?.prices_by_room??{}; const bestRt=(ROOM_TYPES as readonly {id:RoomTypeId}[]).find(rt=>{ const v=rb[rt.id]; const price=typeof v==='object'&&v&&'price' in v?Number((v as {price:number}).price):0; return price>0; })?.id??'quad'; const line:HotelRoomLine={id:`rl-${uid()}`,room_type:bestRt,quantity:1,unit_price:hrp(prod,bestRt,false),with_meal:false}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
   const removeLine=(rowId:string,lineId:string)=>setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:(r.room_breakdown||[]).filter(l=>l.id!==lineId)}));
   const updLine=(rowId:string,lineId:string,upd:Partial<HotelRoomLine>)=>setItems(p=>p.map(r=>{ if(r.id!==rowId||!r.room_breakdown) return r; return{...r,room_breakdown:r.room_breakdown.map(l=>l.id!==lineId?l:{...l,...upd})}; }));
   const updateRow=(rowId:string,upd:Partial<OrderItemRow>)=>setItems(p=>p.map(r=>{
@@ -315,9 +355,13 @@ const OrderFormPage: React.FC = () => {
           next.meta={ ...(next.meta||{}), route_type:route, trip_type:(next.meta?.trip_type as TicketTripType)||(prod.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(next.meta?.bus_type as BusType)||'besar' };
           next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?busRoutePrice(prod,route):next.unit_price;
         } else {
-          if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod);
+          if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod,next.type);
         }
-        if(next.type==='hotel'&&!(next.room_breakdown?.length)) next.room_breakdown=[{id:`rl-${uid()}`,room_type:'quad',quantity:1,unit_price:hrp(prod,'quad',false),with_meal:false}];
+        if(next.type==='hotel'&&!(next.room_breakdown?.length)){
+          const rb=prod.room_breakdown??prod.prices_by_room??{};
+          const bestRt=(ROOM_TYPES as readonly {id:RoomTypeId}[]).find(rt=>{ const v=rb[rt.id]; const price=typeof v==='object'&&v&&'price' in v?Number((v as {price:number}).price):0; return price>0; })?.id??'quad';
+          next.room_breakdown=[{id:`rl-${uid()}`,room_type:bestRt,quantity:1,unit_price:hrp(prod,bestRt,false),with_meal:false}];
+        }
       }
     }
     if(upd.meta!=null&&next.type==='ticket'){
@@ -348,15 +392,14 @@ const OrderFormPage: React.FC = () => {
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
-  const rowSAR=(r:OrderItemRow)=>{ const raw=rowSub(r); return rowCur(r)==='SAR'?raw:raw/(rates.SAR_TO_IDR||4200); };
-  const totalSAR=items.reduce((s,r)=>s+rowSAR(r),0);
   const busPenaltyIDR=items.reduce((sum,r)=>{
     if(r.type!=='bus'||(r.meta?.bus_type as string)!=='besar') return sum;
     const qty=Math.max(0,r.quantity||0);
     if(qty>=busRules.bus_min_pack) return sum;
     return sum+(busRules.bus_min_pack-qty)*busRules.bus_penalty_idr;
   },0);
-  const totalIDR=totalSAR*(rates.SAR_TO_IDR||4200)+busPenaltyIDR;
+  const totalIDR=items.reduce((s,r)=>s+toIDR(rowSub(r),r),0)+busPenaltyIDR;
+  const totalSAR=totalIDR/(rates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
@@ -380,13 +423,11 @@ const OrderFormPage: React.FC = () => {
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
-    const s2i=rates.SAR_TO_IDR||4200;
-    const tIDR=(price:number,row:OrderItemRow)=>rowCur(row)==='SAR'?price*s2i:price;
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
-      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
+      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
     if(isEdit&&orderId){
@@ -424,13 +465,11 @@ const OrderFormPage: React.FC = () => {
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
-    const s2i=rates.SAR_TO_IDR||4200;
-    const tIDR=(price:number,row:OrderItemRow)=>rowCur(row)==='SAR'?price*s2i:price;
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
-      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
+      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
     if(isEdit&&orderId){
@@ -583,7 +622,10 @@ const OrderFormPage: React.FC = () => {
                 <div className="p-2.5 rounded-xl bg-primary-50 text-primary-600">
                   <CreditCard className="w-5 h-5" />
                 </div>
-                <h4 className="font-semibold text-slate-900">Daftar Item</h4>
+                <div>
+                  <h4 className="font-semibold text-slate-900">Daftar Item</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">Tarik ikon grip (⋮⋮) untuk mengubah urutan item</p>
+                </div>
               </div>
               {canEditPrice&&(
                 <div className="flex flex-wrap items-center gap-2 text-slate-600">
@@ -606,13 +648,30 @@ const OrderFormPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  {items.map(row=>{
+                  {items.map((row, index)=>{
                     const tc=typeOf(row.type);
                     const hProd=row.type==='hotel'?byType('hotel').find(p=>p.id===row.product_id):undefined;
                     return (
-                      <div key={row.id} className="border border-slate-200 rounded-xl bg-slate-50/50 p-4 space-y-4">
-                        {/* Baris: tipe + produk + subtotal + hapus */}
+                      <div
+                        key={row.id}
+                        className="border border-slate-200 rounded-xl bg-slate-50/50 p-4 space-y-4"
+                        onDragOver={(e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; }}
+                        onDrop={(e)=>{
+                          e.preventDefault();
+                          const from=parseInt(e.dataTransfer.getData('text/plain'),10);
+                          if (!Number.isNaN(from)) moveItem(from, index);
+                        }}
+                      >
+                        {/* Baris: handle drag + tipe + produk + subtotal + hapus */}
                         <div className="flex flex-wrap items-end gap-3">
+                          <div
+                            draggable
+                            onDragStart={(e)=>{ e.dataTransfer.setData('text/plain', String(index)); e.dataTransfer.effectAllowed='move'; }}
+                            className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 cursor-grab active:cursor-grabbing shrink-0 hover:bg-slate-200 hover:text-slate-700"
+                            title="Tarik untuk pindah urutan"
+                          >
+                            <GripVertical size={18}/>
+                          </div>
                           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-600 shrink-0">
                             <tc.Icon size={16}/>
                           </div>
@@ -632,7 +691,7 @@ const OrderFormPage: React.FC = () => {
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-xs font-semibold text-slate-500 uppercase">Subtotal</p>
-                            <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(rowSub(row))} SAR`:formatIDR(rowSub(row))}</p>
+                            <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(rowSub(row))} SAR`:rowCur(row)==='USD'?formatUSD(rowSub(row)):formatIDR(rowSub(row))}</p>
                           </div>
                           <Button type="button" variant="ghost" size="sm" onClick={()=>removeRow(row.id)} className="text-slate-500 hover:text-red-600 shrink-0">
                             <X size={16}/>
@@ -648,16 +707,8 @@ const OrderFormPage: React.FC = () => {
                                   <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_in ?? ''} onChange={e => updateRow(row.id, { check_in: e.target.value || undefined })} />
                                 </div>
                                 <div>
-                                  <label className={labelClass}>Jam check-in</label>
-                                  <input type="time" className={inputClass} style={{ minWidth: 100 }} value={row.check_in_time ?? '14:00'} onChange={e => updateRow(row.id, { check_in_time: e.target.value || '14:00' })} title="Untuk status jamaah (sudah masuk room) di Progress Hotel" />
-                                </div>
-                                <div>
                                   <label className={labelClass}>Check-out (tanggal)</label>
                                   <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_out ?? ''} onChange={e => updateRow(row.id, { check_out: e.target.value || undefined })} />
-                                </div>
-                                <div>
-                                  <label className={labelClass}>Jam check-out</label>
-                                  <input type="time" className={inputClass} style={{ minWidth: 100 }} value={row.check_out_time ?? '12:00'} onChange={e => updateRow(row.id, { check_out_time: e.target.value || '12:00' })} title="Untuk status jamaah (keluar room) di Progress Hotel" />
                                 </div>
                                 {row.check_in && row.check_out && (
                                   <div className="self-end text-sm font-medium text-slate-700">
@@ -676,7 +727,7 @@ const OrderFormPage: React.FC = () => {
                               </div>
                               {row.check_in && row.check_out && (row.room_breakdown?.length ?? 0) > 0 && getNights(row.check_in, row.check_out) > 0 && (
                                 <div className="rounded-lg bg-slate-100 border border-slate-200 p-3 text-sm text-slate-700 space-y-1">
-                                  <p className="font-semibold text-slate-800 mb-2">Hitungan (harga SAR per malam × jumlah malam × kamar):</p>
+                                  <p className="font-semibold text-slate-800 mb-2">Hitungan (harga {rowCur(row)} per malam × jumlah malam × kamar):</p>
                                   {(row.room_breakdown||[]).filter(l=>l.quantity>0).map(line=>{
                                     const nights = getNights(row.check_in!, row.check_out!);
                                     const roomOnly = hrp(hProd, line.room_type, false);
@@ -719,7 +770,7 @@ const OrderFormPage: React.FC = () => {
                                   <div className="flex-1 min-w-[140px]">
                                     {canEditPrice ? (
                                       <>
-                                        <label className={labelClass}>Harga / kamar / malam {rowCur(row)==='SAR'?'(SAR)':'(IDR)'}</label>
+                                        <label className={labelClass}>Harga / kamar / malam ({rowCur(row)})</label>
                                         <div className="flex gap-2 flex-wrap">
                                           {(['IDR','SAR','USD'] as const).map(c=>{ const val=getInC(line.unit_price||0,row,c); const on=priceCur===c; return(
                                             <div key={c} className="flex items-center gap-1">
@@ -733,13 +784,13 @@ const OrderFormPage: React.FC = () => {
                                     ) : (
                                       <>
                                         <label className={labelClass}>Harga / kamar / malam</label>
-                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(line.unit_price||0)} SAR`:formatIDR(line.unit_price||0)}</p>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(line.unit_price||0)} SAR`:rowCur(row)==='USD'?`${formatUSD(line.unit_price||0)}`:formatIDR(line.unit_price||0)}</p>
                                       </>
                                     )}
                                   </div>
                                   <div className="text-right">
                                     <p className="text-xs font-semibold text-slate-500 uppercase">Subtotal</p>
-                                    <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0))} SAR`:formatIDR(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0))}</p>
+                                    <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0))} SAR`:rowCur(row)==='USD'?formatUSD(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0)):formatIDR(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0))}</p>
                                   </div>
                                   <Button type="button" variant="ghost" size="sm" onClick={()=>removeLine(row.id,line.id)} className="text-slate-500 hover:text-red-600">
                                     <Trash2 size={14}/>
@@ -847,7 +898,7 @@ const OrderFormPage: React.FC = () => {
                               </div>
                               {canEditPrice ? (
                                 <div>
-                                  <label className={labelClass}>Harga Satuan</label>
+                                  <label className={labelClass}>Harga Satuan ({rowCur(row)})</label>
                                   <div className="flex gap-2 flex-wrap">
                                     {(['IDR','SAR','USD'] as const).map(c=>{ const val=getInC(row.unit_price||0,row,c); const on=priceCur===c; return(
                                       <div key={c} className="flex items-center gap-1">
@@ -860,8 +911,8 @@ const OrderFormPage: React.FC = () => {
                                 </div>
                               ) : (
                                 <div>
-                                  <label className={labelClass}>Harga Satuan</label>
-                                  <p className="text-sm font-bold text-slate-900 tabular-nums pt-1">{rowCur(row)==='SAR'?`${fmt(row.unit_price||0)} SAR`:formatIDR(row.unit_price||0)}</p>
+                                  <label className={labelClass}>Harga Satuan ({rowCur(row)})</label>
+                                  <p className="text-sm font-bold text-slate-900 tabular-nums pt-1">{rowCur(row)==='SAR'?`${fmt(row.unit_price||0)} SAR`:rowCur(row)==='USD'?formatUSD(row.unit_price||0):formatIDR(row.unit_price||0)}</p>
                                 </div>
                               )}
                             </div>

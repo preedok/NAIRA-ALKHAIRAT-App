@@ -837,6 +837,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
           data={filteredHotels}
           sort={{ columnId: sortBy, order: sortOrder }}
           onSortChange={(col, order) => { setSortBy(col); setSortOrder(order); setPage(1); }}
+          stickyActionsColumn
           pagination={pagination ? {
             total: pagination.total,
             page: pagination.page,
@@ -1839,7 +1840,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                           <tr className="bg-slate-100/80 border-b border-slate-200">
                             <th className="text-left py-3 px-4 font-medium text-slate-600">Nama</th>
                             <th className="text-left py-3 px-4 font-medium text-slate-600">Periode</th>
-                            <th className="text-right py-3 px-4 font-medium text-slate-600">Aksi</th>
+                            <th className="text-right py-3 px-4 font-medium text-slate-600 sticky right-0 z-10 bg-slate-100/80 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1847,7 +1848,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                             <tr key={s.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
                               <td className="py-3 px-4 font-medium text-slate-800">{s.name}</td>
                               <td className="py-3 px-4 text-slate-600">{s.start_date} — {s.end_date}</td>
-                              <td className="py-3 px-4 text-right">
+                              <td className="py-3 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                                 <div className="flex items-center justify-end gap-2">
                                   <Button
                                     variant="outline"

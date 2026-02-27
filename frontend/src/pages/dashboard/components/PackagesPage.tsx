@@ -22,6 +22,31 @@ const INCLUDE_OPTIONS = [
   { id: 'handling', label: 'Handling' }
 ] as const;
 
+/** Bandara keberangkatan tiket (penerbangan dari mana) */
+const BANDARA_TIKET = [
+  { code: 'BTH', name: 'Batam' },
+  { code: 'CGK', name: 'Jakarta' },
+  { code: 'SBY', name: 'Surabaya' },
+  { code: 'UPG', name: 'Makassar' }
+] as const;
+
+/** Maskapai untuk tiket paket */
+const MASKAPAI_OPTIONS = [
+  { code: 'lion', name: 'Lion Air' },
+  { code: 'garuda', name: 'Garuda Indonesia' },
+  { code: 'super_air_jet', name: 'Super Air Jet' },
+  { code: 'batik', name: 'Batik Air' },
+  { code: 'citilink', name: 'Citilink' },
+  { code: 'other', name: 'Lainnya' }
+] as const;
+
+/** Perjalanan tiket: pergi saja / pulang saja / pulang pergi */
+const TICKET_TRIP_OPTIONS = [
+  { value: 'one_way', label: 'Pergi saja' },
+  { value: 'return_only', label: 'Pulang saja' },
+  { value: 'round_trip', label: 'Pulang pergi' }
+] as const;
+
 const CURRENCIES = [
   { id: 'IDR', label: 'Rupiah (IDR)', symbol: 'Rp', locale: 'id-ID' },
   { id: 'SAR', label: 'Riyal Saudi (SAR)', symbol: 'SAR', locale: 'en-US' },
@@ -43,6 +68,9 @@ interface PackageProduct {
     hotel_madinah_id?: string;
     visa_ids?: string[];
     ticket_ids?: string[];
+    ticket_bandara?: string;
+    ticket_maskapai?: string;
+    ticket_trip_type?: string;
     bus_ids?: string[];
     handling_ids?: string[];
     makan_hotel_ids?: string[];
@@ -90,6 +118,9 @@ type FormState = {
   hotel_madinah_id: string;
   visa_ids: string[];
   ticket_ids: string[];
+  ticket_bandara: string;
+  ticket_maskapai: string;
+  ticket_trip_type: string;
   bus_ids: string[];
   handling_ids: string[];
   makan_hotel_ids: string[];
@@ -105,6 +136,9 @@ const emptyForm: FormState = {
   hotel_madinah_id: '',
   visa_ids: [],
   ticket_ids: [],
+  ticket_bandara: '',
+  ticket_maskapai: '',
+  ticket_trip_type: '',
   bus_ids: [],
   handling_ids: [],
   makan_hotel_ids: []
@@ -223,6 +257,8 @@ const PackagesPage: React.FC = () => {
     { id: 'days', label: 'Hari', align: 'center' },
     { id: 'hotel_makkah', label: 'Hotel Mekkah', align: 'left' },
     { id: 'hotel_madinah', label: 'Hotel Madinah', align: 'left' },
+    { id: 'ticket_info', label: 'Tiket', align: 'left' },
+    { id: 'ticket_workflow', label: 'Perjalanan', align: 'left' },
     { id: 'price_idr', label: 'Harga (IDR)', align: 'right' },
     { id: 'price_sar', label: 'Harga (SAR)', align: 'right' },
     { id: 'price_usd', label: 'Harga (USD)', align: 'right' },
@@ -310,6 +346,9 @@ const PackagesPage: React.FC = () => {
       hotel_madinah_id: meta?.hotel_madinah_id ?? '',
       visa_ids: meta?.visa_ids ?? [],
       ticket_ids: meta?.ticket_ids ?? [],
+      ticket_bandara: meta?.ticket_bandara ?? '',
+      ticket_maskapai: meta?.ticket_maskapai ?? '',
+      ticket_trip_type: meta?.ticket_trip_type ?? '',
       bus_ids: meta?.bus_ids ?? [],
       handling_ids: meta?.handling_ids ?? [],
       makan_hotel_ids: meta?.makan_hotel_ids ?? []
@@ -352,6 +391,9 @@ const PackagesPage: React.FC = () => {
         ...(form.hotel_madinah_id ? { hotel_madinah_id: form.hotel_madinah_id } : {}),
         ...(form.visa_ids?.length ? { visa_ids: form.visa_ids } : {}),
         ...(form.ticket_ids?.length ? { ticket_ids: form.ticket_ids } : {}),
+        ...(form.ticket_bandara ? { ticket_bandara: form.ticket_bandara } : {}),
+        ...(form.ticket_maskapai ? { ticket_maskapai: form.ticket_maskapai } : {}),
+        ...(form.ticket_trip_type ? { ticket_trip_type: form.ticket_trip_type } : {}),
         ...(form.bus_ids?.length ? { bus_ids: form.bus_ids } : {}),
         ...(form.handling_ids?.length ? { handling_ids: form.handling_ids } : {}),
         ...(form.makan_hotel_ids?.length ? { makan_hotel_ids: form.makan_hotel_ids } : {})
@@ -493,6 +535,7 @@ const PackagesPage: React.FC = () => {
           data={packages}
           sort={{ columnId: sortBy, order: sortOrder }}
           onSortChange={(col, order) => { setSortBy(col); setSortOrder(order); setPage(1); }}
+          stickyActionsColumn
           pagination={pagination ? {
             total: pagination.total,
             page: pagination.page,
@@ -525,6 +568,24 @@ const PackagesPage: React.FC = () => {
                 <td className="px-4 py-3 text-center text-slate-700 whitespace-nowrap">{days} hari</td>
                 <td className="px-4 py-3 text-sm text-slate-700">{hotelMakkahName}</td>
                 <td className="px-4 py-3 text-sm text-slate-700">{hotelMadinahName}</td>
+                <td className="px-4 py-3 text-sm text-slate-700">
+                  {pkgMeta?.ticket_ids?.length ? (() => {
+                    const tid = pkgMeta.ticket_ids[0];
+                    const ticketProduct = ticketProducts.find((p) => p.id === tid);
+                    const productName = ticketProduct?.name ?? 'Tiket';
+                    const maskapaiName = pkgMeta.ticket_maskapai ? MASKAPAI_OPTIONS.find((m) => m.code === pkgMeta.ticket_maskapai)?.name : '';
+                    const bandaraName = pkgMeta.ticket_bandara ? BANDARA_TIKET.find((b) => b.code === pkgMeta.ticket_bandara)?.name : '';
+                    const parts = [productName, maskapaiName, bandaraName].filter(Boolean);
+                    return parts.length > 1 ? <span>{parts[0]} <span className="text-slate-500">·</span> {parts.slice(1).join(' · ')}</span> : (parts[0] || '-');
+                  })() : <span className="text-slate-400">-</span>}
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-700">
+                  {pkgMeta?.ticket_ids?.length && pkgMeta?.ticket_trip_type ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-sky-100 text-sky-800">
+                      {TICKET_TRIP_OPTIONS.find((t) => t.value === pkgMeta.ticket_trip_type)?.label ?? pkgMeta.ticket_trip_type}
+                    </span>
+                  ) : <span className="text-slate-400">-</span>}
+                </td>
                 <td className="px-4 py-3 text-right text-slate-800 whitespace-nowrap tabular-nums">
                   {priceIdr != null && Number(priceIdr) > 0 ? formatPrice(Number(priceIdr), 'IDR') : '-'}
                 </td>
@@ -595,8 +656,8 @@ const PackagesPage: React.FC = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center z-10">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">{editingPackage ? 'Update paket' : 'Buat paket baru'}</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Admin Pusat / Super Admin</p>
@@ -605,160 +666,219 @@ const PackagesPage: React.FC = () => {
                 <XCircle className="w-6 h-6 text-slate-400" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama paket *</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Contoh: Paket Ramadhan 9 day"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Include – pilih yang termasuk (klik untuk pilih)</label>
-                <div className="flex flex-wrap gap-2">
-                  {INCLUDE_OPTIONS.map((opt) => {
-                    const selected = form.includes.includes(opt.id);
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => toggleInclude(opt.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          selected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
+            <div className="p-6 space-y-6">
+              {/* Section: Info dasar */}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Info dasar</h3>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nama paket *</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    placeholder="Contoh: Paket Ramadhan 9 day"
+                  />
                 </div>
-                <p className="text-xs text-slate-500 mt-1.5">Jika pilih Hotel, isi hotel Mekkah & Madinah di bawah.</p>
-              </div>
-              {canCreatePackage && form.includes.includes('hotel') && (
-                <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
-                  <p className="text-sm font-medium text-emerald-800">Hotel yang termasuk dalam paket</p>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Hotel Mekkah</label>
-                    <select
-                      value={form.hotel_makkah_id}
-                      onChange={(e) => setForm((f) => ({ ...f, hotel_makkah_id: e.target.value }))}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                    >
-                      <option value="">-- Pilih hotel Mekkah --</option>
-                      {hotelsMakkah.map((h) => (
-                        <option key={h.id} value={h.id}>{h.name}</option>
-                      ))}
-                      {hotelsLoading && hotelsMakkah.length === 0 && <option value="">Memuat...</option>}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Hotel Madinah</label>
-                    <select
-                      value={form.hotel_madinah_id}
-                      onChange={(e) => setForm((f) => ({ ...f, hotel_madinah_id: e.target.value }))}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                    >
-                      <option value="">-- Pilih hotel Madinah --</option>
-                      {hotelsMadinah.map((h) => (
-                        <option key={h.id} value={h.id}>{h.name}</option>
-                      ))}
-                      {hotelsLoading && hotelsMadinah.length === 0 && <option value="">Memuat...</option>}
-                    </select>
-                  </div>
-                </div>
-              )}
-              {canCreatePackage && form.includes.includes('makan') && (form.hotel_makkah_id || form.hotel_madinah_id) && (
-                <div className="rounded-xl border-2 border-amber-200 bg-amber-50/50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-amber-800">Makan – pilih sesuai hotel yang dipilih</p>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Include – pilih yang termasuk</label>
                   <div className="flex flex-wrap gap-2">
-                    {form.hotel_makkah_id && (() => {
-                      const h = hotels.find((x) => x.id === form.hotel_makkah_id);
-                      return h ? (
+                    {INCLUDE_OPTIONS.map((opt) => {
+                      const selected = form.includes.includes(opt.id);
+                      return (
                         <button
-                          key={h.id}
+                          key={opt.id}
                           type="button"
-                          onClick={() => toggleMakanHotelId(h.id)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
+                          onClick={() => toggleInclude(opt.id)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            selected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
                         >
-                          Makan – {h.name}
+                          {opt.label}
                         </button>
-                      ) : null;
-                    })()}
-                    {form.hotel_madinah_id && (() => {
-                      const h = hotels.find((x) => x.id === form.hotel_madinah_id);
-                      return h ? (
-                        <button
-                          key={h.id}
-                          type="button"
-                          onClick={() => toggleMakanHotelId(h.id)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5">Jika pilih Hotel, isi hotel Mekkah & Madinah di bawah.</p>
+                </div>
+              </section>
+
+              {/* Section: Hotel & Makan */}
+              {(form.includes.includes('hotel') || (form.includes.includes('makan') && (form.hotel_makkah_id || form.hotel_madinah_id))) && canCreatePackage && (
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Hotel & Makan</h3>
+                  {form.includes.includes('hotel') && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                      <p className="text-sm font-medium text-slate-800">Hotel yang termasuk dalam paket</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Hotel Mekkah</label>
+                          <select
+                            value={form.hotel_makkah_id}
+                            onChange={(e) => setForm((f) => ({ ...f, hotel_makkah_id: e.target.value }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          >
+                            <option value="">-- Pilih hotel Mekkah --</option>
+                            {hotelsMakkah.map((h) => (
+                              <option key={h.id} value={h.id}>{h.name}</option>
+                            ))}
+                            {hotelsLoading && hotelsMakkah.length === 0 && <option value="">Memuat...</option>}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Hotel Madinah</label>
+                          <select
+                            value={form.hotel_madinah_id}
+                            onChange={(e) => setForm((f) => ({ ...f, hotel_madinah_id: e.target.value }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          >
+                            <option value="">-- Pilih hotel Madinah --</option>
+                            {hotelsMadinah.map((h) => (
+                              <option key={h.id} value={h.id}>{h.name}</option>
+                            ))}
+                            {hotelsLoading && hotelsMadinah.length === 0 && <option value="">Memuat...</option>}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {form.includes.includes('makan') && (form.hotel_makkah_id || form.hotel_madinah_id) && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4">
+                      <label className="block text-sm font-medium text-amber-800 mb-2">Makan – pilih sesuai hotel</label>
+                      <div className="flex flex-wrap gap-2">
+                        {form.hotel_makkah_id && (() => {
+                          const h = hotels.find((x) => x.id === form.hotel_makkah_id);
+                          return h ? (
+                            <button
+                              key={h.id}
+                              type="button"
+                              onClick={() => toggleMakanHotelId(h.id)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
+                            >
+                              Makan – {h.name}
+                            </button>
+                          ) : null;
+                        })()}
+                        {form.hotel_madinah_id && (() => {
+                          const h = hotels.find((x) => x.id === form.hotel_madinah_id);
+                          return h ? (
+                            <button
+                              key={h.id}
+                              type="button"
+                              onClick={() => toggleMakanHotelId(h.id)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
+                            >
+                              Makan – {h.name}
+                            </button>
+                          ) : null;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Section: Produk dalam paket (Visa, Tiket, Bis) – select list seperti Hotel */}
+              {(form.includes.includes('visa') || form.includes.includes('tiket') || form.includes.includes('bis')) && canCreatePackage && (
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Produk dalam paket</h3>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                    {form.includes.includes('visa') && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Visa – pilih yang masuk paket</label>
+                        <select
+                          value={form.visa_ids[0] ?? ''}
+                          onChange={(e) => setForm((f) => ({ ...f, visa_ids: e.target.value ? [e.target.value] : [] }))}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                         >
-                          Makan – {h.name}
-                        </button>
-                      ) : null;
-                    })()}
+                          <option value="">-- Pilih visa --</option>
+                          {visaProducts.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                          {productsLoading && visaProducts.length === 0 && <option value="">Memuat visa...</option>}
+                        </select>
+                      </div>
+                    )}
+                    {form.includes.includes('tiket') && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Tiket – pilih yang masuk paket</label>
+                          <select
+                            value={form.ticket_ids[0] ?? ''}
+                            onChange={(e) => setForm((f) => ({ ...f, ticket_ids: e.target.value ? [e.target.value] : [] }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          >
+                            <option value="">-- Pilih produk tiket --</option>
+                            {ticketProducts.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                            {productsLoading && ticketProducts.length === 0 && <option value="">Memuat tiket...</option>}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Maskapai</label>
+                            <select
+                              value={form.ticket_maskapai}
+                              onChange={(e) => setForm((f) => ({ ...f, ticket_maskapai: e.target.value }))}
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            >
+                              <option value="">-- Pilih maskapai --</option>
+                              {MASKAPAI_OPTIONS.map((m) => (
+                                <option key={m.code} value={m.code}>{m.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Penerbangan dari (bandara)</label>
+                            <select
+                              value={form.ticket_bandara}
+                              onChange={(e) => setForm((f) => ({ ...f, ticket_bandara: e.target.value }))}
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            >
+                              <option value="">-- Pilih bandara --</option>
+                              {BANDARA_TIKET.map((b) => (
+                                <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Perjalanan</label>
+                            <select
+                              value={form.ticket_trip_type}
+                              onChange={(e) => setForm((f) => ({ ...f, ticket_trip_type: e.target.value }))}
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            >
+                              <option value="">-- Pilih perjalanan --</option>
+                              {TICKET_TRIP_OPTIONS.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {form.includes.includes('bis') && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Bis – pilih yang masuk paket</label>
+                        <select
+                          value={form.bus_ids[0] ?? ''}
+                          onChange={(e) => setForm((f) => ({ ...f, bus_ids: e.target.value ? [e.target.value] : [] }))}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        >
+                          <option value="">-- Pilih bis --</option>
+                          {busProducts.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                          {productsLoading && busProducts.length === 0 && <option value="">Memuat bis...</option>}
+                        </select>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
-              {canCreatePackage && form.includes.includes('visa') && (
-                <div className="rounded-xl border-2 border-sky-200 bg-sky-50/50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-sky-800">Visa – pilih yang masuk paket</p>
-                  <div className="flex flex-wrap gap-2">
-                    {visaProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggleProductId('visa_ids', p.id)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.visa_ids.includes(p.id) ? 'bg-sky-600 text-white' : 'bg-white border border-sky-300 text-slate-700 hover:bg-sky-100'}`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                    {productsLoading && visaProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat visa...</span>}
-                  </div>
-                </div>
-              )}
-              {canCreatePackage && form.includes.includes('tiket') && (
-                <div className="rounded-xl border-2 border-violet-200 bg-violet-50/50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-violet-800">Tiket – pilih yang masuk paket</p>
-                  <div className="flex flex-wrap gap-2">
-                    {ticketProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggleProductId('ticket_ids', p.id)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.ticket_ids.includes(p.id) ? 'bg-violet-600 text-white' : 'bg-white border border-violet-300 text-slate-700 hover:bg-violet-100'}`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                    {productsLoading && ticketProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat tiket...</span>}
-                  </div>
-                </div>
-              )}
-              {canCreatePackage && form.includes.includes('bis') && (
-                <div className="rounded-xl border-2 border-teal-200 bg-teal-50/50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-teal-800">Bis – pilih yang masuk paket</p>
-                  <div className="flex flex-wrap gap-2">
-                    {busProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggleProductId('bus_ids', p.id)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.bus_ids.includes(p.id) ? 'bg-teal-600 text-white' : 'bg-white border border-teal-300 text-slate-700 hover:bg-teal-100'}`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                    {productsLoading && busProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat bis...</span>}
-                  </div>
-                </div>
+                </section>
               )}
               {canCreatePackage && form.includes.includes('handling') && (
-                <div className="rounded-xl border-2 border-rose-200 bg-rose-50/50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-rose-800">Handling – pilih yang masuk paket</p>
+                <div className="rounded-lg border border-slate-200 bg-rose-50/30 p-4">
+                  <label className="block text-sm font-medium text-rose-800 mb-2">Handling – pilih yang masuk paket</label>
                   <div className="flex flex-wrap gap-2">
                     {handlingProducts.map((p) => (
                       <button
@@ -774,11 +894,14 @@ const PackagesPage: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Section: Lama & Harga */}
               {canCreatePackage && (
-                <>
+                <section className="space-y-4 pt-2 border-t border-slate-200">
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Lama & Harga</h3>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Lama (hari) *</label>
-                    <p className="text-xs text-slate-500 mb-1">Contoh: 9 hari = paket 9 hari full. Harga di bawah adalah total untuk lama hari ini per jamaah.</p>
+                    <p className="text-xs text-slate-500 mb-1">Contoh: 9 hari = paket 9 hari full. Harga di bawah adalah total untuk seluruh hari per jamaah.</p>
                     <input
                       type="number"
                       min={1}
@@ -790,36 +913,34 @@ const PackagesPage: React.FC = () => {
                         setForm((f) => ({ ...f, days: norm }));
                         setDaysInput(String(norm));
                       }}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full max-w-[120px] border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       placeholder="9"
                     />
                   </div>
-                </>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Harga (IDR) – total full per jamaah</label>
+                    <p className="text-xs text-slate-500 mb-2">Total harga paket untuk seluruh hari. Isi dalam Rupiah. Sistem pakai kurs untuk SAR & USD.</p>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={form.price_total_idr || ''}
+                      onChange={(e) => setForm((f) => ({ ...f, price_total_idr: parseFloat(e.target.value) || 0 }))}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="Contoh: 45000000"
+                    />
+                    {(form.price_total_idr > 0) && (() => {
+                      const triple = fillFromSource('IDR', form.price_total_idr, currencyRates);
+                      return (
+                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
+                          <p className="text-slate-600 font-medium mb-1">Konversi (kurs):</p>
+                          <p className="text-slate-700">IDR: {formatPrice(form.price_total_idr, 'IDR')} · SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </section>
               )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Harga (IDR) – total full per jamaah
-                </label>
-                <p className="text-xs text-slate-500 mb-2">Total harga paket untuk seluruh hari (bukan per hari). Isi dalam Rupiah. Sistem pakai kurs untuk SAR & USD.</p>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.price_total_idr || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, price_total_idr: parseFloat(e.target.value) || 0 }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Contoh: 45000000"
-                />
-                {(form.price_total_idr > 0) && (() => {
-                  const triple = fillFromSource('IDR', form.price_total_idr, currencyRates);
-                  return (
-                    <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
-                      <p className="text-slate-600 font-medium mb-1">Konversi (kurs):</p>
-                      <p className="text-slate-700">IDR: {formatPrice(form.price_total_idr, 'IDR')} · SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
-                    </div>
-                  );
-                })()}
-              </div>
               {canCreatePackage && (() => {
                 const sar = currencyRates.SAR_TO_IDR ?? 4200;
                 const usd = currencyRates.USD_TO_IDR ?? 15500;
@@ -860,7 +981,13 @@ const PackagesPage: React.FC = () => {
                 });
                 form.ticket_ids.forEach((id) => {
                   const p = ticketProducts.find((x) => x.id === id);
-                  if (p) rows.push({ label: `Tiket: ${p.name}`, listIdr: toIdr(p) });
+                  if (p) {
+                    const maskapaiName = form.ticket_maskapai ? MASKAPAI_OPTIONS.find((m) => m.code === form.ticket_maskapai)?.name : '';
+                    const bandaraName = form.ticket_bandara ? BANDARA_TIKET.find((b) => b.code === form.ticket_bandara)?.name : '';
+                    const tripLabel = form.ticket_trip_type ? TICKET_TRIP_OPTIONS.find((t) => t.value === form.ticket_trip_type)?.label : '';
+                    const extra = [maskapaiName, bandaraName, tripLabel].filter(Boolean).join(' · ');
+                    rows.push({ label: `Tiket: ${p.name}${extra ? ` (${extra})` : ''}`, listIdr: toIdr(p) });
+                  }
                 });
                 form.bus_ids.forEach((id) => {
                   const p = busProducts.find((x) => x.id === id);

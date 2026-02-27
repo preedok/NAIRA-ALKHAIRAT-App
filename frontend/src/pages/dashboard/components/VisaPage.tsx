@@ -414,7 +414,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                     <th className="text-right py-3 px-4 font-semibold text-slate-600">IDR</th>
                     <th className="text-right py-3 px-4 font-semibold text-slate-600">SAR</th>
                     <th className="text-right py-3 px-4 font-semibold text-slate-600">USD</th>
-                    <th className="text-center py-3 px-4 font-semibold text-slate-600">Aksi</th>
+                    <th className="text-center py-3 px-4 font-semibold text-slate-600 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -436,7 +436,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                         <td className="py-3 px-4 text-right font-medium text-slate-800">Rp {Number(priceIdr).toLocaleString('id-ID')}</td>
                         <td className="py-3 px-4 text-right text-slate-700">SAR {triple.sar.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                         <td className="py-3 px-4 text-right text-slate-700">$ {triple.usd.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                           <div className="flex items-center justify-center gap-1 flex-wrap">
                             {isPusat && (
                               <>
@@ -893,7 +893,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           <th className="text-left py-2 px-3 font-semibold text-slate-600">Mulai</th>
                           <th className="text-left py-2 px-3 font-semibold text-slate-600">Selesai</th>
                           <th className="text-right py-2 px-3 font-semibold text-slate-600">Kuota</th>
-                          <th className="text-right py-2 px-3 font-semibold text-slate-600">Aksi</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -925,7 +925,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                                 <span className="tabular-nums">{s.Quota?.quota ?? 0}</span>
                               )}
                           </td>
-                            <td className="py-2 px-3 text-right">
+                            <td className="py-2 px-3 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                               {quotaEdit?.seasonId === s.id ? (
                                 <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setQuotaEdit(null)}>Batal</button>
                               ) : (

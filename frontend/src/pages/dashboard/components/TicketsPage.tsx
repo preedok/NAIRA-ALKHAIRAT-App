@@ -247,6 +247,12 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
     return <TicketWorkPage />;
   }
 
+  const statsTiket = [
+    { label: 'Total Produk Tiket', value: ticketProducts.length, color: 'from-blue-500 to-cyan-500' },
+    { label: 'Dengan Harga', value: ticketProducts.filter((p) => (p.bandara_options ?? []).some((b) => (b.default?.price_idr ?? 0) > 0)).length, color: 'from-emerald-500 to-teal-500' },
+    { label: 'Bandara', value: BANDARA_TIKET.length, color: 'from-purple-500 to-pink-500' }
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -257,6 +263,23 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
           </p>
         </div>
         <AutoRefreshControl onRefresh={refetchAll} disabled={loadingTicketProducts} />
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {statsTiket.map((stat, i) => (
+          <Card key={i} padding="md" className="border border-slate-200/80">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} text-white shrink-0 shadow-sm`}>
+                <Plane className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                <p className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{stat.value}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
       {(canAddToOrder || embedInProducts) && (
@@ -285,7 +308,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
                     {BANDARA_TIKET.map((b) => (
                       <th key={b.code} className="text-left py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">{b.name} ({b.code})</th>
                     ))}
-                    <th className="text-right py-3 px-4 font-semibold text-slate-700">Aksi</th>
+                    <th className="text-right py-3 px-4 font-semibold text-slate-700 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,7 +346,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
                           </td>
                         );
                       })}
-                      <td className="py-2 px-4 text-right">
+                      <td className="py-2 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         {isPusat && (
                           <Button
                             variant="outline"

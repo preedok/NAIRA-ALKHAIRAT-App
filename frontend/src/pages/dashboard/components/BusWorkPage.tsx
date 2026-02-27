@@ -363,7 +363,7 @@ const BusWorkPage: React.FC = () => {
                   <th className="text-left py-3 px-4 font-semibold text-slate-700">Owner</th>
                   <th className="text-right py-3 px-4 font-semibold text-slate-700">Item Bus</th>
                   <th className="text-left py-3 px-4 font-semibold text-slate-700">Status Tiket</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700 w-28">Aksi</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700 w-28 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -387,7 +387,7 @@ const BusWorkPage: React.FC = () => {
                           {TICKET_OPTIONS.find(s => s.value === firstTicketStatus)?.label ?? firstTicketStatus}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
                           <Eye className="w-4 h-4 mr-1" /> Detail
                         </Button>

@@ -654,7 +654,8 @@ const jamaahStorage = multer.diskStorage({
     const { dateTimeForFilename } = uploadConfig;
     const { date, time } = dateTimeForFilename();
     const id6 = (req.params.itemId || '').toString().slice(-6);
-    const ext = (path.extname(file.originalname || '').toLowerCase() === '.zip') ? '.zip' : '.zip';
+    const raw = (path.extname(file.originalname || '').toLowerCase());
+    const ext = (raw === '.xlsx' || raw === '.xls') ? raw : (raw === '.zip' ? '.zip' : '.zip');
     cb(null, `JAMAAH_${id6}_${date}_${time}${ext}`);
   }
 });
@@ -682,8 +683,8 @@ const uploadJamaahData = [
 
     const link = (req.body.jamaah_data_link != null ? String(req.body.jamaah_data_link).trim() : '') || null;
     const hasFile = !!req.file;
-    if (!hasFile && !link) return res.status(400).json({ success: false, message: 'Upload file ZIP atau isi link Google Drive' });
-    if (hasFile && link) return res.status(400).json({ success: false, message: 'Pilih salah satu: file ZIP atau link Google Drive' });
+    if (!hasFile && !link) return res.status(400).json({ success: false, message: 'Upload file (ZIP / Excel untuk hotel) atau isi link Google Drive' });
+    if (hasFile && link) return res.status(400).json({ success: false, message: 'Pilih salah satu: file atau link Google Drive' });
 
     let jamaahDataType = null;
     let jamaahDataValue = null;

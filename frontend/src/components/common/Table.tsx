@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { TableColumn } from '../../types';
 
 export interface TablePagination {
@@ -16,6 +16,9 @@ export interface TableSort {
   order: 'asc' | 'desc';
 }
 
+const STICKY_ACTIONS_CLASS = 'sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]';
+const STICKY_ACTIONS_TH_CLASS = 'sticky right-0 z-10 bg-slate-50/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]';
+
 interface TableProps<T> {
   columns: TableColumn[];
   data: T[];
@@ -25,6 +28,8 @@ interface TableProps<T> {
   pagination?: TablePagination;
   sort?: TableSort;
   onSortChange?: (columnId: string, order: 'asc' | 'desc') => void;
+  /** Kolom Aksi (kolom terakhir) tetap terlihat saat tabel di-scroll horizontal */
+  stickyActionsColumn?: boolean;
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500];
@@ -37,45 +42,27 @@ function Table<T>({
   className = '',
   pagination,
   sort,
-  onSortChange
+  onSortChange,
+  stickyActionsColumn = false
 }: TableProps<T>) {
   const pag = pagination;
   const startItem = pag ? (pag.page - 1) * pag.limit + 1 : 1;
   const endItem = pag ? Math.min(pag.page * pag.limit, pag.total) : data.length;
 
-  const handleSort = (col: TableColumn) => {
-    if (!col.sortable || !onSortChange) return;
-    const sortKey = col.sortKey ?? col.id;
-    if (sort?.columnId === sortKey) {
-      onSortChange(sortKey, sort.order === 'asc' ? 'desc' : 'asc');
-    } else {
-      onSortChange(sortKey, 'asc');
-    }
-  };
-
   return (
     <div className={className}>
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      <div className="overflow-x-auto overflow-y-visible">
+        <table className="text-sm min-w-max w-full">
           <thead>
-            <tr className="border-b-2 border-slate-200">
-              {columns.map((column) => {
-                const sortKey = column.sortKey ?? column.id;
-                const isSorted = sort?.columnId === sortKey;
+            <tr className="border-b border-slate-200 bg-slate-50/95">
+              {columns.map((column, colIndex) => {
+                const isLastCol = stickyActionsColumn && colIndex === columns.length - 1;
                 return (
                   <th
                     key={column.id}
-                    className={`px-6 py-4 text-sm font-bold text-slate-900 uppercase tracking-wider ${column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'} ${column.sortable ? 'cursor-pointer select-none hover:bg-slate-50' : ''}`}
-                    onClick={() => column.sortable && handleSort(column)}
+                    className={`py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap ${column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'} ${isLastCol ? STICKY_ACTIONS_TH_CLASS : ''}`}
                   >
-                    <div className="flex items-center gap-1">
-                      {column.label}
-                      {column.sortable && (
-                        <span className="inline-flex text-slate-400">
-                          {isSorted ? (sort!.order === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />) : <ChevronsUpDown className="w-4 h-4" />}
-                        </span>
-                      )}
-                    </div>
+                    {column.label}
                   </th>
                 );
               })}
@@ -89,7 +76,21 @@ function Table<T>({
                 </td>
               </tr>
             ) : (
-              data.map((item, index) => renderRow(item, index))
+              data.map((item, index) => {
+                const row = renderRow(item, index);
+                if (!stickyActionsColumn || !React.isValidElement(row) || row.type !== 'tr') return row;
+                const children = React.Children.toArray(row.props.children);
+                if (children.length === 0) return row;
+                const lastIndex = children.length - 1;
+                const lastChild = children[lastIndex];
+                if (!React.isValidElement(lastChild)) return row;
+                const existingClassName = typeof lastChild.props.className === 'string' ? lastChild.props.className : '';
+                const newLast = React.cloneElement(lastChild as React.ReactElement<{ className?: string }>, {
+                  className: `${existingClassName} ${STICKY_ACTIONS_CLASS}`.trim()
+                });
+                const newChildren = [...children.slice(0, lastIndex), newLast];
+                return React.cloneElement(row, {}, newChildren);
+              })
             )}
           </tbody>
         </table>

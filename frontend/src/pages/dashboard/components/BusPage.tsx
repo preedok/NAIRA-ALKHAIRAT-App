@@ -199,6 +199,12 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
     return <BusWorkPage />;
   }
 
+  const statsBus = [
+    { label: 'Total Produk', value: busProducts.length, color: 'from-blue-500 to-cyan-500' },
+    { label: 'Bus (besar)', value: busProducts.filter((p) => p.meta?.bus_kind !== 'hiace').length, color: 'from-amber-500 to-orange-500' },
+    { label: 'Hiace', value: busProducts.filter((p) => p.meta?.bus_kind === 'hiace').length, color: 'from-emerald-500 to-teal-500' }
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -209,6 +215,23 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
           </p>
         </div>
         <AutoRefreshControl onRefresh={refetchAll} disabled={loadingBusProducts} />
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {statsBus.map((stat, i) => (
+          <Card key={i} padding="md" className="border border-slate-200/80">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} text-white shrink-0 shadow-sm`}>
+                <Bus className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                <p className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{stat.value}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
       {/* Daftar produk bus */}
@@ -243,7 +266,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                     <th className="text-left py-3 px-4 font-semibold text-slate-700">Harga</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-700">Harga / mobil</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-700">Kuota</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-700">Aksi</th>
+                    <th className="text-right py-3 px-4 font-semibold text-slate-700 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -291,7 +314,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                         <span className="text-slate-700 tabular-nums">{typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0 ? p.meta.default_quota : '—'}</span>
                         <p className="text-[10px] text-slate-500 mt-0.5">per hari (kalender)</p>
                       </td>
-                      <td className="py-2 px-4 text-right">
+                      <td className="py-2 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         <div className="flex items-center justify-end gap-1 flex-wrap">
                           {canAddToOrder && (
                             <Button

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -91,7 +91,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const [payAmountSaudi, setPayAmountSaudi] = useState<string>('');
   const [uploadingJamaahItemId, setUploadingJamaahItemId] = useState<string | null>(null);
   const [jamaahLinkInput, setJamaahLinkInput] = useState<Record<string, string>>({});
-  const [hotelProgressSaving, setHotelProgressSaving] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelTargetInv, setCancelTargetInv] = useState<any | null>(null);
   const [cancelAction, setCancelAction] = useState<'to_balance' | 'refund'>('to_balance');
@@ -110,6 +109,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [reallocateListLoading, setReallocateListLoading] = useState(false);
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
+  const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
+  const [uploadDocLoading, setUploadDocLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
   const canReallocate = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'].includes(user?.role || '');
@@ -226,6 +227,21 @@ const OrdersInvoicesPage: React.FC = () => {
       if (res.data.success) setViewInvoice(res.data.data);
     } catch {
       showToast('Gagal memuat detail invoice', 'error');
+    }
+  };
+
+  const openUploadDocModal = async (inv: any) => {
+    if (!inv?.id || !inv?.order_id) return;
+    setUploadDocInvoice(inv);
+    setUploadDocLoading(true);
+    try {
+      const res = await invoicesApi.getById(inv.id);
+      if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+    } catch {
+      showToast('Gagal memuat data order', 'error');
+      setUploadDocInvoice(null);
+    } finally {
+      setUploadDocLoading(false);
     }
   };
 
@@ -1164,6 +1180,9 @@ const OrdersInvoicesPage: React.FC = () => {
                               ...(canOrderAction && inv.order_id
                                 ? [{ id: 'edit-order', label: 'Edit Invoice', icon: <Edit className="w-4 h-4" />, onClick: () => navigate(`/dashboard/orders/${inv.order_id}/edit`) }]
                                 : []),
+                              ...(canOrderAction && inv.order_id
+                                ? [{ id: 'upload-doc', label: 'Upload dokumen', icon: <Upload className="w-4 h-4" />, onClick: () => openUploadDocModal(inv) }]
+                                : []),
                               { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
                               { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
                               ...(canOrderAction && inv.order_id
@@ -1205,6 +1224,185 @@ const OrdersInvoicesPage: React.FC = () => {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Modal Upload Dokumen (terpisah dari Detail Invoice) */}
+      {uploadDocInvoice && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/50" onClick={() => !uploadDocLoading && setUploadDocInvoice(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-slate-600" /> Upload dokumen
+              </h2>
+              <button type="button" onClick={() => setUploadDocInvoice(null)} disabled={uploadDocLoading} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              {uploadDocLoading ? (
+                <p className="text-slate-500 py-8 text-center">Memuat data order…</p>
+              ) : (() => {
+                const order = uploadDocInvoice.Order;
+                const items = order?.OrderItems || [];
+                const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
+                const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
+                const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
+                const hasAny = hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0;
+                if (!hasAny) {
+                  return <p className="text-slate-600 py-4">Order ini tidak memiliki item hotel, visa, atau tiket. Tidak ada dokumen yang perlu diupload.</p>;
+                }
+                return (
+                  <div className="space-y-6">
+                    {hotelItems.length > 0 && (
+                      <section className="rounded-xl border border-slate-200 bg-amber-50/50 p-4">
+                        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                          <Package className="w-4 h-4" /> Hotel – Paket info (Excel/Spreadsheet)
+                        </h3>
+                        <p className="text-xs text-slate-600 mb-3">Upload file Excel atau spreadsheet berisi info paket hotel.</p>
+                        {hotelItems.map((item: any) => (
+                          <div key={item.id} className="flex flex-wrap items-end gap-2 mt-2 p-3 bg-white rounded-lg border border-slate-200">
+                            <span className="text-sm font-medium text-slate-700 w-full">{item.Product?.name || item.product_name || 'Hotel'}</span>
+                            <label className="flex flex-col gap-1 text-xs">
+                              <span>File Excel (.xlsx, .xls)</span>
+                              <input type="file" accept=".xlsx,.xls" className="text-sm border border-slate-300 rounded px-2 py-1.5" onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (f && uploadDocInvoice?.order_id) {
+                                  setUploadingJamaahItemId(item.id);
+                                  try {
+                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                    showToast('Paket info hotel berhasil diupload', 'success');
+                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                  } finally {
+                                    setUploadingJamaahItemId(null);
+                                  }
+                                }
+                                e.target.value = '';
+                              }} disabled={!!uploadingJamaahItemId} />
+                            </label>
+                            {uploadingJamaahItemId === item.id && <span className="text-xs text-slate-500">Mengunggah…</span>}
+                          </div>
+                        ))}
+                      </section>
+                    )}
+                    {visaItems.length > 0 && (
+                      <section className="rounded-xl border border-slate-200 bg-sky-50/50 p-4">
+                        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                          <FileText className="w-4 h-4" /> Visa – Data paspor (ZIP atau link Google Drive)
+                        </h3>
+                        {visaItems.map((item: any) => (
+                          <div key={item.id} className="flex flex-wrap gap-2 mt-2 p-3 bg-white rounded-lg border border-slate-200">
+                            <span className="text-sm font-medium text-slate-700 w-full">{item.Product?.name || item.product_name || 'Visa'}</span>
+                            <label className="flex flex-col gap-1 text-xs">
+                              <span>File ZIP</span>
+                              <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded px-2 py-1.5" onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (f && uploadDocInvoice?.order_id) {
+                                  setUploadingJamaahItemId(item.id);
+                                  try {
+                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                    showToast('Data paspor berhasil diupload', 'success');
+                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                  } finally {
+                                    setUploadingJamaahItemId(null);
+                                  }
+                                }
+                                e.target.value = '';
+                              }} disabled={!!uploadingJamaahItemId} />
+                            </label>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs">atau Link Google Drive</span>
+                              <div className="flex gap-2">
+                                <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="text-sm border border-slate-300 rounded px-2 py-1.5 w-56" disabled={!!uploadingJamaahItemId} />
+                                <Button size="sm" variant="outline" onClick={async () => {
+                                  if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
+                                  setUploadingJamaahItemId(item.id);
+                                  try {
+                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
+                                    showToast('Link berhasil disimpan', 'success');
+                                    setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
+                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                  } finally {
+                                    setUploadingJamaahItemId(null);
+                                  }
+                                }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
+                                  {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </section>
+                    )}
+                    {ticketItems.length > 0 && (
+                      <section className="rounded-xl border border-slate-200 bg-emerald-50/50 p-4">
+                        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                          <Plane className="w-4 h-4" /> Tiket – Dokumen penerbangan (ZIP atau link Google Drive)
+                        </h3>
+                        {ticketItems.map((item: any) => (
+                          <div key={item.id} className="flex flex-wrap gap-2 mt-2 p-3 bg-white rounded-lg border border-slate-200">
+                            <span className="text-sm font-medium text-slate-700 w-full">{item.Product?.name || item.product_name || 'Tiket'}</span>
+                            <label className="flex flex-col gap-1 text-xs">
+                              <span>File ZIP</span>
+                              <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded px-2 py-1.5" onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (f && uploadDocInvoice?.order_id) {
+                                  setUploadingJamaahItemId(item.id);
+                                  try {
+                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                    showToast('Dokumen tiket berhasil diupload', 'success');
+                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                  } finally {
+                                    setUploadingJamaahItemId(null);
+                                  }
+                                }
+                                e.target.value = '';
+                              }} disabled={!!uploadingJamaahItemId} />
+                            </label>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs">atau Link Google Drive</span>
+                              <div className="flex gap-2">
+                                <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="text-sm border border-slate-300 rounded px-2 py-1.5 w-56" disabled={!!uploadingJamaahItemId} />
+                                <Button size="sm" variant="outline" onClick={async () => {
+                                  if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
+                                  setUploadingJamaahItemId(item.id);
+                                  try {
+                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
+                                    showToast('Link berhasil disimpan', 'success');
+                                    setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
+                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                  } finally {
+                                    setUploadingJamaahItemId(null);
+                                  }
+                                }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
+                                  {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </section>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal Detail Invoice */}
@@ -1278,279 +1476,132 @@ const OrdersInvoicesPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-6">
               {detailTab === 'invoice' && (
                 <div className="space-y-6">
-                  {/* Ringkasan info - grid rapi */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data Order</h4>
-                      <dl className="space-y-1.5 text-sm">
-                        <div className="flex justify-between"><dt className="text-slate-600">Owner</dt><dd className="font-semibold">{viewInvoice.User?.name || viewInvoice.User?.company_name}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Cabang</dt><dd className="font-semibold">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Mata Uang</dt><dd className="font-semibold">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
-                      </dl>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data Invoice (lengkap IDR · SAR · USD)</h4>
-                      <dl className="space-y-2 text-sm">
-                        <div className="flex justify-between items-start"><dt className="text-slate-600">Status</dt><dd><Badge variant={getStatusBadge(viewInvoice.status)}>{INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status}</Badge>{viewInvoice.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}</dd></div>
-                        {(() => {
-                          const totalInv = Number(viewInvoice.total_amount) || 0;
-                          const paidFromProofs = (viewInvoice?.PaymentProofs || [])
-                            .filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected'))
-                            .reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
-                          const paidFromInvoice = Number(viewInvoice.paid_amount) || 0;
-                          const displayPaid = paidFromInvoice > 0 ? paidFromInvoice : paidFromProofs;
-                          const displayRemaining = Math.max(0, totalInv - displayPaid);
-                          return [
-                            { label: 'Total', val: totalInv, color: '' },
-                            { label: `DP (${viewInvoice.dp_percentage ?? 0}%)`, val: Number(viewInvoice.dp_amount) || 0, color: '' },
-                            { label: 'Dibayar', val: displayPaid, color: 'text-emerald-600' },
-                            { label: 'Sisa', val: displayRemaining, color: 'text-red-600' }
-                          ];
-                        })().map(({ label, val, color }) => {
-                          const safeVal = Number.isFinite(val) ? val : 0;
-                          const t = { idr: safeVal, sar: safeVal / sarToIdr, usd: safeVal / usdToIdr };
-                          const kesBreakdown = (viewInvoice?.PaymentProofs || []).filter((pr: any) => pr.payment_location === 'saudi' && pr.amount_original != null && pr.payment_currency && pr.payment_currency !== 'IDR');
-                          const kesSar = kesBreakdown.filter((pr: any) => pr.payment_currency === 'SAR').reduce((s: number, pr: any) => s + Number(pr.amount_original || 0), 0);
-                          const kesUsd = kesBreakdown.filter((pr: any) => pr.payment_currency === 'USD').reduce((s: number, pr: any) => s + Number(pr.amount_original || 0), 0);
-                          return (
-                            <div key={label} className="border-t border-slate-100 pt-2 first:border-0 first:pt-0">
-                              <dt className="text-slate-600 mb-0.5">{label}</dt>
-                              <dd className={`font-semibold ${color}`}>
-                                <div>{formatIDR(t.idr)}</div>
-                                <div className="text-xs font-normal text-slate-500 mt-0.5">{formatSAR(t.sar)} · {formatUSD(t.usd)}</div>
-                                {label === 'Dibayar' && (kesSar > 0 || kesUsd > 0) && (
-                                  <div className="text-xs font-normal text-emerald-600 mt-1">Termasuk KES: {kesSar > 0 ? formatSAR(kesSar) : ''}{kesSar > 0 && kesUsd > 0 ? ' · ' : ''}{kesUsd > 0 ? formatUSD(kesUsd) : ''}</div>
-                                )}
-                              </dd>
-                            </div>
-                          );
-                        })}
-                        <div className="flex justify-between border-t border-slate-100 pt-2"><dt className="text-slate-600">Terbayar</dt><dd className="font-semibold">{(() => {
-                          const total = Number(viewInvoice.total_amount) || 0;
-                          const paidFromProofs = (viewInvoice?.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
-                          const paid = (Number(viewInvoice.paid_amount) || 0) || paidFromProofs;
-                          const pct = total > 0 ? (paid / total) * 100 : 0;
-                          return (Number.isFinite(pct) ? pct.toFixed(1) : '0') + '%';
-                        })()}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Tgl Invoice</dt><dd>{formatDate(viewInvoice.issued_at || viewInvoice.created_at)}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Jatuh Tempo DP</dt><dd>{formatDate(viewInvoice.due_date_dp)}</dd></div>
-                      </dl>
-                    </div>
-                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                      <h4 className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-2">Kurs (untuk pembayaran)</h4>
-                      <dl className="space-y-1.5 text-sm text-slate-700">
-                        <div>1 SAR = {formatIDR(sarToIdr)} IDR</div>
-                        <div>1 USD = {formatIDR(usdToIdr)} IDR</div>
-                        {(viewInvoice.Order?.currency === 'SAR' || viewInvoice.Order?.currency === 'USD') && (
-                          <div className="pt-2 mt-2 border-t border-emerald-200 font-semibold">
-                            Total: {viewInvoice.Order?.currency === 'SAR' && `${(parseFloat(viewInvoice.total_amount || 0) / sarToIdr).toFixed(2)} SAR`}
-                            {viewInvoice.Order?.currency === 'USD' && `${(parseFloat(viewInvoice.total_amount || 0) / usdToIdr).toFixed(2)} USD`} = {formatIDR(parseFloat(viewInvoice.total_amount || 0))} IDR
-                          </div>
-                        )}
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* Link ke tab Status Pekerjaan */}
-                  {(viewInvoice?.Order?.OrderItems || []).some((i: any) => ['visa', 'ticket', 'hotel', 'bus'].includes((i.type || i.product_type))) && (
-                    <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm text-slate-700">Status pekerjaan visa, tiket, hotel: lihat di tab <strong>Status Pekerjaan</strong>.</p>
-                      <Button variant="outline" size="sm" onClick={() => setDetailTab('progress')}>
-                        <ClipboardList className="w-4 h-4 mr-1" /> Buka tab Status Pekerjaan
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Data Jamaah & Status Visa/Tiket/Hotel/Bus — tampil sesuai divisi: visa_koordinator hanya visa, tiket_koordinator hanya tiket, role_hotel hanya hotel, role_bus hanya bus; role lain lihat semua */}
                   {(() => {
-                    const order = viewInvoice?.Order;
-                    const isRoleHotel = user?.role === 'role_hotel';
-                    const isRoleBus = user?.role === 'role_bus';
-                    const isVisaKoordinator = user?.role === 'visa_koordinator';
-                    const isTiketKoordinator = user?.role === 'tiket_koordinator';
-                    const items = (order?.OrderItems || []).filter((i: any) => {
-                      const t = (i.type || i.product_type);
-                      if (isRoleHotel) return t === 'hotel';
-                      if (isRoleBus) return t === 'bus';
-                      if (isVisaKoordinator) return t === 'visa';
-                      if (isTiketKoordinator) return t === 'ticket';
-                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus';
-                    });
-                    if (items.length === 0) return null;
-                    const sectionTitle = isRoleHotel
-                      ? 'Data & Status Hotel'
-                      : isRoleBus
-                        ? 'Data & Status Bus'
-                        : isVisaKoordinator
-                          ? 'Data Jamaah & Status Visa'
-                          : isTiketKoordinator
-                            ? 'Data Jamaah & Status Tiket'
-                            : 'Data Jamaah & Status Visa / Tiket / Hotel / Bus';
+                    const totalInv = Number(viewInvoice.total_amount) || 0;
+                    const paidFromProofs = (viewInvoice?.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+                    const paidFromInvoice = Number(viewInvoice.paid_amount) || 0;
+                    const displayPaid = paidFromInvoice > 0 ? paidFromInvoice : paidFromProofs;
+                    const displayRemaining = Math.max(0, totalInv - displayPaid);
+                    const kesBreakdown = (viewInvoice?.PaymentProofs || []).filter((pr: any) => pr.payment_location === 'saudi' && pr.amount_original != null && pr.payment_currency && pr.payment_currency !== 'IDR');
+                    const kesSar = kesBreakdown.filter((pr: any) => pr.payment_currency === 'SAR').reduce((s: number, pr: any) => s + Number(pr.amount_original || 0), 0);
+                    const kesUsd = kesBreakdown.filter((pr: any) => pr.payment_currency === 'USD').reduce((s: number, pr: any) => s + Number(pr.amount_original || 0), 0);
+                    const totalPct = totalInv > 0 ? ((displayPaid / totalInv) * 100) : 0;
                     return (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                          <FileText className="w-4 h-4" /> {sectionTitle}
-                        </h4>
-                        {items.map((item: any) => {
-                          const isVisa = (item.type || item.product_type) === 'visa';
-                          const isTicket = (item.type || item.product_type) === 'ticket';
-                          const isHotel = (item.type || item.product_type) === 'hotel';
-                          const isBus = (item.type || item.product_type) === 'bus';
-                          const progress = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : item.HotelProgress;
-                          const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
-                          const status = isBus ? (progress?.bus_ticket_status ? (BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status) : 'Pending') : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : (isVisa ? 'Menunggu data' : 'Menunggu data')));
-                          const hasJamaah = item.jamaah_data_type && item.jamaah_data_value;
-                          const jamaahUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
-                          const productLabel = item.Product?.name || item.product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
-                          const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
-                          return (
-                            <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-medium text-slate-800">{productLabel}</span>
-                                <Badge variant={badgeVariant}>{status}</Badge>
+                      <>
+                        {/* Baris aksi & ringkasan utama */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/80 border border-slate-200/80 shadow-sm">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Badge variant={getStatusBadge(viewInvoice.status)} className="text-sm px-3 py-1">{INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status}</Badge>
+                            {viewInvoice.is_blocked && <Badge variant="error">Block</Badge>}
+                            <span className="text-slate-500 text-sm">{formatDate(viewInvoice.issued_at || viewInvoice.created_at)} · Jatuh tempo DP {formatDate(viewInvoice.due_date_dp)}</span>
+                          </div>
+                          {canPayInvoice(viewInvoice) && (
+                            <Button onClick={openPaymentModal} variant="primary" size="sm" className="shadow-md">
+                              <Wallet className="w-4 h-4 mr-2" /> Bayar DP / Bayar
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Grid: Data Order | Data Invoice | Saldo + Kurs */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                          {/* Data Order */}
+                          <div className="lg:col-span-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                              <span className="w-1 h-5 rounded-full bg-primary-500" /> Data Order
+                            </h4>
+                            <dl className="space-y-4">
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.User?.name || viewInvoice.User?.company_name}</dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Cabang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mata Uang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
+                            </dl>
+                          </div>
+
+                          {/* Data Invoice — tagihan & angka */}
+                          <div className="lg:col-span-5 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                              <span className="w-1 h-5 rounded-full bg-primary-500" /> Data Invoice
+                            </h4>
+                            <div className="space-y-4">
+                              <div className="pb-4 border-b border-slate-100">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
+                                <p className="text-xl font-bold text-slate-900 mt-1">{formatIDR(totalInv)}</p>
+                                <p className="text-sm text-slate-500 mt-0.5">{formatSAR(totalInv / sarToIdr)} · {formatUSD(totalInv / usdToIdr)}</p>
                               </div>
-                              {hasJamaah && (
-                                <div className="text-sm text-slate-600">
-                                  Dokumen (ZIP/link): {item.jamaah_data_type === 'link' ? (
-                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
-                                      <LinkIcon className="w-3.5 h-3.5" /> Link Google Drive
-                                    </a>
-                                  ) : jamaahUrl ? (
-                                    <a href={jamaahUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
-                                      <Download className="w-3.5 h-3.5" /> Unduh file
-                                    </a>
-                                  ) : (
-                                    <span>File diunggah</span>
-                                  )}
-                                </div>
-                              )}
-                              {(isTicket || isVisa) && item.manifest_file_url && (
-                                <div className="text-sm text-slate-600">
-                                  Manifest jamaah:{' '}
-                                  <a
-                                    href={getFileUrl(item.manifest_file_url) || item.manifest_file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download
-                                    className="text-blue-600 hover:underline inline-flex items-center gap-1 font-medium"
-                                  >
-                                    <Download className="w-3.5 h-3.5" /> Unduh manifest
-                                  </a>
-                                </div>
-                              )}
-                              {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
-                                <div className="text-sm text-slate-600">
-                                  {isVisa ? 'Dokumen visa terbit (upload role visa):' : 'Dokumen tiket terbit (upload role tiket):'}{' '}
-                                  <a
-                                    href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download
-                                    className="text-emerald-600 hover:underline inline-flex items-center gap-1 font-medium"
-                                  >
-                                    <Download className="w-3.5 h-3.5" /> Unduh {isVisa ? 'dokumen visa terbit' : 'dokumen tiket terbit'}
-                                  </a>
-                                </div>
-                              )}
-                              {canOrderAction && viewInvoice?.order_id && !isBus && (
-                                <div className="pt-2 border-t border-slate-200 space-y-2">
-                                  <p className="text-xs text-slate-500">Upload dokumen (ZIP atau link Google Drive) untuk divisi visa/tiket/hotel:</p>
-                                  <div className="flex flex-wrap gap-2 items-end">
-                                    <label className="flex flex-col gap-1 text-xs">
-                                      <span>File ZIP</span>
-                                      <input
-                                        type="file"
-                                        accept=".zip"
-                                        className="text-sm border border-slate-300 rounded px-2 py-1.5"
-                                        onChange={async (e) => {
-                                          const f = e.target.files?.[0];
-                                          if (f) await handleUploadJamaahData(viewInvoice.order_id, item.id, f, '');
-                                          e.target.value = '';
-                                        }}
-                                        disabled={!!uploadingJamaahItemId}
-                                      />
-                                    </label>
-                                    <span className="text-slate-400">atau</span>
-                                    <div className="flex flex-col gap-1">
-                                      <input
-                                        type="url"
-                                        placeholder="Link Google Drive"
-                                        value={jamaahLinkInput[item.id] || ''}
-                                        onChange={(e) => setJamaahLinkInput((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                                        className="text-sm border border-slate-300 rounded px-2 py-1.5 w-64"
-                                        disabled={!!uploadingJamaahItemId}
-                                      />
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleUploadJamaahData(viewInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '')}
-                                        disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}
-                                      >
-                                        {uploadingJamaahItemId === item.id ? 'Mengunggah...' : <><Upload className="w-3.5 h-3.5 mr-1" /> Simpan link</>}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {isRoleHotel && isHotel && (
-                                <div className="pt-2 border-t border-slate-200 space-y-2">
-                                  <p className="text-xs font-medium text-slate-600">Update progress hotel</p>
-                                  <form
-                                    className="flex flex-wrap gap-3 items-end"
-                                    onSubmit={async (e) => {
-                                      e.preventDefault();
-                                      const form = e.currentTarget;
-                                      const fd = new FormData(form);
-                                      const status = (fd.get('status') as string) || undefined;
-                                      const room_number = (fd.get('room_number') as string)?.trim() || undefined;
-                                      const meal_status = (fd.get('meal_status') as string) || undefined;
-                                      setHotelProgressSaving(item.id);
-                                      try {
-                                        await hotelApi.updateItemProgress(item.id, { status, room_number, meal_status });
-                                        showToast('Status hotel berhasil diperbarui', 'success');
-                                        if (viewInvoice?.id) fetchInvoiceDetail(viewInvoice.id);
-                                      } catch (err: any) {
-                                        showToast(err.response?.data?.message || 'Gagal update progress hotel', 'error');
-                                      } finally {
-                                        setHotelProgressSaving(null);
-                                      }
-                                    }}
-                                  >
-                                    <label className="flex flex-col gap-1 text-xs">
-                                      <span>Status</span>
-                                      <select name="status" defaultValue={progress?.status || 'waiting_confirmation'} className="text-sm border border-slate-300 rounded px-2 py-1.5">
-                                        {Object.entries(HOTEL_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                                      </select>
-                                    </label>
-                                    <label className="flex flex-col gap-1 text-xs">
-                                      <span>No. Kamar</span>
-                                      <input type="text" name="room_number" defaultValue={progress?.room_number || ''} placeholder="Contoh: 301" className="text-sm border border-slate-300 rounded px-2 py-1.5 w-24" />
-                                    </label>
-                                    <label className="flex flex-col gap-1 text-xs">
-                                      <span>Makan</span>
-                                      <select name="meal_status" defaultValue={progress?.meal_status || 'pending'} className="text-sm border border-slate-300 rounded px-2 py-1.5">
-                                        <option value="pending">Pending</option>
-                                        <option value="confirmed">Dikonfirmasi</option>
-                                        <option value="completed">Selesai</option>
-                                      </select>
-                                    </label>
-                                    <Button type="submit" size="sm" variant="primary" disabled={!!hotelProgressSaving}>
-                                      {hotelProgressSaving === item.id ? 'Menyimpan...' : 'Simpan'}
-                                    </Button>
-                                  </form>
-                                </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5">{formatIDR(Number(viewInvoice.dp_amount) || 0)}</p></div>
+                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-emerald-600 mt-0.5">{formatIDR(displayPaid)}</p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-emerald-600 mt-0.5">KES: {formatSAR(kesSar)}{kesUsd > 0 ? ` · ${formatUSD(kesUsd)}` : ''}</p>}</div>
+                                <div><p className="text-xs text-slate-500">Sisa</p><p className="font-semibold text-red-600 mt-0.5">{formatIDR(displayRemaining)}</p></div>
+                                <div><p className="text-xs text-slate-500">Terbayar</p><p className="font-semibold text-slate-900 mt-0.5">{(Number.isFinite(totalPct) ? totalPct.toFixed(1) : '0')}%</p></div>
+                              </div>
+                              <div className="flex flex-wrap gap-4 pt-2 text-sm text-slate-600">
+                                <span>Tgl invoice: <strong className="text-slate-800">{formatDate(viewInvoice.issued_at || viewInvoice.created_at)}</strong></span>
+                                <span>Jatuh tempo DP: <strong className="text-slate-800">{formatDate(viewInvoice.due_date_dp)}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Saldo (owner) + Kurs */}
+                          <div className="lg:col-span-3 space-y-4">
+                            {user?.role === 'owner' && viewInvoice?.owner_id === user?.id && (
+                              <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 shadow-sm">
+                                <h4 className="text-sm font-semibold text-emerald-800 flex items-center gap-2 mb-3">
+                                  <Wallet className="w-4 h-4" /> Saldo Akun Anda
+                                </h4>
+                                {ownerBalanceLoading ? (
+                                  <p className="text-sm text-slate-500">Memuat saldo...</p>
+                                ) : (
+                                  <>
+                                    <p className="text-2xl font-bold text-emerald-700">{formatIDR(ownerBalance ?? 0)}</p>
+                                    <p className="text-xs text-slate-600 mt-1">Untuk order baru atau alokasi ke tagihan.</p>
+                                    {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
+                                      <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
+                                        <label className="block text-xs font-medium text-emerald-800">Alokasikan ke invoice ini</label>
+                                        <div className="flex gap-2">
+                                          <input type="number" min="1" max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} className="flex-1 min-w-0 text-sm border border-emerald-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="Jumlah (IDR)" />
+                                          <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
+                                            const amt = parseFloat(allocateAmount);
+                                            if (!Number.isFinite(amt) || amt <= 0) return;
+                                            setAllocating(true);
+                                            try {
+                                              await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
+                                              showToast(`Saldo Rp ${amt.toLocaleString('id-ID')} berhasil dialokasikan`, 'success');
+                                              setAllocateAmount('');
+                                              fetchInvoiceDetail(viewInvoice.id);
+                                              fetchOwnerBalance();
+                                            } catch (e: any) {
+                                              showToast(e.response?.data?.message || 'Gagal alokasi', 'error');
+                                            } finally { setAllocating(false); }
+                                          }}>{allocating ? '...' : 'Alokasikan'}</Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Kurs pembayaran</p>
+                              <p className="text-sm text-slate-700">1 SAR = {formatIDR(sarToIdr)}</p>
+                              <p className="text-sm text-slate-700">1 USD = {formatIDR(usdToIdr)}</p>
+                              {(viewInvoice.Order?.currency === 'SAR' || viewInvoice.Order?.currency === 'USD') && (
+                                <p className="text-xs font-semibold text-slate-600 mt-2 pt-2 border-t border-slate-200">Total = {formatIDR(parseFloat(viewInvoice.total_amount || 0))} IDR</p>
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        </div>
+
+                        {/* Hint tagihan DP (jika bisa bayar, tombol sudah di atas) */}
+                        {canPayInvoice(viewInvoice) && (
+                          <p className="text-sm text-slate-500 px-1">Tagihan DP minimal {viewInvoice.dp_percentage || 30}% atau input sendiri. Bayar via Transfer Bank, VA, atau QRIS.</p>
+                        )}
+                      </>
                     );
                   })()}
 
                   {/* Info Refund (jika invoice dibatalkan dengan pembayaran) */}
                   {(viewInvoice?.Refunds?.length ?? 0) > 0 && (
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <div className="p-5 bg-amber-50/80 rounded-2xl border border-amber-200 shadow-sm space-y-3">
+                      <h4 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
                         <Receipt className="w-4 h-4" /> Permintaan Refund
                       </h4>
                       <p className="text-xs text-slate-500">Pembatalan invoice dengan pembayaran akan membuat permintaan refund. Status berikut menunggu proses oleh tim keuangan.</p>
@@ -1569,63 +1620,9 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Saldo owner & alokasi ke invoice ini */}
-                  {user?.role === 'owner' && viewInvoice?.owner_id === user?.id && (
-                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 space-y-3">
-                      <h4 className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
-                        <Wallet className="w-4 h-4" /> Saldo Akun Anda
-                      </h4>
-                      {ownerBalanceLoading ? (
-                        <p className="text-sm text-slate-500">Memuat saldo...</p>
-                      ) : (
-                        <>
-                          <p className="text-lg font-bold text-emerald-700">{formatIDR(ownerBalance ?? 0)}</p>
-                          <p className="text-xs text-slate-600">Saldo dapat digunakan untuk order baru atau dialokasikan ke tagihan (DP/lunas).</p>
-                          {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
-                            <div className="pt-2 border-t border-emerald-200 flex flex-wrap gap-2 items-end">
-                              <label className="flex flex-col gap-1 text-xs">
-                                <span>Alokasikan ke invoice ini (IDR)</span>
-                                <input type="number" min="1" max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} className="w-40 text-sm border border-slate-300 rounded-lg px-3 py-2" placeholder="Jumlah" />
-                              </label>
-                              <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
-                                const amt = parseFloat(allocateAmount);
-                                if (!Number.isFinite(amt) || amt <= 0) return;
-                                setAllocating(true);
-                                try {
-                                  await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
-                                  showToast(`Saldo Rp ${amt.toLocaleString('id-ID')} berhasil dialokasikan`, 'success');
-                                  setAllocateAmount('');
-                                  fetchInvoiceDetail(viewInvoice.id);
-                                  fetchOwnerBalance();
-                                } catch (e: any) {
-                                  showToast(e.response?.data?.message || 'Gagal alokasi', 'error');
-                                } finally {
-                                  setAllocating(false);
-                                }
-                              }}>
-                                {allocating ? 'Memproses...' : 'Alokasikan'}
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {canPayInvoice(viewInvoice) && (
-                    <div className="flex flex-wrap items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                      <p className="text-sm text-amber-800">
-                        <strong>Tagihan DP:</strong> Minimal {viewInvoice.dp_percentage || 30}% atau input sendiri. Bayar via Transfer Bank (cantumkan nomor rekening), VA, atau QRIS.
-                      </p>
-                      <Button onClick={openPaymentModal} variant="primary" size="sm">
-                        <Wallet className="w-4 h-4 mr-2" /> Bayar DP / Bayar
-                      </Button>
-                    </div>
-                  )}
-
                   {/* Preview PDF */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                    <div className="flex items-center justify-between px-4 py-2 bg-slate-100 border-b border-slate-200">
+                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
                       <span className="font-semibold text-slate-700 flex items-center gap-2">
                         <LayoutGrid className="w-4 h-4" /> Preview Invoice PDF
                       </span>
@@ -1633,7 +1630,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         <ExternalLink className="w-4 h-4 mr-1" /> Buka di tab baru
                       </Button>
                     </div>
-                    <div className="h-[400px] min-h-[300px]">
+                    <div className="h-[420px] min-h-[320px] bg-slate-50">
                       {loadingPdf && (
                         <div className="flex items-center justify-center h-full text-slate-500">
                           <div className="animate-pulse">Memuat PDF...</div>

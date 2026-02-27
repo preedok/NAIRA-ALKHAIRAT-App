@@ -398,6 +398,7 @@ const UsersPage: React.FC = () => {
           data={filteredUsers}
           sort={{ columnId: sortBy, order: sortOrder }}
           onSortChange={(col, order) => { setSortBy(col); setSortOrder(order); setPage(1); }}
+          stickyActionsColumn
           pagination={pagination ? {
             total: pagination.total,
             page: pagination.page,
