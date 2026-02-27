@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight } from 'lucide-react';
+import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight, ShoppingCart } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
+import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import { formatIDR, formatSAR, formatUSD } from '../../../utils';
@@ -59,6 +60,7 @@ type BusPageProps = { embedInProducts?: boolean };
 const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { addItem: addDraftItem } = useOrderDraft();
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [loadingBusProducts, setLoadingBusProducts] = useState(false);
@@ -290,35 +292,60 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                         <p className="text-[10px] text-slate-500 mt-0.5">per hari (kalender)</p>
                       </td>
                       <td className="py-2 px-4 text-right">
-                        {isPusat && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const raw = p.meta?.route_prices_by_trip as Record<string, unknown> | undefined;
-                              const toNum = (v: unknown): number => {
-                                if (typeof v === 'number' && !Number.isNaN(v)) return v;
-                                if (v && typeof v === 'object' && typeof (v as Record<string, unknown>).full_route === 'number') return Number((v as Record<string, number>).full_route) || 0;
-                                return 0;
-                              };
-                              const one = raw ? toNum(raw.one_way) : 0;
-                              const ret = raw ? toNum(raw.return_only) : 0;
-                              const round = raw ? toNum(raw.round_trip) : 0;
-                              setEditProductModal({
-                                product: p,
-                                name: p.name,
-                                description: p.description ?? '',
-                                bus_kind: (p.meta?.bus_kind as BusKind) || 'bus',
-                                route_prices_by_trip: { one_way: one, return_only: ret, round_trip: round },
-                                price_per_vehicle_idr: p.meta?.price_per_vehicle_idr ?? 0,
-                                price_currency: 'IDR',
-                                default_quota: (typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0) ? p.meta.default_quota : ''
-                              });
-                            }}
-                          >
-                            <Pencil className="w-4 h-4 mr-1" /> Edit
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-1 flex-wrap">
+                          {canAddToOrder && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                const priceIdr = isHiace
+                                  ? (p.meta?.price_per_vehicle_idr ?? p.price_general_idr ?? 0)
+                                  : getPriceForTrip(p, 'round_trip');
+                                addDraftItem({
+                                  type: 'bus',
+                                  product_id: p.id,
+                                  product_name: p.name,
+                                  unit_price_idr: priceIdr,
+                                  quantity: 1
+                                });
+                                showToast('Bus ditambahkan ke order. Buka menu Order untuk lengkapi tipe perjalanan & tanggal.', 'success');
+                              }}
+                              title="Pesan / Tambah ke order"
+                            >
+                              <ShoppingCart className="w-4 h-4 mr-1" /> Pesan
+                            </Button>
+                          )}
+                          {isPusat && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const raw = p.meta?.route_prices_by_trip as Record<string, unknown> | undefined;
+                                const toNum = (v: unknown): number => {
+                                  if (typeof v === 'number' && !Number.isNaN(v)) return v;
+                                  if (v && typeof v === 'object' && typeof (v as Record<string, unknown>).full_route === 'number') return Number((v as Record<string, number>).full_route) || 0;
+                                  return 0;
+                                };
+                                const one = raw ? toNum(raw.one_way) : 0;
+                                const ret = raw ? toNum(raw.return_only) : 0;
+                                const round = raw ? toNum(raw.round_trip) : 0;
+                                setEditProductModal({
+                                  product: p,
+                                  name: p.name,
+                                  description: p.description ?? '',
+                                  bus_kind: (p.meta?.bus_kind as BusKind) || 'bus',
+                                  route_prices_by_trip: { one_way: one, return_only: ret, round_trip: round },
+                                  price_per_vehicle_idr: p.meta?.price_per_vehicle_idr ?? 0,
+                                  price_currency: 'IDR',
+                                  default_quota: (typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0) ? p.meta.default_quota : ''
+                                });
+                              }}
+                            >
+                              <Pencil className="w-4 h-4 mr-1" /> Edit
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );})}
