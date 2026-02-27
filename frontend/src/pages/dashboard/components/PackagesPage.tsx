@@ -41,6 +41,12 @@ interface PackageProduct {
     currency?: string;
     hotel_makkah_id?: string;
     hotel_madinah_id?: string;
+    visa_ids?: string[];
+    ticket_ids?: string[];
+    bus_ids?: string[];
+    handling_ids?: string[];
+    makan_hotel_ids?: string[];
+    price_total_idr?: number;
   } | null;
   is_active: boolean;
   is_package?: boolean;
@@ -52,31 +58,56 @@ interface PackageProduct {
   currency?: string;
 }
 
-/** Hotel option untuk dropdown paket */
+/** Hotel option untuk dropdown paket (dari API dengan price & meal_price_idr) */
 interface HotelOption {
   id: string;
   name: string;
   meta?: { location?: string } | null;
+  price_general_idr?: number | null;
+  room_breakdown?: Record<string, { price: number }>;
+  meal_price_idr?: number | null;
+}
+
+/** Produk untuk pilihan paket (visa, tiket, bus, handling) */
+interface ProductOption {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  price_general_idr?: number | null;
+  price_general_sar?: number | null;
+  price_general_usd?: number | null;
+  currency?: string;
 }
 
 type FormState = {
   name: string;
-  price_idr: number;
+  price_total_idr: number;
   days: number;
   discountPercent: number;
   includes: string[];
   hotel_makkah_id: string;
   hotel_madinah_id: string;
+  visa_ids: string[];
+  ticket_ids: string[];
+  bus_ids: string[];
+  handling_ids: string[];
+  makan_hotel_ids: string[];
 };
 
 const emptyForm: FormState = {
   name: '',
-  price_idr: 0,
+  price_total_idr: 0,
   days: 1,
   discountPercent: 0,
   includes: [],
   hotel_makkah_id: '',
-  hotel_madinah_id: ''
+  hotel_madinah_id: '',
+  visa_ids: [],
+  ticket_ids: [],
+  bus_ids: [],
+  handling_ids: [],
+  makan_hotel_ids: []
 };
 
 const PackagesPage: React.FC = () => {
@@ -95,6 +126,11 @@ const PackagesPage: React.FC = () => {
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [hotels, setHotels] = useState<HotelOption[]>([]);
   const [hotelsLoading, setHotelsLoading] = useState(false);
+  const [visaProducts, setVisaProducts] = useState<ProductOption[]>([]);
+  const [ticketProducts, setTicketProducts] = useState<ProductOption[]>([]);
+  const [busProducts, setBusProducts] = useState<ProductOption[]>([]);
+  const [handlingProducts, setHandlingProducts] = useState<ProductOption[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
 
   const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
@@ -111,6 +147,25 @@ const PackagesPage: React.FC = () => {
         .catch(() => setHotels([]))
         .finally(() => setHotelsLoading(false));
     }
+  }, [canCreatePackage]);
+
+  useEffect(() => {
+    if (!canCreatePackage) return;
+    setProductsLoading(true);
+    Promise.all([
+      productsApi.list({ type: 'visa', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'ticket', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'bus', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'handling', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? [])
+    ])
+      .then(([visa, ticket, bus, handling]) => {
+        setVisaProducts(visa);
+        setTicketProducts(ticket);
+        setBusProducts(bus);
+        setHandlingProducts(handling);
+      })
+      .catch(() => {})
+      .finally(() => setProductsLoading(false));
   }, [canCreatePackage]);
 
   useEffect(() => {
@@ -197,8 +252,25 @@ const PackagesPage: React.FC = () => {
       if (id === 'hotel' && willRemove) {
         next.hotel_makkah_id = '';
         next.hotel_madinah_id = '';
+        next.makan_hotel_ids = next.makan_hotel_ids.filter((hid) => hid !== f.hotel_makkah_id && hid !== f.hotel_madinah_id);
       }
+      if (id === 'makan' && willRemove) next.makan_hotel_ids = [];
       return next;
+    });
+  };
+
+  const toggleProductId = (key: 'visa_ids' | 'ticket_ids' | 'bus_ids' | 'handling_ids', id: string) => {
+    setForm((f) => {
+      const arr = f[key];
+      const next = arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+      return { ...f, [key]: next };
+    });
+  };
+
+  const toggleMakanHotelId = (hotelId: string) => {
+    setForm((f) => {
+      const next = f.makan_hotel_ids.includes(hotelId) ? f.makan_hotel_ids.filter((x) => x !== hotelId) : [...f.makan_hotel_ids, hotelId];
+      return { ...f, makan_hotel_ids: next };
     });
   };
 
@@ -213,27 +285,34 @@ const PackagesPage: React.FC = () => {
     setEditingPackage(pkg);
     const meta = pkg.meta as PackageProduct['meta'];
     const days = Number(meta?.days ?? 1);
-    let priceIdr = pkg.price_general_idr ?? 0;
+    let totalIdr = pkg.price_general_idr ?? 0;
     const priceSar = pkg.price_general_sar ?? 0;
     const priceUsd = pkg.price_general_usd ?? 0;
-    if (priceIdr === 0 && priceSar === 0 && priceUsd === 0) {
+    if (totalIdr === 0 && priceSar === 0 && priceUsd === 0) {
       const base = Number(pkg.price_branch ?? pkg.price_general ?? 0);
       const cur = (meta?.currency || pkg.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
       const triple = fillFromSource(cur, base, currencyRates);
-      priceIdr = triple.idr;
-    } else if (priceIdr === 0 && (priceSar > 0 || priceUsd > 0)) {
+      totalIdr = triple.idr;
+    } else if (totalIdr === 0 && (priceSar > 0 || priceUsd > 0)) {
       const triple = getRatesFromRates(currencyRates);
-      if (priceSar > 0) priceIdr = priceSar * (triple.SAR_TO_IDR ?? 4200);
-      else if (priceUsd > 0) priceIdr = priceUsd * (triple.USD_TO_IDR ?? 15500);
+      if (priceSar > 0) totalIdr = priceSar * (triple.SAR_TO_IDR ?? 4200);
+      else if (priceUsd > 0) totalIdr = priceUsd * (triple.USD_TO_IDR ?? 15500);
     }
+    // Paket lama mungkin tersimpan sebagai total = (input × days); tampilkan nilai yang diinput = totalIdr / days
+    const priceTotal = meta?.price_total_idr ?? (days >= 1 ? totalIdr / days : totalIdr);
     setForm({
       name: pkg.name,
-      price_idr: priceIdr,
+      price_total_idr: priceTotal,
       days,
       discountPercent: Number(meta?.discount_percent ?? 0),
       includes: meta?.includes ?? [],
       hotel_makkah_id: meta?.hotel_makkah_id ?? '',
-      hotel_madinah_id: meta?.hotel_madinah_id ?? ''
+      hotel_madinah_id: meta?.hotel_madinah_id ?? '',
+      visa_ids: meta?.visa_ids ?? [],
+      ticket_ids: meta?.ticket_ids ?? [],
+      bus_ids: meta?.bus_ids ?? [],
+      handling_ids: meta?.handling_ids ?? [],
+      makan_hotel_ids: meta?.makan_hotel_ids ?? []
     });
     setDaysInput(days >= 1 ? String(days) : '1');
     setShowModal(true);
@@ -259,16 +338,23 @@ const PackagesPage: React.FC = () => {
     }
     const parsedDays = parseInt(daysInput.trim(), 10);
     const days = (Number.isNaN(parsedDays) || parsedDays < 1) ? 1 : parsedDays;
-    const triplePrice = fillFromSource('IDR', form.price_idr || 0, currencyRates);
+    const totalIdr = form.price_total_idr || 0;
+    const triplePrice = fillFromSource('IDR', totalIdr, currencyRates);
     const hasPrice = triplePrice.idr > 0 || triplePrice.sar > 0 || triplePrice.usd > 0;
     setSaving(true);
     try {
       const meta = {
         includes: form.includes,
         days,
+        price_total_idr: form.price_total_idr || 0,
         ...(editingPackage ? { discount_percent: form.discountPercent } : {}),
         ...(form.hotel_makkah_id ? { hotel_makkah_id: form.hotel_makkah_id } : {}),
-        ...(form.hotel_madinah_id ? { hotel_madinah_id: form.hotel_madinah_id } : {})
+        ...(form.hotel_madinah_id ? { hotel_madinah_id: form.hotel_madinah_id } : {}),
+        ...(form.visa_ids?.length ? { visa_ids: form.visa_ids } : {}),
+        ...(form.ticket_ids?.length ? { ticket_ids: form.ticket_ids } : {}),
+        ...(form.bus_ids?.length ? { bus_ids: form.bus_ids } : {}),
+        ...(form.handling_ids?.length ? { handling_ids: form.handling_ids } : {}),
+        ...(form.makan_hotel_ids?.length ? { makan_hotel_ids: form.makan_hotel_ids } : {})
       };
       if (editingPackage) {
         await productsApi.update(editingPackage.id, {
@@ -416,10 +502,12 @@ const PackagesPage: React.FC = () => {
             onLimitChange: (l) => { setLimit(l); setPage(1); }
           } : undefined}
           renderRow={(pkg: PackageProduct) => {
-            const meta = pkg.meta as { discount_percent?: number; days?: number; currency?: string } | undefined;
+            const meta = pkg.meta as PackageProduct['meta'];
             const discountPercent = Number(meta?.discount_percent ?? 0);
             const days = Number(meta?.days ?? 1);
-            const priceIdr = pkg.price_general_idr ?? (pkg.currency === 'IDR' || !pkg.currency ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
+            // Tampilkan harga yang diinput: pakai meta.price_total_idr jika ada; untuk paket lama (tanpa meta) nilai DB = input×days → tampilkan input = price_general_idr/days
+            const rawIdr = pkg.price_general_idr ?? (pkg.currency === 'IDR' || !pkg.currency ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
+            const priceIdr = meta?.price_total_idr ?? (days >= 1 ? (Number(rawIdr) || 0) / days : rawIdr);
             const priceSar = pkg.price_general_sar ?? (pkg.currency === 'SAR' ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
             const priceUsd = pkg.price_general_usd ?? (pkg.currency === 'USD' ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
             const basePriceIdr = Number(priceIdr) || 0;
@@ -581,6 +669,111 @@ const PackagesPage: React.FC = () => {
                   </div>
                 </div>
               )}
+              {canCreatePackage && form.includes.includes('makan') && (form.hotel_makkah_id || form.hotel_madinah_id) && (
+                <div className="rounded-xl border-2 border-amber-200 bg-amber-50/50 p-4 space-y-2">
+                  <p className="text-sm font-medium text-amber-800">Makan – pilih sesuai hotel yang dipilih</p>
+                  <div className="flex flex-wrap gap-2">
+                    {form.hotel_makkah_id && (() => {
+                      const h = hotels.find((x) => x.id === form.hotel_makkah_id);
+                      return h ? (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => toggleMakanHotelId(h.id)}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
+                        >
+                          Makan – {h.name}
+                        </button>
+                      ) : null;
+                    })()}
+                    {form.hotel_madinah_id && (() => {
+                      const h = hotels.find((x) => x.id === form.hotel_madinah_id);
+                      return h ? (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => toggleMakanHotelId(h.id)}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
+                        >
+                          Makan – {h.name}
+                        </button>
+                      ) : null;
+                    })()}
+                  </div>
+                </div>
+              )}
+              {canCreatePackage && form.includes.includes('visa') && (
+                <div className="rounded-xl border-2 border-sky-200 bg-sky-50/50 p-4 space-y-2">
+                  <p className="text-sm font-medium text-sky-800">Visa – pilih yang masuk paket</p>
+                  <div className="flex flex-wrap gap-2">
+                    {visaProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggleProductId('visa_ids', p.id)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.visa_ids.includes(p.id) ? 'bg-sky-600 text-white' : 'bg-white border border-sky-300 text-slate-700 hover:bg-sky-100'}`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    {productsLoading && visaProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat visa...</span>}
+                  </div>
+                </div>
+              )}
+              {canCreatePackage && form.includes.includes('tiket') && (
+                <div className="rounded-xl border-2 border-violet-200 bg-violet-50/50 p-4 space-y-2">
+                  <p className="text-sm font-medium text-violet-800">Tiket – pilih yang masuk paket</p>
+                  <div className="flex flex-wrap gap-2">
+                    {ticketProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggleProductId('ticket_ids', p.id)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.ticket_ids.includes(p.id) ? 'bg-violet-600 text-white' : 'bg-white border border-violet-300 text-slate-700 hover:bg-violet-100'}`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    {productsLoading && ticketProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat tiket...</span>}
+                  </div>
+                </div>
+              )}
+              {canCreatePackage && form.includes.includes('bis') && (
+                <div className="rounded-xl border-2 border-teal-200 bg-teal-50/50 p-4 space-y-2">
+                  <p className="text-sm font-medium text-teal-800">Bis – pilih yang masuk paket</p>
+                  <div className="flex flex-wrap gap-2">
+                    {busProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggleProductId('bus_ids', p.id)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.bus_ids.includes(p.id) ? 'bg-teal-600 text-white' : 'bg-white border border-teal-300 text-slate-700 hover:bg-teal-100'}`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    {productsLoading && busProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat bis...</span>}
+                  </div>
+                </div>
+              )}
+              {canCreatePackage && form.includes.includes('handling') && (
+                <div className="rounded-xl border-2 border-rose-200 bg-rose-50/50 p-4 space-y-2">
+                  <p className="text-sm font-medium text-rose-800">Handling – pilih yang masuk paket</p>
+                  <div className="flex flex-wrap gap-2">
+                    {handlingProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggleProductId('handling_ids', p.id)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.handling_ids.includes(p.id) ? 'bg-rose-600 text-white' : 'bg-white border border-rose-300 text-slate-700 hover:bg-rose-100'}`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    {productsLoading && handlingProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat handling...</span>}
+                  </div>
+                </div>
+              )}
               {canCreatePackage && (
                 <>
                   <div>
@@ -605,28 +798,110 @@ const PackagesPage: React.FC = () => {
               )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Harga (IDR) – total {(() => { const v = parseInt(daysInput.trim(), 10); return (Number.isNaN(v) || v < 1) ? 1 : v; })()} hari full per jamaah
+                  Harga (IDR) – total full per jamaah
                 </label>
-                <p className="text-xs text-slate-500 mb-2">Harga sesuai lama hari di atas (mis. 9 hari = harga paket 9 hari full per jamaah). Isi dalam Rupiah. Sistem otomatis membuat SAR & USD dari kurs.</p>
+                <p className="text-xs text-slate-500 mb-2">Total harga paket untuk seluruh hari (bukan per hari). Isi dalam Rupiah. Sistem pakai kurs untuk SAR & USD.</p>
                 <input
                   type="number"
                   min={0}
                   step={1}
-                  value={form.price_idr || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, price_idr: parseFloat(e.target.value) || 0 }))}
+                  value={form.price_total_idr || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, price_total_idr: parseFloat(e.target.value) || 0 }))}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   placeholder="Contoh: 45000000"
                 />
-                {(form.price_idr > 0) && (() => {
-                  const triple = fillFromSource('IDR', form.price_idr, currencyRates);
+                {(form.price_total_idr > 0) && (() => {
+                  const triple = fillFromSource('IDR', form.price_total_idr, currencyRates);
                   return (
                     <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
-                      <p className="text-slate-600 font-medium mb-1">Konversi otomatis (dari kurs):</p>
-                      <p className="text-slate-700">SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
+                      <p className="text-slate-600 font-medium mb-1">Konversi (kurs):</p>
+                      <p className="text-slate-700">IDR: {formatPrice(form.price_total_idr, 'IDR')} · SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
                     </div>
                   );
                 })()}
               </div>
+              {canCreatePackage && (() => {
+                const sar = currencyRates.SAR_TO_IDR ?? 4200;
+                const usd = currencyRates.USD_TO_IDR ?? 15500;
+                const toIdr = (p: ProductOption | HotelOption & { price_general_idr?: number | null; price_general_sar?: number | null; price_general_usd?: number | null }): number => {
+                  if ('price_general_idr' in p && p.price_general_idr != null && p.price_general_idr > 0) return p.price_general_idr;
+                  if ('price_general_sar' in p && p.price_general_sar != null && p.price_general_sar > 0) return p.price_general_sar * sar;
+                  if ('price_general_usd' in p && p.price_general_usd != null && p.price_general_usd > 0) return p.price_general_usd * usd;
+                  if ('room_breakdown' in p && p.room_breakdown) {
+                    const first = Object.values(p.room_breakdown)[0];
+                    return first?.price ? first.price * ((() => { const v = parseInt(daysInput.trim(), 10); return (Number.isNaN(v) || v < 1) ? 1 : v; })()) : 0;
+                  }
+                  return 0;
+                };
+                const daysVal = (() => { const v = parseInt(daysInput.trim(), 10); return (Number.isNaN(v) || v < 1) ? 1 : v; })();
+                const packageTotalIdr = form.price_total_idr || 0;
+                const rows: { label: string; listIdr: number }[] = [];
+                if (form.hotel_makkah_id) {
+                  const h = hotels.find((x) => x.id === form.hotel_makkah_id);
+                  if (h) {
+                    const listIdr = (h.price_general_idr ?? (h.room_breakdown && Object.values(h.room_breakdown)[0]?.price) ?? 0) * daysVal;
+                    rows.push({ label: `Hotel Mekkah: ${h.name}`, listIdr });
+                  }
+                }
+                if (form.hotel_madinah_id) {
+                  const h = hotels.find((x) => x.id === form.hotel_madinah_id);
+                  if (h) {
+                    const listIdr = (h.price_general_idr ?? (h.room_breakdown && Object.values(h.room_breakdown)[0]?.price) ?? 0) * daysVal;
+                    rows.push({ label: `Hotel Madinah: ${h.name}`, listIdr });
+                  }
+                }
+                form.makan_hotel_ids.forEach((hid) => {
+                  const h = hotels.find((x) => x.id === hid);
+                  if (h && (h.meal_price_idr ?? 0) > 0) rows.push({ label: `Makan: ${h.name}`, listIdr: (h.meal_price_idr ?? 0) * daysVal });
+                });
+                form.visa_ids.forEach((id) => {
+                  const p = visaProducts.find((x) => x.id === id);
+                  if (p) rows.push({ label: `Visa: ${p.name}`, listIdr: toIdr(p) });
+                });
+                form.ticket_ids.forEach((id) => {
+                  const p = ticketProducts.find((x) => x.id === id);
+                  if (p) rows.push({ label: `Tiket: ${p.name}`, listIdr: toIdr(p) });
+                });
+                form.bus_ids.forEach((id) => {
+                  const p = busProducts.find((x) => x.id === id);
+                  if (p) rows.push({ label: `Bis: ${p.name}`, listIdr: toIdr(p) });
+                });
+                form.handling_ids.forEach((id) => {
+                  const p = handlingProducts.find((x) => x.id === id);
+                  if (p) rows.push({ label: `Handling: ${p.name}`, listIdr: toIdr(p) });
+                });
+                const totalListIdr = rows.reduce((s, r) => s + r.listIdr, 0);
+                const totalDiscount = totalListIdr - packageTotalIdr;
+                if (rows.length > 0 && packageTotalIdr > 0 && totalListIdr > 0) {
+                  const ratio = packageTotalIdr / totalListIdr;
+                  return (
+                    <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 space-y-2">
+                      <p className="text-sm font-semibold text-slate-800">Kalkulasi diskon (otomatis dari harga total paket & kurs)</p>
+                      <div className="text-xs space-y-1 max-h-48 overflow-y-auto">
+                        {rows.map((r, i) => {
+                          const allocated = Math.round(r.listIdr * ratio);
+                          const discount = r.listIdr - allocated;
+                          const pct = r.listIdr > 0 ? Math.round((discount / r.listIdr) * 100) : 0;
+                          return (
+                            <div key={i} className="py-1.5 border-b border-slate-200/80">
+                              <div className="text-slate-700 font-medium truncate">{r.label}</div>
+                              <div className="text-xs text-slate-600 mt-0.5">
+                                List: {formatPrice(r.listIdr, 'IDR')} → Alokasi: {formatPrice(allocated, 'IDR')} · Diskon: {formatPrice(discount, 'IDR')} ({pct}%)
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm font-medium">
+                        <span>Total list: {formatPrice(totalListIdr, 'IDR')}</span>
+                        <span>Total paket: {formatPrice(packageTotalIdr, 'IDR')}</span>
+                        <span className="text-amber-700">Total diskon: {formatPrice(totalDiscount, 'IDR')}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               {editingPackage && (
                 <>
                   <div>
@@ -645,7 +920,7 @@ const PackagesPage: React.FC = () => {
                     <div className="rounded-lg bg-slate-50 p-3 text-sm">
                       <span className="text-slate-600">Harga setelah diskon (IDR): </span>
                       <span className="font-semibold text-emerald-600">
-                        {formatPrice(getPriceAfterDiscount(form.price_idr || 0, form.discountPercent), 'IDR')}
+                        {formatPrice(getPriceAfterDiscount(form.price_total_idr || 0, form.discountPercent), 'IDR')}
                       </span>
                     </div>
                   )}

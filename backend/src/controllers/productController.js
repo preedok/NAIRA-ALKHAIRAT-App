@@ -190,15 +190,18 @@ const list = asyncHandler(async (req, res) => {
         const roomTypesMeta = avMeta.room_types || {};
         const generalPrices = prices.filter(pr => !pr.branch_id && !pr.owner_id);
         const rooms = {};
+        let mealPriceIdr = base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null;
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
           const priceRow = generalPrices.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
           const priceWithMeal = generalPrices.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
           const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? parseFloat(priceWithMeal.amount) - (base.meta?.meal_price || 0) : 0);
+          if (mealPriceIdr == null && priceWithMeal && basePrice > 0) mealPriceIdr = parseFloat(priceWithMeal.amount) - basePrice;
           rooms[rt] = { quantity: qty, price: basePrice };
         });
         base.room_breakdown = rooms;
         base.prices_by_room = rooms;
+        base.meal_price_idr = mealPriceIdr;
       }
       if (type === 'visa') {
         const av = p.ProductAvailability;
