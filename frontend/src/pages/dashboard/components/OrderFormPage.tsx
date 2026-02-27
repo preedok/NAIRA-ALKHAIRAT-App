@@ -51,9 +51,15 @@ const TICKET_TRIP_OPTIONS: { value: TicketTripType; label: string }[] = [
 type BusRouteType = 'full_route' | 'bandara_makkah' | 'bandara_madinah' | 'bandara_madinah_only';
 const BUS_ROUTE_OPTIONS: { value: BusRouteType; label: string }[] = [
   { value: 'full_route', label: 'Full rute (Mekkah–Madinah)' },
-  { value: 'bandara_makkah', label: 'Bandara–Mekkah' },
-  { value: 'bandara_madinah', label: 'Bandara–Madinah' },
-  { value: 'bandara_madinah_only', label: 'Bandara–Madinah saja' },
+  { value: 'bandara_makkah', label: 'Bandara Jeddah–Mekkah' },
+  { value: 'bandara_madinah', label: 'Bandara Jeddah–Madinah' },
+  { value: 'bandara_madinah_only', label: 'Bandara Jeddah–Madinah saja' },
+];
+type BusType = 'besar' | 'menengah_hiace' | 'kecil';
+const BUS_TYPE_OPTIONS: { value: BusType; label: string }[] = [
+  { value: 'besar', label: 'Bus Besar (min 35 orang, penalti jika kurang)' },
+  { value: 'menengah_hiace', label: 'Bus Menengah (HIACE)' },
+  { value: 'kecil', label: 'Mobil Kecil' },
 ];
 
 type ItemType   = typeof ITEM_TYPES[number]['id'];
@@ -69,7 +75,7 @@ interface ProductOption {
   route_prices?: Partial<Record<BusRouteType, number>>;
 }
 interface HotelRoomLine { id:string; room_type:RoomTypeId; quantity:number; unit_price:number; with_meal?:boolean; }
-interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; meta?:Record<string,unknown>; }
+interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; }
 interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
 
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
@@ -148,15 +154,20 @@ const OrderFormPage: React.FC = () => {
     }).catch(()=>{});
   },[canPickOwner]);
 
-  // Kurs SAR & USD dari Menu Settings (global business rules); mata uang lain mengikuti.
+  // Kurs SAR & USD dari Menu Settings (global business rules); bus_min_pack & bus_penalty_idr untuk penalti bus besar.
+  const [busRules, setBusRules] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   useEffect(()=>{
     businessRulesApi.get().then(r=>{
-      let cr=(r.data as any)?.data?.currency_rates;
+      const d=(r.data as any)?.data;
+      let cr=d?.currency_rates;
       if(typeof cr==='string'){ try{ cr=JSON.parse(cr); }catch{ cr=null; } }
       const s=typeof cr?.SAR_TO_IDR==='number'?cr.SAR_TO_IDR:4200;
       const u=typeof cr?.USD_TO_IDR==='number'?cr.USD_TO_IDR:15500;
       setRates({SAR_TO_IDR:s, USD_TO_IDR:u});
-    }).catch(()=>setRates({SAR_TO_IDR:4200,USD_TO_IDR:15500}));
+      const minPack = typeof d?.bus_min_pack === 'number' ? d.bus_min_pack : parseInt(String(d?.bus_min_pack), 10) || 35;
+      const penaltyIdr = typeof d?.bus_penalty_idr === 'number' ? d.bus_penalty_idr : parseFloat(String(d?.bus_penalty_idr)) || 500000;
+      setBusRules({ bus_min_pack: minPack, bus_penalty_idr: penaltyIdr });
+    }).catch(()=>{ setRates({SAR_TO_IDR:4200,USD_TO_IDR:15500}); setBusRules({ bus_min_pack: 35, bus_penalty_idr: 500000 }); });
   },[]);
 
   const fetchProducts = useCallback(()=>{
@@ -228,11 +239,15 @@ const OrderFormPage: React.FC = () => {
           const firstMeta=typeof grp[0]?.meta==='object'?grp[0].meta:{};
           const checkIn=(firstMeta.check_in??getVal(grp[0],'check_in')) as string|undefined;
           const checkOut=(firstMeta.check_out??getVal(grp[0],'check_out')) as string|undefined;
+          const checkInTime=(firstMeta.check_in_time as string|undefined)||'14:00';
+          const checkOutTime=(firstMeta.check_out_time as string|undefined)||'12:00';
           rows.push({ id:oi.id||`row-${uid()}`, type:'hotel', product_id:productRefId, product_name:productName,
             quantity:grp.reduce((s:number,o:any)=>s+qty(o),0),
             unit_price:unitPrice,
             check_in:checkIn||undefined,
             check_out:checkOut||undefined,
+            check_in_time:checkInTime,
+            check_out_time:checkOutTime,
             room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId), with_meal:!!(m.with_meal??m.meal) }; })
           });
         }
@@ -297,7 +312,7 @@ const OrderFormPage: React.FC = () => {
           const routeOption=BUS_ROUTE_OPTIONS.find(o=>(rp?.[o.value] ?? 0)>0);
           const routeOpt=routeOption?.value;
           const route:BusRouteType=(next.meta?.route_type as BusRouteType)||routeOpt||'full_route';
-          next.meta={ ...(next.meta||{}), route_type:route, trip_type:(next.meta?.trip_type as TicketTripType)||(prod.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(next.meta?.bus_type as string)||'besar' };
+          next.meta={ ...(next.meta||{}), route_type:route, trip_type:(next.meta?.trip_type as TicketTripType)||(prod.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(next.meta?.bus_type as BusType)||'besar' };
           next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?busRoutePrice(prod,route):next.unit_price;
         } else {
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod);
@@ -335,7 +350,13 @@ const OrderFormPage: React.FC = () => {
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
   const rowSAR=(r:OrderItemRow)=>{ const raw=rowSub(r); return rowCur(r)==='SAR'?raw:raw/(rates.SAR_TO_IDR||4200); };
   const totalSAR=items.reduce((s,r)=>s+rowSAR(r),0);
-  const totalIDR=totalSAR*(rates.SAR_TO_IDR||4200);
+  const busPenaltyIDR=items.reduce((sum,r)=>{
+    if(r.type!=='bus'||(r.meta?.bus_type as string)!=='besar') return sum;
+    const qty=Math.max(0,r.quantity||0);
+    if(qty>=busRules.bus_min_pack) return sum;
+    return sum+(busRules.bus_min_pack-qty)*busRules.bus_penalty_idr;
+  },0);
+  const totalIDR=totalSAR*(rates.SAR_TO_IDR||4200)+busPenaltyIDR;
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
@@ -363,8 +384,8 @@ const OrderFormPage: React.FC = () => {
     const tIDR=(price:number,row:OrderItemRow)=>rowCur(row)==='SAR'?price*s2i:price;
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
       else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
@@ -407,8 +428,8 @@ const OrderFormPage: React.FC = () => {
     const tIDR=(price:number,row:OrderItemRow)=>rowCur(row)==='SAR'?price*s2i:price;
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:tIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
       else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:tIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
@@ -623,12 +644,20 @@ const OrderFormPage: React.FC = () => {
                             <>
                               <div className="flex flex-wrap gap-4">
                                 <div>
-                                  <label className={labelClass}>Check-in</label>
+                                  <label className={labelClass}>Check-in (tanggal)</label>
                                   <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_in ?? ''} onChange={e => updateRow(row.id, { check_in: e.target.value || undefined })} />
                                 </div>
                                 <div>
-                                  <label className={labelClass}>Check-out</label>
+                                  <label className={labelClass}>Jam check-in</label>
+                                  <input type="time" className={inputClass} style={{ minWidth: 100 }} value={row.check_in_time ?? '14:00'} onChange={e => updateRow(row.id, { check_in_time: e.target.value || '14:00' })} title="Untuk status jamaah (sudah masuk room) di Progress Hotel" />
+                                </div>
+                                <div>
+                                  <label className={labelClass}>Check-out (tanggal)</label>
                                   <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_out ?? ''} onChange={e => updateRow(row.id, { check_out: e.target.value || undefined })} />
+                                </div>
+                                <div>
+                                  <label className={labelClass}>Jam check-out</label>
+                                  <input type="time" className={inputClass} style={{ minWidth: 100 }} value={row.check_out_time ?? '12:00'} onChange={e => updateRow(row.id, { check_out_time: e.target.value || '12:00' })} title="Untuk status jamaah (keluar room) di Progress Hotel" />
                                 </div>
                                 {row.check_in && row.check_out && (
                                   <div className="self-end text-sm font-medium text-slate-700">
@@ -770,12 +799,31 @@ const OrderFormPage: React.FC = () => {
                                   )}
                                 </>
                               )}
+                              {row.type==='visa' && (
+                                <div className="min-w-[140px]">
+                                  <label className={labelClass}>Tanggal keberangkatan</label>
+                                  <input type="date" className={inputClass} value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender visa" />
+                                </div>
+                              )}
                               {row.type==='bus' && (
                                 <>
+                                  <div className="min-w-[140px]">
+                                    <label className={labelClass}>Tanggal keberangkatan</label>
+                                    <input type="date" className={inputClass} value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender bus" />
+                                  </div>
+                                  <div className="min-w-[200px]">
+                                    <label className={labelClass}>Jenis bus</label>
+                                    <select className={selectClass} value={(row.meta?.bus_type as BusType)||'besar'}
+                                      onChange={e=>{ const bus_type=e.target.value as BusType; updateRow(row.id,{ meta: { ...(row.meta||{}), bus_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }}>
+                                      {BUS_TYPE_OPTIONS.map(o=>(
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
                                   <div className="min-w-[180px]">
                                     <label className={labelClass}>Rute</label>
                                     <select className={selectClass} value={(row.meta?.route_type as BusRouteType)||'full_route'}
-                                      onChange={e=>{ const route_type=e.target.value as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(row.meta?.bus_type as string)||'besar' } }); }}>
+                                      onChange={e=>{ const route_type=e.target.value as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }}>
                                       {BUS_ROUTE_OPTIONS.map(o=>(
                                         <option key={o.value} value={o.value}>{o.label}</option>
                                       ))}
@@ -784,7 +832,7 @@ const OrderFormPage: React.FC = () => {
                                   <div className="min-w-[140px]">
                                     <label className={labelClass}>Perjalanan</label>
                                     <select className={selectClass} value={(row.meta?.trip_type as TicketTripType)||'round_trip'}
-                                      onChange={e=>{ const trip_type=e.target.value as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as string)||'besar' } }); }}>
+                                      onChange={e=>{ const trip_type=e.target.value as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }}>
                                       {TICKET_TRIP_OPTIONS.map(o=>(
                                         <option key={o.value} value={o.value}>{o.label}</option>
                                       ))}
@@ -842,6 +890,13 @@ const OrderFormPage: React.FC = () => {
               <p className="text-2xl font-bold text-primary-600 tabular-nums">{formatSAR(totalSAR)}</p>
               <p className="text-xs text-slate-500 mt-1">1 SAR = {formatIDR(rates.SAR_TO_IDR??4200)}</p>
             </div>
+            {busPenaltyIDR>0 && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <p className="text-xs font-semibold text-amber-800 uppercase">Penalti bus besar (kurang dari {busRules.bus_min_pack} orang)</p>
+                <p className="text-lg font-bold text-amber-900 tabular-nums">{formatIDR(busPenaltyIDR)}</p>
+                <p className="text-xs text-amber-700 mt-0.5">Rp {busRules.bus_penalty_idr.toLocaleString('id-ID')} per orang dari minimal</p>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
               <div className="rounded-xl bg-primary-50 border border-primary-100 p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Total SAR</p>
@@ -851,7 +906,7 @@ const OrderFormPage: React.FC = () => {
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Total IDR</p>
                 <p className="text-lg font-bold text-slate-900 tabular-nums">{formatIDR(totalIDR)}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Tagihan Rupiah</p>
+                <p className="text-xs text-slate-500 mt-0.5">{busPenaltyIDR>0 ? 'Subtotal + penalti bus' : 'Tagihan Rupiah'}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Total USD</p>

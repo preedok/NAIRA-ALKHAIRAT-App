@@ -19,9 +19,12 @@ const {
   Product,
   ProductAvailability,
   HotelSeason,
-  HotelRoomInventory
+  HotelRoomInventory,
+  VisaSeason,
+  VisaSeasonQuota
 } = require('../models');
 const { ROLES, ORDER_ITEM_TYPE } = require('../constants');
+const { getHotelAvailabilityConfig } = require('../services/hotelAvailabilityService');
 
 /**
  * GET /api/v1/admin-pusat/dashboard
@@ -526,6 +529,58 @@ const setProductAvailability = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
+// ---------- Hotel availability mode (semua jumlah kamar vs per musim) ----------
+
+const getHotelAvailabilityConfigHandler = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
+  const config = await getHotelAvailabilityConfig(productId);
+  res.json({ success: true, data: config });
+});
+
+const setHotelAvailabilityConfigHandler = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { availability_mode, global_room_inventory } = req.body;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
+
+  const validModes = ['global', 'per_season'];
+  const mode = availability_mode && validModes.includes(availability_mode) ? availability_mode : 'per_season';
+  const roomTypes = ['single', 'double', 'triple', 'quad', 'quint'];
+
+  let av = await ProductAvailability.findOne({ where: { product_id: productId } });
+  const meta = av?.meta && typeof av.meta === 'object' ? { ...av.meta } : {};
+  meta.availability_mode = mode;
+  if (mode === 'global' && global_room_inventory && typeof global_room_inventory === 'object') {
+    const inv = {};
+    for (const rt of roomTypes) {
+      inv[rt] = Math.max(0, parseInt(global_room_inventory[rt], 10) || 0);
+    }
+    meta.global_room_inventory = inv;
+  }
+  // When switching to per_season, keep existing global_room_inventory so user can switch back without re-entering
+
+  if (!av) {
+    av = await ProductAvailability.create({
+      product_id: productId,
+      quantity: 0,
+      meta,
+      updated_by: req.user.id
+    });
+  } else {
+    av.meta = JSON.parse(JSON.stringify(meta));
+    av.updated_by = req.user.id;
+    av.changed('meta', true);
+    await av.save();
+  }
+
+  const config = await getHotelAvailabilityConfig(productId);
+  res.json({ success: true, data: config, message: 'Pengaturan jumlah kamar disimpan' });
+});
+
 // ---------- Hotel seasons & room inventory (data per musim, realtime availability) ----------
 
 const listSeasons = asyncHandler(async (req, res) => {
@@ -605,6 +660,81 @@ const setSeasonInventory = asyncHandler(async (req, res) => {
   res.json({ success: true, data: list });
 });
 
+// ---------- Visa seasons & quota (kalender visa) ----------
+
+const listVisaSeasons = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'visa') return res.status(400).json({ success: false, message: 'Bukan product visa' });
+  const seasons = await VisaSeason.findAll({
+    where: { product_id: productId },
+    order: [['start_date', 'ASC']],
+    include: [{ model: VisaSeasonQuota, as: 'Quota', attributes: ['id', 'quota'] }]
+  });
+  res.json({ success: true, data: seasons });
+});
+
+const createVisaSeason = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { name, start_date, end_date, quota, meta } = req.body;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'visa') return res.status(400).json({ success: false, message: 'Bukan product visa' });
+  if (!name || !start_date || !end_date) return res.status(400).json({ success: false, message: 'name, start_date, end_date wajib' });
+  const season = await VisaSeason.create({
+    product_id: productId,
+    name: name.trim(),
+    start_date,
+    end_date,
+    meta: meta || {},
+    created_by: req.user.id
+  });
+  const q = Math.max(0, parseInt(quota, 10) || 0);
+  await VisaSeasonQuota.create({ product_id: productId, season_id: season.id, quota: q });
+  const full = await VisaSeason.findByPk(season.id, { include: [{ model: VisaSeasonQuota, as: 'Quota' }] });
+  res.status(201).json({ success: true, data: full });
+});
+
+const updateVisaSeason = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const { name, start_date, end_date, meta } = req.body;
+  const season = await VisaSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode visa tidak ditemukan' });
+  const updates = {};
+  if (name !== undefined) updates.name = name.trim();
+  if (start_date !== undefined) updates.start_date = start_date;
+  if (end_date !== undefined) updates.end_date = end_date;
+  if (meta !== undefined) updates.meta = meta;
+  await season.update(updates);
+  const full = await VisaSeason.findByPk(season.id, { include: [{ model: VisaSeasonQuota, as: 'Quota' }] });
+  res.json({ success: true, data: full });
+});
+
+const deleteVisaSeason = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const season = await VisaSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode visa tidak ditemukan' });
+  await season.destroy();
+  res.json({ success: true, message: 'Periode visa dihapus' });
+});
+
+const setVisaSeasonQuota = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const { quota } = req.body;
+  const season = await VisaSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode visa tidak ditemukan' });
+  const q = Math.max(0, parseInt(quota, 10) || 0);
+  let row = await VisaSeasonQuota.findOne({ where: { season_id: seasonId } });
+  if (row) {
+    row.quota = q;
+    await row.save();
+  } else {
+    row = await VisaSeasonQuota.create({ product_id: productId, season_id: seasonId, quota: q });
+  }
+  res.json({ success: true, data: row });
+});
+
 module.exports = {
   getDashboard,
   listUsers,
@@ -613,9 +743,16 @@ module.exports = {
   updateUser,
   deleteUser,
   setProductAvailability,
+  getHotelAvailabilityConfig: getHotelAvailabilityConfigHandler,
+  setHotelAvailabilityConfig: setHotelAvailabilityConfigHandler,
   listSeasons,
   createSeason,
   updateSeason,
   deleteSeason,
-  setSeasonInventory
+  setSeasonInventory,
+  listVisaSeasons,
+  createVisaSeason,
+  updateVisaSeason,
+  deleteVisaSeason,
+  setVisaSeasonQuota
 };

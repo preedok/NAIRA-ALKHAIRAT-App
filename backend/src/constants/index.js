@@ -114,12 +114,14 @@ const BUS_TRIP_STATUS = {
 // Bus Saudi: workflow perjalanan (sama konsep tiket)
 const BUS_TRIP_TYPES = ['one_way', 'return_only', 'round_trip'];
 
-// Rute bus: Mekkah–Madinah, Bandara–Mekkah, Bandara–Madinah, Bandara–Madinah saja
+// Rute bus: full, bandara–hotel (Jeddah→Mekkah / Madinah), antar hotel (Mekkah↔Madinah)
 const BUS_ROUTE_FULL = 'full_route';
 const BUS_ROUTE_BANDARA_MAKKAH = 'bandara_makkah';
 const BUS_ROUTE_BANDARA_MADINAH = 'bandara_madinah';
 const BUS_ROUTE_BANDARA_MADINAH_ONLY = 'bandara_madinah_only';
-const BUS_ROUTE_TYPES = [BUS_ROUTE_FULL, BUS_ROUTE_BANDARA_MAKKAH, BUS_ROUTE_BANDARA_MADINAH, BUS_ROUTE_BANDARA_MADINAH_ONLY];
+const BUS_ROUTE_HOTEL_MAKKAH_MADINAH = 'hotel_makkah_madinah';
+const BUS_ROUTE_HOTEL_MADINAH_MAKKAH = 'hotel_madinah_makkah';
+const BUS_ROUTE_TYPES = [BUS_ROUTE_FULL, BUS_ROUTE_BANDARA_MAKKAH, BUS_ROUTE_BANDARA_MADINAH, BUS_ROUTE_BANDARA_MADINAH_ONLY, BUS_ROUTE_HOTEL_MAKKAH_MADINAH, BUS_ROUTE_HOTEL_MADINAH_MAKKAH];
 
 // VI. Ticket progress (Role Tiket)
 const TICKET_PROGRESS_STATUS = {
@@ -307,10 +309,6 @@ module.exports = {
   BUS_TICKET_STATUS,
   BUS_TRIP_STATUS,
   BUS_TRIP_TYPES,
-  BUS_ROUTE_FULL,
-  BUS_ROUTE_BANDARA_MAKKAH,
-  BUS_ROUTE_BANDARA_MADINAH,
-  BUS_ROUTE_BANDARA_MADINAH_ONLY,
   BUS_ROUTE_TYPES,
   VISA_PROGRESS_STATUS,
   TICKET_PROGRESS_STATUS,

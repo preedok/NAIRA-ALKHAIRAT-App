@@ -166,8 +166,8 @@ const BusDashboard: React.FC = () => {
                   <p className="text-xs text-stone-500">Belum lengkap (tiket / kedatangan / keberangkatan / kepulangan)</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/dashboard/bus')}>
-                Kelola di Menu Bus <ChevronRight className="w-4 h-4 ml-1" />
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/dashboard/orders-invoices')}>
+                Buka Invoice <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </Card>
           )}
@@ -180,9 +180,14 @@ const BusDashboard: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-900">Pekerjaan Bus</h3>
             <p className="text-sm text-slate-600 mt-0.5">Kelola invoice bus, update status tiket bis, kedatangan, keberangkatan, kepulangan.</p>
           </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/bus')}>
-            <Bus className="w-4 h-4 mr-2" /> Buka Menu Bus
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/products/bus')}>
+              Produk Bus
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>
+              <ClipboardList className="w-4 h-4 mr-2" /> Invoice
+            </Button>
+          </div>
         </div>
       </Card>
     </div>

@@ -1,9 +1,43 @@
 const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
-const { HotelSeason, HotelRoomInventory } = require('../models');
+const { HotelSeason, HotelRoomInventory, ProductAvailability } = require('../models');
+
+const HOTEL_AVAILABILITY_MODES = ['global', 'per_season'];
+const ROOM_TYPES_LIST = ['single', 'double', 'triple', 'quad', 'quint'];
+
+/**
+ * Ambil konfigurasi ketersediaan hotel: mode (global = satu set kamar untuk semua bulan, per_season = kuota per musim).
+ * Ketika mode global, jumlah kamar diambil dari meta.room_types (sumber yang sama dengan Pengaturan Jumlah).
+ */
+async function getHotelAvailabilityConfig(productId) {
+  const av = await ProductAvailability.findOne({
+    where: { product_id: productId },
+    attributes: ['meta']
+  });
+  const meta = av?.meta && typeof av.meta === 'object' ? av.meta : {};
+  const mode = meta.availability_mode && HOTEL_AVAILABILITY_MODES.includes(meta.availability_mode)
+    ? meta.availability_mode
+    : 'per_season';
+  const roomTypesMeta = meta.room_types && typeof meta.room_types === 'object' ? meta.room_types : {};
+  const globalRaw = meta.global_room_inventory && typeof meta.global_room_inventory === 'object'
+    ? meta.global_room_inventory
+    : {};
+  const global_room_inventory = {};
+  for (const rt of ROOM_TYPES_LIST) {
+    if (mode === 'global' && roomTypesMeta[rt] != null) {
+      global_room_inventory[rt] = Math.max(0, parseInt(roomTypesMeta[rt], 10) || 0);
+    } else if (globalRaw[rt] != null) {
+      global_room_inventory[rt] = Math.max(0, parseInt(globalRaw[rt], 10) || 0);
+    } else {
+      global_room_inventory[rt] = 0;
+    }
+  }
+  return { mode, global_room_inventory };
+}
 
 /**
  * Cari musim yang aktif untuk tanggal tertentu (date antara start_date dan end_date inklusif).
+ * Tidak dipakai ketika availability_mode === 'global'.
  */
 async function getSeasonForDate(productId, dateStr) {
   const season = await HotelSeason.findOne({
@@ -102,9 +136,11 @@ async function getBookingsForDate(productId, dateStr) {
 
 /**
  * Kalender hotel lengkap: availability per tanggal + bookings (owner + jamaah per room type) + seasonId per date.
- * Returns { byDate: { 'YYYY-MM-DD': { seasonId, roomTypes: { single: { total, booked, available }, ... }, bookings: [...] } }, byRoomType }.
+ * Jika availability_mode === 'global', setiap tanggal pakai global_room_inventory (open semua bulan).
+ * Jika 'per_season', pakai musim + inventori per musim.
  */
 async function getHotelCalendar(productId, startDateStr, endDateStr) {
+  const config = await getHotelAvailabilityConfig(productId);
   const byDate = {};
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
@@ -112,12 +148,24 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10);
-    const season = await getSeasonForDate(productId, dateStr);
-    if (!season) {
-      byDate[dateStr] = { _noSeason: true };
-      continue;
+    let inventory = {};
+    let seasonId = null;
+    let seasonName = null;
+
+    if (config.mode === 'global') {
+      inventory = config.global_room_inventory;
+      seasonName = 'Semua bulan';
+    } else {
+      const season = await getSeasonForDate(productId, dateStr);
+      if (!season) {
+        byDate[dateStr] = { _noSeason: true };
+        continue;
+      }
+      seasonId = season.id;
+      seasonName = season.name;
+      inventory = await getInventoryForSeason(season.id);
     }
-    const inventory = await getInventoryForSeason(season.id);
+
     const roomTypes = {};
     for (const [rt, total] of Object.entries(inventory)) {
       roomTypesSeen.add(rt);
@@ -126,8 +174,8 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
     }
     const bookings = await getBookingsForDate(productId, dateStr);
     byDate[dateStr] = {
-      seasonId: season.id,
-      seasonName: season.name,
+      seasonId,
+      seasonName,
       roomTypes,
       bookings
     };
@@ -149,24 +197,37 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
 
 /**
  * Availability per tanggal untuk satu product (hotel) dalam range tanggal.
- * Returns { byDate: { '2025-03-01': { single: { total, booked, available }, ... } }, byRoomType: { single: minAvailableInRange } }.
+ * Mengikuti pilihan: mode 'global' = Semua jumlah kamar (satu set untuk setiap tanggal),
+ * mode 'per_season' = kuota per musim. Frontend bisa pakai availability_mode untuk label.
  */
 async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
+  const config = await getHotelAvailabilityConfig(productId);
   const byDate = {};
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
   const roomTypesSeen = new Set();
-  const seq = sequelize;
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10);
-    const season = await getSeasonForDate(productId, dateStr);
-    if (!season) {
-      byDate[dateStr] = { _noSeason: true };
-      continue;
+    let inventory = {};
+    let seasonId = null;
+    let seasonName = '';
+
+    if (config.mode === 'global') {
+      inventory = config.global_room_inventory;
+      seasonName = 'Semua bulan';
+    } else {
+      const season = await getSeasonForDate(productId, dateStr);
+      if (!season) {
+        byDate[dateStr] = { _noSeason: true };
+        continue;
+      }
+      seasonId = season.id;
+      seasonName = season.name || '';
+      inventory = await getInventoryForSeason(season.id);
     }
-    const inventory = await getInventoryForSeason(season.id);
-    byDate[dateStr] = { seasonId: season.id, seasonName: season.name || '' };
+
+    byDate[dateStr] = { seasonId, seasonName };
     for (const [rt, total] of Object.entries(inventory)) {
       roomTypesSeen.add(rt);
       const booked = await getBookedForDateRaw(sequelize, productId, rt, dateStr);
@@ -185,24 +246,33 @@ async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
     byRoomType[rt] = minAvail === Infinity ? 0 : minAvail;
   }
 
-  return { byDate, byRoomType };
+  return { availability_mode: config.mode, byDate, byRoomType };
 }
 
 /**
  * Cek apakah untuk (productId, roomType, checkIn, checkOut) masih ada availability jika kita book quantity kamar.
  * Exclude orderId when updating order (so we don't count current order's items).
+ * Jika mode global: total dari global_room_inventory. Jika per_season: total dari musim.
  */
 async function checkAvailability(productId, roomType, checkInStr, checkOutStr, quantity, excludeOrderId = null) {
+  const config = await getHotelAvailabilityConfig(productId);
   const start = new Date(checkInStr);
   const end = new Date(checkOutStr);
   end.setDate(end.getDate() - 1); // last night is check_out - 1 day
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10);
-    const season = await getSeasonForDate(productId, dateStr);
-    if (!season) return { ok: false, message: `Tanggal ${dateStr} tidak ada musim yang terdefinisi` };
-    const inv = await HotelRoomInventory.findOne({ where: { season_id: season.id, room_type: roomType } });
-    const total = inv ? inv.total_rooms : 0;
+    let total = 0;
+
+    if (config.mode === 'global') {
+      total = config.global_room_inventory[roomType] != null ? config.global_room_inventory[roomType] : 0;
+    } else {
+      const season = await getSeasonForDate(productId, dateStr);
+      if (!season) return { ok: false, message: `Tanggal ${dateStr} tidak ada musim yang terdefinisi` };
+      const inv = await HotelRoomInventory.findOne({ where: { season_id: season.id, room_type: roomType } });
+      total = inv ? inv.total_rooms : 0;
+    }
+
     let booked = await getBookedForDateRaw(sequelize, productId, roomType, dateStr);
     if (excludeOrderId) {
       const [exRows] = await sequelize.query(`
@@ -225,6 +295,7 @@ async function checkAvailability(productId, roomType, checkInStr, checkOutStr, q
 }
 
 module.exports = {
+  getHotelAvailabilityConfig,
   getSeasonForDate,
   getInventoryForSeason,
   getBookedForDateRaw: (productId, roomType, dateStr) => getBookedForDateRaw(sequelize, productId, roomType, dateStr),

@@ -126,14 +126,19 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
   /** Nilai tampilan input inventori (string agar "0" bisa dikosongkan) */
   const [inventoryInputs, setInventoryInputs] = useState<Record<string, string>>({});
   const [inventorySaving, setInventorySaving] = useState(false);
+  /** Pengaturan jumlah kamar: global (satu set untuk semua bulan) vs per musim */
+  const [hotelAvailabilityMode, setHotelAvailabilityMode] = useState<'global' | 'per_season'>('per_season');
+  const [globalRoomInventory, setGlobalRoomInventory] = useState<Record<string, number>>({ single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
+  const [hotelAvailabilityConfigLoading, setHotelAvailabilityConfigLoading] = useState(false);
+  const [hotelAvailabilityConfigSaving, setHotelAvailabilityConfigSaving] = useState(false);
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
-  const [quantityModalHotel, setQuantityModalHotel] = useState<HotelProduct | null>(null);
   /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
   const [quantityForm, setQuantityForm] = useState<Record<string, string>>({});
   const [quantityFormLoading, setQuantityFormLoading] = useState(false);
   const [quantityFormSaving, setQuantityFormSaving] = useState(false);
-  /** Availability realtime per hotel (rentang 30 hari): byRoomType + byDate untuk popup kalender */
+  /** Availability realtime per hotel (rentang 30 hari): mengikuti pilihan Semua jumlah kamar atau Per musim */
   type AvailabilityData = {
+    availability_mode?: 'global' | 'per_season';
     byRoomType: Record<string, number>;
     byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>>;
   };
@@ -158,7 +163,88 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         setSeasonForm({ name: '', start_date: '', end_date: '' });
         setEditingSeasonId(null);
         setInventoryForSeason(null);
-        adminPusatApi.listSeasons(hotel.id).then((r) => setSeasonsList((r.data as { data?: HotelSeason[] })?.data ?? [])).catch(() => setSeasonsList([]));
+        loadUnifiedModalData(hotel);
+      }
+    }
+  }, [openSeasonsForHotelId, hotels]);
+
+  /** Load data untuk modal terpadu (config + musim + product untuk jumlah & harga) */
+  const loadUnifiedModalData = (hotel: HotelProduct) => {
+    setHotelAvailabilityConfigLoading(true);
+    Promise.all([
+      adminPusatApi.getHotelAvailabilityConfig(hotel.id),
+      adminPusatApi.listSeasons(hotel.id),
+      productsApi.getById(hotel.id)
+    ])
+      .then(([configRes, seasonsRes, productRes]) => {
+        const configData = (configRes.data as { data?: { mode: 'global' | 'per_season'; global_room_inventory?: Record<string, number> } })?.data;
+        if (configData) {
+          setHotelAvailabilityMode(configData.mode || 'per_season');
+          setGlobalRoomInventory(configData.global_room_inventory || { single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
+        }
+        setSeasonsList((seasonsRes.data as { data?: HotelSeason[] })?.data ?? []);
+        const data = (productRes.data as { data?: ProductDetail })?.data;
+        const meta = (data?.meta as Record<string, unknown>) || {};
+        const avMeta = (data?.ProductAvailability?.meta as Record<string, number>) || {};
+        const roomMeta = (meta.room_types as Record<string, number>) || {};
+        const fromBreakdown = hotel.room_breakdown || hotel.prices_by_room || {};
+        const initial: Record<string, string> = {};
+        ROOM_TYPES.forEach((rt) => {
+          const num = Number(avMeta[rt] ?? roomMeta?.[rt] ?? fromBreakdown[rt]?.quantity ?? 0) || 0;
+          initial[rt] = String(num);
+        });
+        setQuantityForm(initial);
+        const prices = (data?.ProductPrices as ProductPriceItem[]) || [];
+        const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
+        const byRoomMeal: Record<string, number> = {};
+        generalPrices.forEach((p) => {
+          const rt = (p.meta?.room_type as string) || 'single';
+          const withMeal = p.meta?.with_meal === true;
+          byRoomMeal[`${rt}_${withMeal}`] = Number(p.amount) || 0;
+        });
+        const mealPrice = Number(meta.meal_price) || 0;
+        const rooms = { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } };
+        ROOM_TYPES.forEach((rt) => {
+          const qty = Number(roomMeta[rt]) || 0;
+          const basePrice = byRoomMeal[`${rt}_false`] ?? (byRoomMeal[`${rt}_true`] != null ? byRoomMeal[`${rt}_true`] - mealPrice : 0);
+          rooms[rt] = { quantity: qty, price: basePrice || 0 };
+        });
+        const firstPrice = generalPrices[0];
+        const pricingMode = (meta.pricing_mode as 'single' | 'per_type') || 'single';
+        const singlePrice = pricingMode === 'single' && firstPrice ? Number(firstPrice.amount) || 0 : 0;
+        setQuantityModalPriceForm({
+          currency: (meta.currency as 'IDR' | 'SAR' | 'USD') || (firstPrice?.currency as 'IDR' | 'SAR' | 'USD') || 'IDR',
+          meal_price: mealPrice,
+          meal_price_type: (meta.meal_price_type as 'per_day' | 'per_trip') || 'per_day',
+          room_price_type: (meta.room_price_type as 'per_day' | 'per_lasten') || 'per_day',
+          pricing_mode: pricingMode,
+          single_price: singlePrice || (rooms.single?.price ?? 0),
+          rooms
+        });
+      })
+      .catch(() => {})
+      .finally(() => setHotelAvailabilityConfigLoading(false));
+  };
+
+  /** Buka satu modal: Jumlah Kamar & Musim (gabungan Pengaturan Jumlah + Data per Musim) */
+  const handleOpenUnifiedQuantityAndSeasonsModal = (hotel: HotelProduct) => {
+    if (!canAddHotel) return;
+    setSeasonsModalHotel(hotel);
+    setSeasonForm({ name: '', start_date: '', end_date: '' });
+    setEditingSeasonId(null);
+    setInventoryForSeason(null);
+    loadUnifiedModalData(hotel);
+  };
+
+  useEffect(() => {
+    if (openSeasonsForHotelId && hotels.length > 0) {
+      const hotel = hotels.find((h) => h.id === openSeasonsForHotelId);
+      if (hotel) {
+        setSeasonsModalHotel(hotel);
+        setSeasonForm({ name: '', start_date: '', end_date: '' });
+        setEditingSeasonId(null);
+        setInventoryForSeason(null);
+        loadUnifiedModalData(hotel);
       }
     }
   }, [openSeasonsForHotelId, hotels]);
@@ -229,14 +315,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
     list.forEach((h) => {
       productsApi.getAvailability(h.id, { from: availabilityFrom, to: availabilityTo })
         .then((res) => {
-          const data = (res.data as { data?: { byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
+          const data = (res.data as { data?: { availability_mode?: 'global' | 'per_season'; byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
           if (!data?.byRoomType) {
             setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: null }));
             return;
           }
           setAvailabilityByHotelId((prev) => ({
             ...prev,
-            [h.id]: { byRoomType: data.byRoomType!, byDate: data.byDate ?? {} }
+            [h.id]: { availability_mode: data.availability_mode, byRoomType: data.byRoomType!, byDate: data.byDate ?? {} }
           }));
         })
         .catch(() => setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: null })));
@@ -246,9 +332,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
   const refetchAvailabilityForHotel = useCallback((productId: string) => {
     productsApi.getAvailability(productId, { from: availabilityFrom, to: availabilityTo })
       .then((res) => {
-        const data = (res.data as { data?: { byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
+        const data = (res.data as { data?: { availability_mode?: 'global' | 'per_season'; byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
         if (!data?.byRoomType) return;
-        setAvailabilityByHotelId((prev) => ({ ...prev, [productId]: { byRoomType: data.byRoomType!, byDate: data.byDate ?? {} } }));
+        setAvailabilityByHotelId((prev) => ({ ...prev, [productId]: { availability_mode: data.availability_mode, byRoomType: data.byRoomType!, byDate: data.byDate ?? {} } }));
       })
       .catch(() => {});
   }, [availabilityFrom, availabilityTo]);
@@ -259,11 +345,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
       list.forEach((h) => {
         productsApi.getAvailability(h.id, { from: availabilityFrom, to: availabilityTo })
           .then((res) => {
-            const data = (res.data as { data?: { byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
+            const data = (res.data as { data?: { availability_mode?: 'global' | 'per_season'; byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
             if (!data?.byRoomType) return;
             setAvailabilityByHotelId((prev) => ({
               ...prev,
-              [h.id]: { byRoomType: data.byRoomType!, byDate: data.byDate ?? {} }
+              [h.id]: { availability_mode: data.availability_mode, byRoomType: data.byRoomType!, byDate: data.byDate ?? {} }
             }));
           })
           .catch(() => {});
@@ -407,64 +493,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
   };
   type ProductPriceItem = { id: string; amount: number; currency?: string; branch_id?: string; owner_id?: string; meta?: { room_type?: string; with_meal?: boolean } };
 
-  /** Buka modal Pengaturan Jumlah: load jumlah + harga kamar, harga makan, mata uang */
-  const handleOpenQuantityModal = async (hotel: HotelProduct) => {
-    if (!canAddHotel) return;
-    setQuantityModalHotel(hotel);
-    setQuantityFormLoading(true);
-    setQuantityForm({});
-    try {
-      const res = await productsApi.getById(hotel.id);
-      const data = (res.data as { data?: ProductDetail })?.data;
-      const meta = (data?.meta as Record<string, unknown>) || {};
-      const avMeta = (data?.ProductAvailability?.meta as Record<string, number>) || {};
-      const roomMeta = (meta.room_types as Record<string, number>) || {};
-      const fromBreakdown = hotel.room_breakdown || hotel.prices_by_room || {};
-      const initial: Record<string, string> = {};
-      ROOM_TYPES.forEach((rt) => {
-        const num = Number(avMeta[rt] ?? roomMeta?.[rt] ?? fromBreakdown[rt]?.quantity ?? 0) || 0;
-        initial[rt] = String(num);
-      });
-      setQuantityForm(initial);
-
-      const prices = (data?.ProductPrices as ProductPriceItem[]) || [];
-      const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
-      const byRoomMeal: Record<string, number> = {};
-      generalPrices.forEach((p) => {
-        const rt = (p.meta?.room_type as string) || 'single';
-        const withMeal = p.meta?.with_meal === true;
-        byRoomMeal[`${rt}_${withMeal}`] = Number(p.amount) || 0;
-      });
-      const mealPrice = Number(meta.meal_price) || 0;
-      const rooms = { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } };
-      ROOM_TYPES.forEach((rt) => {
-        const qty = Number(roomMeta[rt]) || 0;
-        const basePrice = byRoomMeal[`${rt}_false`] ?? (byRoomMeal[`${rt}_true`] != null ? byRoomMeal[`${rt}_true`] - mealPrice : 0);
-        rooms[rt] = { quantity: qty, price: basePrice || 0 };
-      });
-      const firstPrice = generalPrices[0];
-      const pricingMode = (meta.pricing_mode as 'single' | 'per_type') || 'single';
-      const singlePrice = pricingMode === 'single' && firstPrice ? Number(firstPrice.amount) || 0 : 0;
-      setQuantityModalPriceForm({
-        currency: (meta.currency as 'IDR' | 'SAR' | 'USD') || (firstPrice?.currency as 'IDR' | 'SAR' | 'USD') || 'IDR',
-        meal_price: mealPrice,
-        meal_price_type: (meta.meal_price_type as 'per_day' | 'per_trip') || 'per_day',
-        room_price_type: (meta.room_price_type as 'per_day' | 'per_lasten') || 'per_day',
-        pricing_mode: pricingMode,
-        single_price: singlePrice || (rooms.single?.price ?? 0),
-        rooms
-      });
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal memuat data hotel', 'error');
-      setQuantityModalHotel(null);
-    } finally {
-      setQuantityFormLoading(false);
-    }
-  };
-
-  const handleSaveQuantity = async () => {
-    if (!quantityModalHotel) return;
+  /** Simpan jumlah kamar + harga dari modal terpadu (mode Semua jumlah kamar); pakai seasonsModalHotel */
+  const handleSaveQuantityFromUnifiedModal = async () => {
+    const hotel = seasonsModalHotel;
+    if (!hotel) return;
     const parseQty = (v: string | undefined) => Math.max(0, parseInt(String(v || ''), 10) || 0);
     const totalQty = ROOM_TYPES.reduce((s, rt) => s + parseQty(quantityForm[rt]), 0);
     const roomMeta: Record<string, number> = {};
@@ -472,8 +504,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
     const pf = quantityModalPriceForm;
     setQuantityFormSaving(true);
     try {
-      const existingMeta = (quantityModalHotel.meta as Record<string, unknown>) || {};
-      await productsApi.update(quantityModalHotel.id, {
+      const existingMeta = (hotel.meta as Record<string, unknown>) || {};
+      await productsApi.update(hotel.id, {
         meta: {
           ...existingMeta,
           currency: pf.currency,
@@ -485,7 +517,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         }
       });
 
-      const pricesRes = await productsApi.listPrices({ product_id: quantityModalHotel.id });
+      const pricesRes = await productsApi.listPrices({ product_id: hotel.id });
       const prices = (pricesRes.data as { data?: ProductPriceItem[] })?.data ?? [];
       const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
       for (const p of generalPrices) {
@@ -504,7 +536,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
       }
       for (const { roomType, price } of pricesToCreate) {
         await productsApi.createPrice({
-          product_id: quantityModalHotel.id,
+          product_id: hotel.id,
           branch_id: null,
           owner_id: null,
           currency: pf.currency,
@@ -512,7 +544,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
           meta: { room_type: roomType, with_meal: false }
         });
         await productsApi.createPrice({
-          product_id: quantityModalHotel.id,
+          product_id: hotel.id,
           branch_id: null,
           owner_id: null,
           currency: pf.currency,
@@ -521,9 +553,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         });
       }
 
-      await adminPusatApi.setProductAvailability(quantityModalHotel.id, { quantity: totalQty, meta: { room_types: roomMeta } });
-      showToast('Jumlah kamar, harga, dan mata uang disimpan. Untuk ketersediaan per tanggal, atur di Data per Musim.', 'success');
-      setQuantityModalHotel(null);
+      await adminPusatApi.setProductAvailability(hotel.id, { quantity: totalQty, meta: { room_types: roomMeta } });
+      await adminPusatApi.setHotelAvailabilityConfig(hotel.id, { availability_mode: 'global' });
+      showToast('Jumlah kamar, harga, dan pengaturan (semua bulan) disimpan', 'success');
       fetchProducts();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -663,9 +695,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         ))}
       </div>
 
-      {/* Stat cards ketersediaan (realtime, 30 hari) - memudahkan melihat ketersediaan */}
+      {/* Stat cards ketersediaan (realtime, 30 hari) — mengikuti Semua jumlah kamar atau Per musim per hotel */}
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">Statistik Ketersediaan Kamar (30 hari ke depan)</h3>
+        <h3 className="text-sm font-semibold text-slate-700 mb-1">Statistik Ketersediaan Kamar (30 hari ke depan)</h3>
+        <p className="text-xs text-slate-500 mb-2">Data per hotel mengikuti pilihan di Jumlah Kamar &amp; Musim (Semua jumlah kamar / Per musim).</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           <Card padding="sm" className="!p-3 border-l-4 border-l-emerald-500">
             <p className="text-xs text-slate-500 uppercase tracking-wide">Total Tersedia</p>
@@ -795,7 +828,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         <div className="mb-5">
           <h3 className="text-lg font-semibold text-slate-900">Daftar Hotel</h3>
           <p className="text-sm text-slate-500 mt-1">
-            {filteredHotels.length} dari {pagination?.total ?? hotels.length} hotel. Ketersediaan per tanggal: ketika owner order dan sudah dibooking, kamar tinggal berkurang. Jika semua tipe kamar penuh di satu tanggal, tanggal tersebut full. Klik kolom <strong>Ketersediaan</strong> untuk lihat detail per tanggal.
+            {filteredHotels.length} dari {pagination?.total ?? hotels.length} hotel. Ketersediaan (realtime) mengikuti pilihan di <strong>Jumlah Kamar & Musim</strong>: Semua jumlah kamar (satu set tiap tanggal) atau Per musim. Saat order dibooking, kamar berkurang. Klik kolom <strong>Ketersediaan</strong> untuk detail per tanggal.
           </p>
         </div>
 
@@ -944,8 +977,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                         align="right"
                         items={[
                           ...(canEditProduct ? [{ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => handleOpenEdit(hotel) }] : []),
-                          ...(canAddHotel ? [{ id: 'quantity', label: 'Pengaturan Jumlah', icon: <Settings className="w-4 h-4" />, onClick: () => handleOpenQuantityModal(hotel) }] : []),
-                          ...(canAddHotel ? [{ id: 'seasons', label: 'Data per Musim', icon: <Bed className="w-4 h-4" />, onClick: () => { setSeasonsModalHotel(hotel); setSeasonForm({ name: '', start_date: '', end_date: '' }); setEditingSeasonId(null); setInventoryForSeason(null); adminPusatApi.listSeasons(hotel.id).then((r) => setSeasonsList((r.data as { data?: HotelSeason[] })?.data ?? [])).catch(() => setSeasonsList([])); } }] : []),
+                          ...(canAddHotel ? [{ id: 'seasons', label: 'Jumlah Kamar & Musim', icon: <Bed className="w-4 h-4" />, onClick: () => handleOpenUnifiedQuantityAndSeasonsModal(hotel) }] : []),
                           ...(canAddHotel ? [{ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteHotel(hotel), danger: true }] : []),
                         ].filter(Boolean) as ActionsMenuItem[]}
                       />
@@ -987,6 +1019,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Ketersediaan per tanggal</h3>
                     <p className="text-sm text-slate-600 mt-0.5">{hotel?.name ?? 'Hotel'} — data realtime per tipe kamar</p>
+                    {availData && typeof availData === 'object' && availData.availability_mode && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Mengikuti: <span className="font-medium text-emerald-700">{availData.availability_mode === 'global' ? 'Semua jumlah kamar' : 'Per musim'}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button type="button" onClick={() => setAvailabilityPopupHotelId(null)} className="p-2.5 hover:bg-slate-200 rounded-xl transition-colors">
@@ -1029,7 +1066,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                   <div className="py-16 text-center rounded-2xl bg-slate-50 border border-slate-200">
                     <Calendar className="w-14 h-14 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-600 font-medium">Belum ada data per tanggal</p>
-                    <p className="text-slate-400 text-sm mt-1">Atur musim dan inventori di Data per Musim.</p>
+                    <p className="text-slate-400 text-sm mt-1">Atur di <strong>Jumlah Kamar & Musim</strong>: pilih Semua jumlah kamar atau Per musim, lalu isi jumlah kamar.</p>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -1412,236 +1449,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         </div>
       )}
 
-      {/* Modal Pengaturan Jumlah: jumlah kamar + Harga Kamar, Harga Makan, Mata uang */}
-      {quantityModalHotel && (() => {
-        const qCurr = CURRENCIES.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCIES[0];
-        const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
-        const pf = quantityModalPriceForm;
-        const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
-        return (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !quantityFormSaving && !quantityFormLoading && setQuantityModalHotel(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-emerald-600">
-                    <Settings className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">Pengaturan Jumlah Kamar</h2>
-                    <p className="text-sm text-slate-600 mt-0.5">{quantityModalHotel.name}</p>
-                  </div>
-                </div>
-                <button type="button" onClick={() => !quantityFormSaving && !quantityFormLoading && setQuantityModalHotel(null)} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
-                  <XCircle className="w-5 h-5 text-slate-500" />
-                </button>
-              </div>
-
-              <div className="p-6 overflow-y-auto flex-1">
-                {quantityFormLoading ? (
-                  <div className="py-12 text-center text-slate-500">Memuat data…</div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Section: Jumlah kamar per tipe */}
-                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                          <Bed className="w-4 h-4 text-emerald-600" />
-                          Jumlah kamar per tipe
-                        </h3>
-                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">
-                          Total: {totalRooms} kamar
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                        {ROOM_TYPES.map((rt) => (
-                          <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide capitalize mb-1.5">{rt}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={quantityForm[rt] ?? ''}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
-                              }}
-                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                              placeholder="0"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Section: Mata uang & Harga */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Mata uang + Harga Makan */}
-                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                        <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan</h3>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1.5">Mata uang input</label>
-                          <select
-                            value={pf.currency}
-                            onChange={(e) => {
-                              const newCur = e.target.value as 'IDR' | 'SAR' | 'USD';
-                              const tripleMeal = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
-                              const tripleSingle = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
-                              setQuantityModalPriceForm((f) => ({
-                                ...f,
-                                currency: newCur,
-                                meal_price: newCur === 'IDR' ? tripleMeal.idr : newCur === 'SAR' ? tripleMeal.sar : tripleMeal.usd,
-                                single_price: newCur === 'IDR' ? tripleSingle.idr : newCur === 'SAR' ? tripleSingle.sar : tripleSingle.usd
-                              }));
-                            }}
-                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          >
-                            {CURRENCIES.map((c) => (
-                              <option key={c.id} value={c.id}>{c.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-2">Harga Makan per Kamar</label>
-                          <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
-                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
-                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
-                          </div>
-                          <div className="flex gap-3">
-                            {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                              const triple = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
-                              const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                              const isEditable = pf.currency === curKey;
-                              return (
-                                <div key={curKey} className="flex-1 min-w-0">
-                                  <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
-                                  <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
-                                    readOnly={!isEditable}
-                                    onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, meal_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                    className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Harga Kamar */}
-                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                        <h3 className="text-sm font-semibold text-slate-800">Harga Kamar</h3>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-2">Satuan</label>
-                          <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
-                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_day' }))}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
-                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_lasten' }))}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_lasten' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per lasten</button>
-                          </div>
-                          <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
-                          <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
-                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'single' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Satu harga</button>
-                            <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
-                              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'per_type' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per tipe</button>
-                          </div>
-                        </div>
-                        {pf.pricing_mode === 'single' && (
-                          <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-2">Satu harga untuk semua tipe</label>
-                            <div className="flex gap-3">
-                              {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                                const triple = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
-                                const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                                const isEditable = pf.currency === curKey;
-                                return (
-                                  <div key={curKey} className="flex-1 min-w-0">
-                                    <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
-                                    <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
-                                      readOnly={!isEditable}
-                                      onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, single_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                      className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tabel ringkasan */}
-                    <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                        <h3 className="text-sm font-semibold text-slate-800">Ringkasan per tipe kamar</h3>
-                      </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-100/80 border-b border-slate-200">
-                            <th className="text-left py-3 px-4 font-medium text-slate-600">Tipe</th>
-                            <th className="text-center py-3 px-4 font-medium text-slate-600">Jumlah</th>
-                            <th className="text-right py-3 px-4 font-medium text-slate-600">Harga (room only)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ROOM_TYPES.map((rt) => (
-                            <tr key={rt} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
-                              <td className="py-3 px-4 capitalize font-medium text-slate-800">{rt}</td>
-                              <td className="py-3 px-4 text-center text-slate-700">{Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0)}</td>
-                              <td className="py-3 px-4 text-right">
-                                {pf.pricing_mode === 'per_type' ? (
-                                  <div className="flex items-center justify-end gap-1">
-                                    <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
-                                    <input type="number" min={0} value={pf.rooms[rt].price || ''}
-                                      onChange={(e) => setQuantityModalPriceForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } } }))}
-                                      className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                    />
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-700 font-medium">{qFormatAmount(pf.single_price || 0)}</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Footer actions */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                      <p className="text-xs text-slate-500">Ketersediaan per tanggal: atur di <strong>Data per Musim</strong>.</p>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm"
-                          onClick={() => {
-                            setQuantityModalHotel(null);
-                            setSeasonsModalHotel(quantityModalHotel);
-                            setSeasonForm({ name: '', start_date: '', end_date: '' });
-                            setEditingSeasonId(null);
-                            setInventoryForSeason(null);
-                            adminPusatApi.listSeasons(quantityModalHotel.id).then((r) => setSeasonsList((r.data as { data?: HotelSeason[] })?.data ?? [])).catch(() => setSeasonsList([]));
-                          }}
-                        >
-                          Data per Musim
-                        </Button>
-                        <Button size="sm" disabled={quantityFormSaving} onClick={handleSaveQuantity}>
-                          {quantityFormSaving ? 'Menyimpan…' : 'Simpan Jumlah & Harga'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Modal Data per Musim: musim + inventori kamar per tanggal → availability realtime */}
+      {/* Modal terpadu: Jumlah Kamar & Musim (Pengaturan Jumlah + Data per Musim) */}
       {seasonsModalHotel && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !seasonSaving && !inventorySaving && setSeasonsModalHotel(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
+          <div className={`bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col ${hotelAvailabilityMode === 'global' ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50">
               <div className="flex items-center gap-3">
@@ -1649,17 +1460,239 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Data per Musim</h2>
+                  <h2 className="text-lg font-bold text-slate-900">Pengaturan Jumlah Kamar & Musim</h2>
                   <p className="text-sm text-slate-600 mt-0.5">{seasonsModalHotel.name}</p>
                 </div>
               </div>
-              <button type="button" onClick={() => !seasonSaving && !inventorySaving && setSeasonsModalHotel(null)} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
+              <button type="button" onClick={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
                 <XCircle className="w-5 h-5 text-slate-500" />
               </button>
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
-              {inventoryForSeason ? (
+              {/* Pilihan: Semua jumlah kamar (satu set tiap bulan) vs Per musim */}
+              {hotelAvailabilityConfigLoading ? (
+                <p className="text-sm text-slate-500 mb-5">Memuat pengaturan…</p>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 mb-6">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Cara atur kuota kamar</h3>
+                  <p className="text-xs text-slate-500 mb-4">Pilih salah satu: <strong>Semua jumlah kamar</strong> (satu set untuk setiap bulan, open di semua tanggal) atau <strong>Per musim</strong> (kuota per periode saja).</p>
+                  <div className="flex flex-wrap gap-6 mb-4">
+                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                      <input
+                        type="radio"
+                        name="hotel-availability-mode"
+                        checked={hotelAvailabilityMode === 'global'}
+                        onChange={() => setHotelAvailabilityMode('global')}
+                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-slate-800 block">Semua jumlah kamar</span>
+                        <span className="text-xs text-slate-500">Satu set jumlah kamar dipakai untuk setiap bulan. Open di semua tanggal; tidak perlu mengisi musim.</span>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                      <input
+                        type="radio"
+                        name="hotel-availability-mode"
+                        checked={hotelAvailabilityMode === 'per_season'}
+                        onChange={async () => {
+                          setHotelAvailabilityMode('per_season');
+                          if (!seasonsModalHotel) return;
+                          setHotelAvailabilityConfigSaving(true);
+                          try {
+                            await adminPusatApi.setHotelAvailabilityConfig(seasonsModalHotel.id, { availability_mode: 'per_season' });
+                            showToast('Pengaturan per musim disimpan', 'success');
+                          } catch {
+                            setHotelAvailabilityMode('global');
+                          } finally {
+                            setHotelAvailabilityConfigSaving(false);
+                          }
+                        }}
+                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-slate-800 block">Per musim</span>
+                        <span className="text-xs text-slate-500">Kuota kamar diatur per periode (musim). Isi daftar musim dan inventori per musim di bawah.</span>
+                      </div>
+                    </label>
+                  </div>
+                  {hotelAvailabilityMode === 'global' && (() => {
+                    const qCurr = CURRENCIES.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCIES[0];
+                    const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
+                    const pf = quantityModalPriceForm;
+                    const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
+                    return (
+                      <div className="space-y-6 pt-2 border-t border-slate-200">
+                        <p className="text-xs text-slate-600">Jumlah kamar dan harga di bawah dipakai untuk <strong>setiap tanggal</strong> (open di semua bulan). Tidak perlu mengisi musim.</p>
+                        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                              <Bed className="w-4 h-4 text-emerald-600" />
+                              Jumlah kamar per tipe
+                            </h3>
+                            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">Total: {totalRooms} kamar</span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                            {ROOM_TYPES.map((rt) => (
+                              <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide capitalize mb-1.5">{rt}</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={quantityForm[rt] ?? ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
+                                  }}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                  placeholder="0"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                            <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan</h3>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1.5">Mata uang input</label>
+                              <select
+                                value={pf.currency}
+                                onChange={(e) => {
+                                  const newCur = e.target.value as 'IDR' | 'SAR' | 'USD';
+                                  const tripleMeal = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
+                                  const tripleSingle = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
+                                  setQuantityModalPriceForm((f) => ({
+                                    ...f,
+                                    currency: newCur,
+                                    meal_price: newCur === 'IDR' ? tripleMeal.idr : newCur === 'SAR' ? tripleMeal.sar : tripleMeal.usd,
+                                    single_price: newCur === 'IDR' ? tripleSingle.idr : newCur === 'SAR' ? tripleSingle.sar : tripleSingle.usd
+                                  }));
+                                }}
+                                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              >
+                                {CURRENCIES.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-2">Harga Makan per Kamar</label>
+                              <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
+                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
+                              </div>
+                              <div className="flex gap-3">
+                                {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
+                                  const triple = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
+                                  const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
+                                  const isEditable = pf.currency === curKey;
+                                  return (
+                                    <div key={curKey} className="flex-1 min-w-0">
+                                      <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
+                                      <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
+                                        readOnly={!isEditable}
+                                        onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, meal_price: parseFloat(e.target.value) || 0 })) : undefined}
+                                        className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                            <h3 className="text-sm font-semibold text-slate-800">Harga Kamar</h3>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-2">Satuan</label>
+                              <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
+                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_day' }))}
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_lasten' }))}
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_lasten' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per lasten</button>
+                              </div>
+                              <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
+                              <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
+                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'single' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Satu harga</button>
+                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'per_type' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per tipe</button>
+                              </div>
+                            </div>
+                            {pf.pricing_mode === 'single' && (
+                              <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-2">Satu harga untuk semua tipe</label>
+                                <div className="flex gap-3">
+                                  {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
+                                    const triple = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
+                                    const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
+                                    const isEditable = pf.currency === curKey;
+                                    return (
+                                      <div key={curKey} className="flex-1 min-w-0">
+                                        <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
+                                        <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
+                                          readOnly={!isEditable}
+                                          onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, single_price: parseFloat(e.target.value) || 0 })) : undefined}
+                                          className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                            <h3 className="text-sm font-semibold text-slate-800">Ringkasan per tipe kamar</h3>
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-slate-100/80 border-b border-slate-200">
+                                <th className="text-left py-3 px-4 font-medium text-slate-600">Tipe</th>
+                                <th className="text-center py-3 px-4 font-medium text-slate-600">Jumlah</th>
+                                <th className="text-right py-3 px-4 font-medium text-slate-600">Harga (room only)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ROOM_TYPES.map((rt) => (
+                                <tr key={rt} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                                  <td className="py-3 px-4 capitalize font-medium text-slate-800">{rt}</td>
+                                  <td className="py-3 px-4 text-center text-slate-700">{Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0)}</td>
+                                  <td className="py-3 px-4 text-right">
+                                    {pf.pricing_mode === 'per_type' ? (
+                                      <div className="flex items-center justify-end gap-1">
+                                        <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
+                                        <input type="number" min={0} value={pf.rooms[rt].price || ''}
+                                          onChange={(e) => setQuantityModalPriceForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } } }))}
+                                          className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-700 font-medium">{qFormatAmount(pf.single_price || 0)}</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button size="sm" disabled={quantityFormSaving} onClick={handleSaveQuantityFromUnifiedModal}>
+                            {quantityFormSaving ? 'Menyimpan…' : 'Simpan Jumlah & Harga'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {hotelAvailabilityMode === 'per_season' && (inventoryForSeason ? (
                 /* View: Atur inventori untuk satu musim */
                 <div className="space-y-5">
                   <button
@@ -1788,7 +1821,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                     </div>
                   </div>
 
-                  {/* Daftar musim */}
+                  {/* Daftar musim — hanya dipakai ketika pilihan "Per musim" */}
+                  <p className="text-xs text-slate-500 mb-2">Dengan pilihan per musim, hanya tanggal yang masuk dalam periode musim di bawah yang memiliki kuota. Tanggal di luar periode tidak tersedia.</p>
                   <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                     <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                       <h3 className="text-sm font-semibold text-slate-800">Daftar musim</h3>
@@ -1857,7 +1891,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                     )}
                   </div>
                 </>
-              )}
+              ))}
             </div>
           </div>
         </div>

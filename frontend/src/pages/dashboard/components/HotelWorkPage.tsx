@@ -11,11 +11,17 @@ import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { formatInvoiceDisplay } from '../../../utils';
 
 const STATUS_OPTIONS = [
-  { value: 'waiting_confirmation', label: 'Menunggu konfirmasi' },
-  { value: 'confirmed', label: 'Dikonfirmasi' },
-  { value: 'room_assigned', label: 'Kamar ditetapkan' },
+  { value: 'waiting_confirmation', label: 'Progress' },
+  { value: 'confirmed', label: 'Penetapan room' },
+  { value: 'room_assigned', label: 'Pemberian nomor room' },
   { value: 'completed', label: 'Selesai' }
 ];
+
+const JAMAAH_STATUS_LABELS: Record<string, string> = {
+  belum_masuk: 'Belum masuk room',
+  sudah_masuk_room: 'Sudah masuk room',
+  keluar_room: 'Keluar room'
+};
 
 const MEAL_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -103,8 +109,8 @@ const HotelWorkPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Hotel – Alokasi Kamar & Konfirmasi</h1>
-          <p className="text-slate-600 text-sm mt-1">Data invoice yang punya item hotel. Update status konfirmasi, nomor kamar, dan meal. Status terlihat juga di menu Invoice.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Progress Hotel</h1>
+          <p className="text-slate-600 text-sm mt-1">Order hotel: status progress → penetapan room → pemberian nomor room. Status jamaah (sudah masuk / keluar room) otomatis dari tanggal & jam check-in/check-out.</p>
         </div>
         <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
       </div>
@@ -184,9 +190,17 @@ const HotelWorkPage: React.FC = () => {
                 const prog = item.HotelProgress;
                 const status = prog?.status || 'waiting_confirmation';
                 const mealStatus = prog?.meal_status || 'pending';
+                const jamaahStatus = item.jamaah_status || prog?.jamaah_status;
                 return (
                   <div key={item.id} className="p-4 border border-slate-200 rounded-xl space-y-3">
-                    <p className="font-semibold">Item Hotel · Qty: {item.quantity}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold">Item Hotel · Qty: {item.quantity}</p>
+                      {jamaahStatus && (
+                        <span className={`text-xs font-medium px-2 py-1 rounded-md ${jamaahStatus === 'keluar_room' ? 'bg-slate-100 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
+                        </span>
+                      )}
+                    </div>
                     <div>
                       <label className="block text-xs text-slate-500 mb-1">Status Pekerjaan</label>
                       <select

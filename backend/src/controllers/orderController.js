@@ -288,9 +288,8 @@ const create = asyncHandler(async (req, res) => {
     if (it.type === ORDER_ITEM_TYPE.BUS) {
       totalJamaah += qty;
       const busType = it.meta?.bus_type || 'besar';
-      if (busType === 'besar') {
-        const seatDiff = Math.abs(qty - busMinPack);
-        if (seatDiff > 0) penaltyAmount += seatDiff * busPenaltyIdr;
+      if (busType === 'besar' && qty < busMinPack) {
+        penaltyAmount += (busMinPack - qty) * busPenaltyIdr;
       }
     }
     const meta = {
@@ -498,9 +497,8 @@ const update = asyncHandler(async (req, res) => {
       if (it.type === ORDER_ITEM_TYPE.BUS) {
         totalJamaah += qty;
         const busType = it.meta?.bus_type || 'besar';
-        if (busType === 'besar') {
-          const seatDiff = Math.abs(qty - busMinPack);
-          if (seatDiff > 0) penaltyAmount += seatDiff * busPenaltyIdr;
+        if (busType === 'besar' && qty < busMinPack) {
+          penaltyAmount += (busMinPack - qty) * busPenaltyIdr;
         }
       }
       const meta = { room_type: it.room_type, meal: it.meal, ...(it.meta || {}) };

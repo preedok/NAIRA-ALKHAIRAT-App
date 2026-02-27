@@ -2,6 +2,9 @@ const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
+const { getVisaCalendar } = require('../services/visaAvailabilityService');
+const { getTicketCalendar } = require('../services/ticketAvailabilityService');
+const { getBusCalendar } = require('../services/busAvailabilityService');
 const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES, BUS_ROUTE_TYPES, BUS_TRIP_TYPES } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
 const sequelize = require('../config/sequelize');
@@ -44,10 +47,11 @@ function fillTriple(sourceCurrency, value, rates) {
  * Untuk produk tiket: jika meta.bandara diisi, cari harga general dengan meta.bandara yang sama.
  */
 async function getEffectivePrice(productId, branchId, ownerId, meta = {}, currency = 'IDR') {
-  if (meta.route_type && BUS_ROUTE_TYPES.includes(meta.route_type)) {
+  if (meta.trip_type && BUS_TRIP_TYPES.includes(meta.trip_type)) {
     const product = await Product.findByPk(productId, { attributes: ['id', 'type', 'meta'] });
-    if (product && product.type === 'bus' && product.meta && product.meta.route_prices && typeof product.meta.route_prices[meta.route_type] === 'number') {
-      return product.meta.route_prices[meta.route_type];
+    if (product && product.type === 'bus' && product.meta && product.meta.route_prices_by_trip) {
+      const price = product.meta.route_prices_by_trip[meta.trip_type];
+      if (typeof price === 'number' && price >= 0) return price;
     }
   }
 
@@ -306,17 +310,22 @@ async function generateVisaCode(visaKind) {
  * Body: name, description?, visa_kind, require_hotel? (boolean, default false)
  */
 const createVisa = asyncHandler(async (req, res) => {
-  const { name, description, visa_kind, require_hotel } = req.body;
+  const { name, description, visa_kind, require_hotel, default_quota } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
   const kind = (visa_kind && VISA_KIND_VALUES.includes(visa_kind)) ? visa_kind : VISA_KIND.ONLY;
   const code = await generateVisaCode(kind);
+  const meta = { visa_kind: kind, require_hotel: require_hotel === true || require_hotel === 'true' };
+  const quotaNum = typeof default_quota === 'number' && !Number.isNaN(default_quota) && default_quota >= 0
+    ? Math.round(default_quota)
+    : (parseInt(default_quota, 10) >= 0 ? parseInt(default_quota, 10) : null);
+  if (quotaNum != null) meta.default_quota = quotaNum;
   const product = await Product.create({
     type: 'visa',
     code,
     name: name.trim(),
     description: description || null,
     is_package: false,
-    meta: { visa_kind: kind, require_hotel: require_hotel === true || require_hotel === 'true' },
+    meta,
     created_by: req.user.id
   });
   res.status(201).json({ success: true, data: product });
@@ -352,6 +361,67 @@ const createTicket = asyncHandler(async (req, res) => {
     description: description || null,
     is_package: false,
     meta: { trip_type: tripType },
+    created_by: req.user.id
+  });
+  res.status(201).json({ success: true, data: product });
+});
+
+/** Generate kode unik untuk product bus (BUS-01, BUS-02, ...) */
+async function generateBusCode() {
+  const prefix = 'BUS-';
+  const existing = await Product.findAll({
+    where: { type: 'bus', code: { [Op.like]: `${prefix}%` } },
+    attributes: ['code']
+  });
+  const nums = existing
+    .map(p => parseInt(String(p.code || '').replace(prefix, '') || '0', 10))
+    .filter(n => !Number.isNaN(n));
+  const nextSeq = nums.length === 0 ? 1 : Math.max(...nums) + 1;
+  return `${prefix}${String(nextSeq).padStart(2, '0')}`;
+}
+
+const BUS_KIND_VALUES = ['bus', 'hiace'];
+
+/**
+ * POST /api/v1/products/bus - buat produk bus atau hiace
+ * Body: name, description?, bus_kind? ('bus' | 'hiace')
+ *   - bus: route_prices_by_trip? { one_way?, return_only?, round_trip? } satu harga per tipe (IDR)
+ *   - hiace: price_per_vehicle_idr? (harga per mobil)
+ */
+const createBus = asyncHandler(async (req, res) => {
+  const { name, description, bus_kind, route_prices_by_trip, price_per_vehicle_idr, default_quota } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
+  const kind = (bus_kind && BUS_KIND_VALUES.includes(bus_kind)) ? bus_kind : 'bus';
+  const code = await generateBusCode();
+  const meta = { bus_kind: kind };
+
+  const quotaNum = typeof default_quota === 'number' && !Number.isNaN(default_quota) && default_quota >= 0
+    ? Math.round(default_quota)
+    : (parseInt(default_quota, 10) >= 0 ? parseInt(default_quota, 10) : null);
+  if (quotaNum != null) meta.default_quota = quotaNum;
+
+  if (kind === 'bus') {
+    if (route_prices_by_trip && typeof route_prices_by_trip === 'object') {
+      meta.route_prices_by_trip = {};
+      BUS_TRIP_TYPES.forEach(tt => {
+        const v = route_prices_by_trip[tt];
+        if (typeof v === 'number' && !Number.isNaN(v) && v >= 0) meta.route_prices_by_trip[tt] = Math.round(v);
+      });
+    }
+  } else {
+    const v = typeof price_per_vehicle_idr === 'number' && !Number.isNaN(price_per_vehicle_idr)
+      ? Math.max(0, price_per_vehicle_idr)
+      : (parseFloat(price_per_vehicle_idr) || 0);
+    meta.price_per_vehicle_idr = Math.max(0, v);
+  }
+
+  const product = await Product.create({
+    type: 'bus',
+    code,
+    name: name.trim(),
+    description: description || null,
+    is_package: false,
+    meta,
     created_by: req.user.id
   });
   res.status(201).json({ success: true, data: product });
@@ -528,19 +598,31 @@ const update = asyncHandler(async (req, res) => {
     if (product.type === 'visa') {
       if (nextMeta.visa_kind && !VISA_KIND_VALUES.includes(nextMeta.visa_kind)) nextMeta.visa_kind = VISA_KIND.ONLY;
       if (typeof nextMeta.require_hotel !== 'boolean') nextMeta.require_hotel = nextMeta.require_hotel === true || nextMeta.require_hotel === 'true';
+      if (nextMeta.hasOwnProperty('default_quota')) {
+        if (nextMeta.default_quota === null || nextMeta.default_quota === '') delete nextMeta.default_quota;
+        else { const q = parseInt(nextMeta.default_quota, 10); nextMeta.default_quota = (Number.isNaN(q) || q < 0) ? 0 : Math.round(q); }
+      }
     }
     if (product.type === 'ticket' && nextMeta.trip_type && !TICKET_TRIP_TYPES.includes(nextMeta.trip_type)) {
       nextMeta.trip_type = 'round_trip';
     }
     if (product.type === 'bus') {
-      if (nextMeta.trip_type && !BUS_TRIP_TYPES.includes(nextMeta.trip_type)) nextMeta.trip_type = 'round_trip';
-      if (nextMeta.route_prices && typeof nextMeta.route_prices === 'object') {
+      if (nextMeta.bus_kind && !BUS_KIND_VALUES.includes(nextMeta.bus_kind)) nextMeta.bus_kind = 'bus';
+      if (nextMeta.route_prices_by_trip && typeof nextMeta.route_prices_by_trip === 'object') {
         const sanitized = {};
-        BUS_ROUTE_TYPES.forEach(rt => {
-          const v = nextMeta.route_prices[rt];
-          if (typeof v === 'number' && !isNaN(v) && v >= 0) sanitized[rt] = Math.round(v);
+        BUS_TRIP_TYPES.forEach(tt => {
+          const v = nextMeta.route_prices_by_trip[tt];
+          if (typeof v === 'number' && !isNaN(v) && v >= 0) sanitized[tt] = Math.round(v);
         });
-        nextMeta.route_prices = sanitized;
+        nextMeta.route_prices_by_trip = sanitized;
+      }
+      if (nextMeta.trip_type && BUS_TRIP_TYPES.includes(nextMeta.trip_type)) nextMeta.trip_type = nextMeta.trip_type;
+      if (nextMeta.bus_kind === 'hiace' && nextMeta.price_per_vehicle_idr != null) {
+        nextMeta.price_per_vehicle_idr = Math.max(0, parseFloat(nextMeta.price_per_vehicle_idr) || 0);
+      }
+      if (nextMeta.hasOwnProperty('default_quota')) {
+        if (nextMeta.default_quota === null || nextMeta.default_quota === '') delete nextMeta.default_quota;
+        else { const q = parseInt(nextMeta.default_quota, 10); nextMeta.default_quota = (Number.isNaN(q) || q < 0) ? 0 : Math.round(q); }
       }
     }
     product.meta = nextMeta;
@@ -727,16 +809,79 @@ const getHotelCalendarHandler = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { ...data, productName: product.name } });
 });
 
+/**
+ * GET /api/v1/products/:id/visa-calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * Kalender visa: per tanggal ada kuota, booked, available, daftar booking. Hanya product type visa.
+ */
+const getVisaCalendarHandler = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type', 'name', 'meta'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'visa') return res.status(400).json({ success: false, message: 'Bukan product visa' });
+  const from = req.query.from || new Date().toISOString().slice(0, 10);
+  const to = req.query.to || from;
+  // Gunakan meta.default_quota jika ada; jika tidak ada, fallback ke ProductAvailability.quantity
+  const baseMeta = product.meta && typeof product.meta === 'object' ? { ...product.meta } : {};
+  if (baseMeta.default_quota == null || typeof baseMeta.default_quota !== 'number') {
+    const availability = await ProductAvailability.findOne({
+      where: { product_id: product.id },
+      attributes: ['quantity']
+    });
+    if (availability && typeof availability.quantity === 'number' && availability.quantity >= 0) {
+      baseMeta.default_quota = availability.quantity;
+    }
+  }
+  const productMeta = Object.keys(baseMeta).length > 0 ? baseMeta : null;
+  const data = await getVisaCalendar(product.id, from, to, productMeta);
+  res.json({ success: true, data: { ...data, productName: product.name } });
+});
+
+/**
+ * GET /api/v1/products/:id/bus-calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * Kalender bus: per tanggal ada kuota, booked, available, daftar booking. Hanya product type bus.
+ */
+const getBusCalendarHandler = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type', 'name', 'meta'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'bus') return res.status(400).json({ success: false, message: 'Bukan product bus' });
+  const from = req.query.from || new Date().toISOString().slice(0, 10);
+  const to = req.query.to || from;
+  const productMeta = product.meta && typeof product.meta === 'object' ? product.meta : null;
+  const data = await getBusCalendar(product.id, from, to, productMeta);
+  res.json({ success: true, data: { ...data, productName: product.name } });
+});
+
+/**
+ * GET /api/v1/products/:id/ticket-calendar?bandara=BTH|CGK|SBY|UPG&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * Kalender tiket: per tanggal ada kuota, booked, available, daftar booking (per bandara). Hanya product type ticket.
+ */
+const getTicketCalendarHandler = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type', 'name'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
+  const bandara = req.query.bandara;
+  if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
+    return res.status(400).json({ success: false, message: 'Query bandara wajib: BTH, CGK, SBY, atau UPG' });
+  }
+  const from = req.query.from || new Date().toISOString().slice(0, 10);
+  const to = req.query.to || from;
+  const data = await getTicketCalendar(product.id, bandara, from, to);
+  res.json({ success: true, data: { ...data, productName: product.name, bandara } });
+});
+
 module.exports = {
   list,
   getById,
   getPrice,
   getAvailability,
   getHotelCalendar: getHotelCalendarHandler,
+  getVisaCalendar: getVisaCalendarHandler,
+  getBusCalendar: getBusCalendarHandler,
+  getTicketCalendar: getTicketCalendarHandler,
   create,
   createHotel,
   createVisa,
   createTicket,
+  createBus,
   setTicketBandara,
   setTicketBandaraBulk,
   update,

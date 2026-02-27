@@ -29,13 +29,22 @@ const ticketsRouter = express.Router({ mergeParams: true });
 ticketsRouter.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createTicket);
 router.use('/tickets', ticketsRouter);
 
+// Sub-router untuk /bus - POST /products/bus (buat produk bus, rute & tipe perjalanan)
+const busRouter = express.Router({ mergeParams: true });
+busRouter.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.createBus);
+router.use('/bus', busRouter);
+
 router.get('/', productController.list);
-router.get('/:id', productController.getById);
-router.put('/:id/ticket-bandara', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandara);
-router.put('/:id/ticket-bandara-bulk', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandaraBulk);
+// More specific /:id/... routes must come before generic /:id (Express first-match wins)
+router.get('/:id/ticket-calendar', productController.getTicketCalendar);
+router.get('/:id/bus-calendar', productController.getBusCalendar);
+router.get('/:id/hotel-calendar', productController.getHotelCalendar);
+router.get('/:id/visa-calendar', productController.getVisaCalendar);
 router.get('/:id/price', productController.getPrice);
 router.get('/:id/availability', productController.getAvailability);
-router.get('/:id/hotel-calendar', productController.getHotelCalendar);
+router.put('/:id/ticket-bandara', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandara);
+router.put('/:id/ticket-bandara-bulk', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.setTicketBandaraBulk);
+router.get('/:id', productController.getById);
 router.post('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.create);
 router.patch('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ADMIN_KOORDINATOR), productController.update);
 router.delete('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), productController.remove);

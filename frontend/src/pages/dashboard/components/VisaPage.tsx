@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet } from 'lucide-react';
+import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet, Calendar } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
@@ -7,7 +7,7 @@ import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import { businessRulesApi, productsApi, adminPusatApi } from '../../../services/api';
+import { businessRulesApi, productsApi, adminPusatApi, type VisaSeason } from '../../../services/api';
 import { fillFromSource, fromIDR } from '../../../utils/currencyConversion';
 import VisaWorkPage from './VisaWorkPage';
 
@@ -74,6 +74,13 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
     price_currency: 'IDR' as 'IDR' | 'SAR' | 'USD'
   });
   const [editVisaSaving, setEditVisaSaving] = useState(false);
+  const [visaSeasonsProduct, setVisaSeasonsProduct] = useState<VisaProduct | null>(null);
+  const [visaSeasons, setVisaSeasons] = useState<VisaSeason[]>([]);
+  const [visaSeasonsLoading, setVisaSeasonsLoading] = useState(false);
+  const [newSeasonForm, setNewSeasonForm] = useState({ name: '', start_date: '', end_date: '', quota: 0 });
+  const [addSeasonSaving, setAddSeasonSaving] = useState(false);
+  const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
+  const [quotaSaving, setQuotaSaving] = useState(false);
   const { addItem: addDraftItem } = useOrderDraft();
 
   useEffect(() => {
@@ -105,6 +112,15 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
 
+  useEffect(() => {
+    if (!visaSeasonsProduct?.id) return;
+    setVisaSeasonsLoading(true);
+    adminPusatApi.listVisaSeasons(visaSeasonsProduct.id)
+      .then((res) => setVisaSeasons((res.data as { data?: VisaSeason[] })?.data ?? []))
+      .catch(() => setVisaSeasons([]))
+      .finally(() => setVisaSeasonsLoading(false));
+  }, [visaSeasonsProduct?.id]);
+
   const refetchAll = useCallback(() => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
@@ -116,7 +132,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
       name: p.name || '',
       description: p.description || '',
       visa_kind: (p.meta?.visa_kind || 'only') as VisaKind,
-      quota: p.quota ?? 0,
+      quota: p.quota ?? (p as { meta?: { default_quota?: number } }).meta?.default_quota ?? 0,
       require_hotel: p.meta?.require_hotel === true,
       price_idr: Math.round(Number(priceIdr)) || 0,
       price_currency: 'IDR'
@@ -133,7 +149,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
       await productsApi.update(editingVisa.id, {
         name: editVisaForm.name.trim(),
         description: editVisaForm.description.trim() || null,
-        meta: { visa_kind: editVisaForm.visa_kind, require_hotel: editVisaForm.require_hotel }
+        meta: { visa_kind: editVisaForm.visa_kind, require_hotel: editVisaForm.require_hotel, default_quota: editVisaForm.quota >= 0 ? editVisaForm.quota : null }
       });
       await adminPusatApi.setProductAvailability(editingVisa.id, {
         quantity: Math.max(0, Math.floor(Number(editVisaForm.quota) || 0))
@@ -170,7 +186,8 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
         name: addVisaForm.name.trim(),
         description: addVisaForm.description.trim() || undefined,
         visa_kind: addVisaForm.visa_kind,
-        require_hotel: addVisaForm.require_hotel
+        require_hotel: addVisaForm.require_hotel,
+        default_quota: addVisaForm.quota > 0 || addVisaForm.quota === 0 ? addVisaForm.quota : undefined
       });
       const product = (createRes.data as { data?: { id: string } })?.data;
       const productId = product?.id;
@@ -198,7 +215,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
       showToast(msg, 'success');
       setShowAddVisaModal(false);
       setAddVisaForm({ name: '', description: '', visa_kind: 'only', quota: 0, require_hotel: false, price_idr: 0, price_currency: 'IDR' });
-      fetchVisaProducts();
+    fetchVisaProducts();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       showToast(err.response?.data?.message || 'Gagal menambah produk visa', 'error');
@@ -422,9 +439,14 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-center gap-1 flex-wrap">
                             {isPusat && (
-                              <Button variant="outline" size="sm" className="p-2" onClick={() => handleOpenEdit(p)} title="Edit" aria-label="Edit">
-                                <Pencil className="w-4 h-4" />
-                              </Button>
+                              <>
+                                <Button variant="outline" size="sm" className="p-2" onClick={() => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); }} title="Periode & Kuota (kalender)" aria-label="Periode">
+                                  <Calendar className="w-4 h-4" />
+                                </Button>
+                                <Button variant="outline" size="sm" className="p-2" onClick={() => handleOpenEdit(p)} title="Edit" aria-label="Edit">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                              </>
                             )}
                             {canAddToOrder && (
                               <Button
@@ -442,7 +464,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                             )}
                           </div>
                         </td>
-                      </tr>
+                    </tr>
                     );
                   })}
                 </tbody>
@@ -540,7 +562,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Kuota & aturan</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
-                      <div>
+              <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">Kuota tersedia</label>
                         <p className="text-xs text-slate-500 mb-2">Jumlah yang bisa dipesan. Isi 0 = tidak dibatasi.</p>
                         <input
@@ -577,44 +599,44 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                       <p className="text-xs text-slate-500 mb-3">Opsional. Isi satu mata uang; lainnya mengikuti kurs. Kosongkan jika diisi nanti.</p>
                       <div className="flex gap-2 mb-3">
                         <span className="text-xs font-medium text-slate-500 self-center">Input:</span>
-                        <select
+                  <select
                           value={addVisaForm.price_currency}
                           onChange={(e) => setAddVisaForm((f) => ({ ...f, price_currency: e.target.value as 'IDR' | 'SAR' | 'USD' }))}
                           className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 bg-white"
-                        >
-                          <option value="IDR">IDR</option>
-                          <option value="SAR">SAR</option>
-                          <option value="USD">USD</option>
-                        </select>
-                      </div>
+                  >
+                    <option value="IDR">IDR</option>
+                    <option value="SAR">SAR</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </div>
                       <div className="grid grid-cols-3 gap-3">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
+                  {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
                           const triple = fillFromSource('IDR', addVisaForm.price_idr || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
+                    const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
                           const isEditable = addVisaForm.price_currency === curKey;
                           const label = curKey === 'IDR' ? 'Rp' : curKey === 'SAR' ? 'SAR' : '$';
-                          return (
+                    return (
                             <div key={curKey} className={isEditable ? '' : 'opacity-80'}>
                               <span className="text-xs font-medium text-slate-500 block mb-1">{label} {!isEditable && '(konversi)'}</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={curKey === 'IDR' ? 1 : 0.01}
-                                value={val || ''}
-                                readOnly={!isEditable}
-                                onChange={isEditable ? (e) => {
-                                  const v = parseFloat(e.target.value) || 0;
-                                  const next = fillFromSource(curKey, v, currencyRates);
+                        <input
+                          type="number"
+                          min={0}
+                          step={curKey === 'IDR' ? 1 : 0.01}
+                          value={val || ''}
+                          readOnly={!isEditable}
+                          onChange={isEditable ? (e) => {
+                            const v = parseFloat(e.target.value) || 0;
+                            const next = fillFromSource(curKey, v, currencyRates);
                                   setAddVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
-                                } : undefined}
+                          } : undefined}
                                 className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
-                                placeholder="0"
-                              />
-                            </div>
-                          );
-                        })}
+                          placeholder="0"
+                        />
                       </div>
-                    </div>
+                    );
+                  })}
+                </div>
+              </div>
                   </section>
                 </div>
               </div>
@@ -736,14 +758,14 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                       </div>
                       <div className="pt-2 border-t border-slate-200/80">
                         <label className="flex items-center gap-3 cursor-pointer group">
-                          <input
-                            type="checkbox"
+                <input
+                  type="checkbox"
                             checked={editVisaForm.require_hotel}
                             onChange={(e) => setEditVisaForm((f) => ({ ...f, require_hotel: e.target.checked }))}
                             className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                           />
                           <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">Visa wajib dibarengi hotel</span>
-                        </label>
+              </label>
                         <p className="text-xs text-slate-500 mt-1 ml-7">Order yang memesan produk ini harus punya item hotel.</p>
                       </div>
                     </div>
@@ -809,6 +831,127 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
               <Button variant="primary" onClick={handleSaveEdit} disabled={editVisaSaving}>
                 {editVisaSaving ? 'Menyimpan...' : 'Simpan perubahan'}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Periode & Kuota (untuk kalender visa) */}
+      {visaSeasonsProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary-500" />
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Periode & Kuota</h3>
+                  <p className="text-sm text-slate-500">{visaSeasonsProduct.name}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="text" placeholder="Nama periode" value={newSeasonForm.name} onChange={(e) => setNewSeasonForm((f) => ({ ...f, name: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <input type="date" value={newSeasonForm.start_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, start_date: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <input type="date" value={newSeasonForm.end_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, end_date: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <input type="number" min={0} placeholder="Kuota" value={newSeasonForm.quota || ''} onChange={(e) => setNewSeasonForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <Button size="sm" className="mt-3" disabled={addSeasonSaving || !newSeasonForm.name.trim() || !newSeasonForm.start_date || !newSeasonForm.end_date} onClick={async () => {
+                  if (!visaSeasonsProduct?.id) return;
+                  setAddSeasonSaving(true);
+                  try {
+                    await adminPusatApi.createVisaSeason(visaSeasonsProduct.id, { name: newSeasonForm.name.trim(), start_date: newSeasonForm.start_date, end_date: newSeasonForm.end_date, quota: newSeasonForm.quota });
+                    showToast('Periode ditambahkan', 'success');
+                    setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 });
+                    const res = await adminPusatApi.listVisaSeasons(visaSeasonsProduct.id);
+                    setVisaSeasons((res.data as { data?: VisaSeason[] })?.data ?? []);
+                  } catch (e: unknown) {
+                    const err = e as { response?: { data?: { message?: string } } };
+                    showToast(err.response?.data?.message || 'Gagal menambah periode', 'error');
+                  } finally { setAddSeasonSaving(false); }
+                }}>
+                  {addSeasonSaving ? 'Menyimpan...' : 'Tambah periode'}
+                </Button>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
+                {visaSeasonsLoading ? (
+                  <p className="text-sm text-slate-500">Memuat...</p>
+                ) : visaSeasons.length === 0 ? (
+                  <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk kalender visa.</p>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Nama</th>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Mulai</th>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Selesai</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600">Kuota</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                        {visaSeasons.map((s) => (
+                          <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                            <td className="py-2 px-3 font-medium text-slate-800">{s.name}</td>
+                            <td className="py-2 px-3 text-slate-600">{s.start_date}</td>
+                            <td className="py-2 px-3 text-slate-600">{s.end_date}</td>
+                            <td className="py-2 px-3 text-right">
+                              {quotaEdit?.seasonId === s.id ? (
+                                <span className="flex items-center justify-end gap-1">
+                                  <input type="number" min={0} className="w-20 border border-slate-200 rounded px-2 py-1 text-sm" value={quotaEdit.value} onChange={(e) => setQuotaEdit((q) => q ? { ...q, value: e.target.value } : null)} />
+                                  <Button size="sm" variant="primary" disabled={quotaSaving} onClick={async () => {
+                                    if (!visaSeasonsProduct?.id || !quotaEdit) return;
+                                    setQuotaSaving(true);
+                                    try {
+                                      await adminPusatApi.setVisaSeasonQuota(visaSeasonsProduct.id, s.id, { quota: Math.max(0, parseInt(quotaEdit.value, 10) || 0) });
+                                      showToast('Kuota disimpan', 'success');
+                                      setQuotaEdit(null);
+                                      const res = await adminPusatApi.listVisaSeasons(visaSeasonsProduct.id);
+                                      setVisaSeasons((res.data as { data?: VisaSeason[] })?.data ?? []);
+                                    } catch (e: unknown) {
+                                      const err = e as { response?: { data?: { message?: string } } };
+                                      showToast(err.response?.data?.message || 'Gagal', 'error');
+                                    } finally { setQuotaSaving(false); }
+                                  }}>Simpan</Button>
+                                </span>
+                              ) : (
+                                <span className="tabular-nums">{s.Quota?.quota ?? 0}</span>
+                              )}
+                          </td>
+                            <td className="py-2 px-3 text-right">
+                              {quotaEdit?.seasonId === s.id ? (
+                                <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setQuotaEdit(null)}>Batal</button>
+                              ) : (
+                                <>
+                                  <button type="button" className="text-primary-600 hover:underline text-xs mr-2" onClick={() => setQuotaEdit({ seasonId: s.id, value: String(s.Quota?.quota ?? 0) })}>Set kuota</button>
+                                  <button type="button" className="text-red-600 hover:underline text-xs" onClick={async () => {
+                                    if (!visaSeasonsProduct?.id || !window.confirm('Hapus periode ini?')) return;
+                                    try {
+                                      await adminPusatApi.deleteVisaSeason(visaSeasonsProduct.id, s.id);
+                                      showToast('Periode dihapus', 'success');
+                                      setVisaSeasons((prev) => prev.filter((x) => x.id !== s.id));
+                                    } catch (e: unknown) {
+                                      const err = e as { response?: { data?: { message?: string } } };
+                                      showToast(err.response?.data?.message || 'Gagal menghapus', 'error');
+                                    }
+                                  }}>Hapus</button>
+                                </>
+                              )}
+                            </td>
+                      </tr>
+                        ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+              </div>
             </div>
           </div>
         </div>

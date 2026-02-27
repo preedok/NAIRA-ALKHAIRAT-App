@@ -89,7 +89,7 @@ export const productsApi = {
   getById: (id: string) => api.get(`/products/${id}`),
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),
   getAvailability: (id: string, params: { from: string; to: string }) =>
-    api.get<{ success: boolean; data: { byDate: Record<string, Record<string, { total: number; booked: number; available: number }> >; byRoomType: Record<string, number> } }>(`/products/${id}/availability`, { params }),
+    api.get<{ success: boolean; data: { availability_mode?: 'global' | 'per_season'; byDate: Record<string, Record<string, { total: number; booked: number; available: number }>>; byRoomType: Record<string, number> } }>(`/products/${id}/availability`, { params }),
   getHotelCalendar: (id: string, params: { from: string; to: string }) =>
     api.get<{
       success: boolean;
@@ -105,11 +105,58 @@ export const productsApi = {
         byRoomType: Record<string, number>;
       };
     }>(`/products/${id}/hotel-calendar`, { params }),
+  getVisaCalendar: (id: string, params: { from: string; to: string }) =>
+    api.get<{
+      success: boolean;
+      data: {
+        productName: string;
+        byDate: Record<string, {
+          _noSeason?: boolean;
+          seasonId?: string;
+          seasonName?: string;
+          quota?: number;
+          booked?: number;
+          available?: number;
+          bookings?: { order_id: string; owner_id: string; owner_name: string; quantity: number }[];
+        }>;
+      };
+    }>(`/products/${id}/visa-calendar`, { params }),
+  getTicketCalendar: (id: string, params: { bandara: string; from: string; to: string }) =>
+    api.get<{
+      success: boolean;
+      data: {
+        productName: string;
+        bandara: string;
+        byDate: Record<string, {
+          quota?: number;
+          booked?: number;
+          available?: number;
+          bookings?: { order_id: string; owner_id: string; owner_name: string; quantity: number }[];
+        }>;
+      };
+    }>(`/products/${id}/ticket-calendar`, { params }),
+  getBusCalendar: (id: string, params: { from: string; to: string }) =>
+    api.get<{
+      success: boolean;
+      data: {
+        productName: string;
+        byDate: Record<string, {
+          _noSeason?: boolean;
+          seasonId?: string;
+          seasonName?: string;
+          quota?: number;
+          booked?: number;
+          available?: number;
+          bookings?: { order_id: string; owner_id: string; owner_name: string; quantity: number }[];
+        }>;
+      };
+    }>(`/products/${id}/bus-calendar`, { params }),
   listPrices: (params?: { product_id?: string; branch_id?: string }) => api.get('/products/prices', { params }),
   create: (body: { type: string; code?: string; name: string; description?: string; is_package?: boolean; meta?: object }) => api.post('/products', body),
   createHotel: (body: { name: string; description?: string; meta?: object }) => api.post('/products/hotels', body),
-  createVisa: (body: { name: string; description?: string; visa_kind: 'only' | 'tasreh' | 'premium'; require_hotel?: boolean }) => api.post('/products/visas', body),
+  createVisa: (body: { name: string; description?: string; visa_kind: 'only' | 'tasreh' | 'premium'; require_hotel?: boolean; default_quota?: number | null }) => api.post('/products/visas', body),
   createTicket: (body: { name: string; description?: string; trip_type?: 'one_way' | 'return_only' | 'round_trip' }) => api.post('/products/tickets', body),
+  createBus: (body: { name: string; description?: string; bus_kind?: 'bus' | 'hiace'; route_prices_by_trip?: Record<'one_way' | 'return_only' | 'round_trip', number>; price_per_vehicle_idr?: number; default_quota?: number | null }) => api.post('/products/bus', body),
   setTicketBandara: (productId: string, body: { bandara: string; period_type?: 'default' | 'month' | 'week' | 'day'; period_key?: string; price_idr: number; seat_quota: number }) => api.put(`/products/${productId}/ticket-bandara`, body),
   setTicketBandaraBulk: (productId: string, body: { bandara_defaults: Record<string, { price_idr?: number; seat_quota?: number }> }) => api.put(`/products/${productId}/ticket-bandara-bulk`, body),
   update: (id: string, body: object) => api.patch(`/products/${id}`, body),
@@ -146,7 +193,7 @@ export const hotelApi = {
   listOrders: (params?: { status?: string }) => api.get('/hotel/orders', { params }),
   getOrder: (id: string) => api.get(`/hotel/orders/${id}`),
   listProducts: () => api.get('/hotel/products'),
-  updateItemProgress: (orderItemId: string, body: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; notes?: string }) =>
+  updateItemProgress: (orderItemId: string, body: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; check_in_time?: string; check_out_time?: string; notes?: string }) =>
     api.patch(`/hotel/order-items/${orderItemId}/progress`, body)
 };
 
@@ -434,6 +481,10 @@ export const adminPusatApi = {
   deleteUser: (id: string) => api.delete<{ success: boolean; message?: string }>(`/admin-pusat/users/${id}`),
   setProductAvailability: (productId: string, body: { quantity?: number; meta?: object }) =>
     api.put<{ success: boolean; data: any }>(`/admin-pusat/products/${productId}/availability`, body),
+  getHotelAvailabilityConfig: (productId: string) =>
+    api.get<{ success: boolean; data: HotelAvailabilityConfig }>(`/admin-pusat/products/${productId}/hotel-availability-config`),
+  setHotelAvailabilityConfig: (productId: string, body: { availability_mode: 'global' | 'per_season'; global_room_inventory?: Record<string, number> }) =>
+    api.put<{ success: boolean; data: HotelAvailabilityConfig; message?: string }>(`/admin-pusat/products/${productId}/hotel-availability-config`, body),
   listSeasons: (productId: string) =>
     api.get<{ success: boolean; data: HotelSeason[] }>(`/admin-pusat/products/${productId}/seasons`),
   createSeason: (productId: string, body: { name: string; start_date: string; end_date: string; meta?: object }) =>
@@ -443,8 +494,36 @@ export const adminPusatApi = {
   deleteSeason: (productId: string, seasonId: string) =>
     api.delete<{ success: boolean; message?: string }>(`/admin-pusat/products/${productId}/seasons/${seasonId}`),
   setSeasonInventory: (productId: string, seasonId: string, body: { inventory: { room_type: string; total_rooms: number }[] }) =>
-    api.put<{ success: boolean; data: HotelRoomInventory[] }>(`/admin-pusat/products/${productId}/seasons/${seasonId}/inventory`, body)
+    api.put<{ success: boolean; data: HotelRoomInventory[] }>(`/admin-pusat/products/${productId}/seasons/${seasonId}/inventory`, body),
+  listVisaSeasons: (productId: string) =>
+    api.get<{ success: boolean; data: VisaSeason[] }>(`/admin-pusat/products/${productId}/visa-seasons`),
+  createVisaSeason: (productId: string, body: { name: string; start_date: string; end_date: string; quota?: number; meta?: object }) =>
+    api.post<{ success: boolean; data: VisaSeason }>(`/admin-pusat/products/${productId}/visa-seasons`, body),
+  updateVisaSeason: (productId: string, seasonId: string, body: { name?: string; start_date?: string; end_date?: string; meta?: object }) =>
+    api.patch<{ success: boolean; data: VisaSeason }>(`/admin-pusat/products/${productId}/visa-seasons/${seasonId}`, body),
+  deleteVisaSeason: (productId: string, seasonId: string) =>
+    api.delete<{ success: boolean; message?: string }>(`/admin-pusat/products/${productId}/visa-seasons/${seasonId}`),
+  setVisaSeasonQuota: (productId: string, seasonId: string, body: { quota: number }) =>
+    api.put<{ success: boolean; data: VisaSeasonQuota }>(`/admin-pusat/products/${productId}/visa-seasons/${seasonId}/quota`, body)
 };
+export interface VisaSeason {
+  id: string;
+  product_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  meta?: object;
+  Quota?: { id: string; quota: number };
+}
+export interface VisaSeasonQuota {
+  id: string;
+  season_id: string;
+  quota: number;
+}
+export interface HotelAvailabilityConfig {
+  mode: 'global' | 'per_season';
+  global_room_inventory: Record<string, number>;
+}
 export interface HotelSeason {
   id: string;
   product_id: string;

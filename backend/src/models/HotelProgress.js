@@ -34,6 +34,8 @@ const HotelProgress = sequelize.define('HotelProgress', {
   },
   check_in_date: { type: DataTypes.DATEONLY },
   check_out_date: { type: DataTypes.DATEONLY },
+  check_in_time: { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:mm, default 14:00' },
+  check_out_time: { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:mm, default 12:00' },
   notes: { type: DataTypes.TEXT },
   updated_by: {
     type: DataTypes.UUID,

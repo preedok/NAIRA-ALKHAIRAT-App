@@ -26,6 +26,10 @@ const BusProgress = require('./BusProgress');
 const ProductAvailability = require('./ProductAvailability');
 const HotelSeason = require('./HotelSeason');
 const HotelRoomInventory = require('./HotelRoomInventory');
+const VisaSeason = require('./VisaSeason');
+const VisaSeasonQuota = require('./VisaSeasonQuota');
+const BusSeason = require('./BusSeason');
+const BusSeasonQuota = require('./BusSeasonQuota');
 const AccountingFiscalYear = require('./AccountingFiscalYear');
 const AccountingPeriod = require('./AccountingPeriod');
 const ChartOfAccount = require('./ChartOfAccount');
@@ -152,6 +156,22 @@ HotelRoomInventory.belongsTo(HotelSeason, { foreignKey: 'season_id', as: 'Season
 HotelSeason.hasMany(HotelRoomInventory, { foreignKey: 'season_id', as: 'RoomInventory' });
 Product.hasMany(HotelRoomInventory, { foreignKey: 'product_id', as: 'HotelRoomInventory' });
 
+// Visa seasons & quota (kalender visa)
+VisaSeason.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(VisaSeason, { foreignKey: 'product_id', as: 'VisaSeasons' });
+VisaSeasonQuota.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+VisaSeasonQuota.belongsTo(VisaSeason, { foreignKey: 'season_id', as: 'Season' });
+VisaSeason.hasOne(VisaSeasonQuota, { foreignKey: 'season_id', as: 'Quota' });
+Product.hasMany(VisaSeasonQuota, { foreignKey: 'product_id', as: 'VisaSeasonQuotas' });
+
+// Bus seasons & quota (kalender bus)
+BusSeason.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(BusSeason, { foreignKey: 'product_id', as: 'BusSeasons' });
+BusSeasonQuota.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+BusSeasonQuota.belongsTo(BusSeason, { foreignKey: 'season_id', as: 'Season' });
+BusSeason.hasOne(BusSeasonQuota, { foreignKey: 'season_id', as: 'Quota' });
+Product.hasMany(BusSeasonQuota, { foreignKey: 'product_id', as: 'BusSeasonQuotas' });
+
 // Accounting
 AccountingFiscalYear.hasMany(AccountingPeriod, { foreignKey: 'fiscal_year_id', as: 'Periods' });
 AccountingPeriod.belongsTo(AccountingFiscalYear, { foreignKey: 'fiscal_year_id', as: 'FiscalYear' });
@@ -216,6 +236,10 @@ const db = {
   ProductAvailability,
   HotelSeason,
   HotelRoomInventory,
+  VisaSeason,
+  VisaSeasonQuota,
+  BusSeason,
+  BusSeasonQuota,
   AccountingFiscalYear,
   AccountingPeriod,
   ChartOfAccount,

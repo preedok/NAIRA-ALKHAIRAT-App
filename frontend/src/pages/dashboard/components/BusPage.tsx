@@ -1,39 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bus, Settings, Users, AlertCircle, ShoppingCart, Pencil, X, ArrowRight, ArrowLeft, ArrowLeftRight } from 'lucide-react';
+import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
-import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import { businessRulesApi, productsApi } from '../../../services/api';
+import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
+import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import BusWorkPage from './BusWorkPage';
 
 type BusTripType = 'one_way' | 'return_only' | 'round_trip';
-type BusRouteType = 'full_route' | 'bandara_makkah' | 'bandara_madinah' | 'bandara_madinah_only';
+type BusKind = 'bus' | 'hiace';
 
 const BUS_TRIP_LABELS: Record<BusTripType, string> = {
-  one_way: 'Pergi saja',
+  one_way: 'Jemput saja',
   return_only: 'Pulang saja',
   round_trip: 'Pulang pergi'
 };
 
-const BUS_ROUTE_LABELS: Record<BusRouteType, string> = {
-  full_route: 'Full rute (Mekkah–Madinah)',
-  bandara_makkah: 'Bandara–Mekkah',
-  bandara_madinah: 'Bandara–Madinah',
-  bandara_madinah_only: 'Bandara–Madinah saja'
-};
-
-const BUS_ROUTE_KEYS: BusRouteType[] = ['full_route', 'bandara_makkah', 'bandara_madinah', 'bandara_madinah_only'];
+/** Satu harga per tipe perjalanan (semua rute sama). */
+type RoutePricesByTrip = Record<BusTripType, number>;
 
 interface BusProduct {
   id: string;
   code: string;
   name: string;
   description?: string | null;
-  meta?: { trip_type?: BusTripType; route_prices?: Partial<Record<BusRouteType, number>> };
+  meta?: {
+    bus_kind?: BusKind;
+    route_prices_by_trip?: Partial<RoutePricesByTrip>;
+    price_per_vehicle_idr?: number;
+    default_quota?: number;
+  };
   price_general_idr?: number | null;
   price_general_sar?: number | null;
   price_general_usd?: number | null;
@@ -42,35 +41,24 @@ interface BusProduct {
   currency?: string;
 }
 
+const emptyPricesByTrip = (): RoutePricesByTrip => ({
+  one_way: 0,
+  return_only: 0,
+  round_trip: 0
+});
+
+const BUS_KIND_LABELS: Record<BusKind, string> = {
+  bus: 'Bus (min 35 orang, penalti jika kurang)',
+  hiace: 'Hiace (harga per mobil, tanpa penalti)'
+};
+
 const formatRp = (n: number) => (n > 0 ? `Rp ${Number(n).toLocaleString('id-ID')}` : '—');
-
-type BusTabId = 'besar' | 'menengah' | 'kecil';
-
-const BUS_TABS: { id: BusTabId; label: string; description: string }[] = [
-  { id: 'besar', label: 'Bus Besar', description: 'Minimal paket & penalti jika kurang' },
-  { id: 'menengah', label: 'Bus Menengah (Hiace)', description: 'Harga saja, tanpa penalti' },
-  { id: 'kecil', label: 'Mobil Kecil', description: 'Harga saja, tanpa penalti' },
-];
 
 type BusPageProps = { embedInProducts?: boolean };
 
 const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { addItem: addDraftItem } = useOrderDraft();
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<BusTabId>('besar');
-  const [form, setForm] = useState({
-    bus_min_pack: 35,
-    bus_penalty_idr: 500000,
-    bus_menengah_price_idr: 0,
-    bus_kecil_price_idr: 0,
-  });
-  const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
-  const [penaltyCurrency, setPenaltyCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
-  const [menengahCurrency, setMenengahCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
-  const [kecilCurrency, setKecilCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [loadingBusProducts, setLoadingBusProducts] = useState(false);
@@ -78,47 +66,42 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   const canConfig = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat';
 
+  type PriceCurrency = 'IDR' | 'SAR' | 'USD';
+
   const [editProductModal, setEditProductModal] = useState<{
     product: BusProduct;
     name: string;
     description: string;
-    trip_type: BusTripType;
-    route_prices: Record<BusRouteType, number>;
+    bus_kind: BusKind;
+    route_prices_by_trip: RoutePricesByTrip;
+    price_per_vehicle_idr: number;
+    price_currency: PriceCurrency;
+    default_quota: number | '';
   } | null>(null);
   const [editProductSaving, setEditProductSaving] = useState(false);
+
+  const [addBusModalOpen, setAddBusModalOpen] = useState(false);
+  const [addBusForm, setAddBusForm] = useState({
+    name: '',
+    description: '',
+    bus_kind: 'bus' as BusKind,
+    route_prices_by_trip: emptyPricesByTrip(),
+    price_per_vehicle_idr: 0,
+    price_currency: 'IDR' as PriceCurrency,
+    default_quota: '' as number | ''
+  });
+  const [addBusSaving, setAddBusSaving] = useState(false);
+  const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
       const data = (res.data as { data?: { currency_rates?: unknown } })?.data;
       let cr = data?.currency_rates;
-      if (typeof cr === 'string') {
-        try { cr = JSON.parse(cr) as { SAR_TO_IDR?: number; USD_TO_IDR?: number }; } catch { cr = null; }
-      }
+      if (typeof cr === 'string') try { cr = JSON.parse(cr) as { SAR_TO_IDR?: number; USD_TO_IDR?: number }; } catch { cr = null; }
       const rates = cr as { SAR_TO_IDR?: number; USD_TO_IDR?: number } | null;
       if (rates && typeof rates === 'object') setCurrencyRates({ SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 });
     }).catch(() => {});
   }, []);
-
-  const fetchBusConfig = () => {
-    if (!canConfig && !embedInProducts) return;
-    setLoading(true);
-    businessRulesApi.get()
-      .then((res) => {
-        const d = res.data?.data as Record<string, unknown> | undefined;
-        if (d) setForm({
-          bus_min_pack: Number(d.bus_min_pack) || 35,
-          bus_penalty_idr: Number(d.bus_penalty_idr) || 500000,
-          bus_menengah_price_idr: Number(d.bus_menengah_price_idr) || 0,
-          bus_kecil_price_idr: Number(d.bus_kecil_price_idr) || 0,
-        });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchBusConfig();
-  }, [canConfig, embedInProducts]);
 
   const fetchBusProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
@@ -137,53 +120,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
     fetchBusProducts();
   }, [fetchBusProducts]);
 
-  const handleSaveBesar = async () => {
-    if (!canConfig) return;
-    setSaving(true);
-    try {
-      await businessRulesApi.set({ rules: { bus_min_pack: form.bus_min_pack, bus_penalty_idr: form.bus_penalty_idr } });
-      showToast('Konfigurasi bus besar disimpan', 'success');
-      fetchBusConfig();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menyimpan', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveMenengah = async () => {
-    if (!canConfig) return;
-    setSaving(true);
-    try {
-      await businessRulesApi.set({ rules: { bus_menengah_price_idr: form.bus_menengah_price_idr } });
-      showToast('Harga bus menengah (Hiace) disimpan', 'success');
-      fetchBusConfig();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menyimpan', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveKecil = async () => {
-    if (!canConfig) return;
-    setSaving(true);
-    try {
-      await businessRulesApi.set({ rules: { bus_kecil_price_idr: form.bus_kecil_price_idr } });
-      showToast('Harga mobil kecil disimpan', 'success');
-      fetchBusConfig();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menyimpan', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const refetchAll = useCallback(() => {
-    fetchBusConfig();
     fetchBusProducts();
   }, [fetchBusProducts]);
 
@@ -196,8 +133,10 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
         name: editProductModal.name.trim(),
         description: editProductModal.description.trim() || null,
         meta: {
-          trip_type: editProductModal.trip_type,
-          route_prices: editProductModal.route_prices
+          bus_kind: editProductModal.bus_kind,
+          route_prices_by_trip: editProductModal.bus_kind === 'bus' ? editProductModal.route_prices_by_trip : undefined,
+          price_per_vehicle_idr: editProductModal.bus_kind === 'hiace' ? editProductModal.price_per_vehicle_idr : undefined,
+          default_quota: editProductModal.default_quota !== '' && editProductModal.default_quota !== undefined ? Number(editProductModal.default_quota) : null
         }
       });
       showToast('Produk bus diperbarui', 'success');
@@ -211,22 +150,47 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
     }
   };
 
-  const getRoutePrice = (p: BusProduct, route: BusRouteType): number => {
-    return p.meta?.route_prices?.[route] ?? p.price_general_idr ?? p.price_general ?? 0;
+  const handleCreateBus = async () => {
+    if (!addBusForm.name.trim()) {
+      showToast('Nama produk wajib', 'error');
+      return;
+    }
+    setAddBusSaving(true);
+    try {
+      const payload: { name: string; description?: string; bus_kind: BusKind; route_prices_by_trip?: RoutePricesByTrip; price_per_vehicle_idr?: number; default_quota?: number | null } = {
+        name: addBusForm.name.trim(),
+        description: addBusForm.description.trim() || undefined,
+        bus_kind: addBusForm.bus_kind
+      };
+      if (addBusForm.bus_kind === 'bus') {
+        payload.route_prices_by_trip = addBusForm.route_prices_by_trip;
+      } else {
+        payload.price_per_vehicle_idr = Math.max(0, addBusForm.price_per_vehicle_idr || 0);
+      }
+      const q = addBusForm.default_quota === '' ? undefined : Math.max(0, parseInt(String(addBusForm.default_quota), 10) || 0);
+      if (q !== undefined) payload.default_quota = q;
+      await productsApi.createBus(payload);
+      showToast('Produk bus ditambahkan', 'success');
+      setAddBusModalOpen(false);
+      setAddBusForm({ name: '', description: '', bus_kind: 'bus', route_prices_by_trip: emptyPricesByTrip(), price_per_vehicle_idr: 0, price_currency: 'IDR', default_quota: '' });
+      fetchBusProducts();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      showToast(err.response?.data?.message || 'Gagal menambah produk bus', 'error');
+    } finally {
+      setAddBusSaving(false);
+    }
   };
 
-  const handleAddToOrder = (p: BusProduct, route: BusRouteType) => {
-    const priceIdr = getRoutePrice(p, route);
-    if (priceIdr <= 0) return;
-    addDraftItem({
-      type: 'bus',
-      product_id: p.id,
-      product_name: `${p.name} (${BUS_ROUTE_LABELS[route]})`,
-      unit_price_idr: priceIdr,
-      quantity: 1,
-      meta: { bus_type: 'besar', route_type: route, trip_type: (p.meta?.trip_type as BusTripType) || 'round_trip' }
-    });
-    showToast('Bus ditambahkan ke order.', 'success');
+  const getPriceForTrip = (p: BusProduct, tripType: BusTripType): number => {
+    if (p.meta?.bus_kind === 'hiace') return p.meta?.price_per_vehicle_idr ?? p.price_general_idr ?? p.price_general ?? 0;
+    const v = p.meta?.route_prices_by_trip?.[tripType];
+    return typeof v === 'number' && v >= 0 ? v : p.price_general_idr ?? p.price_general ?? 0;
+  };
+
+  const hasPricesForTrip = (p: BusProduct, tripType: BusTripType): boolean => {
+    const v = p.meta?.route_prices_by_trip?.[tripType];
+    return typeof v === 'number' && v > 0;
   };
 
   if (user?.role === 'role_bus' && !embedInProducts) {
@@ -239,313 +203,116 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Bus Saudi</h2>
           <p className="text-slate-600 text-sm mt-0.5">
-            Atur minimal paket dan penalti bus. Rute Mekkah–Madinah, Bandara–Mekkah/Madinah. Order & tiket dikelola tim Bus cabang.
+            Pilih tipe perjalanan (jemput saja / pulang saja / pulang pergi), lalu isi harga per rute (jemput di mana → antar ke mana) dalam IDR, SAR, atau USD—nilai terkonversi otomatis. Data tampil di tabel dan dipakai untuk order.
           </p>
         </div>
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loading || loadingBusProducts} />
+        <AutoRefreshControl onRefresh={refetchAll} disabled={loadingBusProducts} />
       </div>
 
-      {(canConfig || embedInProducts) && (
-        <Card>
-          <div className="flex items-center gap-3 mb-4">
-            <Settings className="w-5 h-5 text-slate-500" />
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Pengaturan Bus Saudi {embedInProducts && !canConfig ? '(harga dari admin pusat)' : ''}</h3>
-              <p className="text-sm text-slate-500">{canConfig ? 'Bus besar (min paket & penalti), bus menengah & mobil kecil (harga saja)' : 'Lihat saja. Pekerjaan bus di menu Bus.'}</p>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex border-b border-slate-200 mb-4">
-            {BUS_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-amber-500 text-amber-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {loading ? (
-            <p className="text-slate-500 text-sm py-4">Memuat...</p>
-          ) : (
-            <>
-              {/* Tab: Bus Besar ΓÇö minimal paket & penalti */}
-              {activeTab === 'besar' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                      <div className="p-2 rounded-lg bg-amber-100 text-amber-600 shrink-0">
-                        <Users className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Minimal paket</p>
-                        <p className="text-lg font-bold text-slate-900 tabular-nums">{form.bus_min_pack || 0} <span className="text-sm font-normal text-slate-600">orang</span></p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-red-50 border border-red-100">
-                      <div className="p-2 rounded-lg bg-red-100 text-red-600 shrink-0">
-                        <AlertCircle className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Penalti jika &lt; min paket</p>
-                        <p className="text-lg font-bold text-slate-900 tabular-nums">Rp {Number(form.bus_penalty_idr || 0).toLocaleString('id-ID')}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600">Bus besar: minimal 35 paket. Jika kurang dari minimal, dikenakan penalti. Jika ΓëÑ minimal, penalti tidak berlaku.</p>
-                  <div className="flex flex-wrap items-end gap-4 pt-2">
-                    <div className="min-w-0">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Minimal paket (orang)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={form.bus_min_pack || ''}
-                        onChange={canConfig ? (e) => setForm((f) => ({ ...f, bus_min_pack: Number(e.target.value) || 0 })) : undefined}
-                        readOnly={!canConfig}
-                        className={`w-full max-w-[160px] border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 ${canConfig ? 'bg-white' : 'bg-slate-100 cursor-default'}`}
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Penalti bus</label>
-                      <p className="text-xs text-slate-500 mb-1">Pilih mata uang, lalu isi nilai. Mata uang lain mengikuti kurs dari Menu Settings.</p>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <select
-                          value={penaltyCurrency}
-                          onChange={canConfig ? (e) => setPenaltyCurrency(e.target.value as 'IDR' | 'SAR' | 'USD') : undefined}
-                          disabled={!canConfig}
-                          className={`border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 ${canConfig ? 'bg-white' : 'bg-slate-100 cursor-default'}`}
-                        >
-                          <option value="IDR">IDR</option>
-                          <option value="SAR">SAR</option>
-                          <option value="USD">USD</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource('IDR', form.bus_penalty_idr || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const isEditable = canConfig && penaltyCurrency === curKey;
-                          return (
-                            <div key={curKey}>
-                              <span className="text-xs text-slate-500 block mb-0.5">{curKey}{!isEditable && ' (konversi)'}</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={curKey === 'IDR' ? 1 : 0.01}
-                                value={val || ''}
-                                readOnly={!isEditable}
-                                onChange={isEditable ? (e) => {
-                                  const v = parseFloat(e.target.value) || 0;
-                                  const next = fillFromSource(curKey, v, currencyRates);
-                                  setForm((f) => ({ ...f, bus_penalty_idr: Math.round(next.idr) }));
-                                } : undefined}
-                                className={`w-full max-w-[120px] border rounded-xl px-3 py-2 text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 ${isEditable ? 'bg-white' : 'bg-slate-100 text-slate-600 cursor-not-allowed'}`}
-                                placeholder="0"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {canConfig && (
-                      <Button variant="primary" onClick={handleSaveBesar} disabled={saving} className="shrink-0">
-                        {saving ? 'Menyimpan...' : 'Simpan'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Tab: Bus Menengah (Hiace) ΓÇö harga saja, tanpa penalti */}
-              {activeTab === 'menengah' && (
-                <div className="space-y-4">
-                  <p className="text-sm text-slate-600">Bus menengah (contoh: Hiace). Hanya atur harga; tidak ada penalti.</p>
-                  <div className="flex flex-wrap items-end gap-4">
-                    <div className="min-w-0">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Harga</label>
-                      <p className="text-xs text-slate-500 mb-1">Pilih mata uang. Lainnya mengikuti kurs dari Menu Settings.</p>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <select
-                          value={menengahCurrency}
-                          onChange={canConfig ? (e) => setMenengahCurrency(e.target.value as 'IDR' | 'SAR' | 'USD') : undefined}
-                          disabled={!canConfig}
-                          className={`border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 ${canConfig ? 'bg-white' : 'bg-slate-100 cursor-default'}`}
-                        >
-                          <option value="IDR">IDR</option>
-                          <option value="SAR">SAR</option>
-                          <option value="USD">USD</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource('IDR', form.bus_menengah_price_idr || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const isEditable = canConfig && menengahCurrency === curKey;
-                          return (
-                            <div key={curKey}>
-                              <span className="text-xs text-slate-500 block mb-0.5">{curKey}{!isEditable && ' (konversi)'}</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={curKey === 'IDR' ? 1 : 0.01}
-                                value={val || ''}
-                                readOnly={!isEditable}
-                                onChange={isEditable ? (e) => {
-                                  const v = parseFloat(e.target.value) || 0;
-                                  const next = fillFromSource(curKey, v, currencyRates);
-                                  setForm((f) => ({ ...f, bus_menengah_price_idr: Math.round(next.idr) }));
-                                } : undefined}
-                                className={`w-full max-w-[120px] border rounded-xl px-3 py-2 text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 ${isEditable ? 'bg-white' : 'bg-slate-100 text-slate-600 cursor-not-allowed'}`}
-                                placeholder="0"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {canConfig && (
-                      <Button variant="primary" onClick={handleSaveMenengah} disabled={saving} className="shrink-0">
-                        {saving ? 'Menyimpan...' : 'Simpan'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Tab: Mobil Kecil ΓÇö harga saja, tanpa penalti */}
-              {activeTab === 'kecil' && (
-                <div className="space-y-4">
-                  <p className="text-sm text-slate-600">Mobil kecil. Hanya atur harga; tidak ada penalti.</p>
-                  <div className="flex flex-wrap items-end gap-4">
-                    <div className="min-w-0">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Harga</label>
-                      <p className="text-xs text-slate-500 mb-1">Pilih mata uang. Lainnya mengikuti kurs dari Menu Settings.</p>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <select
-                          value={kecilCurrency}
-                          onChange={canConfig ? (e) => setKecilCurrency(e.target.value as 'IDR' | 'SAR' | 'USD') : undefined}
-                          disabled={!canConfig}
-                          className={`border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 ${canConfig ? 'bg-white' : 'bg-slate-100 cursor-default'}`}
-                        >
-                          <option value="IDR">IDR</option>
-                          <option value="SAR">SAR</option>
-                          <option value="USD">USD</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource('IDR', form.bus_kecil_price_idr || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const isEditable = canConfig && kecilCurrency === curKey;
-                          return (
-                            <div key={curKey}>
-                              <span className="text-xs text-slate-500 block mb-0.5">{curKey}{!isEditable && ' (konversi)'}</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={curKey === 'IDR' ? 1 : 0.01}
-                                value={val || ''}
-                                readOnly={!isEditable}
-                                onChange={isEditable ? (e) => {
-                                  const v = parseFloat(e.target.value) || 0;
-                                  const next = fillFromSource(curKey, v, currencyRates);
-                                  setForm((f) => ({ ...f, bus_kecil_price_idr: Math.round(next.idr) }));
-                                } : undefined}
-                                className={`w-full max-w-[120px] border rounded-xl px-3 py-2 text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 ${isEditable ? 'bg-white' : 'bg-slate-100 text-slate-600 cursor-not-allowed'}`}
-                                placeholder="0"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {canConfig && (
-                      <Button variant="primary" onClick={handleSaveKecil} disabled={saving} className="shrink-0">
-                        {saving ? 'Menyimpan...' : 'Simpan'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </Card>
-      )}
-
-      {/* Tabel produk bus: rute, workflow, aksi Edit & Tambah ke order */}
+      {/* Daftar produk bus */}
       {(canAddToOrder || embedInProducts) && (
         <Card>
-          <h3 className="text-base font-semibold text-slate-900 mb-2">Produk bus {canAddToOrder ? 'untuk order' : '(harga dari admin pusat)'}</h3>
-          <p className="text-sm text-slate-500 mb-3">Rute: Full Mekkah–Madinah, Bandara–Mekkah, Bandara–Madinah. Workflow pergi/pulang. Pekerjaan bus di menu Bus.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Daftar produk bus</h3>
+              <p className="text-sm text-slate-500 mt-0.5">Tambah produk bus atau Hiace; isi harga dan kuota default (per hari). Kuota tampil di tabel dan di Kalender—berkurang otomatis per tanggal jika ada order.</p>
+            </div>
+            {isPusat && (
+              <Button variant="primary" size="sm" onClick={() => setAddBusModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" /> Tambah produk bus
+              </Button>
+            )}
+          </div>
           {loadingBusProducts ? (
             <p className="text-slate-500 text-sm py-4">Memuat produk...</p>
           ) : busProducts.length === 0 ? (
-            <p className="text-slate-500 text-sm py-4">Belum ada produk bus. Tambah produk bus di master produk.</p>
+            <div className="py-6 text-center">
+              <p className="text-slate-500 text-sm">Belum ada produk bus.</p>
+              {!isPusat && <p className="text-xs text-slate-400 mt-1">Admin pusat dapat menambah produk bus.</p>}
+            </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200">
+<thead>
+                <tr className="bg-slate-100 border-b border-slate-200">
                     <th className="text-left py-3 px-4 font-semibold text-slate-700">Kode</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-700">Nama</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Workflow</th>
-                    {BUS_ROUTE_KEYS.map((route) => (
-                      <th key={route} className="text-left py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">{BUS_ROUTE_LABELS[route]}</th>
-                    ))}
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Jenis</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Harga</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Harga / mobil</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Kuota</th>
                     <th className="text-right py-3 px-4 font-semibold text-slate-700">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {busProducts.map((p) => (
+                  {busProducts.map((p) => {
+                    const isHiace = p.meta?.bus_kind === 'hiace';
+                    return (
                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                       <td className="py-2 px-4 font-mono text-slate-600">{p.code || '-'}</td>
                       <td className="py-2 px-4 font-medium text-slate-900">{p.name}</td>
                       <td className="py-2 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-700">
-                          {BUS_TRIP_LABELS[(p.meta?.trip_type as BusTripType) || 'round_trip']}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${isHiace ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {isHiace ? 'Hiace' : 'Bus'}
                         </span>
                       </td>
-                      {BUS_ROUTE_KEYS.map((route) => {
-                        const priceIdr = getRoutePrice(p, route);
-                        return (
-                          <td key={route} className="py-2 px-4 align-top">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-slate-600">{formatRp(priceIdr)}</span>
-                              {canAddToOrder && priceIdr > 0 && (
-                                <Button variant="outline" size="sm" className="p-1 min-w-0 h-7 w-fit" onClick={() => handleAddToOrder(p, route)} title={`Tambah ke order: ${BUS_ROUTE_LABELS[route]}`}>
-                                  <ShoppingCart className="w-3.5 h-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
+                      <td className="py-2 px-4 align-top">
+                        {isHiace ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <div className="flex flex-col gap-0.5">
+                            {(() => {
+                              const priceIdr = getPriceForTrip(p, 'round_trip');
+                              const triple = fillFromSource('IDR', priceIdr, currencyRates);
+                              return (
+                                <>
+                                  <span className="text-slate-700 font-medium">{formatRp(priceIdr)}</span>
+                                  {priceIdr > 0 && <span className="text-xs text-slate-500">{formatSAR(triple.sar)} · {formatUSD(triple.usd)}</span>}
+                                  {priceIdr <= 0 && <span className="text-slate-400 text-xs">—</span>}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2 px-4">
+                        {isHiace ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-slate-700 font-medium">{formatRp(p.meta?.price_per_vehicle_idr ?? 0)}</span>
+                            {(p.meta?.price_per_vehicle_idr ?? 0) > 0 && <span className="text-xs text-slate-500">{formatSAR(fillFromSource('IDR', p.meta?.price_per_vehicle_idr ?? 0, currencyRates).sar)} · {formatUSD(fillFromSource('IDR', p.meta?.price_per_vehicle_idr ?? 0, currencyRates).usd)}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-4">
+                        <span className="text-slate-700 tabular-nums">{typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0 ? p.meta.default_quota : '—'}</span>
+                        <p className="text-[10px] text-slate-500 mt-0.5">per hari (kalender)</p>
+                      </td>
                       <td className="py-2 px-4 text-right">
                         {isPusat && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              const rp = p.meta?.route_prices || {};
+                              const raw = p.meta?.route_prices_by_trip as Record<string, unknown> | undefined;
+                              const toNum = (v: unknown): number => {
+                                if (typeof v === 'number' && !Number.isNaN(v)) return v;
+                                if (v && typeof v === 'object' && typeof (v as Record<string, unknown>).full_route === 'number') return Number((v as Record<string, number>).full_route) || 0;
+                                return 0;
+                              };
+                              const one = raw ? toNum(raw.one_way) : 0;
+                              const ret = raw ? toNum(raw.return_only) : 0;
+                              const round = raw ? toNum(raw.round_trip) : 0;
                               setEditProductModal({
                                 product: p,
                                 name: p.name,
                                 description: p.description ?? '',
-                                trip_type: (p.meta?.trip_type as BusTripType) || 'round_trip',
-                                route_prices: {
-                                  full_route: rp.full_route ?? p.price_general_idr ?? p.price_general ?? 0,
-                                  bandara_makkah: rp.bandara_makkah ?? 0,
-                                  bandara_madinah: rp.bandara_madinah ?? 0,
-                                  bandara_madinah_only: rp.bandara_madinah_only ?? 0
-                                }
+                                bus_kind: (p.meta?.bus_kind as BusKind) || 'bus',
+                                route_prices_by_trip: { one_way: one, return_only: ret, round_trip: round },
+                                price_per_vehicle_idr: p.meta?.price_per_vehicle_idr ?? 0,
+                                price_currency: 'IDR',
+                                default_quota: (typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0) ? p.meta.default_quota : ''
                               });
                             }}
                           >
@@ -554,7 +321,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
@@ -562,10 +329,149 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
         </Card>
       )}
 
+      {/* Modal Tambah produk bus — hanya form produk */}
+      {addBusModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addBusSaving && setAddBusModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-amber-50/80">
+              <h3 className="text-lg font-bold text-slate-900">Tambah produk bus</h3>
+              <button type="button" onClick={() => !addBusSaving && setAddBusModalOpen(false)} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nama produk <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={addBusForm.name}
+                  onChange={(e) => setAddBusForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
+                  placeholder="Contoh: Bus Mekkah–Madinah atau Hiace Madinah"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Jenis</label>
+                <div className="flex gap-3">
+                  {(['bus', 'hiace'] as const).map((k) => (
+                    <label key={k} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="bus_kind"
+                        checked={addBusForm.bus_kind === k}
+                        onChange={() => setAddBusForm((f) => ({ ...f, bus_kind: k }))}
+                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="text-sm text-slate-700">{BUS_KIND_LABELS[k]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Kuota</label>
+                <p className="text-xs text-slate-500 mb-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
+                <input
+                  type="number"
+                  min={0}
+                  value={addBusForm.default_quota === '' ? '' : addBusForm.default_quota}
+                  onChange={(e) => setAddBusForm((f) => ({ ...f, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                  className="w-full max-w-[140px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
+                  placeholder="Total Kuota Bus Operasi"
+                />
+              </div>
+              {addBusForm.bus_kind === 'hiace' && (
+                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Harga per mobil</label>
+                  <p className="text-xs text-slate-500 mb-2">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="add_price_currency" checked={addBusForm.price_currency === cur} onChange={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
+                        <span className="text-sm font-medium text-slate-700">{cur}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(() => {
+                      const idr = addBusForm.price_per_vehicle_idr ?? 0;
+                      const triple = fillFromSource('IDR', idr, currencyRates);
+                      const cur = addBusForm.price_currency;
+                      return (
+                        <>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
+                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) }))} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
+                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
+                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+              {addBusForm.bus_kind === 'bus' && (
+                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Harga</label>
+                  <p className="text-xs text-slate-500">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="add_bus_currency" checked={addBusForm.price_currency === cur} onChange={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
+                        <span className="text-sm font-medium text-slate-700">{cur}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(() => {
+                      const idr = addBusForm.route_prices_by_trip.round_trip ?? 0;
+                      const triple = fillFromSource('IDR', idr, currencyRates);
+                      const cur = addBusForm.price_currency;
+                      const setPrice = (valueIdr: number) => setAddBusForm((f) => ({
+                        ...f,
+                        route_prices_by_trip: { one_way: valueIdr, return_only: valueIdr, round_trip: valueIdr }
+                      }));
+                      return (
+                        <>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
+                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
+                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
+                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <Button variant="outline" onClick={() => setAddBusModalOpen(false)} disabled={addBusSaving}>Batal</Button>
+              <Button variant="primary" onClick={handleCreateBus} disabled={addBusSaving || !addBusForm.name.trim()}>
+                {addBusSaving ? 'Menyimpan...' : 'Simpan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Edit produk bus */}
       {editProductModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !editProductSaving && setEditProductModal(null)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-amber-50/80">
               <h3 className="text-lg font-bold text-slate-900">Edit produk bus</h3>
               <button type="button" onClick={() => !editProductSaving && setEditProductModal(null)} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
@@ -582,40 +488,112 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                 <textarea value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 resize-none" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Workflow perjalanan</label>
-                <div className="flex flex-wrap gap-2">
-                  {(['one_way', 'return_only', 'round_trip'] as const).map((tripType) => (
-                    <button
-                      key={tripType}
-                      type="button"
-                      onClick={() => setEditProductModal((m) => m ? { ...m, trip_type: tripType } : null)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${editProductModal.trip_type === tripType ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      {tripType === 'one_way' && <ArrowRight className="w-4 h-4" />}
-                      {tripType === 'return_only' && <ArrowLeft className="w-4 h-4" />}
-                      {tripType === 'round_trip' && <ArrowLeftRight className="w-4 h-4" />}
-                      {BUS_TRIP_LABELS[tripType]}
-                    </button>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Jenis</label>
+                <div className="flex gap-3">
+                  {(['bus', 'hiace'] as const).map((k) => (
+                    <label key={k} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="edit_bus_kind"
+                        checked={editProductModal.bus_kind === k}
+                        onChange={() => setEditProductModal((m) => m ? { ...m, bus_kind: k } : null)}
+                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="text-sm text-slate-700">{BUS_KIND_LABELS[k]}</span>
+                    </label>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Harga per rute (IDR)</label>
-                <div className="space-y-3">
-                  {BUS_ROUTE_KEYS.map((route) => (
-                    <div key={route} className="flex items-center gap-3">
-                      <span className="w-48 text-sm text-slate-600 shrink-0">{BUS_ROUTE_LABELS[route]}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={editProductModal.route_prices[route] || ''}
-                        onChange={(e) => setEditProductModal((m) => m ? { ...m, route_prices: { ...m.route_prices, [route]: Math.max(0, parseFloat(e.target.value) || 0) } } : null)}
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                  ))}
-                </div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Kuota default (kalender)</label>
+                <p className="text-xs text-slate-500 mb-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
+                <input
+                  type="number"
+                  min={0}
+                  value={editProductModal.default_quota === '' ? '' : editProductModal.default_quota}
+                  onChange={(e) => setEditProductModal((m) => m ? { ...m, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) } : null)}
+                  className="w-full max-w-[140px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
+                  placeholder="Opsional"
+                />
               </div>
+              {editProductModal.bus_kind === 'hiace' && (
+                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Harga per mobil</label>
+                  <p className="text-xs text-slate-500 mb-2">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="edit_price_currency" checked={editProductModal.price_currency === cur} onChange={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
+                        <span className="text-sm font-medium text-slate-700">{cur}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(() => {
+                      const idr = editProductModal.price_per_vehicle_idr ?? 0;
+                      const triple = fillFromSource('IDR', idr, currencyRates);
+                      const cur = editProductModal.price_currency;
+                      return (
+                        <>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
+                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) } : null)} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
+                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
+                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+              {editProductModal.bus_kind === 'bus' && (
+                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
+                  <label className="block text-sm font-medium text-slate-700">Harga</label>
+                  <p className="text-xs text-slate-500">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="edit_bus_currency" checked={editProductModal.price_currency === cur} onChange={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
+                        <span className="text-sm font-medium text-slate-700">{cur}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(() => {
+                      const idr = editProductModal.route_prices_by_trip.round_trip ?? 0;
+                      const triple = fillFromSource('IDR', idr, currencyRates);
+                      const cur = editProductModal.price_currency;
+                      const setPrice = (valueIdr: number) => setEditProductModal((m) => m ? {
+                        ...m,
+                        route_prices_by_trip: { one_way: valueIdr, return_only: valueIdr, round_trip: valueIdr }
+                      } : null);
+                      return (
+                        <>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
+                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
+                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
+                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
               <Button variant="outline" onClick={() => setEditProductModal(null)} disabled={editProductSaving}>Batal</Button>
@@ -625,15 +603,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
         </div>
       )}
 
-      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex gap-3">
-        <Bus className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
-        <div>
-          <h3 className="font-medium text-slate-900 text-sm">Order & tiket bus</h3>
-          <p className="text-sm text-slate-600 mt-0.5">
-            Order bus, tiket, dan status kedatangan/keberangkatan dikelola dengan akun <strong>role Bus Saudi cabang</strong>.
-          </p>
-        </div>
-      </div>
+      <p className="text-xs text-slate-500">Tiket bus dan status kedatangan/keberangkatan dikelola di Invoice oleh role Bus.</p>
     </div>
   );
 };

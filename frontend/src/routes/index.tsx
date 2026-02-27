@@ -11,12 +11,16 @@ import SuperAdminLogsPage from '../pages/dashboard/superadmin/SuperAdminLogsPage
 import SuperAdminMaintenancePage from '../pages/dashboard/superadmin/SuperAdminMaintenancePage';
 import ProductsPage from '../pages/dashboard/components/ProductsPage';
 import ProductHotelPage from '../pages/dashboard/components/ProductHotelPage';
+import HotelWorkPage from '../pages/dashboard/components/HotelWorkPage';
+import ProductVisaPage from '../pages/dashboard/components/ProductVisaPage';
 import VisaPage from '../pages/dashboard/components/VisaPage';
 import VisaWorkPage from '../pages/dashboard/components/VisaWorkPage';
 import TicketsPage from '../pages/dashboard/components/TicketsPage';
+import ProductTicketPage from '../pages/dashboard/components/ProductTicketPage';
 import TicketWorkPage from '../pages/dashboard/components/TicketWorkPage';
 import HotelsPage from '../pages/dashboard/components/HotelsPage';
 import BusPage from '../pages/dashboard/components/BusPage';
+import ProductBusPage from '../pages/dashboard/components/ProductBusPage';
 import PackagesPage from '../pages/dashboard/components/PackagesPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
@@ -94,8 +98,12 @@ const router = createBrowserRouter([
             element: <ProductHotelPage />
           },
           {
+            path: 'progress-hotel',
+            element: <HotelWorkPage />
+          },
+          {
             path: 'products/visa',
-            element: <VisaPage embedInProducts />
+            element: <ProductVisaPage />
           },
           {
             path: 'products/visa/pekerjaan',
@@ -103,7 +111,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'products/tickets',
-            element: <TicketsPage embedInProducts />
+            element: <ProductTicketPage />
           },
           {
             path: 'products/tickets/pekerjaan',
@@ -111,7 +119,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'products/bus',
-            element: <BusPage embedInProducts />
+            element: <ProductBusPage />
           },
           {
             path: 'products/packages',

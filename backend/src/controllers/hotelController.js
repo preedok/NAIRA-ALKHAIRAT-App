@@ -5,6 +5,48 @@ const { ORDER_ITEM_TYPE, ROLES } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
+/** Default jam check-in 14:00, check-out 12:00 */
+const DEFAULT_CHECK_IN_TIME = '14:00';
+const DEFAULT_CHECK_OUT_TIME = '12:00';
+
+/**
+ * Hitung jamaah_status dari tanggal + jam check-in/check-out vs now.
+ * Returns: 'belum_masuk' | 'sudah_masuk_room' | 'keluar_room'
+ */
+function getJamaahStatus(checkInDate, checkOutDate, checkInTime, checkOutTime) {
+  if (!checkInDate || !checkOutDate) return null;
+  const ciTime = (checkInTime || DEFAULT_CHECK_IN_TIME).toString().trim() || DEFAULT_CHECK_IN_TIME;
+  const coTime = (checkOutTime || DEFAULT_CHECK_OUT_TIME).toString().trim() || DEFAULT_CHECK_OUT_TIME;
+  const parse = (dateStr, timeStr) => {
+    const [h, m] = timeStr.split(':').map(n => parseInt(n, 10) || 0);
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setHours(h, m, 0, 0);
+    return d.getTime();
+  };
+  const now = Date.now();
+  const ci = parse(checkInDate, ciTime);
+  const co = parse(checkOutDate, coTime);
+  if (now < ci) return 'belum_masuk';
+  if (now < co) return 'sudah_masuk_room';
+  return 'keluar_room';
+}
+
+/** Attach jamaah_status to hotel item from meta + HotelProgress (auto dari tanggal & jam check-in/check-out). */
+function attachJamaahStatus(item) {
+  const meta = item.meta || {};
+  const prog = item.HotelProgress;
+  const checkInDate = prog?.check_in_date || meta.check_in;
+  const checkOutDate = prog?.check_out_date || meta.check_out;
+  const checkInTime = prog?.check_in_time || meta.check_in_time;
+  const checkOutTime = prog?.check_out_time || meta.check_out_time;
+  const status = getJamaahStatus(checkInDate, checkOutDate, checkInTime, checkOutTime);
+  if (status) {
+    item.jamaah_status = status;
+    if (prog) prog.jamaah_status = status;
+  }
+  return item;
+}
+
 /**
  * Hotel controller: scope cabang via getHotelBranchIds (sama seperti bus/tiket).
  * branch_id user TIDAK wajib: super_admin = semua cabang, admin_koordinator = wilayah,
@@ -107,6 +149,7 @@ const getInvoice = asyncHandler(async (req, res) => {
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
   const hotelItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item hotel' });
+  hotelItems.forEach(attachJamaahStatus);
 
   res.json({ success: true, data: invoice });
 });
@@ -171,6 +214,7 @@ const getOrder = asyncHandler(async (req, res) => {
   if (!branchIds.includes(order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
   const hotelItems = (order.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Order tidak memiliki item hotel' });
+  hotelItems.forEach(attachJamaahStatus);
 
   res.json({ success: true, data: order });
 });
@@ -276,7 +320,7 @@ const getDashboard = asyncHandler(async (req, res) => {
  */
 const updateItemProgress = asyncHandler(async (req, res) => {
   const { orderItemId } = req.params;
-  const { status, room_number, meal_status, check_in_date, check_out_date, notes } = req.body;
+  const { status, room_number, meal_status, check_in_date, check_out_date, check_in_time, check_out_time, notes } = req.body;
 
   const item = await OrderItem.findByPk(orderItemId, {
     include: [{ model: Order, as: 'Order' }, { model: HotelProgress, as: 'HotelProgress', required: false }]
@@ -288,11 +332,16 @@ const updateItemProgress = asyncHandler(async (req, res) => {
   const validStatuses = Object.values(HOTEL_PROGRESS_STATUS);
   if (status && !validStatuses.includes(status)) return res.status(400).json({ success: false, message: 'Status tidak valid' });
 
+  const meta = item.meta || {};
   let progress = item.HotelProgress;
   if (!progress) {
     progress = await HotelProgress.create({
       order_item_id: item.id,
       status: status || HOTEL_PROGRESS_STATUS.WAITING_CONFIRMATION,
+      check_in_date: check_in_date ?? meta.check_in,
+      check_out_date: check_out_date ?? meta.check_out,
+      check_in_time: check_in_time ?? meta.check_in_time ?? DEFAULT_CHECK_IN_TIME,
+      check_out_time: check_out_time ?? meta.check_out_time ?? DEFAULT_CHECK_OUT_TIME,
       updated_by: req.user.id
     });
   } else {
@@ -302,6 +351,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     if (meal_status !== undefined) updates.meal_status = ['pending', 'confirmed', 'completed'].includes(meal_status) ? meal_status : progress.meal_status;
     if (check_in_date !== undefined) updates.check_in_date = check_in_date;
     if (check_out_date !== undefined) updates.check_out_date = check_out_date;
+    if (check_in_time !== undefined) updates.check_in_time = check_in_time;
+    if (check_out_time !== undefined) updates.check_out_time = check_out_time;
     if (notes !== undefined) updates.notes = notes;
     await progress.update(updates);
   }

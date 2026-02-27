@@ -20,11 +20,20 @@ router.delete('/users/:id', adminPusatController.deleteUser);
 // Ketersediaan product (acuan general)
 router.put('/products/:id/availability', adminPusatController.setProductAvailability);
 
-// Hotel: data per musim & inventori kamar (admin pusat)
+// Hotel: pengaturan jumlah kamar (semua bulan vs per musim) + data per musim & inventori
+router.get('/products/:productId/hotel-availability-config', adminPusatController.getHotelAvailabilityConfig);
+router.put('/products/:productId/hotel-availability-config', adminPusatController.setHotelAvailabilityConfig);
 router.get('/products/:productId/seasons', adminPusatController.listSeasons);
 router.post('/products/:productId/seasons', adminPusatController.createSeason);
 router.patch('/products/:productId/seasons/:seasonId', adminPusatController.updateSeason);
 router.delete('/products/:productId/seasons/:seasonId', adminPusatController.deleteSeason);
 router.put('/products/:productId/seasons/:seasonId/inventory', adminPusatController.setSeasonInventory);
+
+// Visa: data per periode & kuota (kalender visa)
+router.get('/products/:productId/visa-seasons', adminPusatController.listVisaSeasons);
+router.post('/products/:productId/visa-seasons', adminPusatController.createVisaSeason);
+router.patch('/products/:productId/visa-seasons/:seasonId', adminPusatController.updateVisaSeason);
+router.delete('/products/:productId/visa-seasons/:seasonId', adminPusatController.deleteVisaSeason);
+router.put('/products/:productId/visa-seasons/:seasonId/quota', adminPusatController.setVisaSeasonQuota);
 
 module.exports = router;
