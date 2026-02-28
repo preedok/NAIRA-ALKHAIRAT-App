@@ -5,8 +5,8 @@ const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
-/** Default jam check-in 14:00, check-out 12:00 */
-const DEFAULT_CHECK_IN_TIME = '14:00';
+/** Default jam check-in 16:00, check-out 12:00 (otomatis sistem, tidak perlu pilih jam) */
+const DEFAULT_CHECK_IN_TIME = '16:00';
 const DEFAULT_CHECK_OUT_TIME = '12:00';
 
 /**
@@ -351,7 +351,8 @@ const getDashboard = asyncHandler(async (req, res) => {
  */
 const updateItemProgress = asyncHandler(async (req, res) => {
   const { orderItemId } = req.params;
-  const { status, room_number, meal_status, check_in_date, check_out_date, check_in_time, check_out_time, notes } = req.body;
+  const { status, room_number, meal_status, check_in_date, check_out_date, notes } = req.body;
+  // Jam check-in/check-out otomatis sistem (16:00 / 12:00), tidak dari body
 
   const item = await OrderItem.findByPk(orderItemId, {
     include: [{ model: Order, as: 'Order' }, { model: HotelProgress, as: 'HotelProgress', required: false }]
@@ -371,8 +372,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
       status: status || HOTEL_PROGRESS_STATUS.WAITING_CONFIRMATION,
       check_in_date: check_in_date ?? meta.check_in,
       check_out_date: check_out_date ?? meta.check_out,
-      check_in_time: check_in_time ?? meta.check_in_time ?? DEFAULT_CHECK_IN_TIME,
-      check_out_time: check_out_time ?? meta.check_out_time ?? DEFAULT_CHECK_OUT_TIME,
+      check_in_time: DEFAULT_CHECK_IN_TIME,
+      check_out_time: DEFAULT_CHECK_OUT_TIME,
       updated_by: req.user.id
     });
   } else {
@@ -382,8 +383,8 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     if (meal_status !== undefined) updates.meal_status = ['pending', 'confirmed', 'completed'].includes(meal_status) ? meal_status : progress.meal_status;
     if (check_in_date !== undefined) updates.check_in_date = check_in_date;
     if (check_out_date !== undefined) updates.check_out_date = check_out_date;
-    if (check_in_time !== undefined) updates.check_in_time = check_in_time;
-    if (check_out_time !== undefined) updates.check_out_time = check_out_time;
+    updates.check_in_time = DEFAULT_CHECK_IN_TIME;
+    updates.check_out_time = DEFAULT_CHECK_OUT_TIME;
     if (notes !== undefined) updates.notes = notes;
     await progress.update(updates);
   }

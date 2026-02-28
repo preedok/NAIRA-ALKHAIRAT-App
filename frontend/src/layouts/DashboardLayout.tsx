@@ -80,6 +80,12 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_koordinator', 'tiket_koordinator']
   },
   {
+    title: 'Progress Visa',
+    icon: <FileText className="w-5 h-5" />,
+    path: '/dashboard/progress-visa',
+    roles: ['super_admin', 'admin_koordinator', 'visa_koordinator']
+  },
+  {
     title: 'Bus Saudi',
     icon: <Bus className="w-5 h-5" />,
     path: '/dashboard/products/bus',

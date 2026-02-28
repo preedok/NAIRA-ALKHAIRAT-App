@@ -12,7 +12,7 @@ const Order = sequelize.define('Order', {
     allowNull: false,
     unique: true
   },
-  owner_id: {
+  travel_id: {
     type: DataTypes.UUID,
     allowNull: false,
     references: { model: 'users', key: 'id' },

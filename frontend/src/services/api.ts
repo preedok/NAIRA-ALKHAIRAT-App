@@ -193,7 +193,7 @@ export const hotelApi = {
   listOrders: (params?: { status?: string }) => api.get('/hotel/orders', { params }),
   getOrder: (id: string) => api.get(`/hotel/orders/${id}`),
   listProducts: () => api.get('/hotel/products'),
-  updateItemProgress: (orderItemId: string, body: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; check_in_time?: string; check_out_time?: string; notes?: string }) =>
+  updateItemProgress: (orderItemId: string, body: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; notes?: string }) =>
     api.patch(`/hotel/order-items/${orderItemId}/progress`, body)
 };
 

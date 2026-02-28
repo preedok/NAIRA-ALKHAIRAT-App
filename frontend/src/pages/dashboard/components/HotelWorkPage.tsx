@@ -130,7 +130,7 @@ const HotelWorkPage: React.FC = () => {
     }
   }, [invoiceIdParam]);
 
-  const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; check_in_time?: string; check_out_time?: string; notes?: string }) => {
+  const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
     try {
       await hotelApi.updateItemProgress(orderItemId, payload);
@@ -148,6 +148,17 @@ const HotelWorkPage: React.FC = () => {
   };
 
   const hotelItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'hotel') || [];
+  type HotelGroup = { key: string; productName: string; items: any[] };
+  const hotelByProduct = useMemo<HotelGroup[]>(() => {
+    return hotelItems.reduce((acc: HotelGroup[], item: any) => {
+      const pid = String(item.product_ref_id || item.product_id || '');
+      const name = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
+      const existing = acc.find((g) => g.key === pid);
+      if (existing) existing.items.push(item);
+      else acc.push({ key: pid || item.id, productName: name, items: [item] });
+      return acc;
+    }, []);
+  }, [hotelItems]);
   const byStatus = dashboard?.by_status ?? { waiting_confirmation: 0, confirmed: 0, room_assigned: 0, completed: 0 };
   const totalInvoices = dashboard?.total_orders ?? 0;
   const totalItems = dashboard?.total_hotel_items ?? 0;
@@ -193,132 +204,114 @@ const HotelWorkPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Progress Hotel</h1>
-          <p className="text-slate-600 text-sm mt-1 max-w-xl">Order hotel: status progress → penetapan room → pemberian nomor room. Status jamaah (sudah masuk / keluar room) otomatis dari tanggal & jam check-in/check-out.</p>
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-amber-100 rounded-2xl shadow-sm shrink-0">
+            <Hotel className="w-8 h-8 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Progress Hotel</h1>
+            <p className="text-slate-600 text-sm mt-1 max-w-xl">Kelola invoice berisi item hotel: status progress, penetapan room, nomor kamar. Check-in 16:00 & check-out 12:00 otomatis.</p>
+          </div>
         </div>
         <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
       </div>
 
-      {/* Stat cards — modern grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card className="p-4 rounded-2xl border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600">
-              <ClipboardList className="w-5 h-5" />
+      {/* Stat cards */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-slate-100 text-slate-600 shrink-0">
+                <ClipboardList className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
+                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalInvoices}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : totalInvoices}</p>
+          </Card>
+          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-amber-100 text-amber-600 shrink-0">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Item Hotel</p>
+                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalItems}</p>
+              </div>
             </div>
+          </Card>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Per Status Progress</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {STATUS_OPTIONS.map((opt) => (
+              <Card key={opt.value} className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl shrink-0 ${opt.value === 'waiting_confirmation' ? 'bg-amber-100 text-amber-600' : opt.value === 'confirmed' ? 'bg-sky-100 text-sky-600' : opt.value === 'room_assigned' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                    {opt.value === 'waiting_confirmation' ? <ListChecks className="h-6 w-6" /> : opt.value === 'confirmed' ? <Hotel className="h-6 w-6" /> : opt.value === 'room_assigned' ? <DoorOpen className="h-6 w-6" /> : <CheckCircle className="h-6 w-6" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-500">{opt.label}</p>
+                    <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : (byStatus[opt.value] ?? 0)}</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
           </div>
-        </Card>
-        <Card className="p-4 rounded-2xl border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Item Hotel</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : totalItems}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 rounded-2xl border border-amber-200 shadow-sm bg-gradient-to-br from-amber-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600">
-              <ListChecks className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide">Progress</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : (byStatus.waiting_confirmation ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 rounded-2xl border border-sky-200 shadow-sm bg-gradient-to-br from-sky-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
-              <Hotel className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-sky-700 uppercase tracking-wide">Penetapan room</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : (byStatus.confirmed ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 rounded-2xl border border-emerald-200 shadow-sm bg-gradient-to-br from-emerald-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
-              <DoorOpen className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-emerald-700 uppercase tracking-wide">No. room</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : (byStatus.room_assigned ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 rounded-2xl border border-emerald-200 shadow-sm bg-gradient-to-br from-emerald-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-emerald-700 uppercase tracking-wide">Selesai</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : (byStatus.completed ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
+        </div>
       </div>
 
       {/* Filter */}
-      <Card className="p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-          <Filter className="w-4 h-4" /> Filter
-        </h3>
-        <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Status Invoice</label>
-            <select value={filterInvoiceStatus} onChange={(e) => setFilterInvoiceStatus(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white">
+      <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+          <div className="flex-1 min-w-0 sm:min-w-[200px]">
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">Cari (invoice / order / owner / cabang)</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." className="w-full text-sm border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white" />
+            </div>
+          </div>
+          <div className="sm:w-44">
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Invoice</label>
+            <select value={filterInvoiceStatus} onChange={(e) => setFilterInvoiceStatus(e.target.value)} className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-amber-500 bg-white">
               <option value="">Semua status</option>
               {Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => (
                 <option key={val} value={val}>{lbl}</option>
               ))}
             </select>
           </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Status Progress</label>
-            <select value={filterProgressStatus} onChange={(e) => setFilterProgressStatus(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white">
+          <div className="sm:w-44">
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Progress</label>
+            <select value={filterProgressStatus} onChange={(e) => setFilterProgressStatus(e.target.value)} className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-amber-500 bg-white">
               <option value="">Semua progress</option>
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Cari (invoice / order / owner / cabang)</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." className="w-full text-sm border border-slate-300 rounded-lg pl-9 pr-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-            </div>
-          </div>
-          <div className="flex items-end">
-            <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }}>Reset filter</Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }} className="rounded-xl">Reset</Button>
         </div>
       </Card>
 
       {/* Table */}
-      <Card className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
+      <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/60">
           <h2 className="text-lg font-semibold text-slate-900">Daftar Invoice Hotel</h2>
-          <p className="text-sm text-slate-500 mt-0.5">{filteredInvoices.length} invoice · Gunakan filter di atas untuk mempersempit hasil</p>
+          <p className="text-sm text-slate-500 mt-0.5">{filteredInvoices.length} invoice</p>
         </div>
         {loading ? (
           <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
           </div>
         ) : !hasHotelInvoices ? (
-          <div className="py-12 text-center text-slate-500 px-4">Belum ada invoice dengan item hotel di cabang Anda. Buat order & invoice dari menu Order/Invoice terlebih dahulu.</div>
+          <div className="py-16 text-center">
+            <div className="p-5 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
+              <Hotel className="w-14 h-14 text-slate-400" />
+            </div>
+            <p className="text-slate-700 font-semibold">Belum ada invoice dengan item hotel</p>
+            <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">Buat order & invoice dari menu Invoice terlebih dahulu.</p>
+          </div>
         ) : (
           <Table
             columns={tableColumns}
@@ -340,9 +333,9 @@ const HotelWorkPage: React.FC = () => {
               const invStatusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
               const firstHotel = hotelItemsList[0];
               const checkInDate = firstHotel?.HotelProgress?.check_in_date ?? firstHotel?.meta?.check_in;
-              const checkInTime = firstHotel?.HotelProgress?.check_in_time ?? firstHotel?.meta?.check_in_time;
               const checkOutDate = firstHotel?.HotelProgress?.check_out_date ?? firstHotel?.meta?.check_out;
-              const checkOutTime = firstHotel?.HotelProgress?.check_out_time ?? firstHotel?.meta?.check_out_time;
+              const checkInTime = firstHotel?.HotelProgress?.check_in_time ?? firstHotel?.meta?.check_in_time ?? '16:00';
+              const checkOutTime = firstHotel?.HotelProgress?.check_out_time ?? firstHotel?.meta?.check_out_time ?? '12:00';
               const checkInDisplay = formatDateWithTime(checkInDate, checkInTime);
               const checkOutDisplay = formatDateWithTime(checkOutDate, checkOutTime);
               return (
@@ -360,7 +353,7 @@ const HotelWorkPage: React.FC = () => {
                   <td className="py-3 px-4 text-slate-600 text-sm whitespace-nowrap">{checkOutDisplay}</td>
                   <td className="py-3 px-4 text-slate-600 text-sm">{progressSummary}</td>
                   <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                    <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
+                    <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                       <Eye className="w-4 h-4 mr-1" /> Detail
                     </Button>
                   </td>
@@ -373,172 +366,181 @@ const HotelWorkPage: React.FC = () => {
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
         {detailInvoice && (
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80">
             {/* Header */}
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 p-5 pb-4 border-b border-slate-200 bg-white rounded-t-2xl">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-bold text-slate-900 truncate">
-                  {formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
-                </h2>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-slate-600">
-                  <span className="flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-slate-400 shrink-0" />
-                    {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
-                  </span>
-                  {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
+            <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-amber-50/80 via-white to-slate-50/50">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="p-3 bg-amber-100 rounded-xl shadow-sm shrink-0">
+                  <Hotel className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-slate-900 truncate">
+                    {formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-sm text-slate-600">
                     <span className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                      {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
+                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
                     </span>
-                  )}
+                    {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <button type="button" onClick={() => setSearchParams({})} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors shrink-0" aria-label="Tutup">
+              <button type="button" onClick={() => setSearchParams({})} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors shrink-0" aria-label="Tutup">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-5 space-y-5">
-              <p className="text-sm text-slate-500">
-                Sesuai order: tiap baris = satu tipe kamar × qty. Isi status & nomor kamar per unit (Kamar 1, Kamar 2, …).
-              </p>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+              {(() => {
+                type HotelGroup = { key: string; productName: string; items: any[] };
+                const hotelByProduct: HotelGroup[] = hotelItems.reduce((acc: HotelGroup[], item: any) => {
+                  const pid = String(item.product_ref_id || item.product_id || '');
+                  const name = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
+                  const existing = acc.find((g) => g.key === pid);
+                  if (existing) existing.items.push(item);
+                  else acc.push({ key: pid || item.id, productName: name, items: [item] });
+                  return acc;
+                }, []);
 
-              {hotelItems.map((item: any, idx: number) => {
-                const prog = item.HotelProgress;
-                const status = prog?.status || 'waiting_confirmation';
-                const mealStatus = prog?.meal_status || 'pending';
-                const jamaahStatus = item.jamaah_status || prog?.jamaah_status;
-                const qty = Math.max(1, Number(item.quantity) || 1);
-                const roomType = (item.meta?.room_type || '').toString() || '–';
-                const roomTypeLabel = ROOM_TYPE_LABELS[roomType] || roomType;
-                const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
-                const roomNumbersRaw = (prog?.room_number || '').trim();
-                const roomNumbersArr = roomNumbersRaw ? roomNumbersRaw.split(',').map((s: string) => s.trim()) : [];
-                const roomNumbersPadded = Array.from({ length: qty }, (_, i) => roomNumbersArr[i] ?? '');
-
-                const handleRoomNumbersBlur = () => {
-                  const inputs = document.querySelectorAll<HTMLInputElement>(`input[name^="room-${item.id}-"]`);
-                  const values = Array.from(inputs).map(inp => (inp.value ?? '').trim());
-                  const joined = values.join(', ');
-                  const normalizedSaved = roomNumbersRaw.split(',').map((s: string) => s.trim()).join(', ');
-                  if (joined !== normalizedSaved) handleUpdateProgress(item.id, { room_number: joined || undefined });
-                };
-
-                return (
-                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/40 shadow-sm overflow-hidden">
-                    {/* Card header: Nama Hotel + Tipe kamar + Qty */}
-                    <div className="px-4 py-3 bg-white border-b border-slate-100 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-100 text-primary-600 text-sm font-semibold shrink-0">
-                          {idx + 1}
+                return hotelByProduct.map((group) => (
+                  <div key={group.key} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    {/* Card header: Nama Hotel */}
+                    <div className="px-5 py-4 bg-amber-50/50 border-b border-slate-100">
+                      <div className="flex items-center gap-4">
+                        <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-amber-100 text-amber-600 shrink-0">
+                          <Hotel className="w-6 h-6" />
                         </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Nama Hotel</p>
-                          <p className="font-semibold text-slate-900 truncate">{productName}</p>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Hotel</p>
+                          <p className="font-bold text-slate-900 text-lg">{group.productName}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{group.items.length} tipe kamar</p>
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 pl-10">
-                        <span className="text-slate-600 text-sm">{roomTypeLabel} · × {qty} kamar</span>
-                        {jamaahStatus && (
-                          <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${jamaahStatus === 'keluar_room' ? 'bg-slate-100 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
-                          </span>
-                        )}
                       </div>
                     </div>
 
-                    <div className="p-4 space-y-4">
-                      {/* Status Pekerjaan (satu untuk seluruh baris ini) */}
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                          <ListChecks className="w-3.5 h-3.5 text-slate-400" /> Status Pekerjaan
-                        </label>
-                        <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={status} onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })} disabled={updatingId === item.id}>
-                          {STATUS_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                        </select>
-                      </div>
+                    <div className="p-5 space-y-5">
+                      {group.items.map((item: any) => {
+                        const prog = item.HotelProgress;
+                        const status = prog?.status || 'waiting_confirmation';
+                        const mealStatus = prog?.meal_status || 'pending';
+                        const jamaahStatus = item.jamaah_status || prog?.jamaah_status;
+                        const qty = Math.max(1, Number(item.quantity) || 1);
+                        const roomType = (item.meta?.room_type || '').toString() || '–';
+                        const roomTypeLabel = ROOM_TYPE_LABELS[roomType] || roomType;
+                        const roomNumbersRaw = (prog?.room_number || '').trim();
+                        const roomNumbersArr = roomNumbersRaw ? roomNumbersRaw.split(',').map((s: string) => s.trim()) : [];
+                        const roomNumbersPadded = Array.from({ length: qty }, (_, i) => roomNumbersArr[i] ?? '');
 
-                      {/* Nomor Kamar: tampil hanya ketika status = Pemberian nomor room */}
-                      {status === 'room_assigned' && (
-                        <div>
-                          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                            <DoorOpen className="w-3.5 h-3.5 text-slate-400" /> Nomor Kamar (per unit)
-                          </label>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                            {roomNumbersPadded.map((val, i) => (
-                              <div key={i}>
-                                <label className="block text-xs text-slate-500 mb-1">Kamar {i + 1}</label>
-                                <input
-                                  type="text"
-                                  name={`room-${item.id}-${i}`}
-                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400"
-                                  placeholder="No. kamar"
-                                  defaultValue={val}
-                                  onBlur={handleRoomNumbersBlur}
-                                  disabled={updatingId === item.id}
-                                />
+                        const handleRoomNumbersBlur = () => {
+                          const inputs = document.querySelectorAll<HTMLInputElement>(`input[name^="room-${item.id}-"]`);
+                          const values = Array.from(inputs).map(inp => (inp.value ?? '').trim());
+                          const joined = values.join(', ');
+                          const normalizedSaved = roomNumbersRaw.split(',').map((s: string) => s.trim()).join(', ');
+                          if (joined !== normalizedSaved) handleUpdateProgress(item.id, { room_number: joined || undefined });
+                        };
+
+                        return (
+                          <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 space-y-4">
+                            {/* Sub-header: Tipe kamar × qty */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                              <span className="font-semibold text-slate-900">{roomTypeLabel} × {qty} kamar</span>
+                              {jamaahStatus && (
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${jamaahStatus === 'keluar_room' ? 'bg-slate-200 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-4">
+                              {/* Status Pekerjaan */}
+                              <div className="rounded-lg bg-white p-4 border border-slate-100">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                  <ListChecks className="w-3.5 h-3.5 text-amber-500" /> Status Pekerjaan
+                                </label>
+                                <select className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500" value={status} onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })} disabled={updatingId === item.id}>
+                                  {STATUS_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                                </select>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Status Makan */}
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                          <UtensilsCrossed className="w-3.5 h-3.5 text-slate-400" /> Status Makan
-                        </label>
-                        <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={mealStatus} onChange={(e) => handleUpdateProgress(item.id, { meal_status: e.target.value })} disabled={updatingId === item.id}>
-                          {MEAL_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                        </select>
-                      </div>
+                              {/* Nomor Kamar — hanya saat status Pemberian nomor room */}
+                              {status === 'room_assigned' && (
+                                <div className="rounded-lg bg-white p-4 border border-slate-100">
+                                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                                    <DoorOpen className="w-3.5 h-3.5 text-amber-500" /> Nomor Kamar (per unit)
+                                  </label>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    {roomNumbersPadded.map((val, i) => (
+                                      <div key={i}>
+                                        <label className="block text-xs text-slate-500 mb-1">Kamar {i + 1}</label>
+                                        <input
+                                          type="text"
+                                          name={`room-${item.id}-${i}`}
+                                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 placeholder:text-slate-400"
+                                          placeholder="No. kamar"
+                                          defaultValue={val}
+                                          onBlur={handleRoomNumbersBlur}
+                                          disabled={updatingId === item.id}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
 
-                      {/* Check-in / Check-out — tanggal dari order (tampil saja), jam bisa diatur role hotel */}
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" /> Check-in & Check-out
-                        </label>
-                        <p className="text-xs text-slate-500 mb-3">Tanggal sudah ditetapkan di form order; di sini hanya tampil. Jam check-in/check-out dapat diatur di bawah.</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <p className="text-xs text-slate-500 font-medium">Check-in</p>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="flex-1 min-w-[120px] rounded-xl bg-slate-100 border border-slate-200 px-3 py-2.5 text-sm text-slate-700">
-                                {formatDate(prog?.check_in_date ?? item.meta?.check_in)}
-                              </span>
-                              <input type="time" className="w-[100px] border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" defaultValue={prog?.check_in_time ?? '14:00'} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.check_in_time ?? '14:00')) handleUpdateProgress(item.id, { check_in_time: v }); }} disabled={updatingId === item.id} />
+                              {/* Status Makan */}
+                              <div className="rounded-lg bg-white p-4 border border-slate-100">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                  <UtensilsCrossed className="w-3.5 h-3.5 text-amber-500" /> Status Makan
+                                </label>
+                                <select className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500" value={mealStatus} onChange={(e) => handleUpdateProgress(item.id, { meal_status: e.target.value })} disabled={updatingId === item.id}>
+                                  {MEAL_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                                </select>
+                              </div>
+
+                              {/* Check-in & Check-out — tanggal dari order, jam otomatis 16:00 / 12:00 */}
+                              <div className="rounded-lg bg-white p-4 border border-slate-100">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5 text-amber-500" /> Check-in & Check-out
+                                </label>
+                                <p className="text-xs text-slate-500 mb-3">Jam otomatis: CI 16:00, CO 12:00</p>
+                                <div className="flex flex-wrap gap-3">
+                                  <span className="inline-flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-100 px-4 py-2 text-sm font-medium text-slate-700">
+                                    CI: {formatDate(prog?.check_in_date ?? item.meta?.check_in)} <span className="text-amber-600">16:00</span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">
+                                    CO: {formatDate(prog?.check_out_date ?? item.meta?.check_out)} <span className="text-slate-600">12:00</span>
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Catatan */}
+                              <div className="rounded-lg bg-white p-4 border border-slate-100">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                  <FileText className="w-3.5 h-3.5 text-amber-500" /> Catatan
+                                </label>
+                                <textarea className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 placeholder:text-slate-400 resize-none" rows={2} placeholder="Catatan (opsional)" defaultValue={prog?.notes ?? ''} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v }); }} disabled={updatingId === item.id} />
+                              </div>
+
+                              {updatingId === item.id && (
+                                <p className="flex items-center gap-2 text-sm text-slate-500">
+                                  <RefreshCw className="w-4 h-4 animate-spin" /> Menyimpan...
+                                </p>
+                              )}
                             </div>
                           </div>
-                          <div className="space-y-2">
-                            <p className="text-xs text-slate-500 font-medium">Check-out</p>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="flex-1 min-w-[120px] rounded-xl bg-slate-100 border border-slate-200 px-3 py-2.5 text-sm text-slate-700">
-                                {formatDate(prog?.check_out_date ?? item.meta?.check_out)}
-                              </span>
-                              <input type="time" className="w-[100px] border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" defaultValue={prog?.check_out_time ?? '12:00'} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.check_out_time ?? '12:00')) handleUpdateProgress(item.id, { check_out_time: v }); }} disabled={updatingId === item.id} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Catatan */}
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                          <FileText className="w-3.5 h-3.5 text-slate-400" /> Catatan
-                        </label>
-                        <textarea className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400 resize-none" rows={2} placeholder="Catatan (opsional)" defaultValue={prog?.notes ?? ''} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v }); }} disabled={updatingId === item.id} />
-                      </div>
-
-                      {updatingId === item.id && (
-                        <p className="flex items-center gap-2 text-sm text-slate-500">
-                          <RefreshCw className="w-4 h-4 animate-spin" /> Menyimpan...
-                        </p>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
+                ));
+              })()}
             </div>
           </div>
         )}

@@ -3,14 +3,14 @@ const Wilayah = require('./Wilayah');
 const Provinsi = require('./Provinsi');
 const Branch = require('./Branch');
 const User = require('./User');
-const OwnerProfile = require('./OwnerProfile');
+const TravelProfile = require('./TravelProfile');
 const Order = require('./Order');
 const OrderItem = require('./OrderItem');
 const Invoice = require('./Invoice');
 const InvoiceFile = require('./InvoiceFile');
 const PaymentProof = require('./PaymentProof');
 const Refund = require('./Refund');
-const OwnerBalanceTransaction = require('./OwnerBalanceTransaction');
+const TravelBalanceTransaction = require('./TravelBalanceTransaction');
 const AuditLog = require('./AuditLog');
 const Notification = require('./Notification');
 const AppSetting = require('./AppSetting');
@@ -61,17 +61,17 @@ Branch.hasMany(User, { foreignKey: 'branch_id' });
 User.belongsTo(Wilayah, { foreignKey: 'wilayah_id', as: 'Wilayah' });
 Wilayah.hasMany(User, { foreignKey: 'wilayah_id' });
 
-// OwnerProfile -> User (pakai alias agar include dari OwnerProfile wajib: include: [{ model: User, as: 'User' }])
-OwnerProfile.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
-User.hasOne(OwnerProfile, { foreignKey: 'user_id', as: 'OwnerProfile' });
-OwnerProfile.belongsTo(Branch, { foreignKey: 'preferred_branch_id', as: 'PreferredBranch' });
-OwnerProfile.belongsTo(Branch, { foreignKey: 'assigned_branch_id', as: 'AssignedBranch' });
+// TravelProfile -> User (pakai alias agar include dari TravelProfile wajib: include: [{ model: User, as: 'User' }])
+TravelProfile.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
+User.hasOne(TravelProfile, { foreignKey: 'user_id', as: 'TravelProfile' });
+TravelProfile.belongsTo(Branch, { foreignKey: 'preferred_branch_id', as: 'PreferredBranch' });
+TravelProfile.belongsTo(Branch, { foreignKey: 'assigned_branch_id', as: 'AssignedBranch' });
 
 // Order
-Order.belongsTo(User, { foreignKey: 'owner_id', as: 'User' });
+Order.belongsTo(User, { foreignKey: 'travel_id', as: 'User' });
 Order.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
 Order.belongsTo(Branch, { foreignKey: 'branch_id' });
-User.hasMany(Order, { foreignKey: 'owner_id' });
+User.hasMany(Order, { foreignKey: 'travel_id' });
 Branch.hasMany(Order, { foreignKey: 'branch_id' });
 
 OrderItem.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
@@ -79,7 +79,7 @@ Order.hasMany(OrderItem, { foreignKey: 'order_id', as: 'OrderItems' });
 
 // Invoice
 Invoice.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
-Invoice.belongsTo(User, { foreignKey: 'owner_id', as: 'User' });
+Invoice.belongsTo(User, { foreignKey: 'travel_id', as: 'User' });
 Invoice.belongsTo(Branch, { foreignKey: 'branch_id' });
 Order.hasOne(Invoice, { foreignKey: 'order_id' });
 
@@ -96,13 +96,13 @@ InvoiceFile.belongsTo(User, { foreignKey: 'generated_by', as: 'GeneratedBy' });
 // Refund
 Refund.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 Refund.belongsTo(Order, { foreignKey: 'order_id' });
-Refund.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
+Refund.belongsTo(User, { foreignKey: 'travel_id', as: 'Travel' });
 Refund.belongsTo(User, { foreignKey: 'requested_by', as: 'RequestedBy' });
 Refund.belongsTo(User, { foreignKey: 'approved_by', as: 'ApprovedBy' });
 
-// Owner balance (saldo)
-User.hasMany(OwnerBalanceTransaction, { foreignKey: 'owner_id' });
-OwnerBalanceTransaction.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
+// Travel balance (saldo)
+User.hasMany(TravelBalanceTransaction, { foreignKey: 'travel_id' });
+TravelBalanceTransaction.belongsTo(User, { foreignKey: 'travel_id', as: 'Travel' });
 
 // AuditLog
 AuditLog.belongsTo(User, { foreignKey: 'user_id' });
@@ -120,7 +120,7 @@ Product.belongsTo(User, { foreignKey: 'created_by' });
 Product.hasMany(ProductPrice, { foreignKey: 'product_id', as: 'ProductPrices' });
 ProductPrice.belongsTo(Product, { foreignKey: 'product_id' });
 ProductPrice.belongsTo(Branch, { foreignKey: 'branch_id' });
-ProductPrice.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
+ProductPrice.belongsTo(User, { foreignKey: 'travel_id', as: 'Travel' });
 ProductPrice.belongsTo(User, { foreignKey: 'created_by', as: 'Creator' });
 Branch.hasMany(ProductPrice, { foreignKey: 'branch_id' });
 
@@ -232,14 +232,14 @@ const db = {
   Provinsi,
   Branch,
   User,
-  OwnerProfile,
+  TravelProfile,
   Order,
   OrderItem,
   Invoice,
   InvoiceFile,
   PaymentProof,
   Refund,
-  OwnerBalanceTransaction,
+  TravelBalanceTransaction,
   AuditLog,
   Notification,
   AppSetting,

@@ -115,12 +115,16 @@ const router = createBrowserRouter([
             element: <TicketWorkPage />
           },
           {
+            path: 'progress-visa',
+            element: <VisaWorkPage />
+          },
+          {
             path: 'products/visa',
             element: <ProductVisaPage />
           },
           {
             path: 'products/visa/pekerjaan',
-            element: <VisaWorkPage />
+            element: <Navigate to="/dashboard/progress-visa" replace />
           },
           {
             path: 'products/tickets',

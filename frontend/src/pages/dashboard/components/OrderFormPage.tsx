@@ -254,15 +254,12 @@ const OrderFormPage: React.FC = () => {
           const firstMeta=typeof grp[0]?.meta==='object'?grp[0].meta:{};
           const checkIn=(firstMeta.check_in??getVal(grp[0],'check_in')) as string|undefined;
           const checkOut=(firstMeta.check_out??getVal(grp[0],'check_out')) as string|undefined;
-          const checkInTime=(firstMeta.check_in_time as string|undefined)||'14:00';
-          const checkOutTime=(firstMeta.check_out_time as string|undefined)||'12:00';
+          // Jam check-in/check-out otomatis sistem (16:00 / 12:00), tidak perlu pilih di form
           rows.push({ id:oi.id||`row-${uid()}`, type:'hotel', product_id:productRefId, product_name:productName,
             quantity:grp.reduce((s:number,o:any)=>s+qty(o),0),
             unit_price:unitPrice,
             check_in:checkIn||undefined,
             check_out:checkOut||undefined,
-            check_in_time:checkInTime,
-            check_out_time:checkOutTime,
             room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId,'hotel'), with_meal:!!(m.with_meal??m.meal) }; })
           });
         }
@@ -425,8 +422,8 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
       else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
@@ -467,8 +464,8 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.check_in_time) meta.check_in_time=r.check_in_time; if(r.check_out_time) meta.check_out_time=r.check_out_time; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
       else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
     setSaving(true);
@@ -705,10 +702,12 @@ const OrderFormPage: React.FC = () => {
                                 <div>
                                   <label className={labelClass}>Check-in (tanggal)</label>
                                   <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_in ?? ''} onChange={e => updateRow(row.id, { check_in: e.target.value || undefined })} />
+                                  <p className="text-xs text-slate-500 mt-0.5">Jam otomatis 16:00</p>
                                 </div>
                                 <div>
                                   <label className={labelClass}>Check-out (tanggal)</label>
                                   <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_out ?? ''} onChange={e => updateRow(row.id, { check_out: e.target.value || undefined })} />
+                                  <p className="text-xs text-slate-500 mt-0.5">Jam otomatis 12:00</p>
                                 </div>
                                 {row.check_in && row.check_out && (
                                   <div className="self-end text-sm font-medium text-slate-700">

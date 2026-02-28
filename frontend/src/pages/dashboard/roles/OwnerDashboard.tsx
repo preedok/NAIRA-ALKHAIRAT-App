@@ -167,18 +167,25 @@ const OwnerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats - travel card style */}
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => (
-          <Card key={index} hover className="relative overflow-hidden travel-card">
-            <div className="flex items-start justify-between">
-              <div className={`p-2.5 rounded-xl bg-gradient-to-br ${stat.color} text-white`}>
+          <Card key={index} hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+            <div className="flex items-center gap-4">
+              <div className={`p-3.5 rounded-2xl shrink-0 ${
+                index === 0 ? 'bg-emerald-100 text-emerald-600' :
+                index === 1 ? 'bg-sky-100 text-sky-600' :
+                index === 2 ? 'bg-violet-100 text-violet-600' :
+                'bg-amber-100 text-amber-600'
+              }`}>
                 {stat.icon}
               </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{stat.title}</p>
+                <p className="text-xl font-bold tabular-nums text-slate-900 mt-1">{stat.value}</p>
+                <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{stat.subtitle}</p>
+              </div>
             </div>
-            <p className="text-xs text-stone-500 mt-3 mb-0.5">{stat.title}</p>
-            <p className="text-lg sm:text-xl font-bold text-stone-900">{stat.value}</p>
-            <p className="text-xs text-stone-500 line-clamp-1">{stat.subtitle}</p>
           </Card>
         ))}
       </div>

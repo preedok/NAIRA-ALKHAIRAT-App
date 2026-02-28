@@ -11,7 +11,7 @@ router.get('/', (req, res) => {
     docs: '/docs/MASTER_BUSINESS_PROCESS.md',
     endpoints: {
       auth: '/api/v1/auth (POST /login, GET /me)',
-      owners: '/api/v1/owners (register, upload-mou, list, verify-mou, verify-deposit, assign-branch, activate)',
+      travels: '/api/v1/travels (register, upload-mou, list, verify-mou, verify-deposit, assign-branch, activate)',
       branches: '/api/v1/branches',
       orders: '/api/v1/orders',
       invoices: '/api/v1/invoices'
@@ -25,7 +25,7 @@ router.get('/i18n/:locale', (req, res, next) => {
 });
 router.use('/auth', require('./auth'));
 router.use('/notifications', require('./notifications'));
-router.use('/owners', require('./owners'));
+router.use('/travels', require('./travels'));
 router.use('/branches', require('./branches'));
 router.use('/orders', require('./orders'));
 router.use('/invoices', require('./invoices'));

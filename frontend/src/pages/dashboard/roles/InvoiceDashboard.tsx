@@ -129,53 +129,53 @@ const InvoiceDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stat cards – data lengkap, tanpa gradasi */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
-              <Clock className="h-5 w-5" />
+        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-amber-100 text-amber-600 shrink-0">
+              <Clock className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Pending Verifikasi</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{pendingVerification.length}</p>
-              <p className="text-[10px] text-stone-500 mt-0.5">Bukti bayar perlu diverifikasi</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pending Verifikasi</p>
+              <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{pendingVerification.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Bukti bayar perlu diverifikasi</p>
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-              <CheckCircle className="h-5 w-5" />
+        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
+              <CheckCircle className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Terverifikasi Hari Ini</p>
-              <p className="text-lg font-bold tabular-nums text-stone-900">{verifiedToday.length} invoice</p>
-              <p className="text-[10px] text-stone-500 mt-0.5">{verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Terverifikasi Hari Ini</p>
+              <p className="text-xl font-bold tabular-nums text-slate-900 mt-1">{verifiedToday.length} invoice</p>
+              <p className="text-xs text-slate-500 mt-0.5">{verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'}</p>
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
-              <Receipt className="h-5 w-5" />
+        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-sky-100 text-sky-600 shrink-0">
+              <Receipt className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Total Invoice</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{summary?.total_invoices ?? invoices.length}</p>
-              <p className="text-[10px] text-stone-500 mt-0.5">{scopeLabel}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Invoice</p>
+              <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{summary?.total_invoices ?? invoices.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{scopeLabel}</p>
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
-              <AlertCircle className="h-5 w-5" />
+        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-red-100 text-red-600 shrink-0">
+              <AlertCircle className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Terblokir (DP Overdue)</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{blockedInvoices.length}</p>
-              <p className="text-[10px] text-stone-500 mt-0.5">Bisa diaktifkan kembali</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Terblokir (DP Overdue)</p>
+              <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{blockedInvoices.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Bisa diaktifkan kembali</p>
             </div>
           </div>
         </Card>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -14,6 +14,26 @@ import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, type InvoicesSummaryData } from '../../../services/api';
+
+/** Konfigurasi icon & warna card Per Status Invoice */
+const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode; bg: string }> = {
+  draft: { icon: <Pencil className="h-6 w-6" />, bg: 'bg-slate-100 text-slate-600' },
+  tentative: { icon: <Clock className="h-6 w-6" />, bg: 'bg-amber-100 text-amber-600' },
+  partial_paid: { icon: <CreditCard className="h-6 w-6" />, bg: 'bg-orange-100 text-orange-600' },
+  paid: { icon: <CheckCircle className="h-6 w-6" />, bg: 'bg-emerald-100 text-emerald-600' },
+  processing: { icon: <Send className="h-6 w-6" />, bg: 'bg-sky-100 text-sky-600' },
+  completed: { icon: <CheckCircle className="h-6 w-6" />, bg: 'bg-emerald-100 text-emerald-600' },
+  canceled: { icon: <X className="h-6 w-6" />, bg: 'bg-red-100 text-red-600' },
+  cancelled: { icon: <X className="h-6 w-6" />, bg: 'bg-red-100 text-red-600' },
+  overdue: { icon: <Clock className="h-6 w-6" />, bg: 'bg-red-100 text-red-600' },
+  refunded: { icon: <Receipt className="h-6 w-6" />, bg: 'bg-slate-100 text-slate-600' },
+  overpaid: { icon: <DollarSign className="h-6 w-6" />, bg: 'bg-amber-100 text-amber-600' }
+};
+
+/** Urutan tampilan card Per Status Invoice (status utama dulu). Status utama selalu ditampilkan sebagai card. */
+const PER_STATUS_ORDER = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled', 'overdue', 'draft', 'refunded', 'order_updated', 'overpaid', 'overpaid_transferred', 'overpaid_received', 'refund_canceled', 'overpaid_refund_pending'];
+/** Status yang selalu ditampilkan di card (meskipun count 0): Tagihan DP, Pembayaran DP, Lunas, Processing, Completed, Dibatalkan */
+const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled'];
 
 /** Base URL untuk file uploads (supaya foto bukti bayar tampil; pakai origin saat proxy) */
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -972,27 +992,45 @@ const OrdersInvoicesPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Per Status Invoice */}
-      <div className="grid grid-cols-1 gap-4">
-        <Card className="travel-card rounded-2xl border-slate-200/80 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
-          </h3>
-          {loadingSummary ? (
-            <p className="text-slate-500 text-sm">Memuat...</p>
-          ) : Object.keys(s.by_invoice_status).length === 0 ? (
-            <p className="text-slate-500 text-sm">Tidak ada data</p>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {Object.entries(s.by_invoice_status).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100 min-w-[120px]">
-                  <Badge variant={getStatusBadge(status)}>{INVOICE_STATUS_LABELS[status] || status}</Badge>
-                  <span className="font-bold text-slate-900">{Number(count).toLocaleString('id-ID')}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+      {/* Per Status Invoice - card statistic (Tagihan DP, Pembayaran DP, Dibatalkan, dll.) */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
+        </h3>
+        {loadingSummary ? (
+          <p className="text-slate-500 text-sm">Memuat...</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {(() => {
+              const keys: string[] = [...PER_STATUS_ALWAYS_SHOW];
+              Object.keys(s.by_invoice_status).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
+              return keys
+                .sort((a, b) => {
+                  const ia = PER_STATUS_ORDER.indexOf(a);
+                  const ib = PER_STATUS_ORDER.indexOf(b);
+                  if (ia === -1 && ib === -1) return a.localeCompare(b);
+                  if (ia === -1) return 1;
+                  if (ib === -1) return -1;
+                  return ia - ib;
+                })
+                .map((status) => {
+                  const count = s.by_invoice_status[status] ?? 0;
+                  const cfg = INVOICE_STATUS_CARD_CONFIG[status] || { icon: <Receipt className="h-6 w-6" />, bg: 'bg-slate-100 text-slate-600' };
+                  return (
+                    <Card key={status} className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white overflow-hidden">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-3.5 rounded-2xl shrink-0 ${cfg.bg}`}>{cfg.icon}</div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-slate-500 truncate">{INVOICE_STATUS_LABELS[status] || status}</p>
+                          <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{Number(count).toLocaleString('id-ID')}</p>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                });
+            })()}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -1123,8 +1161,8 @@ const OrdersInvoicesPage: React.FC = () => {
                           const pid = String(item.product_ref_id || item.product_id || '');
                           const name = item.Product?.name || (item as any).product_name || 'Hotel';
                           const status = labels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
-                          const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time);
-                          const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time);
+                          const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
+                          const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
                           if (!acc.some((g) => g.key === pid)) acc.push({ key: pid, name, status, checkIn, checkOut });
                           return acc;
                         }, [] as { key: string; name: string; status: string; checkIn: string; checkOut: string }[]);

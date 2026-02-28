@@ -17,7 +17,7 @@ const ROLES = {
   ROLE_BUS: 'role_bus',
   ROLE_INVOICE_SAUDI: 'role_invoice_saudi',
   ROLE_ACCOUNTING: 'role_accounting',
-  OWNER: 'owner',
+  TRAVEL: 'travel',
   // Deprecated (tetap di enum DB untuk kompatibilitas, tidak dipakai)
   ADMIN_PROVINSI: 'admin_provinsi',
   ADMIN_WILAYAH: 'admin_wilayah',
@@ -25,12 +25,12 @@ const ROLES = {
   ROLE_HANDLING: 'role_handling'
 };
 
-// PROSES A - Registrasi & Aktivasi Owner
+// PROSES A - Registrasi & Aktivasi Travel
 // Flow: Daftar (pilih cabang + upload bukti bayar) → admin verifikasi bukti bayar → admin aktivasi (cabang otomatis dari pendaftaran, generate password + MOU)
-/** Biaya MoU pendaftaran partner owner (IDR). Wajib dibayar & di-upload buktinya sebelum akun diaktifkan. */
+/** Biaya MoU pendaftaran partner travel (IDR). Wajib dibayar & di-upload buktinya sebelum akun diaktifkan. */
 const MOU_REGISTRATION_FEE_IDR = 25_000_000;
 
-const OWNER_STATUS = {
+const TRAVEL_STATUS = {
   PENDING_REGISTRATION_PAYMENT: 'pending_registration_payment',   // setelah daftar, wajib upload bukti bayar
   PENDING_REGISTRATION_VERIFICATION: 'pending_registration_verification', // bukti diupload, menunggu admin
   DEPOSIT_VERIFIED: 'deposit_verified',   // bukti disetujui
@@ -296,7 +296,7 @@ const BUSINESS_RULES = {
 module.exports = {
   ROLES,
   MOU_REGISTRATION_FEE_IDR,
-  OWNER_STATUS,
+  TRAVEL_STATUS,
   INVOICE_STATUS,
   REFUND_STATUS,
   REFUND_SOURCE,

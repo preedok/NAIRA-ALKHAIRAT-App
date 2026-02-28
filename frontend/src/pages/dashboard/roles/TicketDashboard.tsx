@@ -74,80 +74,99 @@ const TicketDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Dashboard Tiket</h1>
-          <p className="text-slate-600 mt-1">Rekap statistik pekerjaan tiket (penerbitan) cabang Anda.</p>
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-emerald-100 rounded-2xl shadow-sm shrink-0">
+            <Plane className="w-8 h-8 text-emerald-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Tiket</h1>
+            <p className="text-slate-600 text-sm mt-1">Rekap statistik pekerjaan tiket (penerbitan) cabang Anda.</p>
+          </div>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} className="rounded-xl">
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </Button>
       </div>
 
-      {/* Rekap statistik lengkap */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Total Invoice</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{totalInvoices}</p>
-              <p className="text-[10px] text-stone-500 mt-0.5">Invoice dengan item tiket</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-              <Ticket className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Item Tiket</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{totalItems}</p>
-              <p className="text-[10px] text-stone-500 mt-0.5">Item tiket di cabang</p>
-            </div>
-          </div>
-        </Card>
-        {STATUS_ORDER.map((status) => (
-          <Card key={status} hover className="travel-card">
-            <div className="flex items-center gap-3 p-4">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
-                {STATUS_ICONS[status] || <Ticket className="h-5 w-5" />}
+      {/* Stat cards - 2 utama + status breakdown */}
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-600 shrink-0">
+                <ClipboardList className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-600">{RECAP_STATUS_LABELS[status] || status}</p>
-                <p className="text-xl font-bold tabular-nums text-stone-900">{byStatus[status] ?? 0}</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Invoice</p>
+                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalInvoices}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Invoice dengan item tiket</p>
               </div>
             </div>
           </Card>
-        ))}
+          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
+                <Ticket className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Tiket</p>
+                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalItems}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Item tiket di cabang</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {STATUS_ORDER.map((status) => (
+              <Card
+                key={status}
+                className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-4 rounded-2xl shrink-0 ${STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
+                    {STATUS_ICONS[status] || <Ticket className="h-7 w-7" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-500">{RECAP_STATUS_LABELS[status] || status}</p>
+                    <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{byStatus[status] ?? 0}</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Progress & Perlu Tindakan */}
       {totalItems > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="border-primary-100 bg-primary-50/30">
-            <p className="text-sm font-medium text-stone-700 mb-2">Progress Penerbitan</p>
-            <div className="flex items-center gap-3">
-              <div className="h-3 flex-1 rounded-full bg-slate-200 overflow-hidden">
-                <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, completionPct)}%` }} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
+            <p className="text-sm font-semibold text-slate-700 mb-4">Progress Penerbitan</p>
+            <div className="flex items-center gap-4">
+              <div className="h-4 flex-1 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, completionPct)}%` }} />
               </div>
-              <span className="text-sm font-bold tabular-nums text-stone-800 min-w-[3rem]">{Math.min(100, completionPct)}%</span>
+              <span className="text-lg font-bold tabular-nums text-slate-900 min-w-[3.5rem]">{Math.min(100, completionPct)}%</span>
             </div>
-            <p className="text-xs text-stone-500 mt-1.5">Item dengan status Tiket Terbit</p>
+            <p className="text-xs text-slate-500 mt-3">Item dengan status Tiket Terbit</p>
           </Card>
           {pendingList.length > 0 && (
-            <Card className="border-amber-200/60 bg-amber-50/30">
-              <h3 className="text-sm font-semibold text-stone-800 mb-3">Perlu Tindakan (Update Status & Upload Dokumen)</h3>
-              <div className="space-y-3">
+            <Card className="p-6 rounded-2xl border border-amber-200/80 shadow-sm bg-amber-50/40">
+              <h3 className="text-sm font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600" /> Perlu Tindakan
+              </h3>
+              <p className="text-xs text-slate-600 mb-4">Update status & upload dokumen tiket terbit.</p>
+              <div className="space-y-3 max-h-[280px] overflow-y-auto">
                 {pendingList.slice(0, 10).map((p: any) => (
-                  <div key={p.order_item_id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
-                    <div>
-                      <p className="font-semibold text-slate-900">{p.invoice_number || p.order_number}</p>
+                  <div key={p.order_item_id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white rounded-xl border border-slate-100 shadow-sm">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{p.invoice_number || p.order_number}</p>
                       <p className="text-sm text-slate-600">{p.owner_name} · Qty: {p.quantity}</p>
-                      <p className="text-xs text-slate-500 mt-1">Status: {RECAP_STATUS_LABELS[p.status] || p.status}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Status: {RECAP_STATUS_LABELS[p.status] || p.status}</p>
                     </div>
                     <Button size="sm" onClick={() => {
                       if (p.invoice_id) {
@@ -158,13 +177,13 @@ const TicketDashboard: React.FC = () => {
                       } else {
                         navigate('/dashboard/progress-tiket');
                       }
-                    }}>
-                      <Eye className="w-4 h-4 mr-2" /> Kerjakan
+                    }} className="rounded-xl shrink-0">
+                      <Eye className="w-4 h-4 mr-1" /> Kerjakan
                     </Button>
                   </div>
                 ))}
               </div>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/dashboard/progress-tiket')}>
+              <Button variant="outline" size="sm" className="mt-4 rounded-xl w-full sm:w-auto" onClick={() => navigate('/dashboard/progress-tiket')}>
                 Buka Progress Tiket <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </Card>
@@ -172,13 +191,18 @@ const TicketDashboard: React.FC = () => {
         </div>
       )}
 
-      <Card>
+      <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Progress Tiket</h3>
-            <p className="text-sm text-slate-600 mt-0.5">Kelola invoice tiket, update status, dan upload dokumen terbit di menu Progress Tiket.</p>
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
+              <Plane className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Progress Tiket</h3>
+              <p className="text-sm text-slate-600 mt-0.5">Kelola invoice tiket, update status, dan upload dokumen terbit di menu Progress Tiket.</p>
+            </div>
           </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-tiket')}>
+          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-tiket')} className="rounded-xl">
             <Plane className="w-4 h-4 mr-2" /> Buka Progress Tiket
           </Button>
         </div>

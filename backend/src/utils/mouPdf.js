@@ -1,6 +1,6 @@
 /**
- * Generate MOU (Memorandum of Understanding) PDF untuk owner yang diaktivasi.
- * Berisi data legal, data owner, dan password baru yang digenerate sistem.
+ * Generate MOU (Memorandum of Understanding) PDF untuk travel yang diaktivasi.
+ * Berisi data legal, data travel, dan password baru yang digenerate sistem.
  */
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -12,18 +12,19 @@ function formatDate(d) {
 }
 
 /**
- * Generate MOU PDF ke file; return path relatif untuk disimpan di owner_profiles.mou_generated_url
- * @param {object} opts - { user, ownerProfile, newPassword, assignedBranchName }
- * @returns {Promise<string>} - URL path e.g. /uploads/mou/MOU_Generated_Owner_xxx.pdf
+ * Generate MOU PDF ke file; return path relatif untuk disimpan di travel_profiles.mou_generated_url
+ * @param {object} opts - { user, travelProfile (or ownerProfile), newPassword, assignedBranchName }
+ * @returns {Promise<string>} - URL path e.g. /uploads/mou/MOU_Generated_Travel_xxx.pdf
  */
 async function generateMouPdf(opts) {
-  const { user, ownerProfile, newPassword, assignedBranchName } = opts;
+  const { user, newPassword, assignedBranchName } = opts;
+  const profile = opts.travelProfile || opts.ownerProfile || {};
   const margin = 50;
   const doc = new PDFDocument({ size: 'A4', margin });
   const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.MOU);
   const { date, time } = uploadConfig.dateTimeForFilename();
   const userId6 = (user.id || '').toString().slice(-6);
-  const filename = `MOU_Generated_Owner_${userId6}_${date}_${time}.pdf`;
+  const filename = `MOU_Generated_Travel_${userId6}_${date}_${time}.pdf`;
   const filepath = path.join(dir, filename);
   const out = fs.createWriteStream(filepath);
   doc.pipe(out);
@@ -33,7 +34,7 @@ async function generateMouPdf(opts) {
 
   doc.fontSize(18).fillColor('#0f172a').text('MEMORANDUM OF UNDERSTANDING (MoU)', margin, y, { align: 'center' });
   y += 28;
-  doc.fontSize(11).fillColor('#475569').text('Kerjasama Partner Travel / Owner dengan Bintang Global Group', margin, y, { align: 'center' });
+  doc.fontSize(11).fillColor('#475569').text('Kerjasama Partner Travel dengan Bintang Global Group', margin, y, { align: 'center' });
   y += 36;
 
   doc.fontSize(10).fillColor('#334155');
@@ -42,8 +43,8 @@ async function generateMouPdf(opts) {
 
   const paragraphs = [
     'Dengan ini kedua belah pihak menyatakan sepakat untuk menjalin kerjasama dalam rangka penjualan paket umroh dan travel yang dikelola oleh Bintang Global Group.',
-    `Pihak Pertama (Partner/Owner): ${user.name || '-'}${user.company_name ? `, ${user.company_name}` : ''}.`,
-    `Alamat: ${ownerProfile.address || '-'}. Kontak: ${ownerProfile.whatsapp || user.phone || user.email || '-'}.`,
+    `Pihak Pertama (Partner Travel): ${user.name || '-'}${user.company_name ? `, ${user.company_name}` : ''}.`,
+    `Alamat: ${profile.address || '-'}. Kontak: ${profile.whatsapp || user.phone || user.email || '-'}.`,
     `Pihak Kedua: Bintang Global Group. Cabang terdaftar: ${assignedBranchName || '-'}.`,
     'Seluruh transaksi, pembayaran, dan ketentuan mengikuti kebijakan Bintang Global Group. Partner wajib mematuhi prosedur dan tata kelola yang berlaku.',
     'Dokumen ini digenerate secara otomatis oleh sistem dan berlaku sebagai surat perjanjian kerjasama setelah akun partner diaktivasi oleh Admin Pusat.'
