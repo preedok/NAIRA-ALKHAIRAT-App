@@ -412,6 +412,12 @@ const STYLES = `
     transition:all .2s;
   }
 
+  /* Form grid: stack on mobile */
+  .l-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:520px) {
+    .l-form-grid { grid-template-columns:1fr; }
+  }
+
   /* Mobile responsive */
   @media (max-width:768px) {
     .l-hide-mob { display:none !important; }
@@ -502,6 +508,8 @@ const LandingPage: React.FC = () => {
   const [scrolled, setScrolled]       = useState(false);
   const [mobileOpen, setMobileOpen]   = useState(false);
   const [testiIdx, setTestiIdx]       = useState(0);
+  const [contactForm, setContactForm] = useState({ nama: '', email: '', telepon: '', pesan: '' });
+  const [contactSent, setContactSent]  = useState(false);
   const injected = useRef(false);
 
   // Inject styles once
@@ -544,6 +552,13 @@ const LandingPage: React.FC = () => {
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setMobileOpen(false);
+  };
+
+  const handleContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactForm.nama.trim() || !contactForm.email.trim() || !contactForm.pesan.trim()) return;
+    setContactSent(true);
+    setContactForm({ nama: '', email: '', telepon: '', pesan: '' });
   };
 
   if (!isLoading && isAuthenticated) return null;
@@ -1380,10 +1395,10 @@ const LandingPage: React.FC = () => {
             <SectionHeader
               tag="Kontak" tagIcon={<Phone size={11}/>}
               title={<>Hubungi <span className="l-sky-text">Tim Kami</span></>}
-              sub="Butuh bantuan atau ingin diskusi kerja sama? Silakan hubungi melalui channel berikut."
+              sub="Butuh bantuan atau ingin diskusi kerja sama? Isi form atau hubungi melalui channel berikut."
             />
           </div>
-          <div data-reveal style={{ opacity:0, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:20 }}>
+          <div data-reveal style={{ opacity:0, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:20, marginBottom:48 }}>
             {[
               { icon: Phone, label: 'Telepon', value: '021-XXXX-XXXX', desc: 'Senin–Sabtu, 08:00–17:00 WIB' },
               { icon: Mail, label: 'Email', value: 'partner@bintangglobal.id', desc: 'Balasan dalam 1×24 jam' },
@@ -1405,6 +1420,59 @@ const LandingPage: React.FC = () => {
                 <div style={{ fontSize:12, color:T.dim }}>{desc}</div>
               </div>
             ))}
+          </div>
+
+          {/* Form Hubungi Kami */}
+          <div data-reveal style={{ opacity:0, maxWidth:560, margin:'0 auto' }}>
+            <div style={{
+              padding:32, borderRadius:20, border:'1px solid rgba(56,189,248,0.15)', background:'rgba(13,21,38,0.6)',
+              backdropFilter:'blur(16px)', boxShadow:'0 24px 60px rgba(0,0,0,0.3)',
+            }}>
+              <div style={{ fontSize:14, fontWeight:700, color:T.sky, marginBottom:20, letterSpacing:'0.06em', textTransform:'uppercase' }}>Form Hubungi Kami</div>
+              {contactSent ? (
+                <div style={{ padding:24, textAlign:'center', color:'#34d399', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexDirection:'column' }}>
+                  <CheckCircle size={40}/>
+                  <span>Pesan Anda telah terkirim. Tim kami akan menghubungi dalam 1×24 jam.</span>
+                  <button type="button" className="l-btn-g" style={{ marginTop:12 }} onClick={() => setContactSent(false)}>Kirim pesan lagi</button>
+                </div>
+              ) : (
+                <form onSubmit={handleContactSubmit} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                  <div>
+                    <label style={{ display:'block', fontSize:12, fontWeight:600, color:T.sub, marginBottom:6 }}>Nama *</label>
+                    <input type="text" required value={contactForm.nama} onChange={e => setContactForm(f => ({ ...f, nama: e.target.value }))}
+                      placeholder="Nama lengkap atau perusahaan"
+                      style={{ width:'100%', padding:'12px 16px', borderRadius:12, border:'1px solid rgba(56,189,248,0.2)', background:'rgba(255,255,255,0.04)', color:'white', fontSize:14, outline:'none' }}
+                    />
+                  </div>
+                  <div className="l-form-grid">
+                    <div>
+                      <label style={{ display:'block', fontSize:12, fontWeight:600, color:T.sub, marginBottom:6 }}>Email *</label>
+                      <input type="email" required value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
+                        placeholder="email@contoh.com"
+                        style={{ width:'100%', padding:'12px 16px', borderRadius:12, border:'1px solid rgba(56,189,248,0.2)', background:'rgba(255,255,255,0.04)', color:'white', fontSize:14, outline:'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display:'block', fontSize:12, fontWeight:600, color:T.sub, marginBottom:6 }}>Telepon</label>
+                      <input type="tel" value={contactForm.telepon} onChange={e => setContactForm(f => ({ ...f, telepon: e.target.value }))}
+                        placeholder="08xx-xxxx-xxxx"
+                        style={{ width:'100%', padding:'12px 16px', borderRadius:12, border:'1px solid rgba(56,189,248,0.2)', background:'rgba(255,255,255,0.04)', color:'white', fontSize:14, outline:'none' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:12, fontWeight:600, color:T.sub, marginBottom:6 }}>Pesan *</label>
+                    <textarea required rows={4} value={contactForm.pesan} onChange={e => setContactForm(f => ({ ...f, pesan: e.target.value }))}
+                      placeholder="Tulis pesan atau pertanyaan Anda..."
+                      style={{ width:'100%', padding:'12px 16px', borderRadius:12, border:'1px solid rgba(56,189,248,0.2)', background:'rgba(255,255,255,0.04)', color:'white', fontSize:14, outline:'none', resize:'vertical', fontFamily:'inherit' }}
+                    />
+                  </div>
+                  <button type="submit" className="l-btn-p" style={{ alignSelf:'flex-start', padding:'14px 28px' }}>
+                    <span className="shine"/> Kirim Pesan
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       </section>
