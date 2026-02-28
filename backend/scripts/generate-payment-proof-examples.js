@@ -9,7 +9,7 @@ const fs = require('fs');
 const { buildPaymentProofPdfBuffer } = require('../src/utils/paymentProofPdf');
 const { SUBDIRS, getDir } = require('../src/config/uploads');
 
-// Data sesuai seeder 20250215000003-example-workflow.js
+// Data sesuai demo/seed (orders & invoices)
 const PAYMENT_PROOFS = [
   {
     filename: 'BUKTI_INV-2026-00001_DP_1650000_IDR_20260215_120000.pdf',

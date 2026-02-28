@@ -15,8 +15,6 @@
     "seed:undo": "sequelize-cli db:seed:undo:all",
     "seed:branches": "sequelize-cli db:seed --seed 20250217000000-branches-indonesia.js",
     "seed:branches:undo": "sequelize-cli db:seed:undo --seed 20250217000000-branches-indonesia.js",
-    "seed:examples-25": "sequelize-cli db:seed --seed 20250217000005-example-25-invoices.js",
-    "seed:examples-25:undo": "sequelize-cli db:seed:undo --seed 20250217000005-example-25-invoices.js",
     "seed:accounting": "sequelize-cli db:seed --seed 20250217000010-accounting-defaults.js",
     "seed:accounting:undo": "sequelize-cli db:seed:undo --seed 20250217000010-accounting-defaults.js",
     "seed:workflow-koordinator": "node scripts/seed-workflow-koordinator-users.js",

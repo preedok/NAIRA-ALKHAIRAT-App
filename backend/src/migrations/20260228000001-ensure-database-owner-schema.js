@@ -2,7 +2,7 @@
 
 /**
  * Ensure database schema matches API: owner_profiles, owner_id, role 'owner'.
- * If DB was migrated to travel_* (by 20260226000030), revert to owner_*.
+ * If DB has travel_* tables/columns, revert to owner_*.
  * Idempotent: safe to run when DB already has owner schema.
  */
 module.exports = {
@@ -17,7 +17,7 @@ module.exports = {
       return;
     }
 
-    // Revert travel -> owner (same as down() of 20260226000030)
+    // Revert travel -> owner
     await queryInterface.sequelize.query("UPDATE users SET role = 'owner' WHERE role = 'travel'");
 
     try {
