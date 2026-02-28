@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, TravelProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, TravelBalanceTransaction } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
 const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES } = require('../constants');
 const { getEffectivePrice } = require('./productController');
@@ -33,11 +33,11 @@ function getNights(checkIn, checkOut) {
 const ALLOWED_SORT = ['order_number', 'created_at', 'total_amount', 'status'];
 
 const list = asyncHandler(async (req, res) => {
-  const { status, branch_id, travel_id, limit = 25, page = 1, sort_by, sort_order, date_from, date_to, order_number, provinsi_id, wilayah_id } = req.query;
+  const { status, branch_id, owner_id, limit = 25, page = 1, sort_by, sort_order, date_from, date_to, order_number, provinsi_id, wilayah_id } = req.query;
   const where = {};
   if (status) where.status = status;
   if (branch_id) where.branch_id = branch_id;
-  if (travel_id) where.travel_id = travel_id;
+  if (owner_id) where.owner_id = owner_id;
   if (order_number && String(order_number).trim()) {
     where.order_number = { [Op.iLike]: `%${String(order_number).trim()}%` };
   }
@@ -50,7 +50,7 @@ const list = asyncHandler(async (req, res) => {
       where.created_at[Op.lte] = d;
     }
   }
-  if (req.user.role === 'travel') where.travel_id = req.user.id;
+  if (req.user.role === 'owner') where.owner_id = req.user.id;
 
   // Role invoice Saudi / super_admin / admin_pusat: lihat semua order (tanpa filter branch dari role)
   const isKoordinatorOrInvoiceKoordinator = ['admin_koordinator', 'invoice_koordinator'].includes(req.user.role);
@@ -146,17 +146,17 @@ async function visaRequiresHotel(items) {
  * Validasi: visa wajib hotel dari product.meta.require_hotel; bus min pack penalty from business rules.
  */
 const create = asyncHandler(async (req, res) => {
-  const { items, branch_id, travel_id, notes } = req.body;
-  const effectiveTravelId = travel_id || req.user.id;
+  const { items, branch_id, owner_id, notes } = req.body;
+  const effectiveOwnerId = owner_id || req.user.id;
   // Gunakan branch_id dari body hanya jika benar-benar string non-kosong (body tanpa branch_id = undefined)
   const bodyBranchOk = typeof branch_id === 'string' && branch_id.trim() !== '';
   let effectiveBranchId = bodyBranchOk ? branch_id.trim() : (req.user.branch_id || null);
   const isInvoiceRole = ['invoice_koordinator', 'role_invoice_saudi'].includes(req.user.role);
 
-  // Untuk travel: ambil assigned_branch_id dari TravelProfile jika belum ada branch_id
-  if (req.user.role === 'travel' && !effectiveBranchId) {
+  // Untuk owner: ambil assigned_branch_id dari OwnerProfile jika belum ada branch_id
+  if (req.user.role === 'owner' && !effectiveBranchId) {
     try {
-      const profile = await TravelProfile.findOne({
+      const profile = await OwnerProfile.findOne({
         where: { user_id: req.user.id },
         attributes: ['assigned_branch_id'],
         raw: true
@@ -173,11 +173,11 @@ const create = asyncHandler(async (req, res) => {
     }
   }
 
-  // Role invoice (koordinator/saudi): jika kirim travel_id tanpa branch_id, ambil cabang dari travel tersebut
-  if (isInvoiceRole && effectiveTravelId && !effectiveBranchId) {
+  // Role invoice (koordinator/saudi): jika kirim owner_id tanpa branch_id, ambil cabang dari owner tersebut
+  if (isInvoiceRole && effectiveOwnerId && !effectiveBranchId) {
     try {
-      const profile = await TravelProfile.findOne({
-        where: { user_id: effectiveTravelId },
+      const profile = await OwnerProfile.findOne({
+        where: { user_id: effectiveOwnerId },
         attributes: ['assigned_branch_id'],
         raw: true
       });
@@ -208,11 +208,11 @@ const create = asyncHandler(async (req, res) => {
       effectiveBranchId,
       branchIdStr
     });
-    const msg = req.user.role === 'travel'
-      ? 'Travel belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
+    const msg = req.user.role === 'owner'
+      ? 'Owner belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
       : isInvoiceRole
-        ? 'Travel yang dipilih belum memiliki cabang. Pilih travel lain atau hubungi admin untuk menetapkan cabang.'
-        : 'Branch/cabang wajib. Pilih cabang atau pastikan akun travel sudah di-assign cabang.';
+        ? 'Owner yang dipilih belum memiliki cabang. Pilih owner lain atau hubungi admin untuk menetapkan cabang.'
+        : 'Branch/cabang wajib. Pilih cabang atau pastikan akun owner sudah di-assign cabang.';
     return res.status(400).json({ success: false, message: msg });
   }
   
@@ -329,7 +329,7 @@ const create = asyncHandler(async (req, res) => {
   try {
     order = await Order.create({
       order_number: generateOrderNumber(),
-      travel_id: effectiveTravelId,
+      owner_id: effectiveOwnerId,
       branch_id: finalBranchId,
       total_jamaah: totalJamaah,
       subtotal,
@@ -346,9 +346,9 @@ const create = asyncHandler(async (req, res) => {
       if (field === 'branch_id' || (createErr.message && createErr.message.includes('branch_id'))) {
         return res.status(400).json({
           success: false,
-          message: req.user.role === 'travel'
-            ? 'Travel belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
-            : 'Branch/cabang wajib. Pilih cabang atau pastikan akun travel sudah di-assign cabang.'
+          message: req.user.role === 'owner'
+            ? 'Owner belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
+            : 'Branch/cabang wajib. Pilih cabang atau pastikan akun owner sudah di-assign cabang.'
         });
       }
     }
@@ -365,7 +365,7 @@ const create = asyncHandler(async (req, res) => {
   const saveAsDraft = req.body.save_as_draft === true || req.body.save_as_draft === 'true';
   if (!saveAsDraft) {
     const orderForInvoice = await Order.findByPk(order.id, {
-      attributes: ['id', 'order_number', 'travel_id', 'branch_id', 'total_amount']
+      attributes: ['id', 'order_number', 'owner_id', 'branch_id', 'total_amount']
     });
     if (orderForInvoice) {
       try {
@@ -409,7 +409,7 @@ const getById = asyncHandler(async (req, res) => {
     ]
   });
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  if (req.user.role === 'travel' && order.travel_id !== req.user.id) {
+  if (req.user.role === 'owner' && order.owner_id !== req.user.id) {
     return res.status(403).json({ success: false, message: 'Akses ditolak' });
   }
   res.json({ success: true, data: order });
@@ -423,9 +423,9 @@ const getById = asyncHandler(async (req, res) => {
 const update = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id, { include: [{ model: OrderItem, as: 'OrderItems' }] });
   if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  const canUpdate = ['invoice_koordinator', 'role_invoice_saudi'].includes(req.user.role) || (req.user.role === 'travel' && order.travel_id === req.user.id);
+  const canUpdate = ['invoice_koordinator', 'role_invoice_saudi'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
   if (!canUpdate) {
-    return res.status(403).json({ success: false, message: 'Hanya travel (invoice sendiri) atau invoice koordinator/Saudi yang dapat mengubah order' });
+    return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau invoice koordinator/Saudi yang dapat mengubah order' });
   }
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa diubah saat draft/tentative/confirmed/processing' });

@@ -33,6 +33,5 @@ android/build/
 **/gradle/wrapper/*.zip
 
 # misc
-.env
 *.keystore
 *.jks

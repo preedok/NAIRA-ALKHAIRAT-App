@@ -100,4 +100,6 @@ async function sendMouToTravel(toEmail, travelName, newPassword, mouFilePath) {
   }
 }
 
-module.exports = { sendMouToTravel, getTransporter };
+/** Alias for owner terminology */
+const sendMouToOwner = sendMouToTravel;
+module.exports = { sendMouToTravel, sendMouToOwner, getTransporter };

@@ -2,8 +2,8 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
 /**
- * Price layers: general (pusat, branch_id null), branch override (branch_id set), special travel (travel_id set).
- * Role invoice can set special for travel; admin cabang can set branch override.
+ * Price layers: general (pusat, branch_id null), branch override (branch_id set), special owner (owner_id set).
+ * Role invoice can set special for owner; admin cabang can set branch override.
  */
 const ProductPrice = sequelize.define('ProductPrice', {
   id: {
@@ -22,10 +22,10 @@ const ProductPrice = sequelize.define('ProductPrice', {
     references: { model: 'branches', key: 'id' },
     comment: 'null = pusat general'
   },
-  travel_id: {
+  owner_id: {
     type: DataTypes.UUID,
     references: { model: 'users', key: 'id' },
-    comment: 'null = general/branch price; set = special for travel'
+    comment: 'null = general/branch price; set = special for owner'
   },
   currency: {
     type: DataTypes.STRING(3),

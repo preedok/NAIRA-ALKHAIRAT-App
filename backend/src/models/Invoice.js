@@ -20,7 +20,7 @@ const Invoice = sequelize.define('Invoice', {
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   },
-  travel_id: {
+  owner_id: {
     type: DataTypes.UUID,
     allowNull: false,
     references: { model: 'users', key: 'id' }

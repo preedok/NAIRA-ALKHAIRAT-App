@@ -18,7 +18,7 @@ const Refund = sequelize.define('Refund', {
     allowNull: true,
     references: { model: 'orders', key: 'id' }
   },
-  travel_id: {
+  owner_id: {
     type: DataTypes.UUID,
     allowNull: true,
     references: { model: 'users', key: 'id' }
@@ -26,12 +26,12 @@ const Refund = sequelize.define('Refund', {
   bank_name: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    comment: 'Nama bank untuk transfer refund (diisi travel)'
+    comment: 'Nama bank untuk transfer refund (diisi owner)'
   },
   account_number: {
     type: DataTypes.STRING(50),
     allowNull: true,
-    comment: 'Nomor rekening untuk refund (diisi travel)'
+    comment: 'Nomor rekening untuk refund (diisi owner)'
   },
   source: {
     type: DataTypes.STRING(20),
