@@ -1,7 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Product, ProductPrice, HotelProgress, Invoice } = require('../models');
-const { ORDER_ITEM_TYPE, ROLES } = require('../constants');
+const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
@@ -89,7 +89,13 @@ const listInvoices = asyncHandler(async (req, res) => {
   if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [] });
 
   const where = { order_id: orderIdsFromHotel, branch_id: { [Op.in]: branchIds } };
-  if (status) where.status = status;
+  // Hanya tampilkan invoice yang sudah ada pembayaran DP (bukan tagihan DP / tentative)
+  const statusWithDpPaid = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (status && statusWithDpPaid.includes(status)) {
+    where.status = status;
+  } else {
+    where.status = { [Op.in]: statusWithDpPaid };
+  }
 
   const invoices = await Invoice.findAll({
     where,
@@ -139,7 +145,10 @@ const getInvoice = asyncHandler(async (req, res) => {
           {
             model: OrderItem,
             as: 'OrderItems',
-            include: [{ model: HotelProgress, as: 'HotelProgress', required: false }]
+            include: [
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false },
+              { model: HotelProgress, as: 'HotelProgress', required: false }
+            ]
           }
         ]
       }
@@ -147,11 +156,23 @@ const getInvoice = asyncHandler(async (req, res) => {
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+  const statusWithDpPaidGet = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (!invoice.status || !statusWithDpPaidGet.includes(invoice.status)) {
+    return res.status(403).json({ success: false, message: 'Detail invoice hanya tersedia setelah ada pembayaran DP.' });
+  }
   const hotelItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item hotel' });
   hotelItems.forEach(attachJamaahStatus);
 
-  res.json({ success: true, data: invoice });
+  const data = invoice.get ? invoice.get({ plain: true }) : invoice;
+  (data?.Order?.OrderItems || []).forEach((oi) => {
+    if (oi.type === ORDER_ITEM_TYPE.HOTEL && (oi.Product || oi.product)) {
+      const p = oi.Product || oi.product;
+      oi.product_name = p.name || p.code || null;
+    }
+  });
+
+  res.json({ success: true, data });
 });
 
 /**
@@ -263,10 +284,13 @@ const getDashboard = asyncHandler(async (req, res) => {
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
+  const statusWithDpPaidList = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+
   const orders = await Order.findAll({
     where: { id: orderIds, branch_id: { [Op.in]: branchIds } },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: false },
       {
         model: OrderItem,
         as: 'OrderItems',
@@ -278,11 +302,16 @@ const getDashboard = asyncHandler(async (req, res) => {
   });
 
   let totalHotelItems = 0;
+  let totalOrdersWithDpPaid = 0;
   const byStatus = { waiting_confirmation: 0, confirmed: 0, room_assigned: 0, completed: 0 };
   const pendingRoom = [];
 
   orders.forEach(o => {
+    const inv = o.Invoice;
+    const invoiceHasDpPaid = inv && inv.status && statusWithDpPaidList.includes(inv.status);
+    if (invoiceHasDpPaid) totalOrdersWithDpPaid += 1;
     (o.OrderItems || []).forEach(item => {
+      if (!invoiceHasDpPaid) return;
       totalHotelItems += 1;
       const prog = item.HotelProgress;
       const status = prog?.status || HOTEL_PROGRESS_STATUS.WAITING_CONFIRMATION;
@@ -291,6 +320,8 @@ const getDashboard = asyncHandler(async (req, res) => {
         pendingRoom.push({
           order_id: o.id,
           order_number: o.order_number,
+          invoice_id: inv?.id || null,
+          invoice_number: inv?.invoice_number || null,
           order_item_id: item.id,
           owner_name: o.User?.name,
           product_ref_id: item.product_ref_id,
@@ -306,7 +337,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      total_orders: orders.length,
+      total_orders: totalOrdersWithDpPaid,
       total_hotel_items: totalHotelItems,
       by_status: byStatus,
       pending_room_allocation: pendingRoom.slice(0, 20)

@@ -95,11 +95,20 @@ const HotelDashboard: React.FC = () => {
             {pending.slice(0, 10).map((p: any) => (
               <div key={p.order_item_id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
                 <div>
-                  <p className="font-semibold text-slate-900">{p.order_number}</p>
+                  <p className="font-semibold text-slate-900">{p.invoice_number || p.order_number}</p>
                   <p className="text-sm text-slate-600">{p.owner_name} · Qty: {p.quantity}</p>
                   <p className="text-xs text-slate-500 mt-1">Status: {STATUS_LABELS[p.status] || p.status}</p>
                 </div>
-                <Button size="sm" onClick={() => navigate('/dashboard/hotels?order=' + p.order_id)}>
+                <Button size="sm" onClick={() => {
+                  if (p.invoice_id) {
+                    const q = (p.invoice_number || '').trim();
+                    const params = new URLSearchParams({ invoice: p.invoice_id });
+                    if (q) params.set('q', q);
+                    navigate('/dashboard/progress-hotel?' + params.toString());
+                  } else {
+                    navigate('/dashboard/progress-hotel');
+                  }
+                }}>
                   <Eye className="w-4 h-4 mr-2" /> Kerjakan
                 </Button>
               </div>
@@ -114,13 +123,13 @@ const HotelDashboard: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-900">Pekerjaan Hotel</h3>
             <p className="text-sm text-slate-600 mt-0.5">Kelola invoice hotel, alokasi kamar, konfirmasi & meal di menu Hotel.</p>
           </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/hotels')}>
-            <Hotel className="w-4 h-4 mr-2" /> Buka Menu Hotel
+          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-hotel')}>
+            <Hotel className="w-4 h-4 mr-2" /> Buka Progress Hotel
           </Button>
         </div>
       </Card>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/hotels?tab=products')}>
+        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/products/hotel')}>
           Lihat Produk & Harga (read-only)
         </Button>
       </div>

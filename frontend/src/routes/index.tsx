@@ -111,6 +111,10 @@ const router = createBrowserRouter([
             element: <HotelWorkPage />
           },
           {
+            path: 'progress-tiket',
+            element: <TicketWorkPage />
+          },
+          {
             path: 'products/visa',
             element: <ProductVisaPage />
           },
@@ -124,7 +128,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'products/tickets/pekerjaan',
-            element: <TicketWorkPage />
+            element: <Navigate to="/dashboard/progress-tiket" replace />
           },
           {
             path: 'products/bus',

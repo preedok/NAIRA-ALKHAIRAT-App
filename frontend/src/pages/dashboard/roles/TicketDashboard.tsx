@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plane, RefreshCw, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
+import { Plane, RefreshCw, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, AlertCircle, ChevronRight, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import { ticketApi } from '../../../services/api';
@@ -140,15 +140,32 @@ const TicketDashboard: React.FC = () => {
           </Card>
           {pendingList.length > 0 && (
             <Card className="border-amber-200/60 bg-amber-50/30">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-stone-800">{pendingList.length} item perlu tindakan</p>
-                  <p className="text-xs text-stone-500">Belum status Terbit (update status & upload dokumen di menu Tiket)</p>
-                </div>
+              <h3 className="text-sm font-semibold text-stone-800 mb-3">Perlu Tindakan (Update Status & Upload Dokumen)</h3>
+              <div className="space-y-3">
+                {pendingList.slice(0, 10).map((p: any) => (
+                  <div key={p.order_item_id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
+                    <div>
+                      <p className="font-semibold text-slate-900">{p.invoice_number || p.order_number}</p>
+                      <p className="text-sm text-slate-600">{p.owner_name} · Qty: {p.quantity}</p>
+                      <p className="text-xs text-slate-500 mt-1">Status: {RECAP_STATUS_LABELS[p.status] || p.status}</p>
+                    </div>
+                    <Button size="sm" onClick={() => {
+                      if (p.invoice_id) {
+                        const q = (p.invoice_number || '').trim();
+                        const params = new URLSearchParams({ invoice: p.invoice_id });
+                        if (q) params.set('q', q);
+                        navigate('/dashboard/progress-tiket?' + params.toString());
+                      } else {
+                        navigate('/dashboard/progress-tiket');
+                      }
+                    }}>
+                      <Eye className="w-4 h-4 mr-2" /> Kerjakan
+                    </Button>
+                  </div>
+                ))}
               </div>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/dashboard/tickets')}>
-                Kelola di Menu Tiket <ChevronRight className="w-4 h-4 ml-1" />
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/dashboard/progress-tiket')}>
+                Buka Progress Tiket <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </Card>
           )}
@@ -158,11 +175,11 @@ const TicketDashboard: React.FC = () => {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Pekerjaan Tiket</h3>
-            <p className="text-sm text-slate-600 mt-0.5">Kelola order tiket, update status, dan upload dokumen terbit di menu Tiket.</p>
+            <h3 className="text-lg font-bold text-slate-900">Progress Tiket</h3>
+            <p className="text-sm text-slate-600 mt-0.5">Kelola invoice tiket, update status, dan upload dokumen terbit di menu Progress Tiket.</p>
           </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/tickets')}>
-            <Plane className="w-4 h-4 mr-2" /> Buka Menu Tiket
+          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-tiket')}>
+            <Plane className="w-4 h-4 mr-2" /> Buka Progress Tiket
           </Button>
         </div>
       </Card>

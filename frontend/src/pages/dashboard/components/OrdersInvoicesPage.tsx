@@ -110,6 +110,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
+  const [uploadDocTab, setUploadDocTab] = useState<'hotel' | 'visa' | 'ticket'>('hotel');
   const [uploadDocLoading, setUploadDocLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
@@ -236,7 +237,17 @@ const OrdersInvoicesPage: React.FC = () => {
     setUploadDocLoading(true);
     try {
       const res = await invoicesApi.getById(inv.id);
-      if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+      if (res.data?.success && res.data?.data) {
+        const data = res.data.data;
+        setUploadDocInvoice(data);
+        const items = data.Order?.OrderItems || [];
+        const hasHotel = items.some((i: any) => (i.type || i.product_type) === 'hotel');
+        const hasVisa = items.some((i: any) => (i.type || i.product_type) === 'visa');
+        const hasTicket = items.some((i: any) => (i.type || i.product_type) === 'ticket');
+        if (hasHotel) setUploadDocTab('hotel');
+        else if (hasVisa) setUploadDocTab('visa');
+        else if (hasTicket) setUploadDocTab('ticket');
+      }
     } catch {
       showToast('Gagal memuat data order', 'error');
       setUploadDocInvoice(null);
@@ -498,14 +509,14 @@ const OrdersInvoicesPage: React.FC = () => {
     const dateStr = formatDate(d ?? null);
     if (dateStr === '-') return '–';
     const t = (time || '').trim();
-    if (!t) return dateStr;
-    return `${dateStr}, ${t}`;
+    return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
   };
 
   const VISA_STATUS_LABELS: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
   const TICKET_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
   const HOTEL_STATUS_LABELS: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
   const BUS_TICKET_LABELS: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
+  const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
 
   const handleUploadJamaahData = async (orderId: string, itemId: string, file: File | null, link: string) => {
     if (!file && !link?.trim()) {
@@ -899,62 +910,62 @@ const OrdersInvoicesPage: React.FC = () => {
           />
       </PageFilter>
 
-      {/* Summary cards - travel card style */}
+      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Card hover className="travel-card flex flex-col">
+        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Total Invoice</p>
-              <p className="text-xl sm:text-2xl font-bold text-stone-900 mt-0.5">{loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}</p>
             </div>
-            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
+            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600 shrink-0">
               <Receipt className="w-5 h-5" />
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card flex flex-col">
+        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Total Trip</p>
-              <p className="text-xl sm:text-2xl font-bold text-stone-900 mt-0.5">{loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Trip</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}</p>
             </div>
-            <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
+            <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600 shrink-0">
               <Package className="w-5 h-5" />
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card flex flex-col">
+        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Total Tagihan</p>
-              <p className="text-lg sm:text-xl font-bold text-stone-900 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_amount)}</p>
-              {!loadingSummary && <p className="text-xs text-stone-500 mt-0.5">≈ {formatSAR(s.total_amount / sarToIdrList)} · ≈ {formatUSD(s.total_amount / usdToIdrList)}</p>}
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Tagihan</p>
+              <p className="text-lg sm:text-xl font-bold text-slate-900 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_amount)}</p>
+              {!loadingSummary && <p className="text-xs text-slate-500 mt-0.5">≈ {formatSAR(s.total_amount / sarToIdrList)} · ≈ {formatUSD(s.total_amount / usdToIdrList)}</p>}
             </div>
-            <div className="p-2.5 rounded-xl bg-stone-100 text-stone-600">
+            <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 shrink-0">
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card flex flex-col">
+        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Dibayar</p>
-              <p className="text-lg sm:text-xl font-bold text-primary-600 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_paid)}</p>
-              {!loadingSummary && <p className="text-xs text-stone-500 mt-0.5">≈ {formatSAR(s.total_paid / sarToIdrList)} · ≈ {formatUSD(s.total_paid / usdToIdrList)}</p>}
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dibayar</p>
+              <p className="text-lg sm:text-xl font-bold text-emerald-600 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_paid)}</p>
+              {!loadingSummary && <p className="text-xs text-slate-500 mt-0.5">≈ {formatSAR(s.total_paid / sarToIdrList)} · ≈ {formatUSD(s.total_paid / usdToIdrList)}</p>}
             </div>
-            <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
+            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600 shrink-0">
               <CreditCard className="w-5 h-5" />
             </div>
           </div>
         </Card>
-        <Card hover className="travel-card flex flex-col">
+        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Sisa</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Sisa</p>
               <p className="text-lg sm:text-xl font-bold text-amber-600 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_remaining)}</p>
-              {!loadingSummary && <p className="text-xs text-stone-500 mt-0.5">≈ {formatSAR(s.total_remaining / sarToIdrList)} · ≈ {formatUSD(s.total_remaining / usdToIdrList)}</p>}
+              {!loadingSummary && <p className="text-xs text-slate-500 mt-0.5">≈ {formatSAR(s.total_remaining / sarToIdrList)} · ≈ {formatUSD(s.total_remaining / usdToIdrList)}</p>}
             </div>
-            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600">
+            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600 shrink-0">
               <Wallet className="w-5 h-5" />
             </div>
           </div>
@@ -963,20 +974,20 @@ const OrdersInvoicesPage: React.FC = () => {
 
       {/* Per Status Invoice */}
       <div className="grid grid-cols-1 gap-4">
-        <Card className="travel-card">
-          <h3 className="text-sm font-semibold text-stone-700 mb-3 flex items-center gap-2">
-            <Receipt className="w-4 h-4" /> Per Status Invoice
+        <Card className="travel-card rounded-2xl border-slate-200/80 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
           </h3>
           {loadingSummary ? (
-            <p className="text-stone-500 text-sm">Memuat...</p>
+            <p className="text-slate-500 text-sm">Memuat...</p>
           ) : Object.keys(s.by_invoice_status).length === 0 ? (
-            <p className="text-stone-500 text-sm">Tidak ada data</p>
+            <p className="text-slate-500 text-sm">Tidak ada data</p>
           ) : (
             <div className="flex flex-wrap gap-3">
               {Object.entries(s.by_invoice_status).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-50 border border-stone-100 min-w-[120px]">
+                <div key={status} className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-100 min-w-[120px]">
                   <Badge variant={getStatusBadge(status)}>{INVOICE_STATUS_LABELS[status] || status}</Badge>
-                  <span className="font-bold text-stone-900">{Number(count).toLocaleString('id-ID')}</span>
+                  <span className="font-bold text-slate-900">{Number(count).toLocaleString('id-ID')}</span>
                 </div>
               ))}
             </div>
@@ -985,16 +996,16 @@ const OrdersInvoicesPage: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-stone-500">Memuat...</div>
+        <div className="py-12 text-center text-slate-500">Memuat...</div>
       ) : (
-        <Card className="travel-card overflow-hidden">
-          <div className="flex items-center justify-between gap-3 mb-4">
+        <Card className="travel-card overflow-hidden rounded-2xl border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5 px-1">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Receipt className="w-5 h-5 text-primary-600" /> Daftar Invoice ({(pagination?.total ?? invoices.length) + draftOrders.length})
             </h2>
             <p className="text-xs text-slate-500 hidden sm:block">Geser horizontal jika tabel tidak muat</p>
           </div>
-          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white shadow-inner">
             <table className="w-full text-sm" style={{ minWidth: 'max-content' }}>
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/95">
@@ -1008,9 +1019,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">Status Invoice</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Visa</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Tiket</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Hotel</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">Check-in Hotel</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">Check-out Hotel</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[200px]">Status Hotel</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px]">Status Bus</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px]">Bukti Bayar</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[100px]">Tgl</th>
@@ -1068,14 +1077,18 @@ const OrdersInvoicesPage: React.FC = () => {
                         const visaItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa');
                         if (visaItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
-                        const statuses = visaItems.map((i: any) => labels[i.VisaProgress?.status] || i.VisaProgress?.status || 'Menunggu');
                         return (
-                          <div className="text-xs">
-                            <div className="grid grid-cols-2 gap-1">
-                              {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
-                              ))}
-                            </div>
+                          <div className="text-xs space-y-1.5">
+                            {visaItems.map((item: any, idx: number) => {
+                              const s = labels[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+                              const depDate = formatDate(item.meta?.travel_date ?? null);
+                              return (
+                                <div key={idx} className="flex flex-col gap-0.5">
+                                  <Badge variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs truncate w-fit">{s}</Badge>
+                                  <span className="text-slate-500">Tgl keberangkatan: {depDate}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })()}
@@ -1085,14 +1098,18 @@ const OrdersInvoicesPage: React.FC = () => {
                         const ticketItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'ticket');
                         if (ticketItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
-                        const statuses = ticketItems.map((i: any) => labels[i.TicketProgress?.status] || i.TicketProgress?.status || 'Menunggu');
                         return (
-                          <div className="text-xs">
-                            <div className="grid grid-cols-2 gap-1">
-                              {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
-                              ))}
-                            </div>
+                          <div className="text-xs space-y-1.5">
+                            {ticketItems.map((item: any, idx: number) => {
+                              const s = labels[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+                              const depDate = formatDate(item.meta?.departure_date ?? null);
+                              return (
+                                <div key={idx} className="flex flex-col gap-0.5">
+                                  <Badge variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs truncate w-fit">{s}</Badge>
+                                  <span className="text-slate-500">Tgl keberangkatan: {depDate}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })()}
@@ -1102,36 +1119,33 @@ const OrdersInvoicesPage: React.FC = () => {
                         const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
                         if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
-                        const statuses = hotelItems.map((i: any) => labels[i.HotelProgress?.status] || i.HotelProgress?.status || 'Menunggu');
+                        const byHotel = hotelItems.reduce((acc: { key: string; name: string; status: string; checkIn: string; checkOut: string }[], item: any) => {
+                          const pid = String(item.product_ref_id || item.product_id || '');
+                          const name = item.Product?.name || (item as any).product_name || 'Hotel';
+                          const status = labels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
+                          const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time);
+                          const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time);
+                          if (!acc.some((g) => g.key === pid)) acc.push({ key: pid, name, status, checkIn, checkOut });
+                          return acc;
+                        }, [] as { key: string; name: string; status: string; checkIn: string; checkOut: string }[]);
+                        if (byHotel.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         return (
-                          <div className="text-xs">
-                            <div className="grid grid-cols-2 gap-1">
-                              {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Selesai' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
-                              ))}
-                            </div>
+                          <div className="text-xs space-y-2">
+                            {byHotel.map((h: { key: string; name: string; status: string; checkIn: string; checkOut: string }, idx: number) => (
+                              <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                <div className="flex flex-wrap items-baseline gap-1">
+                                  <span className="font-medium text-slate-800 truncate max-w-[140px]" title={h.name}>{h.name}:</span>
+                                  <span className={h.status === 'Selesai' ? 'text-emerald-600' : 'text-slate-600'}>{h.status}</span>
+                                </div>
+                                <div className="text-slate-500 pl-0.5">
+                                  <span>CI {h.checkIn}</span>
+                                  <span className="mx-1">·</span>
+                                  <span>CO {h.checkOut}</span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         );
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top text-slate-600 text-xs whitespace-nowrap">
-                      {(() => {
-                        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
-                        if (hotelItems.length === 0) return '–';
-                        const first = hotelItems[0];
-                        const checkInDate = first?.HotelProgress?.check_in_date ?? first?.meta?.check_in;
-                        const checkInTime = first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time;
-                        return formatDateWithTime(checkInDate, checkInTime);
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top text-slate-600 text-xs whitespace-nowrap">
-                      {(() => {
-                        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
-                        if (hotelItems.length === 0) return '–';
-                        const first = hotelItems[0];
-                        const checkOutDate = first?.HotelProgress?.check_out_date ?? first?.meta?.check_out;
-                        const checkOutTime = first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time;
-                        return formatDateWithTime(checkOutDate, checkOutTime);
                       })()}
                     </td>
                     <td className="py-3 px-4 align-top">
@@ -1255,246 +1269,367 @@ const OrdersInvoicesPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Modal Upload Dokumen (terpisah dari Detail Invoice) */}
+      {/* Modal Upload Dokumen – Tabs: Hotel / Visa / Tiket */}
       {uploadDocInvoice && (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/50" onClick={() => !uploadDocLoading && setUploadDocInvoice(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-slate-600" /> Upload dokumen
-              </h2>
-              <button type="button" onClick={() => setUploadDocInvoice(null)} disabled={uploadDocLoading} className="p-2 hover:bg-slate-100 rounded-lg">
-                <X className="w-5 h-5 text-slate-500" />
+        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => !uploadDocLoading && setUploadDocInvoice(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80" onClick={(e) => e.stopPropagation()}>
+            {/* Header modern */}
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-100 rounded-xl">
+                  <Upload className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Upload dokumen</h2>
+                  <p className="text-xs text-slate-500 font-mono">{uploadDocInvoice?.invoice_number || uploadDocInvoice?.Order?.order_number || ''}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setUploadDocInvoice(null)} disabled={uploadDocLoading} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-700">
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1">
-              {uploadDocLoading ? (
-                <p className="text-slate-500 py-8 text-center">Memuat data order…</p>
-              ) : (() => {
-                const order = uploadDocInvoice.Order;
-                const items = order?.OrderItems || [];
-                const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
-                const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
-                const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
-                const hasAny = hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0;
-                if (!hasAny) {
-                  return <p className="text-slate-600 py-4">Order ini tidak memiliki item hotel, visa, atau tiket. Tidak ada dokumen yang perlu diupload.</p>;
-                }
+            {uploadDocLoading ? (
+              <div className="p-8 flex items-center justify-center">
+                <p className="text-slate-500">Memuat data order…</p>
+              </div>
+            ) : (() => {
+              const order = uploadDocInvoice.Order;
+              const items = order?.OrderItems || [];
+              const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
+              const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
+              const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
+              const hasAny = hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0;
+              if (!hasAny) {
                 return (
-                  <div className="space-y-6">
-                    {hotelItems.length > 0 && (
-                      <section className="rounded-xl border border-slate-200 bg-amber-50/50 p-4">
-                        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                          <Package className="w-4 h-4" /> Hotel – Paket info (Excel/Spreadsheet)
-                        </h3>
-                        <p className="text-xs text-slate-600 mb-3">Upload file Excel atau spreadsheet berisi info paket hotel.</p>
-                        {hotelItems.map((item: any) => (
-                          <div key={item.id} className="flex flex-wrap items-end gap-2 mt-2 p-3 bg-white rounded-lg border border-slate-200">
-                            <span className="text-sm font-medium text-slate-700 w-full">{item.Product?.name || item.product_name || 'Hotel'}</span>
-                            <label className="flex flex-col gap-1 text-xs">
-                              <span>File Excel (.xlsx, .xls)</span>
-                              <input type="file" accept=".xlsx,.xls" className="text-sm border border-slate-300 rounded px-2 py-1.5" onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (f && uploadDocInvoice?.order_id) {
-                                  setUploadingJamaahItemId(item.id);
-                                  try {
-                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
-                                    showToast('Paket info hotel berhasil diupload', 'success');
-                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
-                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
-                                  } catch (err: any) {
-                                    showToast(err.response?.data?.message || 'Gagal upload', 'error');
-                                  } finally {
-                                    setUploadingJamaahItemId(null);
-                                  }
-                                }
-                                e.target.value = '';
-                              }} disabled={!!uploadingJamaahItemId} />
-                            </label>
-                            {uploadingJamaahItemId === item.id && <span className="text-xs text-slate-500">Mengunggah…</span>}
-                          </div>
-                        ))}
-                      </section>
-                    )}
-                    {visaItems.length > 0 && (
-                      <section className="rounded-xl border border-slate-200 bg-sky-50/50 p-4">
-                        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                          <FileText className="w-4 h-4" /> Visa – Data paspor (ZIP atau link Google Drive)
-                        </h3>
-                        {visaItems.map((item: any) => (
-                          <div key={item.id} className="flex flex-wrap gap-2 mt-2 p-3 bg-white rounded-lg border border-slate-200">
-                            <span className="text-sm font-medium text-slate-700 w-full">{item.Product?.name || item.product_name || 'Visa'}</span>
-                            <label className="flex flex-col gap-1 text-xs">
-                              <span>File ZIP</span>
-                              <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded px-2 py-1.5" onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (f && uploadDocInvoice?.order_id) {
-                                  setUploadingJamaahItemId(item.id);
-                                  try {
-                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
-                                    showToast('Data paspor berhasil diupload', 'success');
-                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
-                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
-                                  } catch (err: any) {
-                                    showToast(err.response?.data?.message || 'Gagal upload', 'error');
-                                  } finally {
-                                    setUploadingJamaahItemId(null);
-                                  }
-                                }
-                                e.target.value = '';
-                              }} disabled={!!uploadingJamaahItemId} />
-                            </label>
-                            <div className="flex flex-col gap-1">
-                              <span className="text-xs">atau Link Google Drive</span>
-                              <div className="flex gap-2">
-                                <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="text-sm border border-slate-300 rounded px-2 py-1.5 w-56" disabled={!!uploadingJamaahItemId} />
-                                <Button size="sm" variant="outline" onClick={async () => {
-                                  if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
-                                  setUploadingJamaahItemId(item.id);
-                                  try {
-                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
-                                    showToast('Link berhasil disimpan', 'success');
-                                    setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
-                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
-                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
-                                  } catch (err: any) {
-                                    showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
-                                  } finally {
-                                    setUploadingJamaahItemId(null);
-                                  }
-                                }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
-                                  {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </section>
-                    )}
-                    {ticketItems.length > 0 && (
-                      <section className="rounded-xl border border-slate-200 bg-emerald-50/50 p-4">
-                        <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                          <Plane className="w-4 h-4" /> Tiket – Dokumen penerbangan (ZIP atau link Google Drive)
-                        </h3>
-                        {ticketItems.map((item: any) => (
-                          <div key={item.id} className="flex flex-wrap gap-2 mt-2 p-3 bg-white rounded-lg border border-slate-200">
-                            <span className="text-sm font-medium text-slate-700 w-full">{item.Product?.name || item.product_name || 'Tiket'}</span>
-                            <label className="flex flex-col gap-1 text-xs">
-                              <span>File ZIP</span>
-                              <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded px-2 py-1.5" onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (f && uploadDocInvoice?.order_id) {
-                                  setUploadingJamaahItemId(item.id);
-                                  try {
-                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
-                                    showToast('Dokumen tiket berhasil diupload', 'success');
-                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
-                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
-                                  } catch (err: any) {
-                                    showToast(err.response?.data?.message || 'Gagal upload', 'error');
-                                  } finally {
-                                    setUploadingJamaahItemId(null);
-                                  }
-                                }
-                                e.target.value = '';
-                              }} disabled={!!uploadingJamaahItemId} />
-                            </label>
-                            <div className="flex flex-col gap-1">
-                              <span className="text-xs">atau Link Google Drive</span>
-                              <div className="flex gap-2">
-                                <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="text-sm border border-slate-300 rounded px-2 py-1.5 w-56" disabled={!!uploadingJamaahItemId} />
-                                <Button size="sm" variant="outline" onClick={async () => {
-                                  if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
-                                  setUploadingJamaahItemId(item.id);
-                                  try {
-                                    await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
-                                    showToast('Link berhasil disimpan', 'success');
-                                    setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
-                                    const res = await invoicesApi.getById(uploadDocInvoice.id);
-                                    if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
-                                  } catch (err: any) {
-                                    showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
-                                  } finally {
-                                    setUploadingJamaahItemId(null);
-                                  }
-                                }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
-                                  {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </section>
-                    )}
+                  <div className="p-6">
+                    <p className="text-slate-600 text-sm">Order ini tidak memiliki item hotel, visa, atau tiket. Tidak ada dokumen yang perlu diupload.</p>
                   </div>
                 );
-              })()}
-            </div>
+              }
+              interface HotelUploadGroup { key: string; name: string; firstItem: any }
+              const hotelByProduct: HotelUploadGroup[] = hotelItems.reduce(
+                (acc: HotelUploadGroup[], item: any) => {
+                  const pid = item.product_ref_id || item.product_id || '';
+                  const name = item.Product?.name || (item as any).product_name || 'Hotel';
+                  if (!acc.find((g: HotelUploadGroup) => g.key === pid)) acc.push({ key: pid, name, firstItem: item });
+                  return acc;
+                },
+                [] as HotelUploadGroup[]
+              );
+              const tabs: { id: 'hotel' | 'visa' | 'ticket'; label: string; icon: React.ReactNode; count: number }[] = [
+                ...(hotelByProduct.length > 0 ? [{ id: 'hotel' as const, label: 'Hotel', icon: <Package className="w-4 h-4" />, count: hotelByProduct.length }] : []),
+                ...(visaItems.length > 0 ? [{ id: 'visa' as const, label: 'Visa', icon: <FileText className="w-4 h-4" />, count: visaItems.length }] : []),
+                ...(ticketItems.length > 0 ? [{ id: 'ticket' as const, label: 'Tiket', icon: <Plane className="w-4 h-4" />, count: ticketItems.length }] : []),
+              ];
+              const activeTab = tabs.some((t) => t.id === uploadDocTab) ? uploadDocTab : (tabs[0]?.id ?? 'hotel');
+
+              return (
+                <>
+                  {/* Tabs */}
+                  <div className="flex border-b border-slate-200 bg-slate-50/70 px-4 gap-1">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setUploadDocTab(tab.id)}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px rounded-t-lg ${
+                          activeTab === tab.id
+                            ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                        }`}
+                      >
+                        {tab.icon}
+                        <span>{tab.label}</span>
+                        {tab.count > 1 && <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{tab.count}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-6 overflow-y-auto flex-1 bg-white">
+                    {activeTab === 'hotel' && (
+                      <div className="space-y-4">
+                        <p className="text-sm text-slate-600">Satu file per hotel. Upload file Excel/spreadsheet berisi info paket untuk hotel tersebut.</p>
+                        {hotelByProduct.map((group) => {
+                          const item = group.firstItem;
+                          const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
+                          const fileUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
+                          return (
+                            <div key={group.key} className="rounded-xl border border-slate-200 bg-amber-50/30 p-4 space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <Package className="w-4 h-4 text-amber-600" /> {group.name}
+                              </h3>
+                              {hasUploaded && (
+                                <div className="rounded-lg bg-white/80 border border-amber-200/60 p-3">
+                                  <p className="text-xs font-medium text-slate-600 mb-1.5">Dokumen terunggah</p>
+                                  {item.jamaah_data_type === 'link' ? (
+                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <LinkIcon className="w-4 h-4" /> Buka link
+                                    </a>
+                                  ) : fileUrl ? (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <Download className="w-4 h-4" /> Unduh file
+                                    </a>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">File tersimpan</span>
+                                  )}
+                                </div>
+                              )}
+                              <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-slate-600">{hasUploaded ? 'Upload ulang' : 'File Excel (.xlsx, .xls)'}</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                    onChange={async (e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f && uploadDocInvoice?.order_id) {
+                                        setUploadingJamaahItemId(group.firstItem.id);
+                                        try {
+                                          await handleUploadJamaahData(uploadDocInvoice.order_id, group.firstItem.id, f, '');
+                                          showToast('Paket info hotel berhasil diupload', 'success');
+                                          const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                          if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                        } catch (err: any) {
+                                          showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                        } finally {
+                                          setUploadingJamaahItemId(null);
+                                        }
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                    disabled={!!uploadingJamaahItemId}
+                                  />
+                                  {uploadingJamaahItemId === group.firstItem.id && <span className="text-xs text-slate-500">Mengunggah…</span>}
+                                </div>
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'visa' && (
+                      <div className="space-y-4">
+                        <p className="text-sm text-slate-600">Upload data paspor (ZIP) atau masukkan link Google Drive.</p>
+                        {visaItems.map((item: any) => {
+                          const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
+                          const fileUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
+                          return (
+                            <div key={item.id} className="rounded-xl border border-slate-200 bg-sky-50/30 p-4 space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-sky-600" /> {item.Product?.name || item.product_name || 'Visa'}
+                              </h3>
+                              {hasUploaded && (
+                                <div className="rounded-lg bg-white/80 border border-sky-200/60 p-3">
+                                  <p className="text-xs font-medium text-slate-600 mb-1.5">Dokumen terunggah</p>
+                                  {item.jamaah_data_type === 'link' ? (
+                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <LinkIcon className="w-4 h-4" /> Buka link
+                                    </a>
+                                  ) : fileUrl ? (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <Download className="w-4 h-4" /> Unduh file
+                                    </a>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">File tersimpan</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-3">
+                                <label className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">{hasUploaded ? 'Upload ulang' : 'File ZIP'}</span>
+                                  <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700" onChange={async (e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f && uploadDocInvoice?.order_id) {
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                        showToast('Data paspor berhasil diupload', 'success');
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }
+                                    e.target.value = '';
+                                  }} disabled={!!uploadingJamaahItemId} />
+                                </label>
+                                <div className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
+                                  <div className="flex gap-2 flex-wrap">
+                                    <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px] text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!uploadingJamaahItemId} />
+                                    <Button size="sm" variant="outline" onClick={async () => {
+                                      if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
+                                        showToast('Link berhasil disimpan', 'success');
+                                        setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
+                                      {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'ticket' && (
+                      <div className="space-y-4">
+                        <p className="text-sm text-slate-600">Upload dokumen penerbangan (ZIP) atau masukkan link Google Drive.</p>
+                        {ticketItems.map((item: any) => {
+                          const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
+                          const fileUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
+                          return (
+                            <div key={item.id} className="rounded-xl border border-slate-200 bg-emerald-50/30 p-4 space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <Plane className="w-4 h-4 text-emerald-600" /> {item.Product?.name || item.product_name || 'Tiket'}
+                              </h3>
+                              {hasUploaded && (
+                                <div className="rounded-lg bg-white/80 border border-emerald-200/60 p-3">
+                                  <p className="text-xs font-medium text-slate-600 mb-1.5">Dokumen terunggah</p>
+                                  {item.jamaah_data_type === 'link' ? (
+                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <LinkIcon className="w-4 h-4" /> Buka link
+                                    </a>
+                                  ) : fileUrl ? (
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <Download className="w-4 h-4" /> Unduh file
+                                    </a>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">File tersimpan</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-3">
+                                <label className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">{hasUploaded ? 'Upload ulang' : 'File ZIP'}</span>
+                                  <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700" onChange={async (e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f && uploadDocInvoice?.order_id) {
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                        showToast('Dokumen tiket berhasil diupload', 'success');
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }
+                                    e.target.value = '';
+                                  }} disabled={!!uploadingJamaahItemId} />
+                                </label>
+                                <div className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
+                                  <div className="flex gap-2 flex-wrap">
+                                    <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px] text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!uploadingJamaahItemId} />
+                                    <Button size="sm" variant="outline" onClick={async () => {
+                                      if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
+                                        showToast('Link berhasil disimpan', 'success');
+                                        setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
+                                      {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* Modal Detail Invoice */}
       {viewInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={closeModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={closeModal}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col border border-slate-200/80" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 rounded-lg">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50/50">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-100 rounded-xl shadow-sm">
                   <Receipt className="w-6 h-6 text-emerald-600" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">Detail Invoice</h2>
-                  <p className="text-sm text-slate-600 font-mono">{formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}</p>
+                  <p className="text-sm text-slate-600 font-mono mt-0.5">{formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)}>
+                <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)} className="rounded-lg">
                   <Download className="w-4 h-4 mr-2" /> Unduh PDF
                 </Button>
                 {canUnblock(viewInvoice) && (
-                  <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)}>
+                  <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)} className="rounded-lg">
                     <Unlock className="w-4 h-4 mr-2" /> Aktifkan Kembali
                   </Button>
                 )}
-                <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg">
-                  <X className="w-5 h-5 text-slate-600" />
+                <button onClick={closeModal} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-700">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-slate-200 bg-slate-50/50 px-6">
+            {/* Tabs - pill style */}
+            <div className="flex gap-1 px-6 pt-4 pb-0 border-b border-slate-200 bg-slate-50/60">
               <button
                 onClick={() => setDetailTab('invoice')}
-                className={`flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ${
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
                   detailTab === 'invoice'
-                    ? 'border-emerald-600 text-emerald-600'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                    ? 'bg-white border-slate-200 shadow-sm text-emerald-600 border-emerald-200'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4" /> Invoice & Order
               </button>
               <button
                 onClick={() => setDetailTab('payments')}
-                className={`flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ${
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
                   detailTab === 'payments'
-                    ? 'border-emerald-600 text-emerald-600'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                    ? 'bg-white border-slate-200 shadow-sm text-emerald-600 border-emerald-200'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <CreditCard className="w-4 h-4" /> Bukti Bayar
                 {paymentProofs.length > 0 && (
-                  <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">{paymentProofs.length}</span>
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">{paymentProofs.length}</span>
                 )}
               </button>
               <button
                 onClick={() => setDetailTab('progress')}
-                className={`flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ${
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
                   detailTab === 'progress'
-                    ? 'border-emerald-600 text-emerald-600'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                    ? 'bg-white border-slate-200 shadow-sm text-emerald-600 border-emerald-200'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <ClipboardList className="w-4 h-4" /> Status Pekerjaan
@@ -1502,7 +1637,7 @@ const OrdersInvoicesPage: React.FC = () => {
             </div>
 
             {/* Tab content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
               {detailTab === 'invoice' && (
                 <div className="space-y-6">
                   {(() => {
@@ -1680,10 +1815,12 @@ const OrdersInvoicesPage: React.FC = () => {
                 <div className="space-y-6">
                   <p className="text-sm text-slate-600">Setelah bukti bayar diverifikasi, invoice otomatis update: persen terbayar, sisa tagihan, dan status (partial_paid / paid).</p>
                   {paymentProofs.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-                      <CreditCard className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                      <p className="text-slate-600 font-medium">Belum ada bukti pembayaran</p>
-                      <p className="text-sm text-slate-500 mt-1">Upload bukti bayar untuk DP atau pelunasan via tombol &quot;Bayar DP / Bayar&quot; di tab Invoice</p>
+                    <div className="text-center py-14 rounded-2xl border border-slate-200 bg-white shadow-sm">
+                      <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
+                        <CreditCard className="w-12 h-12 text-slate-400" />
+                      </div>
+                      <p className="text-slate-700 font-semibold">Belum ada bukti pembayaran</p>
+                      <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Upload bukti bayar untuk DP atau pelunasan via tombol &quot;Bayar DP / Bayar&quot; di tab Invoice & Order.</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1692,8 +1829,8 @@ const OrdersInvoicesPage: React.FC = () => {
                         const ps = getProofStatus(p);
                         const isPending = ps.status === 'pending';
                         return (
-                          <div key={p.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
+                          <div key={p.id} className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-slate-50/80 border-b border-slate-100">
                               <div className="flex flex-wrap items-center gap-3">
                                 <span className="font-semibold text-slate-800">{getProofDisplayLabel(p)}</span>
                                 <span className="text-slate-600 text-sm">
@@ -1739,7 +1876,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                            <div className="p-4 bg-slate-50 min-h-[280px]">
+                            <div className="p-4 bg-slate-50/50 min-h-[280px]">
                               <ProofPreview invoiceId={viewInvoice.id} proof={p} />
                             </div>
                           </div>
@@ -1752,7 +1889,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
               {detailTab === 'progress' && (
                 <div className="space-y-6">
-                  <p className="text-sm text-slate-600">Status pekerjaan visa, tiket, dan hotel untuk invoice ini. Diupdate oleh divisi Visa, Tiket, dan Hotel.</p>
+                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus). Diupdate oleh divisi Visa, Tiket, dan Hotel.</p>
                   {(() => {
                     const order = viewInvoice?.Order;
                     const items = (order?.OrderItems || []).filter((i: any) => {
@@ -1761,79 +1898,97 @@ const OrdersInvoicesPage: React.FC = () => {
                     });
                     if (items.length === 0) {
                       return (
-                        <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-                          <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                          <p className="text-slate-600 font-medium">Tidak ada item visa / tiket / hotel</p>
-                          <p className="text-sm text-slate-500 mt-1">Invoice ini tidak memiliki item dengan status pekerjaan (visa, tiket, hotel, bus).</p>
+                        <div className="text-center py-14 rounded-2xl border border-slate-200 bg-white shadow-sm">
+                          <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
+                            <ClipboardList className="w-12 h-12 text-slate-400" />
+                          </div>
+                          <p className="text-slate-700 font-semibold">Tidak ada item visa / tiket / hotel / bus</p>
+                          <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Invoice ini tidak memiliki item dengan status pekerjaan.</p>
                         </div>
                       );
                     }
+                    // Kelompokkan per produk (product_ref_id), bukan per tipe kamar
+                    type Group = { key: string; productLabel: string; type: string; items: any[] };
+                    const groupsMap = new Map<string, Group>();
+                    for (const item of items) {
+                      const t = (item.type || item.product_type) as string;
+                      const pid = String(item.product_ref_id || item.product_id || '');
+                      const key = `${t}-${pid || item.id}`;
+                      if (!groupsMap.has(key)) {
+                        const productLabel = item.Product?.name || (item as any).product_name || (t === 'visa' ? 'Visa' : t === 'ticket' ? 'Tiket' : t === 'hotel' ? 'Hotel' : 'Bus');
+                        groupsMap.set(key, { key, productLabel, type: t, items: [] });
+                      }
+                      groupsMap.get(key)!.items.push(item);
+                    }
+                    const groups = Array.from(groupsMap.values());
                     return (
                       <div className="space-y-4">
-                        {items.map((item: any) => {
-                          const isVisa = (item.type || item.product_type) === 'visa';
-                          const isTicket = (item.type || item.product_type) === 'ticket';
-                          const isHotel = (item.type || item.product_type) === 'hotel';
-                          const isBus = (item.type || item.product_type) === 'bus';
-                          const progress = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : item.HotelProgress;
+                        {groups.map((group) => {
+                          const first = group.items[0];
+                          const itemWithJamaah = group.items.find((i: any) => i.jamaah_data_type && i.jamaah_data_value) || first;
+                          const itemWithManifest = (group.type === 'ticket' || group.type === 'visa') ? group.items.find((i: any) => i.manifest_file_url) || first : first;
+                          const isVisa = group.type === 'visa';
+                          const isTicket = group.type === 'ticket';
+                          const isHotel = group.type === 'hotel';
+                          const isBus = group.type === 'bus';
+                          const progress = isVisa ? first.VisaProgress : isTicket ? first.TicketProgress : first.HotelProgress;
                           const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
                           const status = isBus ? (progress?.bus_ticket_status ? (BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status) : 'Pending') : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : 'Menunggu data'));
-                          const hasJamaah = item.jamaah_data_type && item.jamaah_data_value;
-                          const jamaahUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
-                          const productLabel = item.Product?.name || item.product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
+                          const hasJamaah = itemWithJamaah.jamaah_data_type && itemWithJamaah.jamaah_data_value;
+                          const jamaahUrl = itemWithJamaah.jamaah_data_type === 'link' ? itemWithJamaah.jamaah_data_value : itemWithJamaah.jamaah_data_value ? getFileUrl(itemWithJamaah.jamaah_data_value) : null;
                           const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
+                          const typeIcon = isVisa ? <FileText className="w-4 h-4" /> : isTicket ? <Plane className="w-4 h-4" /> : isHotel ? <Package className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />;
+                          const typeBg = isVisa ? 'bg-sky-100 text-sky-600' : isTicket ? 'bg-emerald-100 text-emerald-600' : isHotel ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600';
                           return (
-                            <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-medium text-slate-800">{productLabel}</span>
-                                <Badge variant={badgeVariant}>{status}</Badge>
-                              </div>
-                              {hasJamaah && (
-                                <div className="text-sm text-slate-600">
-                                  Dokumen (ZIP/link): {item.jamaah_data_type === 'link' ? (
-                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
-                                      <LinkIcon className="w-3.5 h-3.5" /> Link Google Drive
-                                    </a>
-                                  ) : jamaahUrl ? (
-                                    <a href={jamaahUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
-                                      <Download className="w-3.5 h-3.5" /> Unduh file
-                                    </a>
-                                  ) : (
-                                    <span>File diunggah</span>
+                            <div key={group.key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                              <div className="flex items-start gap-4 p-4">
+                                <div className={`p-2.5 rounded-xl shrink-0 ${typeBg}`}>{typeIcon}</div>
+                                <div className="flex-1 min-w-0 space-y-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-semibold text-slate-900">{group.productLabel}</span>
+                                    <Badge variant={badgeVariant} className="shrink-0">{status}</Badge>
+                                  </div>
+                                  {isHotel && (
+                                    <p className="text-xs text-slate-500">
+                                      {group.items.map((it: any) => {
+                                        const rt = (it.meta?.room_type || '').toString() || '–';
+                                        const label = ROOM_TYPE_LABELS[rt] || rt;
+                                        return `${label} × ${it.quantity || 1}`;
+                                      }).join(', ')} kamar
+                                    </p>
+                                  )}
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+                                    {hasJamaah && (
+                                      <span>
+                                        {itemWithJamaah.jamaah_data_type === 'link' ? (
+                                          <a href={itemWithJamaah.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+                                            <LinkIcon className="w-3.5 h-3.5" /> Link
+                                          </a>
+                                        ) : jamaahUrl ? (
+                                          <a href={jamaahUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+                                            <Download className="w-3.5 h-3.5" /> File
+                                          </a>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1"><Download className="w-3.5 h-3.5" /> File diunggah</span>
+                                        )}
+                                      </span>
+                                    )}
+                                    {(isTicket || isVisa) && itemWithManifest.manifest_file_url && (
+                                      <a href={getFileUrl(itemWithManifest.manifest_file_url) || itemWithManifest.manifest_file_url} target="_blank" rel="noopener noreferrer" download className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+                                        <Download className="w-3.5 h-3.5" /> Manifest
+                                      </a>
+                                    )}
+                                    {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
+                                      <a href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)} target="_blank" rel="noopener noreferrer" download className="text-emerald-600 hover:underline inline-flex items-center gap-1 font-medium">
+                                        <Download className="w-3.5 h-3.5" /> Dokumen terbit
+                                      </a>
+                                    )}
+                                  </div>
+                                  {progress?.issued_at && (
+                                    <p className="text-xs text-slate-500">Terbit: {new Date(progress.issued_at).toLocaleString('id-ID')}</p>
                                   )}
                                 </div>
-                              )}
-                              {(isTicket || isVisa) && item.manifest_file_url && (
-                                <div className="text-sm text-slate-600">
-                                  Manifest jamaah:{' '}
-                                  <a
-                                    href={getFileUrl(item.manifest_file_url) || item.manifest_file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download
-                                    className="text-blue-600 hover:underline inline-flex items-center gap-1 font-medium"
-                                  >
-                                    <Download className="w-3.5 h-3.5" /> Unduh manifest
-                                  </a>
-                                </div>
-                              )}
-                              {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
-                                <div className="text-sm text-slate-600">
-                                  {isVisa ? 'Dokumen visa terbit (upload role visa):' : 'Dokumen tiket terbit (upload role tiket):'}{' '}
-                                  <a
-                                    href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download
-                                    className="text-emerald-600 hover:underline inline-flex items-center gap-1 font-medium"
-                                  >
-                                    <Download className="w-3.5 h-3.5" /> Unduh {isVisa ? 'dokumen visa terbit' : 'dokumen tiket terbit'}
-                                  </a>
-                                </div>
-                              )}
-                              {progress?.issued_at && (
-                                <p className="text-xs text-slate-500">Terbit: {new Date(progress.issued_at).toLocaleString('id-ID')}</p>
-                              )}
+                              </div>
                             </div>
                           );
                         })}
@@ -1844,8 +1999,8 @@ const OrdersInvoicesPage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50/50">
-              <Button variant="outline" onClick={closeModal}>Tutup</Button>
+            <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+              <Button variant="outline" onClick={closeModal} className="rounded-xl min-w-[100px]">Tutup</Button>
             </div>
           </div>
         </div>

@@ -14,7 +14,7 @@ const {
   TicketProgress,
   Notification
 } = require('../models');
-const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES } = require('../constants');
+const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
@@ -159,8 +159,13 @@ const listInvoices = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [] });
   }
 
+  const statusWithDpPaid = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
   const where = { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } };
-  if (status) where.status = status;
+  if (status && statusWithDpPaid.includes(status)) {
+    where.status = status;
+  } else {
+    where.status = { [Op.in]: statusWithDpPaid };
+  }
 
   const invoices = await Invoice.findAll({
     where,
@@ -210,7 +215,10 @@ const getInvoice = asyncHandler(async (req, res) => {
           {
             model: OrderItem,
             as: 'OrderItems',
-            include: [{ model: TicketProgress, as: 'TicketProgress', required: false }]
+            include: [
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false },
+              { model: TicketProgress, as: 'TicketProgress', required: false }
+            ]
           }
         ]
       }
@@ -218,10 +226,22 @@ const getInvoice = asyncHandler(async (req, res) => {
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+  const statusWithDpPaidGet = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (!invoice.status || !statusWithDpPaidGet.includes(invoice.status)) {
+    return res.status(403).json({ success: false, message: 'Detail invoice hanya tersedia setelah ada pembayaran DP.' });
+  }
   const ticketItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.TICKET);
   if (ticketItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item tiket' });
 
-  res.json({ success: true, data: invoice });
+  const data = invoice.get ? invoice.get({ plain: true }) : invoice;
+  (data?.Order?.OrderItems || []).forEach((oi) => {
+    if (oi.type === ORDER_ITEM_TYPE.TICKET && (oi.Product || oi.product)) {
+      const p = oi.Product || oi.product;
+      oi.product_name = p.name || p.code || null;
+    }
+  });
+
+  res.json({ success: true, data });
 });
 
 /**

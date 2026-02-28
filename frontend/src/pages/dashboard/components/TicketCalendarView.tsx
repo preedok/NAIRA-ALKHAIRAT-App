@@ -4,7 +4,9 @@ import {
   ChevronRight,
   Plane,
   Users,
-  X
+  X,
+  MapPin,
+  ArrowLeftRight
 } from 'lucide-react';
 import { productsApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -20,9 +22,17 @@ export interface TicketProduct {
   id: string;
   code: string;
   name: string;
-  meta?: { trip_type?: string } | null;
+  meta?: { trip_type?: TicketTripType } | null;
   bandara_options?: { bandara: string; name: string }[];
 }
+
+export type TicketTripType = 'one_way' | 'return_only' | 'round_trip';
+
+const TRIP_TYPE_LABELS: Record<TicketTripType, string> = {
+  one_way: 'Pergi saja',
+  return_only: 'Pulang saja',
+  round_trip: 'Pulang pergi'
+};
 
 type CalendarDayData = {
   quota?: number;
@@ -37,6 +47,7 @@ interface TicketCalendarViewProps {
 
 const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts }) => {
   const { showToast } = useToast();
+  const [tripTypeFilter, setTripTypeFilter] = useState<TicketTripType | ''>('');
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [selectedBandara, setSelectedBandara] = useState<string>('');
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -48,9 +59,27 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
   const [loading, setLoading] = useState(false);
   const [popoverDate, setPopoverDate] = useState<string | null>(null);
 
+  const filteredTicketProducts = useMemo(() => {
+    if (!tripTypeFilter) return ticketProducts;
+    return ticketProducts.filter((p) => p.meta?.trip_type === tripTypeFilter);
+  }, [ticketProducts, tripTypeFilter]);
+
+  // If filter changes and current selected product no longer matches, reset selection
+  useEffect(() => {
+    if (!selectedProductId) return;
+    const stillValid = filteredTicketProducts.some((p) => p.id === selectedProductId);
+    if (!stillValid) {
+      setSelectedProductId('');
+      setSelectedBandara('');
+      setCalendarData(null);
+      setProductName('');
+      setPopoverDate(null);
+    }
+  }, [filteredTicketProducts, selectedProductId]);
+
   const selectedProduct = useMemo(
-    () => ticketProducts.find((p) => p.id === selectedProductId),
-    [ticketProducts, selectedProductId]
+    () => filteredTicketProducts.find((p) => p.id === selectedProductId),
+    [filteredTicketProducts, selectedProductId]
   );
 
   const monthStart = useMemo(() => new Date(calendarMonth.year, calendarMonth.month, 1), [calendarMonth]);
@@ -103,63 +132,102 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
 
   if (ticketProducts.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-600">
-        <Plane className="mx-auto h-12 w-12 text-slate-400 mb-3" />
-        <p>Belum ada produk tiket. Tambah tiket di tab Daftar Tiket.</p>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 text-center shadow-sm">
+        <div className="inline-flex p-4 rounded-2xl bg-slate-100 text-slate-500 mb-4">
+          <Plane className="h-12 w-12" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-800">Belum ada produk tiket</h3>
+        <p className="text-slate-600 mt-1">Tambah tiket di tab Daftar Tiket untuk melihat kalender kuota.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium text-slate-700">Pilih Produk Tiket:</label>
-        <select
-          value={selectedProductId}
-          onChange={(e) => {
-            setSelectedProductId(e.target.value);
-            setSelectedBandara('');
-          }}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[220px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        >
-          <option value="">-- Pilih tiket --</option>
-          {ticketProducts.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.code})
-            </option>
-          ))}
-        </select>
-        {selectedProductId && (
-          <>
-            <label className="text-sm font-medium text-slate-700">Bandara:</label>
+    <div className="space-y-6">
+      {/* Filter panel */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80">
+          <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <ArrowLeftRight className="w-4 h-4 text-primary-600" />
+            Pilih filter untuk menampilkan kalender
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">Perjalanan, produk tiket, dan bandara menentukan data yang ditampilkan.</p>
+        </div>
+        <div className="p-5 flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-600">Perjalanan</label>
             <select
-              value={selectedBandara}
-              onChange={(e) => setSelectedBandara(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              value={tripTypeFilter}
+              onChange={(e) => {
+                const v = e.target.value as TicketTripType | '';
+                setTripTypeFilter(v);
+              }}
+              className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm min-w-[160px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
             >
-              <option value="">-- Pilih bandara --</option>
-              {BANDARA_TIKET.map((b) => (
-                <option key={b.code} value={b.code}>
-                  {b.name} ({b.code})
-                </option>
+              <option value="">Semua</option>
+              {Object.entries(TRIP_TYPE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
               ))}
             </select>
-          </>
-        )}
-        {selectedProductId && selectedBandara && (
-          <span className="text-sm text-slate-500">{productName} — {bandaraName}</span>
-        )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-600">Produk Tiket</label>
+            <select
+              value={selectedProductId}
+              onChange={(e) => {
+                setSelectedProductId(e.target.value);
+                setSelectedBandara('');
+              }}
+              className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm min-w-[220px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            >
+              <option value="">-- Pilih tiket --</option>
+              {filteredTicketProducts.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+              ))}
+            </select>
+          </div>
+          {selectedProductId && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" /> Bandara
+              </label>
+              <select
+                value={selectedBandara}
+                onChange={(e) => setSelectedBandara(e.target.value)}
+                className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm min-w-[160px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              >
+                <option value="">-- Pilih bandara --</option>
+                {BANDARA_TIKET.map((b) => (
+                  <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {selectedProductId && selectedBandara && (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 text-primary-800 text-sm font-medium border border-primary-100">
+              {productName} · {bandaraName}
+            </div>
+          )}
+        </div>
       </div>
 
+      {ticketProducts.length > 0 && filteredTicketProducts.length === 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-6 text-center text-amber-800 text-sm shadow-sm">
+          Tidak ada produk tiket sesuai filter perjalanan yang dipilih.
+        </div>
+      )}
+
       {selectedProductId && !selectedBandara && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center text-amber-800 text-sm">
-          Pilih bandara (BTH, CGK, SBY, UPG) untuk menampilkan kalender kuota per tanggal dan booking owner.
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-8 text-center shadow-sm">
+          <MapPin className="mx-auto w-10 h-10 text-slate-400 mb-3" />
+          <p className="text-slate-600 font-medium">Pilih bandara (BTH, CGK, SBY, UPG)</p>
+          <p className="text-slate-500 text-sm mt-1">untuk menampilkan kalender kuota per tanggal dan booking owner.</p>
         </div>
       )}
 
       {selectedProductId && selectedBandara && (
-        <>
-          <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={handlePrevMonth}
@@ -180,11 +248,11 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
           </div>
 
           {loading ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500">
+            <div className="p-12 text-center text-slate-500">
               Memuat kalender...
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-200 bg-white overflow-visible shadow-sm">
+            <div className="overflow-visible">
               <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
                 {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((d) => (
                   <div key={d} className="py-2 text-center text-xs font-medium text-slate-600">
@@ -284,10 +352,10 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
             </div>
           )}
 
-          <div className="flex flex-wrap gap-4 text-xs text-slate-600">
-            <span>Keterangan: angka = dipesan/kuota per tanggal (bandara {bandaraName}). Booking dihitung dari item tiket dengan tanggal keberangkatan (departure_date).</span>
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-600">
+            Keterangan: angka = dipesan/kuota per tanggal (bandara {bandaraName}). Booking dihitung dari item tiket dengan tanggal keberangkatan (departure_date).
           </div>
-        </>
+        </div>
       )}
     </div>
   );

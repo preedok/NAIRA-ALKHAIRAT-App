@@ -31,6 +31,13 @@ const MEAL_OPTIONS = [
   { value: 'completed', label: 'Selesai' }
 ];
 
+const ROOM_TYPE_LABELS: Record<string, string> = {
+  single: 'Single',
+  double: 'Double',
+  triple: 'Triple',
+  quad: 'Quad'
+};
+
 const formatDate = (d: string | null | undefined) => {
   if (!d) return '–';
   try {
@@ -51,6 +58,7 @@ const formatDateWithTime = (d: string | null | undefined, time: string | null | 
 const HotelWorkPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const invoiceIdParam = searchParams.get('invoice');
+  const qParam = searchParams.get('q');
   const { showToast } = useToast();
 
   const [dashboard, setDashboard] = useState<any>(null);
@@ -61,7 +69,7 @@ const HotelWorkPage: React.FC = () => {
 
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
-  const [filterSearch, setFilterSearch] = useState<string>('');
+  const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -101,10 +109,21 @@ const HotelWorkPage: React.FC = () => {
     fetchInvoices();
   }, [fetchInvoices]);
 
+  // Saat dibuka dari dashboard (Kerjakan) dengan ?invoice=...&q=..., filter langsung pakai nomor invoice
+  useEffect(() => {
+    if (qParam && qParam.trim()) setFilterSearch(qParam.trim());
+  }, [qParam]);
+
   useEffect(() => {
     if (invoiceIdParam) {
       hotelApi.getInvoice(invoiceIdParam)
-        .then((res: any) => res.data.success && setDetailInvoice(res.data.data))
+        .then((res: any) => {
+          if (res.data.success && res.data.data) {
+            setDetailInvoice(res.data.data);
+            const invNum = res.data.data.invoice_number;
+            if (invNum) setFilterSearch(invNum);
+          }
+        })
         .catch(() => setDetailInvoice(null));
     } else {
       setDetailInvoice(null);
@@ -382,7 +401,7 @@ const HotelWorkPage: React.FC = () => {
             {/* Content */}
             <div className="p-5 space-y-5">
               <p className="text-sm text-slate-500">
-                {hotelItems.length} item hotel · Perbarui status, nomor kamar, dan jadwal di bawah.
+                Sesuai order: tiap baris = satu tipe kamar × qty. Isi status & nomor kamar per unit (Kamar 1, Kamar 2, …).
               </p>
 
               {hotelItems.map((item: any, idx: number) => {
@@ -390,41 +409,80 @@ const HotelWorkPage: React.FC = () => {
                 const status = prog?.status || 'waiting_confirmation';
                 const mealStatus = prog?.meal_status || 'pending';
                 const jamaahStatus = item.jamaah_status || prog?.jamaah_status;
+                const qty = Math.max(1, Number(item.quantity) || 1);
+                const roomType = (item.meta?.room_type || '').toString() || '–';
+                const roomTypeLabel = ROOM_TYPE_LABELS[roomType] || roomType;
+                const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
+                const roomNumbersRaw = (prog?.room_number || '').trim();
+                const roomNumbersArr = roomNumbersRaw ? roomNumbersRaw.split(',').map((s: string) => s.trim()) : [];
+                const roomNumbersPadded = Array.from({ length: qty }, (_, i) => roomNumbersArr[i] ?? '');
+
+                const handleRoomNumbersBlur = () => {
+                  const inputs = document.querySelectorAll<HTMLInputElement>(`input[name^="room-${item.id}-"]`);
+                  const values = Array.from(inputs).map(inp => (inp.value ?? '').trim());
+                  const joined = values.join(', ');
+                  const normalizedSaved = roomNumbersRaw.split(',').map((s: string) => s.trim()).join(', ');
+                  if (joined !== normalizedSaved) handleUpdateProgress(item.id, { room_number: joined || undefined });
+                };
+
                 return (
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/40 shadow-sm overflow-hidden">
-                    {/* Item card header */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-100 text-primary-600 text-sm font-semibold">
+                    {/* Card header: Nama Hotel + Tipe kamar + Qty */}
+                    <div className="px-4 py-3 bg-white border-b border-slate-100 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-100 text-primary-600 text-sm font-semibold shrink-0">
                           {idx + 1}
                         </span>
-                        <span className="font-semibold text-slate-900">Item Hotel · Qty: {item.quantity}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Nama Hotel</p>
+                          <p className="font-semibold text-slate-900 truncate">{productName}</p>
+                        </div>
                       </div>
-                      {jamaahStatus && (
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${jamaahStatus === 'keluar_room' ? 'bg-slate-100 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
-                        </span>
-                      )}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pl-10">
+                        <span className="text-slate-600 text-sm">{roomTypeLabel} · × {qty} kamar</span>
+                        {jamaahStatus && (
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${jamaahStatus === 'keluar_room' ? 'bg-slate-100 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="p-4 space-y-4">
-                      {/* Status Pekerjaan & Nomor Kamar — satu baris di desktop */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                            <ListChecks className="w-3.5 h-3.5 text-slate-400" /> Status Pekerjaan
-                          </label>
-                          <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={status} onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })} disabled={updatingId === item.id}>
-                            {STATUS_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
-                            <DoorOpen className="w-3.5 h-3.5 text-slate-400" /> Nomor Kamar
-                          </label>
-                          <input type="text" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400" placeholder="Contoh: 101" defaultValue={prog?.room_number ?? ''} onBlur={(e) => { const v = e.target.value?.trim(); if (v !== (prog?.room_number ?? '')) handleUpdateProgress(item.id, { room_number: v || undefined }); }} disabled={updatingId === item.id} />
-                        </div>
+                      {/* Status Pekerjaan (satu untuk seluruh baris ini) */}
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
+                          <ListChecks className="w-3.5 h-3.5 text-slate-400" /> Status Pekerjaan
+                        </label>
+                        <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={status} onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })} disabled={updatingId === item.id}>
+                          {STATUS_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                        </select>
                       </div>
+
+                      {/* Nomor Kamar: tampil hanya ketika status = Pemberian nomor room */}
+                      {status === 'room_assigned' && (
+                        <div>
+                          <label className="flex items-center gap-2 text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">
+                            <DoorOpen className="w-3.5 h-3.5 text-slate-400" /> Nomor Kamar (per unit)
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {roomNumbersPadded.map((val, i) => (
+                              <div key={i}>
+                                <label className="block text-xs text-slate-500 mb-1">Kamar {i + 1}</label>
+                                <input
+                                  type="text"
+                                  name={`room-${item.id}-${i}`}
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-400"
+                                  placeholder="No. kamar"
+                                  defaultValue={val}
+                                  onBlur={handleRoomNumbersBlur}
+                                  disabled={updatingId === item.id}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Status Makan */}
                       <div>
