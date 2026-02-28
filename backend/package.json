@@ -25,6 +25,7 @@
     "db:sync": "node scripts/sync-database.js",
     "clean:uploads": "node scripts/clean-uploads.js",
     "clean:data-keep-master": "node scripts/clean-data-keep-master-only.js",
+    "clear:orders-invoices": "node scripts/clear-orders-invoices.js",
     "generate:payment-proofs": "node scripts/generate-payment-proof-examples.js"
   },
   "dependencies": {
