@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X } from 'lucide-react';
+import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, FileSpreadsheet, Wallet } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -464,14 +464,35 @@ const AccountingDashboard: React.FC = () => {
 
           <Card>
             <h3 className="text-lg font-bold text-slate-900 mb-4">Aksi Cepat</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center" onClick={() => navigate('/dashboard/accounting/financial-report')}>
-                <Activity className="w-5 h-5" />
-                <span className="text-sm">Laporan Keuangan</span>
+            <p className="text-sm text-slate-500 mb-4">Akses langsung ke modul accounting dan laporan</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/financial-report')}>
+                <Activity className="w-5 h-5 text-primary-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Laporan Keuangan</span>
               </Button>
-              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center" onClick={() => navigate('/dashboard/accounting/aging')}>
-                <TrendingUp className="w-5 h-5" />
-                <span className="text-sm">Piutang (AR)</span>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/aging')}>
+                <TrendingUp className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Piutang (AR)</span>
+              </Button>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/chart-of-accounts')}>
+                <FileText className="w-5 h-5 text-slate-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Chart of Accounts</span>
+              </Button>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/rekening-koran')}>
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Rekening Koran</span>
+              </Button>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/orders-invoices')}>
+                <Receipt className="w-5 h-5 text-blue-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Order & Invoice</span>
+              </Button>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/reports')}>
+                <BarChart3 className="w-5 h-5 text-purple-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Reports</span>
+              </Button>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/refunds')}>
+                <Wallet className="w-5 h-5 text-sky-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Refund</span>
               </Button>
             </div>
           </Card>

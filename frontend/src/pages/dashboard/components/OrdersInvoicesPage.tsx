@@ -494,6 +494,13 @@ const OrdersInvoicesPage: React.FC = () => {
   };
 
   const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
+  const formatDateWithTime = (d: string | null | undefined, time: string | null | undefined) => {
+    const dateStr = formatDate(d ?? null);
+    if (dateStr === '-') return '–';
+    const t = (time || '').trim();
+    if (!t) return dateStr;
+    return `${dateStr}, ${t}`;
+  };
 
   const VISA_STATUS_LABELS: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
   const TICKET_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
@@ -1002,6 +1009,8 @@ const OrdersInvoicesPage: React.FC = () => {
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Visa</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Tiket</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Hotel</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">Check-in Hotel</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">Check-out Hotel</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px]">Status Bus</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px]">Bukti Bayar</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[100px]">Tgl</th>
@@ -1103,6 +1112,26 @@ const OrdersInvoicesPage: React.FC = () => {
                             </div>
                           </div>
                         );
+                      })()}
+                    </td>
+                    <td className="py-3 px-4 align-top text-slate-600 text-xs whitespace-nowrap">
+                      {(() => {
+                        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
+                        if (hotelItems.length === 0) return '–';
+                        const first = hotelItems[0];
+                        const checkInDate = first?.HotelProgress?.check_in_date ?? first?.meta?.check_in;
+                        const checkInTime = first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time;
+                        return formatDateWithTime(checkInDate, checkInTime);
+                      })()}
+                    </td>
+                    <td className="py-3 px-4 align-top text-slate-600 text-xs whitespace-nowrap">
+                      {(() => {
+                        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
+                        if (hotelItems.length === 0) return '–';
+                        const first = hotelItems[0];
+                        const checkOutDate = first?.HotelProgress?.check_out_date ?? first?.meta?.check_out;
+                        const checkOutTime = first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time;
+                        return formatDateWithTime(checkOutDate, checkOutTime);
                       })()}
                     </td>
                     <td className="py-3 px-4 align-top">

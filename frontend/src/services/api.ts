@@ -611,6 +611,15 @@ export const accountingApi = {
     api.get('/accounting/export-financial-pdf', { params, responseType: 'blob' }),
   reconcilePayment: (id: string) =>
     api.post<{ success: boolean; data: any }>(`/accounting/payments/${id}/reconcile`),
+  bankStatements: {
+    list: () => api.get<{ success: boolean; data: BankStatementUploadItem[] }>('/accounting/bank-statements'),
+    get: (id: string) => api.get<{ success: boolean; data: BankStatementUploadWithLines }>(`/accounting/bank-statements/${id}`),
+    getReconciliation: (id: string) => api.get<{ success: boolean; data: BankStatementReconciliationData }>(`/accounting/bank-statements/${id}/reconcile`),
+    exportReconciliation: (id: string) => api.get<Blob>(`/accounting/bank-statements/${id}/reconcile/export`, { responseType: 'blob' }),
+    upload: (formData: FormData) => api.post<{ success: boolean; data: BankStatementUploadWithLines; message: string }>('/accounting/bank-statements/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    delete: (id: string) => api.delete<{ success: boolean; message: string }>(`/accounting/bank-statements/${id}`),
+    downloadTemplate: () => api.get<Blob>('/accounting/bank-statements/template', { responseType: 'blob' })
+  },
   payroll: {
     getSettings: (params?: { branch_id?: string }) => api.get<{ success: boolean; data: PayrollSettingData }>('/accounting/payroll/settings', { params }),
     updateSettings: (body: { branch_id?: string; method?: string; payroll_day_of_month?: number; run_time?: string; is_active?: boolean; company_name_slip?: string; company_address_slip?: string }) =>
@@ -800,6 +809,50 @@ export interface AccountingAgingData {
   pagination?: { total: number; page: number; limit: number; totalPages: number };
   totals: { current: number; days_1_30: number; days_31_60: number; days_61_plus: number };
   total_outstanding: number;
+}
+
+export interface BankStatementLineItem {
+  id: string;
+  upload_id: string;
+  transaction_date: string;
+  description?: string | null;
+  reference_number?: string | null;
+  amount_debit: number;
+  amount_credit: number;
+  amount: number;
+  balance_after?: number | null;
+  row_index?: number | null;
+}
+export interface BankStatementUploadItem {
+  id: string;
+  name?: string | null;
+  period_from?: string | null;
+  period_to?: string | null;
+  file_name?: string | null;
+  uploaded_by?: string | null;
+  created_at: string;
+  UploadedBy?: { id: string; name: string };
+  line_count: number;
+}
+export interface BankStatementUploadWithLines extends Omit<BankStatementUploadItem, 'line_count'> {
+  Lines?: BankStatementLineItem[];
+}
+export interface BankStatementReconciliationData {
+  upload: BankStatementUploadWithLines;
+  recorded: Array<{
+    id: string;
+    transfer_date: string;
+    amount: number;
+    bank_name?: string;
+    account_number?: string;
+    invoice_number?: string;
+    payer?: string;
+    payment_type: string;
+  }>;
+  bankLines: BankStatementLineItem[];
+  matched: Array<{ recorded: BankStatementReconciliationData['recorded'][0]; bankLine: BankStatementLineItem }>;
+  onlyInRecorded: BankStatementReconciliationData['recorded'];
+  onlyInBank: BankStatementLineItem[];
 }
 
 export type ReportType = 'revenue' | 'orders' | 'partners' | 'jamaah' | 'financial' | 'logs';

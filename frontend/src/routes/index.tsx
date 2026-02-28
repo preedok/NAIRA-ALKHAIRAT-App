@@ -36,6 +36,7 @@ import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
 import AccountingAgingPage from '../pages/dashboard/accounting/AccountingAgingPage';
 import AccountingChartOfAccountsPage from '../pages/dashboard/accounting/AccountingChartOfAccountsPage';
+import RekeningKoranPage from '../pages/dashboard/accounting/RekeningKoranPage';
 
 const router = createBrowserRouter([
   {
@@ -219,8 +220,12 @@ const router = createBrowserRouter([
             element: <AccountingChartOfAccountsPage />
           },
           {
+            path: 'accounting/rekening-koran',
+            element: <RekeningKoranPage />
+          },
+          {
             path: 'accounting/reconciliation',
-            element: <Navigate to="/dashboard" replace />
+            element: <Navigate to="/dashboard/accounting/rekening-koran" replace />
           },
           {
             path: 'accounting/aging',

@@ -24,7 +24,8 @@ import {
   Rocket,
   UserPlus,
   Calendar,
-  DollarSign
+  DollarSign,
+  Landmark
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { OrderDraftProvider } from '../contexts/OrderDraftContext';
@@ -128,6 +129,12 @@ const menuItems: MenuItem[] = [
     title: 'Piutang (AR)',
     icon: <BarChart3 className="w-5 h-5" />,
     path: '/dashboard/accounting/aging',
+    roles: ['role_accounting']
+  },
+  {
+    title: 'Rekening Koran',
+    icon: <FileText className="w-5 h-5" />,
+    path: '/dashboard/accounting/rekening-koran',
     roles: ['role_accounting']
   },
   {

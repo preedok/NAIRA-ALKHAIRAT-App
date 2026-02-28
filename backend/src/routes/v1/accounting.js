@@ -3,6 +3,7 @@ const router = express.Router();
 const { auth, requireRole } = require('../../middleware/auth');
 const { ROLES } = require('../../constants');
 const accountingController = require('../../controllers/accountingController');
+const bankStatementController = require('../../controllers/bankStatementController');
 const payrollController = require('../../controllers/payrollController');
 
 router.use(auth);
@@ -50,6 +51,15 @@ router.get('/invoices', accountingController.listInvoices);
 router.get('/orders', accountingController.listOrders);
 router.get('/financial-report', accountingController.getFinancialReport);
 router.post('/payments/:id/reconcile', accountingController.reconcilePayment);
+
+// Rekening Koran (upload Excel & rekon)
+router.post('/bank-statements/upload', bankStatementController.uploadBankStatement);
+router.get('/bank-statements/template', bankStatementController.downloadTemplate);
+router.get('/bank-statements', bankStatementController.listBankStatements);
+router.get('/bank-statements/:id', bankStatementController.getBankStatement);
+router.get('/bank-statements/:id/reconcile/export', bankStatementController.exportReconciliationExcel);
+router.get('/bank-statements/:id/reconcile', bankStatementController.getReconciliation);
+router.delete('/bank-statements/:id', bankStatementController.deleteBankStatement);
 
 // Payroll (penggajian)
 router.get('/payroll/settings', payrollController.getSettings);
