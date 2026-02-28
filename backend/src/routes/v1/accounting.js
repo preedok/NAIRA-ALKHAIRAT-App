@@ -5,6 +5,7 @@ const { ROLES } = require('../../constants');
 const accountingController = require('../../controllers/accountingController');
 const bankStatementController = require('../../controllers/bankStatementController');
 const payrollController = require('../../controllers/payrollController');
+const accurateOnlineController = require('../../controllers/accurateOnlineController');
 
 router.use(auth);
 
@@ -60,6 +61,18 @@ router.get('/bank-statements/:id', bankStatementController.getBankStatement);
 router.get('/bank-statements/:id/reconcile/export', bankStatementController.exportReconciliationExcel);
 router.get('/bank-statements/:id/reconcile', bankStatementController.getReconciliation);
 router.delete('/bank-statements/:id', bankStatementController.deleteBankStatement);
+
+// Accurate Online module
+router.get('/accurate/dashboard', accurateOnlineController.getDashboard);
+router.get('/accurate/quotations', accurateOnlineController.listQuotations);
+router.get('/accurate/purchase-orders', accurateOnlineController.listPurchaseOrders);
+router.get('/accurate/warehouses', accurateOnlineController.listWarehouses);
+router.post('/accurate/warehouses', accurateOnlineController.createWarehouse);
+router.get('/accurate/fixed-assets', accurateOnlineController.listFixedAssets);
+router.post('/accurate/fixed-assets', accurateOnlineController.createFixedAsset);
+router.patch('/accurate/fixed-assets/:id', accurateOnlineController.updateFixedAsset);
+router.post('/accurate/fixed-assets/:id/calculate-depreciation', accurateOnlineController.calculateDepreciation);
+router.get('/accurate/fixed-assets/:id/depreciation', accurateOnlineController.getDepreciationSchedule);
 
 // Payroll (penggajian)
 router.get('/payroll/settings', payrollController.getSettings);

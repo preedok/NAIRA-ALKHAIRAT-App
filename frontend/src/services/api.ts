@@ -639,8 +639,27 @@ export const accountingApi = {
     getSlipPdf: (runId: string, itemId: string) => api.get(`/accounting/payroll/runs/${runId}/items/${itemId}/slip`, { responseType: 'blob' }),
     getMySlips: () => api.get<{ success: boolean; data: MySlipItem[] }>('/accounting/payroll/my-slips'),
     getMySlipPdf: (itemId: string) => api.get(`/accounting/payroll/my-slips/${itemId}/slip`, { responseType: 'blob' })
+  },
+  accurate: {
+    getDashboard: () => api.get<{ success: boolean; data: AccurateDashboardData }>('/accounting/accurate/dashboard'),
+    listQuotations: () => api.get<{ success: boolean; data: any[] }>('/accounting/accurate/quotations'),
+    listPurchaseOrders: () => api.get<{ success: boolean; data: any[] }>('/accounting/accurate/purchase-orders'),
+    listWarehouses: () => api.get<{ success: boolean; data: any[] }>('/accounting/accurate/warehouses'),
+    createWarehouse: (body: { code: string; name: string; branch_id?: string }) => api.post<{ success: boolean; data: any }>('/accounting/accurate/warehouses', body),
+    listFixedAssets: () => api.get<{ success: boolean; data: any[] }>('/accounting/accurate/fixed-assets'),
+    createFixedAsset: (body: Record<string, unknown>) => api.post<{ success: boolean; data: any }>('/accounting/accurate/fixed-assets', body),
+    updateFixedAsset: (id: string, body: Record<string, unknown>) => api.patch<{ success: boolean; data: any }>(`/accounting/accurate/fixed-assets/${id}`, body),
+    calculateDepreciation: (id: string) => api.post<{ success: boolean; data: { schedule: any[]; message: string } }>(`/accounting/accurate/fixed-assets/${id}/calculate-depreciation`),
+    getDepreciationSchedule: (id: string) => api.get<{ success: boolean; data: any[] }>(`/accounting/accurate/fixed-assets/${id}/depreciation`)
   }
 };
+
+export interface AccurateDashboardData {
+  penjualan: { quotations: number };
+  pembelian: { purchase_orders: number };
+  persediaan: { warehouses: number };
+  aset_tetap: { fixed_assets: number };
+}
 export interface PayrollSettingData {
   id: string;
   branch_id?: string;

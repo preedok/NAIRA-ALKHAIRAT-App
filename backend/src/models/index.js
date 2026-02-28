@@ -43,6 +43,11 @@ const PayrollItem = require('./PayrollItem');
 const PaymentReallocation = require('./PaymentReallocation');
 const BankStatementUpload = require('./BankStatementUpload');
 const BankStatementLine = require('./BankStatementLine');
+const AccurateQuotation = require('./AccurateQuotation');
+const AccuratePurchaseOrder = require('./AccuratePurchaseOrder');
+const AccurateWarehouse = require('./AccurateWarehouse');
+const AccurateFixedAsset = require('./AccurateFixedAsset');
+const AccurateDepreciationSchedule = require('./AccurateDepreciationSchedule');
 
 // Wilayah -> Provinsi -> Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
@@ -209,9 +214,16 @@ Invoice.hasMany(PaymentReallocation, { foreignKey: 'target_invoice_id', as: 'Rea
 User.hasMany(PaymentReallocation, { foreignKey: 'performed_by', as: 'PaymentReallocations' });
 
 BankStatementUpload.belongsTo(User, { foreignKey: 'uploaded_by', as: 'UploadedBy' });
-User.hasMany(BankStatementUpload, { foreignKey: 'uploaded_by', as: 'BankStatementUploads' });
-BankStatementUpload.hasMany(BankStatementLine, { foreignKey: 'upload_id', as: 'Lines' });
-BankStatementLine.belongsTo(BankStatementUpload, { foreignKey: 'upload_id', as: 'Upload' });
+  User.hasMany(BankStatementUpload, { foreignKey: 'uploaded_by', as: 'BankStatementUploads' });
+  BankStatementUpload.hasMany(BankStatementLine, { foreignKey: 'upload_id', as: 'Lines' });
+  BankStatementLine.belongsTo(BankStatementUpload, { foreignKey: 'upload_id', as: 'Upload' });
+
+  AccurateQuotation.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+  AccuratePurchaseOrder.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+  AccurateWarehouse.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+  AccurateFixedAsset.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+  AccurateFixedAsset.hasMany(AccurateDepreciationSchedule, { foreignKey: 'fixed_asset_id', as: 'DepreciationSchedules' });
+  AccurateDepreciationSchedule.belongsTo(AccurateFixedAsset, { foreignKey: 'fixed_asset_id', as: 'FixedAsset' });
 
 const db = {
   sequelize,
@@ -259,7 +271,12 @@ const db = {
   PayrollItem,
   PaymentReallocation,
   BankStatementUpload,
-  BankStatementLine
+  BankStatementLine,
+  AccurateQuotation,
+  AccuratePurchaseOrder,
+  AccurateWarehouse,
+  AccurateFixedAsset,
+  AccurateDepreciationSchedule
 };
 
 module.exports = db;

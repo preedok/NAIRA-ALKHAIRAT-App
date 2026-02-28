@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, FileSpreadsheet, Wallet } from 'lucide-react';
+import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, FileSpreadsheet, Wallet, Landmark } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -493,6 +493,10 @@ const AccountingDashboard: React.FC = () => {
               <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/refunds')}>
                 <Wallet className="w-5 h-5 text-sky-600 shrink-0" />
                 <span className="text-xs font-medium text-center leading-tight">Refund</span>
+              </Button>
+              <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/accurate')}>
+                <Landmark className="w-5 h-5 text-slate-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Accurate Online</span>
               </Button>
             </div>
           </Card>
