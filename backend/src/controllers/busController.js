@@ -120,7 +120,7 @@ const getDashboard = asyncHandler(async (req, res) => {
  * Scope cabang role bus. Sama pola dengan visa/ticket.
  */
 const listInvoices = asyncHandler(async (req, res) => {
-  const { status } = req.query;
+  const { status, page = 1, limit = 25 } = req.query;
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
@@ -130,12 +130,16 @@ const listInvoices = asyncHandler(async (req, res) => {
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
-  if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [] });
+  if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
 
   const where = { order_id: orderIdsFromBus, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
 
-  const invoices = await Invoice.findAll({
+  const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
+  const pg = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (pg - 1) * lim;
+
+  const { count, rows: invoices } = await Invoice.findAndCountAll({
     where,
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
@@ -156,10 +160,14 @@ const listInvoices = asyncHandler(async (req, res) => {
         ]
       }
     ],
-    order: [['created_at', 'DESC']]
+    order: [['created_at', 'DESC']],
+    limit: lim,
+    offset,
+    distinct: true
   });
 
-  res.json({ success: true, data: invoices });
+  const totalPages = Math.ceil((count || 0) / lim) || 1;
+  res.json({ success: true, data: invoices, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
 });
 
 /**

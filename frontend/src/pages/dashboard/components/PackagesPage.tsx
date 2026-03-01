@@ -8,14 +8,15 @@ import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, Autocomplete } from '../../../components/common';
+import { FilterIconButton, StatCard, Autocomplete, Input, PriceInput, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
-import { fillFromSource, getRatesFromRates } from '../../../utils/currencyConversion';
+import { fillFromSource, getRatesFromRates, fromIDR } from '../../../utils/currencyConversion';
+import { PRICE_COLUMN_LABEL, getPriceTripleForTable } from '../../../utils';
 
 const INCLUDE_OPTIONS = [
   { id: 'hotel', label: 'Hotel' },
@@ -268,11 +269,9 @@ const PackagesPage: React.FC = () => {
     { id: 'hotel_madinah', label: 'Hotel Madinah', align: 'left' },
     { id: 'ticket_info', label: 'Tiket', align: 'left' },
     { id: 'ticket_workflow', label: 'Perjalanan', align: 'left' },
-    { id: 'price_idr', label: 'Harga (IDR)', align: 'right' },
-    { id: 'price_sar', label: 'Harga (SAR)', align: 'right' },
-    { id: 'price_usd', label: 'Harga (USD)', align: 'right' },
+    { id: 'price', label: PRICE_COLUMN_LABEL, align: 'right' },
     { id: 'discount', label: 'Diskon %', align: 'center' },
-    { id: 'price_after', label: 'Setelah Diskon (IDR)', align: 'right' },
+    { id: 'price_after', label: 'Setelah Diskon (IDR · SAR · USD)', align: 'right' },
     { id: 'includes', label: 'Include', align: 'left' },
     { id: 'status', label: 'Status', align: 'center' },
     { id: 'actions', label: 'Aksi', align: 'center' }
@@ -581,8 +580,14 @@ const PackagesPage: React.FC = () => {
             // Tampilkan harga yang diinput: pakai meta.price_total_idr jika ada; untuk paket lama (tanpa meta) nilai DB = input×days → tampilkan input = price_general_idr/days
             const rawIdr = pkg.price_general_idr ?? (pkg.currency === 'IDR' || !pkg.currency ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
             const priceIdr = meta?.price_total_idr ?? (days >= 1 ? (Number(rawIdr) || 0) / days : rawIdr);
-            const priceSar = pkg.price_general_sar ?? (pkg.currency === 'SAR' ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
-            const priceUsd = pkg.price_general_usd ?? (pkg.currency === 'USD' ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
+            let priceSar = pkg.price_general_sar ?? (pkg.currency === 'SAR' ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
+            let priceUsd = pkg.price_general_usd ?? (pkg.currency === 'USD' ? pkg.price_general ?? pkg.price_branch : null) ?? 0;
+            // Jika hanya IDR ada, tampilkan SAR & USD dari konversi kurs
+            if (Number(priceIdr) > 0 && (priceSar == null || Number(priceSar) <= 0) && (priceUsd == null || Number(priceUsd) <= 0)) {
+              const triple = fromIDR(Number(priceIdr), currencyRates);
+              priceSar = triple.sar;
+              priceUsd = triple.usd;
+            }
             const basePriceIdr = Number(priceIdr) || 0;
             const priceAfterIdr = discountPercent > 0 ? getPriceAfterDiscount(basePriceIdr, discountPercent) : null;
             const includesList = (pkg.meta?.includes as string[] | undefined) ?? [];
@@ -616,20 +621,41 @@ const PackagesPage: React.FC = () => {
                     </span>
                   ) : <span className="text-slate-400">-</span>}
                 </td>
-                <td className="px-4 py-3 text-right text-slate-800 whitespace-nowrap tabular-nums">
-                  {priceIdr != null && Number(priceIdr) > 0 ? formatPrice(Number(priceIdr), 'IDR') : '-'}
-                </td>
-                <td className="px-4 py-3 text-right text-slate-800 whitespace-nowrap tabular-nums">
-                  {priceSar != null && Number(priceSar) > 0 ? formatPrice(Number(priceSar), 'SAR') : '-'}
-                </td>
-                <td className="px-4 py-3 text-right text-slate-800 whitespace-nowrap tabular-nums">
-                  {priceUsd != null && Number(priceUsd) > 0 ? formatPrice(Number(priceUsd), 'USD') : '-'}
+                <td className="px-4 py-3 text-right text-slate-800 align-top">
+                  {(() => {
+                    const t = getPriceTripleForTable(priceIdr, priceSar, priceUsd);
+                    if (!t.hasPrice) return '-';
+                    return (
+                      <>
+                        <div className="tabular-nums">{t.idrText}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          <span className="text-slate-400">SAR:</span> {t.sarText}
+                          <span className="text-slate-400 ml-1">USD:</span> {t.usdText}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">per jamaah</div>
+                      </>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-center whitespace-nowrap">
                   {discountPercent > 0 ? <span className="text-amber-700 font-semibold">{discountPercent}%</span> : <span className="text-slate-400">-</span>}
                 </td>
-                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                  {priceAfterIdr != null && priceAfterIdr > 0 ? <span className="text-[#0D1A63] font-medium">{formatPrice(priceAfterIdr, 'IDR')}</span> : <span className="text-slate-400">-</span>}
+                <td className="px-4 py-3 text-right text-slate-800 align-top">
+                  {(() => {
+                    if (priceAfterIdr == null || priceAfterIdr <= 0) return <span className="text-slate-400">-</span>;
+                    const afterTriple = fromIDR(priceAfterIdr, currencyRates);
+                    const t = getPriceTripleForTable(priceAfterIdr, afterTriple.sar, afterTriple.usd);
+                    return (
+                      <>
+                        <div className="tabular-nums text-[#0D1A63] font-medium">{t.idrText}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          <span className="text-slate-400">SAR:</span> {t.sarText}
+                          <span className="text-slate-400 ml-1">USD:</span> {t.usdText}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">per jamaah</div>
+                      </>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -685,47 +711,43 @@ const PackagesPage: React.FC = () => {
         </div>
       </Card>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center z-10">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">{editingPackage ? 'Update paket' : 'Buat paket baru'}</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Admin Pusat / Super Admin</p>
-              </div>
-              <button type="button" onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg" disabled={saving}>
-                <XCircle className="w-6 h-6 text-slate-400" />
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
+      <Modal open={showModal} onClose={closeModal}>
+        <ModalBox>
+          <ModalHeader
+            title={editingPackage ? 'Update paket' : 'Buat paket baru'}
+            subtitle="Admin Pusat / Super Admin"
+            icon={<Package className="w-5 h-5" />}
+            onClose={closeModal}
+          />
+          <ModalBody className="space-y-6 overflow-y-auto flex-1">
               {/* Section: Info dasar */}
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Info dasar</h3>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Nama paket *</label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                    placeholder="Contoh: Paket Ramadhan 9 day"
-                  />
-                </div>
-                <div>
+                <Input
+                  label="Nama paket"
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Contoh: Paket Ramadhan 9 day"
+                  required
+                  fullWidth
+                />
+                <div className="w-full">
                   <label className="block text-sm font-medium text-slate-700 mb-2">Include – pilih yang termasuk</label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
                     {INCLUDE_OPTIONS.map((opt) => {
                       const selected = form.includes.includes(opt.id);
                       return (
-                        <button
+                        <Button
                           key={opt.id}
                           type="button"
+                          variant={selected ? 'primary' : 'outline'}
+                          size="sm"
+                          className="w-full"
                           onClick={() => toggleInclude(opt.id)}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            selected ? 'bg-[#0D1A63] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
                         >
                           {opt.label}
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
@@ -741,65 +763,57 @@ const PackagesPage: React.FC = () => {
                     <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
                       <p className="text-sm font-medium text-slate-800">Hotel yang termasuk dalam paket</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1">Hotel Mekkah</label>
-                          <select
-                            value={form.hotel_makkah_id}
-                            onChange={(e) => setForm((f) => ({ ...f, hotel_makkah_id: e.target.value }))}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                          >
-                            <option value="">-- Pilih hotel Mekkah --</option>
-                            {hotelsMakkah.map((h) => (
-                              <option key={h.id} value={h.id}>{h.name}</option>
-                            ))}
-                            {hotelsLoading && hotelsMakkah.length === 0 && <option value="">Memuat...</option>}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1">Hotel Madinah</label>
-                          <select
-                            value={form.hotel_madinah_id}
-                            onChange={(e) => setForm((f) => ({ ...f, hotel_madinah_id: e.target.value }))}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                          >
-                            <option value="">-- Pilih hotel Madinah --</option>
-                            {hotelsMadinah.map((h) => (
-                              <option key={h.id} value={h.id}>{h.name}</option>
-                            ))}
-                            {hotelsLoading && hotelsMadinah.length === 0 && <option value="">Memuat...</option>}
-                          </select>
-                        </div>
+                        <Autocomplete
+                          label="Hotel Mekkah"
+                          value={form.hotel_makkah_id}
+                          onChange={(v) => setForm((f) => ({ ...f, hotel_makkah_id: v }))}
+                          options={hotelsMakkah.map((h) => ({ value: h.id, label: h.name }))}
+                          placeholder={hotelsLoading && hotelsMakkah.length === 0 ? 'Memuat...' : '-- Pilih hotel Mekkah --'}
+                          fullWidth
+                        />
+                        <Autocomplete
+                          label="Hotel Madinah"
+                          value={form.hotel_madinah_id}
+                          onChange={(v) => setForm((f) => ({ ...f, hotel_madinah_id: v }))}
+                          options={hotelsMadinah.map((h) => ({ value: h.id, label: h.name }))}
+                          placeholder={hotelsLoading && hotelsMadinah.length === 0 ? 'Memuat...' : '-- Pilih hotel Madinah --'}
+                          fullWidth
+                        />
                       </div>
                     </div>
                   )}
                   {form.includes.includes('makan') && (form.hotel_makkah_id || form.hotel_madinah_id) && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4">
-                      <label className="block text-sm font-medium text-amber-800 mb-2">Makan – pilih sesuai hotel</label>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="rounded-xl border border-btn/30 bg-btn-light/50 p-4 w-full">
+                      <label className="block text-sm font-medium text-slate-800 mb-2">Makan – pilih sesuai hotel</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                         {form.hotel_makkah_id && (() => {
                           const h = hotels.find((x) => x.id === form.hotel_makkah_id);
                           return h ? (
-                            <button
+                            <Button
                               key={h.id}
                               type="button"
+                              size="sm"
+                              variant={form.makan_hotel_ids.includes(h.id) ? 'primary' : 'outline'}
+                              className="w-full"
                               onClick={() => toggleMakanHotelId(h.id)}
-                              className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
                             >
                               Makan – {h.name}
-                            </button>
+                            </Button>
                           ) : null;
                         })()}
                         {form.hotel_madinah_id && (() => {
                           const h = hotels.find((x) => x.id === form.hotel_madinah_id);
                           return h ? (
-                            <button
+                            <Button
                               key={h.id}
                               type="button"
+                              size="sm"
+                              variant={form.makan_hotel_ids.includes(h.id) ? 'primary' : 'outline'}
+                              className="w-full"
                               onClick={() => toggleMakanHotelId(h.id)}
-                              className={`px-3 py-2 rounded-lg text-sm font-medium ${form.makan_hotel_ids.includes(h.id) ? 'bg-amber-600 text-white' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'}`}
                             >
                               Makan – {h.name}
-                            </button>
+                            </Button>
                           ) : null;
                         })()}
                       </div>
@@ -808,132 +822,105 @@ const PackagesPage: React.FC = () => {
                 </section>
               )}
 
-              {/* Section: Produk dalam paket (Visa, Tiket, Bis) – select list seperti Hotel */}
-              {(form.includes.includes('visa') || form.includes.includes('tiket') || form.includes.includes('bis')) && canCreatePackage && (
+              {/* Section: Produk dalam paket (Visa, Tiket, Bis, Handling) */}
+              {(form.includes.includes('visa') || form.includes.includes('tiket') || form.includes.includes('bis') || form.includes.includes('handling')) && canCreatePackage && (
                 <section className="space-y-3">
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Produk dalam paket</h3>
                   <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
                     {form.includes.includes('visa') && (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Visa – pilih yang masuk paket</label>
-                        <select
-                          value={form.visa_ids[0] ?? ''}
-                          onChange={(e) => setForm((f) => ({ ...f, visa_ids: e.target.value ? [e.target.value] : [] }))}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                        >
-                          <option value="">-- Pilih visa --</option>
-                          {visaProducts.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                          {productsLoading && visaProducts.length === 0 && <option value="">Memuat visa...</option>}
-                        </select>
-                      </div>
+                      <Autocomplete
+                        label="Visa – pilih yang masuk paket"
+                        value={form.visa_ids[0] ?? ''}
+                        onChange={(v) => setForm((f) => ({ ...f, visa_ids: v ? [v] : [] }))}
+                        options={visaProducts.map((p) => ({ value: p.id, label: p.name }))}
+                        placeholder={productsLoading && visaProducts.length === 0 ? 'Memuat visa...' : '-- Pilih visa --'}
+                        fullWidth
+                      />
                     )}
                     {form.includes.includes('tiket') && (
                       <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Tiket – pilih yang masuk paket</label>
-                          <select
-                            value={form.ticket_ids[0] ?? ''}
-                            onChange={(e) => setForm((f) => ({ ...f, ticket_ids: e.target.value ? [e.target.value] : [] }))}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                          >
-                            <option value="">-- Pilih produk tiket --</option>
-                            {ticketProducts.map((p) => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                            {productsLoading && ticketProducts.length === 0 && <option value="">Memuat tiket...</option>}
-                          </select>
-                        </div>
+                        <Autocomplete
+                          label="Tiket – pilih yang masuk paket"
+                          value={form.ticket_ids[0] ?? ''}
+                          onChange={(v) => setForm((f) => ({ ...f, ticket_ids: v ? [v] : [] }))}
+                          options={ticketProducts.map((p) => ({ value: p.id, label: p.name }))}
+                          placeholder={productsLoading && ticketProducts.length === 0 ? 'Memuat tiket...' : '-- Pilih produk tiket --'}
+                          fullWidth
+                        />
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Maskapai</label>
-                            <select
-                              value={form.ticket_maskapai}
-                              onChange={(e) => setForm((f) => ({ ...f, ticket_maskapai: e.target.value }))}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                            >
-                              <option value="">-- Pilih maskapai --</option>
-                              {MASKAPAI_OPTIONS.map((m) => (
-                                <option key={m.code} value={m.code}>{m.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Penerbangan dari (bandara)</label>
-                            <select
-                              value={form.ticket_bandara}
-                              onChange={(e) => setForm((f) => ({ ...f, ticket_bandara: e.target.value }))}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                            >
-                              <option value="">-- Pilih bandara --</option>
-                              {BANDARA_TIKET.map((b) => (
-                                <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Perjalanan</label>
-                            <select
-                              value={form.ticket_trip_type}
-                              onChange={(e) => setForm((f) => ({ ...f, ticket_trip_type: e.target.value }))}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                            >
-                              <option value="">-- Pilih perjalanan --</option>
-                              {TICKET_TRIP_OPTIONS.map((t) => (
-                                <option key={t.value} value={t.value}>{t.label}</option>
-                              ))}
-                            </select>
-                          </div>
+                          <Autocomplete
+                            label="Maskapai"
+                            value={form.ticket_maskapai}
+                            onChange={(v) => setForm((f) => ({ ...f, ticket_maskapai: v }))}
+                            options={MASKAPAI_OPTIONS.map((m) => ({ value: m.code, label: m.name }))}
+                            placeholder="-- Pilih maskapai --"
+                            fullWidth
+                          />
+                          <Autocomplete
+                            label="Penerbangan dari (bandara)"
+                            value={form.ticket_bandara}
+                            onChange={(v) => setForm((f) => ({ ...f, ticket_bandara: v }))}
+                            options={BANDARA_TIKET.map((b) => ({ value: b.code, label: `${b.name} (${b.code})` }))}
+                            placeholder="-- Pilih bandara --"
+                            fullWidth
+                          />
+                          <Autocomplete
+                            label="Perjalanan"
+                            value={form.ticket_trip_type}
+                            onChange={(v) => setForm((f) => ({ ...f, ticket_trip_type: v }))}
+                            options={TICKET_TRIP_OPTIONS.map((t) => ({ value: t.value, label: t.label }))}
+                            placeholder="-- Pilih perjalanan --"
+                            fullWidth
+                          />
                         </div>
                       </div>
                     )}
                     {form.includes.includes('bis') && (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Bis – pilih yang masuk paket</label>
-                        <select
-                          value={form.bus_ids[0] ?? ''}
-                          onChange={(e) => setForm((f) => ({ ...f, bus_ids: e.target.value ? [e.target.value] : [] }))}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                        >
-                          <option value="">-- Pilih bis --</option>
-                          {busProducts.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                          {productsLoading && busProducts.length === 0 && <option value="">Memuat bis...</option>}
-                        </select>
+                      <Autocomplete
+                        label="Bis – pilih yang masuk paket"
+                        value={form.bus_ids[0] ?? ''}
+                        onChange={(v) => setForm((f) => ({ ...f, bus_ids: v ? [v] : [] }))}
+                        options={busProducts.map((p) => ({ value: p.id, label: p.name }))}
+                        placeholder={productsLoading && busProducts.length === 0 ? 'Memuat bis...' : '-- Pilih bis --'}
+                        fullWidth
+                      />
+                    )}
+                    {form.includes.includes('handling') && (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-800">Handling – pilih yang masuk paket</label>
+                        <p className="text-xs text-slate-500">Bisa pilih lebih dari satu produk handling.</p>
+                        {productsLoading && handlingProducts.length === 0 ? (
+                          <p className="text-slate-500 text-sm">Memuat handling...</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 w-full">
+                            {handlingProducts.map((p) => (
+                              <Button
+                                key={p.id}
+                                type="button"
+                                size="sm"
+                                variant={form.handling_ids.includes(p.id) ? 'primary' : 'outline'}
+                                className="w-full"
+                                onClick={() => toggleProductId('handling_ids', p.id)}
+                              >
+                                {p.name}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </section>
               )}
-              {canCreatePackage && form.includes.includes('handling') && (
-                <div className="rounded-lg border border-slate-200 bg-rose-50/30 p-4">
-                  <label className="block text-sm font-medium text-rose-800 mb-2">Handling – pilih yang masuk paket</label>
-                  <div className="flex flex-wrap gap-2">
-                    {handlingProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => toggleProductId('handling_ids', p.id)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium ${form.handling_ids.includes(p.id) ? 'bg-rose-600 text-white' : 'bg-white border border-rose-300 text-slate-700 hover:bg-rose-100'}`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                    {productsLoading && handlingProducts.length === 0 && <span className="text-slate-500 text-sm">Memuat handling...</span>}
-                  </div>
-                </div>
-              )}
 
-              {/* Section: Lama & Harga */}
+              {/* Section: Lama & Harga (termasuk diskon) */}
               {canCreatePackage && (
                 <section className="space-y-4 pt-2 border-t border-slate-200">
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Lama & Harga</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Lama (hari) *</label>
-                    <p className="text-xs text-slate-500 mb-1">Contoh: 9 hari = paket 9 hari full. Harga di bawah adalah total untuk seluruh hari per jamaah.</p>
-                    <input
+                  <p className="text-xs text-slate-500">Contoh: 9 hari = paket 9 hari full. Harga total untuk seluruh hari per jamaah. Isi dalam Rupiah; sistem pakai kurs untuk SAR & USD.</p>
+                  <div className={`grid gap-4 ${editingPackage ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                    <Input
+                      label="Lama (hari)"
                       type="number"
                       min={1}
                       value={daysInput}
@@ -944,35 +931,49 @@ const PackagesPage: React.FC = () => {
                         setForm((f) => ({ ...f, days: norm }));
                         setDaysInput(String(norm));
                       }}
-                      className="w-full max-w-[120px] border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                       placeholder="9"
+                      required
+                      fullWidth
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Harga (IDR) – total full per jamaah</label>
-                    <p className="text-xs text-slate-500 mb-2">Total harga paket untuk seluruh hari. Isi dalam Rupiah. Sistem pakai kurs untuk SAR & USD.</p>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={form.price_total_idr || ''}
-                      onChange={(e) => setForm((f) => ({ ...f, price_total_idr: parseFloat(e.target.value) || 0 }))}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
+                    <PriceInput
+                      label="Harga (IDR) – total full per jamaah"
+                      value={form.price_total_idr ?? 0}
+                      currency="IDR"
+                      onChange={(n) => setForm((f) => ({ ...f, price_total_idr: n }))}
                       placeholder="Contoh: 45000000"
+                      fullWidth
                     />
-                    {(form.price_total_idr > 0) && (() => {
-                      const triple = fillFromSource('IDR', form.price_total_idr, currencyRates);
-                      return (
-                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
-                          <p className="text-slate-600 font-medium mb-1">Konversi (kurs):</p>
-                          <p className="text-slate-700">IDR: {formatPrice(form.price_total_idr, 'IDR')} · SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
-                        </div>
-                      );
-                    })()}
+                    {editingPackage && (
+                      <Input
+                        label="Diskon (%)"
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={form.discountPercent != null ? String(form.discountPercent) : ''}
+                        onChange={(e) => setForm((f) => ({ ...f, discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                        placeholder="0"
+                        fullWidth
+                      />
+                    )}
                   </div>
-                </section>
-              )}
-              {canCreatePackage && (() => {
+                  {editingPackage && form.discountPercent > 0 && (
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
+                      <span className="text-slate-600">Harga setelah diskon (IDR): </span>
+                      <span className="font-semibold text-[#0D1A63]">
+                        {formatPrice(getPriceAfterDiscount(form.price_total_idr || 0, form.discountPercent), 'IDR')}
+                      </span>
+                    </div>
+                  )}
+                  {(form.price_total_idr > 0) && (() => {
+                    const triple = fillFromSource('IDR', form.price_total_idr, currencyRates);
+                    return (
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
+                        <p className="text-slate-600 font-medium mb-1">Konversi (kurs):</p>
+                        <p className="text-slate-700">IDR: {formatPrice(form.price_total_idr, 'IDR')} · SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
+                      </div>
+                    );
+                  })()}
+                  {(() => {
                 const sar = currencyRates.SAR_TO_IDR ?? 4200;
                 const usd = currencyRates.USD_TO_IDR ?? 15500;
                 const toIdr = (p: ProductOption | HotelOption & { price_general_idr?: number | null; price_general_sar?: number | null; price_general_usd?: number | null }): number => {
@@ -1059,41 +1060,18 @@ const PackagesPage: React.FC = () => {
                   );
                 }
                 return null;
-              })()}
-              {editingPackage && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Diskon (%)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={form.discountPercent || ''}
-                      onChange={(e) => setForm((f) => ({ ...f, discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                      placeholder="0"
-                    />
-                  </div>
-                  {form.discountPercent > 0 && (
-                    <div className="rounded-lg bg-slate-50 p-3 text-sm">
-                      <span className="text-slate-600">Harga setelah diskon (IDR): </span>
-                      <span className="font-semibold text-[#0D1A63]">
-                        {formatPrice(getPriceAfterDiscount(form.price_total_idr || 0, form.discountPercent), 'IDR')}
-                      </span>
-                    </div>
-                  )}
-                </>
+                  })()}
+                </section>
               )}
-              <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={closeModal} disabled={saving}>Batal</Button>
-                <Button variant="primary" onClick={handleSubmit} disabled={saving}>
-                  {saving ? 'Menyimpan...' : editingPackage ? 'Simpan perubahan' : 'Simpan paket'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={closeModal} disabled={saving}>Batal</Button>
+            <Button variant="primary" onClick={handleSubmit} disabled={saving}>
+              {saving ? 'Menyimpan...' : editingPackage ? 'Simpan perubahan' : 'Simpan paket'}
+            </Button>
+          </ModalFooter>
+        </ModalBox>
+      </Modal>
     </div>
   );
 };

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, ClipboardList, Building2, Filter, Search, Hotel, CheckCircle, DoorOpen, ListChecks, X, User, MapPin, Calendar, UtensilsCrossed, FileText } from 'lucide-react';
+import { RefreshCw, Eye, ClipboardList, Building2, Filter, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
@@ -74,6 +74,9 @@ const HotelWorkPage: React.FC = () => {
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -89,16 +92,24 @@ const HotelWorkPage: React.FC = () => {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const params = filterInvoiceStatus ? { status: filterInvoiceStatus } : {};
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
+      if (filterInvoiceStatus) params.status = filterInvoiceStatus;
       const res = await hotelApi.listInvoices(params);
-      if (res.data.success) setInvoices(res.data.data || []);
-      else setInvoices([]);
+      if (res.data.success) {
+        setInvoices(res.data.data || []);
+        const pag = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
+        setPagination(pag || null);
+      } else {
+        setInvoices([]);
+        setPagination(null);
+      }
     } catch (e: any) {
       setInvoices([]);
+      setPagination(null);
       const msg = e.response?.data?.message;
       if (e.response?.status === 403 && msg) showToast(msg, 'error');
     }
-  }, [showToast, filterInvoiceStatus]);
+  }, [showToast, filterInvoiceStatus, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -108,6 +119,10 @@ const HotelWorkPage: React.FC = () => {
   useEffect(() => {
     refetchAll();
   }, [refetchAll]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterInvoiceStatus]);
 
   useEffect(() => {
     fetchInvoices();
@@ -277,6 +292,14 @@ const HotelWorkPage: React.FC = () => {
             data={filteredInvoices}
             emptyMessage="Tidak ada invoice sesuai filter"
             stickyActionsColumn
+            pagination={pagination ? {
+              total: pagination.total,
+              page: pagination.page,
+              limit: pagination.limit,
+              totalPages: pagination.totalPages,
+              onPageChange: (p) => setPage(p),
+              onLimitChange: (l) => { setLimit(l); setPage(1); }
+            } : undefined}
             renderRow={(inv: any) => {
               const o = inv.Order;
               const orderItems = o?.OrderItems || [];
@@ -325,38 +348,27 @@ const HotelWorkPage: React.FC = () => {
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
         {detailInvoice && (
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-amber-50/80 via-white to-slate-50/50">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="p-3 bg-amber-100 rounded-xl shadow-sm shrink-0">
-                  <Hotel className="w-6 h-6 text-amber-600" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-slate-900 truncate">
-                    {formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-sm text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
+          <ModalBoxLg>
+            <ModalHeader
+              title={formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
+              subtitle={
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 opacity-90" />
+                    {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
+                  </span>
+                  {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
+                    <span className="flex items-center gap-1.5 ml-3">
+                      <MapPin className="w-3.5 h-3.5 opacity-90" />
+                      {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
                     </span>
-                    {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <button type="button" onClick={() => setSearchParams({})} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors shrink-0" aria-label="Tutup">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+                  )}
+                </>
+              }
+              icon={<Hotel className="w-5 h-5" />}
+              onClose={() => setSearchParams({})}
+            />
+            <ModalBody className="space-y-6 bg-slate-50/30">
               {(() => {
                 type HotelGroup = { key: string; productName: string; items: any[] };
                 const hotelByProduct: HotelGroup[] = hotelItems.reduce((acc: HotelGroup[], item: any) => {
@@ -496,8 +508,8 @@ const HotelWorkPage: React.FC = () => {
                   </div>
                 ));
               })()}
-            </div>
-          </div>
+            </ModalBody>
+          </ModalBoxLg>
         )}
       </Modal>
     </div>

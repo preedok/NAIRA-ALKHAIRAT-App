@@ -9,13 +9,14 @@ import {
   Search,
   X,
   LockKeyhole,
-  RefreshCw
+  RefreshCw,
+  Calendar
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton } from '../../../components/common';
+import { FilterIconButton, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import {
   accountingApi,
   type FiscalYearItem,
@@ -427,78 +428,35 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
         )}
       </Card>
 
-      {modalCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Tambah Tahun Fiskal</h2>
-              <button
-                type="button"
-                onClick={() => { setModalCreate(false); setCreateError(''); }}
-                className="p-1 rounded hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
+      <Modal open={modalCreate} onClose={() => { setModalCreate(false); setCreateError(''); }}>
+        <ModalBox>
+          <ModalHeader title="Tambah Tahun Fiskal" subtitle="Buat tahun fiskal baru untuk periode akuntansi" icon={<Calendar className="w-5 h-5" />} onClose={() => { setModalCreate(false); setCreateError(''); }} />
+          <ModalBody className="space-y-4">
+            <form id="fiscal-create-form" onSubmit={handleCreateSubmit} className="space-y-4">
               {createError && (
                 <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{createError}</div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Kode *</label>
-                <input
-                  type="text"
-                  value={createForm.code}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value }))}
-                  placeholder="FY2026"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama *</label>
-                <input
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Tahun Fiskal 2026"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Mulai *</label>
-                  <input
-                    type="date"
-                    value={createForm.start_date}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, start_date: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Selesai *</label>
-                  <input
-                    type="date"
-                    value={createForm.end_date}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, end_date: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-                  />
-                </div>
+              <Input label="Kode *" type="text" value={createForm.code} onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value }))} placeholder="FY2026" fullWidth required />
+              <Input label="Nama *" type="text" value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))} placeholder="Tahun Fiskal 2026" fullWidth required />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input label="Tanggal Mulai *" type="date" value={createForm.start_date} onChange={(e) => setCreateForm((f) => ({ ...f, start_date: e.target.value }))} fullWidth required />
+                <Input label="Tanggal Selesai *" type="date" value={createForm.end_date} onChange={(e) => setCreateForm((f) => ({ ...f, end_date: e.target.value }))} fullWidth required />
               </div>
               <p className="text-xs text-slate-500">
                 Periode bulanan akan dibuat otomatis dari tanggal mulai sampai selesai.
               </p>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="ghost" onClick={() => setModalCreate(false)}>
-                  Batal
-                </Button>
-                <Button type="submit" variant="primary" disabled={!!actionLoading}>
-                  {actionLoading === 'create' ? 'Membuat...' : 'Simpan'}
-                </Button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={() => setModalCreate(false)}>
+              Batal
+            </Button>
+            <Button type="submit" form="fiscal-create-form" variant="primary" disabled={!!actionLoading}>
+              {actionLoading === 'create' ? 'Membuat...' : 'Simpan'}
+            </Button>
+          </ModalFooter>
+        </ModalBox>
+      </Modal>
     </div>
   );
 };

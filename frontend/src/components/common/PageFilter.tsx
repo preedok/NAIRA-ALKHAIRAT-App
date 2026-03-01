@@ -3,26 +3,27 @@ import { Filter, FilterX } from 'lucide-react';
 import Button from './Button';
 import Card from './Card';
 
-/** Tombol ikon filter untuk diletakkan di header (sebelah kanan refresh). Seragam di semua halaman. */
+/** Tombol ikon filter untuk diletakkan di header (sebelah kanan refresh). Ukuran konsisten dengan tombol refresh (h-9 w-9). */
 export const FilterIconButton: React.FC<{
   open: boolean;
   onToggle: () => void;
   hasActiveFilters?: boolean;
   className?: string;
 }> = ({ open, onToggle, hasActiveFilters = false, className = '' }) => (
-  <button
-    type="button"
+  <Button
+    variant="outline"
+    size="sm"
+    icon={open ? <FilterX className="w-4 h-4 shrink-0" /> : <Filter className="w-4 h-4 shrink-0" />}
+    className={`relative h-9 w-9 p-0 min-w-[2.25rem] shrink-0 inline-flex items-center justify-center [&_.mr-2]:m-0 ${className}`}
     onClick={onToggle}
-    className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0D1A63] focus:ring-offset-1 ${className}`}
     aria-expanded={open}
     aria-label={open ? 'Sembunyikan filter' : 'Tampilkan filter'}
     title={open ? 'Sembunyikan filter' : 'Tampilkan filter'}
   >
-    {open ? <FilterX className="w-4 h-4" /> : <Filter className="w-4 h-4" />}
     {hasActiveFilters && (
       <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#0D1A63] rounded-full ring-2 ring-white" aria-hidden />
     )}
-  </button>
+  </Button>
 );
 
 interface PageFilterProps {

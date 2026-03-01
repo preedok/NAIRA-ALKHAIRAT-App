@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DollarSign, ChevronLeft, Plus, Settings, Users, FileText, Calendar } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import { Input, Autocomplete } from '../../../components/common';
+import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import { accountingApi, branchesApi, type PayrollRunData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -87,34 +87,36 @@ const PayrollRunsPage: React.FC = () => {
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex flex-col min-h-0 w-full max-w-full space-y-4">
+      <div className="flex flex-wrap items-center gap-3 shrink-0">
         <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
           <ChevronLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <DollarSign className="w-8 h-8 text-emerald-600" />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <DollarSign className="w-6 h-6 text-emerald-600 shrink-0" />
             Penggajian
           </h1>
-          <p className="text-slate-600 mt-1">Buat dan kelola run payroll per periode; finalisasi untuk generate slip dan notifikasi</p>
+          <p className="text-slate-600 text-sm mt-0.5">Kelola run payroll per periode; finalisasi untuk generate slip dan notifikasi</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/settings')}>
-          <Settings className="w-4 h-4 mr-1" />
-          Pengaturan
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/employees')}>
-          <Users className="w-4 h-4 mr-1" />
-          Karyawan & Gaji
-        </Button>
-        <Button size="sm" onClick={() => setShowCreateModal(true)}>
-          <Plus className="w-4 h-4 mr-1" />
-          Buat Payroll Baru
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/settings')}>
+            <Settings className="w-4 h-4 mr-1" />
+            Pengaturan
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/employees')}>
+            <Users className="w-4 h-4 mr-1" />
+            Karyawan & Gaji
+          </Button>
+          <Button size="sm" onClick={() => setShowCreateModal(true)}>
+            <Plus className="w-4 h-4 mr-1" />
+            Buat Payroll Baru
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <Card className="flex-1 min-w-0 w-full overflow-hidden flex flex-col">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua" />
           <Autocomplete label="Tahun" value={String(periodYear)} onChange={(v) => setPeriodYear(Number(v))} options={years.map((y) => ({ value: String(y), label: String(y) }))} />
           <Autocomplete label="Bulan" value={String(periodMonth)} onChange={(v) => setPeriodMonth(Number(v))} options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))} />
@@ -124,8 +126,8 @@ const PayrollRunsPage: React.FC = () => {
         {loading ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto overflow-y-auto min-h-0 flex-1">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-600">
                   <th className="pb-2 pr-4">Periode</th>
@@ -164,9 +166,8 @@ const PayrollRunsPage: React.FC = () => {
             {runs.length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada run payroll</p>}
           </div>
         )}
-
         {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-4 border-t border-slate-200 shrink-0">
             <p className="text-sm text-slate-600">Total {pagination.total} run</p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
@@ -177,24 +178,22 @@ const PayrollRunsPage: React.FC = () => {
         )}
       </Card>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !creating && setShowCreateModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Buat Payroll Baru</h2>
-            <div className="space-y-4">
-              <Autocomplete label="Cabang" value={createBranchId} onChange={setCreateBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Global (semua cabang)" />
-              <div className="grid grid-cols-2 gap-4">
-                <Autocomplete label="Tahun" value={String(createYear)} onChange={(v) => setCreateYear(Number(v))} options={years.map((y) => ({ value: String(y), label: String(y) }))} />
-                <Autocomplete label="Bulan" value={String(createMonth)} onChange={(v) => setCreateMonth(Number(v))} options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))} />
-              </div>
+      <Modal open={showCreateModal} onClose={() => !creating && setShowCreateModal(false)}>
+        <ModalBox>
+          <ModalHeader title="Buat Payroll Baru" subtitle="Pilih periode dan karyawan untuk generate payroll" icon={<DollarSign className="w-5 h-5" />} onClose={() => !creating && setShowCreateModal(false)} />
+          <ModalBody className="space-y-4">
+            <Autocomplete label="Cabang" value={createBranchId} onChange={setCreateBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Global (semua cabang)" />
+            <div className="grid grid-cols-2 gap-4">
+              <Autocomplete label="Tahun" value={String(createYear)} onChange={(v) => setCreateYear(Number(v))} options={years.map((y) => ({ value: String(y), label: String(y) }))} />
+              <Autocomplete label="Bulan" value={String(createMonth)} onChange={(v) => setCreateMonth(Number(v))} options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))} />
             </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)} disabled={creating}>Batal</Button>
-              <Button onClick={handleCreateRun} disabled={creating}>{creating ? 'Membuat...' : 'Buat'}</Button>
-            </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setShowCreateModal(false)} disabled={creating}>Batal</Button>
+            <Button onClick={handleCreateRun} disabled={creating}>{creating ? 'Membuat...' : 'Buat'}</Button>
+          </ModalFooter>
+        </ModalBox>
+      </Modal>
     </div>
   );
 };

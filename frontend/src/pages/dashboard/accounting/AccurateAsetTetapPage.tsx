@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, RefreshCw, ChevronRight, Calculator, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import { Input, Autocomplete } from '../../../components/common';
 import { accountingApi, branchesApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -168,9 +168,9 @@ const AccurateAsetTetapPage: React.FC = () => {
       </Card>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Tambah Aset Tetap</h2>
-          <div className="space-y-4">
+        <ModalBox>
+          <ModalHeader title="Tambah Aset Tetap" subtitle="Kode, nama, kategori, dan tanggal beli aset" icon={<Plus className="w-5 h-5" />} onClose={() => setModalOpen(false)} />
+          <ModalBody className="space-y-4">
             <Input label="Kode Aset *" type="text" value={form.asset_code} onChange={(e) => setForm((f) => ({ ...f, asset_code: e.target.value }))} placeholder="AT-001" fullWidth />
             <Input label="Nama Aset *" type="text" value={form.asset_name} onChange={(e) => setForm((f) => ({ ...f, asset_name: e.target.value }))} placeholder="Komputer" fullWidth />
             <Input label="Kategori" type="text" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Elektronik" fullWidth />
@@ -183,45 +183,47 @@ const AccurateAsetTetapPage: React.FC = () => {
               <Input label="Umur Ekonomis (tahun)" type="number" min={1} value={form.useful_life_years} onChange={(e) => setForm((f) => ({ ...f, useful_life_years: e.target.value }))} fullWidth />
               <Autocomplete label="Metode" value={form.depreciation_method} onChange={(v) => setForm((f) => ({ ...f, depreciation_method: v }))} options={[{ value: 'straight_line', label: 'Straight Line' }]} fullWidth />
             </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
+          </ModalBody>
+          <ModalFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Batal</Button>
             <Button onClick={handleCreate} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
-          </div>
-        </div>
+          </ModalFooter>
+        </ModalBox>
       </Modal>
 
       <Modal open={depreciationAssetId !== null} onClose={() => { setDepreciationAssetId(null); setSchedule([]); }}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Jadwal Penyusutan</h2>
-          {schedule.length === 0 ? (
-            <p className="text-slate-500 text-sm">Belum ada jadwal. Klik &quot;Hitung&quot; di baris aset untuk menghasilkan jadwal.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="text-left py-2 px-3">Periode</th>
-                    <th className="text-right py-2 px-3">Penyusutan</th>
-                    <th className="text-right py-2 px-3">Akumulasi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedule.map((row: any) => (
-                    <tr key={row.id} className="border-t border-slate-100">
-                      <td className="py-2 px-3">{row.period_label}</td>
-                      <td className="py-2 px-3 text-right">{formatIDR(Number(row.depreciation_amount))}</td>
-                      <td className="py-2 px-3 text-right">{formatIDR(Number(row.accumulated_depreciation))}</td>
+        <ModalBox>
+          <ModalHeader title="Jadwal Penyusutan" subtitle="Detail jadwal penyusutan aset tetap" icon={<Calculator className="w-5 h-5" />} onClose={() => { setDepreciationAssetId(null); setSchedule([]); }} />
+          <ModalBody className="space-y-4">
+            {schedule.length === 0 ? (
+              <p className="text-slate-500 text-sm">Belum ada jadwal. Klik &quot;Hitung&quot; di baris aset untuk menghasilkan jadwal.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left py-2 px-3">Periode</th>
+                      <th className="text-right py-2 px-3">Penyusutan</th>
+                      <th className="text-right py-2 px-3">Akumulasi</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="mt-4 flex justify-end">
+                  </thead>
+                  <tbody>
+                    {schedule.map((row: any) => (
+                      <tr key={row.id} className="border-t border-slate-100">
+                        <td className="py-2 px-3">{row.period_label}</td>
+                        <td className="py-2 px-3 text-right">{formatIDR(Number(row.depreciation_amount))}</td>
+                        <td className="py-2 px-3 text-right">{formatIDR(Number(row.accumulated_depreciation))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </ModalBody>
+          <ModalFooter>
             <Button variant="outline" onClick={() => { setDepreciationAssetId(null); setSchedule([]); }}>Tutup</Button>
-          </div>
-        </div>
+          </ModalFooter>
+        </ModalBox>
       </Modal>
     </div>
   );

@@ -2,8 +2,8 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { ButtonVariant, ButtonSize } from '../../types';
 
-interface ButtonProps {
-  children: React.ReactNode;
+interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'title' | 'children'> {
+  children?: React.ReactNode;
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;
@@ -18,7 +18,7 @@ interface ButtonProps {
 }
 
 const Button: React.FC<ButtonProps> = ({
-  children,
+  children = null,
   variant = 'primary',
   size = 'md',
   fullWidth = false,
@@ -29,7 +29,8 @@ const Button: React.FC<ButtonProps> = ({
   type = 'button',
   className = '',
   title,
-  'aria-label': ariaLabel
+  'aria-label': ariaLabel,
+  ...rest
 }) => {
   const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
@@ -57,6 +58,7 @@ const Button: React.FC<ButtonProps> = ({
       className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${widthStyles} ${className}`}
       title={title}
       aria-label={ariaLabel}
+      {...rest}
     >
       {isLoading ? (
         <>
@@ -65,7 +67,7 @@ const Button: React.FC<ButtonProps> = ({
         </>
       ) : (
         <>
-          {icon && <span className="mr-2">{icon}</span>}
+          {icon && <span className={children ? 'mr-2' : ''}>{icon}</span>}
           {children}
         </>
       )}

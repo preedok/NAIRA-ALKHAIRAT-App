@@ -9,6 +9,7 @@ import {
   FileText,
   Plane,
   Bus,
+  HandHelping,
   Package,
   Receipt,
   Users,
@@ -63,6 +64,7 @@ const menuItems: MenuItem[] = [
       { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'visa_koordinator', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
       { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
       { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
       { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
     ]
   },
@@ -85,9 +87,9 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_koordinator', 'visa_koordinator']
   },
   {
-    title: 'Bus Saudi',
+    title: 'Progress Bus',
     icon: <Bus className="w-5 h-5" />,
-    path: '/dashboard/products/bus',
+    path: '/dashboard/progress-bus',
     roles: ['super_admin', 'admin_koordinator', 'role_bus']
   },
   {

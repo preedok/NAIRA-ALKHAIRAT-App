@@ -5,7 +5,7 @@ import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
@@ -306,82 +306,97 @@ const BranchesPage: React.FC = () => {
       )}
 
       <Card className="travel-card">
-        <CardSectionHeader
-          icon={<Building2 className="w-6 h-6" />}
-          title="Daftar Cabang"
-          subtitle="Daftar cabang dan kelola akun admin wilayah, provinsi, cabang. Filter menurut kode, nama, kota, wilayah, provinsi, status."
-          className="mb-4"
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 pb-4 border-b border-slate-200">
+          <CardSectionHeader
+            icon={<Building2 className="w-6 h-6" />}
+            title="Daftar Cabang"
+            subtitle="Daftar cabang dan kelola akun admin wilayah, provinsi, cabang. Filter menurut kode, nama, kota, wilayah, provinsi, status."
+            className="mb-0"
+          />
+          <p className="text-sm font-medium text-stone-700 flex items-center gap-2 shrink-0">
+            <Filter className="w-4 h-4 text-primary-600" /> Filter Cabang
+          </p>
+        </div>
         {loading ? (
           <p className="text-stone-500 py-8 text-center">Memuat...</p>
         ) : (
           <>
-            <div className="space-y-4 mb-4">
-              <div className="p-4 bg-primary-50/50 rounded-xl border border-primary-100">
-                <p className="text-sm font-medium text-stone-700 mb-3 flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-primary-600" /> Filter Cabang
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex-1 min-w-[200px]">
-                    <Input
-                      type="text"
-                      placeholder="Cari kode, nama, kota, provinsi..."
-                      value={searchText}
-                      onChange={(e) => setSearchText(e.target.value)}
-                      icon={<Search className="w-4 h-4" />}
-                      fullWidth
-                    />
-                  </div>
-                  <Autocomplete
-                    value={filterWilayah}
-                    onChange={(v) => { setFilterWilayah(v); setFilterProvinsi(''); }}
-                    options={wilayahForSelect.map((w) => ({ value: w.id, label: w.name }))}
-                    emptyLabel="Semua Wilayah"
-                    placeholder="Wilayah"
-                    className="min-w-[180px]"
-                  />
-                  <Autocomplete
-                    value={filterProvinsi}
-                    onChange={setFilterProvinsi}
-                    options={provincesByWilayah.map((p) => ({ value: String(p.id), label: p.nama ?? p.name ?? '' }))}
-                    emptyLabel="Semua Provinsi"
-                    placeholder="Provinsi"
-                    className="min-w-[180px]"
-                  />
-                  <Input
-                    type="text"
-                    placeholder="Filter kota..."
-                    value={filterCity}
-                    onChange={(e) => setFilterCity(e.target.value)}
-                    fullWidth
-                    className="min-w-[140px]"
-                  />
-                  <Autocomplete
-                    value={filterStatus}
-                    onChange={(v) => setFilterStatus(v as 'all' | 'active' | 'inactive')}
-                    options={[
-                      { value: 'all', label: 'Semua Status' },
-                      { value: 'active', label: 'Aktif' },
-                      { value: 'inactive', label: 'Nonaktif' }
-                    ]}
-                  />
-                  {hasActiveFilters && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchText('');
-                        setFilterWilayah('');
-                        setFilterProvinsi('');
-                        setFilterCity('');
-                        setFilterStatus('all');
-                      }}
-                      className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                      Reset filter
-                    </button>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4 p-4 bg-slate-50/60 rounded-xl border border-slate-200/80">
+              <div className="lg:col-span-2 min-w-0">
+                <Input
+                  type="text"
+                  label="Cari"
+                  placeholder="Kode, nama, kota, provinsi..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  icon={<Search className="w-4 h-4" />}
+                  fullWidth
+                />
               </div>
+              <div className="min-w-0">
+                <Autocomplete
+                  value={filterWilayah}
+                  onChange={(v) => { setFilterWilayah(v); setFilterProvinsi(''); }}
+                  options={wilayahForSelect.map((w) => ({ value: w.id, label: w.name }))}
+                  emptyLabel="Semua Wilayah"
+                  placeholder="Wilayah"
+                  label="Wilayah"
+                  fullWidth
+                />
+              </div>
+              <div className="min-w-0">
+                <Autocomplete
+                  value={filterProvinsi}
+                  onChange={setFilterProvinsi}
+                  options={provincesByWilayah.map((p) => ({ value: String(p.id), label: p.nama ?? p.name ?? '' }))}
+                  emptyLabel="Semua Provinsi"
+                  placeholder="Provinsi"
+                  label="Provinsi"
+                  fullWidth
+                />
+              </div>
+              <div className="min-w-0">
+                <Input
+                  type="text"
+                  label="Kota"
+                  placeholder="Filter kota..."
+                  value={filterCity}
+                  onChange={(e) => setFilterCity(e.target.value)}
+                  fullWidth
+                />
+              </div>
+              <div className="min-w-0">
+                <Autocomplete
+                  value={filterStatus}
+                  onChange={(v) => setFilterStatus(v as 'all' | 'active' | 'inactive')}
+                  options={[
+                    { value: 'all', label: 'Semua Status' },
+                    { value: 'active', label: 'Aktif' },
+                    { value: 'inactive', label: 'Nonaktif' }
+                  ]}
+                  label="Status"
+                  fullWidth
+                />
+              </div>
+              {hasActiveFilters && (
+                <div className="flex items-end min-w-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearchText('');
+                      setFilterWilayah('');
+                      setFilterProvinsi('');
+                      setFilterCity('');
+                      setFilterStatus('all');
+                    }}
+                    className="w-full sm:w-auto"
+                  >
+                    Reset filter
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <Table
@@ -426,7 +441,7 @@ const BranchesPage: React.FC = () => {
                     <div className="flex justify-center">
                       <button
                         type="button"
-                        className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg"
+                        className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                         onClick={() => openEdit(branch)}
                         title="Edit Cabang"
                       >
@@ -455,7 +470,7 @@ const BranchesPage: React.FC = () => {
                     <div key={u.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
                       <span className="text-sm font-medium text-slate-800">{u.name}</span>
                       <span className="text-xs text-slate-500">({u.region})</span>
-                      <button type="button" className="p-1.5 text-primary-600 hover:bg-primary-50 rounded" onClick={() => openEditAccount(u)}>
+                      <button type="button" className="p-1.5 text-slate-600 hover:bg-slate-100 rounded transition-colors" onClick={() => openEditAccount(u)}>
                         <Edit className="w-4 h-4" />
                       </button>
                     </div>
@@ -471,7 +486,7 @@ const BranchesPage: React.FC = () => {
                     <div key={u.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
                       <span className="text-sm font-medium text-slate-800">{u.name}</span>
                       <span className="text-xs text-slate-500">({u.region})</span>
-                      <button type="button" className="p-1.5 text-primary-600 hover:bg-primary-50 rounded" onClick={() => openEditAccount(u)}>
+                      <button type="button" className="p-1.5 text-slate-600 hover:bg-slate-100 rounded transition-colors" onClick={() => openEditAccount(u)}>
                         <Edit className="w-4 h-4" />
                       </button>
                     </div>
@@ -484,29 +499,35 @@ const BranchesPage: React.FC = () => {
       )}
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditingBranchId(null); setEditingUserId(null); }}>
-        <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">
-              {editingUserId ? `Edit Akun ${addAccountMode === 'akun_wilayah' ? 'Wilayah' : 'Provinsi'}` : 'Tambah Akun'}
-            </h3>
+        <ModalBox>
+            <ModalHeader
+              title={editingUserId ? `Edit Akun ${addAccountMode === 'akun_wilayah' ? 'Wilayah' : 'Provinsi'}` : 'Tambah Akun'}
+              subtitle={editingUserId ? 'Ubah data akun koordinator wilayah/provinsi' : 'Tambah akun baru untuk koordinator cabang'}
+              icon={<UserPlus className="w-5 h-5" />}
+              onClose={() => { setModalOpen(false); setEditingBranchId(null); setEditingUserId(null); }}
+            />
+            <ModalBody className="space-y-4">
             {message && (
               <div className={`mb-4 rounded-lg px-4 py-3 ${message.type === 'success' ? 'bg-primary-50 text-primary-800 border border-primary-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                 {message.text}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form id="branch-account-form" onSubmit={handleSubmit} className="space-y-4">
               {!editingBranchId && !editingUserId && (
-                <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Jenis akun</label>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setAddAccountMode('akun_wilayah')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${addAccountMode === 'akun_wilayah' ? 'bg-primary-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                      <MapPin className="w-4 h-4" /> Akun Wilayah
-                    </button>
-                    <button type="button" onClick={() => setAddAccountMode('akun_provinsi')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${addAccountMode === 'akun_provinsi' ? 'bg-primary-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                      <Globe className="w-4 h-4" /> Akun Provinsi
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2">
+                <div className="mb-4">
+                  <Autocomplete
+                    label="Jenis akun"
+                    value={addAccountMode}
+                    onChange={(v) => setAddAccountMode(v as AddAccountMode)}
+                    options={[
+                      { value: 'akun_wilayah', label: 'Akun Wilayah' },
+                      { value: 'akun_provinsi', label: 'Akun Provinsi' }
+                    ]}
+                    placeholder="Pilih jenis akun"
+                    fullWidth
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
                     {addAccountMode === 'akun_wilayah' && 'Pilih wilayah utama (Sumatra, Jawa, Kalimantan, dll).'}
                     {addAccountMode === 'akun_provinsi' && 'Pilih provinsi → sistem otomatis masukkan ke wilayah yang sesuai.'}
                   </p>
@@ -565,14 +586,15 @@ const BranchesPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex gap-2 justify-end pt-4 mt-4 border-t border-slate-200">
-                <Button type="button" variant="outline" onClick={() => { setModalOpen(false); setEditingBranchId(null); setEditingUserId(null); }}>Batal</Button>
-                <Button type="submit" variant="primary" disabled={submitLoading}>
-                  {submitLoading ? 'Menyimpan...' : editingUserId ? 'Simpan' : 'Buat Akun'}
-                </Button>
-              </div>
             </form>
-          </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => { setModalOpen(false); setEditingBranchId(null); setEditingUserId(null); }}>Batal</Button>
+              <Button type="submit" form="branch-account-form" variant="primary" disabled={submitLoading}>
+                {submitLoading ? 'Menyimpan...' : editingUserId ? 'Simpan' : 'Buat Akun'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
       </Modal>
     </div>
   );

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalBox, ModalBoxLg } from '../../../components/common/Modal';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
@@ -480,57 +480,52 @@ const RekeningKoranPage: React.FC = () => {
 
       {/* Modal detail transaksi */}
       <Modal open={!!detailUpload || loadingDetail} onClose={() => setDetailUpload(null)}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50/80 shrink-0">
-            <h2 className="text-lg font-semibold text-slate-900">Detail Transaksi Rekening Koran</h2>
-            <button type="button" onClick={() => setDetailUpload(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          {loadingDetail ? (
-            <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
-              <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
-            </div>
-          ) : detailUpload ? (
-            <>
-              <div className="px-5 py-3 border-b border-slate-100 bg-white">
-                <p className="text-sm text-slate-600"><strong>{detailUpload.name || detailUpload.file_name || '–'}</strong> · Periode: {detailUpload.period_from && detailUpload.period_to ? `${formatDate(detailUpload.period_from)} – ${formatDate(detailUpload.period_to)}` : '–'} · {(detailUpload.Lines || []).length} baris</p>
+        <ModalBoxLg>
+          <ModalHeader
+            title="Detail Transaksi Rekening Koran"
+            subtitle={detailUpload && !loadingDetail ? `${detailUpload.name || detailUpload.file_name || '–'} · Periode: ${detailUpload.period_from && detailUpload.period_to ? `${formatDate(detailUpload.period_from)} – ${formatDate(detailUpload.period_to)}` : '–'} · ${(detailUpload.Lines || []).length} baris` : undefined}
+            icon={<FileSpreadsheet className="w-5 h-5" />}
+            onClose={() => setDetailUpload(null)}
+          />
+          <ModalBody className="flex-1 overflow-auto">
+            {loadingDetail ? (
+              <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
+                <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
               </div>
-              <div className="flex-1 overflow-auto p-5">
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-sm min-w-max">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="text-left py-2 px-3 whitespace-nowrap">No</th>
-                        <th className="text-left py-2 px-3 whitespace-nowrap">Tanggal</th>
-                        <th className="text-left py-2 px-3 whitespace-nowrap">Keterangan</th>
-                        <th className="text-left py-2 px-3 whitespace-nowrap">No Ref</th>
-                        <th className="text-right py-2 px-3 whitespace-nowrap">Debit</th>
-                        <th className="text-right py-2 px-3 whitespace-nowrap">Kredit</th>
-                        <th className="text-right py-2 px-3 whitespace-nowrap">Saldo</th>
+            ) : detailUpload ? (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-sm min-w-max">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left py-2 px-3 whitespace-nowrap">No</th>
+                      <th className="text-left py-2 px-3 whitespace-nowrap">Tanggal</th>
+                      <th className="text-left py-2 px-3 whitespace-nowrap">Keterangan</th>
+                      <th className="text-left py-2 px-3 whitespace-nowrap">No Ref</th>
+                      <th className="text-right py-2 px-3 whitespace-nowrap">Debit</th>
+                      <th className="text-right py-2 px-3 whitespace-nowrap">Kredit</th>
+                      <th className="text-right py-2 px-3 whitespace-nowrap">Saldo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detailUpload.Lines || []).map((line: BankStatementLineItem, idx: number) => (
+                      <tr key={line.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                        <td className="py-2 px-3 tabular-nums">{idx + 1}</td>
+                        <td className="py-2 px-3 whitespace-nowrap">{formatDate(line.transaction_date)}</td>
+                        <td className="py-2 px-3 text-slate-700 max-w-[280px] truncate" title={line.description || ''}>{line.description || '–'}</td>
+                        <td className="py-2 px-3 text-slate-600">{line.reference_number || '–'}</td>
+                        <td className="py-2 px-3 text-right tabular-nums">{Number(line.amount_debit) > 0 ? formatIDR(Number(line.amount_debit)) : '–'}</td>
+                        <td className="py-2 px-3 text-right tabular-nums font-medium">{Number(line.amount_credit) > 0 ? formatIDR(Number(line.amount_credit)) : '–'}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{line.balance_after != null ? formatIDR(Number(line.balance_after)) : '–'}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {(detailUpload.Lines || []).map((line: BankStatementLineItem, idx: number) => (
-                        <tr key={line.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                          <td className="py-2 px-3 tabular-nums">{idx + 1}</td>
-                          <td className="py-2 px-3 whitespace-nowrap">{formatDate(line.transaction_date)}</td>
-                          <td className="py-2 px-3 text-slate-700 max-w-[280px] truncate" title={line.description || ''}>{line.description || '–'}</td>
-                          <td className="py-2 px-3 text-slate-600">{line.reference_number || '–'}</td>
-                          <td className="py-2 px-3 text-right tabular-nums">{Number(line.amount_debit) > 0 ? formatIDR(Number(line.amount_debit)) : '–'}</td>
-                          <td className="py-2 px-3 text-right tabular-nums font-medium">{Number(line.amount_credit) > 0 ? formatIDR(Number(line.amount_credit)) : '–'}</td>
-                          <td className="py-2 px-3 text-right tabular-nums text-slate-600">{line.balance_after != null ? formatIDR(Number(line.balance_after)) : '–'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </>
-          ) : (
-            <div className="py-12 text-center text-slate-500">Data tidak tersedia.</div>
-          )}
-        </div>
+            ) : (
+              <div className="py-12 text-center text-slate-500">Data tidak tersedia.</div>
+            )}
+          </ModalBody>
+        </ModalBoxLg>
       </Modal>
     </div>
   );

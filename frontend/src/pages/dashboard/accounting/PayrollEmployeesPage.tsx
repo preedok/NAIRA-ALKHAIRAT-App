@@ -6,6 +6,7 @@ import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import Textarea from '../../../components/common/Textarea';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import { accountingApi, branchesApi, type PayrollEmployeeItem, type EmployeeSalaryData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -125,34 +126,33 @@ const PayrollEmployeesPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex flex-col min-h-0 w-full max-w-full space-y-4">
+      <div className="flex flex-wrap items-center gap-3 shrink-0">
         <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/runs')}>
           <ChevronLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="w-8 h-8 text-emerald-600" />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <Users className="w-6 h-6 text-emerald-600 shrink-0" />
             Karyawan & Template Gaji
           </h1>
-          <p className="text-slate-600 mt-1">Atur template gaji (gaji pokok, tunjangan, potongan) per karyawan untuk payroll</p>
+          <p className="text-slate-600 text-sm mt-0.5">Atur template gaji (gaji pokok, tunjangan, potongan) per karyawan</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/settings')}>
-          <Settings className="w-4 h-4 mr-1" />
-          Pengaturan Payroll
-        </Button>
+        <div className="flex items-center gap-2">
+          <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" className="w-48 sm:w-56" />
+          <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/settings')}>
+            <Settings className="w-4 h-4 mr-1" />
+            Pengaturan
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <div className="mb-4 max-w-xs">
-          <Autocomplete label="Filter Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
-        </div>
-
+      <Card className="flex-1 min-w-0 w-full overflow-hidden flex flex-col">
         {loading ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto overflow-y-auto min-h-0 flex-1">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-600">
                   <th className="pb-2 pr-4">Nama</th>
@@ -197,13 +197,10 @@ const PayrollEmployeesPage: React.FC = () => {
 
       {/* Modal Atur Gaji */}
       {modalUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !saving && setModalUser(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900">Template Gaji: {modalUser.name}</h2>
-              <p className="text-slate-600 text-sm mt-1">{modalUser.email}</p>
-            </div>
-            <div className="p-6 space-y-4">
+        <Modal open onClose={() => !saving && setModalUser(null)}>
+          <ModalBox>
+            <ModalHeader title={`Template Gaji: ${modalUser.name}`} subtitle={modalUser.email} icon={<DollarSign className="w-5 h-5" />} onClose={() => !saving && setModalUser(null)} />
+            <ModalBody className="space-y-4">
               {loadingSalary ? (
                 <p className="text-slate-500">Memuat...</p>
               ) : (
@@ -238,15 +235,15 @@ const PayrollEmployeesPage: React.FC = () => {
                   <Textarea label="Catatan" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
                 </>
               )}
-            </div>
-            <div className="p-6 border-t border-slate-200 flex justify-end gap-2">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setModalUser(null)} disabled={saving}>Batal</Button>
               <Button onClick={handleSaveSalary} disabled={saving || loadingSalary}>
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import Button from './Button';
+import Autocomplete from './Autocomplete';
 
 const STORAGE_PREFIX = 'autoRefresh_';
 const INTERVAL_OPTIONS = [10, 30, 60, 120] as const;
@@ -80,7 +81,7 @@ const AutoRefreshControl: React.FC<AutoRefreshControlProps> = ({
   const isSm = size === 'sm';
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+      <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
         <input
           type="checkbox"
           checked={enabled}
@@ -88,30 +89,27 @@ const AutoRefreshControl: React.FC<AutoRefreshControlProps> = ({
           disabled={disabled}
           className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
         />
-        <span className={isSm ? 'text-xs text-slate-600' : 'text-sm text-slate-700'}>Auto refresh</span>
+        <span className={`whitespace-nowrap ${isSm ? 'text-xs text-slate-600' : 'text-sm text-slate-700'}`}>Auto refresh</span>
       </label>
-      <select
-        value={intervalSeconds}
-        onChange={(e) => setIntervalSeconds(Number(e.target.value) as typeof INTERVAL_OPTIONS[number])}
+      <Autocomplete
+        value={String(intervalSeconds)}
+        onChange={(v) => setIntervalSeconds(Number(v) as typeof INTERVAL_OPTIONS[number])}
+        options={INTERVAL_OPTIONS.map((sec) => ({ value: String(sec), label: `${sec} detik` }))}
         disabled={disabled}
-        className={`border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${isSm ? 'text-xs py-1 px-2' : 'text-sm py-1.5 px-2'}`}
-        aria-label="Interval auto refresh (detik)"
-      >
-        {INTERVAL_OPTIONS.map((sec) => (
-          <option key={sec} value={sec}>{sec} detik</option>
-        ))}
-      </select>
+        fullWidth={false}
+        className="min-w-[5.5rem] w-auto"
+        placeholder="Interval"
+      />
       <Button
         variant="outline"
-        size={isSm ? 'sm' : 'sm'}
-        className={isSm ? 'p-1.5' : 'p-2'}
+        size="sm"
+        icon={<RefreshCw className="w-4 h-4 shrink-0" />}
+        className="h-9 w-9 p-0 min-w-[2.25rem] shrink-0 inline-flex items-center justify-center"
         onClick={refreshNow}
         disabled={disabled}
         title="Refresh sekarang"
         aria-label="Refresh sekarang"
-      >
-        <RefreshCw className={isSm ? 'w-4 h-4' : 'w-4 h-4'} />
-      </Button>
+      />
     </div>
   );
 };

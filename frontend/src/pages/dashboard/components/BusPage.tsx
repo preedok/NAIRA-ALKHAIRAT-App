@@ -7,14 +7,17 @@ import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, CardSectionHeader, Input, Autocomplete, Textarea } from '../../../components/common';
+import { FilterIconButton, StatCard, CardSectionHeader, Input, PriceInput, Autocomplete, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi, adminPusatApi, type BusSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
-import { formatIDR, formatSAR, formatUSD } from '../../../utils';
+import Table from '../../../components/common/Table';
+import { getPriceTripleForTable, parsePriceInput, PRICE_COLUMN_LABEL, formatIDR } from '../../../utils';
 import BusWorkPage from './BusWorkPage';
+
+const PAGE_SIZE = 25;
 
 type BusTripType = 'one_way' | 'return_only' | 'round_trip';
 type BusKind = 'bus' | 'hiace';
@@ -57,8 +60,6 @@ const BUS_KIND_LABELS: Record<BusKind, string> = {
   bus: 'Bus (min 35 orang, penalti jika kurang)',
   hiace: 'Hiace (harga per mobil, tanpa penalti)'
 };
-
-const formatRp = (n: number) => (n > 0 ? `Rp ${Number(n).toLocaleString('id-ID')}` : '—');
 
 type BusPageProps = {
   embedInProducts?: boolean;
@@ -111,6 +112,11 @@ const BusPage: React.FC<BusPageProps> = ({
   });
   const [addBusSaving, setAddBusSaving] = useState(false);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
+  const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
+  const [busPage, setBusPage] = useState(1);
+  const [busLimit, setBusLimit] = useState(PAGE_SIZE);
+  const [busTotal, setBusTotal] = useState(0);
+  const [busTotalPages, setBusTotalPages] = useState(1);
   const [busQuotaProduct, setBusQuotaProduct] = useState<BusProduct | null>(null);
   const [busSeasons, setBusSeasons] = useState<BusSeason[]>([]);
   const [busSeasonsLoading, setBusSeasonsLoading] = useState(false);
@@ -131,26 +137,40 @@ const BusPage: React.FC<BusPageProps> = ({
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
-      const data = (res.data as { data?: { currency_rates?: unknown } })?.data;
+      const data = (res.data as { data?: Record<string, unknown> })?.data;
       let cr = data?.currency_rates;
       if (typeof cr === 'string') try { cr = JSON.parse(cr) as { SAR_TO_IDR?: number; USD_TO_IDR?: number }; } catch { cr = null; }
       const rates = cr as { SAR_TO_IDR?: number; USD_TO_IDR?: number } | null;
       if (rates && typeof rates === 'object') setCurrencyRates({ SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 });
+      const minPack = typeof data?.bus_min_pack === 'number' ? data.bus_min_pack : parseInt(String(data?.bus_min_pack), 10) || 35;
+      const penaltyIdr = typeof data?.bus_penalty_idr === 'number' ? data.bus_penalty_idr : parseFloat(String(data?.bus_penalty_idr)) || 500000;
+      setBusPenaltyRule({ bus_min_pack: minPack, bus_penalty_idr: penaltyIdr });
     }).catch(() => {});
   }, []);
 
   const fetchBusProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingBusProducts(true);
-    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: busLimit, page: busPage, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
-        const data = (res.data as { data?: BusProduct[] })?.data;
-        setBusProducts(Array.isArray(data) ? data : []);
+        const body = res.data as { data?: BusProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };
+        setBusProducts(Array.isArray(body.data) ? body.data : []);
+        const p = body.pagination;
+        if (p) {
+          setBusTotal(p.total);
+          setBusPage(p.page);
+          setBusLimit(p.limit);
+          setBusTotalPages(p.totalPages || 1);
+        }
       })
       .catch(() => setBusProducts([]))
       .finally(() => setLoadingBusProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, busLimit, busPage]);
+
+  useEffect(() => {
+    setBusPage(1);
+  }, [filterIncludeInactive]);
 
   useEffect(() => {
     fetchBusProducts();
@@ -318,29 +338,19 @@ const BusPage: React.FC<BusPageProps> = ({
               </Button>
             ) : undefined}
           />
-          {loadingBusProducts ? (
-            <p className="text-slate-500 text-sm py-4">Memuat produk...</p>
-          ) : busProducts.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-slate-500 text-sm">Belum ada produk bus.</p>
-              {!isPusat && <p className="text-xs text-slate-400 mt-1">Admin pusat dapat menambah produk bus.</p>}
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
-<thead>
-                <tr className="bg-slate-100 border-b border-slate-200">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Kode</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Nama</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Jenis</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Harga</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Harga / mobil</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-700">Kuota</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-700 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {busProducts.map((p) => {
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <Table<BusProduct>
+              columns={[
+                { id: 'code', label: 'Kode', align: 'left' },
+                { id: 'name', label: 'Nama', align: 'left' },
+                { id: 'kind', label: 'Jenis', align: 'left' },
+                { id: 'price', label: PRICE_COLUMN_LABEL, align: 'left' },
+                { id: 'price_vehicle', label: 'Harga / mobil (IDR · SAR · USD)', align: 'left' },
+                { id: 'quota', label: 'Kuota', align: 'left' },
+                { id: 'actions', label: 'Aksi', align: 'right' }
+              ]}
+              data={loadingBusProducts ? [] : busProducts}
+              renderRow={(p) => {
                     const isHiace = p.meta?.bus_kind === 'hiace';
                     return (
                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
@@ -355,27 +365,37 @@ const BusPage: React.FC<BusPageProps> = ({
                         {isHiace ? (
                           <span className="text-slate-400">—</span>
                         ) : (
-                          <div className="flex flex-col gap-0.5">
-                            {(() => {
-                              const priceIdr = getPriceForTrip(p, 'round_trip');
-                              const triple = fillFromSource('IDR', priceIdr, currencyRates);
-                              return (
-                                <>
-                                  <span className="text-slate-700 font-medium">{formatRp(priceIdr)}</span>
-                                  {priceIdr > 0 && <span className="text-xs text-slate-500">{formatSAR(triple.sar)} · {formatUSD(triple.usd)}</span>}
-                                  {priceIdr <= 0 && <span className="text-slate-400 text-xs">—</span>}
-                                </>
-                              );
-                            })()}
-                          </div>
+                          (() => {
+                            const priceIdr = getPriceForTrip(p, 'round_trip');
+                            const triple = fillFromSource('IDR', priceIdr, currencyRates);
+                            const t = getPriceTripleForTable(priceIdr, triple.sar, triple.usd);
+                            if (!t.hasPrice) return <span className="text-slate-400">—</span>;
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-slate-700 font-medium tabular-nums">{t.idrText}</span>
+                                <span className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</span>
+                                <span className="text-xs text-slate-400">per orang</span>
+                                <span className="text-xs text-amber-700 mt-0.5">Penalti: {formatIDR(busPenaltyRule.bus_penalty_idr)}/org (jika &lt; {busPenaltyRule.bus_min_pack} org)</span>
+                              </div>
+                            );
+                          })()
                         )}
                       </td>
-                      <td className="py-2 px-4">
+                      <td className="py-2 px-4 align-top">
                         {isHiace ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-slate-700 font-medium">{formatRp(p.meta?.price_per_vehicle_idr ?? 0)}</span>
-                            {(p.meta?.price_per_vehicle_idr ?? 0) > 0 && <span className="text-xs text-slate-500">{formatSAR(fillFromSource('IDR', p.meta?.price_per_vehicle_idr ?? 0, currencyRates).sar)} · {formatUSD(fillFromSource('IDR', p.meta?.price_per_vehicle_idr ?? 0, currencyRates).usd)}</span>}
-                          </div>
+                          (() => {
+                            const idr = p.meta?.price_per_vehicle_idr ?? 0;
+                            const triple = fillFromSource('IDR', idr, currencyRates);
+                            const t = getPriceTripleForTable(idr, triple.sar, triple.usd);
+                            if (!t.hasPrice) return <span className="text-slate-400">—</span>;
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-slate-700 font-medium tabular-nums">{t.idrText}</span>
+                                <span className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</span>
+                                <span className="text-xs text-slate-400">per mobil</span>
+                              </div>
+                            );
+                          })()
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
@@ -440,57 +460,69 @@ const BusPage: React.FC<BusPageProps> = ({
                         </div>
                       </td>
                     </tr>
-                  );})}
-                </tbody>
-              </table>
+                  );
+              }}
+              emptyMessage={loadingBusProducts ? 'Memuat produk...' : 'Belum ada produk bus.'}
+              emptyDescription={!loadingBusProducts && !isPusat ? 'Admin pusat dapat menambah produk bus.' : undefined}
+              pagination={{
+                total: busTotal,
+                page: busPage,
+                limit: busLimit,
+                totalPages: busTotalPages,
+                onPageChange: setBusPage,
+                onLimitChange: (l) => { setBusLimit(l); setBusPage(1); }
+              }}
+              stickyActionsColumn
+            />
             </div>
-          )}
         </Card>
       )}
 
       {/* Modal Tambah produk bus — hanya form produk */}
       {addBusModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addBusSaving && setAddBusModalOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-amber-50/80">
-              <h3 className="text-lg font-bold text-slate-900">Tambah produk bus</h3>
-              <button type="button" onClick={() => !addBusSaving && setAddBusModalOpen(false)} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <Input label="Nama produk *" type="text" value={addBusForm.name} onChange={(e) => setAddBusForm((f) => ({ ...f, name: e.target.value }))} placeholder="Contoh: Bus Mekkah–Madinah atau Hiace Madinah" />
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Jenis</label>
-                <div className="flex gap-3">
+        <Modal open onClose={() => !addBusSaving && setAddBusModalOpen(false)}>
+          <ModalBox>
+            <ModalHeader title="Tambah produk bus" subtitle="Nama produk, deskripsi, dan harga (opsional)" icon={<Plus className="w-5 h-5" />} onClose={() => !addBusSaving && setAddBusModalOpen(false)} />
+            <ModalBody className="flex-1 overflow-y-auto space-y-6">
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Info produk</h3>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-4">
+                  <Input label="Nama produk *" type="text" value={addBusForm.name} onChange={(e) => setAddBusForm((f) => ({ ...f, name: e.target.value }))} placeholder="Contoh: Bus Mekkah–Madinah atau Hiace Madinah" fullWidth />
+                  <Textarea label="Deskripsi (opsional)" value={addBusForm.description} onChange={(e) => setAddBusForm((f) => ({ ...f, description: e.target.value }))} rows={2} placeholder="Deskripsi singkat" fullWidth />
+                </div>
+              </section>
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Jenis</h3>
+                <p className="text-xs text-slate-500">Pilih jenis kendaraan: Bus (besar, min 35 orang) atau Hiace (harga per mobil).</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(['bus', 'hiace'] as const).map((k) => (
-                    <label key={k} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="bus_kind"
-                        checked={addBusForm.bus_kind === k}
-                        onChange={() => setAddBusForm((f) => ({ ...f, bus_kind: k }))}
-                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                      />
-                      <span className="text-sm text-slate-700">{BUS_KIND_LABELS[k]}</span>
-                    </label>
+                    <Button
+                      key={k}
+                      type="button"
+                      variant={addBusForm.bus_kind === k ? 'primary' : 'outline'}
+                      size="sm"
+                      className="w-full justify-center py-4 flex flex-col gap-1"
+                      onClick={() => setAddBusForm((f) => ({ ...f, bus_kind: k }))}
+                    >
+                      <span className="font-medium">{k === 'bus' ? 'Bus' : 'Hiace'}</span>
+                      <span className="text-xs opacity-90 font-normal">{BUS_KIND_LABELS[k]}</span>
+                    </Button>
                   ))}
                 </div>
-              </div>
-              <div>
-                <Input label="Kuota" type="number" min={0} value={addBusForm.default_quota === '' ? '' : String(addBusForm.default_quota)} onChange={(e) => setAddBusForm((f) => ({ ...f, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="Total Kuota Bus Operasi" className="max-w-[140px]" fullWidth={false} />
-                <p className="text-xs text-slate-500 mt-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
-              </div>
+              </section>
+              <section className="space-y-2">
+                <Input label="Kuota (opsional)" type="number" min={0} value={addBusForm.default_quota === '' ? '' : String(addBusForm.default_quota)} onChange={(e) => setAddBusForm((f) => ({ ...f, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="Total Kuota Bus Operasi" fullWidth />
+                <p className="text-xs text-slate-500">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
+              </section>
               {addBusForm.bus_kind === 'hiace' && (
-                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
-                  <label className="block text-sm font-medium text-slate-700">Harga per mobil</label>
-                  <p className="text-xs text-slate-500 mb-2">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
-                  <div className="flex flex-wrap gap-3 mb-2">
+                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-700">Harga per mobil</h3>
+                  <p className="text-xs text-slate-500">Pilih mata uang input; nilai lain terkonversi otomatis.</p>
+                  <div className="flex flex-wrap gap-2">
                     {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="add_price_currency" checked={addBusForm.price_currency === cur} onChange={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-                        <span className="text-sm font-medium text-slate-700">{cur}</span>
-                      </label>
+                      <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
+                        {cur}
+                      </Button>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -500,25 +532,24 @@ const BusPage: React.FC<BusPageProps> = ({
                       const cur = addBusForm.price_currency;
                       return (
                         <>
-                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) }))} disabled={cur !== 'IDR'} placeholder="0" />
-                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'SAR'} placeholder="0" />
-                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'USD'} placeholder="0" />
+                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: n }))} disabled={cur !== 'IDR'} placeholder="0" />
+                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr }))} disabled={cur !== 'SAR'} placeholder="0" />
+                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr }))} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
                   </div>
-                </div>
+                </section>
               )}
               {addBusForm.bus_kind === 'bus' && (
-                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
-                  <label className="block text-sm font-medium text-slate-700">Harga</label>
-                  <p className="text-xs text-slate-500">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
-                  <div className="flex flex-wrap gap-3 mb-2">
+                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-700">Harga (per tipe perjalanan)</h3>
+                  <p className="text-xs text-slate-500">Pilih mata uang input; nilai lain terkonversi otomatis.</p>
+                  <div className="flex flex-wrap gap-2">
                     {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="add_bus_currency" checked={addBusForm.price_currency === cur} onChange={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-                        <span className="text-sm font-medium text-slate-700">{cur}</span>
-                      </label>
+                      <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
+                        {cur}
+                      </Button>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -532,56 +563,54 @@ const BusPage: React.FC<BusPageProps> = ({
                       }));
                       return (
                         <>
-                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} placeholder="0" />
-                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
-                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
+                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
+                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
+                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
                   </div>
-                </div>
+                </section>
               )}
-            </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setAddBusModalOpen(false)} disabled={addBusSaving}>Batal</Button>
               <Button variant="primary" onClick={handleCreateBus} disabled={addBusSaving || !addBusForm.name.trim()}>
                 {addBusSaving ? 'Menyimpan...' : 'Simpan'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Modal Edit produk bus */}
       {editProductModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !editProductSaving && setEditProductModal(null)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-amber-50/80">
-              <h3 className="text-lg font-bold text-slate-900">Edit produk bus</h3>
-              <button type="button" onClick={() => !editProductSaving && setEditProductModal(null)} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <Input label="Nama produk *" type="text" value={editProductModal.name} onChange={(e) => setEditProductModal((m) => m ? { ...m, name: e.target.value } : null)} />
-              <Textarea label="Deskripsi" value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} />
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Jenis</label>
-                <div className="flex gap-3">
+        <Modal open onClose={() => !editProductSaving && setEditProductModal(null)}>
+          <ModalBox>
+            <ModalHeader title="Edit produk bus" subtitle="Ubah nama, deskripsi, dan harga produk" icon={<Pencil className="w-5 h-5" />} onClose={() => !editProductSaving && setEditProductModal(null)} />
+            <ModalBody className="flex-1 overflow-y-auto space-y-6">
+              <section className="space-y-3">
+                <Input label="Nama produk *" type="text" value={editProductModal.name} onChange={(e) => setEditProductModal((m) => m ? { ...m, name: e.target.value } : null)} fullWidth />
+                <Textarea label="Deskripsi" value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} fullWidth />
+              </section>
+              <section className="space-y-3">
+                <label className="block text-sm font-semibold text-slate-700">Jenis</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(['bus', 'hiace'] as const).map((k) => (
-                    <label key={k} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="edit_bus_kind"
-                        checked={editProductModal.bus_kind === k}
-                        onChange={() => setEditProductModal((m) => m ? { ...m, bus_kind: k } : null)}
-                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                      />
-                      <span className="text-sm text-slate-700">{BUS_KIND_LABELS[k]}</span>
-                    </label>
+                    <Button
+                      key={k}
+                      type="button"
+                      variant={editProductModal.bus_kind === k ? 'primary' : 'outline'}
+                      size="sm"
+                      className="w-full justify-center py-3 flex flex-col gap-0.5"
+                      onClick={() => setEditProductModal((m) => m ? { ...m, bus_kind: k } : null)}
+                    >
+                      <span className="font-medium">{k === 'bus' ? 'Bus' : 'Hiace'}</span>
+                      <span className="text-xs opacity-90 font-normal">{BUS_KIND_LABELS[k]}</span>
+                    </Button>
                   ))}
                 </div>
-              </div>
+              </section>
               <div>
                 <Input label="Kuota default (kalender)" type="number" min={0} value={editProductModal.default_quota === '' ? '' : String(editProductModal.default_quota)} onChange={(e) => setEditProductModal((m) => m ? { ...m, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) } : null)} placeholder="Opsional" className="max-w-[140px]" fullWidth={false} />
                 <p className="text-xs text-slate-500 mt-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
@@ -590,12 +619,11 @@ const BusPage: React.FC<BusPageProps> = ({
                 <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
                   <label className="block text-sm font-medium text-slate-700">Harga per mobil</label>
                   <p className="text-xs text-slate-500 mb-2">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
-                  <div className="flex flex-wrap gap-3 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="edit_price_currency" checked={editProductModal.price_currency === cur} onChange={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-                        <span className="text-sm font-medium text-slate-700">{cur}</span>
-                      </label>
+                      <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
+                        {cur}
+                      </Button>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -605,9 +633,9 @@ const BusPage: React.FC<BusPageProps> = ({
                       const cur = editProductModal.price_currency;
                       return (
                         <>
-                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) } : null)} disabled={cur !== 'IDR'} placeholder="0" />
-                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'SAR'} placeholder="0" />
-                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'USD'} placeholder="0" />
+                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: n } : null)} disabled={cur !== 'IDR'} placeholder="0" />
+                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr } : null)} disabled={cur !== 'SAR'} placeholder="0" />
+                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr } : null)} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
@@ -618,12 +646,11 @@ const BusPage: React.FC<BusPageProps> = ({
                 <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
                   <label className="block text-sm font-medium text-slate-700">Harga</label>
                   <p className="text-xs text-slate-500">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
-                  <div className="flex flex-wrap gap-3 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <label key={cur} className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="edit_bus_currency" checked={editProductModal.price_currency === cur} onChange={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-                        <span className="text-sm font-medium text-slate-700">{cur}</span>
-                      </label>
+                      <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
+                        {cur}
+                      </Button>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -637,41 +664,30 @@ const BusPage: React.FC<BusPageProps> = ({
                       } : null);
                       return (
                         <>
-                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} placeholder="0" />
-                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
-                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
+                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
+                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
+                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
                   </div>
                 </div>
               )}
-            </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setEditProductModal(null)} disabled={editProductSaving}>Batal</Button>
               <Button variant="primary" onClick={saveEditProduct} disabled={editProductSaving}>{editProductSaving ? 'Menyimpan...' : 'Simpan'}</Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Modal: Kuota per periode (Admin Pusat) */}
       {busQuotaProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addSeasonSaving && !quotaSaving && setBusQuotaProduct(null)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-[#0D1A63]" />
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Kuota per periode</h3>
-                  <p className="text-sm text-slate-500">{busQuotaProduct.name}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => !addSeasonSaving && !quotaSaving && setBusQuotaProduct(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-500">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <Modal open onClose={() => !addSeasonSaving && !quotaSaving && setBusQuotaProduct(null)}>
+          <ModalBox>
+            <ModalHeader title="Kuota per periode" subtitle={busQuotaProduct.name} icon={<Calendar className="w-5 h-5" />} onClose={() => !addSeasonSaving && !quotaSaving && setBusQuotaProduct(null)} />
+            <ModalBody className="flex-1 overflow-y-auto space-y-4">
               <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
                 <div className="grid grid-cols-2 gap-3">
@@ -771,9 +787,9 @@ const BusPage: React.FC<BusPageProps> = ({
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
+            </ModalBody>
+          </ModalBox>
+        </Modal>
       )}
 
       <p className="text-xs text-slate-500">Tiket bus dan status kedatangan/keberangkatan dikelola di Invoice oleh role Bus.</p>

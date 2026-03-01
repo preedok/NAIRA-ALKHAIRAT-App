@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, ClipboardList, Bus, Ticket, MapPin, Plane, RotateCcw, Search, Download, FileSpreadsheet, FileText, AlertCircle, ChevronRight } from 'lucide-react';
+import { RefreshCw, Eye, ClipboardList, Bus, Ticket, MapPin, Plane, RotateCcw, Search, FileSpreadsheet, FileText, AlertCircle, ChevronRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
+import Table from '../../../components/common/Table';
+import { Input, Autocomplete, Textarea } from '../../../components/common';
+import type { TableColumn } from '../../../types';
 import { busApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
@@ -40,9 +43,18 @@ const BusWorkPage: React.FC = () => {
   const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterTicketStatus, setFilterTicketStatus] = useState<string>('');
+  const [filterArrival, setFilterArrival] = useState<string>('');
+  const [filterDeparture, setFilterDeparture] = useState<string>('');
+  const [filterReturn, setFilterReturn] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const filterChangedOnce = useRef(false);
+  const [localTicketInfo, setLocalTicketInfo] = useState<Record<string, string>>({});
+  const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -55,12 +67,19 @@ const BusWorkPage: React.FC = () => {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const res = await busApi.listInvoices({ status: filterStatus || undefined });
-      if (res.data.success) setInvoices(res.data.data || []);
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
+      if (filterStatus) params.status = filterStatus;
+      const res = await busApi.listInvoices(params);
+      if (res.data.success) {
+        setInvoices(res.data.data || []);
+        const pag = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
+        setPagination(pag || null);
+      }
     } catch {
       setInvoices([]);
+      setPagination(null);
     }
-  }, [filterStatus]);
+  }, [filterStatus, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -68,15 +87,46 @@ const BusWorkPage: React.FC = () => {
   }, [fetchDashboard, fetchInvoices]);
 
   const filteredInvoices = useMemo(() => {
-    if (!searchQuery.trim()) return invoices;
-    const q = searchQuery.trim().toLowerCase();
-    return invoices.filter((inv: any) => {
-      const invNum = (inv.invoice_number ?? '').toLowerCase();
-      const ownerName = (inv.User?.name ?? inv.Order?.User?.name ?? '').toLowerCase();
-      const orderNum = (inv.Order?.order_number ?? '').toLowerCase();
-      return invNum.includes(q) || ownerName.includes(q) || orderNum.includes(q);
-    });
-  }, [invoices, searchQuery]);
+    let list = invoices;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((inv: any) => {
+        const invNum = (inv.invoice_number ?? '').toLowerCase();
+        const ownerName = (inv.User?.name ?? inv.Order?.User?.name ?? '').toLowerCase();
+        const orderNum = (inv.Order?.order_number ?? '').toLowerCase();
+        return invNum.includes(q) || ownerName.includes(q) || orderNum.includes(q);
+      });
+    }
+    if (filterTicketStatus) {
+      list = list.filter((inv: any) => {
+        const orderItems = inv.Order?.OrderItems || [];
+        const busItems = orderItems.filter((i: any) => i.type === 'bus');
+        return busItems.some((i: any) => (i.BusProgress?.bus_ticket_status || 'pending') === filterTicketStatus);
+      });
+    }
+    if (filterArrival) {
+      list = list.filter((inv: any) => {
+        const orderItems = inv.Order?.OrderItems || [];
+        const busItems = orderItems.filter((i: any) => i.type === 'bus');
+        return busItems.some((i: any) => (i.BusProgress?.arrival_status || 'pending') === filterArrival);
+      });
+    }
+    if (filterDeparture) {
+      list = list.filter((inv: any) => {
+        const orderItems = inv.Order?.OrderItems || [];
+        const busItems = orderItems.filter((i: any) => i.type === 'bus');
+        return busItems.some((i: any) => (i.BusProgress?.departure_status || 'pending') === filterDeparture);
+      });
+    }
+    if (filterReturn) {
+      list = list.filter((inv: any) => {
+        const orderItems = inv.Order?.OrderItems || [];
+        const busItems = orderItems.filter((i: any) => i.type === 'bus');
+        return busItems.some((i: any) => (i.BusProgress?.return_status || 'pending') === filterReturn);
+      });
+    }
+    return list;
+  }, [invoices, searchQuery, filterTicketStatus, filterArrival, filterDeparture, filterReturn]);
 
   const handleExport = useCallback(async (type: 'excel' | 'pdf') => {
     setExporting(type);
@@ -106,6 +156,10 @@ const BusWorkPage: React.FC = () => {
   }, [refetchAll]);
 
   useEffect(() => {
+    setPage(1);
+  }, [filterStatus]);
+
+  useEffect(() => {
     if (!filterChangedOnce.current) {
       filterChangedOnce.current = true;
       return;
@@ -121,6 +175,8 @@ const BusWorkPage: React.FC = () => {
         .catch(() => setDetailInvoice(null));
     } else {
       setDetailInvoice(null);
+      setLocalTicketInfo({});
+      setLocalNotes({});
     }
   }, [invoiceIdParam]);
 
@@ -210,22 +266,24 @@ const BusWorkPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             {pendingList.slice(0, 20).map((p: any) => (
-              <button
+              <Button
                 key={`${p.order_id}-${p.order_item_id}`}
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   const inv = invoices.find((i: any) => i.Order?.id === p.order_id);
                   if (inv) setSearchParams({ invoice: inv.id });
                   else showToast('Invoice tidak ada dalam daftar. Coba reset filter.', 'warning');
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-200 bg-white hover:bg-amber-50 text-left text-sm"
+                className="inline-flex items-center gap-1.5 text-left border-amber-200 hover:bg-amber-50"
               >
                 <span className="font-mono text-stone-700">{p.order_number}</span>
                 <span className="text-stone-500">·</span>
                 <span className="text-stone-600">{p.owner_name || '–'}</span>
                 <span className="text-amber-600">Qty {p.quantity}</span>
                 <ChevronRight className="w-4 h-4 text-stone-400" />
-              </button>
+              </Button>
             ))}
             {pendingList.length > 20 && (
               <span className="text-xs text-stone-500 self-center">+{pendingList.length - 20} lainnya</span>
@@ -234,112 +292,158 @@ const BusWorkPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Filter & Tabel */}
-      <Card>
-        <div className="p-4 border-b border-slate-100 space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-              <input
-                type="text"
-                placeholder="Cari invoice, order, owner..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
-              />
-            </div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white min-w-[160px]"
-            >
-              {INVOICE_STATUS_FILTER_OPTIONS.map((opt) => (
-                <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            {(searchQuery || filterStatus) && (
-              <button
-                type="button"
-                onClick={() => { setSearchQuery(''); setFilterStatus(''); }}
-                className="text-sm text-stone-500 hover:text-stone-700"
-              >
-                Reset filter
-              </button>
-            )}
+      {/* Filter */}
+      <Card className="p-4 rounded-xl border border-slate-200/80 shadow-sm overflow-visible">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
+          <div className="flex-1 min-w-0 sm:min-w-[180px]">
+            <Input
+              label="Cari"
+              type="text"
+              placeholder="No. invoice, order, owner..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              icon={<Search className="w-4 h-4" />}
+              fullWidth
+            />
           </div>
+          <div className="w-full sm:w-40 min-w-0">
+            <Autocomplete
+              label="Status Invoice"
+              value={filterStatus}
+              onChange={setFilterStatus}
+              options={INVOICE_STATUS_FILTER_OPTIONS}
+              placeholder="Semua status"
+              emptyLabel="Semua status"
+              fullWidth
+            />
+          </div>
+          <div className="w-full sm:w-36 min-w-0">
+            <Autocomplete
+              label="Status Tiket Bis"
+              value={filterTicketStatus}
+              onChange={setFilterTicketStatus}
+              options={TICKET_OPTIONS}
+              placeholder="Semua"
+              emptyLabel="Semua"
+              fullWidth
+            />
+          </div>
+          <div className="w-full sm:w-36 min-w-0">
+            <Autocomplete
+              label="Status Kedatangan"
+              value={filterArrival}
+              onChange={setFilterArrival}
+              options={TRIP_OPTIONS}
+              placeholder="Semua"
+              emptyLabel="Semua"
+              fullWidth
+            />
+          </div>
+          <div className="w-full sm:w-40 min-w-0">
+            <Autocomplete
+              label="Status Keberangkatan"
+              value={filterDeparture}
+              onChange={setFilterDeparture}
+              options={TRIP_OPTIONS}
+              placeholder="Semua"
+              emptyLabel="Semua"
+              fullWidth
+            />
+          </div>
+          <div className="w-full sm:w-36 min-w-0">
+            <Autocomplete
+              label="Status Kepulangan"
+              value={filterReturn}
+              onChange={setFilterReturn}
+              options={TRIP_OPTIONS}
+              placeholder="Semua"
+              emptyLabel="Semua"
+              fullWidth
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => { setSearchQuery(''); setFilterStatus(''); setFilterTicketStatus(''); setFilterArrival(''); setFilterDeparture(''); setFilterReturn(''); }}
+            className="sm:shrink-0"
+          >
+            Reset filter
+          </Button>
         </div>
-        {loading ? (
-          <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
+      </Card>
+
+      {/* Tabel */}
+      <Card className="rounded-xl border border-slate-200/80 shadow-sm min-w-0 overflow-hidden">
+        {loading && (
+          <div className="py-8 text-center text-slate-500 flex items-center justify-center gap-2 border-b border-slate-100">
             <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
           </div>
-        ) : filteredInvoices.length === 0 ? (
-          <div className="py-16 text-center">
-            <Bus className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-            <p className="text-slate-600 font-medium">
-              {invoices.length === 0 ? 'Belum ada invoice dengan item bus' : 'Tidak ada hasil untuk filter ini'}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">
-              {invoices.length === 0 ? 'Buat order & invoice dari menu Order/Invoice terlebih dahulu.' : 'Ubah filter atau kata kunci pencarian.'}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">No. Invoice</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Owner</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Item Bus</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Status Tiket</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700 w-28 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map((inv: any) => {
-                  const o = inv.Order;
-                  const orderItems = o?.OrderItems || [];
-                  const busCount = orderItems.filter((i: any) => i.type === 'bus').length;
-                  const firstTicketStatus = orderItems.find((i: any) => i.type === 'bus')?.BusProgress?.bus_ticket_status || 'pending';
-                  return (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
-                        {inv.Order?.order_number && (
-                          <span className="block text-xs text-slate-500 mt-0.5">{inv.Order.order_number}</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                      <td className="py-3 px-4 text-right font-medium tabular-nums">{busCount}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={firstTicketStatus === 'issued' ? 'success' : 'warning'}>
-                          {TICKET_OPTIONS.find(s => s.value === firstTicketStatus)?.label ?? firstTicketStatus}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                        <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
-                          <Eye className="w-4 h-4 mr-1" /> Detail
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
         )}
+        <div className="min-w-0 overflow-x-auto rounded-xl border border-slate-200">
+          <Table
+            columns={[
+              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+              { id: 'owner', label: 'Owner', align: 'left' },
+              { id: 'item_bus', label: 'Item Bus', align: 'right' },
+              { id: 'status_tiket', label: 'Status Tiket', align: 'left' },
+              { id: 'actions', label: 'Aksi', align: 'left' }
+            ] as TableColumn[]}
+            data={loading ? [] : filteredInvoices}
+            emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item bus' : 'Tidak ada hasil untuk filter ini'}
+            emptyDescription={invoices.length === 0 ? 'Buat order & invoice dari menu Order/Invoice terlebih dahulu.' : 'Ubah filter atau kata kunci pencarian.'}
+            emptyIcon={<Bus className="w-8 h-8" />}
+            stickyActionsColumn
+            pagination={pagination ? {
+              total: pagination.total,
+              page: pagination.page,
+              limit: pagination.limit,
+              totalPages: pagination.totalPages,
+              onPageChange: (p) => setPage(p),
+              onLimitChange: (l) => { setLimit(l); setPage(1); }
+            } : undefined}
+            renderRow={(inv: any) => {
+              const o = inv.Order;
+              const orderItems = o?.OrderItems || [];
+              const busCount = orderItems.filter((i: any) => i.type === 'bus').length;
+              const firstTicketStatus = orderItems.find((i: any) => i.type === 'bus')?.BusProgress?.bus_ticket_status || 'pending';
+              return (
+                <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 px-4">
+                    <span className="font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                    {inv.Order?.order_number && (
+                      <span className="block text-xs text-slate-500 mt-0.5">{inv.Order.order_number}</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                  <td className="py-3 px-4 text-right font-medium tabular-nums">{busCount}</td>
+                  <td className="py-3 px-4">
+                    <Badge variant={firstTicketStatus === 'issued' ? 'success' : 'warning'}>
+                      {TICKET_OPTIONS.find(s => s.value === firstTicketStatus)?.label ?? firstTicketStatus}
+                    </Badge>
+                  </td>
+                  <td className="py-3 px-4">
+                    <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
+                      <Eye className="w-4 h-4 mr-1" /> Detail
+                    </Button>
+                  </td>
+                </tr>
+              );
+            }}
+          />
+        </div>
       </Card>
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
         {detailInvoice && (
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex justify-between items-start gap-4 mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">{formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}</h2>
-                <p className="text-sm text-slate-500 mt-1">Owner: {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name}</p>
-              </div>
-              <button type="button" className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700" onClick={() => setSearchParams({})} aria-label="Tutup">×</button>
-            </div>
-            <div className="space-y-4">
+          <ModalBoxLg>
+            <ModalHeader
+              title={formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
+              subtitle={`Owner: ${detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}`}
+              icon={<Bus className="w-5 h-5" />}
+              onClose={() => setSearchParams({})}
+            />
+            <ModalBody className="space-y-4">
               {busItems.map((item: any, idx: number) => {
                 const prog = item.BusProgress;
                 const ticketStatus = prog?.bus_ticket_status || 'pending';
@@ -352,92 +456,80 @@ const BusWorkPage: React.FC = () => {
                       <Bus className="w-4 h-4 text-[#0D1A63]" />
                       Item Bus #{idx + 1} · Qty: {item.quantity}
                     </p>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Status Tiket Bis</label>
-                      <select
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        value={ticketStatus}
-                        onChange={(e) => handleUpdateProgress(item.id, { bus_ticket_status: e.target.value })}
-                        disabled={updatingId === item.id}
-                      >
-                        {TICKET_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Info Tiket (nomor, dll)</label>
-                      <input
-                        type="text"
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        placeholder="Opsional"
-                        defaultValue={prog?.bus_ticket_info ?? ''}
-                        onBlur={(e) => {
-                          const v = e.target.value?.trim() || undefined;
-                          if (v !== (prog?.bus_ticket_info ?? '')) handleUpdateProgress(item.id, { bus_ticket_info: v });
-                        }}
-                        disabled={updatingId === item.id}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Status Kedatangan</label>
-                      <select
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        value={arrivalStatus}
-                        onChange={(e) => handleUpdateProgress(item.id, { arrival_status: e.target.value })}
-                        disabled={updatingId === item.id}
-                      >
-                        {TRIP_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Status Keberangkatan</label>
-                      <select
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        value={departureStatus}
-                        onChange={(e) => handleUpdateProgress(item.id, { departure_status: e.target.value })}
-                        disabled={updatingId === item.id}
-                      >
-                        {TRIP_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Status Kepulangan</label>
-                      <select
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        value={returnStatus}
-                        onChange={(e) => handleUpdateProgress(item.id, { return_status: e.target.value })}
-                        disabled={updatingId === item.id}
-                      >
-                        {TRIP_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Catatan</label>
-                      <textarea
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        rows={2}
-                        placeholder="Opsional"
-                        defaultValue={prog?.notes ?? ''}
-                        onBlur={(e) => {
-                          const v = e.target.value?.trim() || undefined;
-                          if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v });
-                        }}
-                        disabled={updatingId === item.id}
-                      />
-                    </div>
+                    <Autocomplete
+                      label="Status Tiket Bis"
+                      value={ticketStatus}
+                      onChange={(v) => handleUpdateProgress(item.id, { bus_ticket_status: v })}
+                      options={TICKET_OPTIONS}
+                      disabled={updatingId === item.id}
+                      fullWidth
+                    />
+                    <Input
+                      label="Info Tiket (nomor, dll)"
+                      type="text"
+                      placeholder="Opsional"
+                      value={localTicketInfo[item.id] ?? prog?.bus_ticket_info ?? ''}
+                      onChange={(e) => setLocalTicketInfo((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      onBlur={() => {
+                        const v = (localTicketInfo[item.id] ?? prog?.bus_ticket_info ?? '').trim() || undefined;
+                        if (v !== (prog?.bus_ticket_info ?? '')) handleUpdateProgress(item.id, { bus_ticket_info: v });
+                        setLocalTicketInfo((prev) => {
+                          const next = { ...prev };
+                          delete next[item.id];
+                          return next;
+                        });
+                      }}
+                      disabled={updatingId === item.id}
+                      fullWidth
+                    />
+                    <Autocomplete
+                      label="Status Kedatangan"
+                      value={arrivalStatus}
+                      onChange={(v) => handleUpdateProgress(item.id, { arrival_status: v })}
+                      options={TRIP_OPTIONS}
+                      disabled={updatingId === item.id}
+                      fullWidth
+                    />
+                    <Autocomplete
+                      label="Status Keberangkatan"
+                      value={departureStatus}
+                      onChange={(v) => handleUpdateProgress(item.id, { departure_status: v })}
+                      options={TRIP_OPTIONS}
+                      disabled={updatingId === item.id}
+                      fullWidth
+                    />
+                    <Autocomplete
+                      label="Status Kepulangan"
+                      value={returnStatus}
+                      onChange={(v) => handleUpdateProgress(item.id, { return_status: v })}
+                      options={TRIP_OPTIONS}
+                      disabled={updatingId === item.id}
+                      fullWidth
+                    />
+                    <Textarea
+                      label="Catatan"
+                      rows={2}
+                      placeholder="Opsional"
+                      value={localNotes[item.id] ?? prog?.notes ?? ''}
+                      onChange={(e) => setLocalNotes((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      onBlur={() => {
+                        const v = (localNotes[item.id] ?? prog?.notes ?? '').trim() || undefined;
+                        if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v });
+                        setLocalNotes((prev) => {
+                          const next = { ...prev };
+                          delete next[item.id];
+                          return next;
+                        });
+                      }}
+                      disabled={updatingId === item.id}
+                      fullWidth
+                    />
                     {updatingId === item.id && <span className="text-xs text-slate-500">Menyimpan...</span>}
                   </div>
                 );
               })}
-            </div>
-          </div>
+            </ModalBody>
+          </ModalBoxLg>
         )}
       </Modal>
     </div>

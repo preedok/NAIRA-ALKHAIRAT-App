@@ -6,7 +6,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Autocomplete, StatCard } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, branchesApi, invoicesApi, businessRulesApi, type AccountingAgingData } from '../../../services/api';
@@ -539,34 +539,27 @@ const AccountingAgingPage: React.FC = () => {
 
       {/* Modal Detail Invoice - Lengkap seperti Admin Pusat */}
       {viewInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={closeModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 rounded-lg">
-                  <Receipt className="w-6 h-6 text-emerald-600" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Detail Invoice</h2>
-                  <p className="text-sm text-slate-600 font-mono">{formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)}>
-                  <Download className="w-4 h-4 mr-2" /> Unduh PDF
+        <Modal open onClose={closeModal}>
+          <ModalBoxLg>
+            <ModalHeader
+              title="Detail Invoice"
+              subtitle={formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}
+              icon={<Receipt className="w-5 h-5" />}
+              onClose={closeModal}
+            />
+            <div className="px-6 pt-2 pb-2 flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)}>
+                <Download className="w-4 h-4 mr-2" /> Unduh PDF
+              </Button>
+              {canUnblock(viewInvoice) && (
+                <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)}>
+                  <Unlock className="w-4 h-4 mr-2" /> Aktifkan Kembali
                 </Button>
-                {canUnblock(viewInvoice) && (
-                  <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)}>
-                    <Unlock className="w-4 h-4 mr-2" /> Aktifkan Kembali
-                  </Button>
-                )}
-                <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg">
-                  <X className="w-5 h-5 text-slate-600" />
-                </button>
-              </div>
+              )}
             </div>
 
-            <div className="flex border-b border-slate-200 bg-slate-50/50 px-6">
+            <ModalBody className="flex-1 overflow-hidden flex flex-col p-0">
+            <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 shrink-0">
               <button
                 onClick={() => setDetailTab('invoice')}
                 className={'flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ' + (detailTab === 'invoice' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-600 hover:text-slate-900')}
@@ -700,12 +693,13 @@ const AccountingAgingPage: React.FC = () => {
                 </div>
               )}
             </div>
+            </ModalBody>
 
-            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50/50">
+            <ModalFooter>
               <Button variant="outline" onClick={closeModal}>Tutup</Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBoxLg>
+        </Modal>
       )}
     </div>
   );

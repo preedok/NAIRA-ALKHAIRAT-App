@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import ActionsMenu from '../../../components/common/ActionsMenu';
-import { Input, Checkbox } from '../../../components/common';
+import { Input, Checkbox, Textarea } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { superAdminApi } from '../../../services/api';
 
@@ -179,19 +179,12 @@ export const SuperAdminMaintenancePage: React.FC = () => {
       </Card>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">{editing ? 'Edit Notice' : 'New Notice'}</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <ModalBox>
+          <ModalHeader title={editing ? 'Edit Notice' : 'New Notice'} subtitle="Pemberitahuan maintenance untuk ditampilkan ke pengguna" icon={<AlertTriangle className="w-5 h-5" />} onClose={() => setModalOpen(false)} />
+          <ModalBody className="space-y-4">
+            <form id="maintenance-notice-form" onSubmit={handleSubmit} className="space-y-4">
               <Input label="Title" type="text" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} fullWidth required />
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Pesan</label>
-                <textarea
-                  className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm min-h-[100px] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] disabled:bg-slate-100"
-                  value={form.message}
-                  onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                  required
-                />
-              </div>
+              <Textarea label="Pesan" value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} rows={4} required fullWidth />
               <Checkbox label="Blokir akses aplikasi" checked={form.block_app} onChange={(e) => setForm((f) => ({ ...f, block_app: e.target.checked, ...(e.target.checked ? { starts_at: '', ends_at: '' } : {}) }))} />
               <p className="text-xs text-slate-500 -mt-2">Jika dicentang: seluruh role (kecuali Super Admin) langsung melihat halaman maintenance. Tanggal tidak dipakai.</p>
               <div className="grid grid-cols-2 gap-4">
@@ -201,12 +194,13 @@ export const SuperAdminMaintenancePage: React.FC = () => {
               {!form.block_app && (
                 <p className="text-xs text-slate-500">Wajib isi tanggal mulai. Sebelum tanggal tiba: alert pemberitahuan di setiap halaman. Saat tanggal tiba: halaman maintenance full otomatis untuk semua role.</p>
               )}
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitLoading}>{submitLoading ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
-              </div>
             </form>
-          </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button type="submit" form="maintenance-notice-form" disabled={submitLoading}>{submitLoading ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
+          </ModalFooter>
+        </ModalBox>
       </Modal>
     </div>
   );

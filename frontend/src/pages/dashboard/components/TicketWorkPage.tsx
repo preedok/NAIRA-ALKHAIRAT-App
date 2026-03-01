@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Filter, Search, User, MapPin, X } from 'lucide-react';
+import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Filter, Search, User, MapPin } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Checkbox from '../../../components/common/Checkbox';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
+import { Input, Autocomplete } from '../../../components/common';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
@@ -68,6 +71,9 @@ const TicketWorkPage: React.FC = () => {
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -80,13 +86,19 @@ const TicketWorkPage: React.FC = () => {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const params = filterInvoiceStatus ? { status: filterInvoiceStatus } : {};
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
+      if (filterInvoiceStatus) params.status = filterInvoiceStatus;
       const res = await ticketApi.listInvoices(params);
-      if (res.data.success) setInvoices(res.data.data || []);
+      if (res.data.success) {
+        setInvoices(res.data.data || []);
+        const pag = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
+        setPagination(pag || null);
+      }
     } catch {
       setInvoices([]);
+      setPagination(null);
     }
-  }, [filterInvoiceStatus]);
+  }, [filterInvoiceStatus, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -96,6 +108,10 @@ const TicketWorkPage: React.FC = () => {
   useEffect(() => {
     refetchAll();
   }, [refetchAll]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterInvoiceStatus]);
 
   useEffect(() => {
     if (invoiceIdParam) {
@@ -185,6 +201,14 @@ const TicketWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus]);
 
+  const tableColumns: TableColumn[] = [
+    { id: 'invoice', label: 'No. Invoice' },
+    { id: 'owner', label: 'Owner' },
+    { id: 'items', label: 'Item Tiket', align: 'right' },
+    { id: 'status', label: 'Status' },
+    { id: 'action', label: 'Aksi' }
+  ];
+
   const formatDate = (d: string | null | undefined) => {
     if (!d) return '–';
     try {
@@ -222,38 +246,20 @@ const TicketWorkPage: React.FC = () => {
       </div>
 
       {/* Filter */}
-      {!loading && invoices.length > 0 && (
-        <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Cari (Invoice / Order / Owner)</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={filterSearch}
-                  onChange={(e) => setFilterSearch(e.target.value)}
-                  placeholder="No. invoice, order, owner..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                />
-              </div>
-            </div>
-            <div className="sm:w-48">
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Progress</label>
-              <select
-                value={filterProgressStatus}
-                onChange={(e) => setFilterProgressStatus(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white"
-              >
-                <option value="">Semua</option>
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+      <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+          <div className="flex-1 min-w-0 sm:min-w-[200px]">
+            <Input label="Cari (Invoice / Order / Owner)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="No. invoice, order, owner..." icon={<Search className="w-4 h-4" />} fullWidth />
           </div>
-        </Card>
-      )}
+          <div className="sm:w-48">
+            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel="Semua status" />
+          </div>
+          <div className="sm:w-48">
+            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel="Semua progress" />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); setPage(1); }} className="rounded-xl">Reset</Button>
+        </div>
+      </Card>
 
       {/* Tabel invoice tiket */}
       <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
@@ -261,84 +267,61 @@ const TicketWorkPage: React.FC = () => {
           <div className="py-16 text-center text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
           </div>
-        ) : invoices.length === 0 ? (
-          <div className="py-16 text-center">
-            <div className="p-5 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
-              <Ticket className="w-14 h-14 text-slate-400" />
-            </div>
-            <p className="text-slate-700 font-semibold">Belum ada invoice dengan item tiket</p>
-            <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">Buat order & invoice dari menu Invoice terlebih dahulu.</p>
-          </div>
-        ) : filteredInvoices.length === 0 ? (
-          <div className="py-14 text-center">
-            <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-3">
-              <Search className="w-10 h-10 text-slate-400" />
-            </div>
-            <p className="text-slate-700 font-semibold">Tidak ada hasil untuk filter ini</p>
-            <p className="text-sm text-slate-500 mt-1">Coba ubah kata kunci atau status progress.</p>
-          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50/95 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">No. Invoice</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Owner</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Item Tiket</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 sticky right-0 z-10 bg-slate-50/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] text-xs font-semibold text-slate-600 uppercase tracking-wider">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map((inv: any) => {
-                  const o = inv.Order;
-                  const orderItems = o?.OrderItems || [];
-                  const ticketCount = orderItems.filter((i: any) => i.type === 'ticket').length;
-                  const firstStatus = orderItems.find((i: any) => i.type === 'ticket')?.TicketProgress?.status || 'pending';
-                  return (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                      <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                      <td className="py-3 px-4 text-right font-medium text-slate-800">{ticketCount}</td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium ${RECAP_STATUS_COLORS[firstStatus] || 'bg-slate-100 text-slate-600'}`}>
-                          {RECAP_STATUS_ICONS[firstStatus]}
-                          {STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                        <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
-                          <Eye className="w-4 h-4 mr-1" /> Detail
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="min-w-0 overflow-x-auto">
+            <Table
+              columns={tableColumns}
+              data={filteredInvoices}
+              renderRow={(inv: any) => {
+                const o = inv.Order;
+                const orderItems = o?.OrderItems || [];
+                const ticketCount = orderItems.filter((i: any) => i.type === 'ticket').length;
+                const firstStatus = orderItems.find((i: any) => i.type === 'ticket')?.TicketProgress?.status || 'pending';
+                return (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-800">{ticketCount}</td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium ${RECAP_STATUS_COLORS[firstStatus] || 'bg-slate-100 text-slate-600'}`}>
+                        {RECAP_STATUS_ICONS[firstStatus]}
+                        {STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
+                        <Eye className="w-4 h-4 mr-1" /> Detail
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              }}
+              emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item tiket' : 'Tidak ada hasil untuk filter ini'}
+              emptyDescription={invoices.length === 0 ? 'Buat order & invoice dari menu Invoice terlebih dahulu.' : 'Coba ubah kata kunci atau status progress.'}
+              stickyActionsColumn
+              pagination={pagination ? {
+                total: pagination.total,
+                page: pagination.page,
+                limit: pagination.limit,
+                totalPages: pagination.totalPages,
+                onPageChange: (p) => setPage(p),
+                onLimitChange: (l) => { setLimit(l); setPage(1); }
+              } : undefined}
+            />
           </div>
         )}
       </Card>
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
         {detailInvoice && (
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50/50">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-emerald-100 rounded-xl shadow-sm">
-                  <Ticket className="w-6 h-6 text-emerald-600" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">{formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}</h2>
-                  <p className="text-sm text-slate-600 mt-0.5">Owner: {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name}</p>
-                </div>
-              </div>
-              <button className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-700" onClick={() => setSearchParams({})}>
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <ModalBoxLg>
+            <ModalHeader
+              title={formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
+              subtitle={`Owner: ${detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}`}
+              icon={<Ticket className="w-5 h-5" />}
+              onClose={() => setSearchParams({})}
+            />
+            <ModalBody className="space-y-5">
               {ticketItems.map((item: any) => {
                 const prog = item.TicketProgress;
                 const status = prog?.status || 'pending';
@@ -446,8 +429,8 @@ const TicketWorkPage: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
-          </div>
+            </ModalBody>
+          </ModalBoxLg>
         )}
       </Modal>
     </div>

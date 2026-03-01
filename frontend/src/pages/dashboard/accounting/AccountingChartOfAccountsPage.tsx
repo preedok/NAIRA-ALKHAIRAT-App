@@ -18,7 +18,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Autocomplete, Checkbox } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, Checkbox, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import { accountingApi, type ChartOfAccountItem } from '../../../services/api';
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -360,60 +360,54 @@ const AccountingChartOfAccountsPage: React.FC = () => {
       </Card>
 
       {modalOpen === 'create' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Tambah Akun</h2>
-              <button type="button" onClick={() => setModalOpen(null)} className="p-1 rounded hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmitCreate} className="space-y-4">
-              {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
-              <Input label="Kode *" type="text" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="1-1-01" />
-              <Input label="Nama *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Kas Kecil" />
-              <Autocomplete label="Tipe Akun *" value={form.account_type} onChange={(v) => setForm((f) => ({ ...f, account_type: v }))} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
-              <div className="grid grid-cols-2 gap-4">
-                <Autocomplete label="Mata Uang" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} options={[{ value: 'IDR', label: 'IDR' }, { value: 'USD', label: 'USD' }, { value: 'SAR', label: 'SAR' }]} />
-                <Input label="Urutan" type="number" value={String(form.sort_order)} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} min={0} />
-              </div>
-              <Checkbox label="Akun header (tidak untuk posting)" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="ghost" onClick={() => setModalOpen(null)}>Batal</Button>
-                <Button type="submit" variant="primary" disabled={!!actionLoading}>{actionLoading === 'create' ? 'Menyimpan...' : 'Simpan'}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal open onClose={() => setModalOpen(null)}>
+          <ModalBox>
+            <ModalHeader title="Tambah Akun" subtitle="Kode dan nama akun untuk chart of accounts" icon={<Plus className="w-5 h-5" />} onClose={() => setModalOpen(null)} />
+            <ModalBody className="space-y-4">
+              <form id="chart-create-form" onSubmit={handleSubmitCreate} className="space-y-4">
+                {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
+                <Input label="Kode *" type="text" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="1-1-01" />
+                <Input label="Nama *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Kas Kecil" />
+                <Autocomplete label="Tipe Akun *" value={form.account_type} onChange={(v) => setForm((f) => ({ ...f, account_type: v }))} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
+                <div className="grid grid-cols-2 gap-4">
+                  <Autocomplete label="Mata Uang" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} options={[{ value: 'IDR', label: 'IDR' }, { value: 'USD', label: 'USD' }, { value: 'SAR', label: 'SAR' }]} />
+                  <Input label="Urutan" type="number" value={String(form.sort_order)} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} min={0} />
+                </div>
+                <Checkbox label="Akun header (tidak untuk posting)" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
+              </form>
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setModalOpen(null)}>Batal</Button>
+              <Button type="submit" form="chart-create-form" variant="primary" disabled={!!actionLoading}>{actionLoading === 'create' ? 'Menyimpan...' : 'Simpan'}</Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
 
       {modalOpen === 'edit' && editingAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Edit Akun</h2>
-              <button type="button" onClick={() => { setModalOpen(null); setEditingAccount(null); }} className="p-1 rounded hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmitEdit} className="space-y-4">
-              {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
-              <Input label="Kode" type="text" value={form.code} readOnly />
-              <Input label="Nama *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-              <Autocomplete label="Tipe Akun" value={form.account_type} onChange={(v) => setForm((f) => ({ ...f, account_type: v }))} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
-              <div className="grid grid-cols-2 gap-4">
-                <Autocomplete label="Mata Uang" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} options={[{ value: 'IDR', label: 'IDR' }, { value: 'USD', label: 'USD' }, { value: 'SAR', label: 'SAR' }]} />
-                <Input label="Urutan" type="number" value={String(form.sort_order)} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} min={0} />
-              </div>
-              <Checkbox label="Akun header" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
-              <Checkbox label="Aktif" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="ghost" onClick={() => { setModalOpen(null); setEditingAccount(null); }}>Batal</Button>
-                <Button type="submit" variant="primary" disabled={!!actionLoading}>{actionLoading === 'edit' ? 'Menyimpan...' : 'Simpan'}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal open onClose={() => { setModalOpen(null); setEditingAccount(null); }}>
+          <ModalBox>
+            <ModalHeader title="Edit Akun" subtitle="Ubah nama akun (kode tidak dapat diubah)" icon={<Pencil className="w-5 h-5" />} onClose={() => { setModalOpen(null); setEditingAccount(null); }} />
+            <ModalBody className="space-y-4">
+              <form id="chart-edit-form" onSubmit={handleSubmitEdit} className="space-y-4">
+                {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
+                <Input label="Kode" type="text" value={form.code} readOnly />
+                <Input label="Nama *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <Autocomplete label="Tipe Akun" value={form.account_type} onChange={(v) => setForm((f) => ({ ...f, account_type: v }))} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
+                <div className="grid grid-cols-2 gap-4">
+                  <Autocomplete label="Mata Uang" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} options={[{ value: 'IDR', label: 'IDR' }, { value: 'USD', label: 'USD' }, { value: 'SAR', label: 'SAR' }]} />
+                  <Input label="Urutan" type="number" value={String(form.sort_order)} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} min={0} />
+                </div>
+                <Checkbox label="Akun header" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
+                <Checkbox label="Aktif" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
+              </form>
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => { setModalOpen(null); setEditingAccount(null); }}>Batal</Button>
+              <Button type="submit" form="chart-edit-form" variant="primary" disabled={!!actionLoading}>{actionLoading === 'edit' ? 'Menyimpan...' : 'Simpan'}</Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
     </div>
   );

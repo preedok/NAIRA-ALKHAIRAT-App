@@ -11,6 +11,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import { adminPusatApi, type UserListItem } from '../../../services/api';
 import { TableColumn } from '../../../types';
 
@@ -328,37 +329,38 @@ const AdminPusatCreateUserPage: React.FC = () => {
       </Card>
 
       {modalOpen && editingUser && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => { setModalOpen(false); setEditingUser(null); }}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Edit Akun</h3>
-            {message && (
-              <div
-                className={`mb-4 rounded-lg px-4 py-3 ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
-              >
-                {message.text}
-              </div>
-            )}
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <Input label="Nama *" type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
-              <Input label="Email *" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
-              <Input label="Password baru (kosongkan jika tidak ingin mengubah)" type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Min. 6 karakter" minLength={6} />
-              <div className="flex gap-2 justify-end pt-4">
-                <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                  Batal
-                </Button>
-                <Button type="submit" variant="primary" disabled={submitLoading}>
-                  {submitLoading ? 'Menyimpan...' : 'Simpan'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal open onClose={() => { setModalOpen(false); setEditingUser(null); }}>
+          <ModalBox>
+            <ModalHeader
+              title="Edit Akun"
+              subtitle="Ubah data user yang baru dibuat"
+              icon={<Edit className="w-5 h-5" />}
+              onClose={() => { setModalOpen(false); setEditingUser(null); }}
+            />
+            <ModalBody className="space-y-4">
+              {message && (
+                <div
+                  className={`mb-4 rounded-lg px-4 py-3 ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
+                >
+                  {message.text}
+                </div>
+              )}
+              <form id="adminpusat-edit-akun-form" onSubmit={handleEditSubmit} className="space-y-4">
+                <Input label="Nama *" type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+                <Input label="Email *" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+                <Input label="Password baru (kosongkan jika tidak ingin mengubah)" type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Min. 6 karakter" minLength={6} />
+              </form>
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit" form="adminpusat-edit-akun-form" variant="primary" disabled={submitLoading}>
+                {submitLoading ? 'Menyimpan...' : 'Simpan'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
     </div>
   );

@@ -1,10 +1,11 @@
 /* eslint-disable no-restricted-globals */
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileText, ChevronLeft, Check, Save, ExternalLink, DollarSign } from 'lucide-react';
+import { FileText, ChevronLeft, Check, Save, ExternalLink, DollarSign, Pencil, Lock } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import { accountingApi, type PayrollRunData, type PayrollItemData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -120,36 +121,36 @@ const PayrollRunDetailPage: React.FC = () => {
   if (!id) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex flex-col min-h-0 w-full max-w-full space-y-4">
+      <div className="flex flex-wrap items-center gap-3 shrink-0">
         <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/accounting/payroll/runs')}>
           <ChevronLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <DollarSign className="w-8 h-8 text-emerald-600" />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+            <DollarSign className="w-6 h-6 text-emerald-600 shrink-0" />
             Detail Payroll
             {run && (
-              <span className="text-lg font-normal text-slate-600">
+              <span className="text-base font-normal text-slate-600">
                 — {MONTH_NAMES[run.period_month - 1]} {run.period_year}
                 {run.Branch && ` · ${run.Branch.code} - ${run.Branch.name}`}
               </span>
             )}
           </h1>
-          <p className="text-slate-600 mt-1">
+          <p className="text-slate-600 text-sm mt-0.5">
             {run?.status === 'draft' ? 'Edit item lalu simpan. Klik Finalisasi untuk generate slip dan kirim notifikasi.' : 'Slip gaji telah digenerate.'}
           </p>
         </div>
         {isDraft && (
-          <>
+          <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleSaveRun} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan perubahan'}</Button>
             <Button size="sm" onClick={openFinalizeModal} disabled={finalizing}>{finalizing ? 'Memproses...' : 'Finalisasi Payroll'}</Button>
-          </>
+          </div>
         )}
       </div>
 
       {run && (
-        <Card padding="sm" className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card padding="sm" className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full shrink-0">
           <div>
             <p className="text-xs text-slate-500">Status</p>
             <p className="font-medium">{run.status === 'draft' ? 'Draft' : run.status === 'finalized' ? 'Final' : run.status}</p>
@@ -169,12 +170,12 @@ const PayrollRunDetailPage: React.FC = () => {
         </Card>
       )}
 
-      <Card>
+      <Card className="flex-1 min-w-0 w-full overflow-hidden flex flex-col">
         {loading ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto overflow-y-auto min-h-0 flex-1">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-600">
                   <th className="pb-2 pr-4">Karyawan</th>
@@ -223,10 +224,10 @@ const PayrollRunDetailPage: React.FC = () => {
 
       {/* Modal edit item (draft) */}
       {editItemId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setEditItemId(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Edit item payroll</h3>
-            <div className="space-y-3 mb-4">
+        <Modal open onClose={() => setEditItemId(null)}>
+          <ModalBox>
+            <ModalHeader title="Edit item payroll" subtitle="Ubah gaji pokok, tunjangan, dan potongan" icon={<Pencil className="w-5 h-5" />} onClose={() => setEditItemId(null)} />
+            <ModalBody className="space-y-3">
               <Input label="Gaji pokok" type="number" min={0} value={editBase ? String(editBase) : ''} onChange={(e) => setEditBase(Number(e.target.value) || 0)} />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tunjangan (nama, jumlah)</label>
@@ -236,7 +237,7 @@ const PayrollRunDetailPage: React.FC = () => {
                     <Input type="number" placeholder="Jumlah" value={a.amount != null ? String(a.amount) : ''} onChange={(e) => setEditAllowances((p) => p.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) || 0 } : x))} className="w-24" fullWidth={false} />
                   </div>
                 ))}
-                <button type="button" onClick={() => setEditAllowances((p) => [...p, { name: '', amount: 0 }])} className="text-xs text-emerald-600 mt-1">+ Tunjangan</button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setEditAllowances((p) => [...p, { name: '', amount: 0 }])} className="mt-1 text-emerald-600">+ Tunjangan</Button>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Potongan (nama, jumlah)</label>
@@ -246,31 +247,33 @@ const PayrollRunDetailPage: React.FC = () => {
                     <Input type="number" placeholder="Jumlah" value={d.amount != null ? String(d.amount) : ''} onChange={(e) => setEditDeductions((p) => p.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) || 0 } : x))} className="w-24" fullWidth={false} />
                   </div>
                 ))}
-                <button type="button" onClick={() => setEditDeductions((p) => [...p, { name: '', amount: 0 }])} className="text-xs text-emerald-600 mt-1">+ Potongan</button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setEditDeductions((p) => [...p, { name: '', amount: 0 }])} className="mt-1 text-emerald-600">+ Potongan</Button>
               </div>
-            </div>
-            <div className="flex justify-end gap-2">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setEditItemId(null)}>Batal</Button>
               <Button onClick={applyEditToLocal}>Terapkan</Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Modal konfirmasi finalisasi */}
       {showFinalizeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowFinalizeModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Finalisasi Payroll</h3>
-            <p className="text-slate-600 text-sm mb-6">
-              Finalisasi payroll akan generate slip PDF dan mengirim notifikasi ke setiap karyawan. Lanjutkan?
-            </p>
-            <div className="flex justify-end gap-2">
+        <Modal open onClose={() => setShowFinalizeModal(false)}>
+          <ModalBox>
+            <ModalHeader title="Finalisasi Payroll" subtitle="Generate slip PDF dan kirim notifikasi ke karyawan" icon={<Lock className="w-5 h-5" />} onClose={() => setShowFinalizeModal(false)} />
+            <ModalBody className="space-y-4">
+              <p className="text-slate-600 text-sm">
+                Finalisasi payroll akan generate slip PDF dan mengirim notifikasi ke setiap karyawan. Lanjutkan?
+              </p>
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setShowFinalizeModal(false)}>Batal</Button>
               <Button onClick={handleFinalize}>Ya, finalisasi</Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
     </div>
   );

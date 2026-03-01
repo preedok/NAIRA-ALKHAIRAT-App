@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, X, Copy } from 'lucide-react';
+import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, Copy } from 'lucide-react';
 import { ROLE_NAMES, TableColumn, OWNER_STATUS_LABELS } from '../../../types';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
@@ -322,69 +322,84 @@ const UsersPage: React.FC = () => {
         ))}
       </div>
 
-      <Card className="travel-card">
+      <Card className="travel-card overflow-visible">
         <CardSectionHeader
           icon={<UsersIcon className="w-6 h-6" />}
           title="Daftar User"
           subtitle="Filter menurut tipe, wilayah, provinsi, cabang. Hanya dapat diakses Super Admin dan Admin Pusat."
           className="mb-4"
         />
-        {/* Tab: Semua / Divisi / Owner */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-sm font-medium text-stone-600 mr-1">Filter:</span>
-          <div className="inline-flex rounded-xl border border-stone-200 bg-stone-50 p-1">
-            {(['all', 'divisi', 'owner'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setTabFilter(tab)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  tabFilter === tab
-                    ? 'bg-white text-primary-600 shadow-sm border border-stone-200'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                {tab === 'all' ? 'Semua' : tab === 'divisi' ? 'Divisi' : 'Owner'}
-              </button>
-            ))}
-          </div>
-        </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 items-stretch sm:items-center">
-          <div className="flex-1 min-w-0">
-            <Input
-              type="text"
-              placeholder="Cari nama atau email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-5 h-5 text-stone-400" />}
-            />
+        {/* Filter block: terpisah dari tabel agar input/dropdown tidak tertimpa */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 mb-6 overflow-visible relative z-10">
+          {/* Tab: Semua / Divisi / Owner */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-sm font-medium text-slate-600">Filter:</span>
+            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+              {(['all', 'divisi', 'owner'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setTabFilter(tab)}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    tabFilter === tab
+                      ? 'bg-white text-primary-600 shadow-sm border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab === 'all' ? 'Semua' : tab === 'divisi' ? 'Divisi' : 'Owner'}
+                </button>
+              ))}
+            </div>
           </div>
-          {canListUsers && (
-            <>
-              <Autocomplete
-                value={wilayahId}
-                onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
-                options={[{ value: '', label: 'Semua wilayah' }, ...wilayahList.map((w) => ({ value: w.id, label: w.name }))]}
-                placeholder="Filter wilayah"
-                emptyLabel="Semua wilayah"
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+            <div className="sm:col-span-2 lg:col-span-1 min-w-0">
+              <Input
+                label="Cari"
+                type="text"
+                placeholder="Nama atau email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                icon={<Search className="w-4 h-4" />}
+                fullWidth
               />
-              <Autocomplete
-                value={provinsiId}
-                onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
-                options={[{ value: '', label: 'Semua provinsi' }, ...provincesFiltered.map((p) => ({ value: p.id, label: p.name }))]}
-                placeholder="Filter provinsi"
-                emptyLabel="Semua provinsi"
-              />
-              <Autocomplete
-                value={branchId}
-                onChange={(v) => setBranchId(v)}
-                options={[{ value: '', label: 'Semua cabang' }, ...branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}${b.city ? ` (${b.city})` : ''}` }))]}
-                placeholder="Filter cabang (kota)"
-                emptyLabel="Semua cabang"
-              />
-            </>
-          )}
+            </div>
+            {canListUsers && (
+              <>
+                <div className="min-w-0">
+                  <Autocomplete
+                    value={wilayahId}
+                    onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+                    options={[{ value: '', label: 'Semua wilayah' }, ...wilayahList.map((w) => ({ value: w.id, label: w.name }))]}
+                    placeholder="Wilayah"
+                    emptyLabel="Semua wilayah"
+                    fullWidth
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Autocomplete
+                    value={provinsiId}
+                    onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
+                    options={[{ value: '', label: 'Semua provinsi' }, ...provincesFiltered.map((p) => ({ value: p.id, label: p.name }))]}
+                    placeholder="Provinsi"
+                    emptyLabel="Semua provinsi"
+                    fullWidth
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Autocomplete
+                    value={branchId}
+                    onChange={(v) => setBranchId(v)}
+                    options={[{ value: '', label: 'Semua cabang' }, ...branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}${b.city ? ` (${b.city})` : ''}` }))]}
+                    placeholder="Cabang"
+                    emptyLabel="Semua cabang"
+                    fullWidth
+                  />
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -481,12 +496,9 @@ const UsersPage: React.FC = () => {
       {/* Modal Edit User */}
       <Modal open={!!editUser} onClose={() => { setEditUser(null); setEditActivationPassword(null); }}>
         {editUser && (
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">Edit User</h2>
-              <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setEditUser(null)}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-4 space-y-3">
+          <ModalBox>
+            <ModalHeader title="Edit User" subtitle="Ubah data nama, email, telepon, dan perusahaan" icon={<Edit className="w-5 h-5" />} onClose={() => { setEditUser(null); setEditActivationPassword(null); }} />
+            <ModalBody className="space-y-3">
               <Input label="Nama" type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
               <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
               <Input label="Telepon" type="text" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Opsional" />
@@ -512,26 +524,28 @@ const UsersPage: React.FC = () => {
               )}
               <Input label="Ubah password (kosongkan jika tidak diubah)" type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Min. 6 karakter" autoComplete="new-password" />
               <Checkbox label="Aktif" checked={editForm.is_active} onChange={(e) => setEditForm((f) => ({ ...f, is_active: e.target.checked }))} />
-            </div>
-            <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setEditUser(null)}>Batal</Button>
               <Button variant="primary" onClick={saveEdit} disabled={saving || !editForm.name.trim() || !editForm.email.trim()}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBox>
         )}
       </Modal>
 
       {/* Modal Konfirmasi Hapus */}
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
         {deleteTarget && (
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4">
-            <h2 className="text-lg font-semibold text-slate-900 mb-2">Hapus User</h2>
-            <p className="text-sm text-slate-600 mb-4">Yakin ingin menghapus user <strong>{deleteTarget.name}</strong> ({deleteTarget.email})? User akan dinonaktifkan.</p>
-            <div className="flex justify-end gap-2">
+          <ModalBox>
+            <ModalHeader title="Hapus User" subtitle="User akan dinonaktifkan dan tidak dapat login" icon={<Trash2 className="w-5 h-5" />} onClose={() => setDeleteTarget(null)} />
+            <ModalBody className="space-y-4">
+              <p className="text-sm text-slate-600">Yakin ingin menghapus user <strong>{deleteTarget.name}</strong> ({deleteTarget.email})? User akan dinonaktifkan.</p>
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setDeleteTarget(null)}>Batal</Button>
               <Button variant="danger" onClick={handleDelete} disabled={deleting}>{deleting ? 'Menghapus...' : 'Hapus'}</Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBox>
         )}
       </Modal>
 
@@ -543,17 +557,23 @@ const UsersPage: React.FC = () => {
             ? `${(UPLOAD_BASE || '').replace(/\/$/, '')}${proofPath.startsWith('/') ? '' : '/'}${proofPath}`
             : '';
           return (
-            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-              <div className="p-4 border-b border-slate-200">
-                <h2 className="text-lg font-semibold text-slate-900">Verifikasi Bukti Bayar MoU (diupload owner)</h2>
-                <p className="text-sm text-slate-600 mt-1">{verifyRegPaymentUser.name} – {verifyRegPaymentUser.email}</p>
-                {(verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount != null && (
-                  <p className="text-sm text-slate-700 mt-1">
-                    Jumlah yang diinput: <strong>Rp {new Intl.NumberFormat('id-ID').format((verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount!)}</strong>
-                  </p>
-                )}
-              </div>
-              <div className="p-4 flex-1 overflow-auto space-y-4">
+            <ModalBox>
+              <ModalHeader
+                title="Verifikasi Bukti Bayar MoU (diupload owner)"
+                icon={<FileCheck className="w-5 h-5" />}
+                subtitle={
+                  <>
+                    {verifyRegPaymentUser.name} – {verifyRegPaymentUser.email}
+                    {(verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount != null && (
+                      <span className="block mt-1">
+                        Jumlah yang diinput: <strong>Rp {new Intl.NumberFormat('id-ID').format((verifyRegPaymentUser as UserListItem & { registration_payment_amount?: number }).registration_payment_amount!)}</strong>
+                      </span>
+                    )}
+                  </>
+                }
+                onClose={() => { setVerifyRegPaymentUser(null); setVerifyRegPaymentReject(''); }}
+              />
+              <ModalBody className="space-y-4">
                 {proofPath ? (
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-2">Bukti bayar yang diupload owner</label>
@@ -569,25 +589,21 @@ const UsersPage: React.FC = () => {
                 ) : (
                   <p className="text-sm text-slate-500">Owner belum mengupload bukti bayar.</p>
                 )}
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (wajib jika tolak)</label>
-                  <select
-                    value={verifyRegPaymentReject}
-                    onChange={(e) => setVerifyRegPaymentReject(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  >
-                    {REGISTRATION_REJECTION_REASONS.map((opt) => (
-                      <option key={opt.value || 'empty'} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+                <Autocomplete
+                  label="Alasan penolakan (wajib jika tolak)"
+                  value={verifyRegPaymentReject}
+                  onChange={(v) => setVerifyRegPaymentReject(v)}
+                  options={REGISTRATION_REJECTION_REASONS}
+                  placeholder="— Pilih alasan (jika tolak) —"
+                  fullWidth
+                />
+              </ModalBody>
+              <ModalFooter>
                 <Button variant="outline" onClick={() => { setVerifyRegPaymentUser(null); setVerifyRegPaymentReject(''); }}>Batal</Button>
                 <Button variant="outline" onClick={() => handleVerifyRegistrationPayment(false)} disabled={verifyingRegPayment || !verifyRegPaymentReject.trim()}>Tolak</Button>
                 <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>{verifyingRegPayment ? 'Memproses...' : 'Setujui Bukti Bayar'}</Button>
-              </div>
-            </div>
+              </ModalFooter>
+            </ModalBox>
           );
         })()}
       </Modal>
@@ -595,12 +611,10 @@ const UsersPage: React.FC = () => {
       {/* Modal Hasil Aktivasi */}
       <Modal open={!!activateResult} onClose={() => setActivateResult(null)}>
         {activateResult && (
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
-              <h2 className="text-lg font-semibold text-slate-900">Owner Diaktifkan</h2>
-              <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setActivateResult(null)}><X className="w-5 h-5" /></button>
-            </div>
-            <p className="text-sm text-slate-600 mb-3">Email berisi MOU dan kredensial telah dikirim ke owner. Berikan data berikut jika diperlukan.</p>
+          <ModalBox>
+            <ModalHeader title="Owner Diaktifkan" subtitle="Email MOU dan kredensial telah dikirim ke owner" icon={<CheckCircle className="w-5 h-5" />} onClose={() => setActivateResult(null)} />
+            <ModalBody className="space-y-4">
+            <p className="text-sm text-slate-600">Email berisi MOU dan kredensial telah dikirim ke owner. Berikan data berikut jika diperlukan.</p>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Password baru</label>
@@ -614,10 +628,11 @@ const UsersPage: React.FC = () => {
                 <a href={`${UPLOAD_BASE}${activateResult.mouUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline text-sm">Unduh / Buka MoU (PDF)</a>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-200">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="primary" className="w-full" onClick={() => setActivateResult(null)}>Tutup</Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBox>
         )}
       </Modal>
     </div>

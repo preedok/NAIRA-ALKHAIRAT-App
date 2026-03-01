@@ -3,7 +3,7 @@ import { RefreshCw, CheckCircle, Eye, FileCheck, X, ChevronLeft, ChevronRight, U
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import { PageFilter, AutoRefreshControl, PageHeader, FilterIconButton, StatCard } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
@@ -491,12 +491,9 @@ const KoordinatorOwnersPage: React.FC = () => {
       {/* Modal Detail Owner */}
       <Modal open={showDetailModal && !!detailOwner} onClose={() => setShowDetailModal(false)}>
         {detailOwner && (
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">Detail Owner</h2>
-              <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setShowDetailModal(false)}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-4 space-y-3 text-sm">
+          <ModalBox>
+            <ModalHeader title="Detail Owner" subtitle="Data lengkap owner dan perusahaan" icon={<Eye className="w-5 h-5" />} onClose={() => setShowDetailModal(false)} />
+            <ModalBody className="space-y-3 text-sm">
               <div><span className="text-slate-500">Nama</span><p className="font-medium">{detailOwner.User?.name || '-'}</p></div>
               <div><span className="text-slate-500">Perusahaan</span><p className="font-medium">{detailOwner.User?.company_name || '-'}</p></div>
               <div><span className="text-slate-500">Email</span><p>{detailOwner.User?.email || '-'}</p></div>
@@ -505,20 +502,22 @@ const KoordinatorOwnersPage: React.FC = () => {
               <div><span className="text-slate-500">Cabang</span><p>{detailOwner.AssignedBranch ? `${detailOwner.AssignedBranch.code} – ${detailOwner.AssignedBranch.name}` : '-'}</p></div>
               {detailOwner.User?.address && <div><span className="text-slate-500">Alamat</span><p>{detailOwner.User.address}</p></div>}
               {detailOwner.User?.whatsapp && <div><span className="text-slate-500">WhatsApp</span><p>{detailOwner.User.whatsapp}</p></div>}
-            </div>
-          </div>
+            </ModalBody>
+          </ModalBox>
         )}
       </Modal>
 
       {/* Modal Verifikasi Bukti Bayar Pendaftaran */}
       <Modal open={showVerifyRegPaymentModal && !!verifyRegPaymentProfile} onClose={() => setShowVerifyRegPaymentModal(false)}>
         {verifyRegPaymentProfile && (
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">Verifikasi Bukti Bayar Pendaftaran</h2>
-              <p className="text-sm text-slate-600 mt-1">{verifyRegPaymentProfile.User?.name || verifyRegPaymentProfile.User?.company_name} – {verifyRegPaymentProfile.User?.email}</p>
-            </div>
-            <div className="p-4 space-y-3">
+          <ModalBox>
+            <ModalHeader
+              title="Verifikasi Bukti Bayar Pendaftaran"
+              subtitle={`${verifyRegPaymentProfile.User?.name || verifyRegPaymentProfile.User?.company_name} – ${verifyRegPaymentProfile.User?.email}`}
+              icon={<FileCheck className="w-5 h-5" />}
+              onClose={() => setShowVerifyRegPaymentModal(false)}
+            />
+            <ModalBody className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (jika tolak)</label>
                 <textarea
@@ -529,25 +528,27 @@ const KoordinatorOwnersPage: React.FC = () => {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
-            </div>
-            <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setShowVerifyRegPaymentModal(false)}>Batal</Button>
               <Button variant="outline" onClick={() => handleVerifyRegistrationPayment(false)} disabled={verifyingRegPayment || !verifyRegPaymentRejectReason.trim()}>Tolak</Button>
               <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>{verifyingRegPayment ? 'Memproses...' : 'Setujui Bukti Bayar'}</Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBox>
         )}
       </Modal>
 
       {/* Modal Verifikasi MoU */}
       <Modal open={showVerifyMouModal && !!verifyMouProfile} onClose={() => setShowVerifyMouModal(false)}>
         {verifyMouProfile && (
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">Verifikasi MoU</h2>
-              <p className="text-sm text-slate-600 mt-1">{verifyMouProfile.User?.name || verifyMouProfile.User?.company_name} – {verifyMouProfile.User?.email}</p>
-            </div>
-            <div className="p-4 space-y-3">
+          <ModalBox>
+            <ModalHeader
+              title="Verifikasi MoU"
+              subtitle={`${verifyMouProfile.User?.name || verifyMouProfile.User?.company_name} – ${verifyMouProfile.User?.email}`}
+              icon={<CreditCard className="w-5 h-5" />}
+              onClose={() => setShowVerifyMouModal(false)}
+            />
+            <ModalBody className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Alasan penolakan (jika tolak)</label>
                 <textarea
@@ -558,24 +559,22 @@ const KoordinatorOwnersPage: React.FC = () => {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
-            </div>
-            <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setShowVerifyMouModal(false)}>Batal</Button>
               <Button variant="outline" onClick={() => handleVerifyMou(false)} disabled={verifyingMou || !verifyMouRejectReason.trim()}>Tolak</Button>
               <Button variant="primary" onClick={() => handleVerifyMou(true)} disabled={verifyingMou}>{verifyingMou ? 'Memproses...' : 'Setujui MoU'}</Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBox>
         )}
       </Modal>
 
       {/* Modal Hasil Aktivasi: password baru + link MOU */}
       <Modal open={!!activateResult} onClose={() => setActivateResult(null)}>
         {activateResult && (
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
-              <h2 className="text-lg font-semibold text-slate-900">Owner Diaktivasi</h2>
-              <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setActivateResult(null)}><X className="w-5 h-5" /></button>
-            </div>
+          <ModalBox>
+            <ModalHeader title="Owner Diaktivasi" subtitle="Berikan password baru kepada owner. Password lama tidak berlaku." icon={<CheckCircle className="w-5 h-5" />} onClose={() => setActivateResult(null)} />
+            <ModalBody className="space-y-4">
             <p className="text-sm text-slate-600 mb-3">Berikan data berikut kepada owner. Password lama tidak berlaku.</p>
             <div className="space-y-3">
               <div>
@@ -592,10 +591,11 @@ const KoordinatorOwnersPage: React.FC = () => {
                 </a>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-200">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="primary" className="w-full" onClick={() => setActivateResult(null)}>Tutup</Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBox>
         )}
       </Modal>
     </div>

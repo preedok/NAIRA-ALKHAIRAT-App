@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Package, Plus, RefreshCw, Warehouse, BarChart3 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import { accountingApi, branchesApi } from '../../../services/api';
@@ -144,18 +144,18 @@ const AccuratePersediaanPage: React.FC = () => {
       </Card>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Tambah Gudang</h2>
-          <div className="space-y-4">
+        <ModalBox>
+          <ModalHeader title="Tambah Gudang" subtitle="Kode, nama gudang, dan cabang (opsional)" icon={<Warehouse className="w-5 h-5" />} onClose={() => setModalOpen(false)} />
+          <ModalBody className="space-y-4">
             <Input label="Kode Gudang *" type="text" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="WH-01" />
             <Input label="Nama Gudang *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Gudang Utama" />
             <Autocomplete label="Cabang" value={form.branch_id} onChange={(v) => setForm((f) => ({ ...f, branch_id: v }))} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="-- Pilih cabang (opsional) --" />
-          </div>
-          <div className="flex justify-end gap-2 mt-6">
+          </ModalBody>
+          <ModalFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Batal</Button>
             <Button onClick={handleCreate} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
-          </div>
-        </div>
+          </ModalFooter>
+        </ModalBox>
       </Modal>
     </div>
   );

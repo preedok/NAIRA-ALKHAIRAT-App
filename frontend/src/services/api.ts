@@ -188,7 +188,7 @@ export const ordersApi = {
 
 export const hotelApi = {
   getDashboard: () => api.get('/hotel/dashboard'),
-  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/hotel/invoices', { params }),
+  listInvoices: (params?: { status?: string; page?: number; limit?: number }) => api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/hotel/invoices', { params }),
   getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/hotel/invoices/${id}`),
   listOrders: (params?: { status?: string }) => api.get('/hotel/orders', { params }),
   getOrder: (id: string) => api.get(`/hotel/orders/${id}`),
@@ -199,7 +199,7 @@ export const hotelApi = {
 
 export const ticketApi = {
   getDashboard: () => api.get<{ success: boolean; data: TicketDashboardData }>('/ticket/dashboard'),
-  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/ticket/invoices', { params }),
+  listInvoices: (params?: { status?: string; page?: number; limit?: number }) => api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/ticket/invoices', { params }),
   getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/ticket/invoices/${id}`),
   updateItemProgress: (orderItemId: string, body: { status?: string; notes?: string }) =>
     api.patch(`/ticket/order-items/${orderItemId}/progress`, body),
@@ -212,7 +212,7 @@ export const ticketApi = {
 
 export const visaApi = {
   getDashboard: () => api.get<{ success: boolean; data: VisaDashboardData }>('/visa/dashboard'),
-  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/visa/invoices', { params }),
+  listInvoices: (params?: { status?: string; page?: number; limit?: number }) => api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/visa/invoices', { params }),
   getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/visa/invoices/${id}`),
   updateItemProgress: (orderItemId: string, body: { status?: string; notes?: string }) =>
     api.patch(`/visa/order-items/${orderItemId}/progress`, body),
@@ -225,7 +225,7 @@ export const visaApi = {
 
 export const busApi = {
   getDashboard: () => api.get<{ success: boolean; data: BusDashboardData }>('/bus/dashboard'),
-  listInvoices: (params?: { status?: string }) => api.get<{ success: boolean; data: any[] }>('/bus/invoices', { params }),
+  listInvoices: (params?: { status?: string; page?: number; limit?: number }) => api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/bus/invoices', { params }),
   getInvoice: (id: string) => api.get<{ success: boolean; data: any }>(`/bus/invoices/${id}`),
   listOrders: (params?: { status?: string }) => api.get<{ success: boolean; data: Order[] }>('/bus/orders', { params }),
   getOrder: (id: string) => api.get<{ success: boolean; data: Order }>(`/bus/orders/${id}`),

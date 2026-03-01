@@ -18,7 +18,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader } from '../../../components/common';
+import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
@@ -101,15 +101,10 @@ const OrderListModal: React.FC<{
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto flex-1">
+    <Modal open onClose={onClose}>
+      <ModalBoxXl>
+        <ModalHeader title={title} subtitle="Daftar order dengan filter cabang, wilayah, status, dan tanggal" icon={<FileText className="w-5 h-5" />} onClose={onClose} />
+        <ModalBody className="flex-1 overflow-y-auto">
           <div className="mb-6">
             <DashboardFilterBar
               variant="modal"
@@ -185,9 +180,9 @@ const OrderListModal: React.FC<{
               </tr>
             )}
           />
-        </div>
-      </div>
-    </div>
+        </ModalBody>
+      </ModalBoxXl>
+    </Modal>
   );
 };
 
@@ -241,15 +236,10 @@ const InvoiceListModalAdmin: React.FC<{
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto flex-1">
+    <Modal open onClose={onClose}>
+      <ModalBoxXl>
+        <ModalHeader title={title} subtitle="Daftar invoice dengan ringkasan total dan filter" icon={<Receipt className="w-5 h-5" />} onClose={onClose} />
+        <ModalBody className="flex-1 overflow-y-auto">
           {summary && (
             <div className="flex flex-wrap gap-4 mb-4 p-3 bg-slate-50 rounded-lg text-sm">
               <span>Total: <strong>{summary.total_invoices}</strong> invoice</span>
@@ -296,9 +286,9 @@ const InvoiceListModalAdmin: React.FC<{
               </tr>
             )}
           />
-        </div>
-      </div>
-    </div>
+        </ModalBody>
+      </ModalBoxXl>
+    </Modal>
   );
 };
 

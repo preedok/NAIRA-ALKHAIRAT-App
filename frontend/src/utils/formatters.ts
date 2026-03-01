@@ -66,6 +66,116 @@ export const formatIDR = (amount: number, showPrefix: boolean = true): string =>
         return amount.toString();
     }
   };
+
+/** Label kolom tabel harga seragam di semua modul */
+export const PRICE_COLUMN_LABEL = 'Harga (IDR · SAR · USD)';
+
+/**
+ * Nilai untuk tampilan sel tabel harga (satu kolom IDR · SAR · USD).
+ * Gunakan: baris pertama idrText, baris kedua "SAR: sarText  USD: usdText" (text-xs text-slate-500).
+ */
+export function getPriceTripleForTable(
+  idr: number | null | undefined,
+  sar: number | null | undefined,
+  usd: number | null | undefined,
+  options?: { formatIDR?: (n: number) => string; formatSAR?: (n: number, showPrefix?: boolean) => string; formatUSD?: (n: number, showPrefix?: boolean) => string }
+): { hasPrice: boolean; idrText: string; sarText: string; usdText: string } {
+  const fmtIdr = options?.formatIDR ?? ((n: number) => formatIDR(n));
+  const fmtSar = options?.formatSAR ?? ((n: number, show = false) => formatSAR(n, show));
+  const fmtUsd = options?.formatUSD ?? ((n: number, show = false) => formatUSD(n, show));
+  const hasIdr = idr != null && Number(idr) > 0;
+  const hasSar = sar != null && Number(sar) > 0;
+  const hasUsd = usd != null && Number(usd) > 0;
+  const hasPrice = hasIdr || hasSar || hasUsd;
+  return {
+    hasPrice,
+    idrText: hasIdr ? fmtIdr(Number(idr)) : '–',
+    sarText: hasSar ? fmtSar(Number(sar), false) : '–',
+    usdText: hasUsd ? fmtUsd(Number(usd), false) : '–'
+  };
+}
+
+/**
+ * Format angka untuk ditampilkan di tabel/label (dengan pemisah ribuan).
+ * Jangan dipakai di input—pakai getPriceInputDisplayValue agar user bisa mengedit.
+ */
+export function formatPriceForInput(value: number, currency: 'IDR' | 'SAR' | 'USD'): string {
+  if (value === 0 || Number.isNaN(value)) return '';
+  if (currency === 'IDR') {
+    return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+  }
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+}
+
+/**
+ * Nilai tampilan untuk input harga: tanpa pemisah ribuan agar bisa diedit (cursor tidak loncat).
+ * IDR: angka bulat. SAR/USD: 2 desimal.
+ */
+export function getPriceInputDisplayValue(value: number, currency: 'IDR' | 'SAR' | 'USD'): string {
+  if (value === 0 || Number.isNaN(value)) return '';
+  if (currency === 'IDR') return String(Math.round(value));
+  return value.toFixed(2);
+}
+
+/**
+ * Parse string input harga ke number (hapus pemisah ribuan/desimal sesuai currency).
+ */
+export function parsePriceInput(str: string, currency: 'IDR' | 'SAR' | 'USD'): number {
+  const s = (str || '').trim();
+  if (!s) return 0;
+  if (currency === 'IDR') {
+    const cleaned = s.replace(/\./g, '').replace(',', '.');
+    return Math.max(0, parseFloat(cleaned) || 0);
+  }
+  const cleaned = s.replace(/,/g, '');
+  return Math.max(0, parseFloat(cleaned) || 0);
+}
+
+/** Hitung jumlah "karakter bermakna" (digit + satu desimal untuk SAR/USD) sebelum posisi kursor */
+function countSignificantBeforeCursor(inputStr: string, cursorPos: number, currency: 'IDR' | 'SAR' | 'USD'): number {
+  const sub = inputStr.substring(0, cursorPos);
+  let count = 0;
+  let seenDecimal = false;
+  for (const c of sub) {
+    if (/\d/.test(c)) count++;
+    else if (currency !== 'IDR' && (c === '.' || c === ',') && !seenDecimal) {
+      seenDecimal = true;
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Posisi kursor di string terformat agar sesuai dengan jumlah karakter bermakna */
+function positionAfterSignificantChars(formatted: string, currency: 'IDR' | 'SAR' | 'USD', targetCount: number): number {
+  let count = 0;
+  let seenDecimal = false;
+  for (let i = 0; i < formatted.length; i++) {
+    if (/\d/.test(formatted[i])) count++;
+    else if (currency !== 'IDR' && formatted[i] === '.' && !seenDecimal) {
+      seenDecimal = true;
+      count++;
+    }
+    if (count >= targetCount) return i + 1;
+  }
+  return formatted.length;
+}
+
+/**
+ * Format input harga sesuai mata uang dan hitung posisi kursor baru (agar bisa diedit tanpa loncat).
+ * Dipakai di komponen input harga: parse -> format -> set state -> set cursor.
+ */
+export function formatPriceInputWithCursor(
+  inputValue: string,
+  selectionStart: number,
+  currency: 'IDR' | 'SAR' | 'USD'
+): { formatted: string; cursorPosition: number } {
+  const num = parsePriceInput(inputValue, currency);
+  const formatted = num === 0 || Number.isNaN(num) ? '' : formatPriceForInput(num, currency);
+  const significantBefore = countSignificantBeforeCursor(inputValue, selectionStart, currency);
+  const cursorPosition = positionAfterSignificantChars(formatted, currency, significantBefore);
+  return { formatted, cursorPosition };
+}
   
   /**
    * Format large numbers with K, M, B suffix

@@ -21,7 +21,9 @@ import TicketWorkPage from '../pages/dashboard/components/TicketWorkPage';
 import HotelsPage from '../pages/dashboard/components/HotelsPage';
 import BusPage from '../pages/dashboard/components/BusPage';
 import ProductBusPage from '../pages/dashboard/components/ProductBusPage';
+import BusWorkPage from '../pages/dashboard/components/BusWorkPage';
 import PackagesPage from '../pages/dashboard/components/PackagesPage';
+import HandlingPage from '../pages/dashboard/components/HandlingPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
 import BranchesPage from '../pages/dashboard/components/BranchesPage';
@@ -119,6 +121,10 @@ const router = createBrowserRouter([
             element: <VisaWorkPage />
           },
           {
+            path: 'progress-bus',
+            element: <BusWorkPage />
+          },
+          {
             path: 'products/visa',
             element: <ProductVisaPage />
           },
@@ -143,6 +149,10 @@ const router = createBrowserRouter([
             element: <PackagesPage />
           },
           {
+            path: 'products/handling',
+            element: <HandlingPage />
+          },
+          {
             path: 'hotels',
             element: <Navigate to="/dashboard/products/hotel" replace />
           },
@@ -160,7 +170,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'handling',
-            element: <Navigate to="/dashboard/products/hotel" replace />
+            element: <Navigate to="/dashboard/products/handling" replace />
           },
           {
             path: 'packages',

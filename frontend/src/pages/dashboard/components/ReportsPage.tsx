@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  RefreshCw,
   Filter,
-  FilterX,
-  ChevronRight,
   FileSpreadsheet,
   FileType,
   DollarSign,
@@ -17,11 +14,12 @@ import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import StatCard from '../../../components/common/StatCard';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Table from '../../../components/common/Table';
+import Table from '../../../components/common/Table'; 
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { FilterIconButton } from '../../../components/common/PageFilter';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { TableColumn } from '../../../types';
 import {
@@ -254,30 +252,14 @@ const ReportsPage: React.FC = () => {
   const series = data?.series ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col min-h-0 w-full max-w-full space-y-6">
       <PageHeader
         title="Reports & Analytics"
         subtitle="Laporan lengkap dengan filter periode, cabang, wilayah, dan provinsi"
         right={
           <div className="flex items-center gap-2 flex-wrap">
             <AutoRefreshControl onRefresh={fetchAnalytics} disabled={loading} />
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((v) => !v)}
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0D1A63] focus:ring-offset-1"
-              aria-expanded={filtersOpen}
-              aria-label={filtersOpen ? 'Sembunyikan filter' : 'Tampilkan filter'}
-              title={filtersOpen ? 'Sembunyikan filter' : 'Tampilkan filter'}
-            >
-              {filtersOpen ? (
-                <FilterX className="w-4 h-4" />
-              ) : (
-                <Filter className="w-4 h-4" />
-              )}
-              {hasActiveFilters && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#0D1A63] rounded-full ring-2 ring-white" aria-hidden />
-              )}
-            </button>
+            <FilterIconButton open={filtersOpen} onToggle={() => setFiltersOpen((v) => !v)} hasActiveFilters={hasActiveFilters} />
             <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               {exporting === 'excel' ? '...' : 'Excel'}
@@ -403,9 +385,9 @@ const ReportsPage: React.FC = () => {
       )}
 
       {data && (
-        <>
+        <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-6">
           {/* Summary cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
             {reportType === 'financial' && (
               <>
                 <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" />
@@ -427,8 +409,9 @@ const ReportsPage: React.FC = () => {
 
           {/* Series (time) */}
           {series.length > 0 && (
-            <Card className="travel-card">
+            <Card className="travel-card shrink-0">
               <CardSectionHeader title="Trend per Periode" subtitle="Data per periode sesuai filter." className="mb-4" />
+              <div className="overflow-x-auto rounded-xl border border-slate-200 min-w-0">
               <Table
                 columns={[
                   { id: 'period', label: 'Periode', align: 'left' },
@@ -446,15 +429,16 @@ const ReportsPage: React.FC = () => {
                   </tr>
                 )}
               />
+              </div>
             </Card>
           )}
 
           {/* Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 shrink-0">
             {breakdown.by_branch && breakdown.by_branch.length > 0 && (
-              <Card className="travel-card">
+              <Card className="travel-card min-w-0">
                 <CardSectionHeader title="Per Cabang" className="mb-4" />
-                <div className="max-h-64 overflow-y-auto">
+                <div className="overflow-auto max-h-96 min-w-0 rounded-xl border border-slate-200">
                   <Table
                     columns={[
                       { id: 'branch', label: 'Cabang', align: 'left' },
@@ -487,9 +471,9 @@ const ReportsPage: React.FC = () => {
               </Card>
             )}
             {breakdown.by_provinsi && breakdown.by_provinsi.length > 0 && (
-              <Card className="travel-card">
+              <Card className="travel-card min-w-0">
                 <CardSectionHeader title="Per Provinsi" className="mb-4" />
-                <div className="max-h-64 overflow-y-auto">
+                <div className="overflow-auto max-h-96 min-w-0 rounded-xl border border-slate-200">
                   <Table
                     columns={[
                       { id: 'provinsi', label: 'Provinsi', align: 'left' },
@@ -509,9 +493,9 @@ const ReportsPage: React.FC = () => {
               </Card>
             )}
             {breakdown.by_wilayah && breakdown.by_wilayah.length > 0 && (
-              <Card className="travel-card">
+              <Card className="travel-card min-w-0">
                 <CardSectionHeader title="Per Wilayah" className="mb-4" />
-                <div className="max-h-64 overflow-y-auto">
+                <div className="overflow-auto max-h-96 min-w-0 rounded-xl border border-slate-200">
                   <Table
                     columns={[
                       { id: 'wilayah', label: 'Wilayah', align: 'left' },
@@ -638,7 +622,7 @@ const ReportsPage: React.FC = () => {
             )}
             </div>
           </Card>
-        </>
+        </div>
       )}
     </div>
   );

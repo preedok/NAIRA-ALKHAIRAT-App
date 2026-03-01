@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, RefreshCw, Eye, Download, ClipboardList, Inbox, Send, Loader2, Check, CheckCircle, Search, User, MapPin, X } from 'lucide-react';
+import { FileText, RefreshCw, Eye, Download, ClipboardList, Inbox, Send, Loader2, Check, CheckCircle, Search, User, MapPin } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
@@ -65,6 +67,9 @@ const VisaWorkPage: React.FC = () => {
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -77,13 +82,19 @@ const VisaWorkPage: React.FC = () => {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const params = filterInvoiceStatus ? { status: filterInvoiceStatus } : {};
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
+      if (filterInvoiceStatus) params.status = filterInvoiceStatus;
       const res = await visaApi.listInvoices(params);
-      if (res.data.success) setInvoices(res.data.data || []);
+      if (res.data.success) {
+        setInvoices(res.data.data || []);
+        const pag = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
+        setPagination(pag || null);
+      }
     } catch {
       setInvoices([]);
+      setPagination(null);
     }
-  }, [filterInvoiceStatus]);
+  }, [filterInvoiceStatus, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -97,6 +108,10 @@ const VisaWorkPage: React.FC = () => {
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterInvoiceStatus]);
 
   useEffect(() => {
     if (qParam && qParam.trim()) setFilterSearch(qParam.trim());
@@ -186,7 +201,13 @@ const VisaWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus]);
 
-  const hasVisaInvoices = filteredInvoices.length > 0;
+  const tableColumns: TableColumn[] = [
+    { id: 'invoice', label: 'No. Invoice' },
+    { id: 'owner', label: 'Owner' },
+    { id: 'items', label: 'Item Visa', align: 'right' },
+    { id: 'status', label: 'Status' },
+    { id: 'action', label: 'Aksi' }
+  ];
 
   return (
     <div className="space-y-6">
@@ -239,7 +260,7 @@ const VisaWorkPage: React.FC = () => {
           <CardSectionHeader
             icon={<FileText className="w-6 h-6" />}
             title="Daftar Invoice Visa"
-            subtitle={`${filteredInvoices.length} invoice`}
+            subtitle={pagination ? `${pagination.total} invoice` : `${filteredInvoices.length} invoice`}
             className="mb-0"
           />
         </div>
@@ -247,86 +268,69 @@ const VisaWorkPage: React.FC = () => {
           <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
             <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
           </div>
-        ) : !hasVisaInvoices ? (
-          <div className="py-16 text-center">
-            <div className="p-5 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
-              <FileText className="w-14 h-14 text-slate-400" />
-            </div>
-            <p className="text-slate-700 font-semibold">Belum ada invoice dengan item visa</p>
-            <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">Buat order & invoice dari menu Invoice terlebih dahulu.</p>
-          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4">No. Invoice</th>
-                  <th className="text-left py-3 px-4">Owner</th>
-                  <th className="text-right py-3 px-4">Item Visa</th>
-                  <th className="text-left py-3 px-4">Status</th>
-                  <th className="text-left py-3 px-4 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map((inv: any) => {
-                  const o = inv.Order;
-                  const orderItems = o?.OrderItems || [];
-                  const visaCount = orderItems.filter((i: any) => i.type === 'visa').length;
-                  const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
-                  return (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                      <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                      <td className="py-3 px-4 text-right font-semibold tabular-nums text-slate-900">{visaCount}</td>
-                      <td className="py-3 px-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
-                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                        <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
-                          <Eye className="w-4 h-4 mr-1" /> Detail
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="min-w-0 overflow-x-auto">
+            <Table
+              columns={tableColumns}
+              data={filteredInvoices}
+              renderRow={(inv: any) => {
+                const o = inv.Order;
+                const orderItems = o?.OrderItems || [];
+                const visaCount = orderItems.filter((i: any) => i.type === 'visa').length;
+                const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
+                return (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                    <td className="py-3 px-4 text-right font-semibold tabular-nums text-slate-900">{visaCount}</td>
+                    <td className="py-3 px-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
+                    <td className="py-3 px-4">
+                      <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
+                        <Eye className="w-4 h-4 mr-1" /> Detail
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              }}
+              emptyMessage="Belum ada invoice dengan item visa"
+              emptyDescription="Buat order & invoice dari menu Invoice terlebih dahulu."
+              stickyActionsColumn
+              pagination={pagination ? {
+                total: pagination.total,
+                page: pagination.page,
+                limit: pagination.limit,
+                totalPages: pagination.totalPages,
+                onPageChange: (p) => setPage(p),
+                onLimitChange: (l) => { setLimit(l); setPage(1); }
+              } : undefined}
+            />
           </div>
         )}
       </Card>
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
         {detailInvoice && (
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80">
-            {/* Modal header */}
-            <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-sky-50/80 via-white to-slate-50/50">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="p-3 bg-sky-100 rounded-xl shadow-sm shrink-0">
-                  <FileText className="w-6 h-6 text-sky-600" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-slate-900 truncate">
-                    {formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-sm text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
+          <ModalBoxLg>
+            <ModalHeader
+              title={formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
+              subtitle={
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 opacity-90" />
+                    {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
+                  </span>
+                  {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
+                    <span className="flex items-center gap-1.5 ml-3">
+                      <MapPin className="w-3.5 h-3.5 opacity-90" />
+                      {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
                     </span>
-                    {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <button type="button" onClick={() => setSearchParams({})} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors shrink-0" aria-label="Tutup">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+                  )}
+                </>
+              }
+              icon={<FileText className="w-5 h-5" />}
+              onClose={() => setSearchParams({})}
+            />
+            <ModalBody className="space-y-6 bg-slate-50/30">
               {visaItems.map((item: any) => {
                 const prog = item.VisaProgress;
                 const status = prog?.status || 'document_received';
@@ -451,15 +455,13 @@ const VisaWorkPage: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
-
-            {/* Modal footer */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" size="sm" onClick={() => setSearchParams({})} className="rounded-xl">
                 Tutup
               </Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBoxLg>
         )}
       </Modal>
     </div>

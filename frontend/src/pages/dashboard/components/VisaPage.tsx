@@ -7,14 +7,18 @@ import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, CardSectionHeader, Input, Autocomplete } from '../../../components/common';
+import { FilterIconButton, StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { businessRulesApi, productsApi, adminPusatApi, type VisaSeason } from '../../../services/api';
-import { fillFromSource, fromIDR } from '../../../utils/currencyConversion';
+import { fillFromSource, fromIDR, getEditPriceDisplay } from '../../../utils/currencyConversion';
+import Table from '../../../components/common/Table';
+import { getPriceTripleForTable, PRICE_COLUMN_LABEL, parsePriceInput } from '../../../utils';
 import VisaWorkPage from './VisaWorkPage';
+
+const PAGE_SIZE = 25;
 
 export const VISA_KIND_LABELS: Record<string, string> = {
   only: 'Visa Only',
@@ -69,6 +73,10 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
   const [visaProducts, setVisaProducts] = useState<VisaProduct[]>([]);
   const [loadingVisaProducts, setLoadingVisaProducts] = useState(false);
+  const [visaPage, setVisaPage] = useState(1);
+  const [visaLimit, setVisaLimit] = useState(PAGE_SIZE);
+  const [visaTotal, setVisaTotal] = useState(0);
+  const [visaTotalPages, setVisaTotalPages] = useState(1);
   const [showAddVisaModal, setShowAddVisaModal] = useState(false);
   const [addVisaForm, setAddVisaForm] = useState({
     name: '',
@@ -125,16 +133,24 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const fetchVisaProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingVisaProducts(true);
-    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: visaLimit, page: visaPage, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
-        const data = (res.data as { data?: VisaProduct[] })?.data;
-        setVisaProducts(Array.isArray(data) ? data : []);
+        const body = res.data as { data?: VisaProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };
+        setVisaProducts(Array.isArray(body.data) ? body.data : []);
+        const p = body.pagination;
+        if (p) {
+          setVisaTotal(p.total);
+          setVisaPage(p.page);
+          setVisaLimit(p.limit);
+          setVisaTotalPages(p.totalPages || 1);
+        }
       })
       .catch(() => setVisaProducts([]))
       .finally(() => setLoadingVisaProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, visaLimit, visaPage]);
 
+  useEffect(() => { setVisaPage(1); }, [filterIncludeInactive]);
   useEffect(() => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
@@ -170,6 +186,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
 
   const handleOpenEdit = (p: VisaProduct) => {
     const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
+    const { currency } = getEditPriceDisplay(p, currencyRates);
     setEditingVisa(p);
     setEditVisaForm({
       name: p.name || '',
@@ -178,7 +195,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
       quota: p.quota ?? (p as { meta?: { default_quota?: number } }).meta?.default_quota ?? 0,
       require_hotel: p.meta?.require_hotel === true,
       price_idr: Math.round(Number(priceIdr)) || 0,
-      price_currency: 'IDR'
+      price_currency: currency
     });
   };
 
@@ -395,112 +412,112 @@ const VisaPage: React.FC<VisaPageProps> = ({
               </Button>
             ) : undefined}
           />
-          {loadingVisaProducts ? (
-            <div className="py-10 text-center text-slate-500 text-sm">Memuat produk...</div>
-          ) : visaProducts.length === 0 ? (
-            <div className="py-10 text-center text-slate-500 text-sm rounded-xl bg-slate-50/80">Belum ada produk visa. {isPusat ? 'Klik "Tambah produk visa" untuk menambah.' : 'Tambah produk visa di master produk (admin pusat).'}</div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-600">Kode</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-600">Jenis</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-600">Nama</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-600 max-w-[200px]">Deskripsi</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-600">Kuota</th>
-                    <th className="text-center py-3 px-4 font-semibold text-slate-600">Wajib hotel</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-600">IDR</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-600">SAR</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-600">USD</th>
-                    <th className="text-center py-3 px-4 font-semibold text-slate-600 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
+          <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+            <Table<VisaProduct>
+              columns={[
+                { id: 'code', label: 'Kode', align: 'left' },
+                { id: 'kind', label: 'Jenis', align: 'left' },
+                { id: 'name', label: 'Nama', align: 'left' },
+                { id: 'description', label: 'Deskripsi', align: 'left' },
+                { id: 'quota', label: 'Kuota', align: 'right' },
+                { id: 'require_hotel', label: 'Wajib hotel', align: 'center' },
+                { id: 'price', label: PRICE_COLUMN_LABEL, align: 'right' },
+                { id: 'actions', label: 'Aksi', align: 'center' }
+              ]}
+              data={loadingVisaProducts ? [] : visaProducts}
+              renderRow={(p) => {
+                const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
+                const triple = fromIDR(Number(priceIdr), currencyRates);
+                const visaKind = (p.meta?.visa_kind || 'only') as VisaKind;
+                const kindLabel = VISA_KIND_LABELS[visaKind] || visaKind;
+                const requireHotel = p.meta?.require_hotel === true;
+                const quota = p.quota ?? 0;
+                return (
+                  <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-[#0D1A63]/5 transition-colors">
+                    <td className="py-3 px-4 font-mono text-slate-600">{p.code || '-'}</td>
+                    <td className="py-3 px-4"><Badge variant="info" className="font-medium">{kindLabel}</Badge></td>
+                    <td className="py-3 px-4 font-medium text-slate-900">{p.name}</td>
+                    <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate" title={p.description || undefined}>{p.description || '—'}</td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-800">{quota === 0 ? '—' : quota}</td>
+                    <td className="py-3 px-4 text-center">{requireHotel ? <Badge variant="info">Ya</Badge> : <span className="text-slate-500">Tidak</span>}</td>
+                    <td className="py-3 px-4 text-right text-slate-800 align-top">
+                      {(() => {
+                        const idr = Number(priceIdr) || 0;
+                        const sar = triple.sar;
+                        const usd = triple.usd;
+                        const t = getPriceTripleForTable(idr, sar, usd);
+                        if (!t.hasPrice) return '–';
+                        return (
+                          <>
+                            <div className="tabular-nums font-medium">{t.idrText}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              <span className="text-slate-400">SAR:</span> {t.sarText}
+                              <span className="text-slate-400 ml-1">USD:</span> {t.usdText}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-0.5">per orang</div>
+                          </>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {canAddToOrder && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="p-2"
+                            onClick={() => {
+                              addDraftItem({ type: 'visa', product_id: p.id, product_name: p.name, unit_price_idr: Number(priceIdr) || 0, quantity: 1 });
+                              showToast('Visa ditambahkan ke order.', 'success');
+                            }}
+                            title="Tambah ke order"
+                            aria-label="Tambah ke order"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {isPusat && (
+                          <ActionsMenu
+                            align="right"
+                            items={[
+                              { id: 'periode', label: 'Periode & Kuota', icon: <Calendar className="w-4 h-4" />, onClick: () => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
+                              { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => handleOpenEdit(p) },
+                              { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteVisa(p), danger: true },
+                            ]}
+                          />
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visaProducts.map((p) => {
-                    const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
-                    const triple = fromIDR(Number(priceIdr), currencyRates);
-                    const visaKind = (p.meta?.visa_kind || 'only') as VisaKind;
-                    const kindLabel = VISA_KIND_LABELS[visaKind] || visaKind;
-                    const requireHotel = p.meta?.require_hotel === true;
-                    const quota = p.quota ?? 0;
-                    return (
-                      <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-[#0D1A63]/5 transition-colors">
-                        <td className="py-3 px-4 font-mono text-slate-600">{p.code || '-'}</td>
-                        <td className="py-3 px-4"><Badge variant="info" className="font-medium">{kindLabel}</Badge></td>
-                        <td className="py-3 px-4 font-medium text-slate-900">{p.name}</td>
-                        <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate" title={p.description || undefined}>{p.description || '—'}</td>
-                        <td className="py-3 px-4 text-right font-medium text-slate-800">{quota === 0 ? '—' : quota}</td>
-                        <td className="py-3 px-4 text-center">{requireHotel ? <Badge variant="info">Ya</Badge> : <span className="text-slate-500">Tidak</span>}</td>
-                        <td className="py-3 px-4 text-right font-medium text-slate-800">Rp {Number(priceIdr).toLocaleString('id-ID')}</td>
-                        <td className="py-3 px-4 text-right text-slate-700">SAR {triple.sar.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-4 text-right text-slate-700">$ {triple.usd.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {canAddToOrder && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="p-2"
-                                onClick={() => {
-                                  addDraftItem({ type: 'visa', product_id: p.id, product_name: p.name, unit_price_idr: Number(priceIdr) || 0, quantity: 1 });
-                                  showToast('Visa ditambahkan ke order.', 'success');
-                                }}
-                                title="Tambah ke order"
-                                aria-label="Tambah ke order"
-                              >
-                                <ShoppingCart className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {isPusat && (
-                              <ActionsMenu
-                                align="right"
-                                items={[
-                                  { id: 'periode', label: 'Periode & Kuota', icon: <Calendar className="w-4 h-4" />, onClick: () => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
-                                  { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => handleOpenEdit(p) },
-                                  { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteVisa(p), danger: true },
-                                ]}
-                              />
-                            )}
-                          </div>
-                        </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                );
+              }}
+              emptyMessage={loadingVisaProducts ? 'Memuat produk...' : 'Belum ada produk visa.'}
+              emptyDescription={!loadingVisaProducts ? (isPusat ? 'Klik "Tambah produk visa" untuk menambah.' : 'Tambah produk visa di master produk (admin pusat).') : undefined}
+              pagination={{
+                total: visaTotal,
+                page: visaPage,
+                limit: visaLimit,
+                totalPages: visaTotalPages,
+                onPageChange: setVisaPage,
+                onLimitChange: (l) => { setVisaLimit(l); setVisaPage(1); }
+              }}
+              stickyActionsColumn
+            />
+          </div>
         </Card>
       )}
 
-      {/* Modal: Tambah produk visa (admin pusat) — layout modern */}
-      {showAddVisaModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addVisaSaving && setShowAddVisaModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#0D1A63]/10 text-[#0D1A63]">
-                  <Plus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Tambah produk visa</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Lengkapi jenis visa, nama, kuota, dan harga (opsional)</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => !addVisaSaving && setShowAddVisaModal(false)}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                aria-label="Tutup"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Body — scroll */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+      {/* Modal: Tambah produk visa */}
+      <Modal open={showAddVisaModal} onClose={() => !addVisaSaving && setShowAddVisaModal(false)}>
+        {showAddVisaModal && (
+          <ModalBox>
+            <ModalHeader
+              title="Tambah produk visa"
+              subtitle="Lengkapi jenis visa, nama, kuota, dan harga (opsional)"
+              icon={<Plus className="w-5 h-5" />}
+              onClose={() => !addVisaSaving && setShowAddVisaModal(false)}
+            />
+            <ModalBody className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Kolom kiri: Info produk */}
                 <div className="space-y-5">
@@ -530,26 +547,23 @@ const VisaPage: React.FC<VisaPageProps> = ({
                           ))}
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Nama produk <span className="text-red-500">*</span></label>
-                        <input
-                          type="text"
-                          value={addVisaForm.name}
-                          onChange={(e) => setAddVisaForm((f) => ({ ...f, name: e.target.value }))}
-                          placeholder="Contoh: Visa Umroh Reguler"
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white placeholder:text-slate-400"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Deskripsi <span className="text-slate-400 font-normal">(opsional)</span></label>
-                        <textarea
-                          value={addVisaForm.description}
-                          onChange={(e) => setAddVisaForm((f) => ({ ...f, description: e.target.value }))}
-                          placeholder="Deskripsi singkat produk"
-                          rows={2}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white placeholder:text-slate-400 resize-none"
-                        />
-                      </div>
+                      <Input
+                        label="Nama produk"
+                        type="text"
+                        value={addVisaForm.name}
+                        onChange={(e) => setAddVisaForm((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Contoh: Visa Umroh Reguler"
+                        required
+                        fullWidth
+                      />
+                      <Textarea
+                        label="Deskripsi (opsional)"
+                        value={addVisaForm.description}
+                        onChange={(e) => setAddVisaForm((f) => ({ ...f, description: e.target.value }))}
+                        placeholder="Deskripsi singkat produk"
+                        rows={2}
+                        fullWidth
+                      />
                     </div>
                   </section>
                 </div>
@@ -562,18 +576,18 @@ const VisaPage: React.FC<VisaPageProps> = ({
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Kuota & aturan</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
-              <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Kuota tersedia</label>
-                        <p className="text-xs text-slate-500 mb-2">Jumlah yang bisa dipesan. Isi 0 = tidak dibatasi.</p>
-                        <input
+                      <div>
+                        <Input
+                          label="Kuota tersedia"
                           type="number"
                           min={0}
                           step={1}
-                          value={addVisaForm.quota || ''}
+                          value={addVisaForm.quota != null ? String(addVisaForm.quota) : ''}
                           onChange={(e) => setAddVisaForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white"
                           placeholder="0"
+                          fullWidth
                         />
+                        <p className="text-xs text-slate-500 mt-1">Jumlah yang bisa dipesan. Isi 0 = tidak dibatasi.</p>
                       </div>
                       <div className="pt-2 border-t border-slate-200/80">
                         <label className="flex items-center gap-3 cursor-pointer group">
@@ -595,93 +609,69 @@ const VisaPage: React.FC<VisaPageProps> = ({
                       <Coins className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Harga default</span>
                     </div>
-                    <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4">
-                      <p className="text-xs text-slate-500 mb-3">Opsional. Isi satu mata uang; lainnya mengikuti kurs. Kosongkan jika diisi nanti.</p>
-                      <div className="flex gap-2 mb-3">
-                        <span className="text-xs font-medium text-slate-500 self-center">Input:</span>
-                  <select
-                          value={addVisaForm.price_currency}
-                          onChange={(e) => setAddVisaForm((f) => ({ ...f, price_currency: e.target.value as 'IDR' | 'SAR' | 'USD' }))}
-                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white"
-                  >
-                    <option value="IDR">IDR</option>
-                    <option value="SAR">SAR</option>
-                    <option value="USD">USD</option>
-                  </select>
-                </div>
-                      <div className="grid grid-cols-3 gap-3">
-                  {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource('IDR', addVisaForm.price_idr || 0, currencyRates);
-                    const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const isEditable = addVisaForm.price_currency === curKey;
-                          const label = curKey === 'IDR' ? 'Rp' : curKey === 'SAR' ? 'SAR' : '$';
-                    return (
-                            <div key={curKey} className={isEditable ? '' : 'opacity-80'}>
-                              <span className="text-xs font-medium text-slate-500 block mb-1">{label} {!isEditable && '(konversi)'}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step={curKey === 'IDR' ? 1 : 0.01}
-                          value={val || ''}
-                          readOnly={!isEditable}
-                          onChange={isEditable ? (e) => {
-                            const v = parseFloat(e.target.value) || 0;
-                            const next = fillFromSource(curKey, v, currencyRates);
-                                  setAddVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
-                          } : undefined}
-                                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
-                          placeholder="0"
-                        />
+                    <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
+                      <p className="text-xs text-slate-500">Opsional. Pilih mata uang input, isi harga; lainnya konversi otomatis.</p>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                          <Button
+                            key={cur}
+                            type="button"
+                            variant={addVisaForm.price_currency === cur ? 'primary' : 'outline'}
+                            size="sm"
+                            onClick={() => setAddVisaForm((f) => ({ ...f, price_currency: cur }))}
+                          >
+                            {cur}
+                          </Button>
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
+                          const triple = fillFromSource('IDR', addVisaForm.price_idr || 0, currencyRates);
+                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
+                          const priceLabel = curKey === 'IDR' ? 'Rp' : curKey === 'SAR' ? 'SAR' : '$';
+                          return (
+                            <PriceInput
+                              key={curKey}
+                              label={`${priceLabel}${addVisaForm.price_currency !== curKey ? ' (konversi)' : ''}`}
+                              value={val ?? 0}
+                              currency={curKey}
+                              onChange={(n) => {
+                                const next = fillFromSource(curKey, n, currencyRates);
+                                setAddVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
+                              }}
+                              disabled={addVisaForm.price_currency !== curKey}
+                              placeholder="0"
+                              fullWidth
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   </section>
                 </div>
               </div>
-            </div>
-
-            {/* Footer — sticky */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-              <Button variant="outline" onClick={() => setShowAddVisaModal(false)} disabled={addVisaSaving}>
-                Batal
-              </Button>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => setShowAddVisaModal(false)} disabled={addVisaSaving}>Batal</Button>
               <Button variant="primary" onClick={handleCreateVisa} disabled={addVisaSaving}>
                 {addVisaSaving ? 'Menyimpan...' : 'Tambah produk'}
               </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            </ModalFooter>
+          </ModalBox>
+        )}
+      </Modal>
 
-      {/* Modal: Edit produk visa (admin pusat) — layout modern */}
-      {editingVisa && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !editVisaSaving && setEditingVisa(null)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-[#0D1A63]/10 text-[#0D1A63]">
-                  <Pencil className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Edit produk visa</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Ubah data produk, kuota, dan harga</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => !editVisaSaving && setEditingVisa(null)}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                aria-label="Tutup"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Body — scroll */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+      {/* Modal: Edit produk visa */}
+      <Modal open={!!editingVisa} onClose={() => !editVisaSaving && setEditingVisa(null)}>
+        {editingVisa && (
+          <ModalBox>
+            <ModalHeader
+              title="Edit produk visa"
+              subtitle="Ubah data produk, kuota, dan harga"
+              icon={<Pencil className="w-5 h-5" />}
+              onClose={() => !editVisaSaving && setEditingVisa(null)}
+            />
+            <ModalBody className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Kolom kiri: Info produk */}
                 <div className="space-y-5">
@@ -778,42 +768,38 @@ const VisaPage: React.FC<VisaPageProps> = ({
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4">
                       <p className="text-xs text-slate-500 mb-3">Edit satu mata uang; lainnya mengikuti kurs.</p>
-                      <div className="flex gap-2 mb-3">
-                        <span className="text-xs font-medium text-slate-500 self-center">Input:</span>
-                        <select
-                          value={editVisaForm.price_currency}
-                          onChange={(e) => setEditVisaForm((f) => ({ ...f, price_currency: e.target.value as 'IDR' | 'SAR' | 'USD' }))}
-                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white"
-                        >
-                          <option value="IDR">IDR</option>
-                          <option value="SAR">SAR</option>
-                          <option value="USD">USD</option>
-                        </select>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                          <Button
+                            key={cur}
+                            type="button"
+                            variant={editVisaForm.price_currency === cur ? 'primary' : 'outline'}
+                            size="sm"
+                            onClick={() => setEditVisaForm((f) => ({ ...f, price_currency: cur }))}
+                          >
+                            {cur}
+                          </Button>
+                        ))}
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
                           const triple = fillFromSource('IDR', editVisaForm.price_idr || 0, currencyRates);
                           const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const isEditable = editVisaForm.price_currency === curKey;
                           const label = curKey === 'IDR' ? 'Rp' : curKey === 'SAR' ? 'SAR' : '$';
                           return (
-                            <div key={curKey} className={isEditable ? '' : 'opacity-80'}>
-                              <span className="text-xs font-medium text-slate-500 block mb-1">{label} {!isEditable && '(konversi)'}</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step={curKey === 'IDR' ? 1 : 0.01}
-                                value={val || ''}
-                                readOnly={!isEditable}
-                                onChange={isEditable ? (e) => {
-                                  const v = parseFloat(e.target.value) || 0;
-                                  const next = fillFromSource(curKey, v, currencyRates);
-                                  setEditVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
-                                } : undefined}
-                                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
-                                placeholder="0"
-                              />
-                            </div>
+                            <PriceInput
+                              key={curKey}
+                              label={`${label}${editVisaForm.price_currency !== curKey ? ' (konversi)' : ''}`}
+                              value={val ?? 0}
+                              currency={curKey}
+                              onChange={(n) => {
+                                const next = fillFromSource(curKey, n, currencyRates);
+                                setEditVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
+                              }}
+                              disabled={editVisaForm.price_currency !== curKey}
+                              placeholder="0"
+                              fullWidth
+                            />
                           );
                         })}
                       </div>
@@ -821,38 +807,28 @@ const VisaPage: React.FC<VisaPageProps> = ({
                   </section>
                 </div>
               </div>
-            </div>
-
-            {/* Footer — sticky */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-              <Button variant="outline" onClick={() => setEditingVisa(null)} disabled={editVisaSaving}>
-                Batal
-              </Button>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => setEditingVisa(null)} disabled={editVisaSaving}>Batal</Button>
               <Button variant="primary" onClick={handleSaveEdit} disabled={editVisaSaving}>
                 {editVisaSaving ? 'Menyimpan...' : 'Simpan perubahan'}
               </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            </ModalFooter>
+          </ModalBox>
+        )}
+      </Modal>
 
-      {/* Modal: Periode & Kuota (untuk kalender visa) */}
-      {visaSeasonsProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-[#0D1A63]" />
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Periode & Kuota</h3>
-                  <p className="text-sm text-slate-500">{visaSeasonsProduct.name}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-500">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      {/* Modal: Periode & Kuota */}
+      <Modal open={!!visaSeasonsProduct} onClose={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)}>
+        {visaSeasonsProduct && (
+          <ModalBox>
+            <ModalHeader
+              title="Periode & Kuota"
+              subtitle={visaSeasonsProduct.name}
+              icon={<Calendar className="w-5 h-5" />}
+              onClose={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)}
+            />
+            <ModalBody className="space-y-4">
               <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
                 <div className="grid grid-cols-2 gap-3">
@@ -952,10 +928,10 @@ const VisaPage: React.FC<VisaPageProps> = ({
             </div>
           )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </ModalBody>
+          </ModalBox>
+        )}
+      </Modal>
     </div>
   );
 };

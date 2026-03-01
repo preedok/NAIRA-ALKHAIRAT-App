@@ -7,7 +7,7 @@ import {
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import type { TableColumn } from '../../../types';
@@ -1278,23 +1278,15 @@ const OrdersInvoicesPage: React.FC = () => {
 
       {/* Modal Upload Dokumen – Tabs: Hotel / Visa / Tiket */}
       {uploadDocInvoice && (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => !uploadDocLoading && setUploadDocInvoice(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80" onClick={(e) => e.stopPropagation()}>
-            {/* Header modern */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-100 rounded-xl">
-                  <Upload className="w-5 h-5 text-indigo-600" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Upload dokumen</h2>
-                  <p className="text-xs text-slate-500 font-mono">{uploadDocInvoice?.invoice_number || uploadDocInvoice?.Order?.order_number || ''}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setUploadDocInvoice(null)} disabled={uploadDocLoading} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-700">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <Modal open onClose={() => !uploadDocLoading && setUploadDocInvoice(null)} zIndex={55}>
+          <ModalBox className="max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <ModalHeader
+              title="Upload dokumen"
+              subtitle={uploadDocInvoice?.invoice_number || uploadDocInvoice?.Order?.order_number || ''}
+              icon={<Upload className="w-5 h-5" />}
+              onClose={() => !uploadDocLoading && setUploadDocInvoice(null)}
+            />
+            <ModalBody className="flex-1 overflow-y-auto">
             {uploadDocLoading ? (
               <div className="p-8 flex items-center justify-center">
                 <p className="text-slate-500">Memuat data order…</p>
@@ -1572,42 +1564,35 @@ const OrdersInvoicesPage: React.FC = () => {
                 </>
               );
             })()}
-          </div>
-        </div>
+            </ModalBody>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Modal Detail Invoice */}
       {viewInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={closeModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col border border-slate-200/80" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-[#0D1A63]/10 via-white to-slate-50/50">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-[#0D1A63]/10 rounded-xl shadow-sm">
-                  <Receipt className="w-6 h-6 text-[#0D1A63]" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">Detail Invoice</h2>
-                  <p className="text-sm text-slate-600 font-mono mt-0.5">{formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)} className="rounded-lg">
-                  <Download className="w-4 h-4 mr-2" /> Unduh PDF
+        <Modal open onClose={closeModal} zIndex={50}>
+          <ModalBoxLg>
+            <ModalHeader
+              title="Detail Invoice"
+              subtitle={formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}
+              icon={<Receipt className="w-5 h-5" />}
+              onClose={closeModal}
+            />
+            <div className="px-6 pt-2 pb-2 flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)} className="rounded-lg">
+                <Download className="w-4 h-4 mr-2" /> Unduh PDF
+              </Button>
+              {canUnblock(viewInvoice) && (
+                <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)} className="rounded-lg">
+                  <Unlock className="w-4 h-4 mr-2" /> Aktifkan Kembali
                 </Button>
-                {canUnblock(viewInvoice) && (
-                  <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)} className="rounded-lg">
-                    <Unlock className="w-4 h-4 mr-2" /> Aktifkan Kembali
-                  </Button>
-                )}
-                <button onClick={closeModal} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-700">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              )}
             </div>
 
+            <ModalBody className="flex-1 overflow-hidden flex flex-col p-0">
             {/* Tabs - pill style */}
-            <div className="flex gap-1 px-6 pt-4 pb-0 border-b border-slate-200 bg-slate-50/60">
+            <div className="flex gap-1 px-6 pt-4 pb-0 border-b border-slate-200 bg-slate-50/60 shrink-0">
               <button
                 onClick={() => setDetailTab('invoice')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
@@ -2004,19 +1989,21 @@ const OrdersInvoicesPage: React.FC = () => {
                 </div>
               )}
             </div>
+            </ModalBody>
 
-            <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+            <ModalFooter>
               <Button variant="outline" onClick={closeModal} className="rounded-xl min-w-[100px]">Tutup</Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBoxLg>
+        </Modal>
       )}
 
       {/* Modal Batalkan Invoice: pilih Jadikan saldo atau Minta refund (isi bank & rekening) */}
       {showCancelModal && cancelTargetInv && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => !deletingOrderId && setShowCancelModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900">Batalkan Invoice</h3>
+        <Modal open onClose={() => !deletingOrderId && setShowCancelModal(false)} zIndex={60}>
+          <ModalBox>
+            <ModalHeader title="Batalkan Invoice" subtitle="Konfirmasi pembatalan invoice dan pengembalian dana jika ada pembayaran" icon={<X className="w-5 h-5" />} onClose={() => !deletingOrderId && setShowCancelModal(false)} />
+            <ModalBody className="space-y-4">
             {(() => {
               const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
               if (paid > 0) {
@@ -2026,20 +2013,26 @@ const OrdersInvoicesPage: React.FC = () => {
                       Invoice <strong>{cancelTargetInv.invoice_number}</strong> memiliki pembayaran <strong className="text-[#0D1A63]">{formatIDR(paid)}</strong>. Pilih salah satu:
                     </p>
                     <div className="space-y-3">
-                      <label className="flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer border-slate-200 hover:border-emerald-300">
-                        <input type="radio" name="cancelAction" checked={cancelAction === 'to_balance'} onChange={() => setCancelAction('to_balance')} className="mt-1" />
-                        <div>
-                          <span className="font-medium text-slate-800">Jadikan saldo</span>
-                          <p className="text-xs text-slate-500 mt-0.5">Dana masuk ke saldo akun Anda. Bisa dipakai untuk order baru atau alokasi ke tagihan lain.</p>
-                        </div>
-                      </label>
-                      <label className="flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer border-slate-200 hover:border-emerald-300">
-                        <input type="radio" name="cancelAction" checked={cancelAction === 'refund'} onChange={() => setCancelAction('refund')} className="mt-1" />
-                        <div>
-                          <span className="font-medium text-slate-800">Minta refund ke rekening</span>
-                          <p className="text-xs text-slate-500 mt-0.5">Admin/accounting akan memproses pengembalian ke rekening Anda.</p>
-                        </div>
-                      </label>
+                      <Button
+                        type="button"
+                        variant={cancelAction === 'to_balance' ? 'primary' : 'outline'}
+                        fullWidth
+                        onClick={() => setCancelAction('to_balance')}
+                        className="flex flex-col items-start text-left h-auto py-3"
+                      >
+                        <span className="font-medium">Jadikan saldo</span>
+                        <span className="text-xs opacity-90 mt-0.5">Dana masuk ke saldo akun Anda. Bisa dipakai untuk order baru atau alokasi ke tagihan lain.</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={cancelAction === 'refund' ? 'primary' : 'outline'}
+                        fullWidth
+                        onClick={() => setCancelAction('refund')}
+                        className="flex flex-col items-start text-left h-auto py-3"
+                      >
+                        <span className="font-medium">Minta refund ke rekening</span>
+                        <span className="text-xs opacity-90 mt-0.5">Admin/accounting akan memproses pengembalian ke rekening Anda.</span>
+                      </Button>
                     </div>
                     {cancelAction === 'refund' && (
                       <div className="space-y-2 pt-2 border-t border-slate-200">
@@ -2053,14 +2046,15 @@ const OrdersInvoicesPage: React.FC = () => {
               }
               return <p className="text-sm text-slate-600">Batalkan invoice <strong>{cancelTargetInv.invoice_number}</strong>? Tindakan ini tidak dapat dibatalkan.</p>;
             })()}
-            <div className="flex gap-3 justify-end pt-2">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancelTargetInv(null); setCancelReason(''); setCancelBankName(''); setCancelAccountNumber(''); }} disabled={!!deletingOrderId}>Batal</Button>
               <Button variant="primary" onClick={submitCancelModal} disabled={!!deletingOrderId} className="bg-red-600 hover:bg-red-700">
                 {deletingOrderId ? 'Memproses...' : (parseFloat(cancelTargetInv.paid_amount) || 0) > 0 ? (cancelAction === 'to_balance' ? 'Ya, batalkan & jadikan saldo' : 'Ya, batalkan & minta refund') : 'Ya, batalkan'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Modal Pemindahan Dana (alokasi dari invoice sumber ke penerima) */}
@@ -2122,9 +2116,13 @@ const OrdersInvoicesPage: React.FC = () => {
         };
 
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => !reallocateSubmitting && setShowReallocateModal(false)}>
-            <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="px-6 py-4 border-b border-slate-200">
+          <Modal
+            open={showReallocateModal}
+            onClose={() => !reallocateSubmitting && setShowReallocateModal(false)}
+            zIndex={60}
+          >
+            <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto flex flex-col">
+              <div className="px-6 py-4 border-b border-slate-200 shrink-0">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <ArrowRightLeft className="w-5 h-5" /> Pemindahan Dana Antar Invoice
                 </h3>
@@ -2132,67 +2130,86 @@ const OrdersInvoicesPage: React.FC = () => {
                   Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Bisa satu atau lebih sumber dan satu atau lebih penerima.
                 </p>
               </div>
-              <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="p-6 flex-1 space-y-4 min-h-0">
                 {reallocateListLoading ? (
                   <p className="text-slate-500">Memuat daftar invoice...</p>
                 ) : (
                   <>
-                    {sourceCandidates.length === 0 && (
-                      <p className="text-amber-700 bg-amber-50 p-3 rounded-xl text-sm">Tidak ada invoice sumber (invoice dibatalkan dengan pembayaran, atau invoice dengan kelebihan bayar).</p>
+                    {(sourceCandidates.length === 0 || targetCandidates.length === 0) && (
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-1.5">
+                        {sourceCandidates.length === 0 && (
+                          <p className="text-amber-800 text-sm">Tidak ada invoice sumber (invoice dibatalkan dengan pembayaran, atau invoice dengan kelebihan bayar).</p>
+                        )}
+                        {targetCandidates.length === 0 && (
+                          <p className="text-amber-800 text-sm">Tidak ada invoice penerima (invoice aktif dengan sisa tagihan).</p>
+                        )}
+                      </div>
                     )}
-                    {targetCandidates.length === 0 && (
-                      <p className="text-amber-700 bg-amber-50 p-3 rounded-xl text-sm">Tidak ada invoice penerima (invoice aktif dengan sisa tagihan).</p>
-                    )}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-slate-700">Detail alokasi</span>
+                        <span className="text-sm font-semibold text-slate-700">Detail alokasi</span>
                         <Button variant="outline" size="sm" onClick={addRow}>Tambah baris</Button>
                       </div>
-                      <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <table className="w-full text-sm">
+                      <div className="border border-slate-200 rounded-xl w-full">
+                        <table className="w-full text-sm table-fixed">
+                          <colgroup>
+                            <col className="w-[38%]" />
+                            <col className="w-[38%]" />
+                            <col className="w-[18%]" />
+                            <col className="w-[6%]" />
+                          </colgroup>
                           <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
-                              <th className="text-left py-2 px-3">Invoice Sumber</th>
-                              <th className="text-left py-2 px-3">Invoice Penerima</th>
-                              <th className="text-left py-2 px-3">Jumlah (IDR)</th>
-                              <th className="w-10" />
+                              <th className="text-left py-2.5 px-3 text-slate-600 font-medium">Invoice Sumber</th>
+                              <th className="text-left py-2.5 px-3 text-slate-600 font-medium">Invoice Penerima</th>
+                              <th className="text-left py-2.5 px-3 text-slate-600 font-medium">Jumlah (IDR)</th>
+                              <th className="w-10 py-2.5 px-1" />
                             </tr>
                           </thead>
                           <tbody>
                             {reallocateRows.map((row, idx) => (
-                              <tr key={idx} className="border-b border-slate-100 last:border-0">
-                                <td className="py-2 px-3">
-                                  <Autocomplete
-                                    value={row.source_invoice_id}
-                                    onChange={(v) => updateRow(idx, 'source_invoice_id', v)}
-                                    options={[
-                                      { value: '', label: 'Pilih sumber' },
-                                      ...sourceCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(getReleasable(i))} tersedia` }))
-                                    ]}
-                                    emptyLabel="Pilih sumber"
-                                  />
+                              <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                                <td className="py-2 px-3 align-middle">
+                                  <div className="w-full min-w-0">
+                                    <Autocomplete
+                                      value={row.source_invoice_id}
+                                      onChange={(v) => updateRow(idx, 'source_invoice_id', v)}
+                                      options={[
+                                        { value: '', label: 'Pilih sumber' },
+                                        ...sourceCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(getReleasable(i))} tersedia` }))
+                                      ]}
+                                      emptyLabel="Pilih sumber"
+                                      className="w-full"
+                                    />
+                                  </div>
                                 </td>
-                                <td className="py-2 px-3">
-                                  <Autocomplete
-                                    value={row.target_invoice_id}
-                                    onChange={(v) => updateRow(idx, 'target_invoice_id', v)}
-                                    options={[
-                                      { value: '', label: 'Pilih penerima' },
-                                      ...targetCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — sisa ${formatIDR(parseFloat(i.remaining_amount || 0))}` }))
-                                    ]}
-                                    emptyLabel="Pilih penerima"
-                                  />
+                                <td className="py-2 px-3 align-middle">
+                                  <div className="w-full min-w-0">
+                                    <Autocomplete
+                                      value={row.target_invoice_id}
+                                      onChange={(v) => updateRow(idx, 'target_invoice_id', v)}
+                                      options={[
+                                        { value: '', label: 'Pilih penerima' },
+                                        ...targetCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — sisa ${formatIDR(parseFloat(i.remaining_amount || 0))}` }))
+                                      ]}
+                                      emptyLabel="Pilih penerima"
+                                      className="w-full"
+                                    />
+                                  </div>
                                 </td>
-                                <td className="py-2 px-3">
-                                  <Input
-                                    type="text"
-                                    value={row.amount}
-                                    onChange={(e) => updateRow(idx, 'amount', e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
-                                    placeholder="0"
-                                  />
+                                <td className="py-2 px-3 align-middle">
+                                  <div className="w-full min-w-0">
+                                    <Input
+                                      type="text"
+                                      value={row.amount}
+                                      onChange={(e) => updateRow(idx, 'amount', e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                                      placeholder="0"
+                                      fullWidth
+                                    />
+                                  </div>
                                 </td>
-                                <td className="py-2 px-2">
-                                  <button type="button" onClick={() => removeRow(idx)} className="p-1.5 text-slate-400 hover:text-red-600" title="Hapus baris">
+                                <td className="py-2 px-1 align-middle text-center">
+                                  <button type="button" onClick={() => removeRow(idx)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 inline-flex" title="Hapus baris">
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </td>
@@ -2201,20 +2218,24 @@ const OrdersInvoicesPage: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
+                      {reallocateRows.length === 0 && (
+                        <p className="text-slate-500 text-sm py-2">Klik &quot;Tambah baris&quot; untuk menambah alokasi.</p>
+                      )}
                       {transfers.length > 0 && (
                         <p className="text-sm text-slate-600">
                           Total dipindahkan: <strong>{formatIDR(totalAmount)}</strong>
-                          {!sourceOk && <span className="text-red-600 ml-2"> — Jumlah dari salah satu sumber melebihi dana yang tersedia.</span>}
+                          {!sourceOk && <span className="text-red-600 ml-2">— Jumlah dari salah satu sumber melebihi dana yang tersedia.</span>}
                         </p>
                       )}
                     </div>
-                    <div>
-                      <Input
+                    <div className="pt-1">
+                      <Textarea
                         label="Catatan (opsional)"
-                        type="text"
                         value={reallocateNotes}
                         onChange={(e) => setReallocateNotes(e.target.value)}
                         placeholder="Contoh: Alokasi dari pembatalan order #X ke invoice #Y"
+                        rows={3}
+                        fullWidth
                       />
                     </div>
                   </>
@@ -2227,19 +2248,22 @@ const OrdersInvoicesPage: React.FC = () => {
                 </Button>
               </div>
             </div>
-          </div>
+          </Modal>
         );
       })()}
 
       {/* Modal Pembayaran (Transfer Bank / VA / QRIS) */}
       {showPaymentModal && viewInvoice && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => !paySubmitting && setShowPaymentModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900">Pembayaran Invoice</h3>
-              <p className="text-sm text-slate-600 mt-0.5">Bayar dengan: <strong>{paymentMethod === 'bank' ? 'Transfer Bank' : paymentMethod === 'va' ? 'Virtual Account' : 'QRIS'}</strong>. Sisa tagihan: {formatIDR(parseFloat(viewInvoice.remaining_amount))} (≈ {formatSAR(parseFloat(viewInvoice.remaining_amount || 0) / sarToIdr)} · ≈ {formatUSD(parseFloat(viewInvoice.remaining_amount || 0) / usdToIdr)}). Pilih metode, input jumlah, lalu upload bukti.</p>
-            </div>
-            <div className="flex border-b border-slate-200 flex-wrap">
+        <Modal open onClose={() => !paySubmitting && setShowPaymentModal(false)} zIndex={60}>
+          <ModalBox>
+            <ModalHeader
+              title="Pembayaran Invoice"
+              subtitle={`Bayar dengan: ${paymentMethod === 'bank' ? 'Transfer Bank' : paymentMethod === 'va' ? 'Virtual Account' : 'QRIS'}. Sisa tagihan: ${formatIDR(parseFloat(viewInvoice.remaining_amount))} (≈ ${formatSAR(parseFloat(viewInvoice.remaining_amount || 0) / sarToIdr)} · ≈ ${formatUSD(parseFloat(viewInvoice.remaining_amount || 0) / usdToIdr)}). Pilih metode, input jumlah, lalu upload bukti.`}
+              icon={<CreditCard className="w-5 h-5" />}
+              onClose={() => !paySubmitting && setShowPaymentModal(false)}
+            />
+            <ModalBody className="p-0 flex flex-col flex-1 overflow-hidden">
+            <div className="flex border-b border-slate-200 flex-wrap px-6">
               {isInvoiceSaudi && (
                 <button
                   type="button"
@@ -2386,14 +2410,15 @@ const OrdersInvoicesPage: React.FC = () => {
                 <p className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl">QRIS: Masukkan jumlah yang ingin dibayar lalu QR code akan tampil (integrasi payment gateway). Untuk saat ini gunakan <strong>Transfer Bank</strong>.</p>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+            </ModalBody>
+            <ModalFooter>
               <Button variant="outline" onClick={() => setShowPaymentModal(false)} disabled={paySubmitting}>Batal</Button>
               <Button variant="primary" onClick={handleSubmitPayment} disabled={paySubmitting}>
                 {paySubmitting ? 'Menyimpan...' : paymentMethod === 'saudi' ? 'Simpan Pembayaran Saudi' : paymentMethod === 'bank' ? 'Upload Bukti Bayar' : 'Lanjut'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
     </div>
   );

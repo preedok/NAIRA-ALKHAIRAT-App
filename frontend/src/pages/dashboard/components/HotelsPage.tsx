@@ -8,9 +8,6 @@ import {
   Edit,
   Trash2,
   XCircle,
-  Settings,
-  ChevronDown,
-  ChevronUp,
   ShoppingCart,
   Calendar,
   ArrowLeft
@@ -24,7 +21,7 @@ import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, Autocomplete, Input } from '../../../components/common';
+import { FilterIconButton, StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -34,6 +31,7 @@ import HotelWorkPage from './HotelWorkPage';
 import { productsApi, adminPusatApi, businessRulesApi } from '../../../services/api';
 import type { HotelSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
+import { getPriceTripleForTable } from '../../../utils';
 
 const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
@@ -125,11 +123,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     single_price: 0,
     rooms: { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } }
   });
-  const [handlingConfigOpen, setHandlingConfigOpen] = useState(false);
-  const [handlingPrice, setHandlingPrice] = useState(100);
-  const [handlingCurrency, setHandlingCurrency] = useState<'IDR' | 'SAR' | 'USD'>('SAR');
-  const [handlingConfigLoading, setHandlingConfigLoading] = useState(false);
-  const [handlingConfigSaving, setHandlingConfigSaving] = useState(false);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [seasonsModalHotel, setSeasonsModalHotel] = useState<HotelProduct | null>(null);
   const [seasonsList, setSeasonsList] = useState<HotelSeason[]>([]);
@@ -390,34 +383,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     return () => clearInterval(t);
   }, [hotelIdsKey, availabilityFrom, availabilityTo]);
 
-  useEffect(() => {
-    if (!canAddHotel) return;
-    setHandlingConfigLoading(true);
-    businessRulesApi.get()
-      .then((res) => {
-        const d = res.data?.data as { handling_default_sar?: number } | undefined;
-        if (d != null && typeof d.handling_default_sar === 'number') setHandlingPrice(d.handling_default_sar);
-        else if (d != null && d.handling_default_sar != null) setHandlingPrice(Number(d.handling_default_sar) || 100);
-      })
-      .catch(() => {})
-      .finally(() => setHandlingConfigLoading(false));
-  }, [canAddHotel]);
-
-  const handleSaveHandling = async () => {
-    if (!canAddHotel) return;
-    setHandlingConfigSaving(true);
-    try {
-      const triple = fillFromSource(handlingCurrency, handlingPrice || 0, currencyRates);
-      await businessRulesApi.set({ rules: { handling_default_sar: triple.sar } });
-      showToast('Harga handling disimpan', 'success');
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menyimpan', 'error');
-    } finally {
-      setHandlingConfigSaving(false);
-    }
-  };
-
   if (user?.role === 'role_hotel' && !embedInProducts) {
     return <HotelWorkPage />;
   }
@@ -474,8 +439,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     { id: 'location', label: 'Lokasi', align: 'left' },
     { id: 'type_meal', label: 'Type / Meal', align: 'left' },
     { id: 'currency', label: 'Mata Uang', align: 'center' },
-    { id: 'meal', label: 'Harga Makan', align: 'left' },
-    { id: 'room_price_type', label: 'Harga Kamar', align: 'left' },
+    { id: 'meal', label: 'Harga Makan (IDR · SAR · USD)', align: 'left' },
+    { id: 'room_price_type', label: 'Harga Kamar (IDR · SAR · USD)', align: 'left' },
     { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
     { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
     { id: 'actions', label: 'Aksi', align: 'center' }
@@ -758,90 +723,18 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         </div>
       </div>
 
-      {/* Konfigurasi handling - collapse */}
-      {canAddHotel && (
-        <Card padding="sm">
-          <button
-            type="button"
-            onClick={() => setHandlingConfigOpen((o) => !o)}
-            className="w-full flex items-center justify-between text-left py-1"
-          >
-            <span className="flex items-center gap-2 font-medium text-slate-800">
-              <Settings className="w-5 h-5 text-slate-500" />
-              Konfigurasi Handling (harga default SAR)
-            </span>
-            {handlingConfigOpen ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-          </button>
-          {handlingConfigOpen && (
-            <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap items-end gap-4">
-              {handlingConfigLoading ? (
-                <p className="text-slate-500 text-sm">Memuat...</p>
-              ) : (
-                <>
-                  <div className="min-w-0">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Harga default handling</label>
-                    <p className="text-xs text-slate-500 mb-1">Pilih mata uang, lalu isi harga. Lainnya konversi otomatis (read-only).</p>
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <select
-                        value={handlingCurrency}
-                        onChange={(e) => {
-                          const newCur = e.target.value as 'IDR' | 'SAR' | 'USD';
-                          const triple = fillFromSource(handlingCurrency, handlingPrice || 0, currencyRates);
-                          setHandlingCurrency(newCur);
-                          setHandlingPrice(newCur === 'IDR' ? triple.idr : newCur === 'SAR' ? triple.sar : triple.usd);
-                        }}
-                        className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                      >
-                        <option value="IDR">IDR</option>
-                        <option value="SAR">SAR</option>
-                        <option value="USD">USD</option>
-                      </select>
-                      <span className="text-xs text-slate-500">= input</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                        const triple = fillFromSource(handlingCurrency, handlingPrice || 0, currencyRates);
-                        const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                        const isEditable = handlingCurrency === curKey;
-                        return (
-                          <div key={curKey}>
-                            <span className="text-slate-500 text-xs block mb-0.5">{curKey}{!isEditable && ' (konversi)'}</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={curKey === 'IDR' ? 1 : 0.01}
-                              value={val || ''}
-                              readOnly={!isEditable}
-                              onChange={isEditable ? (e) => setHandlingPrice(parseFloat(e.target.value) || 0) : undefined}
-                              className={`w-full max-w-[120px] border rounded-lg px-2 py-1.5 text-sm ${isEditable ? 'border-slate-300 bg-white focus:ring-2 focus:ring-btn' : 'border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed'}`}
-                              placeholder="0"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <Button variant="primary" size="sm" onClick={handleSaveHandling} disabled={handlingConfigSaving}>
-                    {handlingConfigSaving ? 'Menyimpan...' : 'Simpan'}
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-        </Card>
-      )}
-
       {/* Cari & filter + tabel dalam satu card */}
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
-          <div className="flex-1 relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
+          <div className="flex-1 max-w-md">
+            <Input
+              label="Cari nama hotel"
               type="text"
-              placeholder="Cari nama hotel..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-btn focus:border-btn"
+              placeholder="Cari nama hotel..."
+              icon={<Search className="w-4 h-4" />}
+              fullWidth
             />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -897,16 +790,17 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             onLimitChange: (l) => { setLimit(l); setPage(1); }
           } : undefined}
           renderRow={(hotel: HotelProduct) => {
-            const cur = hotel.meta?.currency || hotel.currency || 'IDR';
+            const cur = (hotel.meta?.currency || hotel.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
             const mealPrice = hotel.meta?.meal_price ?? 0;
             const mealType = hotel.meta?.meal_price_type === 'per_trip' ? 'Per trip' : hotel.meta?.meal_price_type === 'per_day' ? 'Per hari' : '-';
             const roomPriceType = hotel.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : hotel.meta?.room_price_type === 'per_day' ? 'Per hari' : '-';
             const pricingMode = hotel.meta?.pricing_mode === 'per_type' ? 'Per tipe' : hotel.meta?.pricing_mode === 'single' ? 'Satu harga' : '-';
-            const fmt = (n: number) => (n > 0 ? `${Number(n).toLocaleString('id-ID')} ${cur}` : '-');
             const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
             const isSinglePrice = hotel.meta?.pricing_mode === 'single';
             // Harga Kamar column: show room-only (breakdown is room-only from API)
             const singlePriceVal = isSinglePrice ? (Number(breakdown.single?.price ?? hotel.price_branch ?? hotel.price_general ?? 0) || 0) : 0;
+            const tripleMeal = fillFromSource(cur, mealPrice, currencyRates);
+            const tripleRoom = fillFromSource(cur, singlePriceVal, currencyRates);
             const avail = availabilityByHotelId[hotel.id];
             return (
               <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
@@ -931,32 +825,46 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   </div>
                 </td>
                 <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
-                <td className="px-4 py-3.5 text-sm text-slate-700 align-middle">
-                  <span>{fmt(mealPrice)}</span>
-                  <span className="text-slate-400 text-xs block">{mealType}</span>
+                <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
+                  {(() => {
+                    const t = getPriceTripleForTable(tripleMeal.idr, tripleMeal.sar, tripleMeal.usd);
+                    if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-400 text-xs block">{mealType}</span></>;
+                    return (
+                      <>
+                        <div className="tabular-nums font-medium">{t.idrText}</div>
+                        <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                        <span className="text-slate-400 text-xs block mt-0.5">per orang · {mealType}</span>
+                      </>
+                    );
+                  })()}
                 </td>
-                <td className="px-4 py-3.5 text-sm text-slate-700 align-middle">
+                <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
                   {isSinglePrice ? (
-                    <div>
-                      <span className="font-semibold tabular-nums">{fmt(singlePriceVal)}</span>
-                      <span className="text-slate-500 text-xs block">{roomPriceType}</span>
-                    </div>
+                    (() => {
+                      const t = getPriceTripleForTable(tripleRoom.idr, tripleRoom.sar, tripleRoom.usd);
+                      if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
+                      return (
+                        <>
+                          <div className="tabular-nums font-semibold">{t.idrText}</div>
+                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · {roomPriceType}</span>
+                        </>
+                      );
+                    })()
                   ) : (
-                    <div>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                        {ROOM_TYPES.map((rt) => {
-                          const pr = breakdown[rt]?.price;
-                          const label = rt === 'single' ? 'S' : rt === 'double' ? 'D' : rt === 'triple' ? 'T' : rt === 'quad' ? 'Q' : 'Qu';
-                          return (
-                            <span key={rt} className="tabular-nums">
-                              <span className="text-slate-500">{label}:</span>{' '}
-                              <span className={pr != null && pr > 0 ? 'font-medium text-slate-800' : 'text-slate-400'}>{pr != null && pr > 0 ? fmt(pr) : '—'}</span>
-                            </span>
-                          );
-                        })}
-                      </div>
-                      <span className="text-slate-500 text-xs block">{roomPriceType}</span>
-                    </div>
+                    (() => {
+                      const repPrice = Number(breakdown.single?.price ?? breakdown.double?.price ?? breakdown.triple?.price ?? breakdown.quad?.price ?? breakdown.quint?.price ?? 0) || 0;
+                      const tr = fillFromSource(cur, repPrice, currencyRates);
+                      const t = getPriceTripleForTable(tr.idr, tr.sar, tr.usd);
+                      if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
+                      return (
+                        <>
+                          <div className="tabular-nums font-medium">{t.idrText}</div>
+                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · Per tipe · {roomPriceType}</span>
+                        </>
+                      );
+                    })()
                   )}
                 </td>
                 <td className="px-4 py-3.5 align-middle">
@@ -1062,28 +970,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const isSinglePrice = hotel?.meta?.pricing_mode === 'single';
         const singlePriceValue = isSinglePrice ? (Number(hotel?.price_branch ?? hotel?.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
         return (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setAvailabilityPopupHotelId(null)}>
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-btn-light shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0D1A63]">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">Ketersediaan per tanggal</h3>
-                    <p className="text-sm text-slate-600 mt-0.5">{hotel?.name ?? 'Hotel'} — data realtime per tipe kamar</p>
-                    {availData && typeof availData === 'object' && availData.availability_mode && (
-                      <p className="text-xs text-slate-500 mt-1">
-                        Mengikuti: <span className="font-medium text-[#0D1A63]">{availData.availability_mode === 'global' ? 'Semua jumlah kamar' : 'Per musim'}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <button type="button" onClick={() => setAvailabilityPopupHotelId(null)} className="p-2.5 hover:bg-slate-200 rounded-xl transition-colors">
-                  <XCircle className="w-5 h-5 text-slate-500" />
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1 min-h-0">
+          <Modal open onClose={() => setAvailabilityPopupHotelId(null)}>
+            <ModalBoxLg className="relative">
+              <ModalHeader
+                title="Ketersediaan per tanggal"
+                subtitle={<>{(hotel?.name ?? 'Hotel')} — data realtime per tipe kamar{availData && typeof availData === 'object' && availData.availability_mode && <span className="block mt-1">Mengikuti: <span className="font-medium">{availData.availability_mode === 'global' ? 'Semua jumlah kamar' : 'Per musim'}</span></span>}</>}
+                icon={<Calendar className="w-5 h-5" />}
+                onClose={() => setAvailabilityPopupHotelId(null)}
+              />
+              <ModalBody className="p-6 overflow-y-auto flex-1 min-h-0">
                 {/* Harga Kamar Per hari — satu harga atau per tipe */}
                 <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
                   <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50">
@@ -1246,7 +1141,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     </div>
                   </div>
                 )}
-              </div>
 
               {/* Sub-popup: Tambah jumlah kamar (di dalam popup Ketersediaan) */}
               {availabilityAddQuantity && availabilityPopupHotelId && (
@@ -1356,34 +1250,26 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   </div>
                 </div>
               )}
-            </div>
-          </div>
+              </ModalBody>
+            </ModalBoxLg>
+          </Modal>
         );
       })()}
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-btn-light to-slate-100/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-btn text-[#0D1A63]">
-                  <HotelIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">{editingHotel ? 'Edit Hotel' : 'Tambah Hotel Baru'}</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Isi data hotel. Harga & jumlah kamar atur di Pengaturan Jumlah.</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
-                <XCircle className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
+        <Modal open onClose={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}>
+          <ModalBox>
+            <ModalHeader
+              title={editingHotel ? 'Edit Hotel' : 'Tambah Hotel Baru'}
+              subtitle="Isi data hotel. Harga & jumlah kamar atur di Pengaturan Jumlah."
+              icon={<HotelIcon className="w-5 h-5" />}
+              onClose={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}
+            />
 
             {editFormLoading ? (
-              <div className="p-12 text-center text-slate-500">Memuat data hotel...</div>
+              <ModalBody><div className="p-12 text-center text-slate-500">Memuat data hotel...</div></ModalBody>
             ) : (
-            <div className="p-6 space-y-6">
+            <ModalBody className="p-6 space-y-6">
               {editingHotel && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200">
                   <span className="text-slate-500 text-sm">Kode:</span>
@@ -1488,39 +1374,29 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
+            </ModalBody>
             )}
 
-            {/* Footer */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+            <ModalFooter>
               <Button variant="outline" size="sm" onClick={() => (setShowAddModal(false), setEditingHotel(null))} disabled={saving || editFormLoading}>Batal</Button>
               <Button variant="primary" size="sm" onClick={editingHotel ? handleEditHotel : handleAddHotel} disabled={saving || editFormLoading} className="min-w-[120px]">{saving ? 'Menyimpan...' : editingHotel ? 'Simpan Perubahan' : 'Simpan'}</Button>
-            </div>
-          </div>
-        </div>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Modal terpadu: Jumlah Kamar & Musim (Pengaturan Jumlah + Data per Musim) */}
       {seasonsModalHotel && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
-          <div className={`bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col ${hotelAvailabilityMode === 'global' ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-btn-light">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0D1A63]">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Pengaturan Jumlah Kamar & Musim</h2>
-                  <p className="text-sm text-slate-600 mt-0.5">{seasonsModalHotel.name}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)} className="p-2 hover:bg-slate-200/80 rounded-xl transition-colors">
-                <XCircle className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
+        <Modal open onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
+          <ModalBoxLg>
+            <ModalHeader
+              title="Pengaturan Jumlah Kamar & Musim"
+              subtitle={seasonsModalHotel.name}
+              icon={<Calendar className="w-5 h-5" />}
+              onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}
+            />
 
-            <div className="p-6 overflow-y-auto flex-1">
+            <ModalBody className="p-6 overflow-y-auto flex-1">
               {/* Pilihan: Semua jumlah kamar (satu set tiap bulan) vs Per musim */}
               {hotelAvailabilityConfigLoading ? (
                 <p className="text-sm text-slate-500 mb-5">Memuat pengaturan…</p>
@@ -1943,9 +1819,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   </div>
                 </>
               ))}
-            </div>
-          </div>
-        </div>
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
       )}
     </div>
   );
