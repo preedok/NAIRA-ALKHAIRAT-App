@@ -192,11 +192,18 @@ const list = asyncHandler(async (req, res) => {
         const rooms = {};
         let mealPriceIdr = base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null;
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
+          const priceRow = generalPrices.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
+          const priceWithMeal = generalPrices.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
+          if (mealPriceIdr == null && priceRow && priceWithMeal) {
+            mealPriceIdr = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
+          }
+        });
+        const mealToSubtract = mealPriceIdr ?? (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : 0);
+        ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
           const priceRow = generalPrices.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
           const priceWithMeal = generalPrices.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
-          const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? parseFloat(priceWithMeal.amount) - (base.meta?.meal_price || 0) : 0);
-          if (mealPriceIdr == null && priceWithMeal && basePrice > 0) mealPriceIdr = parseFloat(priceWithMeal.amount) - basePrice;
+          const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
           rooms[rt] = { quantity: qty, price: basePrice };
         });
         base.room_breakdown = rooms;

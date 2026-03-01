@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, FileSpreadsheet, Wallet, Landmark } from 'lucide-react';
+import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, FileSpreadsheet, Wallet, Landmark, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader } from '../../../components/common';
+import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
+import type { TableColumn } from '../../../types';
 
 /** Modal daftar invoice lengkap dengan filter dan pagination */
 const InvoiceListModal: React.FC<{
@@ -30,7 +32,7 @@ const InvoiceListModal: React.FC<{
   const [fDateFrom, setFDateFrom] = useState(presetFilter.date_from || '');
   const [fDateTo, setFDateTo] = useState(presetFilter.date_to || '');
   const [fStatus, setFStatus] = useState(presetFilter.status || '');
-  const limit = 20;
+  const [limit, setLimit] = useState(20);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -53,7 +55,7 @@ const InvoiceListModal: React.FC<{
     } finally {
       setLoading(false);
     }
-  }, [page, fBranch, fProvinsi, fWilayah, fDateFrom, fDateTo, fStatus]);
+  }, [page, limit, fBranch, fProvinsi, fWilayah, fDateFrom, fDateTo, fStatus]);
 
   useEffect(() => {
     if (open) {
@@ -129,52 +131,44 @@ const InvoiceListModal: React.FC<{
               <span>Sisa: <strong className="text-amber-600">{formatIDR(parseFloat(summary.total_remaining || 0))}</strong></span>
             </div>
           )}
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-slate-600">
-                  <th className="px-4 py-3 font-semibold">No. Invoice</th>
-                  <th className="px-4 py-3 font-semibold">No. Order</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
-                  <th className="px-4 py-3 font-semibold">Cabang</th>
-                  <th className="px-4 py-3 font-semibold">Total</th>
-                  <th className="px-4 py-3 font-semibold">Terbayar</th>
-                  <th className="px-4 py-3 font-semibold">Sisa</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">Memuat...</td></tr>
-                ) : invoices.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">Tidak ada data</td></tr>
-                ) : (
-                  invoices.map((inv) => (
-                    <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono">{inv.invoice_number}</td>
-                      <td className="px-4 py-3 font-mono">{inv.Order?.order_number ?? '-'}</td>
-                      <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
-                      <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                      <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                      <td className="px-4 py-3 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                      <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                      <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-slate-600">Total {pagination.total} invoice</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Sebelumnya</Button>
-                <span className="py-2 text-sm text-slate-600">Halaman {page} / {pagination.totalPages}</span>
-                <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Selanjutnya</Button>
-              </div>
-            </div>
-          )}
+          <Table
+            columns={[
+              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+              { id: 'order_number', label: 'No. Order', align: 'left' },
+              { id: 'owner', label: 'Owner', align: 'left' },
+              { id: 'branch', label: 'Cabang', align: 'left' },
+              { id: 'total', label: 'Total', align: 'left' },
+              { id: 'paid', label: 'Terbayar', align: 'left' },
+              { id: 'remaining', label: 'Sisa', align: 'left' },
+              { id: 'status', label: 'Status', align: 'left' }
+            ] as TableColumn[]}
+            data={loading ? [] : invoices}
+            emptyMessage={loading ? 'Memuat...' : 'Tidak ada data'}
+            pagination={
+              pagination && pagination.total > 0
+                ? {
+                    total: pagination.total,
+                    page: pagination.page,
+                    limit: pagination.limit,
+                    totalPages: pagination.totalPages,
+                    onPageChange: setPage,
+                    onLimitChange: (l) => { setLimit(l); setPage(1); }
+                  }
+                : undefined
+            }
+            renderRow={(inv) => (
+              <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-mono">{inv.Order?.order_number ?? '-'}</td>
+                <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
+                <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
+                <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                <td className="px-4 py-3 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
+              </tr>
+            )}
+          />
         </div>
       </div>
     </div>
@@ -196,6 +190,7 @@ const AccountingDashboard: React.FC = () => {
   const [modalPreset, setModalPreset] = useState<Record<string, string>>({});
   const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
   const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -250,16 +245,43 @@ const AccountingDashboard: React.FC = () => {
     return 'Daftar Invoice';
   };
 
+  const hasActiveFilters = !!(branchId || provinsiId || wilayahId || dateFrom || dateTo);
+  const resetFilters = () => {
+    setBranchId('');
+    setProvinsiId('');
+    setWilayahId('');
+    setDateFrom('');
+    setDateTo('');
+    setTimeout(() => fetchDashboard(), 0);
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">
-          {user?.name ? `Selamat datang, ${user.name}` : 'Accounting'}
-        </h1>
-        <p className="text-slate-600 mt-1">Rekapitulasi piutang, pembayaran, dan laporan keuangan</p>
-      </div>
+      <PageHeader
+        title={user?.name ? `Selamat datang, ${user.name}` : 'Accounting'}
+        subtitle="Rekapitulasi piutang, pembayaran, dan laporan keuangan"
+        right={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading} aria-label="Refresh">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
+          </div>
+        }
+      />
 
-      <Card>
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v: boolean) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchDashboard(); }}
+        loading={loading}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        hideToggleRow
+        className="w-full"
+      >
         <DashboardFilterBar
           variant="page"
           loading={loading}
@@ -268,6 +290,7 @@ const AccountingDashboard: React.FC = () => {
           showBranch
           showDateRange
           showReset={false}
+          hideActions
           wilayahId={wilayahId}
           provinsiId={provinsiId}
           branchId={branchId}
@@ -279,11 +302,12 @@ const AccountingDashboard: React.FC = () => {
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
           onApply={fetchDashboard}
+          onReset={resetFilters}
           wilayahList={wilayahList}
           provinces={provinces}
           branches={branches}
         />
-      </Card>
+      </PageFilter>
 
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3">{error}</div>
@@ -294,48 +318,27 @@ const AccountingDashboard: React.FC = () => {
       {data && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card hover className="flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-slate-600 mb-1">Total Invoice</p>
-                  <p className="text-3xl font-bold text-slate-900">{summary.total_invoices}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
-                  <Receipt className="w-6 h-6" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => openModal('all')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
-            <Card hover className="flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-slate-600 mb-1">Total Terbayar</p>
-                  <p className="text-2xl font-bold text-blue-600">{formatIDR(summary.total_paid)}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                  <DollarSign className="w-6 h-6" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => openModal('all')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
-            <Card hover className="flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-slate-600 mb-1">Piutang (Sisa)</p>
-                  <p className="text-2xl font-bold text-amber-600">{formatIDR(summary.total_receivable)}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-                  <TrendingUp className="w-6 h-6" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => openModal('all')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
+            <StatCard
+              icon={<Receipt className="w-5 h-5" />}
+              label="Total Invoice"
+              value={summary.total_invoices}
+              iconClassName="bg-[#0D1A63] text-white"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
+            <StatCard
+              icon={<DollarSign className="w-5 h-5" />}
+              label="Total Terbayar"
+              value={formatIDR(summary.total_paid)}
+              iconClassName="bg-[#0D1A63] text-white"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
+            <StatCard
+              icon={<TrendingUp className="w-5 h-5" />}
+              label="Piutang (Sisa)"
+              value={formatIDR(summary.total_receivable)}
+              iconClassName="bg-amber-100 text-amber-600"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
@@ -425,41 +428,56 @@ const AccountingDashboard: React.FC = () => {
           </div>
 
           <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Invoice Terbaru</h3>
-              <Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('recent')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No. Invoice</th>
-                    <th className="pb-2 pr-4">Owner</th>
-                    <th className="pb-2 pr-4">Cabang</th>
-                    <th className="pb-2 pr-4">Total</th>
-                    <th className="pb-2 pr-4">Terbayar</th>
-                    <th className="pb-2 pr-4">Sisa</th>
-                    <th className="pb-2">Status</th>
+            <CardSectionHeader
+              icon={<Receipt className="w-6 h-6" />}
+              title="Invoice Terbaru"
+              subtitle="Daftar invoice terbaru"
+              right={
+                <Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('recent')}>
+                  View All <ChevronRight className="w-4 h-4" />
+                </Button>
+              }
+              className="mb-4"
+            />
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <Table
+                columns={[
+                  { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+                  { id: 'owner', label: 'Owner', align: 'left' },
+                  { id: 'branch', label: 'Cabang', align: 'left' },
+                  { id: 'total', label: 'Total', align: 'left' },
+                  { id: 'paid', label: 'Terbayar', align: 'left' },
+                  { id: 'remaining', label: 'Sisa', align: 'left' },
+                  { id: 'status', label: 'Status', align: 'left' }
+                ] as TableColumn[]}
+                data={recent.slice(0, 10)}
+                emptyMessage="Belum ada invoice"
+                emptyDescription="Tidak ada invoice terbaru. Ubah filter atau lihat View All."
+                pagination={
+                  recent.length > 0
+                    ? {
+                        total: recent.length,
+                        page: 1,
+                        limit: 10,
+                        totalPages: Math.ceil(recent.length / 10) || 1,
+                        onPageChange: () => {},
+                        onLimitChange: () => {}
+                      }
+                    : undefined
+                }
+                renderRow={(inv: any) => (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 pr-4 font-mono">{inv.invoice_number}</td>
+                    <td className="py-3 pr-4">{inv.User?.name ?? '-'}</td>
+                    <td className="py-3 pr-4">{inv.Branch?.name ?? '-'}</td>
+                    <td className="py-3 pr-4">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                    <td className="py-3 pr-4 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                    <td className="py-3 pr-4">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                    <td className="py-3"><Badge variant="info">{inv.status}</Badge></td>
                   </tr>
-                </thead>
-                <tbody>
-                  {recent.slice(0, 10).map((inv: any) => (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 pr-4 font-mono">{inv.invoice_number}</td>
-                      <td className="py-3 pr-4">{inv.User?.name ?? '-'}</td>
-                      <td className="py-3 pr-4">{inv.Branch?.name ?? '-'}</td>
-                      <td className="py-3 pr-4">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                      <td className="py-3 pr-4 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                      <td className="py-3 pr-4">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                      <td className="py-3"><Badge variant="info">{inv.status}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                )}
+              />
             </div>
-            {recent.length === 0 && <p className="text-slate-500 py-4 text-center">Belum ada invoice</p>}
           </Card>
 
           <Card>

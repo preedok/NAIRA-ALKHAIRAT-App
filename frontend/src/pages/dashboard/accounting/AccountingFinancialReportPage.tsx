@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Package, List, ExternalLink, TrendingUp, TrendingDown, Search, Calendar, MapPin, Map, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Package, List, ExternalLink, TrendingUp, TrendingDown, Search, Calendar, MapPin, Map, ArrowUpDown, ArrowUp, ArrowDown, Receipt } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, StatCard, Input, Autocomplete } from '../../../components/common';
 import TablePagination from '../../../components/common/TablePagination';
 import { accountingApi, branchesApi, type AccountingFinancialReportData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
@@ -106,7 +109,7 @@ const AccountingFinancialReportPage: React.FC = () => {
   const [provinsiList, setProvinsiList] = useState<{ id: string; name: string; wilayah_id?: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
   const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTab>('ringkasan');
   const [exporting, setExporting] = useState<string | null>(null);
   const [tablePage, setTablePage] = useState(1);
@@ -303,37 +306,38 @@ const AccountingFinancialReportPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Laporan Keuangan</h1>
-          <p className="text-slate-600 mt-1">Pendapatan per wilayah, per provinsi, per cabang, per owner, dan per jenis produk</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="w-4 h-4 mr-2" />
-            Filter {hasActiveFilters && <span className="ml-1 px-1.5 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">aktif</span>}
-          </Button>
-          {hasActiveFilters && <Button variant="ghost" size="sm" onClick={resetFilters}>Reset</Button>}
-          <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={loading || !!exporting}>
-            <Download className={`w-4 h-4 mr-2 ${exporting === 'excel' ? 'animate-pulse' : ''}`} />
-            {exporting === 'excel' ? 'Exporting...' : 'Excel'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={loading || !!exporting}>
-            <Download className={`w-4 h-4 mr-2 ${exporting === 'pdf' ? 'animate-pulse' : ''}`} />
-            {exporting === 'pdf' ? 'Exporting...' : 'PDF'}
-          </Button>
-          <Button variant="primary" size="sm" onClick={fetchReport} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Laporan Keuangan"
+        subtitle="Pendapatan per wilayah, provinsi, cabang, owner, dan jenis produk"
+        right={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="primary" size="sm" onClick={fetchReport} disabled={loading} aria-label="Refresh">
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={loading || !!exporting}>
+              <Download className={`w-4 h-4 mr-2 ${exporting === 'excel' ? 'animate-pulse' : ''}`} />
+              {exporting === 'excel' ? 'Exporting...' : 'Excel'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={loading || !!exporting}>
+              <Download className={`w-4 h-4 mr-2 ${exporting === 'pdf' ? 'animate-pulse' : ''}`} />
+              {exporting === 'pdf' ? 'Exporting...' : 'PDF'}
+            </Button>
+          </div>
+        }
+      />
 
-      {showFilters && (
-        <Card className="bg-slate-50/80">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filter Data
-          </h3>
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v: boolean) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchReport(); }}
+        loading={loading}
+        applyLabel="Terapkan"
+        hideToggleRow
+      >
           <div className="flex flex-wrap gap-2 mb-4">
             {DATE_PRESETS.map((p) => (
               <button key={p.id} type="button" onClick={() => applyPreset(p)} className="px-3 py-1.5 text-sm rounded-lg bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300">
@@ -342,116 +346,128 @@ const AccountingFinancialReportPage: React.FC = () => {
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Wilayah</label>
-              <select value={wilayahId} onChange={(e) => { setWilayahId(e.target.value); setProvinsiId(''); setBranchId(''); }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua wilayah</option>
-                {wilayahList.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Provinsi</label>
-              <select value={provinsiId} onChange={(e) => { setProvinsiId(e.target.value); setBranchId(''); }} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua provinsi</option>
-                {provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cabang</label>
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua cabang</option>
-                {branches.map((b) => <option key={b.id} value={b.id}>{b.code} - {b.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Owner</label>
-              <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua owner</option>
-                {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status Invoice</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua status</option>
-                {Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Jenis Produk</label>
-              <select value={productType} onChange={(e) => setProductType(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua produk</option>
-                {Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
+            <Autocomplete
+              label="Wilayah"
+              value={wilayahId}
+              onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+              options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+              emptyLabel="Semua wilayah"
+            />
+            <Autocomplete
+              label="Provinsi"
+              value={provinsiId}
+              onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
+              options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))}
+              emptyLabel="Semua provinsi"
+            />
+            <Autocomplete
+              label="Cabang"
+              value={branchId}
+              onChange={setBranchId}
+              options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
+              emptyLabel="Semua cabang"
+            />
+            <Autocomplete
+              label="Owner"
+              value={ownerId}
+              onChange={setOwnerId}
+              options={owners.map((o) => ({ value: o.id, label: o.name }))}
+              emptyLabel="Semua owner"
+            />
+            <Autocomplete
+              label="Status Invoice"
+              value={status}
+              onChange={setStatus}
+              options={Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+              emptyLabel="Semua status"
+            />
+            <Autocomplete
+              label="Jenis Produk"
+              value={productType}
+              onChange={setProductType}
+              options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+              emptyLabel="Semua produk"
+            />
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cari (Invoice / Order / Owner)</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="No. invoice atau nama owner..." className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" />
-              </div>
+              <Input
+                label="Cari (Invoice / Order / Owner)"
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="No. invoice atau nama owner..."
+                icon={<Search className="w-4 h-4" />}
+              />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Min. Pendapatan (Rp)</label>
-              <input type="number" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="0" min={0} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Pendapatan (Rp)</label>
-              <input type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="0" min={0} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Jenis Periode</label>
-              <select value={period} onChange={(e) => setPeriod(e.target.value as typeof period)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="month">Bulanan</option>
-                <option value="quarter">Triwulanan</option>
-                <option value="year">Tahunan</option>
-                <option value="custom">Rentang Tanggal</option>
-              </select>
-            </div>
+            <Input
+              label="Min. Pendapatan (Rp)"
+              type="number"
+              value={minAmount}
+              onChange={(e) => setMinAmount(e.target.value)}
+              placeholder="0"
+              min={0}
+            />
+            <Input
+              label="Maks. Pendapatan (Rp)"
+              type="number"
+              value={maxAmount}
+              onChange={(e) => setMaxAmount(e.target.value)}
+              placeholder="0"
+              min={0}
+            />
+            <Autocomplete
+              label="Jenis Periode"
+              value={period}
+              onChange={(v) => setPeriod(v as typeof period)}
+              options={[
+                { value: 'month', label: 'Bulanan' },
+                { value: 'quarter', label: 'Triwulanan' },
+                { value: 'year', label: 'Tahunan' },
+                { value: 'custom', label: 'Rentang Tanggal' }
+              ]}
+            />
             {period !== 'custom' ? (
               <>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Tahun</label>
-                  <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
+                <Input
+                  label="Tahun"
+                  type="number"
+                  value={String(year)}
+                  onChange={(e) => setYear(parseInt(e.target.value, 10) || year)}
+                  min={2020}
+                  max={2030}
+                />
                 {period === 'month' && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Bulan</label>
-                    <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' })}</option>)}
-                    </select>
-                  </div>
+                  <Autocomplete
+                    label="Bulan"
+                    value={String(month)}
+                    onChange={(v) => setMonth(parseInt(v, 10))}
+                    options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => ({
+                      value: String(m),
+                      label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' })
+                    }))}
+                  />
                 )}
                 {period === 'quarter' && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Triwulan</label>
-                    <select value={Math.ceil(month / 3)} onChange={(e) => setMonth((parseInt(e.target.value, 10) - 1) * 3 + 1)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                      <option value={1}>Q1 (Jan–Mar)</option>
-                      <option value={2}>Q2 (Apr–Jun)</option>
-                      <option value={3}>Q3 (Jul–Sep)</option>
-                      <option value={4}>Q4 (Okt–Des)</option>
-                    </select>
-                  </div>
+                  <Autocomplete
+                    label="Triwulan"
+                    value={String(Math.ceil(month / 3))}
+                    onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)}
+                    options={[
+                      { value: '1', label: 'Q1 (Jan–Mar)' },
+                      { value: '2', label: 'Q2 (Apr–Jun)' },
+                      { value: '3', label: 'Q3 (Jul–Sep)' },
+                      { value: '4', label: 'Q4 (Okt–Des)' }
+                    ]}
+                  />
                 )}
               </>
             ) : (
               <>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Dari Tanggal</label>
-                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Sampai Tanggal</label>
-                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
+                <Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                <Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
               </>
             )}
-            <div className="flex items-end">
-              <Button variant="primary" onClick={fetchReport} disabled={loading}>{loading ? 'Memuat...' : 'Tampilkan'}</Button>
-            </div>
           </div>
-        </Card>
-      )}
+      </PageFilter>
 
       {loading && !data && <div className="text-center py-12 text-slate-500">Memuat...</div>}
 
@@ -486,43 +502,18 @@ const AccountingFinancialReportPage: React.FC = () => {
 
           {activeTab === 'ringkasan' && (
             <div className="space-y-6">
-              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
-                <Card>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-emerald-600" />
-                    Total Pendapatan
-                  </h3>
-                  <p className="text-3xl font-bold text-emerald-600">{formatIDR(data.total_revenue)}</p>
-                  <p className="text-sm text-slate-500 mt-1">Dari pembayaran terverifikasi</p>
-                </Card>
-                <Card>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2">Jumlah Invoice</h3>
-                  <p className="text-3xl font-bold text-slate-800">{data.invoice_count}</p>
-                  <p className="text-sm text-slate-500 mt-1">Dalam periode laporan</p>
-                </Card>
-                <Card>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2">Periode</h3>
-                  <p className="text-slate-700">{formatDate(data.period.start)} – {formatDate(data.period.end)}</p>
-                </Card>
-                <Card>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2">Cabang</h3>
-                  <p className="text-2xl font-bold text-slate-800">{data.by_branch.length}</p>
-                  <p className="text-sm text-slate-500 mt-1">Cabang dengan transaksi</p>
-                </Card>
+              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <StatCard icon={<FileText className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle="Dari pembayaran terverifikasi" />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={data.invoice_count} subtitle="Dalam periode laporan" />
+                <StatCard icon={<Calendar className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} />
+                <StatCard icon={<Building2 className="w-5 h-5" />} label="Cabang" value={data.by_branch.length} subtitle="Cabang dengan transaksi" />
                 {prevPeriod && (
-                  <Card className="bg-slate-50 border-emerald-200">
-                    <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
-                      {prevPeriod.growth_percent && parseFloat(prevPeriod.growth_percent) >= 0 ? <TrendingUp className="w-5 h-5 text-emerald-600" /> : <TrendingDown className="w-5 h-5 text-amber-600" />}
-                      Periode Sebelumnya
-                    </h3>
-                    <p className="text-xl font-bold text-slate-800">{formatIDR(prevPeriod.revenue)}</p>
-                    <p className="text-sm text-slate-500 mt-1">{prevPeriod.invoice_count} invoice</p>
-                    {prevPeriod.growth_percent != null && (
-                      <p className={`text-sm font-semibold mt-2 ${parseFloat(prevPeriod.growth_percent) >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                        {parseFloat(prevPeriod.growth_percent) >= 0 ? '+' : ''}{prevPeriod.growth_percent}% vs periode ini
-                      </p>
-                    )}
-                  </Card>
+                  <StatCard
+                    icon={prevPeriod.growth_percent != null && parseFloat(prevPeriod.growth_percent) >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                    label="Periode Sebelumnya"
+                    value={formatIDR(prevPeriod.revenue)}
+                    subtitle={prevPeriod.invoice_count + ' invoice' + (prevPeriod.growth_percent != null ? ` · ${parseFloat(prevPeriod.growth_percent) >= 0 ? '+' : ''}${prevPeriod.growth_percent}% vs periode ini` : '')}
+                  />
                 )}
               </div>
             </div>
@@ -760,17 +751,29 @@ const AccountingFinancialReportPage: React.FC = () => {
               {(data.invoices || []).length === 0 && !loading && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
               {pagination.total > 0 && (
                 <>
-                  <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-t border-slate-200 bg-slate-50/50">
-                    <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white text-sm">
-                      <option value="issued_at">Urut: Tanggal</option>
-                      <option value="total_amount">Urut: Total</option>
-                      <option value="paid_amount">Urut: Dibayar</option>
-                      <option value="invoice_number">Urut: No. Invoice</option>
-                    </select>
-                    <select value={sortOrder} onChange={(e) => { setSortOrder(e.target.value as 'asc' | 'desc'); setPage(1); }} className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white text-sm">
-                      <option value="desc">Terbaru dulu</option>
-                      <option value="asc">Terlama dulu</option>
-                    </select>
+                  <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-t border-slate-200">
+                    <Autocomplete
+                      value={sortBy}
+                      onChange={(v) => { setSortBy(v); setPage(1); }}
+                      options={[
+                        { value: 'issued_at', label: 'Urut: Tanggal' },
+                        { value: 'total_amount', label: 'Urut: Total' },
+                        { value: 'paid_amount', label: 'Urut: Dibayar' },
+                        { value: 'invoice_number', label: 'Urut: No. Invoice' }
+                      ]}
+                      fullWidth={false}
+                      className="min-w-[160px]"
+                    />
+                    <Autocomplete
+                      value={sortOrder}
+                      onChange={(v) => { setSortOrder(v as 'asc' | 'desc'); setPage(1); }}
+                      options={[
+                        { value: 'desc', label: 'Terbaru dulu' },
+                        { value: 'asc', label: 'Terlama dulu' }
+                      ]}
+                      fullWidth={false}
+                      className="min-w-[140px]"
+                    />
                   </div>
                   <TablePagination total={pagination.total} page={page} limit={limit} onPageChange={setPage} onLimitChange={(l) => { setLimit(l); setPage(1); }} loading={loading} limitOptions={[25, 50, 100, 200]} />
                 </>

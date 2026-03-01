@@ -1,10 +1,8 @@
 import React from 'react';
 import { Filter } from 'lucide-react';
 import Button from './Button';
-
-const inputClass = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500';
-const labelClass = 'block text-xs font-medium text-slate-500 mb-1';
-const selectMinWidth = 'min-w-[140px]';
+import Input from './Input';
+import Autocomplete from './Autocomplete';
 
 export interface DashboardFilterBarProps {
   variant?: 'page' | 'modal';
@@ -141,141 +139,114 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
 }) => {
   const isModal = variant === 'modal';
   const gridClass = isModal
-    ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3'
-    : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4';
-  const selectClass = isModal ? inputClass : `${inputClass} ${selectMinWidth}`;
+    ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'
+    : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4';
+  /** Saat dipakai di dalam PageFilter, header "Filter" tidak ditampilkan (sudah ada di panel) */
+  const showHeader = variant === 'page' && !hideActions;
 
   return (
     <div className={gridClass}>
-      {variant === 'page' && (
-        <div className="flex items-end gap-2 pb-2">
-          <Filter className="w-5 h-5 text-primary-600 shrink-0" />
-          <span className="text-slate-600 font-medium">Filter</span>
+      {showHeader && (
+        <div className="col-span-full flex items-center gap-2 pb-1">
+          <Filter className="w-4 h-4 text-slate-500 shrink-0" />
+          <span className="text-sm font-medium text-slate-600">Filter</span>
         </div>
       )}
       {showWilayah && (
-        <div>
-          <label className={labelClass}>Wilayah</label>
-          <select value={wilayahId} onChange={(e) => onWilayahChange?.(e.target.value)} className={selectClass}>
-            <option value="">{isModal ? 'Semua' : 'Semua wilayah'}</option>
-            {wilayahList.map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
-        </div>
+        <Autocomplete
+          label="Wilayah"
+          value={wilayahId}
+          onChange={(v) => onWilayahChange?.(v)}
+          options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+          emptyLabel={isModal ? 'Semua' : 'Semua wilayah'}
+        />
       )}
       {showProvinsi && (
-        <div>
-          <label className={labelClass}>Provinsi</label>
-          <select value={provinsiId} onChange={(e) => onProvinsiChange?.(e.target.value)} className={selectClass}>
-            <option value="">{isModal ? 'Semua' : 'Semua provinsi'}</option>
-            {provinces.map((p) => (
-              <option key={String(p.id)} value={String(p.id)}>{p.name ?? (p as { nama?: string }).nama ?? ''}</option>
-            ))}
-          </select>
-        </div>
+        <Autocomplete
+          label="Provinsi"
+          value={provinsiId}
+          onChange={(v) => onProvinsiChange?.(v)}
+          options={provinces.map((p) => ({ value: String(p.id), label: p.name ?? (p as { nama?: string }).nama ?? '' }))}
+          emptyLabel={isModal ? 'Semua' : 'Semua provinsi'}
+        />
       )}
       {showBranch && (
-        <div>
-          <label className={labelClass}>Cabang</label>
-          <select value={branchId} onChange={(e) => onBranchChange?.(e.target.value)} className={selectClass}>
-            <option value="">{isModal ? 'Semua' : 'Semua cabang'}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
-            ))}
-          </select>
-        </div>
+        <Autocomplete
+          label="Cabang"
+          value={branchId}
+          onChange={(v) => onBranchChange?.(v)}
+          options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
+          emptyLabel={isModal ? 'Semua' : 'Semua cabang'}
+        />
       )}
       {showStatus && (
-        <div>
-          <label className={labelClass}>{statusType === 'order' ? 'Status Order' : 'Status Invoice'}</label>
-          <select value={status} onChange={(e) => onStatusChange?.(e.target.value)} className={selectClass}>
-            {statusType === 'order' ? (
-              <>
-                <option value="">Semua status</option>
-                {Object.entries(orderStatusOptions).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </>
-            ) : (
-              invoiceStatusOptions.map((opt) => (
-                <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-              ))
-            )}
-          </select>
-        </div>
+        <Autocomplete
+          label={statusType === 'order' ? 'Status Order' : 'Status Invoice'}
+          value={status}
+          onChange={(v) => onStatusChange?.(v)}
+          options={
+            statusType === 'order'
+              ? Object.entries(orderStatusOptions).map(([k, v]) => ({ value: k, label: v }))
+              : invoiceStatusOptions
+          }
+          emptyLabel="Semua status"
+        />
       )}
       {showOwner && (
-        <div>
-          <label className={labelClass}>Owner</label>
-          <select value={ownerId} onChange={(e) => onOwnerChange?.(e.target.value)} className={selectClass}>
-            <option value="">Semua owner</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>{o.name ?? o.User?.name ?? o.User?.company_name ?? o.id}</option>
-            ))}
-          </select>
-        </div>
+        <Autocomplete
+          label="Owner"
+          value={ownerId}
+          onChange={(v) => onOwnerChange?.(v)}
+          options={owners.map((o) => ({ value: o.id, label: o.name ?? o.User?.name ?? o.User?.company_name ?? o.id }))}
+          emptyLabel="Semua owner"
+        />
       )}
       {showDueStatus && (
-        <div>
-          <label className={labelClass}>Jatuh Tempo</label>
-          <select value={dueStatus} onChange={(e) => onDueStatusChange?.(e.target.value)} className={selectClass}>
-            {dueStatusOptions.map((opt) => (
-              <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
+        <Autocomplete
+          label="Jatuh Tempo"
+          value={dueStatus}
+          onChange={(v) => onDueStatusChange?.(v)}
+          options={dueStatusOptions}
+        />
       )}
       {showDateRange && (
         <>
-          <div>
-            <label className={labelClass}>Dari</label>
-            <input type="date" value={dateFrom} onChange={(e) => onDateFromChange?.(e.target.value)} className={inputClass} />
-          </div>
-          <div>
-            <label className={labelClass}>Sampai</label>
-            <input type="date" value={dateTo} onChange={(e) => onDateToChange?.(e.target.value)} className={inputClass} />
-          </div>
+          <Input label="Dari" type="date" value={dateFrom} onChange={(e) => onDateFromChange?.(e.target.value)} fullWidth />
+          <Input label="Sampai" type="date" value={dateTo} onChange={(e) => onDateToChange?.(e.target.value)} fullWidth />
         </>
       )}
       {showSearch && (
-        <div>
-          <label className={labelClass}>No. Order</label>
-          <input type="text" value={search} onChange={(e) => onSearchChange?.(e.target.value)} placeholder={searchPlaceholder} className={inputClass} />
-        </div>
+        <Input label="No. Order" value={search} onChange={(e) => onSearchChange?.(e.target.value)} placeholder={searchPlaceholder} fullWidth />
       )}
       {showSearch2 && (
-        <div>
-          <label className={labelClass}>No. Invoice</label>
-          <input type="text" value={search2} onChange={(e) => onSearch2Change?.(e.target.value)} placeholder={search2Placeholder} className={inputClass} />
-        </div>
+        <Input label="No. Invoice" value={search2} onChange={(e) => onSearch2Change?.(e.target.value)} placeholder={search2Placeholder} fullWidth />
       )}
       {showSort && (
         <>
-          <div>
-            <label className={labelClass}>Urutkan</label>
-            <select value={sortBy} onChange={(e) => onSortByChange?.(e.target.value)} className={selectClass}>
-              {sortOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Arah</label>
-            <select value={sortOrder} onChange={(e) => onSortOrderChange?.(e.target.value as 'asc' | 'desc')} className={selectClass}>
-              <option value="desc">Terbaru dulu</option>
-              <option value="asc">Terlama dulu</option>
-            </select>
-          </div>
+          <Autocomplete
+            label="Urutkan"
+            value={sortBy}
+            onChange={(v) => onSortByChange?.(v)}
+            options={sortOptions}
+          />
+          <Autocomplete
+            label="Arah"
+            value={sortOrder}
+            onChange={(v) => onSortOrderChange?.(v as 'asc' | 'desc')}
+            options={[
+              { value: 'desc', label: 'Terbaru dulu' },
+              { value: 'asc', label: 'Terlama dulu' }
+            ]}
+          />
         </>
       )}
       {!hideActions && (
-        <div className={`flex items-end gap-2 ${isModal ? 'col-span-2' : ''}`}>
-          <Button variant="primary" size={isModal ? 'sm' : 'md'} onClick={onApply} disabled={loading}>
+        <div className={`flex flex-wrap items-end gap-2 ${isModal ? 'col-span-2' : 'col-span-full sm:col-span-1'}`}>
+          <Button variant="primary" size={isModal ? 'sm' : 'md'} onClick={onApply} disabled={loading} className="bg-[#0D1A63] hover:bg-[#0a1449] focus:ring-[#0D1A63]">
             {loading ? 'Memuat...' : 'Terapkan'}
           </Button>
           {showReset && onReset && (
-            <Button variant="outline" size={isModal ? 'sm' : 'md'} onClick={onReset}>
+            <Button variant="outline" size={isModal ? 'sm' : 'md'} onClick={onReset} className="border-slate-200 text-slate-700">
               Reset
             </Button>
           )}

@@ -51,7 +51,7 @@ const menuItems: MenuItem[] = [
     title: 'Owners Wilayah',
     icon: <Users className="w-5 h-5" />,
     path: '/dashboard/koordinator/owners',
-    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
+    roles: ['super_admin', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
   },
   {
     title: 'Products',
@@ -403,7 +403,7 @@ const DashboardLayout: React.FC = () => {
                     type="button"
                     onClick={() => !isCollapsed && setExpandedMenuPath((p) => (p === item.path ? null : item.path))}
                     className={`w-full flex items-center ${isCollapsed ? 'justify-center px-3' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all ${
-                      isParentActive ? 'bg-white/10 text-primary-200' : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
+                      isParentActive ? 'bg-white/10 text-slate-200' : 'text-slate-300 hover:bg-white/10 hover:text-slate-200'
                     }`}
                     title={isCollapsed ? item.title : ''}
                   >
@@ -425,7 +425,7 @@ const DashboardLayout: React.FC = () => {
                             type="button"
                             onClick={() => handleNavigate(child.path)}
                             className={`w-full flex items-center gap-2 py-2 px-2 rounded-lg text-sm transition-all ${
-                              isChildActive ? 'bg-primary-500 text-white' : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
+                              isChildActive ? 'bg-white/20 text-slate-100' : 'text-slate-300 hover:bg-white/10 hover:text-slate-200'
                             }`}
                           >
                             <span className={isChildActive ? 'text-white' : 'text-slate-400'}>{child.icon}</span>
@@ -436,7 +436,7 @@ const DashboardLayout: React.FC = () => {
                     </div>
                   )}
                   {isCollapsed && (
-                    <div className="fixed ml-20 px-3 py-2 bg-primary-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
+                    <div className="fixed ml-20 px-3 py-2 bg-slate-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
                       {item.title}
                     </div>
                   )}
@@ -451,7 +451,7 @@ const DashboardLayout: React.FC = () => {
                   type="button"
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center ${isCollapsed ? 'justify-center px-3' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive ? 'bg-primary-500 text-white shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-primary-200'
+                    isActive ? 'bg-white/20 text-slate-100 shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-slate-200'
                   }`}
                   title={isCollapsed ? item.title : ''}
                 >
@@ -465,7 +465,7 @@ const DashboardLayout: React.FC = () => {
                   )}
                 </button>
                 {isCollapsed && (
-                  <div className="fixed ml-20 px-3 py-2 bg-primary-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
+                  <div className="fixed ml-20 px-3 py-2 bg-slate-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
                     {item.title}
                   </div>
                 )}
@@ -478,7 +478,7 @@ const DashboardLayout: React.FC = () => {
         {!isCollapsed && (
           <div className="p-4 border-t border-white/10">
             <div className="flex items-center gap-3 px-3 py-2.5 bg-white/5 rounded-xl border border-white/10">
-              <div className="w-9 h-9 bg-primary-500 rounded-full flex items-center justify-center text-sm font-semibold text-white">
+              <div className="w-9 h-9 bg-slate-500 rounded-full flex items-center justify-center text-sm font-semibold text-white">
                 {user?.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -491,7 +491,7 @@ const DashboardLayout: React.FC = () => {
 
         {isCollapsed && (
           <div className="p-3 border-t border-white/10 flex justify-center">
-            <div className="w-9 h-9 bg-primary-500 rounded-full flex items-center justify-center text-sm font-semibold text-white">
+            <div className="w-9 h-9 bg-slate-500 rounded-full flex items-center justify-center text-sm font-semibold text-white">
               {user?.name.charAt(0).toUpperCase()}
             </div>
           </div>
@@ -644,7 +644,7 @@ const DashboardLayout: React.FC = () => {
           </div>
         </header>
 
-        <main className={`flex-1 p-4 sm:p-6 main-content ${showBottomNav ? 'pb-24' : ''}`} style={showBottomNav ? { paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' } : undefined}>
+        <main className={`flex-1 pt-2 px-4 pb-4 sm:pt-3 sm:px-6 sm:pb-6 main-content ${showBottomNav ? 'pb-24' : ''}`} style={showBottomNav ? { paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' } : undefined}>
           <div className="mb-4">
             <MaintenanceBanner />
           </div>

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { FileText, ChevronLeft, Check, Save, ExternalLink, DollarSign } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import Input from '../../../components/common/Input';
 import { accountingApi, type PayrollRunData, type PayrollItemData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -226,16 +227,13 @@ const PayrollRunDetailPage: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-4">Edit item payroll</h3>
             <div className="space-y-3 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Gaji pokok</label>
-                <input type="number" min={0} value={editBase || ''} onChange={(e) => setEditBase(Number(e.target.value) || 0)} className="w-full border rounded-lg px-3 py-2 text-sm" />
-              </div>
+              <Input label="Gaji pokok" type="number" min={0} value={editBase ? String(editBase) : ''} onChange={(e) => setEditBase(Number(e.target.value) || 0)} />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tunjangan (nama, jumlah)</label>
                 {editAllowances.map((a, i) => (
-                  <div key={i} className="flex gap-2 mb-1">
-                    <input placeholder="Nama" value={a.name || ''} onChange={(e) => setEditAllowances((p) => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className="flex-1 border rounded px-2 py-1 text-sm" />
-                    <input type="number" placeholder="Jumlah" value={a.amount ?? ''} onChange={(e) => setEditAllowances((p) => p.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) || 0 } : x))} className="w-24 border rounded px-2 py-1 text-sm" />
+                  <div key={i} className="flex gap-2 mb-1 items-end">
+                    <Input placeholder="Nama" value={a.name || ''} onChange={(e) => setEditAllowances((p) => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className="flex-1" />
+                    <Input type="number" placeholder="Jumlah" value={a.amount != null ? String(a.amount) : ''} onChange={(e) => setEditAllowances((p) => p.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) || 0 } : x))} className="w-24" fullWidth={false} />
                   </div>
                 ))}
                 <button type="button" onClick={() => setEditAllowances((p) => [...p, { name: '', amount: 0 }])} className="text-xs text-emerald-600 mt-1">+ Tunjangan</button>
@@ -243,9 +241,9 @@ const PayrollRunDetailPage: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Potongan (nama, jumlah)</label>
                 {editDeductions.map((d, i) => (
-                  <div key={i} className="flex gap-2 mb-1">
-                    <input placeholder="Nama" value={d.name || ''} onChange={(e) => setEditDeductions((p) => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className="flex-1 border rounded px-2 py-1 text-sm" />
-                    <input type="number" placeholder="Jumlah" value={d.amount ?? ''} onChange={(e) => setEditDeductions((p) => p.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) || 0 } : x))} className="w-24 border rounded px-2 py-1 text-sm" />
+                  <div key={i} className="flex gap-2 mb-1 items-end">
+                    <Input placeholder="Nama" value={d.name || ''} onChange={(e) => setEditDeductions((p) => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} className="flex-1" />
+                    <Input type="number" placeholder="Jumlah" value={d.amount != null ? String(d.amount) : ''} onChange={(e) => setEditDeductions((p) => p.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) || 0 } : x))} className="w-24" fullWidth={false} />
                   </div>
                 ))}
                 <button type="button" onClick={() => setEditDeductions((p) => [...p, { name: '', amount: 0 }])} className="text-xs text-emerald-600 mt-1">+ Potongan</button>

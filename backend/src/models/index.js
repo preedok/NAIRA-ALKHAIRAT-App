@@ -30,6 +30,8 @@ const VisaSeason = require('./VisaSeason');
 const VisaSeasonQuota = require('./VisaSeasonQuota');
 const BusSeason = require('./BusSeason');
 const BusSeasonQuota = require('./BusSeasonQuota');
+const TicketSeason = require('./TicketSeason');
+const TicketSeasonQuota = require('./TicketSeasonQuota');
 const AccountingFiscalYear = require('./AccountingFiscalYear');
 const AccountingPeriod = require('./AccountingPeriod');
 const ChartOfAccount = require('./ChartOfAccount');
@@ -179,6 +181,14 @@ BusSeasonQuota.belongsTo(BusSeason, { foreignKey: 'season_id', as: 'Season' });
 BusSeason.hasOne(BusSeasonQuota, { foreignKey: 'season_id', as: 'Quota' });
 Product.hasMany(BusSeasonQuota, { foreignKey: 'product_id', as: 'BusSeasonQuotas' });
 
+// Ticket seasons & quota (kuota tiket per periode)
+TicketSeason.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(TicketSeason, { foreignKey: 'product_id', as: 'TicketSeasons' });
+TicketSeasonQuota.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+TicketSeasonQuota.belongsTo(TicketSeason, { foreignKey: 'season_id', as: 'Season' });
+TicketSeason.hasOne(TicketSeasonQuota, { foreignKey: 'season_id', as: 'Quota' });
+Product.hasMany(TicketSeasonQuota, { foreignKey: 'product_id', as: 'TicketSeasonQuotas' });
+
 // Accounting
 AccountingFiscalYear.hasMany(AccountingPeriod, { foreignKey: 'fiscal_year_id', as: 'Periods' });
 AccountingPeriod.belongsTo(AccountingFiscalYear, { foreignKey: 'fiscal_year_id', as: 'FiscalYear' });
@@ -259,6 +269,8 @@ const db = {
   VisaSeasonQuota,
   BusSeason,
   BusSeasonQuota,
+  TicketSeason,
+  TicketSeasonQuota,
   AccountingFiscalYear,
   AccountingPeriod,
   ChartOfAccount,

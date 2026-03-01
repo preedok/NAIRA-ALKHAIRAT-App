@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, RefreshCw, ClipboardList, Inbox, Send, Loader2, CheckCircle, Check } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { visaApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 
@@ -85,66 +87,35 @@ const VisaDashboard: React.FC = () => {
 
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-600 shrink-0">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Invoice</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalInvoices}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Invoice dengan item visa</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-sky-100 text-sky-600 shrink-0">
-                <FileText className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Visa</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalItems}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Item visa di cabang</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={totalInvoices} subtitle="Invoice dengan item visa" iconClassName="bg-slate-100 text-slate-600" />
+          <StatCard icon={<FileText className="w-5 h-5" />} label="Item Visa" value={totalItems} subtitle="Item visa di cabang" iconClassName="bg-sky-100 text-sky-600" />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {STATUS_ORDER.map((status) => (
-              <Card key={status} className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-                <div className="flex items-center gap-4">
-                  <div className={`p-4 rounded-2xl shrink-0 ${STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
-                    {STATUS_ICONS[status] || <FileText className="h-6 w-6" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-500">{RECAP_STATUS_LABELS[status] || status}</p>
-                    <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{byStatus[status] ?? 0}</p>
-                  </div>
-                </div>
-              </Card>
+              <StatCard
+                key={status}
+                icon={STATUS_ICONS[status] || <FileText className="w-5 h-5" />}
+                label={RECAP_STATUS_LABELS[status] || status}
+                value={byStatus[status] ?? 0}
+              />
             ))}
           </div>
         </div>
       </div>
 
       <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-sky-100 text-sky-600 shrink-0">
-              <FileText className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Progress Visa</h3>
-              <p className="text-sm text-slate-600 mt-0.5">Kelola invoice visa, update status, dan upload dokumen terbit di menu Progress Visa.</p>
-            </div>
-          </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-visa')} className="rounded-xl">
-            <FileText className="w-4 h-4 mr-2" /> Buka Progress Visa
-          </Button>
-        </div>
+        <CardSectionHeader
+          icon={<FileText className="w-6 h-6" />}
+          title="Progress Visa"
+          subtitle="Kelola invoice visa, update status, dan upload dokumen terbit di menu Progress Visa."
+          right={
+            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-visa')} className="rounded-xl">
+              <FileText className="w-4 h-4 mr-2" /> Buka Progress Visa
+            </Button>
+          }
+        />
       </Card>
     </div>
   );

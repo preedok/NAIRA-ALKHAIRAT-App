@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { validateEmail } from '../../utils';
+import Input from '../../components/common/Input';
+import Checkbox from '../../components/common/Checkbox';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -118,50 +120,6 @@ const SKY  = '#38bdf8';
 const MUTED = '#475569';
 const DARK  = '#0a0f1e';
 
-/* ─── Input Field ────────────────────────────────────────────────── */
-interface InputProps {
-  id: string; name: string; type: string;
-  label: string; rightLabel?: React.ReactNode;
-  value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  icon: React.ReactNode; suffix?: React.ReactNode;
-  placeholder?: string; autoComplete?: string; hasError?: boolean;
-}
-
-const InputField: React.FC<InputProps> = ({
-  id, name, type, label, rightLabel,
-  value, onChange, icon, suffix,
-  placeholder, autoComplete, hasError,
-}) => {
-  const [focused, setFocused] = useState(false);
-  return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-        <label htmlFor={id} style={{
-          fontSize:11, fontWeight:700, letterSpacing:'0.11em',
-          textTransform:'uppercase', userSelect:'none',
-          color: hasError ? '#f87171' : focused ? SKY : MUTED,
-          transition:'color .2s',
-        }}>
-          {label}
-        </label>
-        {rightLabel}
-      </div>
-      <div className={`lg-input${hasError ? ' err' : ''}`}>
-        <span style={{ color: hasError ? '#f87171' : focused ? SKY : '#334155', transition:'color .2s', flexShrink:0 }}>
-          {icon}
-        </span>
-        <input
-          id={id} name={name} type={type} value={value}
-          onChange={onChange} placeholder={placeholder} autoComplete={autoComplete}
-          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          style={{ flex:1, background:'transparent', color:'white', fontSize:14, outline:'none', minWidth:0, caretColor:SKY }}
-        />
-        {suffix}
-      </div>
-    </div>
-  );
-};
-
 /* ─── LoginPage ──────────────────────────────────────────────────── */
 const LoginPage: React.FC = () => {
   const navigate  = useNavigate();
@@ -200,9 +158,6 @@ const LoginPage: React.FC = () => {
     } catch { setError('Terjadi kesalahan. Silakan coba lagi.'); }
     finally  { setLoading(false); }
   };
-
-  const eyeEnter = (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = SKY; };
-  const eyeLeave = (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = MUTED; };
 
   return (
     <div className="grid-bg" style={{
@@ -310,32 +265,39 @@ const LoginPage: React.FC = () => {
           {/* ── Form ── */}
           <form onSubmit={handleSubmit} noValidate>
             <div className="fu fu-2" style={{ display:'flex', flexDirection:'column', gap:14, marginBottom:14 }}>
-
-              <InputField
-                id="email" name="email" type="email" label="Alamat Email"
-                value={formData.email} onChange={handleChange}
-                icon={<Mail size={15} />} placeholder="nama@perusahaan.com"
-                autoComplete="email" hasError={!!error}
+              <Input
+                name="email"
+                type="email"
+                label="Alamat Email"
+                value={formData.email}
+                onChange={handleChange}
+                icon={<Mail size={15} />}
+                placeholder="nama@perusahaan.com"
+                autoComplete="email"
+                error={error || undefined}
               />
-
-              <InputField
-                id="password" name="password"
-                type={showPass ? 'text' : 'password'} label="Kata Sandi"
+              <Input
+                name="password"
+                type={showPass ? 'text' : 'password'}
+                label="Kata Sandi"
+                value={formData.password}
+                onChange={handleChange}
+                icon={<Lock size={15} />}
+                placeholder="Minimal 8 karakter"
+                autoComplete="current-password"
+                error={error || undefined}
                 rightLabel={
-                  <Link to="/forgot-password" style={{ fontSize:11, fontWeight:600, color:SKY, textDecoration:'none', opacity:.9 }}
-                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.opacity='0.65')}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity='0.9')}>
+                  <Link to="/forgot-password" className="text-xs font-semibold text-[#38bdf8] hover:opacity-80 no-underline">
                     Lupa kata sandi?
                   </Link>
                 }
-                value={formData.password} onChange={handleChange}
-                icon={<Lock size={15} />} placeholder="Minimal 8 karakter"
-                autoComplete="current-password" hasError={!!error}
                 suffix={
-                  <button type="button" onClick={() => setShowPass(p => !p)}
-                    onMouseEnter={eyeEnter} onMouseLeave={eyeLeave}
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(p => !p)}
                     aria-label={showPass ? 'Sembunyikan' : 'Tampilkan'}
-                    style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, padding:0, display:'flex', transition:'color .15s', flexShrink:0 }}>
+                    className="p-0 border-0 bg-transparent cursor-pointer text-slate-400 hover:text-slate-600 flex"
+                  >
                     {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 }
@@ -343,11 +305,13 @@ const LoginPage: React.FC = () => {
             </div>
 
             {/* Remember */}
-            <div className="fu fu-2" style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18 }}>
-              <input id="rem" type="checkbox" style={{ width:14, height:14, accentColor:SKY, cursor:'pointer' }} />
-              <label htmlFor="rem" style={{ fontSize:12, color:MUTED, cursor:'pointer', userSelect:'none' }}>
-                Ingat saya selama 30 hari
-              </label>
+            <div className="fu fu-2" style={{ marginBottom:18 }}>
+              <Checkbox
+                id="rem"
+                label="Ingat saya selama 30 hari"
+                checked={false}
+                onChange={() => {}}
+              />
             </div>
 
             {/* Submit */}

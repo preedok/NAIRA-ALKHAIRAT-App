@@ -31,14 +31,14 @@ const Button: React.FC<ButtonProps> = ({
   title,
   'aria-label': ariaLabel
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variantStyles: Record<ButtonVariant, string> = {
-    primary: 'bg-primary-500 text-white shadow-travel hover:bg-primary-600 focus:ring-primary-500',
-    secondary: 'bg-stone-600 text-white hover:bg-stone-700 shadow-travel focus:ring-stone-500',
-    outline: 'bg-white text-stone-700 border-2 border-stone-200 hover:border-primary-500 hover:text-primary-600 hover:bg-primary-50 focus:ring-primary-500',
-    ghost: 'bg-transparent text-stone-600 hover:bg-stone-100 hover:text-stone-900 focus:ring-stone-400',
-    danger: 'bg-red-600 text-white hover:bg-red-700 shadow-travel focus:ring-red-500'
+    primary: 'bg-btn text-white shadow-sm hover:bg-btn-hover focus:ring-btn',
+    secondary: 'bg-btn text-white hover:bg-btn-hover shadow-sm focus:ring-btn',
+    outline: 'bg-white text-[#0D1A63] border-2 border-stone-200 hover:border-btn hover:bg-btn-light focus:ring-btn',
+    ghost: 'bg-transparent text-stone-600 hover:bg-btn-light focus:ring-stone-400',
+    danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm focus:ring-red-500'
   };
 
   const sizeStyles: Record<ButtonSize, string> = {

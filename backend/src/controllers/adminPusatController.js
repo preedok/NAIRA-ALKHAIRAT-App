@@ -21,7 +21,11 @@ const {
   HotelSeason,
   HotelRoomInventory,
   VisaSeason,
-  VisaSeasonQuota
+  VisaSeasonQuota,
+  TicketSeason,
+  TicketSeasonQuota,
+  BusSeason,
+  BusSeasonQuota
 } = require('../models');
 const { ROLES, ORDER_ITEM_TYPE } = require('../constants');
 const { getHotelAvailabilityConfig } = require('../services/hotelAvailabilityService');
@@ -735,6 +739,156 @@ const setVisaSeasonQuota = asyncHandler(async (req, res) => {
   res.json({ success: true, data: row });
 });
 
+// ---------- Ticket seasons & quota (kuota tiket per periode) ----------
+
+const listTicketSeasons = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
+  const seasons = await TicketSeason.findAll({
+    where: { product_id: productId },
+    order: [['start_date', 'ASC']],
+    include: [{ model: TicketSeasonQuota, as: 'Quota', attributes: ['id', 'quota'] }]
+  });
+  res.json({ success: true, data: seasons });
+});
+
+const createTicketSeason = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { name, start_date, end_date, quota, meta } = req.body;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
+  if (!name || !start_date || !end_date) return res.status(400).json({ success: false, message: 'name, start_date, end_date wajib' });
+  const season = await TicketSeason.create({
+    product_id: productId,
+    name: name.trim(),
+    start_date,
+    end_date,
+    meta: meta || {},
+    created_by: req.user.id
+  });
+  const q = Math.max(0, parseInt(quota, 10) || 0);
+  await TicketSeasonQuota.create({ product_id: productId, season_id: season.id, quota: q });
+  const full = await TicketSeason.findByPk(season.id, { include: [{ model: TicketSeasonQuota, as: 'Quota' }] });
+  res.status(201).json({ success: true, data: full });
+});
+
+const updateTicketSeason = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const { name, start_date, end_date, meta } = req.body;
+  const season = await TicketSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode tiket tidak ditemukan' });
+  const updates = {};
+  if (name !== undefined) updates.name = name.trim();
+  if (start_date !== undefined) updates.start_date = start_date;
+  if (end_date !== undefined) updates.end_date = end_date;
+  if (meta !== undefined) updates.meta = meta;
+  await season.update(updates);
+  const full = await TicketSeason.findByPk(season.id, { include: [{ model: TicketSeasonQuota, as: 'Quota' }] });
+  res.json({ success: true, data: full });
+});
+
+const deleteTicketSeason = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const season = await TicketSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode tiket tidak ditemukan' });
+  await season.destroy();
+  res.json({ success: true, message: 'Periode tiket dihapus' });
+});
+
+const setTicketSeasonQuota = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const { quota } = req.body;
+  const season = await TicketSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode tiket tidak ditemukan' });
+  const q = Math.max(0, parseInt(quota, 10) || 0);
+  let row = await TicketSeasonQuota.findOne({ where: { season_id: seasonId } });
+  if (row) {
+    row.quota = q;
+    await row.save();
+  } else {
+    row = await TicketSeasonQuota.create({ product_id: productId, season_id: seasonId, quota: q });
+  }
+  res.json({ success: true, data: row });
+});
+
+// ---------- Bus seasons & quota (kuota bus per periode) ----------
+
+const listBusSeasons = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'bus') return res.status(400).json({ success: false, message: 'Bukan product bus' });
+  const seasons = await BusSeason.findAll({
+    where: { product_id: productId },
+    order: [['start_date', 'ASC']],
+    include: [{ model: BusSeasonQuota, as: 'Quota', attributes: ['id', 'quota'] }]
+  });
+  res.json({ success: true, data: seasons });
+});
+
+const createBusSeason = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { name, start_date, end_date, quota, meta } = req.body;
+  const product = await Product.findByPk(productId, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'bus') return res.status(400).json({ success: false, message: 'Bukan product bus' });
+  if (!name || !start_date || !end_date) return res.status(400).json({ success: false, message: 'name, start_date, end_date wajib' });
+  const season = await BusSeason.create({
+    product_id: productId,
+    name: name.trim(),
+    start_date,
+    end_date,
+    meta: meta || {},
+    created_by: req.user.id
+  });
+  const q = Math.max(0, parseInt(quota, 10) || 0);
+  await BusSeasonQuota.create({ product_id: productId, season_id: season.id, quota: q });
+  const full = await BusSeason.findByPk(season.id, { include: [{ model: BusSeasonQuota, as: 'Quota' }] });
+  res.status(201).json({ success: true, data: full });
+});
+
+const updateBusSeason = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const { name, start_date, end_date, meta } = req.body;
+  const season = await BusSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode bus tidak ditemukan' });
+  const updates = {};
+  if (name !== undefined) updates.name = name.trim();
+  if (start_date !== undefined) updates.start_date = start_date;
+  if (end_date !== undefined) updates.end_date = end_date;
+  if (meta !== undefined) updates.meta = meta;
+  await season.update(updates);
+  const full = await BusSeason.findByPk(season.id, { include: [{ model: BusSeasonQuota, as: 'Quota' }] });
+  res.json({ success: true, data: full });
+});
+
+const deleteBusSeason = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const season = await BusSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode bus tidak ditemukan' });
+  await season.destroy();
+  res.json({ success: true, message: 'Periode bus dihapus' });
+});
+
+const setBusSeasonQuota = asyncHandler(async (req, res) => {
+  const { productId, seasonId } = req.params;
+  const { quota } = req.body;
+  const season = await BusSeason.findOne({ where: { id: seasonId, product_id: productId } });
+  if (!season) return res.status(404).json({ success: false, message: 'Periode bus tidak ditemukan' });
+  const q = Math.max(0, parseInt(quota, 10) || 0);
+  let row = await BusSeasonQuota.findOne({ where: { season_id: seasonId } });
+  if (row) {
+    row.quota = q;
+    await row.save();
+  } else {
+    row = await BusSeasonQuota.create({ product_id: productId, season_id: seasonId, quota: q });
+  }
+  res.json({ success: true, data: row });
+});
+
 module.exports = {
   getDashboard,
   listUsers,
@@ -754,5 +908,15 @@ module.exports = {
   createVisaSeason,
   updateVisaSeason,
   deleteVisaSeason,
-  setVisaSeasonQuota
+  setVisaSeasonQuota,
+  listTicketSeasons,
+  createTicketSeason,
+  updateTicketSeason,
+  deleteTicketSeason,
+  setTicketSeasonQuota,
+  listBusSeasons,
+  createBusSeason,
+  updateBusSeason,
+  deleteBusSeason,
+  setBusSeasonQuota
 };

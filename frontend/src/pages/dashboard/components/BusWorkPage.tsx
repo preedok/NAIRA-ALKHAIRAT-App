@@ -6,6 +6,8 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
 import { busApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
@@ -154,107 +156,33 @@ const BusWorkPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Bus – Tiket Bis & Perjalanan</h1>
-          <p className="text-slate-600 text-sm mt-1">Kelola invoice berisi item bus: status tiket, kedatangan, keberangkatan, kepulangan. Sinkron dengan menu Invoice.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => handleExport('excel')} disabled={!!exporting || loading} title="Unduh rekap Excel">
-            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-            {exporting === 'excel' ? '...' : 'Excel'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} disabled={!!exporting || loading} title="Unduh rekap PDF">
-            <FileText className="w-4 h-4 mr-1.5" />
-            {exporting === 'pdf' ? '...' : 'PDF'}
-          </Button>
-          <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
-        </div>
-      </div>
+      <PageHeader
+        title="Bus – Tiket Bis & Perjalanan"
+        subtitle="Kelola invoice berisi item bus: status tiket, kedatangan, keberangkatan, kepulangan. Sinkron dengan menu Invoice."
+        right={
+          <>
+            <Button variant="outline" size="sm" onClick={() => handleExport('excel')} disabled={!!exporting || loading} title="Unduh rekap Excel">
+              <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+              {exporting === 'excel' ? '...' : 'Excel'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} disabled={!!exporting || loading} title="Unduh rekap PDF">
+              <FileText className="w-4 h-4 mr-1.5" />
+              {exporting === 'pdf' ? '...' : 'PDF'}
+            </Button>
+            <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
+          </>
+        }
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Total Order</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : totalInvoices}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-              <Bus className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Item Bus</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : totalItems}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
-              <Ticket className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Tiket Pending</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : ticketPending}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-              <Ticket className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Tiket Terbit</p>
-              <p className="text-xl font-bold tabular-nums text-stone-900">{loading ? '–' : ticketIssued}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
-              <MapPin className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Kedatangan</p>
-              <p className="text-lg font-bold tabular-nums text-stone-900">{loading ? '–' : (arrival.completed ?? 0)}</p>
-              <p className="text-[10px] text-stone-400 mt-0.5">P {(arrival.pending ?? 0)} · T {(arrival.scheduled ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
-              <Plane className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Keberangkatan</p>
-              <p className="text-lg font-bold tabular-nums text-stone-900">{loading ? '–' : (departure.completed ?? 0)}</p>
-              <p className="text-[10px] text-stone-400 mt-0.5">P {(departure.pending ?? 0)} · T {(departure.scheduled ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-600">
-              <RotateCcw className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-stone-600">Kepulangan</p>
-              <p className="text-lg font-bold tabular-nums text-stone-900">{loading ? '–' : (returnStat.completed ?? 0)}</p>
-              <p className="text-[10px] text-stone-400 mt-0.5">P {(returnStat.pending ?? 0)} · T {(returnStat.scheduled ?? 0)}</p>
-            </div>
-          </div>
-        </Card>
+        <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={loading ? '–' : totalInvoices} iconClassName="bg-[#0D1A63] text-white" />
+        <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={loading ? '–' : totalItems} iconClassName="bg-slate-100 text-slate-600" />
+        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={loading ? '–' : ticketPending} iconClassName="bg-amber-100 text-amber-600" />
+        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={loading ? '–' : ticketIssued} iconClassName="bg-emerald-100 text-emerald-600" />
+        <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={loading ? '–' : (arrival.completed ?? 0)} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} iconClassName="bg-sky-100 text-sky-600" />
+        <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={loading ? '–' : (departure.completed ?? 0)} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} iconClassName="bg-violet-100 text-violet-600" />
+        <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={loading ? '–' : (returnStat.completed ?? 0)} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} iconClassName="bg-teal-100 text-teal-600" />
       </div>
 
       {/* Progress ring / summary */}
@@ -263,7 +191,7 @@ const BusWorkPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-4 py-2">
             <div className="flex items-center gap-2">
               <div className="h-2 flex-1 min-w-[120px] max-w-[200px] rounded-full bg-slate-200 overflow-hidden">
-                <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, completionTotal)}%` }} />
+                <div className="h-full bg-[#0D1A63] rounded-full transition-all" style={{ width: `${Math.min(100, completionTotal)}%` }} />
               </div>
               <span className="text-sm font-medium text-stone-700 tabular-nums">{Math.min(100, completionTotal)}% lengkap</span>
             </div>
@@ -317,13 +245,13 @@ const BusWorkPage: React.FC = () => {
                 placeholder="Cari invoice, order, owner..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
               />
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[160px]"
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white min-w-[160px]"
             >
               {INVOICE_STATUS_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
@@ -421,7 +349,7 @@ const BusWorkPage: React.FC = () => {
                 return (
                   <div key={item.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-slate-50/50">
                     <p className="font-semibold text-slate-800 flex items-center gap-2">
-                      <Bus className="w-4 h-4 text-primary-600" />
+                      <Bus className="w-4 h-4 text-[#0D1A63]" />
                       Item Bus #{idx + 1} · Qty: {item.quantity}
                     </p>
                     <div>

@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet, Calendar } from 'lucide-react';
+import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet, Calendar, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import ActionsMenu from '../../../components/common/ActionsMenu';
+import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, StatCard, CardSectionHeader, Input, Autocomplete } from '../../../components/common';
 import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -41,9 +46,21 @@ interface VisaProduct {
   currency?: string;
 }
 
-type VisaPageProps = { embedInProducts?: boolean };
+type VisaPageProps = {
+  embedInProducts?: boolean;
+  refreshTrigger?: number;
+  embedFilterOpen?: boolean;
+  embedFilterOnToggle?: () => void;
+  onFilterActiveChange?: (active: boolean) => void;
+};
 
-const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
+const VisaPage: React.FC<VisaPageProps> = ({
+  embedInProducts,
+  refreshTrigger,
+  embedFilterOpen,
+  embedFilterOnToggle,
+  onFilterActiveChange
+}) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
@@ -81,7 +98,17 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
   const [addSeasonSaving, setAddSeasonSaving] = useState(false);
   const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
   const [quotaSaving, setQuotaSaving] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const { addItem: addDraftItem } = useOrderDraft();
+
+  const hasActiveFilters = filterIncludeInactive === 'true';
+  const resetFilters = () => setFilterIncludeInactive('false');
+  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
+  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
+  useEffect(() => {
+    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
+  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -98,7 +125,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
   const fetchVisaProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingVisaProducts(true);
-    const params = { type: 'visa', with_prices: 'true', include_inactive: 'false', limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
         const data = (res.data as { data?: VisaProduct[] })?.data;
@@ -106,11 +133,15 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
       })
       .catch(() => setVisaProducts([]))
       .finally(() => setLoadingVisaProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive]);
 
   useEffect(() => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
+
+  useEffect(() => {
+    if (embedInProducts && refreshTrigger != null && refreshTrigger > 0) fetchVisaProducts();
+  }, [embedInProducts, refreshTrigger, fetchVisaProducts]);
 
   useEffect(() => {
     if (!visaSeasonsProduct?.id) return;
@@ -124,6 +155,18 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
   const refetchAll = useCallback(() => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
+
+  const handleDeleteVisa = async (p: VisaProduct) => {
+    if (!window.confirm(`Hapus produk visa "${p.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    try {
+      await productsApi.delete(p.id);
+      showToast('Produk visa dihapus', 'success');
+      fetchVisaProducts();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      showToast(err.response?.data?.message || 'Gagal menghapus produk visa', 'error');
+    }
+  };
 
   const handleOpenEdit = (p: VisaProduct) => {
     const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
@@ -275,127 +318,83 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loadingVisaProducts} />
-      </div>
+      {!embedInProducts && (
+        <PageHeader
+          title="Visa"
+          subtitle="Produk visa umroh: kelola harga, kuota, dan periode. Admin pusat dapat edit dan hapus."
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={refetchAll} disabled={loadingVisaProducts} />
+              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
+            </div>
+          }
+        />
+      )}
 
-      {/* Card statistik visa */}
+      <PageFilter
+        open={filterOpen}
+        onToggle={filterOnToggle}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { refetchAll(); if (embedFilterOnToggle) embedFilterOnToggle(); else setShowFilters(false); }}
+        loading={loadingVisaProducts}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        cardTitle="Pengaturan Filter"
+        cardDescription="Tampilkan produk visa aktif saja atau termasuk nonaktif."
+        hideToggleRow
+        className="w-full"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Autocomplete
+            label="Tampilkan"
+            value={filterIncludeInactive}
+            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+            options={[
+              { value: 'false', label: 'Aktif saja' },
+              { value: 'true', label: 'Semua (termasuk nonaktif)' }
+            ]}
+          />
+        </div>
+      </PageFilter>
+
+      {/* Stats — layout sama dengan halaman produk Bus/Tiket */}
       {(canAddToOrder || embedInProducts) && (
-        <Card className="overflow-hidden border-0 shadow-md border border-slate-200/80 bg-white">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-primary-500" />
-            <h3 className="text-base font-bold text-slate-900">Statistik produk visa</h3>
+        loadingVisaProducts ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-xl bg-slate-100 animate-pulse h-[88px]" />
+            ))}
           </div>
-          {loadingVisaProducts ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-xl bg-slate-100 animate-pulse h-24" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <Package className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Total produk</span>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">{visaStats.total}</p>
-                <p className="text-xs text-slate-500 mt-0.5">produk visa aktif</p>
-              </div>
-              <div className="rounded-xl bg-primary-50/80 border border-primary-100 p-4">
-                <div className="flex items-center gap-2 text-primary-600 mb-1">
-                  <Layers className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Visa Only</span>
-                </div>
-                <p className="text-2xl font-bold text-primary-800">{visaStats.byKind.only}</p>
-                <p className="text-xs text-primary-600/80 mt-0.5">produk</p>
-              </div>
-              <div className="rounded-xl bg-emerald-50/80 border border-emerald-100 p-4">
-                <div className="flex items-center gap-2 text-emerald-600 mb-1">
-                  <Layers className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Visa + Tasreh</span>
-                </div>
-                <p className="text-2xl font-bold text-emerald-800">{visaStats.byKind.tasreh}</p>
-                <p className="text-xs text-emerald-600/80 mt-0.5">produk</p>
-              </div>
-              <div className="rounded-xl bg-amber-50/80 border border-amber-100 p-4">
-                <div className="flex items-center gap-2 text-amber-600 mb-1">
-                  <Layers className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Visa Premium</span>
-                </div>
-                <p className="text-2xl font-bold text-amber-800">{visaStats.byKind.premium}</p>
-                <p className="text-xs text-amber-600/80 mt-0.5">produk</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <BarChart3 className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Total kuota</span>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">{visaStats.totalQuota > 0 ? visaStats.totalQuota.toLocaleString('id-ID') : '—'}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{visaStats.withQuotaLimit > 0 ? `${visaStats.withQuotaLimit} produk berkuota` : 'Tanpa batas'}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <Hotel className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Wajib hotel</span>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">{visaStats.requireHotelCount}</p>
-                <p className="text-xs text-slate-500 mt-0.5">dari {visaStats.total} produk</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <Wallet className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Dengan harga</span>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">{visaStats.withPriceCount}</p>
-                <p className="text-xs text-slate-500 mt-0.5">produk punya harga</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <Coins className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Rata-rata harga</span>
-                </div>
-                <p className="text-lg font-bold text-slate-900">{visaStats.avgPriceIdr > 0 ? `Rp ${visaStats.avgPriceIdr.toLocaleString('id-ID')}` : '—'}</p>
-                <p className="text-xs text-slate-500 mt-0.5">IDR</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <Coins className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Harga terendah</span>
-                </div>
-                <p className="text-lg font-bold text-slate-900">{visaStats.minPriceIdr > 0 ? `Rp ${visaStats.minPriceIdr.toLocaleString('id-ID')}` : '—'}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                <div className="flex items-center gap-2 text-slate-500 mb-1">
-                  <Coins className="w-4 h-4" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Harga tertinggi</span>
-                </div>
-                <p className="text-lg font-bold text-slate-900">{visaStats.maxPriceIdr > 0 ? `Rp ${visaStats.maxPriceIdr.toLocaleString('id-ID')}` : '—'}</p>
-              </div>
-            </div>
-          )}
-        </Card>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            <StatCard icon={<Package className="w-5 h-5" />} label="Total produk" value={visaStats.total} subtitle="produk visa aktif" />
+            <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Only" value={visaStats.byKind.only} subtitle="produk" />
+            <StatCard icon={<Layers className="w-5 h-5" />} label="Visa + Tasreh" value={visaStats.byKind.tasreh} subtitle="produk" />
+            <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Premium" value={visaStats.byKind.premium} subtitle="produk" />
+            <StatCard icon={<BarChart3 className="w-5 h-5" />} label="Total kuota" value={visaStats.totalQuota > 0 ? visaStats.totalQuota.toLocaleString('id-ID') : '—'} subtitle={visaStats.withQuotaLimit > 0 ? `${visaStats.withQuotaLimit} produk berkuota` : 'Tanpa batas'} />
+            <StatCard icon={<Hotel className="w-5 h-5" />} label="Wajib hotel" value={visaStats.requireHotelCount} subtitle={`dari ${visaStats.total} produk`} />
+            <StatCard icon={<Wallet className="w-5 h-5" />} label="Dengan harga" value={visaStats.withPriceCount} subtitle="produk punya harga" />
+            <StatCard icon={<Coins className="w-5 h-5" />} label="Rata-rata harga" value={visaStats.avgPriceIdr > 0 ? `Rp ${visaStats.avgPriceIdr.toLocaleString('id-ID')}` : '—'} subtitle="IDR" />
+            <StatCard icon={<Coins className="w-5 h-5" />} label="Harga terendah" value={visaStats.minPriceIdr > 0 ? `Rp ${visaStats.minPriceIdr.toLocaleString('id-ID')}` : '—'} />
+            <StatCard icon={<Coins className="w-5 h-5" />} label="Harga tertinggi" value={visaStats.maxPriceIdr > 0 ? `Rp ${visaStats.maxPriceIdr.toLocaleString('id-ID')}` : '—'} />
+          </div>
+        )
       )}
 
       {/* 2. Produk visa (harga dari admin pusat) — tabel */}
       {(canAddToOrder || embedInProducts) && (
         <Card className="overflow-hidden border-0 shadow-lg shadow-slate-200/50 bg-gradient-to-br from-white to-slate-50/50">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
-                <FileText className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Produk visa {canAddToOrder ? 'untuk order' : '(harga dari admin pusat)'}</h3>
-                <p className="text-sm text-slate-500 mt-0.5">{canAddToOrder ? 'Pilih produk visa lalu tambah ke keranjang order.' : 'Lihat saja. Pekerjaan visa di menu Visa.'}</p>
-              </div>
-            </div>
-            {isPusat && (
-              <Button variant="primary" size="sm" className="gap-1.5 shrink-0" onClick={() => setShowAddVisaModal(true)}>
+          <CardSectionHeader
+            icon={<FileText className="w-6 h-6" />}
+            title={`Produk visa ${canAddToOrder ? 'untuk order' : '(harga dari admin pusat)'}`}
+            subtitle={canAddToOrder ? 'Pilih produk visa lalu tambah ke keranjang order.' : 'Lihat saja. Pekerjaan visa di menu Visa.'}
+            right={isPusat ? (
+              <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setShowAddVisaModal(true)}>
                 <Plus className="w-4 h-4" /> Tambah produk visa
               </Button>
-            )}
-          </div>
+            ) : undefined}
+          />
           {loadingVisaProducts ? (
             <div className="py-10 text-center text-slate-500 text-sm">Memuat produk...</div>
           ) : visaProducts.length === 0 ? (
@@ -426,7 +425,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                     const requireHotel = p.meta?.require_hotel === true;
                     const quota = p.quota ?? 0;
                     return (
-                      <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-primary-50/30 transition-colors">
+                      <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-[#0D1A63]/5 transition-colors">
                         <td className="py-3 px-4 font-mono text-slate-600">{p.code || '-'}</td>
                         <td className="py-3 px-4"><Badge variant="info" className="font-medium">{kindLabel}</Badge></td>
                         <td className="py-3 px-4 font-medium text-slate-900">{p.name}</td>
@@ -438,16 +437,6 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                         <td className="py-3 px-4 text-right text-slate-700">$ {triple.usd.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                         <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                           <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {isPusat && (
-                              <>
-                                <Button variant="outline" size="sm" className="p-2" onClick={() => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); }} title="Periode & Kuota (kalender)" aria-label="Periode">
-                                  <Calendar className="w-4 h-4" />
-                                </Button>
-                                <Button variant="outline" size="sm" className="p-2" onClick={() => handleOpenEdit(p)} title="Edit" aria-label="Edit">
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                              </>
-                            )}
                             {canAddToOrder && (
                               <Button
                                 variant="outline"
@@ -458,9 +447,20 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                                   showToast('Visa ditambahkan ke order.', 'success');
                                 }}
                                 title="Tambah ke order"
+                                aria-label="Tambah ke order"
                               >
                                 <ShoppingCart className="w-4 h-4" />
                               </Button>
+                            )}
+                            {isPusat && (
+                              <ActionsMenu
+                                align="right"
+                                items={[
+                                  { id: 'periode', label: 'Periode & Kuota', icon: <Calendar className="w-4 h-4" />, onClick: () => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
+                                  { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => handleOpenEdit(p) },
+                                  { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteVisa(p), danger: true },
+                                ]}
+                              />
                             )}
                           </div>
                         </td>
@@ -481,7 +481,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
+                <div className="p-2.5 rounded-xl bg-[#0D1A63]/10 text-[#0D1A63]">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
@@ -506,7 +506,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                 <div className="space-y-5">
                   <section>
                     <div className="flex items-center gap-2 mb-3">
-                      <Package className="w-4 h-4 text-primary-500" />
+                      <Package className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Info produk</span>
                     </div>
                     <div className="space-y-4 rounded-xl bg-slate-50/80 border border-slate-100 p-4">
@@ -520,7 +520,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                               onClick={() => setAddVisaForm((f) => ({ ...f, visa_kind: kind }))}
                               className={`text-left rounded-xl border-2 p-3 transition-all duration-200 ${
                                 addVisaForm.visa_kind === kind
-                                  ? 'border-primary-500 bg-primary-50 text-primary-800 shadow-sm'
+                                  ? 'border-[#0D1A63] bg-[#0D1A63]/5 text-[#0D1A63] shadow-sm'
                                   : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 text-slate-700'
                               }`}
                             >
@@ -537,7 +537,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           value={addVisaForm.name}
                           onChange={(e) => setAddVisaForm((f) => ({ ...f, name: e.target.value }))}
                           placeholder="Contoh: Visa Umroh Reguler"
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-400 bg-white placeholder:text-slate-400"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white placeholder:text-slate-400"
                         />
                       </div>
                       <div>
@@ -547,7 +547,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           onChange={(e) => setAddVisaForm((f) => ({ ...f, description: e.target.value }))}
                           placeholder="Deskripsi singkat produk"
                           rows={2}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-400 bg-white placeholder:text-slate-400 resize-none"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white placeholder:text-slate-400 resize-none"
                         />
                       </div>
                     </div>
@@ -558,7 +558,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                 <div className="space-y-5">
                   <section>
                     <div className="flex items-center gap-2 mb-3">
-                      <Settings2 className="w-4 h-4 text-primary-500" />
+                      <Settings2 className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Kuota & aturan</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
@@ -571,7 +571,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           step={1}
                           value={addVisaForm.quota || ''}
                           onChange={(e) => setAddVisaForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-400 bg-white"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white"
                           placeholder="0"
                         />
                       </div>
@@ -581,7 +581,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                             type="checkbox"
                             checked={addVisaForm.require_hotel}
                             onChange={(e) => setAddVisaForm((f) => ({ ...f, require_hotel: e.target.checked }))}
-                            className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                            className="w-4 h-4 rounded border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63]"
                           />
                           <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">Visa wajib dibarengi hotel</span>
                         </label>
@@ -592,7 +592,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
 
                   <section>
                     <div className="flex items-center gap-2 mb-3">
-                      <Coins className="w-4 h-4 text-primary-500" />
+                      <Coins className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Harga default</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4">
@@ -602,7 +602,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                   <select
                           value={addVisaForm.price_currency}
                           onChange={(e) => setAddVisaForm((f) => ({ ...f, price_currency: e.target.value as 'IDR' | 'SAR' | 'USD' }))}
-                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 bg-white"
+                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white"
                   >
                     <option value="IDR">IDR</option>
                     <option value="SAR">SAR</option>
@@ -629,7 +629,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                             const next = fillFromSource(curKey, v, currencyRates);
                                   setAddVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
                           } : undefined}
-                                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
+                                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
                           placeholder="0"
                         />
                       </div>
@@ -662,7 +662,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
+                <div className="p-2.5 rounded-xl bg-[#0D1A63]/10 text-[#0D1A63]">
                   <Pencil className="w-5 h-5" />
                 </div>
                 <div>
@@ -687,7 +687,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                 <div className="space-y-5">
                   <section>
                     <div className="flex items-center gap-2 mb-3">
-                      <Package className="w-4 h-4 text-primary-500" />
+                      <Package className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Info produk</span>
                     </div>
                     <div className="space-y-4 rounded-xl bg-slate-50/80 border border-slate-100 p-4">
@@ -701,7 +701,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                               onClick={() => setEditVisaForm((f) => ({ ...f, visa_kind: kind }))}
                               className={`text-left rounded-xl border-2 p-3 transition-all duration-200 ${
                                 editVisaForm.visa_kind === kind
-                                  ? 'border-primary-500 bg-primary-50 text-primary-800 shadow-sm'
+                                  ? 'border-[#0D1A63] bg-[#0D1A63]/5 text-[#0D1A63] shadow-sm'
                                   : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 text-slate-700'
                               }`}
                             >
@@ -718,7 +718,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           value={editVisaForm.name}
                           onChange={(e) => setEditVisaForm((f) => ({ ...f, name: e.target.value }))}
                           placeholder="Contoh: Visa Umroh Reguler"
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-400 bg-white placeholder:text-slate-400"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white placeholder:text-slate-400"
                         />
                       </div>
                       <div>
@@ -728,7 +728,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           onChange={(e) => setEditVisaForm((f) => ({ ...f, description: e.target.value }))}
                           placeholder="Deskripsi singkat produk"
                           rows={2}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-400 bg-white placeholder:text-slate-400 resize-none"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white placeholder:text-slate-400 resize-none"
                         />
                       </div>
                     </div>
@@ -739,7 +739,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                 <div className="space-y-5">
                   <section>
                     <div className="flex items-center gap-2 mb-3">
-                      <Settings2 className="w-4 h-4 text-primary-500" />
+                      <Settings2 className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Kuota & aturan</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
@@ -752,7 +752,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                           step={1}
                           value={editVisaForm.quota || ''}
                           onChange={(e) => setEditVisaForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-400 bg-white"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white"
                           placeholder="0"
                         />
                       </div>
@@ -762,7 +762,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                   type="checkbox"
                             checked={editVisaForm.require_hotel}
                             onChange={(e) => setEditVisaForm((f) => ({ ...f, require_hotel: e.target.checked }))}
-                            className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                            className="w-4 h-4 rounded border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63]"
                           />
                           <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">Visa wajib dibarengi hotel</span>
               </label>
@@ -773,7 +773,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
 
                   <section>
                     <div className="flex items-center gap-2 mb-3">
-                      <Coins className="w-4 h-4 text-primary-500" />
+                      <Coins className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Harga</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4">
@@ -783,7 +783,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                         <select
                           value={editVisaForm.price_currency}
                           onChange={(e) => setEditVisaForm((f) => ({ ...f, price_currency: e.target.value as 'IDR' | 'SAR' | 'USD' }))}
-                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 bg-white"
+                          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white"
                         >
                           <option value="IDR">IDR</option>
                           <option value="SAR">SAR</option>
@@ -810,7 +810,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                                   const next = fillFromSource(curKey, v, currencyRates);
                                   setEditVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
                                 } : undefined}
-                                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
+                                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] bg-white ${isEditable ? 'border-slate-200' : 'border-slate-100 bg-slate-50/50 text-slate-600 cursor-default'}`}
                                 placeholder="0"
                               />
                             </div>
@@ -842,7 +842,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-primary-500" />
+                <Calendar className="w-5 h-5 text-[#0D1A63]" />
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Periode & Kuota</h3>
                   <p className="text-sm text-slate-500">{visaSeasonsProduct.name}</p>
@@ -856,10 +856,10 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
               <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <input type="text" placeholder="Nama periode" value={newSeasonForm.name} onChange={(e) => setNewSeasonForm((f) => ({ ...f, name: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                  <input type="date" value={newSeasonForm.start_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, start_date: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                  <input type="date" value={newSeasonForm.end_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, end_date: e.target.value }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                  <input type="number" min={0} placeholder="Kuota" value={newSeasonForm.quota || ''} onChange={(e) => setNewSeasonForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))} className="border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  <Input label="Nama periode" type="text" placeholder="Nama periode" value={newSeasonForm.name} onChange={(e) => setNewSeasonForm((f) => ({ ...f, name: e.target.value }))} />
+                  <Input label="Mulai" type="date" value={newSeasonForm.start_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, start_date: e.target.value }))} />
+                  <Input label="Selesai" type="date" value={newSeasonForm.end_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, end_date: e.target.value }))} />
+                  <Input label="Kuota" type="number" min={0} placeholder="Kuota" value={newSeasonForm.quota ? String(newSeasonForm.quota) : ''} onChange={(e) => setNewSeasonForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))} />
                 </div>
                 <Button size="sm" className="mt-3" disabled={addSeasonSaving || !newSeasonForm.name.trim() || !newSeasonForm.start_date || !newSeasonForm.end_date} onClick={async () => {
                   if (!visaSeasonsProduct?.id) return;
@@ -905,7 +905,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                             <td className="py-2 px-3 text-right">
                               {quotaEdit?.seasonId === s.id ? (
                                 <span className="flex items-center justify-end gap-1">
-                                  <input type="number" min={0} className="w-20 border border-slate-200 rounded px-2 py-1 text-sm" value={quotaEdit.value} onChange={(e) => setQuotaEdit((q) => q ? { ...q, value: e.target.value } : null)} />
+                                  <Input type="number" min={0} value={quotaEdit.value} onChange={(e) => setQuotaEdit((q) => q ? { ...q, value: e.target.value } : null)} className="w-20" fullWidth={false} />
                                   <Button size="sm" variant="primary" disabled={quotaSaving} onClick={async () => {
                                     if (!visaSeasonsProduct?.id || !quotaEdit) return;
                                     setQuotaSaving(true);
@@ -930,7 +930,7 @@ const VisaPage: React.FC<VisaPageProps> = ({ embedInProducts }) => {
                                 <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setQuotaEdit(null)}>Batal</button>
                               ) : (
                                 <>
-                                  <button type="button" className="text-primary-600 hover:underline text-xs mr-2" onClick={() => setQuotaEdit({ seasonId: s.id, value: String(s.Quota?.quota ?? 0) })}>Set kuota</button>
+                                  <button type="button" className="text-[#0D1A63] hover:underline text-xs mr-2" onClick={() => setQuotaEdit({ seasonId: s.id, value: String(s.Quota?.quota ?? 0) })}>Set kuota</button>
                                   <button type="button" className="text-red-600 hover:underline text-xs" onClick={async () => {
                                     if (!visaSeasonsProduct?.id || !window.confirm('Hapus periode ini?')) return;
                                     try {

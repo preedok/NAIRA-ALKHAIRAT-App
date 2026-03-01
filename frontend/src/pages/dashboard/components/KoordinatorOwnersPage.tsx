@@ -4,7 +4,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
-import { PageFilter, AutoRefreshControl } from '../../../components/common';
+import { PageFilter, AutoRefreshControl, PageHeader, FilterIconButton, StatCard } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { ownersApi, branchesApi, type OwnerStats } from '../../../services/api';
@@ -279,96 +279,25 @@ const KoordinatorOwnersPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Owners Wilayah</h1>
-          <p className="text-slate-600 mt-1">
-            {isAdminPusatOrSuperAdmin
-              ? 'Daftar owner per wilayah. Filter menurut wilayah, cabang, status, dan cari nama/email.'
-              : 'Owner yang dilayani koordinator wilayah Anda. Verifikasi bukti bayar/deposit lalu aktivasi (cabang dari data pendaftaran).'}
-          </p>
-        </div>
-        <AutoRefreshControl onRefresh={() => { fetchStats(); fetchOwners(); }} disabled={loading} />
-      </div>
+      <PageHeader
+        title="Owners Wilayah"
+        subtitle={isAdminPusatOrSuperAdmin ? 'Daftar owner per wilayah. Filter menurut wilayah, cabang, status, dan cari nama/email.' : 'Owner yang dilayani koordinator wilayah Anda. Verifikasi bukti bayar/deposit lalu aktivasi.'}
+        right={
+          <div className="flex items-center gap-2">
+            <AutoRefreshControl onRefresh={() => { fetchStats(); fetchOwners(); }} disabled={loading} />
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v) => !v)} hasActiveFilters={hasActiveFilters} />
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-card">
-              <Users className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Total Owner</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.total_owners ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Aktif</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.active ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Siap Aktivasi</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.siap_aktivasi ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Pending Verifikasi</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.pending_verifikasi ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-violet-100 text-violet-600">
-              <FileCheck className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Pending MoU</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.pending_mou ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-teal-100 text-teal-600">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Pending Bayar</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.pending_bayar ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-red-100 text-red-600">
-              <XCircle className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-stone-600">Ditolak</p>
-              <p className="text-xl font-bold text-stone-900 tabular-nums">{stats?.rejected ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
+        <StatCard icon={<Users className="w-5 h-5" />} label="Total Owner" value={stats?.total_owners ?? '–'} iconClassName="bg-[#0D1A63] text-white" />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Aktif" value={stats?.active ?? '–'} iconClassName="bg-emerald-100 text-emerald-600" />
+        <StatCard icon={<Zap className="w-5 h-5" />} label="Siap Aktivasi" value={stats?.siap_aktivasi ?? '–'} iconClassName="bg-amber-100 text-amber-600" />
+        <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={stats?.pending_verifikasi ?? '–'} iconClassName="bg-sky-100 text-sky-600" />
+        <StatCard icon={<FileCheck className="w-5 h-5" />} label="Pending MoU" value={stats?.pending_mou ?? '–'} iconClassName="bg-violet-100 text-violet-600" />
+        <StatCard icon={<CreditCard className="w-5 h-5" />} label="Pending Bayar" value={stats?.pending_bayar ?? '–'} iconClassName="bg-teal-100 text-teal-600" />
+        <StatCard icon={<XCircle className="w-5 h-5" />} label="Ditolak" value={stats?.rejected ?? '–'} iconClassName="bg-red-100 text-red-600" />
       </div>
 
       <PageFilter
@@ -380,11 +309,7 @@ const KoordinatorOwnersPage: React.FC = () => {
         loading={loading}
         applyLabel="Terapkan"
         resetLabel="Reset"
-        toolbar={
-          <Button variant="outline" size="sm" onClick={() => fetchOwners()} disabled={loading} aria-label="Segarkan">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        }
+        hideToggleRow
         className="w-full"
       >
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

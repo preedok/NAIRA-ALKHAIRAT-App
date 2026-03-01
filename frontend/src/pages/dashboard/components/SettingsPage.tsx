@@ -3,6 +3,10 @@ import { Navigate } from 'react-router-dom';
 import { Settings as SettingsIcon, DollarSign, Bell, Save } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import Input from '../../../components/common/Input';
+import Textarea from '../../../components/common/Textarea';
+import Checkbox from '../../../components/common/Checkbox';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { businessRulesApi } from '../../../services/api';
@@ -138,10 +142,10 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Settings</h1>
-        <p className="text-slate-600 mt-1">Konfigurasi umum, kurs, dan notifikasi</p>
-      </div>
+      <PageHeader
+        title="Settings"
+        subtitle="Konfigurasi umum, kurs, dan notifikasi"
+      />
 
       <div className="grid lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1">
@@ -153,7 +157,7 @@ const SettingsPage: React.FC = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-semibold transition-all ${
                     activeTab === tab.id
-                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
+                      ? 'bg-[#0D1A63] text-white shadow-lg'
                       : 'text-slate-600 hover:bg-slate-50'
                   }`}
                 >
@@ -168,28 +172,22 @@ const SettingsPage: React.FC = () => {
         <div className="lg:col-span-3">
           {activeTab === 'general' && (
             <Card className="travel-card">
-              <h3 className="text-xl font-bold text-stone-900 mb-6">General</h3>
+              <h3 className="text-xl font-bold text-[#0D1A63] mb-6">General</h3>
               <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nama Perusahaan</label>
-                  <input
-                    type="text"
-                    value={form.company_name}
-                    onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
-                    disabled={!canEdit}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Alamat Perusahaan</label>
-                  <textarea
-                    value={form.company_address}
-                    onChange={(e) => setForm((f) => ({ ...f, company_address: e.target.value }))}
-                    disabled={!canEdit}
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100"
-                  />
-                </div>
+                <Input
+                  label="Nama Perusahaan"
+                  type="text"
+                  value={form.company_name}
+                  onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
+                  disabled={!canEdit}
+                />
+                <Textarea
+                  label="Alamat Perusahaan"
+                  value={form.company_address}
+                  onChange={(e) => setForm((f) => ({ ...f, company_address: e.target.value }))}
+                  disabled={!canEdit}
+                  rows={3}
+                />
                 {canEdit && (
                   <Button variant="primary" onClick={handleSaveGeneral} disabled={saving}>
                     <Save className="w-5 h-5 mr-2" />
@@ -207,23 +205,21 @@ const SettingsPage: React.FC = () => {
                 <p className="text-sm text-slate-600">Nilai tukar ke IDR (untuk konversi tagihan). Hanya Admin Pusat / Super Admin yang dapat mengubah kurs global.</p>
                 <div className="space-y-4">
                   <div className="p-4 bg-slate-50 rounded-lg">
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">SAR → IDR (1 SAR = ? IDR)</label>
-                    <input
+                    <Input
+                      label="SAR → IDR (1 SAR = ? IDR)"
                       type="number"
-                      value={form.SAR_TO_IDR === '' ? '' : form.SAR_TO_IDR}
+                      value={form.SAR_TO_IDR === '' ? '' : String(form.SAR_TO_IDR)}
                       onChange={(e) => setForm((f) => ({ ...f, SAR_TO_IDR: e.target.value === '' ? '' : Number(e.target.value) || 0 }))}
                       disabled={!canEdit}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100"
                     />
                   </div>
                   <div className="p-4 bg-slate-50 rounded-lg">
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">USD → IDR (1 USD = ? IDR)</label>
-                    <input
+                    <Input
+                      label="USD → IDR (1 USD = ? IDR)"
                       type="number"
-                      value={form.USD_TO_IDR === '' ? '' : form.USD_TO_IDR}
+                      value={form.USD_TO_IDR === '' ? '' : String(form.USD_TO_IDR)}
                       onChange={(e) => setForm((f) => ({ ...f, USD_TO_IDR: e.target.value === '' ? '' : Number(e.target.value) || 0 }))}
                       disabled={!canEdit}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100"
                     />
                   </div>
                 </div>
@@ -239,7 +235,7 @@ const SettingsPage: React.FC = () => {
 
           {activeTab === 'notifications' && (
             <Card className="travel-card">
-              <h3 className="text-xl font-bold text-stone-900 mb-6">Notifikasi</h3>
+              <h3 className="text-xl font-bold text-[#0D1A63] mb-6">Notifikasi</h3>
               <div className="space-y-4">
                 {[
                   { key: 'notification_order' as const, label: 'Notifikasi Order', description: 'Notifikasi saat ada order baru' },
@@ -251,16 +247,11 @@ const SettingsPage: React.FC = () => {
                       <p className="font-semibold text-slate-900">{item.label}</p>
                       <p className="text-sm text-slate-600">{item.description}</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form[item.key]}
-                        onChange={(e) => setForm((f) => ({ ...f, [item.key]: e.target.checked }))}
-                        disabled={!canEdit}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600 disabled:opacity-60"></div>
-                    </label>
+                    <Checkbox
+                      checked={form[item.key]}
+                      onChange={(e) => setForm((f) => ({ ...f, [item.key]: e.target.checked }))}
+                      disabled={!canEdit}
+                    />
                   </div>
                 ))}
               </div>

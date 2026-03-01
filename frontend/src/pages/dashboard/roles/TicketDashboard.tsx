@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Plane, RefreshCw, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, AlertCircle, ChevronRight, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { ticketApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 
@@ -93,49 +95,19 @@ const TicketDashboard: React.FC = () => {
       {/* Stat cards - 2 utama + status breakdown */}
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-600 shrink-0">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Invoice</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalInvoices}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Invoice dengan item tiket</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
-                <Ticket className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Tiket</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalItems}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Item tiket di cabang</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={totalInvoices} subtitle="Invoice dengan item tiket" iconClassName="bg-slate-100 text-slate-600" />
+          <StatCard icon={<Ticket className="w-5 h-5" />} label="Item Tiket" value={totalItems} subtitle="Item tiket di cabang" iconClassName="bg-emerald-100 text-emerald-600" />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {STATUS_ORDER.map((status) => (
-              <Card
+              <StatCard
                 key={status}
-                className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`p-4 rounded-2xl shrink-0 ${STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
-                    {STATUS_ICONS[status] || <Ticket className="h-7 w-7" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-500">{RECAP_STATUS_LABELS[status] || status}</p>
-                    <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{byStatus[status] ?? 0}</p>
-                  </div>
-                </div>
-              </Card>
+                icon={STATUS_ICONS[status] || <Ticket className="w-5 h-5" />}
+                label={RECAP_STATUS_LABELS[status] || status}
+                value={byStatus[status] ?? 0}
+              />
             ))}
           </div>
         </div>
@@ -192,20 +164,16 @@ const TicketDashboard: React.FC = () => {
       )}
 
       <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
-              <Plane className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Progress Tiket</h3>
-              <p className="text-sm text-slate-600 mt-0.5">Kelola invoice tiket, update status, dan upload dokumen terbit di menu Progress Tiket.</p>
-            </div>
-          </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-tiket')} className="rounded-xl">
-            <Plane className="w-4 h-4 mr-2" /> Buka Progress Tiket
-          </Button>
-        </div>
+        <CardSectionHeader
+          icon={<Plane className="w-6 h-6" />}
+          title="Progress Tiket"
+          subtitle="Kelola invoice tiket, update status, dan upload dokumen terbit di menu Progress Tiket."
+          right={
+            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/progress-tiket')} className="rounded-xl">
+              <Plane className="w-4 h-4 mr-2" /> Buka Progress Tiket
+            </Button>
+          }
+        />
       </Card>
     </div>
   );

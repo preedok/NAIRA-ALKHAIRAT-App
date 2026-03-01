@@ -6,6 +6,7 @@ import {
   Users,
   X
 } from 'lucide-react';
+import Autocomplete from '../../../components/common/Autocomplete';
 import { productsApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 
@@ -107,19 +108,15 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium text-slate-700">Pilih Produk Bus:</label>
-        <select
+        <Autocomplete
+          label="Pilih Produk Bus"
           value={selectedProductId}
-          onChange={(e) => setSelectedProductId(e.target.value)}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[220px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        >
-          <option value="">-- Pilih bus --</option>
-          {busProducts.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.code})
-            </option>
-          ))}
-        </select>
+          onChange={setSelectedProductId}
+          options={busProducts.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
+          placeholder="-- Pilih bus --"
+          className="min-w-[220px]"
+          fullWidth={false}
+        />
         {selectedProductId && (
           <span className="text-sm text-slate-500">{productName}</span>
         )}
@@ -182,7 +179,7 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
                       key={i}
                       className={`relative min-h-[100px] border-b border-r border-slate-100 p-1.5 ${
                         !isInMonth ? 'bg-slate-50/50' : 'bg-white'
-                      } ${isPopover ? 'ring-2 ring-primary-400 ring-inset' : ''}`}
+                      } ${isPopover ? 'ring-2 ring-[#0D1A63]/50 ring-inset' : ''}`}
                     >
                       {isInMonth && (
                         <>
@@ -229,7 +226,7 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
                                   className="text-xs py-1.5 border-b border-slate-100 last:border-0"
                                 >
                                   <div className="font-medium text-slate-800 flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-primary-500" />
+                                    <Users className="w-3.5 h-3.5 text-[#0D1A63]" />
                                     {b.owner_name}
                                   </div>
                                   <div className="text-slate-600 mt-0.5">
@@ -246,7 +243,7 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setPopoverDate(popoverDate === dateStr ? null : dateStr); }}
-                              className="mt-1 text-[10px] text-primary-600 hover:underline flex items-center gap-0.5"
+                              className="mt-1 text-[10px] text-[#0D1A63] hover:underline flex items-center gap-0.5"
                             >
                               <Users className="w-3 h-3" />
                               {day.bookings.length} owner

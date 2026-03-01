@@ -71,6 +71,13 @@ module.exports = {
           indigo: '#4f46e5',
           purple: '#7c3aed',
         },
+        /** Warna tombol seragam (sama seperti background sidebar) — tidak pakai biru/hijau */
+        btn: {
+          DEFAULT: '#0D1A63',
+          hover:   '#0a1449',
+          light:   '#e8eaf0',
+          border:  '#0D1A63',
+        },
       },
       spacing: {
         'safe-top':    'env(safe-area-inset-top)',

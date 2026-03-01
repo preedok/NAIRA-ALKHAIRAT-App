@@ -369,9 +369,19 @@ export interface RefundStats {
   amount_by_status: Record<string, number>;
 }
 
+export type RefundListParams = {
+  status?: string;
+  owner_id?: string;
+  date_from?: string;
+  date_to?: string;
+  source?: string;
+  limit?: number;
+  page?: number;
+};
+
 export const refundsApi = {
-  list: (params?: { status?: string; owner_id?: string; limit?: number; page?: number }) => api.get('/refunds', { params }),
-  getStats: (params?: { status?: string; owner_id?: string }) => api.get<{ success: boolean; data: RefundStats }>('/refunds/stats', { params }),
+  list: (params?: RefundListParams) => api.get('/refunds', { params }),
+  getStats: (params?: Omit<RefundListParams, 'limit' | 'page'>) => api.get<{ success: boolean; data: RefundStats }>('/refunds/stats', { params }),
   getById: (id: string) => api.get(`/refunds/${id}`),
   updateStatus: (id: string, body: { status: string; rejection_reason?: string }) => api.patch(`/refunds/${id}`, body),
   createFromBalance: (body: { amount: number; bank_name: string; account_number: string }) => api.post('/refunds', body)
@@ -504,8 +514,56 @@ export const adminPusatApi = {
   deleteVisaSeason: (productId: string, seasonId: string) =>
     api.delete<{ success: boolean; message?: string }>(`/admin-pusat/products/${productId}/visa-seasons/${seasonId}`),
   setVisaSeasonQuota: (productId: string, seasonId: string, body: { quota: number }) =>
-    api.put<{ success: boolean; data: VisaSeasonQuota }>(`/admin-pusat/products/${productId}/visa-seasons/${seasonId}/quota`, body)
+    api.put<{ success: boolean; data: VisaSeasonQuota }>(`/admin-pusat/products/${productId}/visa-seasons/${seasonId}/quota`, body),
+  listTicketSeasons: (productId: string) =>
+    api.get<{ success: boolean; data: TicketSeason[] }>(`/admin-pusat/products/${productId}/ticket-seasons`),
+  createTicketSeason: (productId: string, body: { name: string; start_date: string; end_date: string; quota?: number; meta?: object }) =>
+    api.post<{ success: boolean; data: TicketSeason }>(`/admin-pusat/products/${productId}/ticket-seasons`, body),
+  updateTicketSeason: (productId: string, seasonId: string, body: { name?: string; start_date?: string; end_date?: string; meta?: object }) =>
+    api.patch<{ success: boolean; data: TicketSeason }>(`/admin-pusat/products/${productId}/ticket-seasons/${seasonId}`, body),
+  deleteTicketSeason: (productId: string, seasonId: string) =>
+    api.delete<{ success: boolean; message?: string }>(`/admin-pusat/products/${productId}/ticket-seasons/${seasonId}`),
+  setTicketSeasonQuota: (productId: string, seasonId: string, body: { quota: number }) =>
+    api.put<{ success: boolean; data: TicketSeasonQuota }>(`/admin-pusat/products/${productId}/ticket-seasons/${seasonId}/quota`, body),
+  listBusSeasons: (productId: string) =>
+    api.get<{ success: boolean; data: BusSeason[] }>(`/admin-pusat/products/${productId}/bus-seasons`),
+  createBusSeason: (productId: string, body: { name: string; start_date: string; end_date: string; quota?: number; meta?: object }) =>
+    api.post<{ success: boolean; data: BusSeason }>(`/admin-pusat/products/${productId}/bus-seasons`, body),
+  updateBusSeason: (productId: string, seasonId: string, body: { name?: string; start_date?: string; end_date?: string; meta?: object }) =>
+    api.patch<{ success: boolean; data: BusSeason }>(`/admin-pusat/products/${productId}/bus-seasons/${seasonId}`, body),
+  deleteBusSeason: (productId: string, seasonId: string) =>
+    api.delete<{ success: boolean; message?: string }>(`/admin-pusat/products/${productId}/bus-seasons/${seasonId}`),
+  setBusSeasonQuota: (productId: string, seasonId: string, body: { quota: number }) =>
+    api.put<{ success: boolean; data: BusSeasonQuota }>(`/admin-pusat/products/${productId}/bus-seasons/${seasonId}/quota`, body)
 };
+export interface BusSeason {
+  id: string;
+  product_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  meta?: object;
+  Quota?: { id: string; quota: number };
+}
+export interface BusSeasonQuota {
+  id: string;
+  season_id: string;
+  quota: number;
+}
+export interface TicketSeason {
+  id: string;
+  product_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  meta?: object;
+  Quota?: { id: string; quota: number };
+}
+export interface TicketSeasonQuota {
+  id: string;
+  season_id: string;
+  quota: number;
+}
 export interface VisaSeason {
   id: string;
   product_id: string;

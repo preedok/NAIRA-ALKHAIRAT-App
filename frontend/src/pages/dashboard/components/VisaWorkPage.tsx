@@ -5,6 +5,10 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import { Input, Autocomplete } from '../../../components/common';
 import { visaApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -186,61 +190,28 @@ const VisaWorkPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-sky-100 rounded-2xl shadow-sm shrink-0">
-            <FileText className="w-8 h-8 text-sky-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Progress Visa</h1>
-            <p className="text-slate-600 text-sm mt-1 max-w-xl">Kelola invoice berisi item visa: update status penerbitan (Nusuk) dan upload dokumen visa terbit. Owner dapat mengunduh dokumen di menu Invoice.</p>
-          </div>
-        </div>
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
-      </div>
+      <PageHeader
+        title="Progress Visa"
+        subtitle="Kelola invoice berisi item visa: update status penerbitan (Nusuk) dan upload dokumen visa terbit. Owner dapat mengunduh dokumen di menu Invoice."
+        right={<AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />}
+      />
 
       {/* Stat cards */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-slate-100 text-slate-600 shrink-0">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalInvoices}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-sky-100 text-sky-600 shrink-0">
-                <FileText className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Item Visa</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalItems}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" />
+          <StatCard icon={<FileText className="w-5 h-5" />} label="Total Item Visa" value={loading ? '–' : totalItems} iconClassName="bg-sky-100 text-sky-600" />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Per Status Progress</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {STATUS_OPTIONS.map((opt) => (
-              <Card key={opt.value} className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl shrink-0 ${STATUS_CARD_COLORS[opt.value] || 'bg-slate-100 text-slate-600'}`}>
-                    {STATUS_ICONS[opt.value] || <FileText className="h-6 w-6" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-500">{RECAP_STATUS_LABELS[opt.value] || opt.label}</p>
-                    <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : (byStatus[opt.value] ?? 0)}</p>
-                  </div>
-                </div>
-              </Card>
+              <StatCard
+                key={opt.value}
+                icon={STATUS_ICONS[opt.value] || <FileText className="w-5 h-5" />}
+                label={RECAP_STATUS_LABELS[opt.value] || opt.label}
+                value={loading ? '–' : (byStatus[opt.value] ?? 0)}
+              />
             ))}
           </div>
         </div>
@@ -250,29 +221,13 @@ const VisaWorkPage: React.FC = () => {
       <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Cari (invoice / order / owner / cabang)</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." className="w-full text-sm border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 bg-white" />
-            </div>
+            <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
           </div>
           <div className="sm:w-44">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Invoice</label>
-            <select value={filterInvoiceStatus} onChange={(e) => setFilterInvoiceStatus(e.target.value)} className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-sky-500 bg-white">
-              <option value="">Semua status</option>
-              {Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => (
-                <option key={val} value={val}>{lbl}</option>
-              ))}
-            </select>
+            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel="Semua status" />
           </div>
           <div className="sm:w-44">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Progress</label>
-            <select value={filterProgressStatus} onChange={(e) => setFilterProgressStatus(e.target.value)} className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-sky-500 bg-white">
-              <option value="">Semua progress</option>
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel="Semua progress" />
           </div>
           <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }} className="rounded-xl">Reset</Button>
         </div>
@@ -281,8 +236,12 @@ const VisaWorkPage: React.FC = () => {
       {/* Table */}
       <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/60">
-          <h2 className="text-lg font-semibold text-slate-900">Daftar Invoice Visa</h2>
-          <p className="text-sm text-slate-500 mt-0.5">{filteredInvoices.length} invoice</p>
+          <CardSectionHeader
+            icon={<FileText className="w-6 h-6" />}
+            title="Daftar Invoice Visa"
+            subtitle={`${filteredInvoices.length} invoice`}
+            className="mb-0"
+          />
         </div>
         {loading ? (
           <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">

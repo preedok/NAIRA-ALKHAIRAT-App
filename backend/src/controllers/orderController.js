@@ -146,7 +146,7 @@ async function visaRequiresHotel(items) {
  * Validasi: visa wajib hotel dari product.meta.require_hotel; bus min pack penalty from business rules.
  */
 const create = asyncHandler(async (req, res) => {
-  const { items, branch_id, owner_id, notes } = req.body;
+  const { items, branch_id, owner_id, notes, currency_rates_override } = req.body;
   const effectiveOwnerId = owner_id || req.user.id;
   // Gunakan branch_id dari body hanya jika benar-benar string non-kosong (body tanpa branch_id = undefined)
   const bodyBranchOk = typeof branch_id === 'string' && branch_id.trim() !== '';
@@ -325,6 +325,17 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
+  const canSetRates = ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+  const ratesOverride = canSetRates && currency_rates_override && typeof currency_rates_override === 'object'
+    ? {
+        SAR_TO_IDR: typeof currency_rates_override.SAR_TO_IDR === 'number' ? currency_rates_override.SAR_TO_IDR : null,
+        USD_TO_IDR: typeof currency_rates_override.USD_TO_IDR === 'number' ? currency_rates_override.USD_TO_IDR : null
+      }
+    : null;
+  const ratesPayload = (ratesOverride && (ratesOverride.SAR_TO_IDR != null || ratesOverride.USD_TO_IDR != null))
+    ? { currency_rates_override: ratesOverride }
+    : {};
+
   let order;
   try {
     order = await Order.create({
@@ -337,7 +348,8 @@ const create = asyncHandler(async (req, res) => {
       total_amount: subtotal + penaltyAmount,
       status: 'draft',
       created_by: req.user.id,
-      notes
+      notes,
+      ...ratesPayload
     });
   } catch (createErr) {
     console.error('Error creating order:', createErr);
@@ -430,7 +442,20 @@ const update = asyncHandler(async (req, res) => {
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa diubah saat draft/tentative/confirmed/processing' });
   }
-  const { items, notes } = req.body;
+  const { items, notes, currency_rates_override } = req.body;
+  const canSetRates = ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+  if (canSetRates && currency_rates_override !== undefined) {
+    const ratesOverride = (currency_rates_override && typeof currency_rates_override === 'object')
+      ? {
+          SAR_TO_IDR: typeof currency_rates_override.SAR_TO_IDR === 'number' ? currency_rates_override.SAR_TO_IDR : null,
+          USD_TO_IDR: typeof currency_rates_override.USD_TO_IDR === 'number' ? currency_rates_override.USD_TO_IDR : null
+        }
+      : null;
+    const payload = (ratesOverride && (ratesOverride.SAR_TO_IDR != null || ratesOverride.USD_TO_IDR != null))
+      ? { currency_rates_override: ratesOverride }
+      : { currency_rates_override: null };
+    await order.update(payload);
+  }
   if (items && Array.isArray(items)) {
     const hasHotel = items.some(i => i.type === ORDER_ITEM_TYPE.HOTEL);
     const visaNeedsHotel = await visaRequiresHotel(items);
@@ -530,7 +555,7 @@ const update = asyncHandler(async (req, res) => {
     await syncInvoiceFromOrder(orderReloaded || order);
   }
   if (notes !== undefined) await order.update({ notes });
-  const full = await Order.findByPk(order.id, {
+  const full = await Order.findByPk(req.params.id, {
     include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }] }]
   });
   res.json({ success: true, data: full });

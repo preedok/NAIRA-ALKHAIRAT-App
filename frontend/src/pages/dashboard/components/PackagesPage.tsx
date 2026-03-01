@@ -6,6 +6,10 @@ import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, StatCard, Autocomplete } from '../../../components/common';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -219,11 +223,16 @@ const PackagesPage: React.FC = () => {
   const [sortBy, setSortBy] = useState('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+
+  const hasActiveFilters = filterIncludeInactive === 'true';
+  const resetFilters = () => setFilterIncludeInactive('false');
 
   const fetchPackages = useCallback(() => {
     setLoading(true);
     setError(null);
-    const params = { is_package: 'true', with_prices: 'true', include_inactive: 'false', limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { is_package: 'true', with_prices: 'true', include_inactive: filterIncludeInactive, limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi
       .list(params)
       .then((res) => {
@@ -236,7 +245,7 @@ const PackagesPage: React.FC = () => {
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder, user?.role]);
+  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive]);
 
   useEffect(() => {
     fetchPackages();
@@ -486,51 +495,72 @@ const PackagesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Paket</h1>
-          <p className="text-slate-600 text-sm mt-1 max-w-xl">
-            Daftar paket umroh & travel. Harga adalah total untuk seluruh hari (bukan per hari).
-          </p>
+      <PageHeader
+        title="Paket"
+        subtitle="Daftar paket umroh & travel. Harga adalah total untuk seluruh hari (bukan per hari)."
+        right={
+          <div className="flex items-center gap-2">
+            <AutoRefreshControl onRefresh={fetchPackages} disabled={loading} />
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v) => !v)} hasActiveFilters={hasActiveFilters} />
+            {canCreatePackage && (
+              <Button variant="primary" className="flex items-center gap-2 shrink-0" onClick={openAdd}>
+                <Plus className="w-5 h-5" />
+                Buat paket baru
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchPackages(); }}
+        loading={loading}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        cardTitle="Pengaturan Filter"
+        cardDescription="Sembunyikan atau tampilkan paket nonaktif."
+        hideToggleRow
+        className="w-full"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <Autocomplete
+            label="Tampilkan"
+            value={filterIncludeInactive}
+            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+            options={[
+              { value: 'false', label: 'Aktif saja' },
+              { value: 'true', label: 'Semua (termasuk nonaktif)' }
+            ]}
+          />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <AutoRefreshControl onRefresh={fetchPackages} disabled={loading} />
-          {canCreatePackage && (
-            <Button variant="primary" className="flex items-center gap-2 shrink-0" onClick={openAdd}>
-              <Plus className="w-5 h-5" />
-              Buat paket baru
-            </Button>
-          )}
-        </div>
-      </div>
+      </PageFilter>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {stats.map((stat, i) => (
-          <Card key={i} padding="md" className="border border-slate-200/80">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} text-white shrink-0 shadow-sm`}>
-                <Package className="w-6 h-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard
+            key={i}
+            icon={<Package className="w-5 h-5" />}
+            label={stat.label}
+            value={stat.value}
+            iconClassName={`bg-gradient-to-br ${stat.color} text-white`}
+          />
         ))}
       </div>
 
       {/* Daftar paket - table */}
-      <Card className="overflow-hidden border border-slate-200/80">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
-          <h2 className="text-lg font-semibold text-slate-900">Daftar paket</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {pagination?.total ?? packages.length} paket · Setiap kolom dipisahkan agar mudah dibaca
-          </p>
-        </div>
-        <Table
+      <Card>
+        <CardSectionHeader
+          icon={<Package className="w-6 h-6" />}
+          title="Daftar paket"
+          subtitle={`${pagination?.total ?? packages.length} paket · Setiap kolom dipisahkan agar mudah dibaca`}
+        />
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <Table
           columns={tableColumns}
           data={packages}
           sort={{ columnId: sortBy, order: sortOrder }}
@@ -599,7 +629,7 @@ const PackagesPage: React.FC = () => {
                   {discountPercent > 0 ? <span className="text-amber-700 font-semibold">{discountPercent}%</span> : <span className="text-slate-400">-</span>}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                  {priceAfterIdr != null && priceAfterIdr > 0 ? <span className="text-emerald-700 font-medium">{formatPrice(priceAfterIdr, 'IDR')}</span> : <span className="text-slate-400">-</span>}
+                  {priceAfterIdr != null && priceAfterIdr > 0 ? <span className="text-[#0D1A63] font-medium">{formatPrice(priceAfterIdr, 'IDR')}</span> : <span className="text-slate-400">-</span>}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -652,6 +682,7 @@ const PackagesPage: React.FC = () => {
             );
           }}
         />
+        </div>
       </Card>
 
       {showModal && (
@@ -675,7 +706,7 @@ const PackagesPage: React.FC = () => {
                   <input
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                     placeholder="Contoh: Paket Ramadhan 9 day"
                   />
                 </div>
@@ -690,7 +721,7 @@ const PackagesPage: React.FC = () => {
                           type="button"
                           onClick={() => toggleInclude(opt.id)}
                           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            selected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            selected ? 'bg-[#0D1A63] text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                         >
                           {opt.label}
@@ -715,7 +746,7 @@ const PackagesPage: React.FC = () => {
                           <select
                             value={form.hotel_makkah_id}
                             onChange={(e) => setForm((f) => ({ ...f, hotel_makkah_id: e.target.value }))}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                           >
                             <option value="">-- Pilih hotel Mekkah --</option>
                             {hotelsMakkah.map((h) => (
@@ -729,7 +760,7 @@ const PackagesPage: React.FC = () => {
                           <select
                             value={form.hotel_madinah_id}
                             onChange={(e) => setForm((f) => ({ ...f, hotel_madinah_id: e.target.value }))}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                           >
                             <option value="">-- Pilih hotel Madinah --</option>
                             {hotelsMadinah.map((h) => (
@@ -788,7 +819,7 @@ const PackagesPage: React.FC = () => {
                         <select
                           value={form.visa_ids[0] ?? ''}
                           onChange={(e) => setForm((f) => ({ ...f, visa_ids: e.target.value ? [e.target.value] : [] }))}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                         >
                           <option value="">-- Pilih visa --</option>
                           {visaProducts.map((p) => (
@@ -805,7 +836,7 @@ const PackagesPage: React.FC = () => {
                           <select
                             value={form.ticket_ids[0] ?? ''}
                             onChange={(e) => setForm((f) => ({ ...f, ticket_ids: e.target.value ? [e.target.value] : [] }))}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                           >
                             <option value="">-- Pilih produk tiket --</option>
                             {ticketProducts.map((p) => (
@@ -820,7 +851,7 @@ const PackagesPage: React.FC = () => {
                             <select
                               value={form.ticket_maskapai}
                               onChange={(e) => setForm((f) => ({ ...f, ticket_maskapai: e.target.value }))}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                             >
                               <option value="">-- Pilih maskapai --</option>
                               {MASKAPAI_OPTIONS.map((m) => (
@@ -833,7 +864,7 @@ const PackagesPage: React.FC = () => {
                             <select
                               value={form.ticket_bandara}
                               onChange={(e) => setForm((f) => ({ ...f, ticket_bandara: e.target.value }))}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                             >
                               <option value="">-- Pilih bandara --</option>
                               {BANDARA_TIKET.map((b) => (
@@ -846,7 +877,7 @@ const PackagesPage: React.FC = () => {
                             <select
                               value={form.ticket_trip_type}
                               onChange={(e) => setForm((f) => ({ ...f, ticket_trip_type: e.target.value }))}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                             >
                               <option value="">-- Pilih perjalanan --</option>
                               {TICKET_TRIP_OPTIONS.map((t) => (
@@ -863,7 +894,7 @@ const PackagesPage: React.FC = () => {
                         <select
                           value={form.bus_ids[0] ?? ''}
                           onChange={(e) => setForm((f) => ({ ...f, bus_ids: e.target.value ? [e.target.value] : [] }))}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                         >
                           <option value="">-- Pilih bis --</option>
                           {busProducts.map((p) => (
@@ -913,7 +944,7 @@ const PackagesPage: React.FC = () => {
                         setForm((f) => ({ ...f, days: norm }));
                         setDaysInput(String(norm));
                       }}
-                      className="w-full max-w-[120px] border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full max-w-[120px] border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                       placeholder="9"
                     />
                   </div>
@@ -926,7 +957,7 @@ const PackagesPage: React.FC = () => {
                       step={1}
                       value={form.price_total_idr || ''}
                       onChange={(e) => setForm((f) => ({ ...f, price_total_idr: parseFloat(e.target.value) || 0 }))}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                       placeholder="Contoh: 45000000"
                     />
                     {(form.price_total_idr > 0) && (() => {
@@ -1039,14 +1070,14 @@ const PackagesPage: React.FC = () => {
                       max={100}
                       value={form.discountPercent || ''}
                       onChange={(e) => setForm((f) => ({ ...f, discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                       placeholder="0"
                     />
                   </div>
                   {form.discountPercent > 0 && (
                     <div className="rounded-lg bg-slate-50 p-3 text-sm">
                       <span className="text-slate-600">Harga setelah diskon (IDR): </span>
-                      <span className="font-semibold text-emerald-600">
+                      <span className="font-semibold text-[#0D1A63]">
                         {formatPrice(getPriceAfterDiscount(form.price_total_idr || 0, form.discountPercent), 'IDR')}
                       </span>
                     </div>

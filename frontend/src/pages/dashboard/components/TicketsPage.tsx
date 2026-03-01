@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plane, ShoppingCart, Plus, Pencil, X, Package, MapPin, ArrowRight, ArrowLeft, ArrowLeftRight } from 'lucide-react';
+import { Plane, ShoppingCart, Plus, Pencil, X, Package, MapPin, ArrowRight, ArrowLeft, ArrowLeftRight, Calendar, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import ActionsMenu from '../../../components/common/ActionsMenu';
+import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
+import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, StatCard, CardSectionHeader, Input, Autocomplete } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import { businessRulesApi, productsApi } from '../../../services/api';
+import { businessRulesApi, productsApi, adminPusatApi, type TicketSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import TicketWorkPage from './TicketWorkPage';
 
@@ -59,9 +64,21 @@ const formatRp = (n: number) => (n > 0 ? `Rp ${Number(n).toLocaleString('id-ID')
 
 type PeriodType = 'default' | 'month' | 'week' | 'day';
 
-type TicketsPageProps = { embedInProducts?: boolean };
+type TicketsPageProps = {
+  embedInProducts?: boolean;
+  refreshTrigger?: number;
+  embedFilterOpen?: boolean;
+  embedFilterOnToggle?: () => void;
+  onFilterActiveChange?: (active: boolean) => void;
+};
 
-const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
+const TicketsPage: React.FC<TicketsPageProps> = ({
+  embedInProducts,
+  refreshTrigger,
+  embedFilterOpen,
+  embedFilterOnToggle,
+  onFilterActiveChange
+}) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
@@ -98,7 +115,24 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
     trip_type: TicketTripType;
   } | null>(null);
   const [editProductSaving, setEditProductSaving] = useState(false);
+  const [ticketQuotaProduct, setTicketQuotaProduct] = useState<TicketProduct | null>(null);
+  const [ticketSeasons, setTicketSeasons] = useState<TicketSeason[]>([]);
+  const [ticketSeasonsLoading, setTicketSeasonsLoading] = useState(false);
+  const [newSeasonForm, setNewSeasonForm] = useState({ name: '', start_date: '', end_date: '', quota: 0 });
+  const [addSeasonSaving, setAddSeasonSaving] = useState(false);
+  const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
+  const [quotaSaving, setQuotaSaving] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const { addItem: addDraftItem } = useOrderDraft();
+
+  const hasActiveFilters = filterIncludeInactive === 'true';
+  const resetFilters = () => setFilterIncludeInactive('false');
+  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
+  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
+  useEffect(() => {
+    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
+  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
 
   const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
@@ -118,7 +152,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
   const fetchTicketProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingTicketProducts(true);
-    const params = { type: 'ticket', with_prices: 'true', include_inactive: 'false', limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'ticket', with_prices: 'true', include_inactive: filterIncludeInactive, limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
         const data = (res.data as { data?: TicketProduct[] })?.data;
@@ -126,10 +160,36 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
       })
       .catch(() => setTicketProducts([]))
       .finally(() => setLoadingTicketProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive]);
 
   useEffect(() => { fetchTicketProducts(); }, [fetchTicketProducts]);
+
+  useEffect(() => {
+    if (embedInProducts && refreshTrigger != null && refreshTrigger > 0) fetchTicketProducts();
+  }, [embedInProducts, refreshTrigger, fetchTicketProducts]);
+
+  useEffect(() => {
+    if (!ticketQuotaProduct?.id) return;
+    setTicketSeasonsLoading(true);
+    adminPusatApi.listTicketSeasons(ticketQuotaProduct.id)
+      .then((res) => setTicketSeasons((res.data as { data?: TicketSeason[] })?.data ?? []))
+      .catch(() => setTicketSeasons([]))
+      .finally(() => setTicketSeasonsLoading(false));
+  }, [ticketQuotaProduct?.id]);
+
   const refetchAll = useCallback(() => fetchTicketProducts(), [fetchTicketProducts]);
+
+  const handleDeleteTicket = async (p: TicketProduct) => {
+    if (!window.confirm(`Hapus produk tiket "${p.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    try {
+      await productsApi.delete(p.id);
+      showToast('Produk tiket dihapus', 'success');
+      fetchTicketProducts();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      showToast(err.response?.data?.message || 'Gagal menghapus produk tiket', 'error');
+    }
+  };
 
   const getSchedule = (p: TicketProduct, bandaraCode: string): BandaraSchedule | undefined =>
     p.bandara_options?.find((b) => b.bandara === bandaraCode);
@@ -255,43 +315,65 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Tiket</h2>
-          <p className="text-slate-600 text-sm mt-0.5">
-            Harga dan kuota seat per bandara: default, per bulan, per minggu, per hari. Pekerjaan tiket di menu Tiket.
-          </p>
+      {!embedInProducts && (
+        <PageHeader
+          title="Tiket"
+          subtitle="Harga dan kuota seat per bandara: default, per bulan, per minggu, per hari. Pekerjaan tiket di menu Tiket."
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={refetchAll} disabled={loadingTicketProducts} />
+              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
+            </div>
+          }
+        />
+      )}
+
+      <PageFilter
+        open={filterOpen}
+        onToggle={filterOnToggle}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { refetchAll(); if (embedFilterOnToggle) embedFilterOnToggle(); else setShowFilters(false); }}
+        loading={loadingTicketProducts}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        cardTitle="Pengaturan Filter"
+        cardDescription="Tampilkan produk tiket aktif saja atau termasuk nonaktif."
+        hideToggleRow
+        className="w-full"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Autocomplete
+            label="Tampilkan"
+            value={filterIncludeInactive}
+            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+            options={[
+              { value: 'false', label: 'Aktif saja' },
+              { value: 'true', label: 'Semua (termasuk nonaktif)' }
+            ]}
+          />
         </div>
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loadingTicketProducts} />
-      </div>
+      </PageFilter>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statsTiket.map((stat, i) => (
-          <Card key={i} padding="md" className="border border-slate-200/80">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} text-white shrink-0 shadow-sm`}>
-                <Plane className="w-6 h-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard key={i} icon={<Plane className="w-5 h-5" />} label={stat.label} value={stat.value} />
         ))}
       </div>
 
       {(canAddToOrder || embedInProducts) && (
         <Card>
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-            <h3 className="text-base font-semibold text-slate-900">Produk tiket</h3>
-            {isPusat && (
+          <CardSectionHeader
+            icon={<Plane className="w-6 h-6" />}
+            title="Produk tiket"
+            subtitle="Harga dan kuota seat per bandara: default, per bulan, per minggu, per hari. Pekerjaan tiket di menu Tiket."
+            right={isPusat ? (
               <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setShowAddModal(true)}>
                 <Plus className="w-4 h-4" /> Tambah produk tiket
               </Button>
-            )}
-          </div>
+            ) : undefined}
+          />
 
           {loadingTicketProducts ? (
             <p className="text-slate-500 text-sm py-4">Memuat produk...</p>
@@ -348,18 +430,16 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
                       })}
                       <td className="py-2 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         {isPusat && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setEditProductModal({
-                              product: p,
-                              name: p.name,
-                              description: p.description ?? '',
-                              trip_type: (p.meta?.trip_type as TicketTripType) || 'round_trip'
-                            })}
-                          >
-                            <Pencil className="w-4 h-4 mr-1" /> Edit produk
-                          </Button>
+                          <div className="flex items-center justify-end">
+                            <ActionsMenu
+                              align="right"
+                              items={[
+                                { id: 'periode', label: 'Kuota per periode', icon: <Calendar className="w-4 h-4" />, onClick: () => { setTicketQuotaProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
+                                { id: 'edit', label: 'Edit produk', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditProductModal({ product: p, name: p.name, description: p.description ?? '', trip_type: (p.meta?.trip_type as TicketTripType) || 'round_trip' }) },
+                                { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteTicket(p), danger: true },
+                              ]}
+                            />
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -676,6 +756,127 @@ const TicketsPage: React.FC<TicketsPageProps> = ({ embedInProducts }) => {
               <Button variant="primary" onClick={saveEditProduct} disabled={editProductSaving}>
                 {editProductSaving ? 'Menyimpan...' : 'Simpan'}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Kuota per periode (Admin Pusat) */}
+      {ticketQuotaProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addSeasonSaving && !quotaSaving && setTicketQuotaProduct(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary-500" />
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Kuota per periode</h3>
+                  <p className="text-sm text-slate-500">{ticketQuotaProduct.name}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => !addSeasonSaving && !quotaSaving && setTicketQuotaProduct(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Nama periode" type="text" placeholder="Nama periode" value={newSeasonForm.name} onChange={(e) => setNewSeasonForm((f) => ({ ...f, name: e.target.value }))} />
+                  <Input label="Mulai" type="date" value={newSeasonForm.start_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, start_date: e.target.value }))} />
+                  <Input label="Selesai" type="date" value={newSeasonForm.end_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, end_date: e.target.value }))} />
+                  <Input label="Kuota" type="number" min={0} placeholder="Kuota" value={newSeasonForm.quota ? String(newSeasonForm.quota) : ''} onChange={(e) => setNewSeasonForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))} />
+                </div>
+                <Button size="sm" className="mt-3" disabled={addSeasonSaving || !newSeasonForm.name.trim() || !newSeasonForm.start_date || !newSeasonForm.end_date} onClick={async () => {
+                  if (!ticketQuotaProduct?.id) return;
+                  setAddSeasonSaving(true);
+                  try {
+                    await adminPusatApi.createTicketSeason(ticketQuotaProduct.id, { name: newSeasonForm.name.trim(), start_date: newSeasonForm.start_date, end_date: newSeasonForm.end_date, quota: newSeasonForm.quota });
+                    showToast('Periode ditambahkan', 'success');
+                    setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 });
+                    const res = await adminPusatApi.listTicketSeasons(ticketQuotaProduct.id);
+                    setTicketSeasons((res.data as { data?: TicketSeason[] })?.data ?? []);
+                  } catch (e: unknown) {
+                    const err = e as { response?: { data?: { message?: string } } };
+                    showToast(err.response?.data?.message || 'Gagal menambah periode', 'error');
+                  } finally { setAddSeasonSaving(false); }
+                }}>
+                  {addSeasonSaving ? 'Menyimpan...' : 'Tambah periode'}
+                </Button>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
+                {ticketSeasonsLoading ? (
+                  <p className="text-sm text-slate-500">Memuat...</p>
+                ) : ticketSeasons.length === 0 ? (
+                  <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk mengatur kuota tiket per periode.</p>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Nama</th>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Mulai</th>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Selesai</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600">Kuota</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ticketSeasons.map((s) => (
+                          <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                            <td className="py-2 px-3 font-medium text-slate-800">{s.name}</td>
+                            <td className="py-2 px-3 text-slate-600">{s.start_date}</td>
+                            <td className="py-2 px-3 text-slate-600">{s.end_date}</td>
+                            <td className="py-2 px-3 text-right">
+                              {quotaEdit?.seasonId === s.id ? (
+                                <span className="flex items-center justify-end gap-1">
+                                  <Input type="number" min={0} value={quotaEdit.value} onChange={(e) => setQuotaEdit((q) => q ? { ...q, value: e.target.value } : null)} className="w-20" fullWidth={false} />
+                                  <Button size="sm" variant="primary" disabled={quotaSaving} onClick={async () => {
+                                    if (!ticketQuotaProduct?.id || !quotaEdit) return;
+                                    setQuotaSaving(true);
+                                    try {
+                                      await adminPusatApi.setTicketSeasonQuota(ticketQuotaProduct.id, s.id, { quota: Math.max(0, parseInt(quotaEdit.value, 10) || 0) });
+                                      showToast('Kuota disimpan', 'success');
+                                      setQuotaEdit(null);
+                                      const res = await adminPusatApi.listTicketSeasons(ticketQuotaProduct.id);
+                                      setTicketSeasons((res.data as { data?: TicketSeason[] })?.data ?? []);
+                                    } catch (e: unknown) {
+                                      const err = e as { response?: { data?: { message?: string } } };
+                                      showToast(err.response?.data?.message || 'Gagal', 'error');
+                                    } finally { setQuotaSaving(false); }
+                                  }}>Simpan</Button>
+                                </span>
+                              ) : (
+                                <span className="tabular-nums">{s.Quota?.quota ?? 0}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
+                              {quotaEdit?.seasonId === s.id ? (
+                                <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setQuotaEdit(null)}>Batal</button>
+                              ) : (
+                                <>
+                                  <button type="button" className="text-primary-600 hover:underline text-xs mr-2" onClick={() => setQuotaEdit({ seasonId: s.id, value: String(s.Quota?.quota ?? 0) })}>Set kuota</button>
+                                  <button type="button" className="text-red-600 hover:underline text-xs" onClick={async () => {
+                                    if (!ticketQuotaProduct?.id || !window.confirm('Hapus periode ini?')) return;
+                                    try {
+                                      await adminPusatApi.deleteTicketSeason(ticketQuotaProduct.id, s.id);
+                                      showToast('Periode dihapus', 'success');
+                                      setTicketSeasons((prev) => prev.filter((x) => x.id !== s.id));
+                                    } catch (e: unknown) {
+                                      const err = e as { response?: { data?: { message?: string } } };
+                                      showToast(err.response?.data?.message || 'Gagal menghapus', 'error');
+                                    }
+                                  }}>Hapus</button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

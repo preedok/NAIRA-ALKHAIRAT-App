@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight, ShoppingCart } from 'lucide-react';
+import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight, ShoppingCart, Calendar, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import ActionsMenu from '../../../components/common/ActionsMenu';
+import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
+import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, StatCard, CardSectionHeader, Input, Autocomplete, Textarea } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import { productsApi, businessRulesApi } from '../../../services/api';
+import { productsApi, businessRulesApi, adminPusatApi, type BusSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import BusWorkPage from './BusWorkPage';
@@ -55,9 +60,21 @@ const BUS_KIND_LABELS: Record<BusKind, string> = {
 
 const formatRp = (n: number) => (n > 0 ? `Rp ${Number(n).toLocaleString('id-ID')}` : '—');
 
-type BusPageProps = { embedInProducts?: boolean };
+type BusPageProps = {
+  embedInProducts?: boolean;
+  refreshTrigger?: number;
+  embedFilterOpen?: boolean;
+  embedFilterOnToggle?: () => void;
+  onFilterActiveChange?: (active: boolean) => void;
+};
 
-const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
+const BusPage: React.FC<BusPageProps> = ({
+  embedInProducts,
+  refreshTrigger,
+  embedFilterOpen,
+  embedFilterOnToggle,
+  onFilterActiveChange
+}) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
@@ -94,6 +111,23 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   });
   const [addBusSaving, setAddBusSaving] = useState(false);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
+  const [busQuotaProduct, setBusQuotaProduct] = useState<BusProduct | null>(null);
+  const [busSeasons, setBusSeasons] = useState<BusSeason[]>([]);
+  const [busSeasonsLoading, setBusSeasonsLoading] = useState(false);
+  const [newSeasonForm, setNewSeasonForm] = useState({ name: '', start_date: '', end_date: '', quota: 0 });
+  const [addSeasonSaving, setAddSeasonSaving] = useState(false);
+  const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
+  const [quotaSaving, setQuotaSaving] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+
+  const hasActiveFilters = filterIncludeInactive === 'true';
+  const resetFilters = () => setFilterIncludeInactive('false');
+  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
+  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
+  useEffect(() => {
+    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
+  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -108,7 +142,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
   const fetchBusProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
     setLoadingBusProducts(true);
-    const params = { type: 'bus', with_prices: 'true', include_inactive: 'false', limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: 50, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
         const data = (res.data as { data?: BusProduct[] })?.data;
@@ -116,15 +150,40 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
       })
       .catch(() => setBusProducts([]))
       .finally(() => setLoadingBusProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive]);
 
   useEffect(() => {
     fetchBusProducts();
   }, [fetchBusProducts]);
 
+  useEffect(() => {
+    if (embedInProducts && refreshTrigger != null && refreshTrigger > 0) fetchBusProducts();
+  }, [embedInProducts, refreshTrigger, fetchBusProducts]);
+
+  useEffect(() => {
+    if (!busQuotaProduct?.id) return;
+    setBusSeasonsLoading(true);
+    adminPusatApi.listBusSeasons(busQuotaProduct.id)
+      .then((res) => setBusSeasons((res.data as { data?: BusSeason[] })?.data ?? []))
+      .catch(() => setBusSeasons([]))
+      .finally(() => setBusSeasonsLoading(false));
+  }, [busQuotaProduct?.id]);
+
   const refetchAll = useCallback(() => {
     fetchBusProducts();
   }, [fetchBusProducts]);
+
+  const handleDeleteBus = async (p: BusProduct) => {
+    if (!window.confirm(`Hapus produk bus "${p.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    try {
+      await productsApi.delete(p.id);
+      showToast('Produk bus dihapus', 'success');
+      fetchBusProducts();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      showToast(err.response?.data?.message || 'Gagal menghapus produk bus', 'error');
+    }
+  };
 
   const saveEditProduct = async () => {
     if (!editProductModal) return;
@@ -207,47 +266,58 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Bus Saudi</h2>
-          <p className="text-slate-600 text-sm mt-0.5">
-            Pilih tipe perjalanan (jemput saja / pulang saja / pulang pergi), lalu isi harga per rute (jemput di mana → antar ke mana) dalam IDR, SAR, atau USD—nilai terkonversi otomatis. Data tampil di tabel dan dipakai untuk order.
-          </p>
+      {!embedInProducts && (
+        <PageHeader
+          title="Bus Saudi"
+          subtitle="Pilih tipe perjalanan (jemput saja / pulang saja / pulang pergi), lalu isi harga per rute dalam IDR, SAR, atau USD. Data tampil di tabel dan dipakai untuk order."
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={refetchAll} disabled={loadingBusProducts} />
+              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
+            </div>
+          }
+        />
+      )}
+
+      <PageFilter
+        open={filterOpen}
+        onToggle={filterOnToggle}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { refetchAll(); if (embedFilterOnToggle) embedFilterOnToggle(); else setShowFilters(false); }}
+        loading={loadingBusProducts}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        cardTitle="Pengaturan Filter"
+        cardDescription="Tampilkan produk bus aktif saja atau termasuk nonaktif."
+        hideToggleRow
+        className="w-full"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Autocomplete label="Tampilkan" value={filterIncludeInactive} onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')} options={[{ value: 'false', label: 'Aktif saja' }, { value: 'true', label: 'Semua (termasuk nonaktif)' }]} />
         </div>
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loadingBusProducts} />
-      </div>
+      </PageFilter>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statsBus.map((stat, i) => (
-          <Card key={i} padding="md" className="border border-slate-200/80">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} text-white shrink-0 shadow-sm`}>
-                <Bus className="w-6 h-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard key={i} icon={<Bus className="w-5 h-5" />} label={stat.label} value={stat.value} />
         ))}
       </div>
 
       {/* Daftar produk bus */}
       {(canAddToOrder || embedInProducts) && (
         <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Daftar produk bus</h3>
-              <p className="text-sm text-slate-500 mt-0.5">Tambah produk bus atau Hiace; isi harga dan kuota default (per hari). Kuota tampil di tabel dan di Kalender—berkurang otomatis per tanggal jika ada order.</p>
-            </div>
-            {isPusat && (
+          <CardSectionHeader
+            icon={<Bus className="w-6 h-6" />}
+            title="Daftar produk bus"
+            subtitle="Tambah produk bus atau Hiace; isi harga dan kuota default (per hari). Kuota tampil di tabel dan di Kalender—berkurang otomatis per tanggal jika ada order."
+            right={isPusat ? (
               <Button variant="primary" size="sm" onClick={() => setAddBusModalOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" /> Tambah produk bus
               </Button>
-            )}
-          </div>
+            ) : undefined}
+          />
           {loadingBusProducts ? (
             <p className="text-slate-500 text-sm py-4">Memuat produk...</p>
           ) : busProducts.length === 0 ? (
@@ -318,9 +388,9 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                         <div className="flex items-center justify-end gap-1 flex-wrap">
                           {canAddToOrder && (
                             <Button
-                              variant="primary"
+                              variant="outline"
                               size="sm"
-                              className="shrink-0"
+                              className="p-2"
                               onClick={() => {
                                 const priceIdr = isHiace
                                   ? (p.meta?.price_per_vehicle_idr ?? p.price_general_idr ?? 0)
@@ -335,38 +405,37 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                                 showToast('Bus ditambahkan ke order. Buka menu Order untuk lengkapi tipe perjalanan & tanggal.', 'success');
                               }}
                               title="Pesan / Tambah ke order"
+                              aria-label="Tambah ke order"
                             >
-                              <ShoppingCart className="w-4 h-4 mr-1" /> Pesan
+                              <ShoppingCart className="w-4 h-4" />
                             </Button>
                           )}
                           {isPusat && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const raw = p.meta?.route_prices_by_trip as Record<string, unknown> | undefined;
-                                const toNum = (v: unknown): number => {
-                                  if (typeof v === 'number' && !Number.isNaN(v)) return v;
-                                  if (v && typeof v === 'object' && typeof (v as Record<string, unknown>).full_route === 'number') return Number((v as Record<string, number>).full_route) || 0;
-                                  return 0;
-                                };
-                                const one = raw ? toNum(raw.one_way) : 0;
-                                const ret = raw ? toNum(raw.return_only) : 0;
-                                const round = raw ? toNum(raw.round_trip) : 0;
-                                setEditProductModal({
-                                  product: p,
-                                  name: p.name,
-                                  description: p.description ?? '',
-                                  bus_kind: (p.meta?.bus_kind as BusKind) || 'bus',
-                                  route_prices_by_trip: { one_way: one, return_only: ret, round_trip: round },
-                                  price_per_vehicle_idr: p.meta?.price_per_vehicle_idr ?? 0,
-                                  price_currency: 'IDR',
-                                  default_quota: (typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0) ? p.meta.default_quota : ''
-                                });
-                              }}
-                            >
-                              <Pencil className="w-4 h-4 mr-1" /> Edit
-                            </Button>
+                            <ActionsMenu
+                              align="right"
+                              items={[
+                                { id: 'periode', label: 'Kuota per periode', icon: <Calendar className="w-4 h-4" />, onClick: () => { setBusQuotaProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
+                                { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => {
+                                  const raw = p.meta?.route_prices_by_trip as Record<string, unknown> | undefined;
+                                  const toNum = (v: unknown): number => {
+                                    if (typeof v === 'number' && !Number.isNaN(v)) return v;
+                                    if (v && typeof v === 'object' && typeof (v as Record<string, unknown>).full_route === 'number') return Number((v as Record<string, number>).full_route) || 0;
+                                    return 0;
+                                  };
+                                  setEditProductModal({
+                                    product: p,
+                                    name: p.name,
+                                    description: p.description ?? '',
+                                    bus_kind: (p.meta?.bus_kind as BusKind) || 'bus',
+                                    route_prices_by_trip: { one_way: raw ? toNum(raw.one_way) : 0, return_only: raw ? toNum(raw.return_only) : 0, round_trip: raw ? toNum(raw.round_trip) : 0 },
+                                    price_per_vehicle_idr: p.meta?.price_per_vehicle_idr ?? 0,
+                                    price_currency: 'IDR',
+                                    default_quota: (typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0) ? p.meta.default_quota : ''
+                                  });
+                                } },
+                                { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteBus(p), danger: true },
+                              ]}
+                            />
                           )}
                         </div>
                       </td>
@@ -390,16 +459,7 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama produk <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  value={addBusForm.name}
-                  onChange={(e) => setAddBusForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
-                  placeholder="Contoh: Bus Mekkah–Madinah atau Hiace Madinah"
-                />
-              </div>
+              <Input label="Nama produk *" type="text" value={addBusForm.name} onChange={(e) => setAddBusForm((f) => ({ ...f, name: e.target.value }))} placeholder="Contoh: Bus Mekkah–Madinah atau Hiace Madinah" />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Jenis</label>
                 <div className="flex gap-3">
@@ -418,16 +478,8 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Kuota</label>
-                <p className="text-xs text-slate-500 mb-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
-                <input
-                  type="number"
-                  min={0}
-                  value={addBusForm.default_quota === '' ? '' : addBusForm.default_quota}
-                  onChange={(e) => setAddBusForm((f) => ({ ...f, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                  className="w-full max-w-[140px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
-                  placeholder="Total Kuota Bus Operasi"
-                />
+                <Input label="Kuota" type="number" min={0} value={addBusForm.default_quota === '' ? '' : String(addBusForm.default_quota)} onChange={(e) => setAddBusForm((f) => ({ ...f, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="Total Kuota Bus Operasi" className="max-w-[140px]" fullWidth={false} />
+                <p className="text-xs text-slate-500 mt-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
               </div>
               {addBusForm.bus_kind === 'hiace' && (
                 <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
@@ -448,18 +500,9 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                       const cur = addBusForm.price_currency;
                       return (
                         <>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
-                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) }))} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
-                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
-                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
+                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) }))} disabled={cur !== 'IDR'} placeholder="0" />
+                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'SAR'} placeholder="0" />
+                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr }))} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
@@ -489,18 +532,9 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                       }));
                       return (
                         <>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
-                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
-                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
-                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
+                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} placeholder="0" />
+                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
+                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
@@ -529,14 +563,8 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama produk <span className="text-red-500">*</span></label>
-                <input type="text" value={editProductModal.name} onChange={(e) => setEditProductModal((m) => m ? { ...m, name: e.target.value } : null)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi</label>
-                <textarea value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 resize-none" />
-              </div>
+              <Input label="Nama produk *" type="text" value={editProductModal.name} onChange={(e) => setEditProductModal((m) => m ? { ...m, name: e.target.value } : null)} />
+              <Textarea label="Deskripsi" value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Jenis</label>
                 <div className="flex gap-3">
@@ -555,16 +583,8 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Kuota default (kalender)</label>
-                <p className="text-xs text-slate-500 mb-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
-                <input
-                  type="number"
-                  min={0}
-                  value={editProductModal.default_quota === '' ? '' : editProductModal.default_quota}
-                  onChange={(e) => setEditProductModal((m) => m ? { ...m, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) } : null)}
-                  className="w-full max-w-[140px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
-                  placeholder="Opsional"
-                />
+                <Input label="Kuota default (kalender)" type="number" min={0} value={editProductModal.default_quota === '' ? '' : String(editProductModal.default_quota)} onChange={(e) => setEditProductModal((m) => m ? { ...m, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) } : null)} placeholder="Opsional" className="max-w-[140px]" fullWidth={false} />
+                <p className="text-xs text-slate-500 mt-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
               </div>
               {editProductModal.bus_kind === 'hiace' && (
                 <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
@@ -585,18 +605,9 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                       const cur = editProductModal.price_currency;
                       return (
                         <>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
-                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) } : null)} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
-                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
-                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
+                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: Math.max(0, parseFloat(e.target.value) || 0) } : null)} disabled={cur !== 'IDR'} placeholder="0" />
+                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'SAR'} placeholder="0" />
+                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr } : null)} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
@@ -626,18 +637,9 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
                       } : null);
                       return (
                         <>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">IDR</span>
-                            <input type="number" min={0} value={idr > 0 ? idr : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'IDR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">SAR</span>
-                            <input type="number" min={0} step={0.01} value={triple.sar > 0 ? triple.sar : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'SAR' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
-                          <div>
-                            <span className="block text-xs text-slate-500 mb-0.5">USD</span>
-                            <input type="number" min={0} step={0.01} value={triple.usd > 0 ? triple.usd : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} className={`w-full border rounded-lg px-3 py-2 text-sm ${cur === 'USD' ? 'border-slate-200 focus:ring-2 focus:ring-amber-500' : 'border-slate-100 bg-slate-50 text-slate-500'}`} placeholder="0" />
-                          </div>
+                          <Input label="IDR" type="number" min={0} value={idr > 0 ? String(idr) : ''} onChange={(e) => setPrice(Math.max(0, parseFloat(e.target.value) || 0))} disabled={cur !== 'IDR'} placeholder="0" />
+                          <Input label="SAR" type="number" min={0} step={0.01} value={triple.sar > 0 ? String(triple.sar) : ''} onChange={(e) => setPrice(fillFromSource('SAR', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
+                          <Input label="USD" type="number" min={0} step={0.01} value={triple.usd > 0 ? String(triple.usd) : ''} onChange={(e) => setPrice(fillFromSource('USD', Math.max(0, parseFloat(e.target.value) || 0), currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
                         </>
                       );
                     })()}
@@ -648,6 +650,127 @@ const BusPage: React.FC<BusPageProps> = ({ embedInProducts }) => {
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
               <Button variant="outline" onClick={() => setEditProductModal(null)} disabled={editProductSaving}>Batal</Button>
               <Button variant="primary" onClick={saveEditProduct} disabled={editProductSaving}>{editProductSaving ? 'Menyimpan...' : 'Simpan'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Kuota per periode (Admin Pusat) */}
+      {busQuotaProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !addSeasonSaving && !quotaSaving && setBusQuotaProduct(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#0D1A63]" />
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Kuota per periode</h3>
+                  <p className="text-sm text-slate-500">{busQuotaProduct.name}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => !addSeasonSaving && !quotaSaving && setBusQuotaProduct(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Nama periode" type="text" placeholder="Nama periode" value={newSeasonForm.name} onChange={(e) => setNewSeasonForm((f) => ({ ...f, name: e.target.value }))} />
+                  <Input label="Mulai" type="date" value={newSeasonForm.start_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, start_date: e.target.value }))} />
+                  <Input label="Selesai" type="date" value={newSeasonForm.end_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, end_date: e.target.value }))} />
+                  <Input label="Kuota" type="number" min={0} placeholder="Kuota" value={newSeasonForm.quota ? String(newSeasonForm.quota) : ''} onChange={(e) => setNewSeasonForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))} />
+                </div>
+                <Button size="sm" className="mt-3" disabled={addSeasonSaving || !newSeasonForm.name.trim() || !newSeasonForm.start_date || !newSeasonForm.end_date} onClick={async () => {
+                  if (!busQuotaProduct?.id) return;
+                  setAddSeasonSaving(true);
+                  try {
+                    await adminPusatApi.createBusSeason(busQuotaProduct.id, { name: newSeasonForm.name.trim(), start_date: newSeasonForm.start_date, end_date: newSeasonForm.end_date, quota: newSeasonForm.quota });
+                    showToast('Periode ditambahkan', 'success');
+                    setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 });
+                    const res = await adminPusatApi.listBusSeasons(busQuotaProduct.id);
+                    setBusSeasons((res.data as { data?: BusSeason[] })?.data ?? []);
+                  } catch (e: unknown) {
+                    const err = e as { response?: { data?: { message?: string } } };
+                    showToast(err.response?.data?.message || 'Gagal menambah periode', 'error');
+                  } finally { setAddSeasonSaving(false); }
+                }}>
+                  {addSeasonSaving ? 'Menyimpan...' : 'Tambah periode'}
+                </Button>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
+                {busSeasonsLoading ? (
+                  <p className="text-sm text-slate-500">Memuat...</p>
+                ) : busSeasons.length === 0 ? (
+                  <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk mengatur kuota bus per periode.</p>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Nama</th>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Mulai</th>
+                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Selesai</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600">Kuota</th>
+                          <th className="text-right py-2 px-3 font-semibold text-slate-600 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {busSeasons.map((s) => (
+                          <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                            <td className="py-2 px-3 font-medium text-slate-800">{s.name}</td>
+                            <td className="py-2 px-3 text-slate-600">{s.start_date}</td>
+                            <td className="py-2 px-3 text-slate-600">{s.end_date}</td>
+                            <td className="py-2 px-3 text-right">
+                              {quotaEdit?.seasonId === s.id ? (
+                                <span className="flex items-center justify-end gap-1">
+                                  <Input type="number" min={0} value={quotaEdit.value} onChange={(e) => setQuotaEdit((q) => q ? { ...q, value: e.target.value } : null)} className="w-20" fullWidth={false} />
+                                  <Button size="sm" variant="primary" disabled={quotaSaving} onClick={async () => {
+                                    if (!busQuotaProduct?.id || !quotaEdit) return;
+                                    setQuotaSaving(true);
+                                    try {
+                                      await adminPusatApi.setBusSeasonQuota(busQuotaProduct.id, s.id, { quota: Math.max(0, parseInt(quotaEdit.value, 10) || 0) });
+                                      showToast('Kuota disimpan', 'success');
+                                      setQuotaEdit(null);
+                                      const res = await adminPusatApi.listBusSeasons(busQuotaProduct.id);
+                                      setBusSeasons((res.data as { data?: BusSeason[] })?.data ?? []);
+                                    } catch (e: unknown) {
+                                      const err = e as { response?: { data?: { message?: string } } };
+                                      showToast(err.response?.data?.message || 'Gagal', 'error');
+                                    } finally { setQuotaSaving(false); }
+                                  }}>Simpan</Button>
+                                </span>
+                              ) : (
+                                <span className="tabular-nums">{s.Quota?.quota ?? 0}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
+                              {quotaEdit?.seasonId === s.id ? (
+                                <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setQuotaEdit(null)}>Batal</button>
+                              ) : (
+                                <>
+                                  <button type="button" className="text-primary-600 hover:underline text-xs mr-2" onClick={() => setQuotaEdit({ seasonId: s.id, value: String(s.Quota?.quota ?? 0) })}>Set kuota</button>
+                                  <button type="button" className="text-red-600 hover:underline text-xs" onClick={async () => {
+                                    if (!busQuotaProduct?.id || !window.confirm('Hapus periode ini?')) return;
+                                    try {
+                                      await adminPusatApi.deleteBusSeason(busQuotaProduct.id, s.id);
+                                      showToast('Periode dihapus', 'success');
+                                      setBusSeasons((prev) => prev.filter((x) => x.id !== s.id));
+                                    } catch (e: unknown) {
+                                      const err = e as { response?: { data?: { message?: string } } };
+                                      showToast(err.response?.data?.message || 'Gagal menghapus', 'error');
+                                    }
+                                  }}>Hapus</button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

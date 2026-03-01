@@ -1,11 +1,17 @@
 export { default as ActionsMenu } from './ActionsMenu';
 export { default as AutoRefreshControl } from './AutoRefreshControl';
+export { default as Autocomplete } from './Autocomplete';
 export { default as Badge } from './Badge';
 export { default as Button } from './Button';
 export { default as Card } from './Card';
+export { default as CardSectionHeader } from './CardSectionHeader';
+export { default as Checkbox } from './Checkbox';
 export { default as DashboardFilterBar } from './DashboardFilterBar';
 export { default as Dropdown } from './Dropdown';
 export { default as Input } from './Input';
 export { default as Modal } from './Modal';
-export { default as PageFilter } from './PageFilter';
+export { default as PageFilter, FilterIconButton } from './PageFilter';
+export { default as PageHeader } from './PageHeader';
+export { default as StatCard } from './StatCard';
 export { default as Table } from './Table';
+export { default as Textarea } from './Textarea';

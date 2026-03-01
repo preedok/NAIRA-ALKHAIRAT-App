@@ -10,11 +10,15 @@ import {
   Trash2,
   Power,
   PowerOff,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, Input, Autocomplete, Checkbox } from '../../../components/common';
 import { accountingApi, type ChartOfAccountItem } from '../../../services/api';
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -285,100 +289,47 @@ const AccountingChartOfAccountsPage: React.FC = () => {
     );
   };
 
+  const hasActiveFilters = filterType !== '' || filterActive !== 'all' || filterLevel !== '' || filterHeader !== 'all' || search.trim() !== '';
+  const resetFilters = () => { setFilterType(''); setFilterActive('all'); setFilterLevel(''); setFilterHeader('all'); setSearch(''); };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Chart of Accounts</h1>
-          <p className="text-slate-600 mt-1">Daftar akun perkiraan multi-level — kelola kode, nama, tipe, dan hierarki</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="primary" size="sm" onClick={() => openCreate()}>
-            <Plus className="w-4 h-4 mr-2" />
-            Tambah Akun
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
-          <Button variant="ghost" size="sm" onClick={fetchAccounts} disabled={loading}>
-            {loading ? 'Memuat...' : 'Refresh'}
-          </Button>
-        </div>
-      </div>
-
-      {showFilters && (
-        <Card className="bg-slate-50/80">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filter
-          </h3>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tipe Akun</label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Semua</option>
-                {Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-              <select
-                value={filterActive}
-                onChange={(e) => setFilterActive(e.target.value as 'all' | 'active' | 'inactive')}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[120px] focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">Semua</option>
-                <option value="active">Aktif</option>
-                <option value="inactive">Nonaktif</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Level</label>
-              <select
-                value={filterLevel}
-                onChange={(e) => setFilterLevel(e.target.value)}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[100px] focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Semua</option>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Header</label>
-              <select
-                value={filterHeader}
-                onChange={(e) => setFilterHeader(e.target.value as 'all' | 'yes' | 'no')}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[100px] focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">Semua</option>
-                <option value="yes">Ya</option>
-                <option value="no">Tidak</option>
-              </select>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cari (kode / nama)</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Kode atau nama akun..."
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
+      <PageHeader
+        title="Chart of Accounts"
+        subtitle="Daftar akun perkiraan multi-level — kelola kode, nama, tipe, dan hierarki"
+        right={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={fetchAccounts} disabled={loading} aria-label="Refresh">
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Memuat...' : 'Refresh'}
+            </Button>
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
+            <Button variant="primary" size="sm" onClick={() => openCreate()}>
+              <Plus className="w-4 h-4 mr-2" />
+              Tambah Akun
+            </Button>
           </div>
-        </Card>
-      )}
+        }
+      />
+
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v: boolean) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => setShowFilters(false)}
+        hideToggleRow
+      >
+        <div className="flex flex-wrap gap-4 items-end">
+          <Autocomplete label="Tipe Akun" value={filterType} onChange={setFilterType} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua" fullWidth={false} className="min-w-[140px]" />
+          <Autocomplete label="Status" value={filterActive} onChange={(v) => setFilterActive(v as 'all' | 'active' | 'inactive')} options={[{ value: 'all', label: 'Semua' }, { value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]} fullWidth={false} className="min-w-[120px]" />
+          <Autocomplete label="Level" value={filterLevel} onChange={setFilterLevel} options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))} emptyLabel="Semua" fullWidth={false} className="min-w-[100px]" />
+          <Autocomplete label="Header" value={filterHeader} onChange={(v) => setFilterHeader(v as 'all' | 'yes' | 'no')} options={[{ value: 'all', label: 'Semua' }, { value: 'yes', label: 'Ya' }, { value: 'no', label: 'Tidak' }]} fullWidth={false} className="min-w-[100px]" />
+          <div className="flex-1 min-w-[200px]">
+            <Input label="Cari (kode / nama)" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kode atau nama akun..." icon={<Search className="w-4 h-4" />} />
+          </div>
+        </div>
+      </PageFilter>
 
       <Card>
         <div className="overflow-x-auto">
@@ -419,66 +370,14 @@ const AccountingChartOfAccountsPage: React.FC = () => {
             </div>
             <form onSubmit={handleSubmitCreate} className="space-y-4">
               {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Kode *</label>
-                <input
-                  type="text"
-                  value={form.code}
-                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                  placeholder="1-1-01"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Kas Kecil"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Akun *</label>
-                <select
-                  value={form.account_type}
-                  onChange={(e) => setForm((f) => ({ ...f, account_type: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                >
-                  {Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </div>
+              <Input label="Kode *" type="text" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="1-1-01" />
+              <Input label="Nama *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Kas Kecil" />
+              <Autocomplete label="Tipe Akun *" value={form.account_type} onChange={(v) => setForm((f) => ({ ...f, account_type: v }))} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Mata Uang</label>
-                  <select
-                    value={form.currency}
-                    onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="IDR">IDR</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Urutan</label>
-                  <input
-                    type="number"
-                    value={form.sort_order}
-                    onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
-                    min={0}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
+                <Autocomplete label="Mata Uang" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} options={[{ value: 'IDR', label: 'IDR' }, { value: 'USD', label: 'USD' }, { value: 'SAR', label: 'SAR' }]} />
+                <Input label="Urutan" type="number" value={String(form.sort_order)} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} min={0} />
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} className="rounded" />
-                Akun header (tidak untuk posting)
-              </label>
+              <Checkbox label="Akun header (tidak untuk posting)" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="ghost" onClick={() => setModalOpen(null)}>Batal</Button>
                 <Button type="submit" variant="primary" disabled={!!actionLoading}>{actionLoading === 'create' ? 'Menyimpan...' : 'Simpan'}</Button>
@@ -499,63 +398,15 @@ const AccountingChartOfAccountsPage: React.FC = () => {
             </div>
             <form onSubmit={handleSubmitEdit} className="space-y-4">
               {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Kode</label>
-                <input type="text" value={form.code} readOnly className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Akun</label>
-                <select
-                  value={form.account_type}
-                  onChange={(e) => setForm((f) => ({ ...f, account_type: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                >
-                  {Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </div>
+              <Input label="Kode" type="text" value={form.code} readOnly />
+              <Input label="Nama *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              <Autocomplete label="Tipe Akun" value={form.account_type} onChange={(v) => setForm((f) => ({ ...f, account_type: v }))} options={Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} />
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Mata Uang</label>
-                  <select
-                    value={form.currency}
-                    onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="IDR">IDR</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Urutan</label>
-                  <input
-                    type="number"
-                    value={form.sort_order}
-                    onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
-                    min={0}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
+                <Autocomplete label="Mata Uang" value={form.currency} onChange={(v) => setForm((f) => ({ ...f, currency: v }))} options={[{ value: 'IDR', label: 'IDR' }, { value: 'USD', label: 'USD' }, { value: 'SAR', label: 'SAR' }]} />
+                <Input label="Urutan" type="number" value={String(form.sort_order)} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} min={0} />
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} className="rounded" />
-                Akun header
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} className="rounded" />
-                Aktif
-              </label>
+              <Checkbox label="Akun header" checked={form.is_header} onChange={(e) => setForm((f) => ({ ...f, is_header: e.target.checked }))} />
+              <Checkbox label="Aktif" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="ghost" onClick={() => { setModalOpen(null); setEditingAccount(null); }}>Batal</Button>
                 <Button type="submit" variant="primary" disabled={!!actionLoading}>{actionLoading === 'edit' ? 'Menyimpan...' : 'Simpan'}</Button>

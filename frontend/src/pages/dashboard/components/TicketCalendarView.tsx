@@ -8,6 +8,7 @@ import {
   MapPin,
   ArrowLeftRight
 } from 'lucide-react';
+import Autocomplete from '../../../components/common/Autocomplete';
 import { productsApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 
@@ -148,63 +149,19 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80">
           <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-            <ArrowLeftRight className="w-4 h-4 text-primary-600" />
+            <ArrowLeftRight className="w-4 h-4 text-[#0D1A63]" />
             Pilih filter untuk menampilkan kalender
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">Perjalanan, produk tiket, dan bandara menentukan data yang ditampilkan.</p>
         </div>
         <div className="p-5 flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-600">Perjalanan</label>
-            <select
-              value={tripTypeFilter}
-              onChange={(e) => {
-                const v = e.target.value as TicketTripType | '';
-                setTripTypeFilter(v);
-              }}
-              className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm min-w-[160px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-            >
-              <option value="">Semua</option>
-              {Object.entries(TRIP_TYPE_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-600">Produk Tiket</label>
-            <select
-              value={selectedProductId}
-              onChange={(e) => {
-                setSelectedProductId(e.target.value);
-                setSelectedBandara('');
-              }}
-              className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm min-w-[220px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-            >
-              <option value="">-- Pilih tiket --</option>
-              {filteredTicketProducts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-              ))}
-            </select>
-          </div>
+          <Autocomplete label="Perjalanan" value={tripTypeFilter} onChange={(v) => { setTripTypeFilter(v as TicketTripType | ''); }} options={Object.entries(TRIP_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua" className="min-w-[160px]" fullWidth={false} />
+          <Autocomplete label="Produk Tiket" value={selectedProductId} onChange={(v) => { setSelectedProductId(v); setSelectedBandara(''); }} options={filteredTicketProducts.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))} placeholder="-- Pilih tiket --" className="min-w-[220px]" fullWidth={false} />
           {selectedProductId && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" /> Bandara
-              </label>
-              <select
-                value={selectedBandara}
-                onChange={(e) => setSelectedBandara(e.target.value)}
-                className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm min-w-[160px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-              >
-                <option value="">-- Pilih bandara --</option>
-                {BANDARA_TIKET.map((b) => (
-                  <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
-                ))}
-              </select>
-            </div>
+            <Autocomplete label="Bandara" value={selectedBandara} onChange={setSelectedBandara} options={BANDARA_TIKET.map((b) => ({ value: b.code, label: `${b.name} (${b.code})` }))} placeholder="-- Pilih bandara --" className="min-w-[160px]" fullWidth={false} />
           )}
           {selectedProductId && selectedBandara && (
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 text-primary-800 text-sm font-medium border border-primary-100">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0D1A63]/10 text-[#0D1A63] text-sm font-medium border border-[#0D1A63]/30">
               {productName} · {bandaraName}
             </div>
           )}
@@ -276,7 +233,7 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
                       key={i}
                       className={`relative min-h-[100px] border-b border-r border-slate-100 p-1.5 ${
                         !isInMonth ? 'bg-slate-50/50' : 'bg-white'
-                      } ${isPopover ? 'ring-2 ring-primary-400 ring-inset' : ''}`}
+                      } ${isPopover ? 'ring-2 ring-[#0D1A63]/50 ring-inset' : ''}`}
                     >
                       {isInMonth && (
                         <>
@@ -320,7 +277,7 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
                                   className="text-xs py-1.5 border-b border-slate-100 last:border-0"
                                 >
                                   <div className="font-medium text-slate-800 flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-primary-500" />
+                                    <Users className="w-3.5 h-3.5 text-[#0D1A63]" />
                                     {b.owner_name}
                                   </div>
                                   <div className="text-slate-600 mt-0.5">
@@ -337,7 +294,7 @@ const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts 
                                 e.stopPropagation();
                                 setPopoverDate(popoverDate === dateStr ? null : dateStr);
                               }}
-                              className="mt-1 text-[10px] text-primary-600 hover:underline flex items-center gap-0.5"
+                              className="mt-1 text-[10px] text-[#0D1A63] hover:underline flex items-center gap-0.5"
                             >
                               <Users className="w-3 h-3" />
                               {day.bookings.length} owner

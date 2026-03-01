@@ -42,13 +42,23 @@ const createFromBalance = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: full, message: 'Permintaan refund saldo telah dicatat. Admin/accounting akan memproses.' });
 });
 
-/** Build where for list/stats (status, owner scope) */
+/** Build where for list/stats (status, owner_id, date_from, date_to, source) */
 function buildRefundWhere(req) {
-  const { status, owner_id } = req.query;
+  const { status, owner_id, date_from, date_to, source } = req.query;
   const where = {};
   if (status) where.status = status;
   if (req.user.role === 'owner') where.owner_id = req.user.id;
   else if (owner_id) where.owner_id = owner_id;
+  if (source) where.source = source;
+  if (date_from || date_to) {
+    where.created_at = {};
+    if (date_from) where.created_at[Op.gte] = new Date(date_from);
+    if (date_to) {
+      const d = new Date(date_to);
+      d.setHours(23, 59, 59, 999);
+      where.created_at[Op.lte] = d;
+    }
+  }
   return where;
 }
 

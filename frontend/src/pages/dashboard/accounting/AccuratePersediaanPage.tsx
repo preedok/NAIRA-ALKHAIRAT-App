@@ -3,6 +3,8 @@ import { Package, Plus, RefreshCw, Warehouse, BarChart3 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import Input from '../../../components/common/Input';
+import Autocomplete from '../../../components/common/Autocomplete';
 import { accountingApi, branchesApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 
@@ -145,39 +147,9 @@ const AccuratePersediaanPage: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Tambah Gudang</h2>
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Kode Gudang *</label>
-              <input
-                type="text"
-                value={form.code}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="WH-01"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Nama Gudang *</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Gudang Utama"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cabang</label>
-              <select
-                value={form.branch_id}
-                onChange={(e) => setForm((f) => ({ ...f, branch_id: e.target.value }))}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="">-- Pilih cabang (opsional) --</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
-                ))}
-              </select>
-            </div>
+            <Input label="Kode Gudang *" type="text" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="WH-01" />
+            <Input label="Nama Gudang *" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Gudang Utama" />
+            <Autocomplete label="Cabang" value={form.branch_id} onChange={(v) => setForm((f) => ({ ...f, branch_id: v }))} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="-- Pilih cabang (opsional) --" />
           </div>
           <div className="flex justify-end gap-2 mt-6">
             <Button variant="outline" onClick={() => setModalOpen(false)}>Batal</Button>

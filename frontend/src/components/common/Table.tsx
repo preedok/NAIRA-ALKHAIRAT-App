@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { TableColumn } from '../../types';
 
 export interface TablePagination {
@@ -24,6 +24,10 @@ interface TableProps<T> {
   data: T[];
   renderRow: (item: T, index: number) => React.ReactNode;
   emptyMessage?: string;
+  /** Deskripsi tambahan di bawah emptyMessage (opsional) */
+  emptyDescription?: string;
+  /** Ikon kustom untuk empty state (default: Inbox) */
+  emptyIcon?: React.ReactNode;
   className?: string;
   pagination?: TablePagination;
   sort?: TableSort;
@@ -38,7 +42,9 @@ function Table<T>({
   columns,
   data,
   renderRow,
-  emptyMessage = 'No data available',
+  emptyMessage = 'Tidak ada data',
+  emptyDescription,
+  emptyIcon,
   className = '',
   pagination,
   sort,
@@ -71,8 +77,16 @@ function Table<T>({
           <tbody className="divide-y divide-slate-200">
             {data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-500">
-                  {emptyMessage}
+                <td colSpan={columns.length} className="p-0 align-top">
+                  <div className="flex flex-col items-center justify-center min-h-[280px] px-6 py-14 bg-gradient-to-b from-slate-50/80 to-white border-b border-slate-100">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 mb-4 shadow-inner">
+                      {emptyIcon ?? <Inbox className="w-8 h-8" strokeWidth={1.5} />}
+                    </div>
+                    <p className="text-base font-semibold text-slate-700 mb-1">{emptyMessage}</p>
+                    {emptyDescription != null && emptyDescription !== '' && (
+                      <p className="text-sm text-slate-500 max-w-sm text-center">{emptyDescription}</p>
+                    )}
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -96,7 +110,7 @@ function Table<T>({
         </table>
       </div>
       {pag && pag.total > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200">
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <span>
               Menampilkan {startItem}-{endItem} dari {pag.total}

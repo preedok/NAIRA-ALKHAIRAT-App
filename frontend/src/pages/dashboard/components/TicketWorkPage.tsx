@@ -3,8 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Filter, Search, User, MapPin, X } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import Checkbox from '../../../components/common/Checkbox';
 import Modal from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
 import { ticketApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -32,12 +35,12 @@ const RECAP_STATUS_LABELS: Record<string, string> = {
 };
 
 const RECAP_STATUS_ICONS: Record<string, React.ReactNode> = {
-  pending: <Clock className="h-5 w-5" />,
-  data_received: <Inbox className="h-5 w-5" />,
-  seat_reserved: <Armchair className="h-5 w-5" />,
-  booking: <CalendarCheck className="h-5 w-5" />,
-  payment_airline: <CreditCard className="h-5 w-5" />,
-  ticket_issued: <CheckCircle className="h-5 w-5" />
+  pending: <Clock className="w-5 h-5" />,
+  data_received: <Inbox className="w-5 h-5" />,
+  seat_reserved: <Armchair className="w-5 h-5" />,
+  booking: <CalendarCheck className="w-5 h-5" />,
+  payment_airline: <CreditCard className="w-5 h-5" />,
+  ticket_issued: <CheckCircle className="w-5 h-5" />
 };
 
 const RECAP_STATUS_COLORS: Record<string, string> = {
@@ -193,61 +196,27 @@ const TicketWorkPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-emerald-100 rounded-2xl shadow-sm shrink-0">
-            <Ticket className="w-8 h-8 text-emerald-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tiket – Penerbitan & Dokumen</h1>
-            <p className="text-slate-600 text-sm mt-1 max-w-xl">Data order yang sudah punya invoice (tagihan). Proses penerbitan tiket, update status, dan upload dokumen tiket terbit. Owner dapat mengunduh dokumen terbit di menu Invoice.</p>
-          </div>
-        </div>
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
-      </div>
+      <PageHeader
+        title="Tiket – Penerbitan & Dokumen"
+        subtitle="Data order yang sudah punya invoice (tagihan). Proses penerbitan tiket, update status, dan upload dokumen tiket terbit. Owner dapat mengunduh dokumen terbit di menu Invoice."
+        right={<AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />}
+      />
 
       {/* Stat cards - 2 utama + status breakdown */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-slate-100 text-slate-600 shrink-0">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalInvoices}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600 shrink-0">
-                <Ticket className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Item Tiket</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalItems}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" />
+          <StatCard icon={<Ticket className="w-5 h-5" />} label="Item Tiket" value={loading ? '–' : totalItems} iconClassName="bg-emerald-100 text-emerald-600" />
         </div>
-        {/* Status breakdown - compact row */}
-        <div className="flex flex-wrap gap-3">
+        {/* Status breakdown — pakai StatCard agar seragam */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {STATUS_OPTIONS.map((opt) => (
-            <div
+            <StatCard
               key={opt.value}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-slate-200/80 bg-white shadow-sm ${RECAP_STATUS_COLORS[opt.value] ? '' : 'bg-slate-50'}`}
-            >
-              <div className={`p-1.5 rounded-lg shrink-0 ${RECAP_STATUS_COLORS[opt.value] || 'bg-slate-200 text-slate-600'}`}>
-                {RECAP_STATUS_ICONS[opt.value] || <Ticket className="h-4 w-4" />}
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500">{RECAP_STATUS_LABELS[opt.value] || opt.label}</p>
-                <p className="text-lg font-bold tabular-nums text-slate-900">{loading ? '–' : (byStatus[opt.value] ?? 0)}</p>
-              </div>
-            </div>
+              icon={RECAP_STATUS_ICONS[opt.value] || <Ticket className="w-5 h-5" />}
+              label={RECAP_STATUS_LABELS[opt.value] || opt.label}
+              value={loading ? '–' : (byStatus[opt.value] ?? 0)}
+            />
           ))}
         </div>
       </div>
@@ -457,7 +426,7 @@ const TicketWorkPage: React.FC = () => {
                               disabled={uploadingId === item.id}
                             />
                             <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer shrink-0">
-                              <input type="checkbox" checked={uploadSetIssued[item.id] ?? false} onChange={(e) => setUploadSetIssued(prev => ({ ...prev, [item.id]: e.target.checked }))} className="rounded border-slate-300" />
+                              <Checkbox checked={uploadSetIssued[item.id] ?? false} onChange={(e) => setUploadSetIssued(prev => ({ ...prev, [item.id]: e.target.checked }))} />
                               Set Terbit & notifikasi
                             </label>
                           </div>

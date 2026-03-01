@@ -137,7 +137,7 @@ const list = asyncHandler(async (req, res) => {
   const orderInclude = {
     model: Order,
     as: 'Order',
-    attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at'],
+    attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override'],
     include: [
       {
         model: OrderItem,

@@ -11,13 +11,19 @@ import {
   Search,
   ChevronRight,
   FileText,
-  DollarSign
+  DollarSign,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import Table from '../../../components/common/Table';
 import { formatIDR } from '../../../utils';
+import type { TableColumn } from '../../../types';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { invoicesApi } from '../../../services/api';
 import type { InvoicesSummaryData } from '../../../services/api';
@@ -39,6 +45,8 @@ const InvoiceDashboard: React.FC = () => {
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -81,7 +89,22 @@ const InvoiceDashboard: React.FC = () => {
         return invNum.includes(q) || orderNum.includes(q) || owner.includes(q) || branch.includes(q);
       })
     : invoices;
-  const recentInvoices = filteredRecent.slice(0, 25);
+  const totalFiltered = filteredRecent.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
+  const pagedInvoices = filteredRecent.slice((page - 1) * limit, page * limit);
+
+  const invoiceTableColumns: TableColumn[] = [
+    { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+    { id: 'status', label: 'Status', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'total', label: 'Total', align: 'right' },
+    { id: 'paid', label: 'Terbayar', align: 'right' },
+    { id: 'remaining', label: 'Sisa', align: 'right' },
+    { id: 'due_date_dp', label: 'Jatuh Tempo DP', align: 'left' },
+    { id: 'order_number', label: 'No. Order', align: 'left' },
+    { id: 'actions', label: 'Aksi', align: 'left' }
+  ];
 
   const handleUnblock = async (invoiceId: string) => {
     try {
@@ -106,178 +129,117 @@ const InvoiceDashboard: React.FC = () => {
 
   const scopeLabel = user?.role === 'role_invoice_saudi' ? 'Semua wilayah' : 'Cabang Anda';
 
+  const invoiceSubtitle = user?.role === 'role_invoice_saudi'
+    ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD otomatis update invoice.'
+    : `Rekapitulasi pekerjaan invoice ${scopeLabel.toLowerCase()}.`;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Invoice Dashboard</h1>
-          <p className="text-slate-600 mt-1">
-            {user?.role === 'role_invoice_saudi'
-              ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD otomatis update invoice.'
-              : `Rekapitulasi pekerjaan invoice ${scopeLabel.toLowerCase()}.`}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>
-            <Receipt className="w-4 h-4 mr-2" />
-            Semua Invoice
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Invoice Dashboard"
+        subtitle={invoiceSubtitle}
+        right={
+          <>
+            <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>
+              <Receipt className="w-4 h-4 mr-2" />
+              Semua Invoice
+            </Button>
+          </>
+        }
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-amber-100 text-amber-600 shrink-0">
-              <Clock className="h-6 w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pending Verifikasi</p>
-              <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{pendingVerification.length}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Bukti bayar perlu diverifikasi</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
-              <CheckCircle className="h-6 w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Terverifikasi Hari Ini</p>
-              <p className="text-xl font-bold tabular-nums text-slate-900 mt-1">{verifiedToday.length} invoice</p>
-              <p className="text-xs text-slate-500 mt-0.5">{verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-sky-100 text-sky-600 shrink-0">
-              <Receipt className="h-6 w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Invoice</p>
-              <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{summary?.total_invoices ?? invoices.length}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{scopeLabel}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-red-100 text-red-600 shrink-0">
-              <AlertCircle className="h-6 w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Terblokir (DP Overdue)</p>
-              <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{blockedInvoices.length}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Bisa diaktifkan kembali</p>
-            </div>
-          </div>
-        </Card>
+        <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={pendingVerification.length} subtitle="Bukti bayar perlu diverifikasi" iconClassName="bg-amber-100 text-amber-600" />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'} iconClassName="bg-emerald-100 text-emerald-600" />
+        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary?.total_invoices ?? invoices.length} subtitle={scopeLabel} iconClassName="bg-sky-100 text-sky-600" />
+        <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" />
       </div>
 
-      {/* Ringkasan nominal (summary) */}
+      {/* Ringkasan nominal (summary) — pakai StatCard agar seragam */}
       {summary && (summary.total_amount > 0 || summary.total_paid > 0) && (
-        <Card className="border-primary-100 bg-primary-50/20">
-          <div className="flex flex-wrap items-center gap-6 py-2">
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-primary-600" />
-              <span className="text-sm font-medium text-stone-700">Total Tagihan:</span>
-              <span className="font-bold tabular-nums text-stone-900">{formatIDR(summary.total_amount)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
-              <span className="text-sm font-medium text-stone-700">Total Terbayar:</span>
-              <span className="font-bold tabular-nums text-stone-900">{formatIDR(summary.total_paid)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-stone-700">Sisa:</span>
-              <span className="font-bold tabular-nums text-stone-900">{formatIDR(summary.total_remaining)}</span>
-            </div>
-          </div>
-        </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Tagihan" value={formatIDR(summary.total_amount)} />
+          <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Total Terbayar" value={formatIDR(summary.total_paid)} />
+          <StatCard icon={<Wallet className="w-5 h-5" />} label="Sisa" value={formatIDR(summary.total_remaining)} />
+        </div>
       )}
 
       {/* Invoice Terbaru (wilayah) – data invoice lengkap */}
       <Card>
         <div className="p-4 border-b border-slate-100">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary-600" />
-              Invoice Terbaru (wilayah)
-            </h3>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-              <input
-                type="text"
-                placeholder="Cari no. invoice, order, owner, cabang..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-          </div>
+          <CardSectionHeader
+            icon={<FileText className="w-6 h-6" />}
+            title="Invoice Terbaru (wilayah)"
+            subtitle="Invoice di wilayah Anda. Cari no. invoice, order, owner, atau cabang."
+            right={
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Cari no. invoice, order, owner, cabang..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+            }
+            className="mb-0"
+          />
         </div>
-        {recentInvoices.length === 0 ? (
-          <div className="py-12 text-center text-slate-500">
-            {invoices.length === 0 ? 'Belum ada invoice.' : 'Tidak ada hasil untuk pencarian ini.'}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">No. Invoice</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Owner</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Cabang</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Total</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Terbayar</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-700">Sisa</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Jatuh Tempo DP</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">No. Order</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700 w-24">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentInvoices.map((inv) => {
-                  const total = parseFloat(inv.total_amount || 0);
-                  const paid = parseFloat(inv.paid_amount || 0);
-                  const remaining = total - paid;
-                  return (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-semibold text-slate-900">{inv.invoice_number || '–'}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'overdue' ? 'error' : 'warning'}>
-                          {INVOICE_STATUS_LABELS[inv.status] || inv.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? inv.Order?.User?.name ?? '–'}</td>
-                      <td className="py-3 px-4 text-slate-600">{inv.Branch?.name ?? inv.Branch?.code ?? '–'}</td>
-                      <td className="py-3 px-4 text-right font-medium tabular-nums">{formatIDR(total)}</td>
-                      <td className="py-3 px-4 text-right tabular-nums text-emerald-700">{formatIDR(paid)}</td>
-                      <td className="py-3 px-4 text-right tabular-nums text-slate-700">{formatIDR(remaining)}</td>
-                      <td className="py-3 px-4 text-slate-600">{formatDate(inv.due_date_dp)}</td>
-                      <td className="py-3 px-4 text-slate-500 font-mono text-xs">{inv.Order?.order_number ?? '–'}</td>
-                      <td className="py-3 px-4">
-                        <Button size="sm" variant="outline" onClick={() => openInvoice(inv)}>
-                          <Eye className="w-4 h-4 mr-1" /> Buka
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <Table
+          columns={invoiceTableColumns}
+          data={pagedInvoices}
+          emptyMessage={invoices.length === 0 ? 'Belum ada invoice.' : 'Tidak ada hasil untuk pencarian ini.'}
+          stickyActionsColumn
+          pagination={
+            totalFiltered > 0
+              ? {
+                  total: totalFiltered,
+                  page,
+                  limit,
+                  totalPages,
+                  onPageChange: setPage,
+                  onLimitChange: (l) => { setLimit(l); setPage(1); }
+                }
+              : undefined
+          }
+          renderRow={(inv) => {
+            const total = parseFloat(inv.total_amount || 0);
+            const paid = parseFloat(inv.paid_amount || 0);
+            const remaining = total - paid;
+            return (
+              <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                <td className="py-3 px-4">
+                  <span className="font-mono font-semibold text-slate-900">{inv.invoice_number || '–'}</span>
+                </td>
+                <td className="py-3 px-4">
+                  <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'overdue' ? 'error' : 'warning'}>
+                    {INVOICE_STATUS_LABELS[inv.status] || inv.status}
+                  </Badge>
+                </td>
+                <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? inv.Order?.User?.name ?? '–'}</td>
+                <td className="py-3 px-4 text-slate-600">{inv.Branch?.name ?? inv.Branch?.code ?? '–'}</td>
+                <td className="py-3 px-4 text-right font-medium tabular-nums">{formatIDR(total)}</td>
+                <td className="py-3 px-4 text-right tabular-nums text-emerald-700">{formatIDR(paid)}</td>
+                <td className="py-3 px-4 text-right tabular-nums text-slate-700">{formatIDR(remaining)}</td>
+                <td className="py-3 px-4 text-slate-600">{formatDate(inv.due_date_dp)}</td>
+                <td className="py-3 px-4 text-slate-500 font-mono text-xs">{inv.Order?.order_number ?? '–'}</td>
+                <td className="py-3 px-4">
+                  <Button size="sm" variant="outline" onClick={() => openInvoice(inv)}>
+                    <Eye className="w-4 h-4 mr-1" /> Buka
+                  </Button>
+                </td>
+              </tr>
+            );
+          }}
+        />
+        </div>
         {invoices.length > 0 && (
           <div className="p-3 border-t border-slate-100 flex justify-end">
             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>

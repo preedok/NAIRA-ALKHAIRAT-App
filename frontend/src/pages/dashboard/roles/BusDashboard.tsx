@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Bus, RefreshCw, ClipboardList, Ticket, MapPin, Plane, RotateCcw, AlertCircle, ChevronRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { busApi } from '../../../services/api';
 import type { BusDashboardData } from '../../../services/api';
 
@@ -65,92 +67,17 @@ const BusDashboard: React.FC = () => {
 
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-600 shrink-0">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Order</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalOrders}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Invoice dengan item bus</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 rounded-2xl bg-violet-100 text-violet-600 shrink-0">
-                <Bus className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Bus</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-1">{totalItems}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Total item di cabang</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={totalOrders} subtitle="Invoice dengan item bus" />
+          <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={totalItems} subtitle="Total item di cabang" />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-2xl bg-amber-100 text-amber-600 shrink-0">
-                  <Ticket className="h-6 w-6" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-500">Tiket Pending</p>
-                  <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{ticketPending}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-2xl bg-emerald-100 text-emerald-600 shrink-0">
-                  <Ticket className="h-6 w-6" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-500">Tiket Terbit</p>
-                  <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{ticketIssued}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-2xl bg-sky-100 text-sky-600 shrink-0">
-                  <MapPin className="h-6 w-6" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-500">Kedatangan</p>
-                  <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{arrival.completed ?? 0}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">P {arrival.pending ?? 0} · T {arrival.scheduled ?? 0}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-2xl bg-violet-100 text-violet-600 shrink-0">
-                  <Plane className="h-6 w-6" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-500">Keberangkatan</p>
-                  <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{departure.completed ?? 0}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">P {departure.pending ?? 0} · T {departure.scheduled ?? 0}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-2xl bg-teal-100 text-teal-600 shrink-0">
-                  <RotateCcw className="h-6 w-6" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-500">Kepulangan</p>
-                  <p className="text-3xl font-bold tabular-nums text-slate-900 mt-1">{returnStat.completed ?? 0}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">P {returnStat.pending ?? 0} · T {returnStat.scheduled ?? 0}</p>
-                </div>
-              </div>
-            </Card>
+            <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={ticketPending} />
+            <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={ticketIssued} />
+            <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={arrival.completed ?? 0} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} />
+            <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={departure.completed ?? 0} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} />
+            <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={returnStat.completed ?? 0} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} />
           </div>
         </div>
       </div>
@@ -185,25 +112,21 @@ const BusDashboard: React.FC = () => {
       )}
 
       <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-violet-100 text-violet-600 shrink-0">
-              <Bus className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Pekerjaan Bus</h3>
-              <p className="text-sm text-slate-600 mt-0.5">Kelola invoice bus, update status tiket bis, kedatangan, keberangkatan, kepulangan.</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/products/bus')} className="rounded-xl">
-              Produk Bus
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')} className="rounded-xl">
-              <ClipboardList className="w-4 h-4 mr-2" /> Invoice
-            </Button>
-          </div>
-        </div>
+        <CardSectionHeader
+          icon={<Bus className="w-6 h-6" />}
+          title="Pekerjaan Bus"
+          subtitle="Kelola invoice bus, update status tiket bis, kedatangan, keberangkatan, kepulangan."
+          right={
+            <>
+              <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/products/bus')} className="rounded-xl">
+                Produk Bus
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')} className="rounded-xl">
+                <ClipboardList className="w-4 h-4 mr-2" /> Invoice
+              </Button>
+            </>
+          }
+        />
       </Card>
     </div>
   );

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
 import { accountingApi } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -53,29 +55,17 @@ const AccurateOnlinePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Accurate Online</h1>
-        <p className="text-slate-600 text-sm mt-1">Modul akuntansi lengkap: Akuntansi & Laporan, Penjualan, Pembelian, Persediaan, Perpajakan, Kas & Bank, Aset Tetap.</p>
-      </div>
+      <PageHeader
+        title="Accurate Online"
+        subtitle="Modul akuntansi lengkap: Akuntansi & Laporan, Penjualan, Pembelian, Persediaan, Perpajakan, Kas & Bank, Aset Tetap."
+      />
 
       {dashboard && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card className="p-4 rounded-xl border border-slate-200">
-            <p className="text-xs font-medium text-slate-500 uppercase">Penawaran</p>
-            <p className="text-xl font-bold text-slate-900">{dashboard.penjualan?.quotations ?? 0}</p>
-          </Card>
-          <Card className="p-4 rounded-xl border border-slate-200">
-            <p className="text-xs font-medium text-slate-500 uppercase">Purchase Order</p>
-            <p className="text-xl font-bold text-slate-900">{dashboard.pembelian?.purchase_orders ?? 0}</p>
-          </Card>
-          <Card className="p-4 rounded-xl border border-slate-200">
-            <p className="text-xs font-medium text-slate-500 uppercase">Gudang</p>
-            <p className="text-xl font-bold text-slate-900">{dashboard.persediaan?.warehouses ?? 0}</p>
-          </Card>
-          <Card className="p-4 rounded-xl border border-slate-200">
-            <p className="text-xs font-medium text-slate-500 uppercase">Aset Tetap</p>
-            <p className="text-xl font-bold text-slate-900">{dashboard.aset_tetap?.fixed_assets ?? 0}</p>
-          </Card>
+          <StatCard icon={<FileText className="w-5 h-5" />} label="Penawaran" value={dashboard.penjualan?.quotations ?? 0} />
+          <StatCard icon={<ShoppingCart className="w-5 h-5" />} label="Purchase Order" value={dashboard.pembelian?.purchase_orders ?? 0} />
+          <StatCard icon={<Package className="w-5 h-5" />} label="Gudang" value={dashboard.persediaan?.warehouses ?? 0} />
+          <StatCard icon={<Building2 className="w-5 h-5" />} label="Aset Tetap" value={dashboard.aset_tetap?.fixed_assets ?? 0} />
         </div>
       )}
 

@@ -2,15 +2,26 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw,
   Filter,
-  ChevronDown,
+  FilterX,
   ChevronRight,
   FileSpreadsheet,
-  FileType
+  FileType,
+  DollarSign,
+  Receipt,
+  Package,
+  Users,
+  FileText
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import StatCard from '../../../components/common/StatCard';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Table from '../../../components/common/Table';
+import Input from '../../../components/common/Input';
+import Autocomplete from '../../../components/common/Autocomplete';
+import PageHeader from '../../../components/common/PageHeader';
+import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { TableColumn } from '../../../types';
 import {
@@ -66,17 +77,21 @@ const ROLES_FILTER = [
   { value: 'role_accounting', label: 'Accounting' }
 ];
 
+const DEFAULT_REPORT_TYPE: ReportType = 'revenue';
+const DEFAULT_PERIOD: ReportPeriod = 'month';
+const DEFAULT_GROUP_BY: ReportGroupBy = 'month';
+
 const ReportsPage: React.FC = () => {
   const { user } = useAuth();
-  const [filtersOpen, setFiltersOpen] = useState(true);
-  const [reportType, setReportType] = useState<ReportType>('revenue');
-  const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [reportType, setReportType] = useState<ReportType>(DEFAULT_REPORT_TYPE);
+  const [period, setPeriod] = useState<ReportPeriod>(DEFAULT_PERIOD);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [branchId, setBranchId] = useState('');
   const [wilayahId, setWilayahId] = useState('');
   const [provinsiId, setProvinsiId] = useState('');
-  const [groupBy, setGroupBy] = useState<ReportGroupBy>('month');
+  const [groupBy, setGroupBy] = useState<ReportGroupBy>(DEFAULT_GROUP_BY);
   const [roleFilter, setRoleFilter] = useState('');
   const [logSource, setLogSource] = useState('');
   const [logLevel, setLogLevel] = useState('');
@@ -154,6 +169,22 @@ const ReportsPage: React.FC = () => {
     if (reportType && (period || dateFrom || dateTo)) fetchAnalytics();
   }, [reportType, period, dateFrom, dateTo, branchId, wilayahId, provinsiId, groupBy, roleFilter, logSource, logLevel, page, limit]);
 
+  const logsFilterActive = reportType === 'logs' && (!!logSource || !!logLevel);
+  const hasActiveFilters = reportType !== DEFAULT_REPORT_TYPE || period !== DEFAULT_PERIOD || !!dateFrom || !!dateTo || !!branchId || !!wilayahId || !!provinsiId || groupBy !== DEFAULT_GROUP_BY || !!roleFilter || logsFilterActive;
+  const resetFilters = () => {
+    setReportType(DEFAULT_REPORT_TYPE);
+    setPeriod(DEFAULT_PERIOD);
+    setDateFrom('');
+    setDateTo('');
+    setBranchId('');
+    setWilayahId('');
+    setProvinsiId('');
+    setGroupBy(DEFAULT_GROUP_BY);
+    setRoleFilter('');
+    setLogSource('');
+    setLogLevel('');
+  };
+
   const getExportParams = () => {
     const p: Record<string, string | undefined> = {
       report_type: reportType,
@@ -224,30 +255,40 @@ const ReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Reports & Analytics</h1>
-          <p className="text-slate-600 mt-1">Laporan lengkap dengan filter periode, cabang, wilayah, dan provinsi</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setFiltersOpen((v) => !v)}>
-            <Filter className="w-4 h-4 mr-2" />
-            {filtersOpen ? 'Sembunyikan Filter' : 'Tampilkan Filter'}
-          </Button>
-          <Button variant="primary" onClick={fetchAnalytics} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Memuat...' : 'Refresh'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            {exporting === 'excel' ? '...' : 'Excel'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}>
-            <FileType className="w-4 h-4 mr-2" />
-            {exporting === 'pdf' ? '...' : 'PDF'}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Reports & Analytics"
+        subtitle="Laporan lengkap dengan filter periode, cabang, wilayah, dan provinsi"
+        right={
+          <div className="flex items-center gap-2 flex-wrap">
+            <AutoRefreshControl onRefresh={fetchAnalytics} disabled={loading} />
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0D1A63] focus:ring-offset-1"
+              aria-expanded={filtersOpen}
+              aria-label={filtersOpen ? 'Sembunyikan filter' : 'Tampilkan filter'}
+              title={filtersOpen ? 'Sembunyikan filter' : 'Tampilkan filter'}
+            >
+              {filtersOpen ? (
+                <FilterX className="w-4 h-4" />
+              ) : (
+                <Filter className="w-4 h-4" />
+              )}
+              {hasActiveFilters && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#0D1A63] rounded-full ring-2 ring-white" aria-hidden />
+              )}
+            </button>
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              {exporting === 'excel' ? '...' : 'Excel'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}>
+              <FileType className="w-4 h-4 mr-2" />
+              {exporting === 'pdf' ? '...' : 'PDF'}
+            </Button>
+          </div>
+        }
+      />
 
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 flex items-center justify-between">
@@ -256,173 +297,106 @@ const ReportsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Filter panel */}
-      <Card className="travel-card">
-        <button
-          type="button"
-          className="w-full flex items-center justify-between text-left font-semibold text-stone-900"
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          <span className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-slate-500" />
-            Filter Laporan
-          </span>
-          {filtersOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-        </button>
-        {filtersOpen && (
-          <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Tipe Laporan</label>
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value as ReportType)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                {REPORT_TYPES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Periode</label>
-              <select
-                value={period}
-                onChange={(e) => setPeriod(e.target.value as ReportPeriod)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                {PERIOD_OPTIONS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Dari Tanggal</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Sampai Tanggal</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Cabang</label>
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">Semua cabang</option>
-                {filterOptions.branches
-                  .filter((b) => {
-                    const pid = (b as { provinsi_id?: string | null }).provinsi_id;
-                    if (wilayahId && pid) {
-                      const provinsi = filterOptions.provinsi.find((p) => p.id === pid);
-                      return provinsi?.Wilayah?.id === wilayahId;
-                    }
-                    if (provinsiId) return pid === provinsiId;
-                    return true;
-                  })
-                  .map((b) => (
-                    <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
-                  ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Wilayah</label>
-              <select
-                value={wilayahId}
-                onChange={(e) => { setWilayahId(e.target.value); setProvinsiId(''); setBranchId(''); }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">Semua wilayah</option>
-                {filterOptions.wilayah.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Provinsi</label>
-              <select
-                value={provinsiId}
-                onChange={(e) => { setProvinsiId(e.target.value); setBranchId(''); }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">Semua provinsi</option>
-                {filterOptions.provinsi
-                  .filter((p) => !wilayahId || (p.Wilayah && p.Wilayah.id === wilayahId))
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-              </select>
-            </div>
+      {filtersOpen && (
+        <Card className="mt-4 w-full min-w-0 p-5 sm:p-6 bg-slate-50/80 border border-slate-200/80 rounded-xl shadow-sm">
+          <CardSectionHeader
+            icon={<Filter className="w-6 h-6" />}
+            title="Pengaturan Filter"
+            subtitle="Pilih tipe, periode, cabang & wilayah — lalu klik Terapkan. Reset untuk kosongkan."
+            className="mb-4 pb-3 border-b border-slate-200/80"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <Autocomplete
+              label="Tipe Laporan"
+              value={reportType}
+              onChange={(v) => setReportType(v as ReportType)}
+              options={REPORT_TYPES.map((r) => ({ value: r.value, label: r.label }))}
+            />
+            <Autocomplete
+              label="Periode"
+              value={period}
+              onChange={(v) => setPeriod(v as ReportPeriod)}
+              options={PERIOD_OPTIONS.map((p) => ({ value: p.value, label: p.label }))}
+            />
+            <Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            <Autocomplete
+              label="Cabang"
+              value={branchId}
+              onChange={setBranchId}
+              options={filterOptions.branches
+                .filter((b) => {
+                  const pid = (b as { provinsi_id?: string | null }).provinsi_id;
+                  if (wilayahId && pid) {
+                    const provinsi = filterOptions.provinsi.find((p) => p.id === pid);
+                    return provinsi?.Wilayah?.id === wilayahId;
+                  }
+                  if (provinsiId) return pid === provinsiId;
+                  return true;
+                })
+                .map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
+              emptyLabel="Semua cabang"
+            />
+            <Autocomplete
+              label="Wilayah"
+              value={wilayahId}
+              onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+              options={filterOptions.wilayah.map((w) => ({ value: w.id, label: w.name }))}
+              emptyLabel="Semua wilayah"
+            />
+            <Autocomplete
+              label="Provinsi"
+              value={provinsiId}
+              onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
+              options={filterOptions.provinsi
+                .filter((p) => !wilayahId || (p.Wilayah && p.Wilayah.id === wilayahId))
+                .map((p) => ({ value: p.id, label: p.name }))}
+              emptyLabel="Semua provinsi"
+            />
             {reportType !== 'logs' && reportType !== 'financial' && (
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Kelompok Waktu</label>
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value as ReportGroupBy)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  {GROUP_BY_OPTIONS.map((g) => (
-                    <option key={g.value} value={g.value}>{g.label}</option>
-                  ))}
-                </select>
-              </div>
+              <Autocomplete
+                label="Kelompok Waktu"
+                value={groupBy}
+                onChange={(v) => setGroupBy(v as ReportGroupBy)}
+                options={GROUP_BY_OPTIONS.map((g) => ({ value: g.value, label: g.label }))}
+              />
             )}
             {(reportType === 'revenue' || reportType === 'orders' || reportType === 'partners') && isSuperAdmin && (
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Role</label>
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  {ROLES_FILTER.map((r) => (
-                    <option key={r.value || 'all'} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
+              <Autocomplete
+                label="Role"
+                value={roleFilter}
+                onChange={setRoleFilter}
+                options={ROLES_FILTER.map((r) => ({ value: r.value, label: r.label }))}
+              />
             )}
             {reportType === 'logs' && (
               <>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Sumber Log</label>
-                  <input
-                    type="text"
-                    value={logSource}
-                    onChange={(e) => setLogSource(e.target.value)}
-                    placeholder="Opsional"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Level Log</label>
-                  <select
-                    value={logLevel}
-                    onChange={(e) => setLogLevel(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">Semua</option>
-                    <option value="info">Info</option>
-                    <option value="warn">Warn</option>
-                    <option value="error">Error</option>
-                    <option value="debug">Debug</option>
-                  </select>
-                </div>
+                <Input label="Sumber Log" type="text" value={logSource} onChange={(e) => setLogSource(e.target.value)} placeholder="Opsional" />
+                <Autocomplete
+                  label="Level Log"
+                  value={logLevel}
+                  onChange={setLogLevel}
+                  options={[
+                    { value: 'info', label: 'Info' },
+                    { value: 'warn', label: 'Warn' },
+                    { value: 'error', label: 'Error' },
+                    { value: 'debug', label: 'Debug' }
+                  ]}
+                  emptyLabel="Semua"
+                />
               </>
             )}
           </div>
-        )}
-      </Card>
+          <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-slate-200/80">
+            <Button variant="primary" size="sm" onClick={() => { setFiltersOpen(false); fetchAnalytics(); }} disabled={loading} className="bg-[#0D1A63] hover:bg-[#0a1449] focus:ring-[#0D1A63]">
+              {loading ? 'Memuat...' : 'Terapkan'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={resetFilters} className="border-slate-200 text-slate-700 hover:bg-slate-100">
+              Reset
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {loading && !data && (
         <div className="text-center py-12 text-slate-500">Memuat data...</div>
@@ -434,48 +408,27 @@ const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {reportType === 'financial' && (
               <>
-                <Card hover className="travel-card">
-                  <p className="text-sm text-slate-600 mb-1">Total Pendapatan</p>
-                  <p className="text-2xl font-bold text-primary-600">{formatIDR(summary.total_revenue ?? 0)}</p>
-                </Card>
-                <Card hover className="travel-card">
-                  <p className="text-sm text-slate-600 mb-1">Jumlah Invoice</p>
-                  <p className="text-2xl font-bold text-slate-900">{summary.invoice_count ?? 0}</p>
-                </Card>
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={summary.invoice_count ?? 0} iconClassName="bg-sky-100 text-sky-600" />
               </>
             )}
             {(reportType === 'revenue' || reportType === 'orders' || reportType === 'partners' || reportType === 'jamaah') && (
               <>
-                <Card hover className="travel-card">
-                  <p className="text-sm text-slate-600 mb-1">Total Order</p>
-                  <p className="text-2xl font-bold text-slate-900">{summary.total_orders ?? 0}</p>
-                </Card>
-                <Card hover className="travel-card">
-                  <p className="text-sm text-slate-600 mb-1">Total Revenue</p>
-                  <p className="text-2xl font-bold text-primary-600">{formatIDR(summary.total_revenue ?? 0)}</p>
-                </Card>
-                <Card hover className="travel-card">
-                  <p className="text-sm text-slate-600 mb-1">Total Jamaah</p>
-                  <p className="text-2xl font-bold text-slate-900">{summary.total_jamaah ?? 0}</p>
-                </Card>
-                <Card hover className="travel-card">
-                  <p className="text-sm text-slate-600 mb-1">Total Invoice</p>
-                  <p className="text-2xl font-bold text-slate-900">{summary.total_invoices ?? 0}</p>
-                </Card>
+                <StatCard icon={<Package className="w-5 h-5" />} label="Total Order" value={summary.total_orders ?? 0} iconClassName="bg-slate-100 text-slate-600" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" />
+                <StatCard icon={<Users className="w-5 h-5" />} label="Total Jamaah" value={summary.total_jamaah ?? 0} iconClassName="bg-emerald-100 text-emerald-600" />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary.total_invoices ?? 0} iconClassName="bg-sky-100 text-sky-600" />
               </>
             )}
             {reportType === 'logs' && (
-              <Card hover className="travel-card">
-                <p className="text-sm text-slate-600 mb-1">Total Log</p>
-                <p className="text-2xl font-bold text-slate-900">{summary.total_logs ?? 0}</p>
-              </Card>
+              <StatCard icon={<FileText className="w-5 h-5" />} label="Total Log" value={summary.total_logs ?? 0} iconClassName="bg-slate-100 text-slate-600" />
             )}
           </div>
 
           {/* Series (time) */}
           {series.length > 0 && (
             <Card className="travel-card">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Trend per Periode</h3>
+              <CardSectionHeader title="Trend per Periode" subtitle="Data per periode sesuai filter." className="mb-4" />
               <Table
                 columns={[
                   { id: 'period', label: 'Periode', align: 'left' },
@@ -500,7 +453,7 @@ const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {breakdown.by_branch && breakdown.by_branch.length > 0 && (
               <Card className="travel-card">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Per Cabang</h3>
+                <CardSectionHeader title="Per Cabang" className="mb-4" />
                 <div className="max-h-64 overflow-y-auto">
                   <Table
                     columns={[
@@ -522,7 +475,7 @@ const ReportsPage: React.FC = () => {
             )}
             {breakdown.by_status && Object.keys(breakdown.by_status).length > 0 && (
               <Card className="travel-card">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Per Status</h3>
+                <CardSectionHeader title="Per Status" className="mb-4" />
                 <div className="space-y-2">
                   {Object.entries(breakdown.by_status).map(([status, count]) => (
                     <div key={status} className="flex justify-between py-2 border-b border-slate-100 last:border-0">
@@ -535,7 +488,7 @@ const ReportsPage: React.FC = () => {
             )}
             {breakdown.by_provinsi && breakdown.by_provinsi.length > 0 && (
               <Card className="travel-card">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Per Provinsi</h3>
+                <CardSectionHeader title="Per Provinsi" className="mb-4" />
                 <div className="max-h-64 overflow-y-auto">
                   <Table
                     columns={[
@@ -557,7 +510,7 @@ const ReportsPage: React.FC = () => {
             )}
             {breakdown.by_wilayah && breakdown.by_wilayah.length > 0 && (
               <Card className="travel-card">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Per Wilayah</h3>
+                <CardSectionHeader title="Per Wilayah" className="mb-4" />
                 <div className="max-h-64 overflow-y-auto">
                   <Table
                     columns={[
@@ -581,9 +534,12 @@ const ReportsPage: React.FC = () => {
 
           {/* Detail table */}
           <Card className="travel-card">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">
-              {reportType === 'logs' ? 'Log Entri' : reportType === 'financial' ? 'Detail Invoice' : 'Detail Order'}
-            </h3>
+            <CardSectionHeader
+              title={reportType === 'logs' ? 'Log Entri' : reportType === 'financial' ? 'Detail Invoice' : 'Detail Order'}
+              subtitle="Detail data sesuai tipe laporan dan filter."
+              className="mb-4"
+            />
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
             {reportType === 'logs' ? (
               <Table
                 columns={[
@@ -616,7 +572,7 @@ const ReportsPage: React.FC = () => {
                 ] as TableColumn[]}
                 data={rows}
                 emptyMessage="Tidak ada data"
-                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: setLimit } : undefined}
+                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4 font-mono text-slate-900">{inv.invoice_number}</td>
@@ -650,7 +606,7 @@ const ReportsPage: React.FC = () => {
                 ] as TableColumn[]}
                 data={rows}
                 emptyMessage="Tidak ada data"
-                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: setLimit } : undefined}
+                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
                 renderRow={(o: any) => (
                   <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4 font-mono text-slate-900">{o.order_number}</td>
@@ -680,6 +636,7 @@ const ReportsPage: React.FC = () => {
                 )}
               />
             )}
+            </div>
           </Card>
         </>
       )}

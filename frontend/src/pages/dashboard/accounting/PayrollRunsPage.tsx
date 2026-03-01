@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DollarSign, ChevronLeft, Plus, Settings, Users, FileText, Calendar } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import { Input, Autocomplete } from '../../../components/common';
 import { accountingApi, branchesApi, type PayrollRunData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -114,34 +115,10 @@ const PayrollRunsPage: React.FC = () => {
 
       <Card>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Cabang</label>
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-              <option value="">Semua</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.code} - {b.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tahun</label>
-            <select value={periodYear} onChange={(e) => setPeriodYear(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Bulan</label>
-            <select value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-              {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-              <option value="">Semua</option>
-              <option value="draft">Draft</option>
-              <option value="processed">Diproses</option>
-              <option value="finalized">Final</option>
-            </select>
-          </div>
+          <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua" />
+          <Autocomplete label="Tahun" value={String(periodYear)} onChange={(v) => setPeriodYear(Number(v))} options={years.map((y) => ({ value: String(y), label: String(y) }))} />
+          <Autocomplete label="Bulan" value={String(periodMonth)} onChange={(v) => setPeriodMonth(Number(v))} options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))} />
+          <Autocomplete label="Status" value={statusFilter} onChange={setStatusFilter} options={[{ value: 'draft', label: 'Draft' }, { value: 'processed', label: 'Diproses' }, { value: 'finalized', label: 'Final' }]} emptyLabel="Semua" />
         </div>
 
         {loading ? (
@@ -205,26 +182,10 @@ const PayrollRunsPage: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-slate-900 mb-4">Buat Payroll Baru</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Cabang</label>
-                <select value={createBranchId} onChange={(e) => setCreateBranchId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                  <option value="">Global (semua cabang)</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.code} - {b.name}</option>)}
-                </select>
-              </div>
+              <Autocomplete label="Cabang" value={createBranchId} onChange={setCreateBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Global (semua cabang)" />
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tahun</label>
-                  <select value={createYear} onChange={(e) => setCreateYear(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Bulan</label>
-                  <select value={createMonth} onChange={(e) => setCreateMonth(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                  </select>
-                </div>
+                <Autocomplete label="Tahun" value={String(createYear)} onChange={(v) => setCreateYear(Number(v))} options={years.map((y) => ({ value: String(y), label: String(y) }))} />
+                <Autocomplete label="Bulan" value={String(createMonth)} onChange={(v) => setCreateMonth(Number(v))} options={MONTH_NAMES.map((m, i) => ({ value: String(i + 1), label: m }))} />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">

@@ -8,10 +8,14 @@ import {
   Filter,
   Search,
   X,
-  LockKeyhole
+  LockKeyhole,
+  RefreshCw
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton } from '../../../components/common';
 import {
   accountingApi,
   type FiscalYearItem,
@@ -33,7 +37,7 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'closed'>('all');
   const [filterPeriodLock, setFilterPeriodLock] = useState<'all' | 'locked' | 'unlocked'>('all');
   const [search, setSearch] = useState('');
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [modalCreate, setModalCreate] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({ code: '', name: '', start_date: '', end_date: '' });
@@ -186,76 +190,78 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
       ? MONTH_NAMES[p.period_number - 1]
       : `Periode ${p.period_number}`;
 
+  const hasActiveFilters = filterStatus !== 'all' || filterPeriodLock !== 'all' || search.trim() !== '';
+  const resetFilters = () => { setFilterStatus('all'); setFilterPeriodLock('all'); setSearch(''); };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Periode Fiskal</h1>
-          <p className="text-slate-600 mt-1">
-            Tahun fiskal dan periode akuntansi — kunci periode untuk mencegah perubahan data
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="primary" size="sm" onClick={() => setModalCreate(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Tambah Tahun Fiskal
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
-          <Button variant="ghost" size="sm" onClick={fetchFiscalYears} disabled={loading}>
-            {loading ? 'Memuat...' : 'Refresh'}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Periode Fiskal"
+        subtitle="Tahun fiskal dan periode akuntansi — kunci periode untuk mencegah perubahan data"
+        right={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={fetchFiscalYears} disabled={loading} aria-label="Refresh">
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Memuat...' : 'Refresh'}
+            </Button>
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
+            <Button variant="primary" size="sm" onClick={() => setModalCreate(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Tambah Tahun Fiskal
+            </Button>
+          </div>
+        }
+      />
 
-      {showFilters && (
-        <Card className="bg-slate-50/80">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filter
-          </h3>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status Tahun Fiskal</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'closed')}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">Semua</option>
-                <option value="active">Aktif</option>
-                <option value="closed">Ditutup</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status Periode</label>
-              <select
-                value={filterPeriodLock}
-                onChange={(e) => setFilterPeriodLock(e.target.value as 'all' | 'locked' | 'unlocked')}
-                className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">Semua</option>
-                <option value="locked">Ada yang terkunci</option>
-                <option value="unlocked">Ada yang terbuka</option>
-              </select>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cari (kode / nama)</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="FY2025, Tahun Fiskal..."
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v: boolean) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchFiscalYears(); }}
+        loading={loading}
+        hideToggleRow
+      >
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Status Tahun Fiskal</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'closed')}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-[#0D1A63]"
+            >
+              <option value="all">Semua</option>
+              <option value="active">Aktif</option>
+              <option value="closed">Ditutup</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Status Periode</label>
+            <select
+              value={filterPeriodLock}
+              onChange={(e) => setFilterPeriodLock(e.target.value as 'all' | 'locked' | 'unlocked')}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-[#0D1A63]"
+            >
+              <option value="all">Semua</option>
+              <option value="locked">Ada yang terkunci</option>
+              <option value="unlocked">Ada yang terbuka</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Cari (kode / nama)</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="FY2025, Tahun Fiskal..."
+                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0D1A63]"
+              />
             </div>
           </div>
-        </Card>
-      )}
+        </div>
+      </PageFilter>
 
       <Card>
         {loading ? (
@@ -445,7 +451,7 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
                   value={createForm.code}
                   onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value }))}
                   placeholder="FY2026"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                 />
               </div>
               <div>
@@ -455,7 +461,7 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
                   value={createForm.name}
                   onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="Tahun Fiskal 2026"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -465,7 +471,7 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
                     type="date"
                     value={createForm.start_date}
                     onChange={(e) => setCreateForm((f) => ({ ...f, start_date: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                   />
                 </div>
                 <div>
@@ -474,7 +480,7 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
                     type="date"
                     value={createForm.end_date}
                     onChange={(e) => setCreateForm((f) => ({ ...f, end_date: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63]"
                   />
                 </div>
               </div>

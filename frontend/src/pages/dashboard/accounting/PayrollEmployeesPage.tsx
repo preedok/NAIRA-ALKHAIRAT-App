@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Users, ChevronLeft, Settings, DollarSign, Plus, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import Input from '../../../components/common/Input';
+import Autocomplete from '../../../components/common/Autocomplete';
+import Textarea from '../../../components/common/Textarea';
 import { accountingApi, branchesApi, type PayrollEmployeeItem, type EmployeeSalaryData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -141,18 +144,8 @@ const PayrollEmployeesPage: React.FC = () => {
       </div>
 
       <Card>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-700 mb-1">Filter Cabang</label>
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="w-full max-w-xs border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Semua cabang</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
-            ))}
-          </select>
+        <div className="mb-4 max-w-xs">
+          <Autocomplete label="Filter Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
         </div>
 
         {loading ? (
@@ -215,36 +208,16 @@ const PayrollEmployeesPage: React.FC = () => {
                 <p className="text-slate-500">Memuat...</p>
               ) : (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Gaji pokok (Rp)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={baseSalary || ''}
-                      onChange={(e) => setBaseSalary(Number(e.target.value) || 0)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
+                  <Input label="Gaji pokok (Rp)" type="number" min={0} value={baseSalary ? String(baseSalary) : ''} onChange={(e) => setBaseSalary(Number(e.target.value) || 0)} />
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-sm font-medium text-slate-700">Tunjangan</label>
                       <Button variant="ghost" size="sm" onClick={() => addRow('allowances')}><Plus className="w-4 h-4" /></Button>
                     </div>
                     {allowances.map((a, i) => (
-                      <div key={i} className="flex gap-2 mb-2">
-                        <input
-                          placeholder="Nama"
-                          value={a.name}
-                          onChange={(e) => updateRow('allowances', i, 'name', e.target.value)}
-                          className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Jumlah"
-                          value={a.amount || ''}
-                          onChange={(e) => updateRow('allowances', i, 'amount', Number(e.target.value) || 0)}
-                          className="w-28 border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
-                        />
+                      <div key={i} className="flex gap-2 mb-2 items-end">
+                        <Input placeholder="Nama" value={a.name} onChange={(e) => updateRow('allowances', i, 'name', e.target.value)} className="flex-1 min-w-0" />
+                        <Input type="number" placeholder="Jumlah" value={a.amount ? String(a.amount) : ''} onChange={(e) => updateRow('allowances', i, 'amount', Number(e.target.value) || 0)} className="w-28" fullWidth={false} />
                         <Button variant="ghost" size="sm" onClick={() => removeRow('allowances', i)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                       </div>
                     ))}
@@ -255,28 +228,14 @@ const PayrollEmployeesPage: React.FC = () => {
                       <Button variant="ghost" size="sm" onClick={() => addRow('deductions')}><Plus className="w-4 h-4" /></Button>
                     </div>
                     {deductions.map((d, i) => (
-                      <div key={i} className="flex gap-2 mb-2">
-                        <input
-                          placeholder="Nama"
-                          value={d.name}
-                          onChange={(e) => updateRow('deductions', i, 'name', e.target.value)}
-                          className="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Jumlah"
-                          value={d.amount || ''}
-                          onChange={(e) => updateRow('deductions', i, 'amount', Number(e.target.value) || 0)}
-                          className="w-28 border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
-                        />
+                      <div key={i} className="flex gap-2 mb-2 items-end">
+                        <Input placeholder="Nama" value={d.name} onChange={(e) => updateRow('deductions', i, 'name', e.target.value)} className="flex-1 min-w-0" />
+                        <Input type="number" placeholder="Jumlah" value={d.amount ? String(d.amount) : ''} onChange={(e) => updateRow('deductions', i, 'amount', Number(e.target.value) || 0)} className="w-28" fullWidth={false} />
                         <Button variant="ghost" size="sm" onClick={() => removeRow('deductions', i)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                       </div>
                     ))}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Catatan</label>
-                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                  </div>
+                  <Textarea label="Catatan" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
                 </>
               )}
             </div>

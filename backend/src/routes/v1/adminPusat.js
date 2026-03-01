@@ -36,4 +36,18 @@ router.patch('/products/:productId/visa-seasons/:seasonId', adminPusatController
 router.delete('/products/:productId/visa-seasons/:seasonId', adminPusatController.deleteVisaSeason);
 router.put('/products/:productId/visa-seasons/:seasonId/quota', adminPusatController.setVisaSeasonQuota);
 
+// Tiket: periode & kuota per periode (Admin Pusat)
+router.get('/products/:productId/ticket-seasons', adminPusatController.listTicketSeasons);
+router.post('/products/:productId/ticket-seasons', adminPusatController.createTicketSeason);
+router.patch('/products/:productId/ticket-seasons/:seasonId', adminPusatController.updateTicketSeason);
+router.delete('/products/:productId/ticket-seasons/:seasonId', adminPusatController.deleteTicketSeason);
+router.put('/products/:productId/ticket-seasons/:seasonId/quota', adminPusatController.setTicketSeasonQuota);
+
+// Bus Saudi: periode & kuota per periode (Admin Pusat)
+router.get('/products/:productId/bus-seasons', adminPusatController.listBusSeasons);
+router.post('/products/:productId/bus-seasons', adminPusatController.createBusSeason);
+router.patch('/products/:productId/bus-seasons/:seasonId', adminPusatController.updateBusSeason);
+router.delete('/products/:productId/bus-seasons/:seasonId', adminPusatController.deleteBusSeason);
+router.put('/products/:productId/bus-seasons/:seasonId/quota', adminPusatController.setBusSeasonQuota);
+
 module.exports = router;

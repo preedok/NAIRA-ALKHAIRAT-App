@@ -9,6 +9,9 @@ import Modal from '../../../components/common/Modal';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import Input from '../../../components/common/Input';
 import { accountingApi } from '../../../services/api';
 import type {
   BankStatementUploadItem,
@@ -220,28 +223,8 @@ const RekeningKoranPage: React.FC = () => {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card className="p-4 rounded-2xl border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600">
-              <FileSpreadsheet className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Upload</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : uploads.length}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 rounded-2xl border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
-              <List className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Baris</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{loading ? '–' : totalLines.toLocaleString('id-ID')}</p>
-            </div>
-          </div>
-        </Card>
+        <StatCard icon={<FileSpreadsheet className="w-5 h-5" />} label="Total Upload" value={loading ? '–' : uploads.length} />
+        <StatCard icon={<List className="w-5 h-5" />} label="Total Baris" value={loading ? '–' : totalLines.toLocaleString('id-ID')} />
         <Card className="p-4 rounded-2xl border border-sky-200 shadow-sm bg-gradient-to-br from-sky-50 to-white sm:col-span-2">
           <p className="text-xs font-medium text-sky-700 uppercase tracking-wide">Setelah upload</p>
           <p className="text-sm text-slate-600 mt-1">Klik <strong>Rekon</strong> untuk membandingkan dengan penerimaan terverifikasi. Gunakan <strong>Lihat detail</strong> untuk melihat semua transaksi bank dalam file.</p>
@@ -275,24 +258,9 @@ const RekeningKoranPage: React.FC = () => {
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Nama / Label (opsional)</label>
-              <input
-                type="text"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Contoh: Rekening Koran Maret 2026"
-                value={uploadName}
-                onChange={(e) => setUploadName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Periode dari (opsional)</label>
-              <input type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Periode sampai (opsional)</label>
-              <input type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
-            </div>
+            <Input label="Nama / Label (opsional)" type="text" placeholder="Contoh: Rekening Koran Maret 2026" value={uploadName} onChange={(e) => setUploadName(e.target.value)} />
+            <Input label="Periode dari (opsional)" type="date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
+            <Input label="Periode sampai (opsional)" type="date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
           </div>
           <Button onClick={handleUpload} disabled={!file || uploading}>
             {uploading ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <FileSpreadsheet className="w-4 h-4 mr-2" />}
@@ -308,19 +276,20 @@ const RekeningKoranPage: React.FC = () => {
         </h3>
         <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Cari nama / file</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Ketik nama atau nama file..." className="w-full text-sm border border-slate-300 rounded-lg pl-9 pr-3 py-2" />
-            </div>
+            <Input
+              label="Cari nama / file"
+              type="text"
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              placeholder="Ketik nama atau nama file..."
+              icon={<Search className="w-4 h-4" />}
+            />
           </div>
           <div className="min-w-[140px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Periode dari</label>
-            <input type="date" value={filterPeriodFrom} onChange={(e) => setFilterPeriodFrom(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+            <Input label="Periode dari" type="date" value={filterPeriodFrom} onChange={(e) => setFilterPeriodFrom(e.target.value)} />
           </div>
           <div className="min-w-[140px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Periode sampai</label>
-            <input type="date" value={filterPeriodTo} onChange={(e) => setFilterPeriodTo(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" />
+            <Input label="Periode sampai" type="date" value={filterPeriodTo} onChange={(e) => setFilterPeriodTo(e.target.value)} />
           </div>
           <div className="flex items-end">
             <Button variant="outline" size="sm" onClick={() => { setFilterName(''); setFilterPeriodFrom(''); setFilterPeriodTo(''); }}>Reset</Button>
@@ -398,27 +367,24 @@ const RekeningKoranPage: React.FC = () => {
           ) : recon ? (
             <div className="p-5 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
-                  <div className="flex items-center gap-2 text-emerald-800 font-medium">
-                    <CheckCircle className="w-5 h-5" /> Cocok
-                  </div>
-                  <p className="text-2xl font-bold text-emerald-900 mt-1">{recon.matched.length}</p>
-                  <p className="text-xs text-emerald-700 mt-0.5">Penerimaan yang cocok tanggal & nominal dengan bank</p>
-                </div>
-                <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
-                  <div className="flex items-center gap-2 text-amber-800 font-medium">
-                    <Banknote className="w-5 h-5" /> Hanya di sistem
-                  </div>
-                  <p className="text-2xl font-bold text-amber-900 mt-1">{recon.onlyInRecorded.length}</p>
-                  <p className="text-xs text-amber-700 mt-0.5">Penerimaan tercatat belum ada di bank</p>
-                </div>
-                <div className="rounded-xl bg-sky-50 border border-sky-200 p-4">
-                  <div className="flex items-center gap-2 text-sky-800 font-medium">
-                    <AlertCircle className="w-5 h-5" /> Hanya di bank
-                  </div>
-                  <p className="text-2xl font-bold text-sky-900 mt-1">{recon.onlyInBank.length}</p>
-                  <p className="text-xs text-sky-700 mt-0.5">Transaksi bank belum tercatat di sistem</p>
-                </div>
+                <StatCard
+                  icon={<CheckCircle className="w-5 h-5" />}
+                  label="Cocok"
+                  value={recon.matched.length}
+                  subtitle="Penerimaan yang cocok tanggal & nominal dengan bank"
+                />
+                <StatCard
+                  icon={<Banknote className="w-5 h-5" />}
+                  label="Hanya di sistem"
+                  value={recon.onlyInRecorded.length}
+                  subtitle="Penerimaan tercatat belum ada di bank"
+                />
+                <StatCard
+                  icon={<AlertCircle className="w-5 h-5" />}
+                  label="Hanya di bank"
+                  value={recon.onlyInBank.length}
+                  subtitle="Transaksi bank belum tercatat di sistem"
+                />
               </div>
 
               {recon.matched.length > 0 && (

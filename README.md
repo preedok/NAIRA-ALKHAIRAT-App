@@ -1,17 +1,19 @@
-# Bintang Global Group - Enterprise B2B Platform
+# Bintang Global Group — Enterprise B2B Platform
 
-Platform manajemen terintegrasi untuk layanan umroh: hotel, visa, tiket, bus, paket, invoice, dan multi-role (Admin Pusat, Admin Cabang, Role Invoice, Hotel, Visa, Tiket, Bus, Accounting, Owner).
+Platform manajemen terintegrasi untuk layanan umroh: hotel, visa, tiket, bus, paket, invoice, dan multi-role (Admin Pusat, Admin Koordinator, Invoice/Visa/Tiket Koordinator, Hotel, Bus, Accounting, Owner).
+
+**Stack:** Backend (Node.js + Express + PostgreSQL), Frontend (React), Mobile (React Native Android), Landing Page (terintegrasi).
+
+---
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies (root + backend + frontend)
+# 1. Install dependencies (root + backend + frontend + mobile)
 npm run install:all
 
-# 2. PostgreSQL: buat database (nama: db_bgg_group)
-# Pakai user yang sama dengan backend/.env (biasanya postgres):
+# 2. Buat database PostgreSQL (nama: db_bgg_group)
 createdb -U postgres db_bgg_group
-# Masukkan password user postgres saat diminta (sama dengan DB_PASSWORD di .env).
 
 # 3. Environment
 cp backend/.env.example backend/.env
@@ -19,52 +21,115 @@ cp frontend/.env.example frontend/.env
 # Isi backend/.env: DB_NAME=db_bgg_group, DB_USERNAME, DB_PASSWORD, dll.
 # Frontend .env: REACT_APP_API_URL=http://localhost:5000/api/v1
 
-# 4. Update database (migrate + buat tabel + seed) — wajib setelah DB kosong
+# 4. Migrate & seed database
+npm run db:migrate
 npm run db:update
-# Atau double-click: run-db-update.bat
-# Ini akan: migrate → sync (buat semua tabel) → seed (isi cabang, akun semua role, 3 owner, produk, order contoh)
+# db:update = migrate + sync + seed (cabang, akun semua role, owner contoh, produk)
 
-# 5. Jalankan aplikasi (backend + frontend sekaligus)
+# 5. Jalankan aplikasi
 npm start
-# Atau double-click: run-project.bat (bebaskan port 5000/3000 dulu lalu start)
+# Backend: http://localhost:5000 | Frontend: http://localhost:3000
 ```
 
-- **Database:** Nama database: **db_bgg_group**. Jalankan `npm run db:update` (atau `run-db-update.bat`) untuk migrate + seed. Untuk hapus DB lama (bintang_global) dan buat DB baru lengkap: `npm run db:recreate`. Backend juga sync schema saat start (tanpa ALTER jika ada view).
-- **Frontend** dan **backend** jalan bersamaan; buka http://localhost:3000 untuk UI, API di http://localhost:5000/api/v1.
-- **Port sibuk?** Gunakan `run-project.bat` untuk membebaskan port 5000 dan 3000 lalu start, atau `stop-project.bat` hanya untuk stop.
+- **Landing page** (untuk tamu): buka http://localhost:3000 — Daftar Partner / Masuk.
+- **Mobile (Owner):** `cd mobile` lalu `npm start` dan `npm run android` (emulator/device).
 
-## Dokumentasi & Presentasi
+---
 
-- **Workflow proses bisnis (untuk presentasi klien):** Satu dokumen PDF berisi semua alur bisnis aplikasi ada di **docs/WORKFLOW_PROSES_BISNIS_PRESENTASI.pdf**. Sumber: **docs/WORKFLOW_PROSES_BISNIS_PRESENTASI.md**. Untuk generate ulang PDF: `node backend/scripts/generate-workflow-pdf.js` (dari root project).
+## Struktur Project
 
-## Akun setelah seed
+| Folder       | Isi |
+|-------------|-----|
+| `backend/`  | REST API (Express, Sequelize, PostgreSQL), migrate, seed, script clear data |
+| `frontend/` | React app (dashboard + landing page) |
+| `mobile/`   | React Native app (Owner) — Android |
+| `docs/`     | Dokumentasi proses bisnis, arsitektur, workflow |
+| Root        | `PENAWARAN_HARGA.html`, `SURAT_KONTRAK_KERJASAMA.html`, script generate PDF |
 
-Password semua: **Password123**
+---
 
-Lihat daftar lengkap di **backend/SEED_ACCOUNTS.md** (Super Admin, Admin Pusat, Admin Cabang, Invoice, Hotel, Visa, Tiket, Bus, Accounting, dan 3 Owner contoh).
-
-## Scripts
+## Scripts (Root)
 
 | Perintah | Keterangan |
 |----------|------------|
-| `npm start` | Jalankan backend + frontend (concurrently) |
-| `npm run db:update` | Migrate + seed database (cabang, akun semua role, 3 owner) |
-| `npm run migrate` | Jalankan migrasi saja (folder backend) |
-| `npm run seed` | Jalankan seed saja (folder backend) |
-| `npm run seed:undo` | Hapus data seed |
-| `npm run build` | Build frontend untuk production |
+| `npm run install:all` | Install dependency root + backend + frontend + mobile |
+| `npm start` | Jalankan backend + frontend (tanpa mobile) |
+| `npm run dev` | Backend + frontend (development, dengan db:migrate pre-run) |
+| `npm run start:backend` | Backend saja |
+| `npm run start:frontend` | Frontend saja |
+| `npm run start:mobile` | Metro (mobile) |
+| `npm run db:migrate` | Jalankan migrasi (backend) |
+| `npm run db:update` | Migrate + sync + seed (backend) |
+| `npm run migrate` | Sama dengan db:migrate |
+| `npm run seed` | Seed saja (backend) |
+| `npm run seed:undo` | Undo seed (backend) |
+| `npm run build` | Build frontend production |
+| `npm run generate:penawaran-pdf` | Generate PENAWARAN_HARGA.pdf dari PENAWARAN_HARGA.html |
 
-**Windows:** `run-db-update.bat` = update DB; `run-project.bat` = bebaskan port lalu start; `stop-project.bat` = stop proses di port 5000/3000.
+### Scripts (Backend — dari folder backend)
 
-## Flow peran (ringkas)
+| Perintah | Keterangan |
+|----------|------------|
+| `npm run clear:orders-invoices` | Hapus semua data order, invoice, pembayaran, progres, notifikasi (data master tetap) |
+| `npm run db:recreate` | Hapus DB lama, buat db_bgg_group baru, lalu migrate + seed |
+| `npm run generate:payment-proofs` | Generate contoh bukti pembayaran |
 
-- **Admin Pusat**: Dashboard rekap cabang, rekap gabungan, buka cabang + akun, buat akun Bus/Hotel, konfigurasi harga/availability general, flyer/template, MOU.
-- **Admin Cabang**: Dashboard cabang, owner di cabang, personil, konfigurasi harga cabang, proses owner baru (MOU, deposit, aktivasi), kirim hasil order ke owner.
-- **Role Invoice**: Buat invoice, verifikasi pembayaran, unblock.
-- **Role Hotel**: Order hotel, status pekerjaan + nomor kamar, ketersediaan kamar/makan (read-only harga).
-- **Role Visa / Tiket**: Order visa/tiket, update status sampai terbit, upload dokumen, notifikasi owner/invoice.
-- **Role Bus**: Order bus, tiket bus, status kedatangan/keberangkatan/kepulangan, export Excel/PDF.
-- **Role Accounting**: Dashboard piutang/terbayar, aging, daftar pembayaran, invoice.
-- **Super Admin**: Monitoring, statistik, logs, maintenance, tampilan, bahasa, deploy.
+**Hapus data order & invoice dari root:**  
+`cd backend && npm run clear:orders-invoices`
 
-Bahasa aplikasi diatur oleh Super Admin (Indonesia, Inggris, Arab).
+---
+
+## Akun Setelah Seed
+
+Password semua: **Password123**
+
+Daftar lengkap: **backend/SEED_ACCOUNTS.md** (Super Admin, Admin Pusat, Admin Koordinator, Invoice/Visa/Tiket Koordinator, Hotel, Bus, Accounting, Owner contoh).
+
+---
+
+## Dokumen Bisnis (Root)
+
+| File | Keterangan |
+|------|-------------|
+| `PENAWARAN_HARGA.html` | Penawaran harga sewa aplikasi (per bulan / 3 bln / 6 bln / tahun, tanpa/dengan server), rincian modul, biaya pengembangan per modul |
+| `SURAT_KONTRAK_KERJASAMA.html` | Draft surat perjanjian kerjasama PT Insan Cita Integrasi & PT Bintang Global Group |
+| `PENAWARAN_HARGA.pdf` | Generate dari HTML: `npm run generate:penawaran-pdf` (perlu Puppeteer) |
+
+Buka file `.html` di browser; untuk PDF bisa Print → Save as PDF atau pakai script generate.
+
+---
+
+## Dokumentasi & Presentasi
+
+- **Workflow proses bisnis:** `docs/WORKFLOW_PROSES_BISNIS_PRESENTASI.md` (generate PDF via backend script bila ada).
+- **Arsitektur & scope role:** `docs/ARCHITECTURE_AND_SCOPE.md`
+- **Master business process:** `docs/MASTER_BUSINESS_PROCESS.md`
+- **Emulator (mobile):** `mobile/docs/EMULATOR_TROUBLESHOOTING.md`
+
+---
+
+## Role (Ringkas)
+
+| Role | Scope |
+|------|--------|
+| **Super Admin** | Monitoring, logs, maintenance |
+| **Admin Pusat** | Seluruh cabang, rekap, konfigurasi global |
+| **Admin Koordinator** | Wilayah (cabang dalam wilayahnya) |
+| **Invoice / Visa / Tiket Koordinator** | Order & invoice dalam wilayah; proses visa/tiket |
+| **Role Hotel / Role Bus** | Pekerjaan hotel, bus (scope cabang/wilayah) |
+| **Role Accounting** | Laporan keuangan, aging, rekening koran |
+| **Owner** | Order & invoice milik sendiri; akses mobile |
+
+---
+
+## Persyaratan
+
+- Node.js ≥ 18
+- PostgreSQL
+- (Mobile) Android Studio / SDK untuk build Android
+
+---
+
+## Lisensi & Author
+
+**Bintang Global Group** — Enterprise B2B Platform for Umroh Services.

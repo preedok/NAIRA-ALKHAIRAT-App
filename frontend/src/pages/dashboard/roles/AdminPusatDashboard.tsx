@@ -18,9 +18,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, AutoRefreshControl } from '../../../components/common';
+import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader } from '../../../components/common';
+import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
+import type { TableColumn } from '../../../types';
 import { ORDER_STATUS_LABELS, INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
 /** Modal daftar order dengan filter lengkap */
@@ -46,12 +48,13 @@ const OrderListModal: React.FC<{
   const [fOrderNumber, setFOrderNumber] = useState('');
   const [sortBy] = useState('created_at');
   const [sortOrder] = useState<'asc' | 'desc'>('desc');
+  const [limit, setLimit] = useState(20);
   const navigate = useNavigate();
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | undefined> = { limit: 20, page, sort_by: sortBy, sort_order: sortOrder };
+      const params: Record<string, string | number | undefined> = { limit, page, sort_by: sortBy, sort_order: sortOrder };
       if (fStatus) params.status = fStatus;
       if (fBranch) params.branch_id = fBranch;
       if (fWilayah) params.wilayah_id = fWilayah;
@@ -69,7 +72,7 @@ const OrderListModal: React.FC<{
     } finally {
       setLoading(false);
     }
-  }, [page, sortBy, sortOrder, fStatus, fBranch, fWilayah, fProvinsi, fDateFrom, fDateTo, fOrderNumber]);
+  }, [page, limit, sortBy, sortOrder, fStatus, fBranch, fWilayah, fProvinsi, fDateFrom, fDateTo, fOrderNumber]);
 
   useEffect(() => {
     if (open) {
@@ -142,54 +145,46 @@ const OrderListModal: React.FC<{
               orderStatusOptions={ORDER_STATUS_LABELS}
             />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-slate-600">
-                  <th className="px-4 py-3 font-semibold">No. Order</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
-                  <th className="px-4 py-3 font-semibold">Cabang</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Total</th>
-                  <th className="px-4 py-3 font-semibold">Tanggal</th>
-                  <th className="px-4 py-3 font-semibold w-24">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Memuat...</td></tr>
-                ) : orders.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Tidak ada data</td></tr>
-                ) : (
-                  orders.map((o) => (
-                    <tr key={o.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono">{o.order_number}</td>
-                      <td className="px-4 py-3">{o.User?.name ?? '-'}</td>
-                      <td className="px-4 py-3">{o.Branch?.name ?? '-'}</td>
-                      <td className="px-4 py-3"><Badge variant="info">{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></td>
-                      <td className="px-4 py-3">{formatIDR(o.total_amount || 0)}</td>
-                      <td className="px-4 py-3">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '-'}</td>
-                      <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm" className="gap-1" onClick={() => { onClose(); navigate('/dashboard/orders-invoices'); }}>
-                          <Eye className="w-4 h-4" /> Lihat
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-slate-600">Total {pagination.total} order</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Sebelumnya</Button>
-                <span className="py-2 text-sm text-slate-600">Halaman {page} / {pagination.totalPages}</span>
-                <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Selanjutnya</Button>
-              </div>
-            </div>
-          )}
+          <Table
+            columns={[
+              { id: 'order_number', label: 'No. Order', align: 'left' },
+              { id: 'owner', label: 'Owner', align: 'left' },
+              { id: 'branch', label: 'Cabang', align: 'left' },
+              { id: 'status', label: 'Status', align: 'left' },
+              { id: 'total', label: 'Total', align: 'left' },
+              { id: 'date', label: 'Tanggal', align: 'left' },
+              { id: 'actions', label: 'Aksi', align: 'left' }
+            ] as TableColumn[]}
+            data={loading ? [] : orders}
+            emptyMessage={loading ? 'Memuat...' : 'Tidak ada data'}
+            pagination={
+              pagination && pagination.total > 0
+                ? {
+                    total: pagination.total,
+                    page: pagination.page,
+                    limit: pagination.limit,
+                    totalPages: pagination.totalPages,
+                    onPageChange: setPage,
+                    onLimitChange: (l) => { setLimit(l); setPage(1); }
+                  }
+                : undefined
+            }
+            renderRow={(o) => (
+              <tr key={o.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono">{o.order_number}</td>
+                <td className="px-4 py-3">{o.User?.name ?? '-'}</td>
+                <td className="px-4 py-3">{o.Branch?.name ?? '-'}</td>
+                <td className="px-4 py-3"><Badge variant="info">{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></td>
+                <td className="px-4 py-3">{formatIDR(o.total_amount || 0)}</td>
+                <td className="px-4 py-3">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '-'}</td>
+                <td className="px-4 py-3">
+                  <Button variant="ghost" size="sm" className="gap-1" onClick={() => { onClose(); navigate('/dashboard/orders-invoices'); }}>
+                    <Eye className="w-4 h-4" /> Lihat
+                  </Button>
+                </td>
+              </tr>
+            )}
+          />
         </div>
       </div>
     </div>
@@ -206,6 +201,7 @@ const InvoiceListModalAdmin: React.FC<{
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [summary, setSummary] = useState<any>(null);
 
@@ -213,7 +209,7 @@ const InvoiceListModalAdmin: React.FC<{
     if (!open) return;
     setLoading(true);
     try {
-      const params: Record<string, string | number> = { limit: 20, page, sort_by: 'created_at', sort_order: 'desc' };
+      const params: Record<string, string | number> = { limit, page, sort_by: 'created_at', sort_order: 'desc' };
       if (presetFilter.branch_id) params.branch_id = presetFilter.branch_id;
       if (presetFilter.provinsi_id) params.provinsi_id = presetFilter.provinsi_id;
       if (presetFilter.wilayah_id) params.wilayah_id = presetFilter.wilayah_id;
@@ -230,7 +226,7 @@ const InvoiceListModalAdmin: React.FC<{
     } finally {
       setLoading(false);
     }
-  }, [open, page, presetFilter.branch_id, presetFilter.provinsi_id, presetFilter.wilayah_id, presetFilter.date_from, presetFilter.date_to]);
+  }, [open, page, limit, presetFilter.branch_id, presetFilter.provinsi_id, presetFilter.wilayah_id, presetFilter.date_from, presetFilter.date_to]);
 
   React.useEffect(() => {
     if (open) {
@@ -262,52 +258,44 @@ const InvoiceListModalAdmin: React.FC<{
               <span>Sisa: <strong className="text-amber-600">{formatIDR(parseFloat(summary.total_remaining || 0))}</strong></span>
             </div>
           )}
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-slate-600">
-                  <th className="px-4 py-3 font-semibold">No. Invoice</th>
-                  <th className="px-4 py-3 font-semibold">No. Order</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
-                  <th className="px-4 py-3 font-semibold">Cabang</th>
-                  <th className="px-4 py-3 font-semibold">Total</th>
-                  <th className="px-4 py-3 font-semibold">Terbayar</th>
-                  <th className="px-4 py-3 font-semibold">Sisa</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">Memuat...</td></tr>
-                ) : invoices.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">Tidak ada data</td></tr>
-                ) : (
-                  invoices.map((inv) => (
-                    <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono">{inv.invoice_number}</td>
-                      <td className="px-4 py-3 font-mono">{inv.Order?.order_number ?? '-'}</td>
-                      <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
-                      <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                      <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                      <td className="px-4 py-3 text-emerald-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                      <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                      <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-slate-600">Total {pagination.total} invoice</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Sebelumnya</Button>
-                <span className="py-2 text-sm text-slate-600">Halaman {page} / {pagination.totalPages}</span>
-                <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Selanjutnya</Button>
-              </div>
-            </div>
-          )}
+          <Table
+            columns={[
+              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+              { id: 'order_number', label: 'No. Order', align: 'left' },
+              { id: 'owner', label: 'Owner', align: 'left' },
+              { id: 'branch', label: 'Cabang', align: 'left' },
+              { id: 'total', label: 'Total', align: 'left' },
+              { id: 'paid', label: 'Terbayar', align: 'left' },
+              { id: 'remaining', label: 'Sisa', align: 'left' },
+              { id: 'status', label: 'Status', align: 'left' }
+            ] as TableColumn[]}
+            data={loading ? [] : invoices}
+            emptyMessage={loading ? 'Memuat...' : 'Tidak ada data'}
+            pagination={
+              pagination && pagination.total > 0
+                ? {
+                    total: pagination.total,
+                    page: pagination.page,
+                    limit: pagination.limit,
+                    totalPages: pagination.totalPages,
+                    onPageChange: setPage,
+                    onLimitChange: (l) => { setLimit(l); setPage(1); }
+                  }
+                : undefined
+            }
+            renderRow={(inv) => (
+              <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-mono">{inv.Order?.order_number ?? '-'}</td>
+                <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
+                <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
+                <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                <td className="px-4 py-3 text-emerald-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
+              </tr>
+            )}
+          />
         </div>
       </div>
     </div>
@@ -330,6 +318,7 @@ const AdminPusatDashboard: React.FC = () => {
   const [modalPreset, setModalPreset] = useState<Record<string, string>>({});
   const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
   const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -361,6 +350,17 @@ const AdminPusatDashboard: React.FC = () => {
   const branches = data?.branches ?? [];
   const ordersRecent = data?.orders_recent ?? [];
   const invoices = data?.invoices ?? { total: 0, by_status: {} };
+
+  const hasActiveFilters = !!(branchId || statusFilter || provinsiId || wilayahId || dateFrom || dateTo);
+  const resetFilters = () => {
+    setBranchId('');
+    setStatusFilter('');
+    setProvinsiId('');
+    setWilayahId('');
+    setDateFrom('');
+    setDateTo('');
+    setTimeout(() => fetchDashboard(), 0);
+  };
 
   const buildPreset = (extra?: Record<string, string>) => {
     const p: Record<string, string> = {};
@@ -396,17 +396,29 @@ const AdminPusatDashboard: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            {user?.name ? `Selamat datang, ${user.name}` : 'Admin Pusat'}
-          </h1>
-          <p className="text-slate-600 mt-1">Rekapitulasi transaksi dan pekerjaan cabang</p>
-        </div>
-        <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} />
-      </div>
+      <PageHeader
+        title={user?.name ? `Selamat datang, ${user.name}` : 'Admin Pusat'}
+        subtitle="Rekapitulasi transaksi dan pekerjaan cabang"
+        right={
+          <div className="flex items-center gap-2">
+            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} />
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
+          </div>
+        }
+      />
 
-      <Card className="border-slate-200/80 shadow-sm">
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v: boolean) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchDashboard(); }}
+        loading={loading}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        hideToggleRow
+        className="w-full"
+      >
         <DashboardFilterBar
           variant="page"
           loading={loading}
@@ -417,6 +429,7 @@ const AdminPusatDashboard: React.FC = () => {
           statusType="order"
           showDateRange
           showReset={false}
+          hideActions
           wilayahId={wilayahId}
           provinsiId={provinsiId}
           branchId={branchId}
@@ -430,12 +443,13 @@ const AdminPusatDashboard: React.FC = () => {
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
           onApply={fetchDashboard}
+          onReset={resetFilters}
           wilayahList={wilayahList}
           provinces={provinces}
           branches={branches}
           orderStatusOptions={ORDER_STATUS_LABELS}
         />
-      </Card>
+      </PageFilter>
 
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-3 flex items-center gap-2">
@@ -451,66 +465,38 @@ const AdminPusatDashboard: React.FC = () => {
         <>
           {/* Cards total lengkap */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card hover className="overflow-hidden flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-500 mb-1">Total Invoice</p>
-                  <p className="text-3xl font-bold text-slate-900">{orders.total}</p>
-                  <p className="text-xs text-slate-400 mt-1">Semua status</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg">
-                  <Receipt className="w-8 h-8" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => openModal('orders')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
-            <Card hover className="overflow-hidden flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-500 mb-1">Total Revenue</p>
-                  <p className="text-2xl font-bold text-slate-900">{formatIDR(orders.total_revenue)}</p>
-                  <p className="text-xs text-slate-400 mt-1">Excl. draft & cancelled</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg">
-                  <DollarSign className="w-8 h-8" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => openModal('orders')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
-            <Card hover className="overflow-hidden flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-500 mb-1">Total Invoice</p>
-                  <p className="text-3xl font-bold text-slate-900">{invoices.total}</p>
-                  <p className="text-xs text-slate-400 mt-1">{Object.keys(invoices.by_status || {}).length} status</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg">
-                  <FileText className="w-8 h-8" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => openModal('invoices')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
-            <Card hover className="overflow-hidden flex flex-col">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-500 mb-1">Total Owner</p>
-                  <p className="text-3xl font-bold text-slate-900">{data.owners_total ?? 0}</p>
-                  <p className="text-xs text-slate-400 mt-1">Terdaftar</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg">
-                  <Users className="w-8 h-8" />
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2 self-start gap-1" onClick={() => navigate('/dashboard/admin-pusat/users')}>
-                View All <ChevronRight className="w-4 h-4" />
-              </Button>
-            </Card>
+            <StatCard
+              icon={<Receipt className="w-5 h-5" />}
+              label="Total Order"
+              value={orders.total}
+              subtitle="Semua status"
+              iconClassName="bg-[#0D1A63] text-white"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('orders')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
+            <StatCard
+              icon={<DollarSign className="w-5 h-5" />}
+              label="Total Revenue"
+              value={formatIDR(orders.total_revenue)}
+              subtitle="Excl. draft & cancelled"
+              iconClassName="bg-[#0D1A63] text-white"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('orders')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
+            <StatCard
+              icon={<FileText className="w-5 h-5" />}
+              label="Total Invoice"
+              value={invoices.total}
+              subtitle={`${Object.keys(invoices.by_status || {}).length} status`}
+              iconClassName="bg-[#0D1A63] text-white"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('invoices')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
+            <StatCard
+              icon={<Users className="w-5 h-5" />}
+              label="Total Owner"
+              value={data.owners_total ?? 0}
+              subtitle="Terdaftar"
+              iconClassName="bg-amber-100 text-amber-600"
+              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => navigate('/dashboard/admin-pusat/users')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+            />
           </div>
 
           {/* Order per Status, Cabang, Wilayah, Provinsi - 2x2 grid */}
@@ -607,45 +593,61 @@ const AdminPusatDashboard: React.FC = () => {
 
           {/* Order Terbaru dengan View All & Aksi */}
           <Card>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-900">Invoice Terbaru</h3>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/dashboard/orders-invoices')}>
-                View All <ExternalLink className="w-4 h-4" />
-              </Button>
-            </div>
+            <CardSectionHeader
+              icon={<Receipt className="w-6 h-6" />}
+              title="Invoice Terbaru"
+              subtitle="Daftar invoice terbaru di sistem"
+              right={
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/dashboard/orders-invoices')}>
+                  View All <ExternalLink className="w-4 h-4" />
+                </Button>
+              }
+              className="mb-6"
+            />
             <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="text-left text-slate-600">
-                    <th className="px-4 py-3 font-semibold">No. Invoice</th>
-                    <th className="px-4 py-3 font-semibold">Owner</th>
-                    <th className="px-4 py-3 font-semibold">Cabang</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Total</th>
-                    <th className="px-4 py-3 font-semibold">Tanggal</th>
-                    <th className="px-4 py-3 font-semibold w-28">Aksi</th>
+              <Table
+                columns={[
+                  { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+                  { id: 'owner', label: 'Owner', align: 'left' },
+                  { id: 'branch', label: 'Cabang', align: 'left' },
+                  { id: 'status', label: 'Status', align: 'left' },
+                  { id: 'total', label: 'Total', align: 'left' },
+                  { id: 'date', label: 'Tanggal', align: 'left' },
+                  { id: 'actions', label: 'Aksi', align: 'left' }
+                ] as TableColumn[]}
+                data={ordersRecent.slice(0, 10)}
+                emptyMessage="Belum ada invoice"
+                emptyDescription="Tidak ada invoice terbaru. Klik View All untuk daftar lengkap."
+                stickyActionsColumn
+                pagination={
+                  ordersRecent.length > 0
+                    ? {
+                        total: ordersRecent.length,
+                        page: 1,
+                        limit: 10,
+                        totalPages: Math.ceil(ordersRecent.length / 10) || 1,
+                        onPageChange: () => {},
+                        onLimitChange: () => {}
+                      }
+                    : undefined
+                }
+                renderRow={(inv: any) => (
+                  <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono">{inv.invoice_number ?? inv.Order?.order_number ?? '-'}</td>
+                    <td className="px-4 py-3">{inv.User?.name ?? '-'}</td>
+                    <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
+                    <td className="px-4 py-3"><Badge variant="info">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge></td>
+                    <td className="px-4 py-3">{formatIDR(inv.total_amount || 0)}</td>
+                    <td className="px-4 py-3">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('id-ID') : '-'}</td>
+                    <td className="px-4 py-3">
+                      <Button variant="ghost" size="sm" className="gap-1" onClick={() => navigate('/dashboard/orders-invoices')}>
+                        <Eye className="w-4 h-4" /> Lihat
+                      </Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {ordersRecent.slice(0, 10).map((inv: any) => (
-                    <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono">{inv.invoice_number ?? inv.Order?.order_number ?? '-'}</td>
-                      <td className="px-4 py-3">{inv.User?.name ?? '-'}</td>
-                      <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                      <td className="px-4 py-3"><Badge variant="info">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge></td>
-                      <td className="px-4 py-3">{formatIDR(inv.total_amount || 0)}</td>
-                      <td className="px-4 py-3">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('id-ID') : '-'}</td>
-                      <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm" className="gap-1" onClick={() => navigate('/dashboard/orders-invoices')}>
-                          <Eye className="w-4 h-4" /> Lihat
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                )}
+              />
             </div>
-            {ordersRecent.length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada invoice</p>}
           </Card>
 
           {/* Aksi Cepat */}

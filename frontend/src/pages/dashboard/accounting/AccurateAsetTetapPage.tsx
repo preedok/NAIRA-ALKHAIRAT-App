@@ -4,6 +4,7 @@ import { Building2, Plus, RefreshCw, ChevronRight, Calculator, Trash2 } from 'lu
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import { Input, Autocomplete } from '../../../components/common';
 import { accountingApi, branchesApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR } from '../../../utils';
@@ -170,43 +171,17 @@ const AccurateAsetTetapPage: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Tambah Aset Tetap</h2>
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Kode Aset *</label>
-              <input type="text" value={form.asset_code} onChange={(e) => setForm((f) => ({ ...f, asset_code: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="AT-001" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Nama Aset *</label>
-              <input type="text" value={form.asset_name} onChange={(e) => setForm((f) => ({ ...f, asset_name: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Komputer" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Kategori</label>
-              <input type="text" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Elektronik" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tanggal Beli</label>
-              <input type="date" value={form.purchase_date} onChange={(e) => setForm((f) => ({ ...f, purchase_date: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <Input label="Kode Aset *" type="text" value={form.asset_code} onChange={(e) => setForm((f) => ({ ...f, asset_code: e.target.value }))} placeholder="AT-001" fullWidth />
+            <Input label="Nama Aset *" type="text" value={form.asset_name} onChange={(e) => setForm((f) => ({ ...f, asset_name: e.target.value }))} placeholder="Komputer" fullWidth />
+            <Input label="Kategori" type="text" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Elektronik" fullWidth />
+            <Input label="Tanggal Beli" type="date" value={form.purchase_date} onChange={(e) => setForm((f) => ({ ...f, purchase_date: e.target.value }))} fullWidth />
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Nilai Perolehan (IDR)" type="number" min={0} value={form.acquisition_cost} onChange={(e) => setForm((f) => ({ ...f, acquisition_cost: e.target.value }))} fullWidth />
+              <Input label="Nilai Residu (IDR)" type="number" min={0} value={form.residual_value} onChange={(e) => setForm((f) => ({ ...f, residual_value: e.target.value }))} fullWidth />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Nilai Perolehan (IDR)</label>
-                <input type="number" min={0} value={form.acquisition_cost} onChange={(e) => setForm((f) => ({ ...f, acquisition_cost: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Nilai Residu (IDR)</label>
-                <input type="number" min={0} value={form.residual_value} onChange={(e) => setForm((f) => ({ ...f, residual_value: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Umur Ekonomis (tahun)</label>
-                <input type="number" min={1} value={form.useful_life_years} onChange={(e) => setForm((f) => ({ ...f, useful_life_years: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Metode</label>
-                <select value={form.depreciation_method} onChange={(e) => setForm((f) => ({ ...f, depreciation_method: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                  <option value="straight_line">Straight Line</option>
-                </select>
-              </div>
+              <Input label="Umur Ekonomis (tahun)" type="number" min={1} value={form.useful_life_years} onChange={(e) => setForm((f) => ({ ...f, useful_life_years: e.target.value }))} fullWidth />
+              <Autocomplete label="Metode" value={form.depreciation_method} onChange={(v) => setForm((f) => ({ ...f, depreciation_method: v }))} options={[{ value: 'straight_line', label: 'Straight Line' }]} fullWidth />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-6">

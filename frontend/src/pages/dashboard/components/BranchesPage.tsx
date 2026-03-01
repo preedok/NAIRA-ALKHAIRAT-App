@@ -7,6 +7,10 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import { Input, Autocomplete } from '../../../components/common';
 import { branchesApi, adminPusatApi, type Branch, type BranchStats, type ProvinceItem, type UserListItem } from '../../../services/api';
 import { TableColumn } from '../../../types';
 
@@ -273,86 +277,26 @@ const BranchesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-stone-900">Kelola Cabang</h1>
-          <p className="text-stone-600 mt-1">Daftar cabang dan tambah akun admin cabang, wilayah, atau provinsi</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <AutoRefreshControl onRefresh={() => { fetchStats(); fetchBranches(); }} disabled={loading} />
-          {canCreateBranch && (
-            <Button variant="primary" onClick={openAddAccount}><UserPlus className="w-5 h-5 mr-2" />Tambah Akun</Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Kelola Cabang"
+        subtitle="Daftar cabang dan tambah akun admin cabang, wilayah, atau provinsi"
+        right={
+          <div className="flex flex-wrap items-center gap-3">
+            <AutoRefreshControl onRefresh={() => { fetchStats(); fetchBranches(); }} disabled={loading} />
+            {canCreateBranch && (
+              <Button variant="primary" onClick={openAddAccount}><UserPlus className="w-5 h-5 mr-2" />Tambah Akun</Button>
+            )}
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-card">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-stone-600">Total Cabang</p>
-              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.total_branches ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-stone-600">Cabang Aktif</p>
-              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.active_branches ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-amber-100 text-amber-600">
-              <XCircle className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-stone-600">Cabang Nonaktif</p>
-              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.inactive_branches ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-sky-100 text-sky-600">
-              <Globe className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-stone-600">Provinsi</p>
-              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.total_provinces ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-violet-100 text-violet-600">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-stone-600">Wilayah</p>
-              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.total_wilayah ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-teal-100 text-teal-600">
-              <Users className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-stone-600">Punya Manager</p>
-              <p className="text-2xl font-bold text-stone-900 tabular-nums">{stats?.branches_with_manager ?? '–'}</p>
-            </div>
-          </div>
-        </Card>
+        <StatCard icon={<Building2 className="w-5 h-5" />} label="Total Cabang" value={stats?.total_branches ?? '–'} iconClassName="bg-[#0D1A63] text-white" />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Cabang Aktif" value={stats?.active_branches ?? '–'} iconClassName="bg-emerald-100 text-emerald-600" />
+        <StatCard icon={<XCircle className="w-5 h-5" />} label="Cabang Nonaktif" value={stats?.inactive_branches ?? '–'} iconClassName="bg-amber-100 text-amber-600" />
+        <StatCard icon={<Globe className="w-5 h-5" />} label="Provinsi" value={stats?.total_provinces ?? '–'} iconClassName="bg-sky-100 text-sky-600" />
+        <StatCard icon={<MapPin className="w-5 h-5" />} label="Wilayah" value={stats?.total_wilayah ?? '–'} iconClassName="bg-violet-100 text-violet-600" />
+        <StatCard icon={<Users className="w-5 h-5" />} label="Punya Manager" value={stats?.branches_with_manager ?? '–'} iconClassName="bg-teal-100 text-teal-600" />
       </div>
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
@@ -362,6 +306,12 @@ const BranchesPage: React.FC = () => {
       )}
 
       <Card className="travel-card">
+        <CardSectionHeader
+          icon={<Building2 className="w-6 h-6" />}
+          title="Daftar Cabang"
+          subtitle="Daftar cabang dan kelola akun admin wilayah, provinsi, cabang. Filter menurut kode, nama, kota, wilayah, provinsi, status."
+          className="mb-4"
+        />
         {loading ? (
           <p className="text-stone-500 py-8 text-center">Memuat...</p>
         ) : (
@@ -372,52 +322,49 @@ const BranchesPage: React.FC = () => {
                   <Filter className="w-4 h-4 text-primary-600" /> Filter Cabang
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                    <input
+                  <div className="flex-1 min-w-[200px]">
+                    <Input
                       type="text"
                       placeholder="Cari kode, nama, kota, provinsi..."
                       value={searchText}
                       onChange={(e) => setSearchText(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      icon={<Search className="w-4 h-4" />}
+                      fullWidth
                     />
                   </div>
-                  <select
+                  <Autocomplete
                     value={filterWilayah}
-                    onChange={(e) => { setFilterWilayah(e.target.value); setFilterProvinsi(''); }}
-                    className="px-4 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[180px]"
-                  >
-                    <option value="">Semua Wilayah</option>
-                    {wilayahForSelect.map((w) => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
-                  <select
+                    onChange={(v) => { setFilterWilayah(v); setFilterProvinsi(''); }}
+                    options={wilayahForSelect.map((w) => ({ value: w.id, label: w.name }))}
+                    emptyLabel="Semua Wilayah"
+                    placeholder="Wilayah"
+                    className="min-w-[180px]"
+                  />
+                  <Autocomplete
                     value={filterProvinsi}
-                    onChange={(e) => setFilterProvinsi(e.target.value)}
-                    className="px-4 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[180px]"
-                  >
-                    <option value="">Semua Provinsi</option>
-                    {provincesByWilayah.map((p) => (
-                      <option key={p.id} value={p.id}>{p.nama ?? p.name ?? ''}</option>
-                    ))}
-                  </select>
-                  <input
+                    onChange={setFilterProvinsi}
+                    options={provincesByWilayah.map((p) => ({ value: String(p.id), label: p.nama ?? p.name ?? '' }))}
+                    emptyLabel="Semua Provinsi"
+                    placeholder="Provinsi"
+                    className="min-w-[180px]"
+                  />
+                  <Input
                     type="text"
                     placeholder="Filter kota..."
                     value={filterCity}
                     onChange={(e) => setFilterCity(e.target.value)}
-                    className="px-4 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-[140px]"
+                    fullWidth
+                    className="min-w-[140px]"
                   />
-                  <select
+                  <Autocomplete
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-                    className="px-4 py-2 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white min-w-[140px]"
-                  >
-                    <option value="all">Semua Status</option>
-                    <option value="active">Aktif</option>
-                    <option value="inactive">Nonaktif</option>
-                  </select>
+                    onChange={(v) => setFilterStatus(v as 'all' | 'active' | 'inactive')}
+                    options={[
+                      { value: 'all', label: 'Semua Status' },
+                      { value: 'active', label: 'Aktif' },
+                      { value: 'inactive', label: 'Nonaktif' }
+                    ]}
+                  />
                   {hasActiveFilters && (
                     <button
                       type="button"
@@ -436,7 +383,8 @@ const BranchesPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <Table
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <Table
               columns={tableColumns}
               data={branches}
               sort={{ columnId: sortBy, order: sortOrder }}
@@ -490,6 +438,7 @@ const BranchesPage: React.FC = () => {
               </tr>
             )}
           />
+            </div>
           </>
         )}
       </Card>
@@ -564,60 +513,54 @@ const BranchesPage: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama *</label>
-                <input type="text" value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2" required placeholder="Nama lengkap" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
-                <input type="email" value={accountForm.email} onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2" required placeholder="email@contoh.com" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password {editingUserId ? '(kosongkan jika tidak ingin mengubah)' : '* (min. 6 karakter)'}</label>
-                <input type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2" required={!editingUserId} minLength={6} placeholder="••••••••" />
-              </div>
+              <Input label="Nama *" type="text" value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} fullWidth placeholder="Nama lengkap" />
+              <Input label="Email *" type="email" value={accountForm.email} onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })} fullWidth placeholder="email@contoh.com" />
+              <Input label={editingUserId ? 'Password (kosongkan jika tidak ingin mengubah)' : 'Password * (min. 6 karakter)'} type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} fullWidth placeholder="••••••••" />
 
               {editingBranchId && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Pilih Kabupaten/Kota (Cabang) *</label>
-                  <select value={accountForm.branch_id} onChange={(e) => setAccountForm({ ...accountForm, branch_id: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2" required disabled={!!editingBranchId || !!editingUserId}>
-                    <option value="">-- Pilih cabang --</option>
-                    {allBranchesForSelect.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.code}) - {b.region}</option>
-                    ))}
-                  </select>
+                  <Autocomplete
+                    label="Pilih Kabupaten/Kota (Cabang) *"
+                    value={accountForm.branch_id}
+                    onChange={(v) => setAccountForm({ ...accountForm, branch_id: v })}
+                    options={allBranchesForSelect.map((b) => ({ value: b.id, label: `${b.name} (${b.code}) - ${b.region}` }))}
+                    placeholder="-- Pilih cabang --"
+                    disabled={!!editingBranchId || !!editingUserId}
+                  />
                   <p className="text-xs text-slate-500 mt-1">Provinsi & wilayah otomatis dari cabang yang dipilih.</p>
                 </div>
               )}
 
               {addAccountMode === 'akun_wilayah' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Wilayah {editingUserId ? '(tidak dapat diubah)' : '*'}</label>
-                  <select value={accountForm.region} onChange={(e) => setAccountForm({ ...accountForm, region: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2" required disabled={!!editingUserId}>
-                    <option value="">-- Pilih wilayah (Sumatra, Jawa, dll) --</option>
-                    {wilayahForSelect.map((w) => (
-                      <option key={w.id} value={w.name}>{w.name}</option>
-                    ))}
-                    {accountForm.region && !wilayahForSelect.some((w) => w.name === accountForm.region) && (
-                      <option value={accountForm.region}>{accountForm.region}</option>
-                    )}
-                  </select>
+                  <Autocomplete
+                    label={`Wilayah ${editingUserId ? '(tidak dapat diubah)' : '*'}`}
+                    value={accountForm.region}
+                    onChange={(v) => setAccountForm({ ...accountForm, region: v })}
+                    options={[
+                      ...wilayahForSelect.map((w) => ({ value: w.name, label: w.name })),
+                      ...(accountForm.region && !wilayahForSelect.some((w) => w.name === accountForm.region) ? [{ value: accountForm.region, label: accountForm.region }] : [])
+                    ]}
+                    placeholder="-- Pilih wilayah (Sumatra, Jawa, dll) --"
+                    disabled={!!editingUserId}
+                  />
                   <p className="text-xs text-slate-500 mt-1">Wilayah utama: Sumatra, Jawa, Kalimantan, Sulawesi, Bali-Nusa Tenggara, Maluku, Papua.</p>
                 </div>
               )}
 
               {addAccountMode === 'akun_provinsi' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Provinsi {editingUserId ? '(tidak dapat diubah)' : '*'}</label>
-                  <select value={accountForm.region} onChange={(e) => setAccountForm({ ...accountForm, region: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2" required disabled={!!editingUserId}>
-                    <option value="">-- Pilih provinsi --</option>
-                    {provincesForSelect.map((p) => (
-                      <option key={p.id} value={p.nama ?? p.name ?? ''}>{p.nama ?? p.name ?? ''}</option>
-                    ))}
-                    {accountForm.region && !provincesForSelect.some((p) => (p.nama ?? p.name) === accountForm.region) && (
-                      <option value={accountForm.region}>{accountForm.region}</option>
-                    )}
-                  </select>
+                  <Autocomplete
+                    label={`Provinsi ${editingUserId ? '(tidak dapat diubah)' : '*'}`}
+                    value={accountForm.region}
+                    onChange={(v) => setAccountForm({ ...accountForm, region: v })}
+                    options={[
+                      ...provincesForSelect.map((p) => ({ value: p.nama ?? p.name ?? '', label: p.nama ?? p.name ?? '' })),
+                      ...(accountForm.region && !provincesForSelect.some((p) => (p.nama ?? p.name) === accountForm.region) ? [{ value: accountForm.region, label: accountForm.region }] : [])
+                    ]}
+                    placeholder="-- Pilih provinsi --"
+                    disabled={!!editingUserId}
+                  />
                   <p className="text-xs text-slate-500 mt-1">Sistem otomatis masukkan ke wilayah yang sesuai (tidak perlu pilih wilayah).</p>
                 </div>
               )}

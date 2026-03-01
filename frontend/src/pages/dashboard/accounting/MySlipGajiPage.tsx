@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Download, Calendar } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
 import { accountingApi, type MySlipItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -35,15 +36,10 @@ const MySlipGajiPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <FileText className="w-8 h-8 text-emerald-600" />
-            Slip Gaji Saya
-          </h1>
-          <p className="text-slate-600 mt-1">Daftar slip gaji yang telah diterbitkan untuk Anda</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Slip Gaji Saya"
+        subtitle="Daftar slip gaji yang telah diterbitkan untuk Anda"
+      />
 
       <Card>
         {loading ? (

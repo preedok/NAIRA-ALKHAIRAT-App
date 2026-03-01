@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import { ownersApi, branchesApi, type Branch } from '../../services/api';
 import { validateEmail } from '../../utils';
+import Input from '../../components/common/Input';
+import Autocomplete from '../../components/common/Autocomplete';
+import Textarea from '../../components/common/Textarea';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -218,133 +221,7 @@ const SKY   = '#38bdf8';
 const MUTED = '#475569';
 const DARK  = '#0a0f1e';
 
-/* ─── Field wrapper ──────────────────────────────────────────────── */
-const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({
-  label, required, children,
-}) => (
-  <div>
-    <span className={`rg-label${required ? ' req' : ''}`}>{label}</span>
-    <div className="rg-field">{children}</div>
-  </div>
-);
-
-/* ─── Custom Dropdown ────────────────────────────────────────────── */
 interface DropdownOption { value: string; label: string; sub?: string; }
-interface DropdownProps {
-  value: string;
-  options: DropdownOption[];
-  onChange: (val: string) => void;
-  placeholder?: string;
-  loading?: boolean;
-  hasError?: boolean;
-  icon?: React.ReactNode;
-}
-
-const Dropdown: React.FC<DropdownProps> = ({
-  value, options, onChange, placeholder = 'Pilih...', loading, hasError, icon,
-}) => {
-  const [open, setOpen]       = useState(false);
-  const [search, setSearch]   = useState('');
-  const ref = useRef<HTMLDivElement>(null);
-
-  const selected = options.find(o => o.value === value);
-
-  const filtered = search.trim()
-    ? options.filter(o =>
-        o.label.toLowerCase().includes(search.toLowerCase()) ||
-        (o.sub || '').toLowerCase().includes(search.toLowerCase())
-      )
-    : options;
-
-  const handleSelect = (val: string) => {
-    onChange(val);
-    setOpen(false);
-    setSearch('');
-  };
-
-  const handleClose = useCallback(() => { setOpen(false); setSearch(''); }, []);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) handleClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [handleClose]);
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      {/* Trigger */}
-      <div
-        className={`dd-trigger${open ? ' open' : ''}${hasError ? ' err' : ''}`}
-        onClick={() => setOpen(o => !o)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && setOpen(o => !o)}
-      >
-        {icon && <span style={{ color: selected ? SKY : MUTED, flexShrink: 0, transition: 'color .2s' }}>{icon}</span>}
-        <span className={`dd-value${!selected ? ' dd-placeholder' : ''}`}>
-          {loading ? 'Memuat data...' : (selected ? selected.label : placeholder)}
-        </span>
-        {value && !loading && (
-          <span
-            style={{ color: MUTED, flexShrink: 0, padding: 2 }}
-            onClick={e => { e.stopPropagation(); handleSelect(''); }}
-            title="Hapus pilihan"
-          >
-            <X size={12} />
-          </span>
-        )}
-        <span style={{
-          color: MUTED, flexShrink: 0,
-          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform .2s',
-          display: 'flex',
-        }}>
-          <ChevronDown size={14} />
-        </span>
-      </div>
-
-      {/* Panel */}
-      {open && (
-        <div className="dd-panel">
-          {/* Search */}
-          <div className="dd-search-wrap">
-            <Search size={13} color={MUTED} style={{ flexShrink: 0 }} />
-            <input
-              className="dd-search"
-              placeholder="Cari kabupaten..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              autoFocus
-            />
-          </div>
-
-          {/* List */}
-          <div className="dd-list">
-            {loading ? (
-              <div className="dd-empty">Memuat...</div>
-            ) : filtered.length === 0 ? (
-              <div className="dd-empty">Tidak ditemukan</div>
-            ) : (
-              filtered.map(opt => (
-                <div
-                  key={opt.value}
-                  className={`dd-item${opt.value === value ? ' active' : ''}`}
-                  onClick={() => handleSelect(opt.value)}
-                >
-                  <Globe size={12} style={{ flexShrink: 0, opacity: .6 }} />
-                  <span className="dd-name">{opt.label}</span>
-                  {opt.sub && <span className="dd-badge">{opt.sub}</span>}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 /* ─── RegisterPage ───────────────────────────────────────────────── */
 const RegisterPage: React.FC = () => {
@@ -562,71 +439,47 @@ const RegisterPage: React.FC = () => {
               {/* Section: Akun */}
               <div className="sec-label">Informasi Akun</div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'11px 13px', marginBottom:18 }}>
-                <Field label="Nama Lengkap" required>
-                  <User size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="name" type="text" value={form.name} onChange={handleChange} placeholder="Nama lengkap" />
-                </Field>
-                <Field label="Email" required>
-                  <Mail size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@travel.com" />
-                </Field>
-                <Field label="Password" required>
-                  <Lock size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min. 6 karakter" />
-                </Field>
+                <Input label="Nama Lengkap" name="name" value={form.name} onChange={handleChange} placeholder="Nama lengkap" icon={<User size={14} className="text-slate-400" />} required />
+                <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@travel.com" icon={<Mail size={14} className="text-slate-400" />} required />
+                <Input label="Password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min. 6 karakter" icon={<Lock size={14} className="text-slate-400" />} required />
               </div>
 
               {/* Section: Kontak */}
               <div className="sec-label">Informasi Kontak</div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'11px 13px', marginBottom:18 }}>
-                <Field label="Telepon">
-                  <Phone size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+62 812 ..." />
-                </Field>
-                <Field label="WhatsApp">
-                  <Phone size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="whatsapp" type="tel" value={form.whatsapp} onChange={handleChange} placeholder="Nomor WhatsApp" />
-                </Field>
-                <Field label="NPWP">
-                  <FileText size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="npwp" type="text" value={form.npwp} onChange={handleChange} placeholder="Opsional" />
-                </Field>
+                <Input label="Telepon" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+62 812 ..." icon={<Phone size={14} className="text-slate-400" />} />
+                <Input label="WhatsApp" name="whatsapp" type="tel" value={form.whatsapp} onChange={handleChange} placeholder="Nomor WhatsApp" icon={<Phone size={14} className="text-slate-400" />} />
+                <Input label="NPWP" name="npwp" value={form.npwp} onChange={handleChange} placeholder="Opsional" icon={<FileText size={14} className="text-slate-400" />} />
               </div>
 
               {/* Section: Perusahaan */}
               <div className="sec-label">Informasi Perusahaan</div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'11px 13px', marginBottom:20 }}>
-                <Field label="Nama Perusahaan / Travel">
-                  <Building2 size={14} color={MUTED} style={{ flexShrink:0 }} />
-                  <input name="company_name" type="text" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" />
-                </Field>
-                <Field label="Alamat Kantor">
-                  <MapPin size={14} color={MUTED} style={{ flexShrink:0, alignSelf:'flex-start', marginTop:1 }} />
-                  <textarea name="address" value={form.address} onChange={handleChange} rows={1} placeholder="Alamat kantor" />
-                </Field>
-
-                {/* Custom Dropdown */}
+                <Input label="Nama Perusahaan / Travel" name="company_name" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" icon={<Building2 size={14} className="text-slate-400" />} />
                 <div>
-                  <span className="rg-label req">Kota Operasional</span>
-                  <Dropdown
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Alamat Kantor</label>
+                  <Textarea name="address" label="Alamat Kantor" value={form.address} onChange={handleChange} rows={2} placeholder="Alamat kantor" />
+                </div>
+                <div>
+                  <Autocomplete
+                    label="Kota Operasional"
                     value={form.preferred_branch_id}
-                    options={branchOptions}
                     onChange={handleBranchChange}
+                    options={branchOptions.map(b => ({ value: b.value, label: b.label }))}
                     placeholder="Pilih kabupaten..."
-                    loading={branchesLoading}
-                    icon={<Globe size={14} />}
+                    emptyLabel="Pilih kabupaten..."
                   />
                   {selectedBranch && (
-                    <div className="branch-info">
-                      <span style={{ color:'#64748b' }}>Provinsi: </span>
-                      <span style={{ color:'#cbd5e1' }}>{selectedBranch.region}</span>
+                    <div className="branch-info mt-1.5 text-xs text-slate-600">
+                      <span>Provinsi: </span>
+                      <span>{selectedBranch.region}</span>
                       {selectedBranch.koordinator_provinsi && (
                         <>
                           {' · '}
-                          <span style={{ color:'#64748b' }}>Koord: </span>
-                          <span style={{ color:'#cbd5e1' }}>{selectedBranch.koordinator_provinsi}</span>
+                          <span>Koord: </span>
+                          <span>{selectedBranch.koordinator_provinsi}</span>
                           {selectedBranch.koordinator_provinsi_phone && (
-                            <span style={{ color:'#475569' }}> · {selectedBranch.koordinator_provinsi_phone}</span>
+                            <span> · {selectedBranch.koordinator_provinsi_phone}</span>
                           )}
                         </>
                       )}

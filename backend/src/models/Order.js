@@ -67,6 +67,11 @@ const Order = sequelize.define('Order', {
   },
   notes: {
     type: DataTypes.TEXT
+  },
+  currency_rates_override: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    comment: 'Kurs khusus order (SAR_TO_IDR, USD_TO_IDR). Kosong = pakai kurs global.'
   }
 }, {
   tableName: 'orders',

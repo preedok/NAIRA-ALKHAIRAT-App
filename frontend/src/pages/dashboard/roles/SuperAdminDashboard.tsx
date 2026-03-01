@@ -14,8 +14,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import Card from '../../../components/common/Card';
-import Button from '../../../components/common/Button';
+import { Card, Button, PageHeader, StatCard } from '../../../components/common';
 import { formatIDR, DONUT_COLORS } from '../../../utils';
 import { superAdminApi, branchesApi } from '../../../services/api';
 import { ROLE_NAMES } from '../../../types';
@@ -137,15 +136,12 @@ const SuperAdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">
-            Selamat datang, {user?.name}
-          </h1>
-          <p className="text-slate-600 mt-1">Super Admin – Informasi transaksi & monitoring sistem</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-slate-600">Filter:</span>
+      <PageHeader
+        title={`Selamat datang, ${user?.name ?? 'Admin'}`}
+        subtitle="Super Admin – Informasi transaksi & monitoring sistem"
+        right={
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-slate-600">Filter:</span>
           <select
             value={filterBranch}
             onChange={(e) => setFilterBranch(e.target.value)}
@@ -192,8 +188,9 @@ const SuperAdminDashboard: React.FC = () => {
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {loading && !data ? (
         <Card className="travel-card"><div className="py-12 text-center text-stone-500">Memuat...</div></Card>
@@ -201,56 +198,11 @@ const SuperAdminDashboard: React.FC = () => {
         <>
           {/* Informasi transaksi keseluruhan */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            <Card hover className="travel-card relative overflow-hidden">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white">
-                  <DollarSign className="w-6 h-6" />
-                </div>
-              </div>
-              <p className="text-sm text-stone-600 mb-1">Total Revenue</p>
-              <p className="text-2xl font-bold text-slate-900">{formatIDR(o.total_revenue || 0)}</p>
-              <p className="text-xs text-slate-500 mt-1">Hari ini: {formatIDR(o.revenue_today || 0)}</p>
-            </Card>
-            <Card hover className="travel-card relative overflow-hidden">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-sky-500 to-cyan-500 text-white">
-                  <Receipt className="w-6 h-6" />
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-1">Total Order</p>
-              <p className="text-2xl font-bold text-slate-900">{o.total_orders ?? 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Hari ini: {o.orders_today ?? 0}</p>
-            </Card>
-            <Card hover className="travel-card relative overflow-hidden">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 text-white">
-                  <FileCheck className="w-6 h-6" />
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-1">Total Faktur</p>
-              <p className="text-2xl font-bold text-slate-900">{o.total_invoices ?? 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Hari ini: {o.invoices_today ?? 0}</p>
-            </Card>
-            <Card hover className="travel-card relative overflow-hidden">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-                  <Users className="w-6 h-6" />
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-1">Pengguna Aktif (24j)</p>
-              <p className="text-2xl font-bold text-slate-900">{o.active_users_24h ?? 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Total: {o.total_users ?? 0}</p>
-            </Card>
-            <Card hover className="travel-card relative overflow-hidden">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-xl text-white ${perf.database === 'ok' ? 'bg-gradient-to-br from-primary-500 to-primary-600' : 'bg-gradient-to-br from-red-500 to-rose-500'}`}>
-                  <Activity className="w-6 h-6" />
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-1">Kesehatan Sistem</p>
-              <p className="text-2xl font-bold text-slate-900">{perf.database === 'ok' ? 'OK' : 'Error'}</p>
-              <p className="text-xs text-slate-500 mt-1">Uptime: {perf.uptime_human || '-'}</p>
-            </Card>
+            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatIDR(o.total_revenue || 0)} subtitle={`Hari ini: ${formatIDR(o.revenue_today || 0)}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order" value={o.total_orders ?? 0} subtitle={`Hari ini: ${o.orders_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<FileCheck className="w-5 h-5" />} label="Total Faktur" value={o.total_invoices ?? 0} subtitle={`Hari ini: ${o.invoices_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<Users className="w-5 h-5" />} label="Pengguna Aktif (24j)" value={o.active_users_24h ?? 0} subtitle={`Total: ${o.total_users ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<Activity className="w-5 h-5" />} label="Kesehatan Sistem" value={perf.database === 'ok' ? 'OK' : 'Error'} subtitle={`Uptime: ${perf.uptime_human || '-'}`} iconClassName={perf.database === 'ok' ? 'bg-[#0D1A63] text-white' : 'bg-red-100 text-red-600'} />
           </div>
 
           {/* Chart Invoice per Status + Performance */}

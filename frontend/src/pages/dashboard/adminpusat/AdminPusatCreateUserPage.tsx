@@ -2,10 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { UserPlus, Search, Filter, Edit, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
 import Badge from '../../../components/common/Badge';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
+import Input from '../../../components/common/Input';
+import Autocomplete from '../../../components/common/Autocomplete';
 import { adminPusatApi, type UserListItem } from '../../../services/api';
 import { TableColumn } from '../../../types';
 
@@ -210,118 +215,50 @@ const AdminPusatCreateUserPage: React.FC = () => {
           {message.text}
         </div>
       )}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Buat Akun</h1>
-          <p className="text-slate-600 mt-1">Kelola akun Role Bus dan Role Hotel (bertugas di Saudi Arabia)</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Buat Akun"
+        subtitle="Kelola akun Role Bus dan Role Hotel (bertugas di Saudi Arabia)"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Tambah Akun Baru</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nama *</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500"
-                placeholder="Nama lengkap"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500"
-                placeholder="email@contoh.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password * (min. 6 karakter)</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500"
-                placeholder="••••••••"
-                minLength={6}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Role *</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500"
-              >
-                {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Input label="Nama *" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama lengkap" />
+            <Input label="Email *" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@contoh.com" />
+            <Input label="Password * (min. 6 karakter)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" minLength={6} />
+            <Autocomplete label="Role *" value={role} onChange={setRole} options={ROLES.map((r) => ({ value: r.value, label: r.label }))} />
             <Button type="submit" variant="primary" disabled={loading}>
               {loading ? 'Memproses...' : 'Buat Akun'}
             </Button>
           </form>
         </Card>
 
-        <Card>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 rounded-xl bg-amber-100 text-amber-700">
-              <UserPlus className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-600">Total Akun Bus & Hotel</p>
-              <p className="text-2xl font-bold text-slate-900">{pagination?.total ?? users.length}</p>
-            </div>
-          </div>
-        </Card>
+        <StatCard
+          icon={<UserPlus className="w-5 h-5" />}
+          label="Total Akun Bus & Hotel"
+          value={pagination?.total ?? users.length}
+          iconClassName="bg-amber-100 text-amber-700"
+        />
       </div>
 
       <Card>
+        <CardSectionHeader
+          icon={<UserPlus className="w-6 h-6" />}
+          title="Daftar Akun Bus & Hotel"
+          subtitle="Filter menurut role dan status. Edit atau nonaktifkan akun dari tabel."
+          className="mb-4"
+        />
         <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 mb-4">
           <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
             <Filter className="w-4 h-4" /> Filter
           </p>
           <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Cari nama atau email..."
-                value={filterSearch}
-                onChange={(e) => setFilterSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-              />
+            <div className="flex-1 min-w-[200px]">
+              <Input label="Cari" type="text" placeholder="Cari nama atau email..." value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} icon={<Search className="w-4 h-4" />} />
             </div>
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-white min-w-[160px]"
-            >
-              <option value="">Semua Role</option>
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-white min-w-[140px]"
-            >
-              <option value="all">Semua Status</option>
-              <option value="active">Aktif</option>
-              <option value="inactive">Nonaktif</option>
-            </select>
+            <Autocomplete label="Role" value={filterRole} onChange={setFilterRole} options={ROLES.map((r) => ({ value: r.value, label: r.label }))} emptyLabel="Semua Role" fullWidth={false} className="min-w-[160px]" />
+            <Autocomplete label="Status" value={filterStatus} onChange={(v) => setFilterStatus(v as 'all' | 'active' | 'inactive')} options={[{ value: 'all', label: 'Semua Status' }, { value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]} fullWidth={false} className="min-w-[140px]" />
             {(filterSearch || filterRole || filterStatus !== 'all') && (
               <button
                 type="button"
@@ -341,7 +278,8 @@ const AdminPusatCreateUserPage: React.FC = () => {
         {loadingList ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <Table
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <Table
             columns={tableColumns}
             data={users}
             emptyMessage="Belum ada akun Role Bus atau Hotel"
@@ -385,6 +323,7 @@ const AdminPusatCreateUserPage: React.FC = () => {
               </tr>
             )}
           />
+          </div>
         )}
       </Card>
 
@@ -406,37 +345,9 @@ const AdminPusatCreateUserPage: React.FC = () => {
               </div>
             )}
             <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nama *</label>
-                <input
-                  type="text"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
-                <input
-                  type="email"
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password baru (kosongkan jika tidak ingin mengubah)</label>
-                <input
-                  type="password"
-                  value={editForm.password}
-                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
-                  placeholder="Min. 6 karakter"
-                  minLength={6}
-                />
-              </div>
+              <Input label="Nama *" type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+              <Input label="Email *" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+              <Input label="Password baru (kosongkan jika tidak ingin mengubah)" type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Min. 6 karakter" minLength={6} />
               <div className="flex gap-2 justify-end pt-4">
                 <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                   Batal

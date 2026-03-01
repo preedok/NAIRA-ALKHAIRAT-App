@@ -7,27 +7,29 @@ import {
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete } from '../../../components/common';
+import Table from '../../../components/common/Table';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
+import type { TableColumn } from '../../../types';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, type InvoicesSummaryData } from '../../../services/api';
 
-/** Konfigurasi icon & warna card Per Status Invoice */
-const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode; bg: string }> = {
-  draft: { icon: <Pencil className="h-6 w-6" />, bg: 'bg-slate-100 text-slate-600' },
-  tentative: { icon: <Clock className="h-6 w-6" />, bg: 'bg-amber-100 text-amber-600' },
-  partial_paid: { icon: <CreditCard className="h-6 w-6" />, bg: 'bg-orange-100 text-orange-600' },
-  paid: { icon: <CheckCircle className="h-6 w-6" />, bg: 'bg-emerald-100 text-emerald-600' },
-  processing: { icon: <Send className="h-6 w-6" />, bg: 'bg-sky-100 text-sky-600' },
-  completed: { icon: <CheckCircle className="h-6 w-6" />, bg: 'bg-emerald-100 text-emerald-600' },
-  canceled: { icon: <X className="h-6 w-6" />, bg: 'bg-red-100 text-red-600' },
-  cancelled: { icon: <X className="h-6 w-6" />, bg: 'bg-red-100 text-red-600' },
-  overdue: { icon: <Clock className="h-6 w-6" />, bg: 'bg-red-100 text-red-600' },
-  refunded: { icon: <Receipt className="h-6 w-6" />, bg: 'bg-slate-100 text-slate-600' },
-  overpaid: { icon: <DollarSign className="h-6 w-6" />, bg: 'bg-amber-100 text-amber-600' }
+/** Konfigurasi icon untuk card Per Status Invoice (StatCard pakai satu warna) */
+const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
+  draft: { icon: <Pencil className="w-5 h-5" /> },
+  tentative: { icon: <Clock className="w-5 h-5" /> },
+  partial_paid: { icon: <CreditCard className="w-5 h-5" /> },
+  paid: { icon: <CheckCircle className="w-5 h-5" /> },
+  processing: { icon: <Send className="w-5 h-5" /> },
+  completed: { icon: <CheckCircle className="w-5 h-5" /> },
+  canceled: { icon: <X className="w-5 h-5" /> },
+  cancelled: { icon: <X className="w-5 h-5" /> }, 
+  overdue: { icon: <Clock className="w-5 h-5" /> },
+  refunded: { icon: <Receipt className="w-5 h-5" /> },
+  overpaid: { icon: <DollarSign className="w-5 h-5" /> }
 };
 
 /** Urutan tampilan card Per Status Invoice (status utama dulu). Status utama selalu ditampilkan sebagai card. */
@@ -771,6 +773,24 @@ const OrdersInvoicesPage: React.FC = () => {
   const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
   const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList });
 
+  const invoiceTableColumns: TableColumn[] = [
+    { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
+    { id: 'wilayah', label: 'Wilayah', align: 'left' },
+    { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
+    { id: 'paid', label: 'Dibayar (IDR·SAR·USD)', align: 'right' },
+    { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
+    { id: 'status', label: 'Status Invoice', align: 'left' },
+    { id: 'status_visa', label: 'Status Visa', align: 'left' },
+    { id: 'status_ticket', label: 'Status Tiket', align: 'left' },
+    { id: 'status_hotel', label: 'Status Hotel', align: 'left' },
+    { id: 'status_bus', label: 'Status Bus', align: 'left' },
+    { id: 'proof', label: 'Bukti Bayar', align: 'left' },
+    { id: 'date', label: 'Tgl', align: 'left' },
+    { id: 'actions', label: 'Aksi', align: 'center' }
+  ];
+
   const s = summary || summaryFromTable || {
     total_invoices: pagination?.total ?? 0,
     total_orders: 0,
@@ -781,19 +801,18 @@ const OrdersInvoicesPage: React.FC = () => {
     by_order_status: {}
   };
 
+  const invoiceSubtitle = user?.role === 'role_hotel' ? 'Pekerjaan hotel: daftar order yang berisi item hotel. Buka invoice untuk update status & nomor kamar.' : user?.role === 'role_bus' ? 'Pekerjaan bus: daftar order yang berisi item bus. Buka invoice untuk detail.' : (isAdminPusat || isAccounting) ? 'Semua invoice dalam satu daftar.' : isInvoiceSaudi ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD (Saudi) otomatis update invoice.' : (user?.role === 'owner' ? 'Invoice Anda.' : 'Invoice cabang Anda.');
+
   return (
     <div className="space-y-6 w-full">
-      {/* Header: judul dan tombol Tambah Order di baris terpisah agar filter tidak ikut bergeser */}
-      <div className="flex flex-wrap justify-between items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-stone-900">Invoice</h1>
-          <p className="text-stone-600 mt-1">
-            {user?.role === 'role_hotel' ? 'Pekerjaan hotel: daftar order yang berisi item hotel. Buka invoice untuk update status & nomor kamar.' : user?.role === 'role_bus' ? 'Pekerjaan bus: daftar order yang berisi item bus. Buka invoice untuk detail.' : (isAdminPusat || isAccounting) ? 'Semua invoice dalam satu daftar.' : isInvoiceSaudi ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD (Saudi) otomatis update invoice.' : (user?.role === 'owner' ? 'Invoice Anda.' : 'Invoice cabang Anda.')}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <AutoRefreshControl onRefresh={fetchInvoices} disabled={loading} />
-          {isAccounting && (
+      <PageHeader
+        title="Invoice"
+        subtitle={invoiceSubtitle}
+        right={
+          <>
+            <AutoRefreshControl onRefresh={fetchInvoices} disabled={loading} />
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v) => !v)} hasActiveFilters={hasActiveFilters} />
+            {isAccounting && (
             <Button
               variant="outline"
               disabled={exportingInvoicesExcel}
@@ -855,8 +874,9 @@ const OrdersInvoicesPage: React.FC = () => {
               <Plus className="w-5 h-5 mr-2" /> Tambah Invoice
             </Button>
           )}
-        </div>
-      </div>
+        </>
+      }
+      />
 
       {/* Baris filter full width - posisi tetap, tidak berpindah */}
       <PageFilter
@@ -868,6 +888,7 @@ const OrdersInvoicesPage: React.FC = () => {
         loading={loading}
         applyLabel="Terapkan"
         resetLabel="Reset"
+        hideToggleRow
         className="w-full"
       >
         <DashboardFilterBar
@@ -932,64 +953,39 @@ const OrdersInvoicesPage: React.FC = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
-              <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}</p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-sky-100 text-sky-600 shrink-0">
-              <Receipt className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Trip</p>
-              <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}</p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-primary-100 text-primary-600 shrink-0">
-              <Package className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Tagihan</p>
-              <p className="text-lg sm:text-xl font-bold text-slate-900 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_amount)}</p>
-              {!loadingSummary && <p className="text-xs text-slate-500 mt-0.5">≈ {formatSAR(s.total_amount / sarToIdrList)} · ≈ {formatUSD(s.total_amount / usdToIdrList)}</p>}
-            </div>
-            <div className="p-2.5 rounded-xl bg-slate-100 text-slate-600 shrink-0">
-              <DollarSign className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dibayar</p>
-              <p className="text-lg sm:text-xl font-bold text-emerald-600 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_paid)}</p>
-              {!loadingSummary && <p className="text-xs text-slate-500 mt-0.5">≈ {formatSAR(s.total_paid / sarToIdrList)} · ≈ {formatUSD(s.total_paid / usdToIdrList)}</p>}
-            </div>
-            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600 shrink-0">
-              <CreditCard className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-        <Card hover className="travel-card flex flex-col rounded-2xl border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Sisa</p>
-              <p className="text-lg sm:text-xl font-bold text-amber-600 mt-0.5">{loadingSummary ? '...' : formatIDR(s.total_remaining)}</p>
-              {!loadingSummary && <p className="text-xs text-slate-500 mt-0.5">≈ {formatSAR(s.total_remaining / sarToIdrList)} · ≈ {formatUSD(s.total_remaining / usdToIdrList)}</p>}
-            </div>
-            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600 shrink-0">
-              <Wallet className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
+        <StatCard
+          icon={<Receipt className="w-5 h-5" />}
+          label="Total Invoice"
+          value={loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}
+          iconClassName="bg-sky-100 text-sky-600"
+        />
+        <StatCard
+          icon={<Package className="w-5 h-5" />}
+          label="Total Trip"
+          value={loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}
+          iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
+        />
+        <StatCard
+          icon={<DollarSign className="w-5 h-5" />}
+          label="Total Tagihan"
+          value={loadingSummary ? '...' : formatIDR(s.total_amount)}
+          iconClassName="bg-slate-100 text-slate-600"
+          subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
+        />
+        <StatCard
+          icon={<CreditCard className="w-5 h-5" />}
+          label="Dibayar"
+          value={loadingSummary ? '...' : formatIDR(s.total_paid)}
+          iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
+          subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_paid / sarToIdrList)} · ≈ ${formatUSD(s.total_paid / usdToIdrList)}` : undefined}
+        />
+        <StatCard
+          icon={<Wallet className="w-5 h-5" />}
+          label="Sisa"
+          value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
+          iconClassName="bg-amber-100 text-amber-600"
+          subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
+        />
       </div>
 
       {/* Per Status Invoice - card statistic (Tagihan DP, Pembayaran DP, Dibatalkan, dll.) */}
@@ -1015,17 +1011,14 @@ const OrdersInvoicesPage: React.FC = () => {
                 })
                 .map((status) => {
                   const count = s.by_invoice_status[status] ?? 0;
-                  const cfg = INVOICE_STATUS_CARD_CONFIG[status] || { icon: <Receipt className="h-6 w-6" />, bg: 'bg-slate-100 text-slate-600' };
+                  const cfg = INVOICE_STATUS_CARD_CONFIG[status] || { icon: <Receipt className="w-5 h-5" /> };
                   return (
-                    <Card key={status} className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white overflow-hidden">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-3.5 rounded-2xl shrink-0 ${cfg.bg}`}>{cfg.icon}</div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-slate-500 truncate">{INVOICE_STATUS_LABELS[status] || status}</p>
-                          <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{Number(count).toLocaleString('id-ID')}</p>
-                        </div>
-                      </div>
-                    </Card>
+                    <StatCard
+                      key={status}
+                      icon={cfg.icon}
+                      label={INVOICE_STATUS_LABELS[status] || status}
+                      value={Number(count).toLocaleString('id-ID')}
+                    />
                   );
                 });
             })()}
@@ -1036,36 +1029,33 @@ const OrdersInvoicesPage: React.FC = () => {
       {loading ? (
         <div className="py-12 text-center text-slate-500">Memuat...</div>
       ) : (
-        <Card className="travel-card overflow-hidden rounded-2xl border-slate-200/80 shadow-sm">
-          <div className="flex items-center justify-between gap-3 mb-5 px-1">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-primary-600" /> Daftar Invoice ({(pagination?.total ?? invoices.length) + draftOrders.length})
-            </h2>
-            <p className="text-xs text-slate-500 hidden sm:block">Geser horizontal jika tabel tidak muat</p>
-          </div>
-          <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white shadow-inner">
-            <table className="w-full text-sm" style={{ minWidth: 'max-content' }}>
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/95">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[140px]">No. Invoice</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Owner</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Perusahaan</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">Wilayah</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Total <span className="font-normal normal-case text-slate-400">(IDR·SAR·USD)</span></th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Dibayar <span className="font-normal normal-case text-slate-400">(IDR·SAR·USD)</span></th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Sisa <span className="font-normal normal-case text-slate-400">(IDR·SAR·USD)</span></th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">Status Invoice</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Visa</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">Status Tiket</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[200px]">Status Hotel</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px]">Status Bus</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px]">Bukti Bayar</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[100px]">Tgl</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap min-w-[80px] sticky right-0 bg-slate-50/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(page === 1 ? [...draftOrders, ...invoices] : invoices).map((inv) => (
+        <Card className="travel-card rounded-2xl border-slate-200/80 shadow-sm">
+          <CardSectionHeader
+            icon={<Receipt className="w-6 h-6" />}
+            title={`Daftar Invoice (${(pagination?.total ?? invoices.length) + draftOrders.length})`}
+            subtitle="Geser horizontal jika tabel tidak muat"
+            className="mb-5 px-1"
+          />
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <Table
+              columns={invoiceTableColumns}
+              data={page === 1 ? [...draftOrders, ...invoices] : invoices}
+              emptyMessage="Belum ada invoice"
+              emptyDescription="Buat order lalu terbitkan invoice, atau ubah filter untuk melihat data."
+              stickyActionsColumn
+              pagination={
+                pagination && (pagination.total > 0 || draftOrders.length > 0)
+                  ? {
+                      total: pagination.total,
+                      page: pagination.page,
+                      limit,
+                      totalPages: pagination.totalPages,
+                      onPageChange: setPage,
+                      onLimitChange: (l) => { setLimit(l); setPage(1); }
+                    }
+                  : undefined
+              }
+              renderRow={(inv) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
                       {isDraftRow(inv) ? `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}` : formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}
@@ -1078,8 +1068,13 @@ const OrdersInvoicesPage: React.FC = () => {
                     <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
                       <div>{formatIDR(parseFloat(inv.total_amount || 0))}</div>
                       {(() => { const t = amountTriple(parseFloat(inv.total_amount || 0)); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      {inv.Order?.currency_rates_override && (inv.Order.currency_rates_override.SAR_TO_IDR != null || inv.Order.currency_rates_override.USD_TO_IDR != null) && (
+                        <div className="text-xs text-amber-700 mt-1 font-medium" title="Kurs & harga khusus order ini">
+                          Kurs: {inv.Order.currency_rates_override.SAR_TO_IDR != null ? `SAR ${Number(inv.Order.currency_rates_override.SAR_TO_IDR).toLocaleString('id-ID')}` : ''}{inv.Order.currency_rates_override.SAR_TO_IDR != null && inv.Order.currency_rates_override.USD_TO_IDR != null ? ', ' : ''}{inv.Order.currency_rates_override.USD_TO_IDR != null ? `USD ${Number(inv.Order.currency_rates_override.USD_TO_IDR).toLocaleString('id-ID')}` : ''}
+                        </div>
+                      )}
                     </td>
-                    <td className="py-3 px-4 text-right text-emerald-600 font-medium align-top">
+                    <td className="py-3 px-4 text-right text-[#0D1A63] font-medium align-top">
                       {(() => {
                         const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
@@ -1173,7 +1168,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                                 <div className="flex flex-wrap items-baseline gap-1">
                                   <span className="font-medium text-slate-800 truncate max-w-[140px]" title={h.name}>{h.name}:</span>
-                                  <span className={h.status === 'Selesai' ? 'text-emerald-600' : 'text-slate-600'}>{h.status}</span>
+                                  <span className={h.status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{h.status}</span>
                                 </div>
                                 <div className="text-slate-500 pl-0.5">
                                   <span>CI {h.checkIn}</span>
@@ -1275,35 +1270,9 @@ const OrdersInvoicesPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+              )}
+            />
           </div>
-          {(page === 1 ? draftOrders.length + invoices.length : invoices.length) === 0 && (
-            <p className="text-slate-500 py-8 text-center text-sm">Belum ada invoice</p>
-          )}
-          {pagination && pagination.total > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50 rounded-b-xl">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-600">
-                  Menampilkan {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}–{Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total}
-                </span>
-                <select
-                  value={limit}
-                  onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
-                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-700 bg-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  {[25, 50, 100, 200, 500].map((n) => (
-                    <option key={n} value={n}>{n} per halaman</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-1">
-                <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page <= 1} className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-50 text-slate-600 hover:bg-slate-50 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-                <button type="button" onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))} disabled={pagination.page >= pagination.totalPages} className="p-2 rounded-lg border border-slate-200 bg-white disabled:opacity-50 text-slate-600 hover:bg-slate-50 transition-colors"><ChevronRight className="w-4 h-4" /></button>
-              </div>
-            </div>
-          )}
         </Card>
       )}
 
@@ -1496,7 +1465,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <div className="flex flex-col gap-1.5">
                                   <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
                                   <div className="flex gap-2 flex-wrap">
-                                    <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px] text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!uploadingJamaahItemId} />
+                                    <Input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px]" disabled={!!uploadingJamaahItemId} />
                                     <Button size="sm" variant="outline" onClick={async () => {
                                       if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
                                       setUploadingJamaahItemId(item.id);
@@ -1529,9 +1498,9 @@ const OrdersInvoicesPage: React.FC = () => {
                           const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
                           const fileUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
                           return (
-                            <div key={item.id} className="rounded-xl border border-slate-200 bg-emerald-50/30 p-4 space-y-3">
+                            <div key={item.id} className="rounded-xl border border-slate-200 bg-[#0D1A63]/5 p-4 space-y-3">
                               <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                                <Plane className="w-4 h-4 text-emerald-600" /> {item.Product?.name || item.product_name || 'Tiket'}
+                                <Plane className="w-4 h-4 text-[#0D1A63]" /> {item.Product?.name || item.product_name || 'Tiket'}
                               </h3>
                               {hasUploaded && (
                                 <div className="rounded-lg bg-white/80 border border-emerald-200/60 p-3">
@@ -1573,7 +1542,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <div className="flex flex-col gap-1.5">
                                   <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
                                   <div className="flex gap-2 flex-wrap">
-                                    <input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px] text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!uploadingJamaahItemId} />
+                                    <Input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px]" disabled={!!uploadingJamaahItemId} />
                                     <Button size="sm" variant="outline" onClick={async () => {
                                       if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
                                       setUploadingJamaahItemId(item.id);
@@ -1612,10 +1581,10 @@ const OrdersInvoicesPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={closeModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col border border-slate-200/80" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-emerald-50/80 via-white to-slate-50/50">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-[#0D1A63]/10 via-white to-slate-50/50">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-emerald-100 rounded-xl shadow-sm">
-                  <Receipt className="w-6 h-6 text-emerald-600" />
+                <div className="p-3 bg-[#0D1A63]/10 rounded-xl shadow-sm">
+                  <Receipt className="w-6 h-6 text-[#0D1A63]" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">Detail Invoice</h2>
@@ -1643,7 +1612,7 @@ const OrdersInvoicesPage: React.FC = () => {
                 onClick={() => setDetailTab('invoice')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
                   detailTab === 'invoice'
-                    ? 'bg-white border-slate-200 shadow-sm text-emerald-600 border-emerald-200'
+                    ? 'bg-white border-slate-200 shadow-sm text-[#0D1A63] border-emerald-200'
                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
@@ -1653,20 +1622,20 @@ const OrdersInvoicesPage: React.FC = () => {
                 onClick={() => setDetailTab('payments')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
                   detailTab === 'payments'
-                    ? 'bg-white border-slate-200 shadow-sm text-emerald-600 border-emerald-200'
+                    ? 'bg-white border-slate-200 shadow-sm text-[#0D1A63] border-emerald-200'
                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
                 <CreditCard className="w-4 h-4" /> Bukti Bayar
                 {paymentProofs.length > 0 && (
-                  <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">{paymentProofs.length}</span>
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-[#0D1A63]/10 text-emerald-700 rounded-full">{paymentProofs.length}</span>
                 )}
               </button>
               <button
                 onClick={() => setDetailTab('progress')}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl border border-b-0 transition-all -mb-px ${
                   detailTab === 'progress'
-                    ? 'bg-white border-slate-200 shadow-sm text-emerald-600 border-emerald-200'
+                    ? 'bg-white border-slate-200 shadow-sm text-[#0D1A63] border-emerald-200'
                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60'
                 }`}
               >
@@ -1731,7 +1700,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5">{formatIDR(Number(viewInvoice.dp_amount) || 0)}</p></div>
-                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-emerald-600 mt-0.5">{formatIDR(displayPaid)}</p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-emerald-600 mt-0.5">KES: {formatSAR(kesSar)}{kesUsd > 0 ? ` · ${formatUSD(kesUsd)}` : ''}</p>}</div>
+                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-[#0D1A63] mt-0.5">{formatIDR(displayPaid)}</p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-[#0D1A63] mt-0.5">KES: {formatSAR(kesSar)}{kesUsd > 0 ? ` · ${formatUSD(kesUsd)}` : ''}</p>}</div>
                                 <div><p className="text-xs text-slate-500">Sisa</p><p className="font-semibold text-red-600 mt-0.5">{formatIDR(displayRemaining)}</p></div>
                                 <div><p className="text-xs text-slate-500">Terbayar</p><p className="font-semibold text-slate-900 mt-0.5">{(Number.isFinite(totalPct) ? totalPct.toFixed(1) : '0')}%</p></div>
                               </div>
@@ -1757,9 +1726,8 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <p className="text-xs text-slate-600 mt-1">Untuk order baru atau alokasi ke tagihan.</p>
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
                                       <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
-                                        <label className="block text-xs font-medium text-emerald-800">Alokasikan ke invoice ini</label>
-                                        <div className="flex gap-2">
-                                          <input type="number" min="1" max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} className="flex-1 min-w-0 text-sm border border-emerald-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="Jumlah (IDR)" />
+                                        <div className="flex gap-2 items-end">
+                                          <Input label="Alokasikan ke invoice ini" type="number" min={1} max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} placeholder="Jumlah (IDR)" className="flex-1 min-w-0" />
                                           <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
                                             const amt = parseFloat(allocateAmount);
                                             if (!Number.isFinite(amt) || amt <= 0) return;
@@ -1877,12 +1845,12 @@ const OrdersInvoicesPage: React.FC = () => {
                                     : p.bank_name ? `Transfer Bank (${p.bank_name}${p.account_number ? ` ${p.account_number}` : ''})` : 'Transfer'}
                                 </span>
                                 {p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR' ? (
-                                  <span className="text-emerald-600 font-semibold">
+                                  <span className="text-[#0D1A63] font-semibold">
                                     Nominal diinput: {p.payment_currency === 'SAR' ? formatSAR(Number(p.amount_original)) : formatUSD(Number(p.amount_original))} = {formatIDR(parseFloat(p.amount))}
                                   </span>
                                 ) : (
                                   <>
-                                    <span className="text-emerald-600 font-semibold">{formatIDR(parseFloat(p.amount))}</span>
+                                    <span className="text-[#0D1A63] font-semibold">{formatIDR(parseFloat(p.amount))}</span>
                                     <span className="text-xs text-slate-500">≈ {formatSAR(parseFloat(p.amount) / sarToIdr)} · ≈ {formatUSD(parseFloat(p.amount) / usdToIdr)}</span>
                                   </>
                                 )}
@@ -1895,7 +1863,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-2">
                                 {fileUrl && (
-                                  <a href={fileUrl} download target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-emerald-600 hover:underline">
+                                  <a href={fileUrl} download target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[#0D1A63] hover:underline">
                                     <Download className="w-4 h-4" /> Unduh
                                   </a>
                                 )}
@@ -1910,7 +1878,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </>
                                 )}
                                 {p.payment_location === 'saudi' && (
-                                  <span className="text-xs text-emerald-600 font-medium">Pembayaran KES — otomatis terverifikasi</span>
+                                  <span className="text-xs text-[#0D1A63] font-medium">Pembayaran KES — otomatis terverifikasi</span>
                                 )}
                               </div>
                             </div>
@@ -1976,7 +1944,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           const jamaahUrl = itemWithJamaah.jamaah_data_type === 'link' ? itemWithJamaah.jamaah_data_value : itemWithJamaah.jamaah_data_value ? getFileUrl(itemWithJamaah.jamaah_data_value) : null;
                           const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
                           const typeIcon = isVisa ? <FileText className="w-4 h-4" /> : isTicket ? <Plane className="w-4 h-4" /> : isHotel ? <Package className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />;
-                          const typeBg = isVisa ? 'bg-sky-100 text-sky-600' : isTicket ? 'bg-emerald-100 text-emerald-600' : isHotel ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600';
+                          const typeBg = isVisa ? 'bg-sky-100 text-sky-600' : isTicket ? 'bg-[#0D1A63]/10 text-[#0D1A63]' : isHotel ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600';
                           return (
                             <div key={group.key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                               <div className="flex items-start gap-4 p-4">
@@ -2017,7 +1985,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                       </a>
                                     )}
                                     {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
-                                      <a href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)} target="_blank" rel="noopener noreferrer" download className="text-emerald-600 hover:underline inline-flex items-center gap-1 font-medium">
+                                      <a href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)} target="_blank" rel="noopener noreferrer" download className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium">
                                         <Download className="w-3.5 h-3.5" /> Dokumen terbit
                                       </a>
                                     )}
@@ -2055,7 +2023,7 @@ const OrdersInvoicesPage: React.FC = () => {
                 return (
                   <>
                     <p className="text-sm text-slate-600">
-                      Invoice <strong>{cancelTargetInv.invoice_number}</strong> memiliki pembayaran <strong className="text-emerald-600">{formatIDR(paid)}</strong>. Pilih salah satu:
+                      Invoice <strong>{cancelTargetInv.invoice_number}</strong> memiliki pembayaran <strong className="text-[#0D1A63]">{formatIDR(paid)}</strong>. Pilih salah satu:
                     </p>
                     <div className="space-y-3">
                       <label className="flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer border-slate-200 hover:border-emerald-300">
@@ -2075,13 +2043,11 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                     {cancelAction === 'refund' && (
                       <div className="space-y-2 pt-2 border-t border-slate-200">
-                        <p className="text-xs font-medium text-slate-600">Rekening tujuan refund (wajib)</p>
-                        <input type="text" value={cancelBankName} onChange={(e) => setCancelBankName(e.target.value)} placeholder="Nama Bank (contoh: BCA, Mandiri)" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!deletingOrderId} />
-                        <input type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2" disabled={!!deletingOrderId} />
+                        <Input label="Nama Bank (wajib)" type="text" value={cancelBankName} onChange={(e) => setCancelBankName(e.target.value)} placeholder="Contoh: BCA, Mandiri" disabled={!!deletingOrderId} />
+                        <Input label="Nomor Rekening (wajib)" type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" disabled={!!deletingOrderId} />
                       </div>
                     )}
-                    <p className="text-xs text-slate-500">Alasan pembatalan (opsional):</p>
-                    <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 min-h-[60px] resize-y" disabled={!!deletingOrderId} />
+                    <Textarea label="Alasan pembatalan (opsional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." rows={3} disabled={!!deletingOrderId} />
                   </>
                 );
               }
@@ -2196,40 +2162,33 @@ const OrdersInvoicesPage: React.FC = () => {
                             {reallocateRows.map((row, idx) => (
                               <tr key={idx} className="border-b border-slate-100 last:border-0">
                                 <td className="py-2 px-3">
-                                  <select
+                                  <Autocomplete
                                     value={row.source_invoice_id}
-                                    onChange={(e) => updateRow(idx, 'source_invoice_id', e.target.value)}
-                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                                  >
-                                    <option value="">Pilih sumber</option>
-                                    {sourceCandidates.map((i: any) => (
-                                      <option key={i.id} value={i.id}>
-                                        {i.invoice_number} — {formatIDR(getReleasable(i))} tersedia
-                                      </option>
-                                    ))}
-                                  </select>
+                                    onChange={(v) => updateRow(idx, 'source_invoice_id', v)}
+                                    options={[
+                                      { value: '', label: 'Pilih sumber' },
+                                      ...sourceCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(getReleasable(i))} tersedia` }))
+                                    ]}
+                                    emptyLabel="Pilih sumber"
+                                  />
                                 </td>
                                 <td className="py-2 px-3">
-                                  <select
+                                  <Autocomplete
                                     value={row.target_invoice_id}
-                                    onChange={(e) => updateRow(idx, 'target_invoice_id', e.target.value)}
-                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                                  >
-                                    <option value="">Pilih penerima</option>
-                                    {targetCandidates.map((i: any) => (
-                                      <option key={i.id} value={i.id}>
-                                        {i.invoice_number} — sisa {formatIDR(parseFloat(i.remaining_amount || 0))}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    onChange={(v) => updateRow(idx, 'target_invoice_id', v)}
+                                    options={[
+                                      { value: '', label: 'Pilih penerima' },
+                                      ...targetCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — sisa ${formatIDR(parseFloat(i.remaining_amount || 0))}` }))
+                                    ]}
+                                    emptyLabel="Pilih penerima"
+                                  />
                                 </td>
                                 <td className="py-2 px-3">
-                                  <input
+                                  <Input
                                     type="text"
                                     value={row.amount}
                                     onChange={(e) => updateRow(idx, 'amount', e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
                                     placeholder="0"
-                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
                                   />
                                 </td>
                                 <td className="py-2 px-2">
@@ -2250,13 +2209,12 @@ const OrdersInvoicesPage: React.FC = () => {
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Catatan (opsional)</label>
-                      <input
+                      <Input
+                        label="Catatan (opsional)"
                         type="text"
                         value={reallocateNotes}
                         onChange={(e) => setReallocateNotes(e.target.value)}
                         placeholder="Contoh: Alokasi dari pembatalan order #X ke invoice #Y"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                       />
                     </div>
                   </>
@@ -2286,7 +2244,7 @@ const OrdersInvoicesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('saudi')}
-                  className={`flex-1 min-w-[120px] px-4 py-3 text-sm font-medium ${paymentMethod === 'saudi' ? 'border-b-2 border-emerald-600 text-emerald-600 bg-emerald-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`flex-1 min-w-[120px] px-4 py-3 text-sm font-medium ${paymentMethod === 'saudi' ? 'border-b-2 border-emerald-600 text-[#0D1A63] bg-emerald-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   Pembayaran Saudi (SAR/USD)
                 </button>
@@ -2296,7 +2254,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   key={m}
                   type="button"
                   onClick={() => setPaymentMethod(m)}
-                  className={`flex-1 min-w-[100px] px-4 py-3 text-sm font-medium ${paymentMethod === m ? 'border-b-2 border-emerald-600 text-emerald-600 bg-emerald-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`flex-1 min-w-[100px] px-4 py-3 text-sm font-medium ${paymentMethod === m ? 'border-b-2 border-emerald-600 text-[#0D1A63] bg-emerald-50/50' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   {m === 'bank' ? 'Transfer Bank' : m === 'va' ? 'Virtual Account' : 'QRIS'}
                 </button>
@@ -2394,8 +2352,8 @@ const OrdersInvoicesPage: React.FC = () => {
                           <p className="font-semibold text-slate-800">Validasi pembayaran (otomatis)</p>
                           <p><span className="text-slate-600">Jumlah yang diinput:</span> <strong>{formatIDR(inputIdr)}</strong> ≈ {formatSAR(inputIdr / sarToIdr)} · ≈ {formatUSD(inputIdr / usdToIdr)}</p>
                           <p><span className="text-slate-600">Setelah pembayaran ini —</span></p>
-                          <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-emerald-600">{formatIDR(newPaid)}</strong> ≈ {formatSAR(newPaid / sarToIdr)} · ≈ {formatUSD(newPaid / usdToIdr)}</p>
-                          <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-emerald-600' : 'text-red-600'}>{formatIDR(Math.max(0, newRemain))}</strong> ≈ {formatSAR(Math.max(0, newRemain) / sarToIdr)} · ≈ {formatUSD(Math.max(0, newRemain) / usdToIdr)}</p>
+                          <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]">{formatIDR(newPaid)}</strong> ≈ {formatSAR(newPaid / sarToIdr)} · ≈ {formatUSD(newPaid / usdToIdr)}</p>
+                          <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>{formatIDR(Math.max(0, newRemain))}</strong> ≈ {formatSAR(Math.max(0, newRemain) / sarToIdr)} · ≈ {formatUSD(Math.max(0, newRemain) / usdToIdr)}</p>
                           {overpay && <p className="text-amber-700 text-xs">Jumlah melebihi sisa tagihan. Sistem akan catat sebagai pelunasan; kelebihan tidak dikembalikan otomatis.</p>}
                         </div>
                       );

@@ -4,7 +4,12 @@ import { Receipt, Users, FileText, Hotel, Plane, Bus, RefreshCw, Settings } from
 import { useToast } from '../../../contexts/ToastContext';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import Table from '../../../components/common/Table';
 import { koordinatorApi, ordersApi } from '../../../services/api';
+import type { TableColumn } from '../../../types';
 
 const OWNER_STATUS_LABELS: Record<string, string> = {
   registered_pending_mou: 'Pending MoU',
@@ -59,47 +64,26 @@ const KoordinatorDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Dashboard Koordinator Wilayah</h1>
-          <p className="text-slate-600 mt-1">Rekapitulasi wilayah Anda: order, owner, dan pekerjaan. Hanya data wilayah Anda.</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
-      </div>
+      <PageHeader
+        title="Dashboard Koordinator Wilayah"
+        subtitle="Rekapitulasi wilayah Anda: order, owner, dan pekerjaan. Hanya data wilayah Anda."
+        right={
+          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card hover><div className="cursor-pointer" onClick={() => navigate('/dashboard/orders-invoices')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/orders-invoices')}>
-          <div className="flex items-start justify-between">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white">
-              <Receipt className="w-6 h-6" />
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 mt-2">Total Order Wilayah</p>
-          <p className="text-2xl font-bold text-slate-900">{orders.total ?? 0}</p>
-          <p className="text-xs text-slate-500">Order & invoice wilayah Anda</p>
-        </div></Card>
-        <Card hover><div className="cursor-pointer" onClick={() => navigate('/dashboard/koordinator/owners')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/koordinator/owners')}>
-          <div className="flex items-start justify-between">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-              <Users className="w-6 h-6" />
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 mt-2">Owner di Wilayah</p>
-          <p className="text-2xl font-bold text-slate-900">{owners.total ?? 0}</p>
-          <p className="text-xs text-slate-500">Owner yang dilayani koordinator wilayah Anda</p>
-        </div></Card>
-        <Card hover><div className="cursor-pointer" onClick={() => navigate('/dashboard/products')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/products')}>
-          <div className="flex items-start justify-between">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-              <Settings className="w-6 h-6" />
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 mt-2">Pengaturan Harga</p>
-          <p className="text-lg font-bold text-slate-900">Harga General & Khusus</p>
-          <p className="text-xs text-slate-500">Produk, paket, kurs cabang di wilayah</p>
-        </div></Card>
+        <div className="cursor-pointer" onClick={() => navigate('/dashboard/orders-invoices')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/orders-invoices')}>
+          <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order Wilayah" value={orders.total ?? 0} subtitle="Order & invoice wilayah Anda" iconClassName="bg-[#0D1A63] text-white" />
+        </div>
+        <div className="cursor-pointer" onClick={() => navigate('/dashboard/koordinator/owners')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/koordinator/owners')}>
+          <StatCard icon={<Users className="w-5 h-5" />} label="Owner di Wilayah" value={owners.total ?? 0} subtitle="Owner yang dilayani koordinator wilayah Anda" iconClassName="bg-[#0D1A63] text-white" />
+        </div>
+        <div className="cursor-pointer" onClick={() => navigate('/dashboard/products')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/products')}>
+          <StatCard icon={<Settings className="w-5 h-5" />} label="Pengaturan Harga" value="Harga General & Khusus" subtitle="Produk, paket, kurs cabang di wilayah" iconClassName="bg-amber-100 text-amber-600" />
+        </div>
         <Card>
           <div className="p-3 rounded-xl bg-slate-100 text-slate-600">
             <p className="text-sm font-medium">Wilayah Anda</p>
@@ -155,32 +139,40 @@ const KoordinatorDashboard: React.FC = () => {
       {(owners.list?.length ?? 0) > 0 && (
         <Card>
           <h3 className="text-lg font-bold text-slate-900 mb-3">Owner di Wilayah Anda</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-2 px-3">Nama / Perusahaan</th>
-                  <th className="text-left py-2 px-3">Email</th>
-                  <th className="text-left py-2 px-3">Status</th>
-                  <th className="text-left py-2 px-3">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(owners.list as any[]).slice(0, 10).map((o: { id: string; User?: { name: string; company_name?: string; email?: string }; status: string }) => (
-                  <tr key={o.id} className="border-b border-slate-100">
-                    <td className="py-2 px-3">{o.User?.name} {o.User?.company_name && `(${o.User.company_name})`}</td>
-                    <td className="py-2 px-3">{o.User?.email}</td>
-                    <td className="py-2 px-3">{OWNER_STATUS_LABELS[o.status] || o.status}</td>
-                    <td className="py-2 px-3">
-                      <Button size="sm" variant="outline" onClick={() => navigate('/dashboard/koordinator/owners?id=' + o.id)}>
-                        Kelola
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={[
+              { id: 'name', label: 'Nama / Perusahaan', align: 'left' },
+              { id: 'email', label: 'Email', align: 'left' },
+              { id: 'status', label: 'Status', align: 'left' },
+              { id: 'actions', label: 'Aksi', align: 'left' }
+            ] as TableColumn[]}
+            data={(owners.list as any[]).slice(0, 10)}
+            emptyMessage="Belum ada owner"
+            pagination={
+              (owners.list as any[])?.length > 0
+                ? {
+                    total: (owners.list as any[]).length,
+                    page: 1,
+                    limit: 10,
+                    totalPages: Math.ceil((owners.list as any[]).length / 10) || 1,
+                    onPageChange: () => {},
+                    onLimitChange: () => {}
+                  }
+                : undefined
+            }
+            renderRow={(o: { id: string; User?: { name: string; company_name?: string; email?: string }; status: string }) => (
+              <tr key={o.id} className="border-b border-slate-100">
+                <td className="py-2 px-3">{o.User?.name} {o.User?.company_name && `(${o.User.company_name})`}</td>
+                <td className="py-2 px-3">{o.User?.email}</td>
+                <td className="py-2 px-3">{OWNER_STATUS_LABELS[o.status] || o.status}</td>
+                <td className="py-2 px-3">
+                  <Button size="sm" variant="outline" onClick={() => navigate('/dashboard/koordinator/owners?id=' + o.id)}>
+                    Kelola
+                  </Button>
+                </td>
+              </tr>
+            )}
+          />
           <div className="mt-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/koordinator/owners')}>
               Lihat semua owner
@@ -191,7 +183,12 @@ const KoordinatorDashboard: React.FC = () => {
 
       {(d.orders_recent?.length ?? 0) > 0 && (
         <Card>
-          <h3 className="text-lg font-bold text-slate-900 mb-3">Invoice Terbaru (wilayah)</h3>
+          <CardSectionHeader
+            icon={<Receipt className="w-6 h-6" />}
+            title="Invoice Terbaru (wilayah)"
+            subtitle="Daftar invoice terbaru di wilayah Anda"
+            className="mb-3"
+          />
           <ul className="space-y-2">
             {d.orders_recent.slice(0, 5).map((o: any) => (
               <li key={o.id} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">

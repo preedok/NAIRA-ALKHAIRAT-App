@@ -1,5 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Autocomplete from './Autocomplete';
+import Button from './Button';
 
 export interface TablePaginationProps {
   total: number;
@@ -29,43 +31,49 @@ const TablePagination: React.FC<TablePaginationProps> = ({
   const end = Math.min(page * limit, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50 mt-2">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 mt-2">
       <div className="flex items-center gap-3">
         <span className="text-sm text-slate-600">
           {label || `Menampilkan ${start}-${end} dari ${total}`}
         </span>
         {showLimitSelector && onLimitChange && (
-          <select
-            value={limit}
-            onChange={(e) => onLimitChange(Number(e.target.value))}
-            className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white text-sm"
-          >
-            {limitOptions.map((n) => (
-              <option key={n} value={n}>{n} per halaman</option>
-            ))}
-          </select>
+          <Autocomplete
+            value={String(limit)}
+            onChange={(v) => onLimitChange(Number(v))}
+            options={limitOptions.map((n) => ({ value: String(n), label: `${n} per halaman` }))}
+            fullWidth={false}
+            className="w-36"
+          />
         )}
       </div>
-      <div className="flex gap-1 items-center">
-        <button
+      <div className="flex gap-2 items-center">
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onPageChange(Math.max(1, page - 1))}
           disabled={page <= 1 || loading}
-          className="p-2 rounded border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50"
+          className="border-slate-200 text-slate-700 p-2 min-w-[36px]"
+          title="Sebelumnya"
+          aria-label="Sebelumnya"
         >
           <ChevronLeft className="w-4 h-4" />
-        </button>
+        </Button>
         <span className="py-2 px-3 text-sm text-slate-600">
           Halaman {page} / {totalPages}
         </span>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages || loading}
-          className="p-2 rounded border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50"
+          className="border-slate-200 text-slate-700 p-2 min-w-[36px]"
+          title="Selanjutnya"
+          aria-label="Selanjutnya"
         >
           <ChevronRight className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

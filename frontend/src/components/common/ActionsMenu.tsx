@@ -64,7 +64,7 @@ const ActionsMenu: React.FC<ActionsMenuProps> = ({ items, className = '', align 
             aria-hidden="true"
           />
           <div
-            className="fixed z-[9999] py-1 bg-white border border-slate-200 rounded-xl shadow-xl min-w-[160px] max-w-[90vw]"
+            className="fixed z-[9999] py-1 bg-white border border-slate-200 rounded-lg shadow-xl min-w-[160px] max-w-[90vw]"
             style={{ top: position.top, left: position.left }}
             role="menu"
           >

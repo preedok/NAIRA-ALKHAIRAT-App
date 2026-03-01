@@ -22,6 +22,10 @@ import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, StatCard, Autocomplete, Input } from '../../../components/common';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -77,9 +81,21 @@ type HotelsPageProps = {
   embedInProducts?: boolean;
   /** When set, open the seasons modal for this hotel (e.g. from calendar "add room"). Cleared after opening. */
   openSeasonsForHotelId?: string | null;
+  refreshTrigger?: number;
+  /** Saat embed: kontrol buka/tutup panel filter dari parent (header) */
+  embedFilterOpen?: boolean;
+  embedFilterOnToggle?: () => void;
+  onFilterActiveChange?: (active: boolean) => void;
 };
 
-const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsForHotelId }) => {
+const HotelsPage: React.FC<HotelsPageProps> = ({
+  embedInProducts,
+  openSeasonsForHotelId,
+  refreshTrigger,
+  embedFilterOpen,
+  embedFilterOnToggle,
+  onFilterActiveChange
+}) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
@@ -266,11 +282,23 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
   const [sortBy, setSortBy] = useState('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
 
-  const fetchProducts = () => {
+  const hasActiveFilters = filterIncludeInactive === 'true';
+
+  /** Saat embed: kontrol filter dari parent (header); beri tahu parent jika filter aktif */
+  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
+  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
+  useEffect(() => {
+    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
+  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
+  const resetFilters = () => setFilterIncludeInactive('false');
+
+  const fetchProducts = useCallback(() => {
     setLoading(true);
     setError(null);
-    const params = { type: 'hotel' as const, with_prices: 'true' as const, limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}) };
+    const params = { type: 'hotel' as const, with_prices: 'true' as const, include_inactive: filterIncludeInactive, limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}) };
     productsApi
       .list(params)
       .then((res) => {
@@ -283,11 +311,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  };
+  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive]);
 
   useEffect(() => {
     fetchProducts();
-  }, [page, limit, sortBy, sortOrder, user?.role]);
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    if (embedInProducts && refreshTrigger != null && refreshTrigger > 0) fetchProducts();
+  }, [embedInProducts, refreshTrigger]);
 
   const filteredHotels = hotels.filter((hotel: HotelProduct) => {
     const matchesSearch =
@@ -661,56 +693,67 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
 
   return (
     <div className="space-y-5">
-      {/* Toolbar: judul ringkas + aksi + filter */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Hotel</h2>
-          <p className="text-slate-600 text-sm">{embedInProducts && !canAddHotel ? 'Lihat saja. Pekerjaan hotel di menu Invoice.' : 'Harga & ketersediaan dikelola Admin Pusat'}</p>
+      {!embedInProducts && (
+        <PageHeader
+          title="Hotel"
+          subtitle="Harga & ketersediaan dikelola Admin Pusat"
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={fetchProducts} disabled={loading} />
+              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
+            </div>
+          }
+        />
+      )}
+
+      <PageFilter
+        open={filterOpen}
+        onToggle={filterOnToggle}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchProducts(); }}
+        loading={loading}
+        applyLabel="Terapkan"
+        resetLabel="Reset"
+        cardTitle="Pengaturan Filter"
+        cardDescription="Tampilkan hotel aktif saja atau termasuk nonaktif."
+        hideToggleRow
+        className="w-full"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Autocomplete
+            label="Tampilkan"
+            value={filterIncludeInactive}
+            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+            options={[
+              { value: 'false', label: 'Aktif saja' },
+              { value: 'true', label: 'Semua (termasuk nonaktif)' }
+            ]}
+          />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <AutoRefreshControl onRefresh={fetchProducts} disabled={loading} />
-          {canAddHotel && (
-            <Button variant="primary" className="flex items-center gap-2 shrink-0" onClick={handleOpenAdd}>
-              <Plus className="w-5 h-5" />
-              Tambah Hotel
-            </Button>
-          )}
-        </div>
-      </div>
+      </PageFilter>
 
       {/* Stat cards - ringkas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((stat, index) => (
-          <Card key={index} padding="sm" className="!p-4">
-            <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl bg-gradient-to-br ${stat.color} text-white shrink-0`}>
-                {stat.icon}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-slate-500 truncate">{stat.label}</p>
-                <p className="text-xl font-bold text-slate-900 tabular-nums">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard
+            key={index}
+            icon={stat.icon}
+            label={stat.label}
+            value={stat.value}
+            iconClassName={`bg-gradient-to-br ${stat.color} text-white`}
+          />
         ))}
       </div>
 
-      {/* Stat cards ketersediaan (realtime, 30 hari) — mengikuti Semua jumlah kamar atau Per musim per hotel */}
+      {/* Stat cards ketersediaan (realtime, 30 hari) — pakai StatCard agar seragam */}
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-slate-700 mb-1">Statistik Ketersediaan Kamar (30 hari ke depan)</h3>
         <p className="text-xs text-slate-500 mb-2">Data per hotel mengikuti pilihan di Jumlah Kamar &amp; Musim (Semua jumlah kamar / Per musim).</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-          <Card padding="sm" className="!p-3 border-l-4 border-l-emerald-500">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">Total Tersedia</p>
-            <p className="text-lg font-bold text-emerald-600 tabular-nums">{availabilityStats.total}</p>
-            <p className="text-xs text-slate-400">kamar</p>
-          </Card>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+          <StatCard icon={<Bed className="w-5 h-5" />} label="Total Tersedia" value={availabilityStats.total} subtitle="kamar" />
           {ROOM_TYPES.map((rt) => (
-            <Card key={rt} padding="sm" className="!p-3 border-l-4 border-l-slate-300">
-              <p className="text-xs text-slate-500 uppercase tracking-wide capitalize">{rt}</p>
-              <p className="text-lg font-bold text-slate-800 tabular-nums">{availabilityStats.byRoom[rt] ?? 0}</p>
-              <p className="text-xs text-slate-400">tersedia</p>
-            </Card>
+            <StatCard key={rt} icon={<Bed className="w-5 h-5" />} label={rt} value={availabilityStats.byRoom[rt] ?? 0} subtitle="tersedia" />
           ))}
         </div>
       </div>
@@ -770,7 +813,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                               value={val || ''}
                               readOnly={!isEditable}
                               onChange={isEditable ? (e) => setHandlingPrice(parseFloat(e.target.value) || 0) : undefined}
-                              className={`w-full max-w-[120px] border rounded-lg px-2 py-1.5 text-sm ${isEditable ? 'border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500' : 'border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed'}`}
+                              className={`w-full max-w-[120px] border rounded-lg px-2 py-1.5 text-sm ${isEditable ? 'border-slate-300 bg-white focus:ring-2 focus:ring-btn' : 'border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed'}`}
                               placeholder="0"
                             />
                           </div>
@@ -798,41 +841,48 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
               placeholder="Cari nama hotel..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-btn focus:border-btn"
             />
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setLocationFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationFilter === 'all' ? 'bg-btn text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               Semua
             </button>
             <button
               type="button"
               onClick={() => setLocationFilter('makkah')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationFilter === 'makkah' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationFilter === 'makkah' ? 'bg-btn text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               Makkah
             </button>
             <button
               type="button"
               onClick={() => setLocationFilter('madinah')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationFilter === 'madinah' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${locationFilter === 'madinah' ? 'bg-btn text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               Madinah
             </button>
           </div>
         </div>
-        <div className="mb-5">
-          <h3 className="text-lg font-semibold text-slate-900">Daftar Hotel</h3>
-          <p className="text-sm text-slate-500 mt-1">
-            {filteredHotels.length} dari {pagination?.total ?? hotels.length} hotel. Ketersediaan (realtime) mengikuti pilihan di <strong>Jumlah Kamar & Musim</strong>: Semua jumlah kamar (satu set tiap tanggal) atau Per musim. Saat order dibooking, kamar berkurang. Klik kolom <strong>Ketersediaan</strong> untuk detail per tanggal.
-          </p>
-        </div>
+        <CardSectionHeader
+          icon={<HotelIcon className="w-6 h-6" />}
+          title="Daftar Hotel"
+          subtitle={`${filteredHotels.length} dari ${pagination?.total ?? hotels.length} hotel. Ketersediaan (realtime) mengikuti pilihan di Jumlah Kamar & Musim. Saat order dibooking, kamar berkurang. Klik kolom Ketersediaan untuk detail per tanggal.`}
+          right={canAddHotel ? (
+            <Button variant="primary" size="sm" className="flex items-center gap-2 shrink-0" onClick={handleOpenAdd}>
+              <Plus className="w-4 h-4" />
+              Tambah Hotel
+            </Button>
+          ) : undefined}
+          className="mb-5"
+        />
 
-        <Table
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <Table
           columns={tableColumns}
           data={filteredHotels}
           sort={{ columnId: sortBy, order: sortOrder }}
@@ -855,7 +905,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
             const fmt = (n: number) => (n > 0 ? `${Number(n).toLocaleString('id-ID')} ${cur}` : '-');
             const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
             const isSinglePrice = hotel.meta?.pricing_mode === 'single';
-            const singlePriceVal = isSinglePrice ? (Number(hotel.price_branch ?? hotel.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
+            // Harga Kamar column: show room-only (breakdown is room-only from API)
+            const singlePriceVal = isSinglePrice ? (Number(breakdown.single?.price ?? hotel.price_branch ?? hotel.price_general ?? 0) || 0) : 0;
             const avail = availabilityByHotelId[hotel.id];
             return (
               <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
@@ -989,6 +1040,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
             );
           }}
         />
+        </div>
       </Card>
 
       {/* Popup Ketersediaan per tanggal: lebar, layout rapi, per tipe kamar */}
@@ -1012,9 +1064,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setAvailabilityPopupHotelId(null)}>
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50 shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-btn-light shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-emerald-600">
+                  <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0D1A63]">
                     <Calendar className="w-5 h-5" />
                   </div>
                   <div>
@@ -1022,7 +1074,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                     <p className="text-sm text-slate-600 mt-0.5">{hotel?.name ?? 'Hotel'} — data realtime per tipe kamar</p>
                     {availData && typeof availData === 'object' && availData.availability_mode && (
                       <p className="text-xs text-slate-500 mt-1">
-                        Mengikuti: <span className="font-medium text-emerald-700">{availData.availability_mode === 'global' ? 'Semua jumlah kamar' : 'Per musim'}</span>
+                        Mengikuti: <span className="font-medium text-[#0D1A63]">{availData.availability_mode === 'global' ? 'Semua jumlah kamar' : 'Per musim'}</span>
                       </p>
                     )}
                   </div>
@@ -1313,9 +1365,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-teal-50/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-btn-light to-slate-100/50">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-emerald-100 text-emerald-600">
+                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-btn text-[#0D1A63]">
                   <HotelIcon className="w-5 h-5" />
                 </div>
                 <div>
@@ -1340,15 +1392,13 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
               )}
 
               {/* Nama Hotel */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nama Hotel <span className="text-rose-500">*</span></label>
-                <input
-                  value={addForm.name}
-                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
-                  placeholder="Contoh: Hotel Al Haram"
-                />
-              </div>
+              <Input
+                label="Nama Hotel"
+                required
+                value={addForm.name}
+                onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Contoh: Hotel Al Haram"
+              />
 
               {/* Lokasi — Tab */}
               <div>
@@ -1359,7 +1409,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                     onClick={() => setAddForm((f) => ({ ...f, location: 'makkah' }))}
                     className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${
                       addForm.location === 'makkah'
-                        ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                        ? 'bg-white text-[#0D1A63] shadow-sm border border-btn'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -1371,7 +1421,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                     onClick={() => setAddForm((f) => ({ ...f, location: 'madinah' }))}
                     className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${
                       addForm.location === 'madinah'
-                        ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
+                        ? 'bg-white text-[#0D1A63] shadow-sm border border-btn'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -1391,8 +1441,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                       onClick={() => setAddForm((f) => ({ ...f, allotment_type: 'allotment' }))}
                       className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
                         addForm.allotment_type === 'allotment'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                          ? 'bg-btn text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
                       }`}
                     >
                       Allotment
@@ -1402,8 +1452,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                       onClick={() => setAddForm((f) => ({ ...f, allotment_type: 'non_allotment' }))}
                       className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
                         addForm.allotment_type === 'non_allotment'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                          ? 'bg-btn text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
                       }`}
                     >
                       Non allotment
@@ -1418,8 +1468,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                       onClick={() => setAddForm((f) => ({ ...f, meal_plan: 'fullboard' }))}
                       className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
                         addForm.meal_plan === 'fullboard'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                          ? 'bg-btn text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
                       }`}
                     >
                       Fullboard
@@ -1429,8 +1479,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                       onClick={() => setAddForm((f) => ({ ...f, meal_plan: 'room_only' }))}
                       className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium text-left transition-all ${
                         addForm.meal_plan === 'room_only'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                          ? 'bg-btn text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
                       }`}
                     >
                       Room only
@@ -1455,9 +1505,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
           <div className={`bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-hidden flex flex-col ${hotelAvailabilityMode === 'global' ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-btn-light">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-emerald-600">
+                <div className="p-2.5 rounded-xl bg-white shadow-sm border border-slate-200 text-[#0D1A63]">
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
@@ -1479,20 +1529,20 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                   <h3 className="text-sm font-semibold text-slate-800 mb-3">Cara atur kuota kamar</h3>
                   <p className="text-xs text-slate-500 mb-4">Pilih salah satu: <strong>Semua jumlah kamar</strong> (satu set untuk setiap bulan, open di semua tanggal) atau <strong>Per musim</strong> (kuota per periode saja).</p>
                   <div className="flex flex-wrap gap-6 mb-4">
-                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-btn hover:bg-btn-light transition-colors">
                       <input
                         type="radio"
                         name="hotel-availability-mode"
                         checked={hotelAvailabilityMode === 'global'}
                         onChange={() => setHotelAvailabilityMode('global')}
-                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                        className="mt-1 text-[#0D1A63] focus:ring-btn"
                       />
                       <div>
                         <span className="text-sm font-medium text-slate-800 block">Semua jumlah kamar</span>
                         <span className="text-xs text-slate-500">Satu set jumlah kamar dipakai untuk setiap bulan. Open di semua tanggal; tidak perlu mengisi musim.</span>
                       </div>
                     </label>
-                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-btn hover:bg-btn-light transition-colors">
                       <input
                         type="radio"
                         name="hotel-availability-mode"
@@ -1510,7 +1560,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                             setHotelAvailabilityConfigSaving(false);
                           }
                         }}
-                        className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                        className="mt-1 text-[#0D1A63] focus:ring-btn"
                       />
                       <div>
                         <span className="text-sm font-medium text-slate-800 block">Per musim</span>
@@ -1529,16 +1579,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                              <Bed className="w-4 h-4 text-emerald-600" />
+                              <Bed className="w-4 h-4 text-[#0D1A63]" />
                               Jumlah kamar per tipe
                             </h3>
-                            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">Total: {totalRooms} kamar</span>
+                            <span className="px-3 py-1 rounded-full bg-btn-light text-[#0D1A63] text-sm font-semibold">Total: {totalRooms} kamar</span>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                             {ROOM_TYPES.map((rt) => (
                               <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide capitalize mb-1.5">{rt}</label>
-                                <input
+                                <Input
                                   type="number"
                                   min={0}
                                   value={quantityForm[rt] ?? ''}
@@ -1546,7 +1595,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                                     const v = e.target.value;
                                     if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
                                   }}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                                   placeholder="0"
                                 />
                               </div>
@@ -1557,11 +1605,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                             <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan</h3>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1.5">Mata uang input</label>
-                              <select
+                              <Autocomplete
+                                label="Mata uang input"
                                 value={pf.currency}
-                                onChange={(e) => {
-                                  const newCur = e.target.value as 'IDR' | 'SAR' | 'USD';
+                                onChange={(v) => {
+                                  const newCur = v as 'IDR' | 'SAR' | 'USD';
                                   const tripleMeal = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
                                   const tripleSingle = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
                                   setQuantityModalPriceForm((f) => ({
@@ -1571,20 +1619,16 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                                     single_price: newCur === 'IDR' ? tripleSingle.idr : newCur === 'SAR' ? tripleSingle.sar : tripleSingle.usd
                                   }));
                                 }}
-                                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                              >
-                                {CURRENCIES.map((c) => (
-                                  <option key={c.id} value={c.id}>{c.label}</option>
-                                ))}
-                              </select>
+                                options={CURRENCIES.map((c) => ({ value: c.id, label: c.label }))}
+                              />
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-slate-500 mb-2">Harga Makan per Kamar</label>
                               <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
                               </div>
                               <div className="flex gap-3">
                                 {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
@@ -1593,11 +1637,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                                   const isEditable = pf.currency === curKey;
                                   return (
                                     <div key={curKey} className="flex-1 min-w-0">
-                                      <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
-                                      <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step={curKey === 'IDR' ? 1 : 0.01}
+                                        value={val != null ? String(val) : ''}
                                         readOnly={!isEditable}
                                         onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, meal_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                        className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
+                                        className={!isEditable ? 'bg-slate-100 cursor-not-allowed' : ''}
                                       />
                                     </div>
                                   );
@@ -1611,16 +1658,16 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                               <label className="block text-xs font-medium text-slate-500 mb-2">Satuan</label>
                               <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_day' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_lasten' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_lasten' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per lasten</button>
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_lasten' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per lasten</button>
                               </div>
                               <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
                               <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'single' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Satu harga</button>
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'single' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Satu harga</button>
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'per_type' ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-600 hover:bg-slate-50'}`}>Per tipe</button>
+                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'per_type' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per tipe</button>
                               </div>
                             </div>
                             {pf.pricing_mode === 'single' && (
@@ -1633,11 +1680,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                                     const isEditable = pf.currency === curKey;
                                     return (
                                       <div key={curKey} className="flex-1 min-w-0">
-                                        <span className="text-slate-500 text-xs block mb-1">{curKey}{!isEditable && ' (konversi)'}</span>
-                                        <input type="number" min={0} step={curKey === 'IDR' ? 1 : 0.01} value={val || ''}
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          step={curKey === 'IDR' ? 1 : 0.01}
+                                          value={val != null ? String(val) : ''}
                                           readOnly={!isEditable}
                                           onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, single_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                          className={`w-full border rounded-lg px-3 py-2 text-sm ${isEditable ? 'border-slate-200 bg-white focus:ring-2 focus:ring-emerald-500' : 'bg-slate-100 text-slate-600 cursor-not-allowed border-slate-200'}`}
+                                          className={!isEditable ? 'bg-slate-100 cursor-not-allowed' : ''}
                                         />
                                       </div>
                                     );
@@ -1670,7 +1720,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                                         <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
                                         <input type="number" min={0} value={pf.rooms[rt].price || ''}
                                           onChange={(e) => setQuantityModalPriceForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } } }))}
-                                          className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                          className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
                                         />
                                       </div>
                                     ) : (
@@ -1699,7 +1749,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                   <button
                     type="button"
                     onClick={() => setInventoryForSeason(null)}
-                    className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+                    className="flex items-center gap-2 text-sm font-medium text-[#0D1A63] hover:text-[#0D1A63]"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     Kembali ke daftar musim
@@ -1707,7 +1757,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                   <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-semibold text-slate-800">Inventori kamar</h3>
-                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium">
+                      <span className="px-3 py-1 rounded-full bg-btn-light text-[#0D1A63] text-sm font-medium">
                         {inventoryForSeason.seasonName}
                       </span>
                     </div>
@@ -1727,7 +1777,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                               setInventoryRows((prev) => prev.map((r) => r.room_type === rt ? { ...r, total_rooms: n } : r));
                               setInventoryInputs((prev) => ({ ...prev, [rt]: String(n) }));
                             }}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-btn focus:border-btn"
                             placeholder="0"
                           />
                         </div>
@@ -1773,7 +1823,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                           placeholder="Contoh: Ramadhan 2026"
                           value={seasonForm.name}
                           onChange={(e) => setSeasonForm((f) => ({ ...f, name: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
                         />
                       </div>
                       <div className="sm:col-span-3">
@@ -1782,7 +1832,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                           type="date"
                           value={seasonForm.start_date}
                           onChange={(e) => setSeasonForm((f) => ({ ...f, start_date: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
                         />
                       </div>
                       <div className="sm:col-span-3">
@@ -1791,7 +1841,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({ embedInProducts, openSeasonsFor
                           type="date"
                           value={seasonForm.end_date}
                           onChange={(e) => setSeasonForm((f) => ({ ...f, end_date: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
                         />
                       </div>
                       <div className="sm:col-span-2">

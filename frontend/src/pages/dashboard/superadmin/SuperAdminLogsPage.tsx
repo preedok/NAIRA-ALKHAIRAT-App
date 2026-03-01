@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FileText, RefreshCw, Circle, FileDown, FileSpreadsheet, Search } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import { Input, Autocomplete } from '../../../components/common';
 import { superAdminApi } from '../../../services/api';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -91,64 +93,30 @@ export const SuperAdminLogsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">System Logs (realtime)</h1>
-        <div className="flex gap-2 items-center flex-wrap">
-          <button
-            type="button"
-            onClick={() => setLive(!live)}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
-              live ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'
-            }`}
-          >
-            <Circle className={`w-2.5 h-2.5 ${live ? 'fill-emerald-500 text-emerald-500' : ''}`} />
-            {live ? 'Live' : 'Paused'}
-          </button>
-          <select
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-          >
-            <option value="">Semua sumber</option>
-            <option value="backend">Backend</option>
-            <option value="frontend">Frontend</option>
-            <option value="database">Database</option>
-          </select>
-          <select
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
-            value={level}
-            onChange={(e) => setLevel(e.target.value)}
-          >
-            <option value="">Semua level</option>
-            <option value="info">Info</option>
-            <option value="warn">Warn</option>
-            <option value="error">Error</option>
-            <option value="debug">Debug</option>
-          </select>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Cari pesan..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm w-40 bg-white"
-            />
+      <PageHeader
+        title="System Logs (realtime)"
+        subtitle="Log sistem backend, frontend, dan database"
+        right={
+          <div className="flex gap-2 items-center flex-wrap">
+            <button
+              type="button"
+              onClick={() => setLive(!live)}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                live ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}
+            >
+              <Circle className={`w-2.5 h-2.5 ${live ? 'fill-emerald-500 text-emerald-500' : ''}`} />
+              {live ? 'Live' : 'Paused'}
+            </button>
+            <Autocomplete value={source} onChange={setSource} options={[{ value: 'backend', label: 'Backend' }, { value: 'frontend', label: 'Frontend' }, { value: 'database', label: 'Database' }]} emptyLabel="Semua sumber" className="w-40" fullWidth={false} />
+            <Autocomplete value={level} onChange={setLevel} options={[{ value: 'info', label: 'Info' }, { value: 'warn', label: 'Warn' }, { value: 'error', label: 'Error' }, { value: 'debug', label: 'Debug' }]} emptyLabel="Semua level" className="w-40" fullWidth={false} />
+            <Input type="text" placeholder="Cari pesan..." value={search} onChange={(e) => setSearch(e.target.value)} icon={<Search className="w-4 h-4" />} className="w-40" />
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}><FileSpreadsheet className="w-4 h-4 mr-1" />{exporting === 'excel' ? '...' : 'Excel'}</Button>
+            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}><FileDown className="w-4 h-4 mr-1" />{exporting === 'pdf' ? '...' : 'PDF'}</Button>
+            <Button variant="outline" size="sm" onClick={() => fetchLogs()} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh</Button>
           </div>
-          <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
-            <FileSpreadsheet className="w-4 h-4 mr-1" />
-            {exporting === 'excel' ? '...' : 'Excel'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}>
-            <FileDown className="w-4 h-4 mr-1" />
-            {exporting === 'pdf' ? '...' : 'PDF'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => fetchLogs()} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       <Card className="overflow-hidden">
         {loading && items.length === 0 ? (

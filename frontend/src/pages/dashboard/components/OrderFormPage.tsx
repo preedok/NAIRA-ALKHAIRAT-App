@@ -13,6 +13,8 @@ import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import PageHeader from '../../../components/common/PageHeader';
+import { Autocomplete, Input } from '../../../components/common';
 
 /* ═══════════════════════════════════════════════
    TYPES & CONSTANTS
@@ -87,13 +89,13 @@ function getDisplayCurrency(type: ItemType, product?: ProductOption | null): Dis
   if (c === 'SAR' || c === 'USD') return c as DisplayCurrency;
   return 'IDR';
 }
-interface HotelRoomLine { id:string; room_type:RoomTypeId; quantity:number; unit_price:number; with_meal?:boolean; }
-interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; }
+interface HotelRoomLine { id:string; room_type:RoomTypeId|''; quantity:number; unit_price:number; meal_unit_price?:number; with_meal?:boolean; }
+interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; price_currency?:DisplayCurrency; }
 interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
 
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'quad', quantity:1, unit_price:0, with_meal:false });
-const newRow  = (): OrderItemRow  => ({ id:`row-${uid()}`, type:'hotel', product_id:'', product_name:'', quantity:1, unit_price:0, room_breakdown:[newLine()] });
+const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'', quantity:0, unit_price:0, with_meal:false });
+const newRow  = (): OrderItemRow  => ({ id:`row-${uid()}`, type:'hotel', product_id:'', product_name:'', quantity:0, unit_price:0, room_breakdown:[newLine()] });
 const rCap = (rt?:RoomTypeId) => rt ? (ROOM_TYPES.find(t=>t.id===rt)?.cap??0) : 0;
 const canManage = (role?:string) => role==='owner' || role==='invoice_koordinator' || role==='role_invoice_saudi';
 /** Jumlah malam dari check_in s/d check_out (tanggal saja). Return 0 jika invalid. */
@@ -105,9 +107,7 @@ function getNights(checkIn?: string, checkOut?: string): number {
   return Math.floor((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000));
 }
 
-const inputClass = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-shadow';
-const selectClass = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-shadow';
-const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
+const labelClass = 'block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1';
 
 const OrderFormPage: React.FC = () => {
   const { id: orderId } = useParams<{ id: string }>();
@@ -131,7 +131,7 @@ const OrderFormPage: React.FC = () => {
   const [items,       setItems]      = useState<OrderItemRow[]>([newRow()]);
   const [saving,      setSaving]     = useState(false);
   const [rates,       setRates]      = useState<{SAR_TO_IDR?:number;USD_TO_IDR?:number}>({});
-  const [priceCur,    setPriceCur]   = useState<'IDR'|'SAR'|'USD'>('IDR');
+  const [orderRatesOverride, setOrderRatesOverride] = useState<{SAR_TO_IDR?:number;USD_TO_IDR?:number}|null>(null);
   const [branches,    setBranches]   = useState<{id:string;code:string;name:string}[]>([]);
   const [branchSel,   setBranchSel]  = useState('');
   const [owners,      setOwners]     = useState<OwnerListItem[]>([]);
@@ -157,6 +157,15 @@ const OrderFormPage: React.FC = () => {
   },[isEdit,isOwner,canPickOwner,user?.branch_id]);
 
   useEffect(()=>{ if(isEdit&&order?.branch_id) setBranchSel(order.branch_id); },[isEdit,order?.branch_id]);
+
+  useEffect(() => {
+    if (!order?.currency_rates_override || typeof order.currency_rates_override !== 'object') return;
+    const o = order.currency_rates_override as { SAR_TO_IDR?: number; USD_TO_IDR?: number };
+    setOrderRatesOverride({
+      SAR_TO_IDR: typeof o.SAR_TO_IDR === 'number' ? o.SAR_TO_IDR : undefined,
+      USD_TO_IDR: typeof o.USD_TO_IDR === 'number' ? o.USD_TO_IDR : undefined
+    });
+  }, [order?.id, order?.currency_rates_override]);
 
   useEffect(()=>{
     if(!canPickOwner){ setOwners([]); return; }
@@ -233,8 +242,9 @@ const OrderFormPage: React.FC = () => {
     const rawItems=order.OrderItems??order.order_items;
     const ois:any[]=Array.isArray(rawItems)?rawItems:[];
     if(ois.length===0){ setItems([newRow()]); return; }
-    const s2i=rates.SAR_TO_IDR||4200;
-    const u2i=rates.USD_TO_IDR||15500;
+    const ov = order.currency_rates_override && typeof order.currency_rates_override === 'object' ? order.currency_rates_override as { SAR_TO_IDR?: number; USD_TO_IDR?: number } : null;
+    const s2i = (ov?.SAR_TO_IDR != null ? ov.SAR_TO_IDR : rates.SAR_TO_IDR) || 4200;
+    const u2i = (ov?.USD_TO_IDR != null ? ov.USD_TO_IDR : rates.USD_TO_IDR) || 15500;
     const getVal=(o:any,k:string)=>o[k]??o[k.replace(/([A-Z])/g,'_$1').toLowerCase().replace(/^_/,'')];
     const qty=(o:any)=>Math.max(0,Number(getVal(o,'quantity'))||0);
     /** Konversi unit_price dari backend (IDR) ke mata uang tampilan produk */
@@ -297,26 +307,34 @@ const OrderFormPage: React.FC = () => {
   const effP=(p:ProductOption,type?:ItemType)=>{ const cur=type?getDisplayCurrency(type,p):'IDR'; const n=p.price_owner??p.price_branch??p.price_general; const raw=typeof n==='number'&&!isNaN(n)?n:0; if(cur==='SAR') return (p.price_general_sar ?? (raw&&p.currency==='IDR'?raw/s2i:raw))??0; if(cur==='USD') return (p.price_general_usd ?? (raw&&p.currency==='USD'?raw:raw/u2iR))??0; return (p.price_general_idr ?? raw)??0; };
   const ticketPrice=(p:ProductOption|undefined,bandara:string)=>{ if(!p?.bandara_options) return 0; const opt=p.bandara_options.find(b=>b.bandara===bandara); return (opt?.default?.price_idr != null && !isNaN(opt.default.price_idr)) ? Number(opt.default.price_idr) : 0; };
   const busRoutePrice=(p:ProductOption|undefined,route:BusRouteType)=>{ if(!p) return 0; const rp=p.meta?.route_prices as Record<string,number>|undefined; const byTrip=p.meta?.route_prices_by_trip as Record<string,number>|undefined; const raw=rp?.[route] ?? byTrip?.round_trip ?? byTrip?.one_way ?? p.price_general_idr ?? p.price_general ?? 0; if(p.price_general_sar != null && p.price_general_sar > 0) return p.price_general_sar; return (typeof raw==='number'?raw:0)/s2i; };
-  const hrp=(p:ProductOption|undefined,rt:RoomTypeId,meal:boolean)=>{
-    if(!p) return 0;
+  const hrp=(p:ProductOption|undefined,rt:RoomTypeId|'',meal:boolean)=>{
+    if(!p || !rt) return 0;
     const rb=p.room_breakdown??p.prices_by_room??{};
     const rtEntry=rb[rt];
     const rtPrice=typeof rtEntry==='object'&&rtEntry!==null&&'price' in rtEntry?Number(rtEntry.price):typeof rtEntry==='number'?rtEntry:0;
     const fallbackGeneral=p.price_general_sar ?? (p.price_general_idr ?? 0)/s2i;
     const fallbackAnyRoom=Object.values(rb).find((v:unknown)=>typeof v==='object'&&v!==null&&'price' in (v as object)&&Number((v as {price?:unknown}).price)>0);
     const anyRoomPrice=fallbackAnyRoom?Number((fallbackAnyRoom as {price:number}).price):0;
-    const base=rtPrice>0?rtPrice:(anyRoomPrice>0?anyRoomPrice:fallbackGeneral);
     const cur=(p.currency||'IDR').toUpperCase();
     const toSar=(x:number)=>cur==='SAR'?x:cur==='USD'?x*u2iR/s2i:x/s2i;
-    const roomSar=toSar(base);
-    return meal?roomSar+toSar((p.meta?.meal_price as number|undefined)??0):roomSar;
+    /* Harga dari room_breakdown/prices_by_room: jika sangat besar (>= 50k) dianggap IDR dan dikonversi ke SAR; selain itu ikuti product.currency */
+    const rawRoom = rtPrice>0 ? rtPrice : (anyRoomPrice>0 ? anyRoomPrice : 0);
+    const roomSar = rawRoom > 0
+      ? (rawRoom >= 50000 ? rawRoom / s2i : toSar(rawRoom))
+      : fallbackGeneral;
+    return meal ? roomSar + toSar((p.meta?.meal_price as number|undefined)??0) : roomSar;
   };
-  const rowCur=(row:OrderItemRow):DisplayCurrency=> getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
-  const toIDR=(price:number,row:OrderItemRow)=>{ const c=rowCur(row); if(c==='SAR') return price*(rates.SAR_TO_IDR||4200); if(c==='USD') return price*(rates.USD_TO_IDR||15500); return price; };
-  const getInC=(priceInRow:number,row:OrderItemRow,cur:'IDR'|'SAR'|'USD')=>{ const idr=toIDR(priceInRow,row); const t=fillFromSource('IDR',idr,rates); return cur==='IDR'?t.idr:cur==='SAR'?t.sar:t.usd; };
-  const toRowCurrency=(idr:number,row:OrderItemRow)=>{ const c=rowCur(row); const s2i=rates.SAR_TO_IDR||4200; const u2i=rates.USD_TO_IDR||15500; if(c==='SAR') return idr/s2i; if(c==='USD') return idr/u2i; return idr; };
-  const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(rates.SAR_TO_IDR||4200):val*(rates.USD_TO_IDR||15500); updateRow(rowId,{unit_price:toRowCurrency(idr,row)}); };
-  const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(rates.SAR_TO_IDR||4200):val*(rates.USD_TO_IDR||15500); updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row)}); };
+  const effectiveRates = (orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null))
+    ? { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR ?? rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: orderRatesOverride.USD_TO_IDR ?? rates.USD_TO_IDR ?? 15500 }
+    : rates;
+  const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
+  const toIDR=(price:number,row:OrderItemRow)=>{ const c=rowCur(row); if(c==='SAR') return price*(effectiveRates.SAR_TO_IDR||4200); if(c==='USD') return price*(effectiveRates.USD_TO_IDR||15500); return price; };
+  const getInC=(priceInRow:number,row:OrderItemRow,cur:'IDR'|'SAR'|'USD')=>{ const idr=toIDR(priceInRow,row); const t=fillFromSource('IDR',idr,effectiveRates); return cur==='IDR'?t.idr:cur==='SAR'?t.sar:t.usd; };
+  const toRowCurrency=(idr:number,row:OrderItemRow)=>{ const c=rowCur(row); const s2i=effectiveRates.SAR_TO_IDR||4200; const u2i=effectiveRates.USD_TO_IDR||15500; if(c==='SAR') return idr/s2i; if(c==='USD') return idr/u2i; return idr; };
+  const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updateRow(rowId,{unit_price:toRowCurrency(idr,row)}); };
+  const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row)}); };
+  const setMealLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updLine(rowId,lineId,{meal_unit_price:toRowCurrency(idr,row)}); };
+  const getMealPriceSar=(p:ProductOption|undefined):number=>{ if(!p) return 0; const raw=(p.meta?.meal_price as number)??0; const cur=(p.currency||'IDR').toUpperCase(); return cur==='SAR'?raw:cur==='USD'?raw*u2iR/s2i:raw/s2i; };
 
   /* mutations */
   const addRow   =()=>setItems(p=>[...p,newRow()]);
@@ -330,7 +348,7 @@ const OrderFormPage: React.FC = () => {
       return next;
     });
   };
-  const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const prod=byType('hotel').find(p=>p.id===row.product_id); const rb=prod?.room_breakdown??prod?.prices_by_room??{}; const bestRt=(ROOM_TYPES as readonly {id:RoomTypeId}[]).find(rt=>{ const v=rb[rt.id]; const price=typeof v==='object'&&v&&'price' in v?Number((v as {price:number}).price):0; return price>0; })?.id??'quad'; const line:HotelRoomLine={id:`rl-${uid()}`,room_type:bestRt,quantity:1,unit_price:hrp(prod,bestRt,false),with_meal:false}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
+  const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const line:HotelRoomLine={id:`rl-${uid()}`,room_type:'',quantity:0,unit_price:0,with_meal:false}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
   const removeLine=(rowId:string,lineId:string)=>setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:(r.room_breakdown||[]).filter(l=>l.id!==lineId)}));
   const updLine=(rowId:string,lineId:string,upd:Partial<HotelRoomLine>)=>setItems(p=>p.map(r=>{ if(r.id!==rowId||!r.room_breakdown) return r; return{...r,room_breakdown:r.room_breakdown.map(l=>l.id!==lineId?l:{...l,...upd})}; }));
   const updateRow=(rowId:string,upd:Partial<OrderItemRow>)=>setItems(p=>p.map(r=>{
@@ -355,9 +373,15 @@ const OrderFormPage: React.FC = () => {
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod,next.type);
         }
         if(next.type==='hotel'&&!(next.room_breakdown?.length)){
-          const rb=prod.room_breakdown??prod.prices_by_room??{};
-          const bestRt=(ROOM_TYPES as readonly {id:RoomTypeId}[]).find(rt=>{ const v=rb[rt.id]; const price=typeof v==='object'&&v&&'price' in v?Number((v as {price:number}).price):0; return price>0; })?.id??'quad';
-          next.room_breakdown=[{id:`rl-${uid()}`,room_type:bestRt,quantity:1,unit_price:hrp(prod,bestRt,false),with_meal:false}];
+          next.room_breakdown=[{id:`rl-${uid()}`,room_type:'',quantity:0,unit_price:0,with_meal:false}];
+        }
+        if(next.type==='hotel'&&next.room_breakdown?.length){
+          next.room_breakdown=next.room_breakdown.map(l=>{
+            if(!l.room_type) return l;
+            const roomP=hrp(prod,l.room_type as RoomTypeId,false);
+            const mealP=getMealPriceSar(prod);
+            return { ...l, unit_price: l.unit_price||roomP, meal_unit_price: l.with_meal?(l.meal_unit_price??mealP):0 };
+          });
         }
       }
     }
@@ -378,17 +402,40 @@ const OrderFormPage: React.FC = () => {
     return next;
   }));
 
-  /* totals — hotel: harga per malam × jumlah malam × qty; non-hotel: unit_price × qty */
+  /* totals — hotel: harga per malam × jumlah malam × qty; non-hotel: unit_price × qty. Jika harga kamar tidak diubah, pakai harga admin pusat. */
+  const getEffectiveLinePrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
+    if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
+    const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const hasSplitMeal=typeof l.meal_unit_price==='number';
+    if(l.with_meal&&!hasSplitMeal) return l.unit_price||hrp(prod,l.room_type as RoomTypeId,true);
+    const roomPart=l.unit_price||hrp(prod,l.room_type as RoomTypeId,false);
+    const mealPart=l.with_meal?(l.meal_unit_price??getMealPriceSar(prod)):0;
+    return roomPart+mealPart;
+  };
+  const getEffectiveRoomPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
+    if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
+    const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const hasSplitMeal=typeof l.meal_unit_price==='number';
+    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||hrp(prod,l.room_type as RoomTypeId,true); const meal=getMealPriceSar(prod); return Math.max(0,combined-meal); }
+    return l.unit_price||hrp(prod,l.room_type as RoomTypeId,false);
+  };
+  const getEffectiveMealPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
+    if(r.type!=='hotel'||!l.with_meal) return 0;
+    const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const hasSplitMeal=typeof l.meal_unit_price==='number';
+    if(!hasSplitMeal){ const combined=l.unit_price||hrp(prod,l.room_type as RoomTypeId,true); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
+    return l.meal_unit_price??getMealPriceSar(prod);
+  };
   const nightsFor=(r:OrderItemRow)=> r.type==='hotel' ? getNights(r.check_in,r.check_out) : 0;
   const rowSub=(r:OrderItemRow)=>{
     if(r.type==='hotel'&&r.room_breakdown?.length){
       const nights=nightsFor(r)||0;
-      return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*(l.unit_price||0)*nights,0);
+      return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*getEffectiveLinePrice(r,l)*nights,0);
     }
     if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*(r.unit_price||0)*(nightsFor(r)||0);
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
-  const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
+  const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
   const busPenaltyIDR=items.reduce((sum,r)=>{
     if(r.type!=='bus'||(r.meta?.bus_type as string)!=='besar') return sum;
     const qty=Math.max(0,r.quantity||0);
@@ -396,14 +443,14 @@ const OrderFormPage: React.FC = () => {
     return sum+(busRules.bus_min_pack-qty)*busRules.bus_penalty_idr;
   },0);
   const totalIDR=items.reduce((s,r)=>s+toIDR(rowSub(r),r),0)+busPenaltyIDR;
-  const totalSAR=totalIDR/(rates.SAR_TO_IDR||4200);
+  const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
   /* submit */
   const handleSubmit=(e:React.FormEvent)=>{
     e.preventDefault();
-    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
     const hotelWithoutDates=valid.filter(r=>r.type==='hotel'&&(!r.check_in||!r.check_out));
     if(hotelWithoutDates.length){ showToast('Item hotel wajib isi tanggal Check-in dan Check-out','warning'); return; }
@@ -422,18 +469,21 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0||!l.room_type) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
       else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
       else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
+    const ratesPayload = canEditPrice && orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null)
+      ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride.USD_TO_IDR } }
+      : {};
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload})
+      ordersApi.update(orderId,{items:payload,...ratesPayload})
         .then(()=>{ showToast('Invoice diperbarui. Tagihan ikut diperbarui.','success'); navigate('/dashboard/orders-invoices', { state: { refreshList: true } }); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal memperbarui','error'))
         .finally(()=>setSaving(false));
     } else {
-      const body:Record<string,any>={items:payload};
+      const body:Record<string,any>={items:payload,...ratesPayload};
       if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
       if(ownerId&&user?.role!=='owner') body.owner_id=ownerId;
       ordersApi.create(body)
@@ -445,7 +495,7 @@ const OrderFormPage: React.FC = () => {
 
   const handleSaveDraft=(e?: React.MouseEvent)=>{
     e?.preventDefault();
-    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
     const hotelWithoutDates=valid.filter(r=>r.type==='hotel'&&(!r.check_in||!r.check_out));
     if(hotelWithoutDates.length){ showToast('Item hotel wajib isi tanggal Check-in dan Check-out','warning'); return; }
@@ -464,18 +514,21 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
     const payload:Record<string,any>[]=[];
     for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
+      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0||!l.room_type) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
       else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
       else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
     }
+    const ratesPayload = canEditPrice && orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null)
+      ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride.USD_TO_IDR } }
+      : {};
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload})
+      ordersApi.update(orderId,{items:payload,...ratesPayload})
         .then(()=>{ showToast('Draft disimpan. Invoice belum diterbitkan.','success'); setSaving(false); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menyimpan draft','error'))
         .finally(()=>setSaving(false));
     } else {
-      const body:Record<string,any>={items:payload,save_as_draft:true};
+      const body:Record<string,any>={items:payload,save_as_draft:true,...ratesPayload};
       if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
       if(ownerId&&user?.role!=='owner') body.owner_id=ownerId;
       ordersApi.create(body)
@@ -507,141 +560,110 @@ const OrderFormPage: React.FC = () => {
 
   if(loadingOrd&&isEdit) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-slate-600">
-      <Loader2 className="w-10 h-10 animate-spin text-primary-500" />
+      <Loader2 className="w-10 h-10 animate-spin text-[#0D1A63]" />
       <span className="text-sm font-medium">Memuat detail order…</span>
     </div>
   );
 
   return (
-    <div className="min-h-full w-full">
-      {/* Header — compact, modern */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2 min-w-0">
-          <button
-            type="button"
-            onClick={()=>navigate('/dashboard/orders-invoices?tab=invoices')}
-            className="flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors shrink-0"
-            aria-label="Kembali"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="min-w-0">
-            <h1 className="text-base font-semibold text-slate-900 truncate">{isEdit ? 'Perbarui invoice' : 'Buat invoice baru'}</h1>
-            <p className="text-xs text-slate-500">{isEdit ? 'Edit invoice' : 'Invoice baru'}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="px-3 py-1.5 rounded-lg bg-primary-500 text-white">
-            <span className="text-sm font-bold tabular-nums">{formatSAR(totalSAR)}</span>
-          </div>
-          <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-            <span className="text-sm font-bold tabular-nums">{formatIDR(totalIDR)}</span>
-          </div>
-          <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-            <span className="text-sm font-bold tabular-nums">{formatUSD(totalIDR/(rates.USD_TO_IDR||15500))}</span>
-          </div>
-          {totalPax>0&&(
-            <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-              <span className="text-sm font-bold tabular-nums">{totalPax}</span>
-              <span className="text-xs text-slate-500 ml-1">Jamaah</span>
+    <div className="min-h-full w-full bg-slate-50/60">
+      <div className="w-full px-1 sm:px-2 pt-0 pb-4 -mt-4">
+        <PageHeader
+          title={isEdit ? 'Perbarui invoice' : 'Buat invoice baru'}
+          subtitle={isEdit ? 'Edit item dan simpan' : 'Isi item pemesanan lalu simpan'}
+          leftAddon={
+            <button
+              type="button"
+              onClick={()=>navigate('/dashboard/orders-invoices?tab=invoices')}
+              className="flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-[#0D1A63]/50 hover:text-[#0D1A63] shadow-sm transition-all shrink-0"
+              aria-label="Kembali"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          }
+          right={
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0D1A63] text-white text-sm">
+                <span className="text-xs opacity-90">Total</span>
+                <span className="font-bold tabular-nums">{formatSAR(totalSAR)}</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm">
+                <span className="text-xs text-slate-500">IDR</span>
+                <span className="font-semibold tabular-nums">{formatIDR(totalIDR)}</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm">
+                <span className="text-xs text-slate-500">USD</span>
+                <span className="font-semibold tabular-nums">{formatUSD(totalIDR/(effectiveRates.USD_TO_IDR||15500))}</span>
+              </div>
+              {totalPax>0&&(
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="font-semibold tabular-nums">{totalPax}</span>
+                  <span className="text-xs text-slate-500">Jamaah</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          }
+          className="mb-4"
+        />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Cabang */}
         {!isEdit&&!isOwner&&!canPickOwner&&branches.length>0&&(
-          <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 rounded-full bg-primary-500" /> Cabang
-            </h3>
-            <Card padding="md">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-primary-50 text-primary-600">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900">Pilih Cabang</h4>
-                  <p className="text-xs text-slate-500">Wajib untuk membuat order</p>
-                </div>
+          <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+                <Building2 className="w-4 h-4" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Cabang</label>
-                  <select className={selectClass} value={branchSel} onChange={e=>{setBranchSel(e.target.value);setOwnerSel('');}} required>
-                    <option value="">— Pilih cabang —</option>
-                    {branches.map(b=><option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
-                  </select>
-                </div>
+              <div>
+                <h2 className="font-semibold text-slate-900 text-sm">Cabang</h2>
+                <p className="text-xs text-slate-500">Pilih cabang untuk order ini</p>
               </div>
-            </Card>
-          </div>
+            </div>
+            <div className="p-4">
+              <Autocomplete label="Cabang" value={branchSel} onChange={v=>{setBranchSel(v);setOwnerSel('');}} options={branches.map(b=>({ value: b.id, label: `${b.name} (${b.code})` }))} placeholder="— Pilih cabang —" />
+            </div>
+          </section>
         )}
 
         {/* Owner */}
         {canPickOwner&&(
-          <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 rounded-full bg-primary-500" /> Owner
-            </h3>
-            <Card padding="md">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-primary-50 text-primary-600">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900">Pilih Owner</h4>
-                  <p className="text-xs text-slate-500">Order & cabang mengikuti owner yang dipilih</p>
-                </div>
+          <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+                <Users className="w-4 h-4" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Owner</label>
-                  <select className={selectClass} value={ownerSel} onChange={e=>setOwnerSel(e.target.value)} required>
-                    <option value="">— Pilih owner —</option>
-                    {owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return <option key={uid2} value={uid2}>{lbl}</option>; })}
-                  </select>
-                </div>
+              <div>
+                <h2 className="font-semibold text-slate-900 text-sm">Owner</h2>
+                <p className="text-xs text-slate-500">Order & cabang mengikuti owner yang dipilih</p>
               </div>
-            </Card>
-          </div>
+            </div>
+            <div className="p-4">
+              <Autocomplete label="Owner" value={ownerSel} onChange={setOwnerSel} options={owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return { value: uid2, label: lbl }; })} placeholder="— Pilih owner —" />
+            </div>
+          </section>
         )}
 
         {/* Item Pemesanan */}
-        <div>
-          <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-            <span className="w-1 h-4 rounded-full bg-primary-500" /> Item Pemesanan
-          </h3>
-          <Card padding="md">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-primary-50 text-primary-600">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-900">Daftar Item</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">Tarik ikon grip (⋮⋮) untuk mengubah urutan item</p>
-                </div>
+        <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+                <CreditCard className="w-4 h-4" />
               </div>
-              {canEditPrice&&(
-                <div className="flex flex-wrap items-center gap-2 text-slate-600">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ubah harga dalam</span>
-                  <div className="flex rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
-                    {(['IDR','SAR','USD'] as const).map(c=>(
-                      <button key={c} type="button"
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${priceCur===c ? 'bg-primary-500 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                        onClick={()=>setPriceCur(c)} title={`Edit dalam ${c}; mata uang lain menyesuaikan otomatis`}>{c}</button>
-                    ))}
-                  </div>
-                  <span className="text-xs text-slate-500">Kurs dari Menu Settings.</span>
-                </div>
-              )}
+              <div>
+                <h2 className="font-semibold text-slate-900 text-sm">Item Pemesanan</h2>
+                <p className="text-xs text-slate-500">Tarik ikon ⋮⋮ untuk ubah urutan</p>
+              </div>
             </div>
-            <div className="space-y-4">
+            {canEditPrice&&(
+              <p className="text-xs text-slate-500">Mata uang & kurs di bagian Kurs bawah.</p>
+            )}
+          </div>
+          <div className="p-4 space-y-4">
               {loadingProd ? (
-                <div className="flex items-center gap-3 py-4 text-slate-500 text-sm">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary-500" /> Memuat produk…
+                <div className="flex items-center gap-2 py-3 text-slate-500 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#0D1A63]" /> Memuat produk…
                 </div>
               ) : (
                 <>
@@ -651,7 +673,7 @@ const OrderFormPage: React.FC = () => {
                     return (
                       <div
                         key={row.id}
-                        className="border border-slate-200 rounded-xl bg-slate-50/50 p-4 space-y-4"
+                        className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden"
                         onDragOver={(e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; }}
                         onDrop={(e)=>{
                           e.preventDefault();
@@ -659,84 +681,164 @@ const OrderFormPage: React.FC = () => {
                           if (!Number.isNaN(from)) moveItem(from, index);
                         }}
                       >
-                        {/* Baris: handle drag + tipe + produk + subtotal + hapus */}
-                        <div className="flex flex-wrap items-end gap-3">
+                        {/* Baris item: isi penuh, tanpa ruang kosong */}
+                        <div className="flex flex-wrap items-end gap-2 p-3 bg-slate-50/70 border-b border-slate-100">
                           <div
                             draggable
                             onDragStart={(e)=>{ e.dataTransfer.setData('text/plain', String(index)); e.dataTransfer.effectAllowed='move'; }}
-                            className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 cursor-grab active:cursor-grabbing shrink-0 hover:bg-slate-200 hover:text-slate-700"
+                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-400 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:text-slate-600 shrink-0"
                             title="Tarik untuk pindah urutan"
                           >
-                            <GripVertical size={18}/>
+                            <GripVertical size={16}/>
                           </div>
-                          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-600 shrink-0">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 shrink-0">
                             <tc.Icon size={16}/>
                           </div>
-                          <div className="min-w-[100px]">
-                            <label className={labelClass}>Tipe</label>
-                            <select className={selectClass} value={row.type} onChange={e=>updateRow(row.id,{type:e.target.value as ItemType})}>
-                              {ITEM_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-                            </select>
+                          <div className="min-w-[90px] flex-1 sm:flex-initial sm:w-[120px]">
+                            <Autocomplete label="Tipe" value={row.type} onChange={v=>updateRow(row.id,{type:v as ItemType})} options={ITEM_TYPES.map(t=>({value:t.id,label:t.label}))} />
                           </div>
-                          <div className="flex-1 min-w-[180px]">
-                            <label className={labelClass}>Produk</label>
-                            <select className={selectClass} value={row.product_id}
-                              onChange={e=>{ const p=byType(row.type).find(x=>x.id===e.target.value); updateRow(row.id,{product_id:e.target.value,product_name:p?.name??'',unit_price:p?effP(p):0}); }}>
-                              <option value="">— Pilih produk —</option>
-                              {byType(row.type).map(p=><option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
-                            </select>
+                          <div className="min-w-0 flex-1 basis-40">
+                            <Autocomplete label="Produk" value={row.product_id} onChange={v=>{ const p=byType(row.type).find(x=>x.id===v); updateRow(row.id,{product_id:v,product_name:p?.name??'',unit_price:p?effP(p):0}); }} options={byType(row.type).map(p=>({value:p.id,label:`${p.name} (${p.code})`}))} emptyLabel="— Pilih produk —" />
                           </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-xs font-semibold text-slate-500 uppercase">Subtotal</p>
+                          {canEditPrice && (
+                            <div className="min-w-[80px] flex-1 sm:flex-initial sm:w-[100px]">
+                              <Autocomplete label="Mata uang" value={row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id))} onChange={v=>updateRow(row.id,{ price_currency: (v==='' ? undefined : v) as DisplayCurrency })} options={[{value:'IDR',label:'IDR'},{value:'SAR',label:'SAR'},{value:'USD',label:'USD'}]} />
+                            </div>
+                          )}
+                          <div className="text-right min-w-[80px] shrink-0">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Subtotal</p>
                             <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(rowSub(row))} SAR`:rowCur(row)==='USD'?formatUSD(rowSub(row)):formatIDR(rowSub(row))}</p>
                           </div>
-                          <Button type="button" variant="ghost" size="sm" onClick={()=>removeRow(row.id)} className="text-slate-500 hover:text-red-600 shrink-0">
-                            <X size={16}/>
+                          <Button type="button" variant="ghost" size="sm" onClick={()=>removeRow(row.id)} aria-label="Hapus item" className="text-slate-400 hover:text-red-600 hover:bg-red-50 w-8 h-8 min-w-[32px] min-h-[32px] p-0 rounded-lg shrink-0 self-end inline-flex items-center justify-center">
+                            <Trash2 size={16} className="shrink-0"/>
                           </Button>
                         </div>
-                        {/* Body: hotel (tanggal + room lines) atau non-hotel (qty + harga) */}
-                        <div className="pl-0 sm:pl-12 space-y-4 border-t border-slate-200 pt-4">
+                        {/* Body: hotel (tanggal + room lines) atau non-hotel */}
+                        <div className="p-3 space-y-3">
                           {row.type==='hotel' ? (
                             <>
-                              <div className="flex flex-wrap gap-4">
-                                <div>
-                                  <label className={labelClass}>Check-in (tanggal)</label>
-                                  <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_in ?? ''} onChange={e => updateRow(row.id, { check_in: e.target.value || undefined })} />
-                                  <p className="text-xs text-slate-500 mt-0.5">Jam otomatis 16:00</p>
-                                </div>
-                                <div>
-                                  <label className={labelClass}>Check-out (tanggal)</label>
-                                  <input type="date" className={inputClass} style={{ minWidth: 140 }} value={row.check_out ?? ''} onChange={e => updateRow(row.id, { check_out: e.target.value || undefined })} />
-                                  <p className="text-xs text-slate-500 mt-0.5">Jam otomatis 12:00</p>
-                                </div>
-                                {row.check_in && row.check_out && (
-                                  <div className="self-end text-sm font-medium text-slate-700">
-                                    Jumlah malam: <span className="tabular-nums">{getNights(row.check_in, row.check_out)}</span>
-                                    {getNights(row.check_in, row.check_out) === 0 && <span className="text-amber-600 ml-1">(Check-out harus setelah Check-in)</span>}
+                              <div className="rounded-lg bg-slate-50/80 border border-slate-100 p-3">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tanggal menginap</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="min-w-0">
+                                    <Input label="Check-in" type="date" value={row.check_in ?? ''} onChange={e => updateRow(row.id, { check_in: e.target.value || undefined })} />
+                                    <p className="text-xs text-slate-400 mt-1">Jam 16:00</p>
                                   </div>
-                                )}
-                                {row.product_id && row.check_in && row.check_out && (
-                                  <div className="self-end text-sm text-slate-600">
-                                    {hotelAvailability[row.id] === 'loading' && <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Memuat ketersediaan…</span>}
-                                    {hotelAvailability[row.id] && typeof hotelAvailability[row.id] === 'object' && (
-                                      <span>Tersedia: {Object.entries((hotelAvailability[row.id] as { byRoomType: Record<string, number> }).byRoomType).filter(([, n]) => n > 0).map(([rt, n]) => `${rt} ${n}`).join(', ') || '—'}</span>
+                                  <div className="min-w-0">
+                                    <Input label="Check-out" type="date" value={row.check_out ?? ''} onChange={e => updateRow(row.id, { check_out: e.target.value || undefined })} />
+                                    <p className="text-xs text-slate-400 mt-1">Jam 12:00</p>
+                                  </div>
+                                  {row.check_in && row.check_out && (
+                                    <div className="flex items-center gap-2 py-2.5 px-4 rounded-lg bg-slate-100 border border-slate-200/80 text-sm font-medium text-slate-700 col-span-full">
+                                      <span>Malam:</span>
+                                      <span className="tabular-nums font-semibold text-slate-900">{getNights(row.check_in, row.check_out)}</span>
+                                      {getNights(row.check_in, row.check_out) === 0 && <span className="text-amber-600 text-xs">(Check-out &gt; Check-in)</span>}
+                                    </div>
+                                  )}
+                                  {row.product_id && row.check_in && row.check_out && (
+                                    <div className="col-span-full text-left">
+                                      {hotelAvailability[row.id] === 'loading' && (
+                                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                                          <Loader2 className="w-4 h-4 animate-spin shrink-0"/>
+                                          <span>Memuat ketersediaan…</span>
+                                        </div>
+                                      )}
+                                      {hotelAvailability[row.id] && typeof hotelAvailability[row.id] === 'object' && (
+                                        <div>
+                                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tersedia</p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {Object.entries((hotelAvailability[row.id] as { byRoomType: Record<string, number> }).byRoomType)
+                                              .filter(([, n]) => n > 0)
+                                              .map(([rt, n]) => (
+                                                <span key={rt} className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200/80 text-sm font-medium text-slate-700 capitalize">
+                                                  {rt} <span className="ml-1.5 font-semibold tabular-nums text-slate-900">{n.toLocaleString('id-ID')}</span>
+                                                </span>
+                                              ))}
+                                            {Object.entries((hotelAvailability[row.id] as { byRoomType: Record<string, number> }).byRoomType).filter(([, n]) => n > 0).length === 0 && (
+                                              <span className="text-sm text-slate-500">—</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipe kamar & harga</p>
+                              {(row.room_breakdown||[]).map(line=>(
+                                <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-slate-50/60 border border-slate-100">
+                                  <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
+                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ const rt=v as RoomTypeId|''; updLine(row.id,line.id,{room_type:rt,unit_price:rt?hrp(hProd,rt,false):0,meal_unit_price:line.with_meal&&rt?getMealPriceSar(hProd):(line.meal_unit_price??0)}); }} options={ROOM_TYPES.map(rt=>({value:rt.id,label:`${rt.label} · ${rt.cap}px`}))} emptyLabel="— Pilih —" />
+                                  </div>
+                                  <div className="w-16 min-w-[60px]">
+                                    <Input label="Jumlah" type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-slate-500 text-sm pb-2.5"><Users size={14} className="text-slate-400"/>{Math.max(0,line.quantity)*rCap(line.room_type||undefined)} jamaah</div>
+                                  <Button type="button" variant={line.with_meal?'primary':'outline'} size="sm" className="rounded-xl"
+                                    onClick={()=>updLine(row.id,line.id,{with_meal:!(line.with_meal??false),meal_unit_price:(!(line.with_meal??false))?getMealPriceSar(hProd):0})}>
+                                    <Utensils size={14} className="mr-1.5"/> Makan
+                                  </Button>
+                                  <div className="flex-1 min-w-[100px]">
+                                    {canEditPrice ? (
+                                      <Input label={`Harga kamar / malam (${rowCur(row)})`} type="number" min={0}
+                                        value={(()=>{ const roomPrice=getEffectiveRoomPrice(row,line); const val=getInC(roomPrice,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()}
+                                        placeholder="0"
+                                        onChange={e=>setLP(row.id,line.id,rowCur(row),parseFloat(e.target.value)||0)}/>
+                                    ) : (
+                                      <>
+                                        <label className={labelClass}>Harga kamar / malam</label>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(getEffectiveRoomPrice(row,line))} SAR`:rowCur(row)==='USD'?formatUSD(getEffectiveRoomPrice(row,line)):formatIDR(getEffectiveRoomPrice(row,line))}</p>
+                                      </>
                                     )}
                                   </div>
-                                )}
-                              </div>
+                                  <div className="flex-1 min-w-[120px]">
+                                    {canEditPrice ? (
+                                      line.with_meal ? (
+                                        <Input label={`Harga makan / malam (${rowCur(row)})`} type="number" min={0}
+                                          value={(()=>{ const mealPrice=getEffectiveMealPrice(row,line); const val=getInC(mealPrice,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()}
+                                          placeholder="0"
+                                          onChange={e=>setMealLP(row.id,line.id,rowCur(row),parseFloat(e.target.value)||0)}/>
+                                      ) : (
+                                        <>
+                                          <span className={labelClass}>Harga makan / malam ({rowCur(row)})</span>
+                                          <p className="text-sm text-slate-500 py-2">— Aktifkan Makan</p>
+                                        </>
+                                      )
+                                    ) : (
+                                      <>
+                                        <label className={labelClass}>Harga makan / malam</label>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{line.with_meal?(rowCur(row)==='SAR'?`${fmt(getEffectiveMealPrice(row,line))} SAR`:rowCur(row)==='USD'?formatUSD(getEffectiveMealPrice(row,line)):formatIDR(getEffectiveMealPrice(row,line))):'—'}</p>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="text-right min-w-[90px] shrink-0">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase">Subtotal</p>
+                                    {(()=>{
+                                      const nights=nightsFor(row)||0;
+                                      const pricePerNight=getEffectiveLinePrice(row,line);
+                                      const qty=Math.max(0,line.quantity);
+                                      const total=qty*pricePerNight*nights;
+                                      if(nights>0){
+                                        return <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(total)} SAR`:rowCur(row)==='USD'?formatUSD(total):formatIDR(total)}</p>;
+                                      }
+                                      const perNightLabel=rowCur(row)==='SAR'?`${fmt(qty*pricePerNight)} SAR/malam`:rowCur(row)==='USD'?formatUSD(qty*pricePerNight)+' USD/malam':formatIDR(qty*pricePerNight)+' IDR/malam';
+                                      return <><p className="text-sm font-bold text-slate-900 tabular-nums">{perNightLabel}</p><p className="text-xs text-slate-500 mt-0.5">Isi check-in & check-out untuk total</p></>;
+                                    })()}
+                                  </div>
+                                  <Button type="button" variant="ghost" size="sm" onClick={()=>removeLine(row.id,line.id)} className="text-slate-500 hover:text-red-600">
+                                    <Trash2 size={14}/>
+                                  </Button>
+                                </div>
+                              ))}
                               {row.check_in && row.check_out && (row.room_breakdown?.length ?? 0) > 0 && getNights(row.check_in, row.check_out) > 0 && (
-                                <div className="rounded-lg bg-slate-100 border border-slate-200 p-3 text-sm text-slate-700 space-y-1">
-                                  <p className="font-semibold text-slate-800 mb-2">Hitungan (harga {rowCur(row)} per malam × jumlah malam × kamar):</p>
-                                  {(row.room_breakdown||[]).filter(l=>l.quantity>0).map(line=>{
+                                <div className="rounded-lg bg-slate-100/80 border border-slate-200 p-3 text-sm text-slate-700 space-y-1">
+                                  <p className="font-semibold text-slate-800 text-xs">Hitungan (harga/malam × malam × kamar)</p>
+                                  {(row.room_breakdown||[]).filter(l=>l.quantity>0&&l.room_type).map(line=>{
                                     const nights = getNights(row.check_in!, row.check_out!);
-                                    const roomOnly = hrp(hProd, line.room_type, false);
-                                    const mealPrice = (hProd?.meta?.meal_price as number|undefined) ?? 0;
-                                    const s2i = rates.SAR_TO_IDR || 4200;
-                                    const toSAR = (p: number) => rowCur(row)==='SAR' ? p : p / s2i;
-                                    const roomSar = toSAR(roomOnly);
-                                    const mealSar = toSAR(mealPrice);
+                                    const roomSar = getEffectiveRoomPrice(row, line);
+                                    const mealSar = getEffectiveMealPrice(row, line);
                                     const lineTotalRoom = roomSar * line.quantity * nights;
-                                    const lineTotalMeal = (line.with_meal ? mealSar * line.quantity * nights : 0);
+                                    const lineTotalMeal = mealSar * line.quantity * nights;
                                     const roomLabel = ROOM_TYPES.find(t=>t.id===line.room_type)?.label ?? line.room_type;
                                     return (
                                       <div key={line.id} className="pl-2 border-l-2 border-slate-300">
@@ -747,241 +849,146 @@ const OrderFormPage: React.FC = () => {
                                   })}
                                 </div>
                               )}
-                              {(row.room_breakdown||[]).map(line=>(
-                                <div key={line.id} className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-white border border-slate-200">
-                                  <div className="w-28">
-                                    <label className={labelClass}>Tipe Kamar</label>
-                                    <select className={selectClass} value={line.room_type}
-                                      onChange={e=>{ const rt=e.target.value as RoomTypeId; updLine(row.id,line.id,{room_type:rt,unit_price:hrp(hProd,rt,line.with_meal??false)}); }}>
-                                      {ROOM_TYPES.map(rt=><option key={rt.id} value={rt.id}>{rt.label} · {rt.cap}px</option>)}
-                                    </select>
-                                  </div>
-                                  <div className="w-20">
-                                    <label className={labelClass}>Kamar</label>
-                                    <input type="number" min="0" className={inputClass} value={line.quantity||''} placeholder="0"
-                                      onChange={e=>{ const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }}/>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-slate-500 text-sm pb-2.5"><Users size={12}/>{Math.max(0,line.quantity)*rCap(line.room_type)} jamaah</div>
-                                  <Button type="button" variant={line.with_meal?'primary':'outline'} size="sm"
-                                    onClick={()=>updLine(row.id,line.id,{with_meal:!(line.with_meal??false),unit_price:hrp(hProd,line.room_type,!(line.with_meal??false))})}>
-                                    <Utensils size={12} className="mr-1"/> Makan
-                                  </Button>
-                                  <div className="flex-1 min-w-[140px]">
-                                    {canEditPrice ? (
-                                      <>
-                                        <label className={labelClass}>Harga / kamar / malam ({rowCur(row)})</label>
-                                        <div className="flex gap-2 flex-wrap">
-                                          {(['IDR','SAR','USD'] as const).map(c=>{ const val=getInC(line.unit_price||0,row,c); const on=priceCur===c; return(
-                                            <div key={c} className="flex items-center gap-1">
-                                              <span className="text-xs font-medium text-slate-500 w-7">{c}</span>
-                                              <input type="number" min="0" className={`w-24 ${inputClass} ${!on?'bg-slate-50 cursor-default':''}`}
-                                                value={Math.round(val*100)/100||''} readOnly={!on} placeholder="0"
-                                                onChange={on?e=>setLP(row.id,line.id,c,parseFloat(e.target.value)||0):undefined}/>
-                                            </div>); })}
-                                        </div>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <label className={labelClass}>Harga / kamar / malam</label>
-                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(line.unit_price||0)} SAR`:rowCur(row)==='USD'?`${formatUSD(line.unit_price||0)}`:formatIDR(line.unit_price||0)}</p>
-                                      </>
-                                    )}
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase">Subtotal</p>
-                                    <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0))} SAR`:rowCur(row)==='USD'?formatUSD(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0)):formatIDR(Math.max(0,line.quantity)*(line.unit_price||0)*(nightsFor(row)||0))}</p>
-                                  </div>
-                                  <Button type="button" variant="ghost" size="sm" onClick={()=>removeLine(row.id,line.id)} className="text-slate-500 hover:text-red-600">
-                                    <Trash2 size={14}/>
-                                  </Button>
-                                </div>
-                              ))}
-                              <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="border-dashed">
+                              <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="w-full border-2 border-dashed border-slate-200 rounded-lg text-slate-600 hover:border-[#0D1A63]/50 hover:bg-[#0D1A63]/5 text-sm py-2">
                                 <Plus size={14} className="mr-1"/> Tambah tipe kamar
                               </Button>
                             </>
                           ) : (
-                            <div className="flex flex-wrap items-end gap-4">
+                            <div className="rounded-lg bg-slate-50/60 border border-slate-100 p-3">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 items-end">
                               {row.type==='ticket' && (
                                 <>
-                                  <div className="min-w-[120px]">
-                                    <label className={labelClass}>Bandara</label>
-                                    <select className={selectClass} value={(row.meta?.bandara as string)||''}
-                                      onChange={e=>{ const bandara=e.target.value; updateRow(row.id,{ meta: { ...(row.meta||{}), bandara, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }}>
-                                      <option value="">— Pilih bandara —</option>
-                                      {BANDARA_TIKET.map(b=>(
-                                        <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
-                                      ))}
-                                    </select>
+                                  <div className="min-w-0">
+                                    <Autocomplete label="Bandara" value={(row.meta?.bandara as string)||''} onChange={v=>{ updateRow(row.id,{ meta: { ...(row.meta||{}), bandara:v, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }} options={BANDARA_TIKET.map(b=>({value:b.code,label:`${b.name} (${b.code})`}))} emptyLabel="— Pilih bandara —" />
                                   </div>
-                                  <div className="min-w-[140px]">
-                                    <label className={labelClass}>Perjalanan</label>
-                                    <select className={selectClass} value={(row.meta?.trip_type as TicketTripType)||'round_trip'}
-                                      onChange={e=>{ const trip_type=e.target.value as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, bandara:(row.meta?.bandara as string)||'BTH' } }); }}>
-                                      {TICKET_TRIP_OPTIONS.map(o=>(
-                                        <option key={o.value} value={o.value}>{o.label}</option>
-                                      ))}
-                                    </select>
+                                  <div className="min-w-0">
+                                    <Autocomplete label="Perjalanan" value={(row.meta?.trip_type as TicketTripType)||'round_trip'} onChange={v=>{ const trip_type=v as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, bandara:(row.meta?.bandara as string)||'BTH' } }); }} options={TICKET_TRIP_OPTIONS.map(o=>({value:o.value,label:o.label}))} />
                                   </div>
                                   {(row.meta?.trip_type as TicketTripType)==='round_trip' && (
                                     <>
-                                      <div className="min-w-[140px]">
-                                        <label className={labelClass}>Tanggal keberangkatan</label>
-                                        <input type="date" className={inputClass} value={(row.meta?.departure_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), departure_date: e.target.value || undefined } })} />
-                                      </div>
-                                      <div className="min-w-[140px]">
-                                        <label className={labelClass}>Tanggal kepulangan</label>
-                                        <input type="date" className={inputClass} value={(row.meta?.return_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), return_date: e.target.value || undefined } })} />
-                                      </div>
+                                      <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.departure_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), departure_date: e.target.value || undefined } })} /></div>
+                                      <div className="min-w-0"><Input label="Tanggal kepulangan" type="date" value={(row.meta?.return_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), return_date: e.target.value || undefined } })} /></div>
                                     </>
                                   )}
                                   {(row.meta?.trip_type as TicketTripType)==='one_way' && (
-                                    <div className="min-w-[140px]">
-                                      <label className={labelClass}>Tanggal keberangkatan</label>
-                                      <input type="date" className={inputClass} value={(row.meta?.departure_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), departure_date: e.target.value || undefined, return_date: undefined } })} />
-                                    </div>
+                                    <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.departure_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), departure_date: e.target.value || undefined, return_date: undefined } })} /></div>
                                   )}
                                   {(row.meta?.trip_type as TicketTripType)==='return_only' && (
-                                    <div className="min-w-[140px]">
-                                      <label className={labelClass}>Tanggal kepulangan</label>
-                                      <input type="date" className={inputClass} value={(row.meta?.return_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), return_date: e.target.value || undefined, departure_date: undefined } })} />
-                                    </div>
+                                    <div className="min-w-0"><Input label="Tanggal kepulangan" type="date" value={(row.meta?.return_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), return_date: e.target.value || undefined, departure_date: undefined } })} /></div>
                                   )}
                                 </>
                               )}
                               {row.type==='visa' && (
-                                <div className="min-w-[140px]">
-                                  <label className={labelClass}>Tanggal keberangkatan</label>
-                                  <input type="date" className={inputClass} value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender visa" />
-                                </div>
+                                <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender visa" /></div>
                               )}
                               {row.type==='bus' && (
                                 <>
-                                  <div className="min-w-[140px]">
-                                    <label className={labelClass}>Tanggal keberangkatan</label>
-                                    <input type="date" className={inputClass} value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender bus" />
-                                  </div>
-                                  <div className="min-w-[200px]">
-                                    <label className={labelClass}>Jenis bus</label>
-                                    <select className={selectClass} value={(row.meta?.bus_type as BusType)||'besar'}
-                                      onChange={e=>{ const bus_type=e.target.value as BusType; updateRow(row.id,{ meta: { ...(row.meta||{}), bus_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }}>
-                                      {BUS_TYPE_OPTIONS.map(o=>(
-                                        <option key={o.value} value={o.value}>{o.label}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="min-w-[180px]">
-                                    <label className={labelClass}>Rute</label>
-                                    <select className={selectClass} value={(row.meta?.route_type as BusRouteType)||'full_route'}
-                                      onChange={e=>{ const route_type=e.target.value as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }}>
-                                      {BUS_ROUTE_OPTIONS.map(o=>(
-                                        <option key={o.value} value={o.value}>{o.label}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="min-w-[140px]">
-                                    <label className={labelClass}>Perjalanan</label>
-                                    <select className={selectClass} value={(row.meta?.trip_type as TicketTripType)||'round_trip'}
-                                      onChange={e=>{ const trip_type=e.target.value as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }}>
-                                      {TICKET_TRIP_OPTIONS.map(o=>(
-                                        <option key={o.value} value={o.value}>{o.label}</option>
-                                      ))}
-                                    </select>
-                                  </div>
+                                  <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender bus" /></div>
+                                  <div className="min-w-0"><Autocomplete label="Jenis bus" value={(row.meta?.bus_type as BusType)||'besar'} onChange={v=>{ const bus_type=v as BusType; updateRow(row.id,{ meta: { ...(row.meta||{}), bus_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }} options={BUS_TYPE_OPTIONS.map(o=>({value:o.value,label:o.label}))} /></div>
+                                  <div className="min-w-0"><Autocomplete label="Rute" value={(row.meta?.route_type as BusRouteType)||'full_route'} onChange={v=>{ const route_type=v as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={BUS_ROUTE_OPTIONS.map(o=>({value:o.value,label:o.label}))} /></div>
+                                  <div className="min-w-0"><Autocomplete label="Perjalanan" value={(row.meta?.trip_type as TicketTripType)||'round_trip'} onChange={v=>{ const trip_type=v as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={TICKET_TRIP_OPTIONS.map(o=>({value:o.value,label:o.label}))} /></div>
                                 </>
                               )}
-                              <div className="w-24">
-                                <label className={labelClass}>Qty</label>
-                                <input type="number" min="0" className={inputClass} value={row.quantity||''}
-                                  onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }}/>
+                              <div className="min-w-0 w-20">
+                                <Input label="Qty" type="number" min={0} value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }} />
                               </div>
                               {canEditPrice ? (
-                                <div>
-                                  <label className={labelClass}>Harga Satuan ({rowCur(row)})</label>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {(['IDR','SAR','USD'] as const).map(c=>{ const val=getInC(row.unit_price||0,row,c); const on=priceCur===c; return(
-                                      <div key={c} className="flex items-center gap-1">
-                                        <span className="text-xs font-medium text-slate-500 w-7">{c}</span>
-                                        <input type="number" min="0" className={`w-24 ${inputClass} ${!on?'bg-slate-50 cursor-default':''}`}
-                                          value={Math.round(val*100)/100||''} readOnly={!on} placeholder="0"
-                                          onChange={on?e=>setRP(row.id,c,parseFloat(e.target.value)||0):undefined}/>
-                                      </div>); })}
-                                  </div>
+                                <div className="min-w-0 col-span-2 sm:col-span-1">
+                                  <Input label={`Harga Satuan (${rowCur(row)})`} type="number" min={0} value={(()=>{ const val=getInC(row.unit_price||0,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()} placeholder="0" onChange={e=>setRP(row.id,rowCur(row),parseFloat(e.target.value)||0)} />
                                 </div>
                               ) : (
-                                <div>
+                                <div className="min-w-0">
                                   <label className={labelClass}>Harga Satuan ({rowCur(row)})</label>
                                   <p className="text-sm font-bold text-slate-900 tabular-nums pt-1">{rowCur(row)==='SAR'?`${fmt(row.unit_price||0)} SAR`:rowCur(row)==='USD'?formatUSD(row.unit_price||0):formatIDR(row.unit_price||0)}</p>
                                 </div>
                               )}
+                              </div>
                             </div>
                           )}
                         </div>
                       </div>
                     );
                   })}
-                  <Button type="button" variant="outline" onClick={addRow} className="w-full border-dashed text-slate-600">
-                    <Plus size={16} className="mr-2"/> Tambah item pemesanan
+                  <Button type="button" variant="outline" onClick={addRow} className="w-full py-4 rounded-xl border-2 border-dashed border-[#0D1A63]/40 bg-[#0D1A63]/5 text-[#0D1A63] hover:border-[#0D1A63] hover:bg-[#0D1A63]/10 transition-colors text-base font-semibold shadow-sm">
+                    <Plus size={20} className="mr-2 inline shrink-0"/> Tambah item pemesanan
                   </Button>
                 </>
               )}
+          </div>
+        </section>
+
+        {/* Kurs untuk order ini */}
+        {canEditPrice && (
+          <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
+                <CreditCard className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900 text-sm">Kurs untuk order ini</h2>
+                <p className="text-xs text-slate-500">Kosongkan = pakai kurs dari Settings</p>
+              </div>
             </div>
-          </Card>
-        </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="1 SAR = (IDR)" type="number" min={0} step={1} placeholder={String(rates.SAR_TO_IDR ?? 4200)} value={orderRatesOverride?.SAR_TO_IDR != null ? String(orderRatesOverride.SAR_TO_IDR) : ''} onChange={e=>{ const v=e.target.value; setOrderRatesOverride(prev=>({ ...(prev||{}), SAR_TO_IDR: v===''?undefined:Math.max(0,parseFloat(v)||0) })); }} />
+                <Input label="1 USD = (IDR)" type="number" min={0} step={1} placeholder={String(rates.USD_TO_IDR ?? 15500)} value={orderRatesOverride?.USD_TO_IDR != null ? String(orderRatesOverride.USD_TO_IDR) : ''} onChange={e=>{ const v=e.target.value; setOrderRatesOverride(prev=>({ ...(prev||{}), USD_TO_IDR: v===''?undefined:Math.max(0,parseFloat(v)||0) })); }} />
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Ringkasan */}
-        <div>
-          <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-            <span className="w-1 h-4 rounded-full bg-primary-500" /> Ringkasan
-          </h3>
-          <Card padding="md">
-            <div className="mb-6 pb-6 border-b border-slate-200">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Referensi Harga Admin Pusat</p>
-              <p className="text-2xl font-bold text-primary-600 tabular-nums">{formatSAR(totalSAR)}</p>
-              <p className="text-xs text-slate-500 mt-1">1 SAR = {formatIDR(rates.SAR_TO_IDR??4200)}</p>
+        <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+              <FileText className="w-4 h-4" />
             </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 text-sm">Ringkasan</h2>
+              <p className="text-xs text-slate-500">Total & kurs yang dipakai</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
             {busPenaltyIDR>0 && (
-              <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <p className="text-xs font-semibold text-amber-800 uppercase">Penalti bus besar (kurang dari {busRules.bus_min_pack} orang)</p>
-                <p className="text-lg font-bold text-amber-900 tabular-nums">{formatIDR(busPenaltyIDR)}</p>
-                <p className="text-xs text-amber-700 mt-0.5">Rp {busRules.bus_penalty_idr.toLocaleString('id-ID')} per orang dari minimal</p>
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Penalti bus (kurang dari {busRules.bus_min_pack} orang)</p>
+                <p className="text-base font-bold text-amber-900 tabular-nums mt-0.5">{formatIDR(busPenaltyIDR)}</p>
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-              <div className="rounded-xl bg-primary-50 border border-primary-100 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase">Total SAR</p>
-                <p className="text-lg font-bold text-primary-600 tabular-nums">{formatSAR(totalSAR)}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Harga admin pusat</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-lg bg-primary-500/5 border border-primary-200/80 p-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total SAR</p>
+                <p className="text-lg font-bold text-[#0D1A63] tabular-nums mt-0.5">{formatSAR(totalSAR)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase">Total IDR</p>
-                <p className="text-lg font-bold text-slate-900 tabular-nums">{formatIDR(totalIDR)}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{busPenaltyIDR>0 ? 'Subtotal + penalti bus' : 'Tagihan Rupiah'}</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total IDR</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatIDR(totalIDR)}</p>
+                <p className="text-xs text-slate-500">{busPenaltyIDR>0 ? 'Subtotal + penalti' : 'Tagihan Rupiah'}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase">Total USD</p>
-                <p className="text-lg font-bold text-slate-900 tabular-nums">{formatUSD(totalIDR/(rates.USD_TO_IDR||15500))}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Pembayaran USD</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total USD</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatUSD(totalIDR/(rates.USD_TO_IDR||15500))}</p>
+                <p className="text-xs text-slate-500">Pembayaran USD</p>
               </div>
             </div>
             {totalPax>0&&(
-              <div className="flex items-center gap-2 text-slate-700 mb-4">
-                <Users size={16} className="text-primary-500"/>
-                Total jamaah: <span className="font-bold text-slate-900">{totalPax}</span> orang
+              <div className="flex items-center gap-2 text-slate-700 text-sm">
+                <Users size={16} className="text-[#0D1A63]"/>
+                <span>Total jamaah: <strong className="text-slate-900">{totalPax}</strong> orang</span>
               </div>
             )}
-            <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+            <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">
               <span>1 SAR = <b className="text-slate-900">{formatIDR(rates.SAR_TO_IDR??4200)}</b></span>
               <span>1 USD = <b className="text-slate-900">{formatIDR(rates.USD_TO_IDR??15500)}</b></span>
-              <span className="text-xs text-slate-500">Kurs dari Menu Settings</span>
             </div>
-          </Card>
-        </div>
+          </div>
+        </section>
 
-        {/* Footer — sticky bar */}
-        <div className="sticky bottom-0 left-0 right-0 z-10 mt-8 py-4 px-4 -mx-4 sm:-mx-6 bg-white/95 backdrop-blur border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex flex-wrap items-center justify-between gap-3">
-          <Button type="button" variant="ghost" onClick={()=>navigate('/dashboard/orders-invoices?tab=invoices')}>Batal</Button>
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Footer */}
+        <div className="sticky bottom-0 left-0 right-0 z-10 mt-6 py-3 -mx-1 sm:-mx-2 px-1 sm:px-2 bg-white/98 backdrop-blur-sm border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)] flex flex-wrap items-center justify-between gap-3 rounded-t-xl">
+          <Button type="button" variant="ghost" onClick={()=>navigate('/dashboard/orders-invoices?tab=invoices')} className="text-slate-600 hover:bg-slate-100 rounded-xl">Batal</Button>
+          <div className="flex flex-wrap items-center gap-3">
             {isDraftNoInvoice && (
               <>
                 <Button type="button" variant="outline" onClick={()=>handleSaveDraft()} disabled={saving}>
@@ -1013,6 +1020,7 @@ const OrderFormPage: React.FC = () => {
           </div>
         </div>
       </form>
+    </div>
     </div>
   );
 };

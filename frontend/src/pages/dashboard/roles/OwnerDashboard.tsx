@@ -14,6 +14,8 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { formatIDR } from '../../../utils';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
@@ -170,29 +172,25 @@ const OwnerDashboard: React.FC = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => (
-          <Card key={index} hover className="p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-            <div className="flex items-center gap-4">
-              <div className={`p-3.5 rounded-2xl shrink-0 ${
-                index === 0 ? 'bg-emerald-100 text-emerald-600' :
-                index === 1 ? 'bg-sky-100 text-sky-600' :
-                index === 2 ? 'bg-violet-100 text-violet-600' :
-                'bg-amber-100 text-amber-600'
-              }`}>
-                {stat.icon}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{stat.title}</p>
-                <p className="text-xl font-bold tabular-nums text-slate-900 mt-1">{stat.value}</p>
-                <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{stat.subtitle}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard
+            key={index}
+            icon={stat.icon}
+            label={stat.title}
+            value={stat.value}
+            subtitle={stat.subtitle}
+            iconClassName={[
+              'bg-emerald-100 text-emerald-600',
+              'bg-sky-100 text-sky-600',
+              'bg-violet-100 text-violet-600',
+              'bg-amber-100 text-amber-600'
+            ][index]}
+          />
         ))}
       </div>
 
       {/* Quick Actions - full width */}
       <Card className="travel-card">
-        <h3 className="text-base font-bold text-stone-900 mb-4">Aksi Cepat</h3>
+        <CardSectionHeader title="Aksi Cepat" subtitle="Pesan baru, paket, invoice, lacak." className="mb-4" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
           <button
             type="button"
@@ -257,10 +255,7 @@ const OwnerDashboard: React.FC = () => {
 
       {/* Invoice Saya - data owner */}
       <Card className="travel-card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-stone-900">Invoice Saya</h3>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Lihat Semua</Button>
-        </div>
+        <CardSectionHeader icon={<Receipt className="w-6 h-6" />} title="Invoice Saya" subtitle="Daftar invoice Anda. Buat pesanan untuk membuat invoice." right={<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Lihat Semua</Button>} className="mb-4" />
         <div className="space-y-4">
           {loading ? (
             <p className="text-stone-500 py-4">Memuat...</p>
@@ -292,10 +287,7 @@ const OwnerDashboard: React.FC = () => {
       {/* Pembayaran Tertunda & Keberangkatan */}
       <div className="grid lg:grid-cols-2 gap-6">
         <Card className="travel-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-stone-900">Pembayaran Tertunda</h3>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Semua</Button>
-          </div>
+          <CardSectionHeader icon={<Receipt className="w-6 h-6" />} title="Pembayaran Tertunda" subtitle="Invoice yang belum lunas. Upload bukti bayar sebelum jatuh tempo." right={<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Semua</Button>} className="mb-4" />
           <div className="space-y-4">
             {pendingPayments.length === 0 ? (
               <p className="text-stone-500 py-4">Tidak ada pembayaran tertunda.</p>
@@ -347,10 +339,7 @@ const OwnerDashboard: React.FC = () => {
         </Card>
 
         <Card className="travel-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-stone-900">Jadwal Keberangkatan</h3>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Semua</Button>
-          </div>
+          <CardSectionHeader icon={<MapPin className="w-6 h-6" />} title="Jadwal Keberangkatan" subtitle="Lihat invoice untuk detail perjalanan." right={<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Semua</Button>} className="mb-4" />
           <div className="space-y-4">
             <p className="text-stone-500 py-4 text-sm">Lihat invoice untuk detail perjalanan.</p>
           </div>

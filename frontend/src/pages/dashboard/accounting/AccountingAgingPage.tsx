@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import PageHeader from '../../../components/common/PageHeader';
+import PageFilter from '../../../components/common/PageFilter';
+import { FilterIconButton, Input, Autocomplete, StatCard } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, branchesApi, invoicesApi, businessRulesApi, type AccountingAgingData } from '../../../services/api';
@@ -54,7 +57,7 @@ const AccountingAgingPage: React.FC = () => {
   const [provinsiList, setProvinsiList] = useState<{ id: string; name: string; wilayah_id?: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
   const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedBucketTab, setSelectedBucketTab] = useState<BucketTab>('all');
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [detailTab, setDetailTab] = useState<'invoice' | 'payments'>('invoice');
@@ -153,7 +156,7 @@ const AccountingAgingPage: React.FC = () => {
     setPage(1);
   };
 
-  const hasActiveFilters = wilayahId || provinsiId || branchId || ownerId || status || dateFrom || dateTo || dueFrom || dueTo || search.trim();
+  const hasActiveFilters = !!(wilayahId || provinsiId || branchId || ownerId || status || dateFrom || dateTo || dueFrom || dueTo || search.trim());
 
   const filteredProvinsi = wilayahId ? provinsiList.filter((p) => p.wilayah_id === wilayahId) : provinsiList;
 
@@ -352,156 +355,61 @@ const AccountingAgingPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Piutang Usaha (AR)</h1>
-          <p className="text-slate-600 mt-1">Aging piutang: belum jatuh tempo, 1–30 hari, 31–60 hari, 61+ hari</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="w-4 h-4 mr-2" />
-            Filter {hasActiveFilters && <span className="ml-1 px-1.5 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">aktif</span>}
-          </Button>
-          {hasActiveFilters && <Button variant="ghost" size="sm" onClick={resetFilters}>Reset</Button>}
-          <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
-            <Download className="w-4 h-4 mr-2" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}>
-            <Download className="w-4 h-4 mr-2" /> PDF
-          </Button>
-          <Button variant="primary" size="sm" onClick={fetchAging} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Piutang Usaha (AR)"
+        subtitle="Aging piutang: belum jatuh tempo, 1–30 hari, 31–60 hari, 61+ hari"
+        right={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="primary" size="sm" onClick={fetchAging} disabled={loading} aria-label="Refresh">
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
+            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
+              <Download className="w-4 h-4 mr-2" /> Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}>
+              <Download className="w-4 h-4 mr-2" /> PDF
+            </Button>
+          </div>
+        }
+      />
 
-      {showFilters && (
-        <Card className="bg-slate-50/80">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filter Data
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Wilayah</label>
-              <select
-                value={wilayahId}
-                onChange={(e) => {
-                  setWilayahId(e.target.value);
-                  setProvinsiId('');
-                  setBranchId('');
-                }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Semua wilayah</option>
-                {wilayahList.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Provinsi</label>
-              <select
-                value={provinsiId}
-                onChange={(e) => {
-                  setProvinsiId(e.target.value);
-                  setBranchId('');
-                }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Semua provinsi</option>
-                {filteredProvinsi.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cabang</label>
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">Semua cabang</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Owner / Partner</label>
-              <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua owner</option>
-                {owners.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name || 'Owner'}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status Invoice</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500">
-                <option value="">Semua status (Piutang)</option>
-                {INVOICE_STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{INVOICE_STATUS_LABELS[s] || s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tanggal Buat (dari)</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tanggal Buat (sampai)</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Jatuh Tempo (dari)</label>
-              <input type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Jatuh Tempo (sampai)</label>
-              <input type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
+      <PageFilter
+        open={showFilters}
+        onToggle={() => setShowFilters((v: boolean) => !v)}
+        onReset={resetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onApply={() => { setShowFilters(false); fetchAging(); }}
+        loading={loading}
+        hideToggleRow
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
+            <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={filteredProvinsi.map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
+            <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+            <Autocomplete label="Owner / Partner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name || 'Owner' }))} emptyLabel="Semua owner" />
+            <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={INVOICE_STATUS_OPTIONS.map((s) => ({ value: s, label: INVOICE_STATUS_LABELS[s] || s }))} emptyLabel="Semua status (Piutang)" />
+            <Input label="Tanggal Buat (dari)" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} fullWidth />
+            <Input label="Tanggal Buat (sampai)" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} fullWidth />
+            <Input label="Jatuh Tempo (dari)" type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} fullWidth />
+            <Input label="Jatuh Tempo (sampai)" type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} fullWidth />
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cari (No. Order / Partner)</label>
-              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="No. order atau nama partner..." className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div className="flex items-end">
-              <Button variant="primary" onClick={fetchAging} disabled={loading}>{loading ? 'Memuat...' : 'Terapkan'}</Button>
+              <Input label="Cari (No. Order / Partner)" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="No. order atau nama partner..." fullWidth />
             </div>
           </div>
-        </Card>
-      )}
+      </PageFilter>
 
       {loading && !data && <div className="text-center py-12 text-slate-500">Memuat...</div>}
 
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Card>
-              <p className="text-sm text-slate-600">Total Piutang</p>
-              <p className="text-xl font-bold text-amber-600">{formatIDR(data.total_outstanding)}</p>
-            </Card>
-            <Card>
-              <p className="text-sm text-slate-600">Belum Jatuh Tempo</p>
-              <p className="text-lg font-bold text-slate-800">{formatIDR(totals.current)}</p>
-              <p className="text-xs text-slate-500">{bucketCounts.current} invoice</p>
-            </Card>
-            <Card>
-              <p className="text-sm text-slate-600">Terlambat 1–30</p>
-              <p className="text-lg font-bold text-amber-600">{formatIDR(totals.days_1_30)}</p>
-              <p className="text-xs text-slate-500">{bucketCounts.days_1_30} invoice</p>
-            </Card>
-            <Card>
-              <p className="text-sm text-slate-600">Terlambat 31–60</p>
-              <p className="text-lg font-bold text-orange-600">{formatIDR(totals.days_31_60)}</p>
-              <p className="text-xs text-slate-500">{bucketCounts.days_31_60} invoice</p>
-            </Card>
-            <Card>
-              <p className="text-sm text-slate-600">Terlambat 61+</p>
-              <p className="text-lg font-bold text-red-600">{formatIDR(totals.days_61_plus)}</p>
-              <p className="text-xs text-slate-500">{bucketCounts.days_61_plus} invoice</p>
-            </Card>
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={formatIDR(data.total_outstanding)} />
+            <StatCard icon={<CreditCard className="w-5 h-5" />} label="Belum Jatuh Tempo" value={formatIDR(totals.current)} subtitle={`${bucketCounts.current} invoice`} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 1–30" value={formatIDR(totals.days_1_30)} subtitle={`${bucketCounts.days_1_30} invoice`} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 31–60" value={formatIDR(totals.days_31_60)} subtitle={`${bucketCounts.days_31_60} invoice`} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 61+" value={formatIDR(totals.days_61_plus)} subtitle={`${bucketCounts.days_61_plus} invoice`} />
           </div>
 
           <Card>
@@ -596,15 +504,13 @@ const AccountingAgingPage: React.FC = () => {
                   <span className="text-sm text-slate-600">
                     Menampilkan {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}-{Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total}
                   </span>
-                  <select
-                    value={limit}
-                    onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
-                    className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white text-sm"
-                  >
-                    {[25, 50, 100, 200, 500].map((n) => (
-                      <option key={n} value={n}>{n} per halaman</option>
-                    ))}
-                  </select>
+                  <Autocomplete
+                    value={String(limit)}
+                    onChange={(v) => { setLimit(Number(v)); setPage(1); }}
+                    options={[25, 50, 100, 200, 500].map((n) => ({ value: String(n), label: `${n} per halaman` }))}
+                    fullWidth={false}
+                    className="min-w-[140px]"
+                  />
                 </div>
                 <div className="flex gap-1">
                   <button

@@ -5,7 +5,11 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
+import { Input, Autocomplete, Textarea } from '../../../components/common';
 import type { TableColumn } from '../../../types';
 import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -202,61 +206,28 @@ const HotelWorkPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-amber-100 rounded-2xl shadow-sm shrink-0">
-            <Hotel className="w-8 h-8 text-amber-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Progress Hotel</h1>
-            <p className="text-slate-600 text-sm mt-1 max-w-xl">Kelola invoice berisi item hotel: status progress, penetapan room, nomor kamar. Check-in 16:00 & check-out 12:00 otomatis.</p>
-          </div>
-        </div>
-        <AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />
-      </div>
+      <PageHeader
+        title="Progress Hotel"
+        subtitle="Kelola invoice berisi item hotel: status progress, penetapan room, nomor kamar. Check-in 16:00 & check-out 12:00 otomatis."
+        right={<AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />}
+      />
 
       {/* Stat cards */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-slate-100 text-slate-600 shrink-0">
-                <ClipboardList className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Invoice</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalInvoices}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-100 text-amber-600 shrink-0">
-                <Building2 className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Item Hotel</p>
-                <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : totalItems}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" />
+          <StatCard icon={<Building2 className="w-5 h-5" />} label="Total Item Hotel" value={loading ? '–' : totalItems} iconClassName="bg-amber-100 text-amber-600" />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Per Status Progress</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {STATUS_OPTIONS.map((opt) => (
-              <Card key={opt.value} className="p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 bg-white">
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl shrink-0 ${opt.value === 'waiting_confirmation' ? 'bg-amber-100 text-amber-600' : opt.value === 'confirmed' ? 'bg-sky-100 text-sky-600' : opt.value === 'room_assigned' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                    {opt.value === 'waiting_confirmation' ? <ListChecks className="h-6 w-6" /> : opt.value === 'confirmed' ? <Hotel className="h-6 w-6" /> : opt.value === 'room_assigned' ? <DoorOpen className="h-6 w-6" /> : <CheckCircle className="h-6 w-6" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-500">{opt.label}</p>
-                    <p className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5">{loading ? '–' : (byStatus[opt.value] ?? 0)}</p>
-                  </div>
-                </div>
-              </Card>
+              <StatCard
+                key={opt.value}
+                icon={opt.value === 'waiting_confirmation' ? <ListChecks className="w-5 h-5" /> : opt.value === 'confirmed' ? <Hotel className="w-5 h-5" /> : opt.value === 'room_assigned' ? <DoorOpen className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                label={opt.label}
+                value={loading ? '–' : (byStatus[opt.value] ?? 0)}
+              />
             ))}
           </div>
         </div>
@@ -266,29 +237,13 @@ const HotelWorkPage: React.FC = () => {
       <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Cari (invoice / order / owner / cabang)</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." className="w-full text-sm border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white" />
-            </div>
+            <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
           </div>
           <div className="sm:w-44">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Invoice</label>
-            <select value={filterInvoiceStatus} onChange={(e) => setFilterInvoiceStatus(e.target.value)} className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-amber-500 bg-white">
-              <option value="">Semua status</option>
-              {Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => (
-                <option key={val} value={val}>{lbl}</option>
-              ))}
-            </select>
+            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel="Semua status" />
           </div>
           <div className="sm:w-44">
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Status Progress</label>
-            <select value={filterProgressStatus} onChange={(e) => setFilterProgressStatus(e.target.value)} className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-amber-500 bg-white">
-              <option value="">Semua progress</option>
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel="Semua progress" />
           </div>
           <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }} className="rounded-xl">Reset</Button>
         </div>
@@ -297,8 +252,12 @@ const HotelWorkPage: React.FC = () => {
       {/* Table */}
       <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/60">
-          <h2 className="text-lg font-semibold text-slate-900">Daftar Invoice Hotel</h2>
-          <p className="text-sm text-slate-500 mt-0.5">{filteredInvoices.length} invoice</p>
+          <CardSectionHeader
+            icon={<Building2 className="w-6 h-6" />}
+            title="Daftar Invoice Hotel"
+            subtitle={`${filteredInvoices.length} invoice`}
+            className="mb-0"
+          />
         </div>
         {loading ? (
           <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
@@ -464,9 +423,7 @@ const HotelWorkPage: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                   <ListChecks className="w-3.5 h-3.5 text-amber-500" /> Status Pekerjaan
                                 </label>
-                                <select className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500" value={status} onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })} disabled={updatingId === item.id}>
-                                  {STATUS_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                                </select>
+                                <Autocomplete value={status} onChange={(v) => handleUpdateProgress(item.id, { status: v })} options={STATUS_OPTIONS} disabled={updatingId === item.id} fullWidth />
                               </div>
 
                               {/* Nomor Kamar — hanya saat status Pemberian nomor room */}
@@ -499,9 +456,7 @@ const HotelWorkPage: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                   <UtensilsCrossed className="w-3.5 h-3.5 text-amber-500" /> Status Makan
                                 </label>
-                                <select className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500" value={mealStatus} onChange={(e) => handleUpdateProgress(item.id, { meal_status: e.target.value })} disabled={updatingId === item.id}>
-                                  {MEAL_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                                </select>
+                                <Autocomplete value={mealStatus} onChange={(v) => handleUpdateProgress(item.id, { meal_status: v })} options={MEAL_OPTIONS} disabled={updatingId === item.id} fullWidth />
                               </div>
 
                               {/* Check-in & Check-out — tanggal dari order, jam otomatis 16:00 / 12:00 */}
@@ -525,7 +480,7 @@ const HotelWorkPage: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                   <FileText className="w-3.5 h-3.5 text-amber-500" /> Catatan
                                 </label>
-                                <textarea className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 placeholder:text-slate-400 resize-none" rows={2} placeholder="Catatan (opsional)" defaultValue={prog?.notes ?? ''} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v }); }} disabled={updatingId === item.id} />
+                                <Textarea label="Catatan (opsional)" rows={2} placeholder="Catatan (opsional)" defaultValue={prog?.notes ?? ''} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v }); }} disabled={updatingId === item.id} />
                               </div>
 
                               {updatingId === item.id && (

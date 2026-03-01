@@ -9,6 +9,8 @@ import {
   Plus,
   X
 } from 'lucide-react';
+import Autocomplete from '../../../components/common/Autocomplete';
+import Input from '../../../components/common/Input';
 import { productsApi, adminPusatApi } from '../../../services/api';
 import Button from '../../../components/common/Button';
 import { useToast } from '../../../contexts/ToastContext';
@@ -155,19 +157,15 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium text-slate-700">Pilih Hotel:</label>
-        <select
+        <Autocomplete
+          label="Pilih Hotel"
           value={selectedHotelId}
-          onChange={(e) => setSelectedHotelId(e.target.value)}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[220px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        >
-          <option value="">-- Pilih hotel --</option>
-          {hotels.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.name} {h.meta?.location ? `(${h.meta.location})` : ''}
-            </option>
-          ))}
-        </select>
+          onChange={setSelectedHotelId}
+          options={hotels.map((h) => ({ value: h.id, label: `${h.name} ${h.meta?.location ? `(${h.meta.location})` : ''}` }))}
+          placeholder="-- Pilih hotel --"
+          className="min-w-[220px]"
+          fullWidth={false}
+        />
         {selectedHotelId && (
           <span className="text-sm text-slate-500">
             {productName}
@@ -233,7 +231,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                       key={i}
                       className={`relative min-h-[100px] border-b border-r border-slate-100 p-1.5 ${
                         !isInMonth ? 'bg-slate-50/50' : 'bg-white'
-                      } ${isHover ? 'ring-2 ring-primary-400 ring-inset' : ''}`}
+                      } ${isHover ? 'ring-2 ring-[#0D1A63]/50 ring-inset' : ''}`}
                       onMouseEnter={() => isInMonth && setHoverDate(dateStr)}
                       onMouseLeave={() => setHoverDate(null)}
                     >
@@ -295,7 +293,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                                   className="text-xs py-1.5 border-b border-slate-100 last:border-0"
                                 >
                                   <div className="font-medium text-slate-800 flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-primary-500" />
+                                    <Users className="w-3.5 h-3.5 text-[#0D1A63]" />
                                     {b.owner_name}
                                   </div>
                                   <div className="text-slate-600 mt-0.5">
@@ -325,7 +323,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setPopoverDate(popoverDate === dateStr ? null : dateStr); }}
-                              className="mt-1 text-[10px] text-primary-600 hover:underline flex items-center gap-0.5"
+                              className="mt-1 text-[10px] text-[#0D1A63] hover:underline flex items-center gap-0.5"
                             >
                               <Users className="w-3 h-3" />
                               {day.bookings.length} owner
@@ -405,13 +403,14 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                               <td className="py-2 px-2 text-center tabular-nums text-slate-600">{booked}</td>
                               <td className={`py-2 px-2 text-center tabular-nums font-medium ${available <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{available}</td>
                               <td className="py-2 px-2">
-                                <input
+                                <Input
                                   type="number"
                                   min={0}
                                   value={addQuantityInputs[rt] ?? ''}
                                   onChange={(e) => setAddQuantityInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
-                                  className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                                   placeholder="0"
+                                  fullWidth={false}
+                                  className="w-20 min-w-[5rem]"
                                 />
                               </td>
                               <td className="py-2 px-2 text-center font-semibold tabular-nums text-slate-800">{newTotal}</td>

@@ -9,6 +9,12 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import Modal from '../../../components/common/Modal';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import PageHeader from '../../../components/common/PageHeader';
+import StatCard from '../../../components/common/StatCard';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import Input from '../../../components/common/Input';
+import Checkbox from '../../../components/common/Checkbox';
+import Autocomplete from '../../../components/common/Autocomplete';
 import { adminPusatApi, branchesApi, ownersApi, UserListItem } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -64,7 +70,6 @@ const UsersPage: React.FC = () => {
 
   const canListUsers =
     currentUser?.role === 'super_admin' || currentUser?.role === 'admin_pusat';
-  const isAdminPusat = currentUser?.role === 'admin_pusat';
 
   useEffect(() => {
     branchesApi.listWilayah().then((res) => {
@@ -294,34 +299,36 @@ const UsersPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-start gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-stone-900">Manajemen User</h1>
-          <p className="text-stone-600 mt-1">Daftar user – tambah akun via Admin Pusat / Admin Cabang</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <AutoRefreshControl onRefresh={fetchUsers} disabled={loading} />
-          <Button variant="primary"><Plus className="w-5 h-5 mr-2" />Tambah User</Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Manajemen User"
+        subtitle="Daftar user – tambah akun via Admin Pusat / Admin Cabang"
+        right={
+          <div className="flex flex-wrap items-center gap-3">
+            <AutoRefreshControl onRefresh={fetchUsers} disabled={loading} />
+            <Button variant="primary"><Plus className="w-5 h-5 mr-2" />Tambah User</Button>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
-          <Card key={i} hover className="travel-card">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.color} text-white shadow-card`}>
-                <UsersIcon className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm text-stone-600">{stat.label}</p>
-                <p className="text-2xl font-bold text-stone-900">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
+          <StatCard
+            key={i}
+            icon={<UsersIcon className="w-5 h-5" />}
+            label={stat.label}
+            value={stat.value}
+            iconClassName={`bg-gradient-to-br ${stat.color} text-white`}
+          />
         ))}
       </div>
 
       <Card className="travel-card">
+        <CardSectionHeader
+          icon={<UsersIcon className="w-6 h-6" />}
+          title="Daftar User"
+          subtitle="Filter menurut tipe, wilayah, provinsi, cabang. Hanya dapat diakses Super Admin dan Admin Pusat."
+          className="mb-4"
+        />
         {/* Tab: Semua / Divisi / Owner */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="text-sm font-medium text-stone-600 mr-1">Filter:</span>
@@ -344,56 +351,44 @@ const UsersPage: React.FC = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 items-stretch sm:items-center">
-          <div className="flex-1 min-w-0 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
-            <input
+          <div className="flex-1 min-w-0">
+            <Input
               type="text"
               placeholder="Cari nama atau email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              icon={<Search className="w-5 h-5 text-stone-400" />}
             />
           </div>
-          {isAdminPusat && (
+          {canListUsers && (
             <>
-              <select
+              <Autocomplete
                 value={wilayahId}
-                onChange={(e) => { setWilayahId(e.target.value); setProvinsiId(''); setBranchId(''); }}
-                className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[140px] sm:min-w-[160px]"
-                title="Filter wilayah"
-              >
-                <option value="">Semua wilayah</option>
-                {wilayahList.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
-              <select
+                onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+                options={[{ value: '', label: 'Semua wilayah' }, ...wilayahList.map((w) => ({ value: w.id, label: w.name }))]}
+                placeholder="Filter wilayah"
+                emptyLabel="Semua wilayah"
+              />
+              <Autocomplete
                 value={provinsiId}
-                onChange={(e) => { setProvinsiId(e.target.value); setBranchId(''); }}
-                className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[140px] sm:min-w-[160px]"
-                title="Filter provinsi"
-              >
-                <option value="">Semua provinsi</option>
-                {provincesFiltered.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <select
+                onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
+                options={[{ value: '', label: 'Semua provinsi' }, ...provincesFiltered.map((p) => ({ value: p.id, label: p.name }))]}
+                placeholder="Filter provinsi"
+                emptyLabel="Semua provinsi"
+              />
+              <Autocomplete
                 value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="px-4 py-2.5 border border-stone-300 rounded-xl focus:ring-2 focus:ring-primary-500 min-w-[160px] sm:min-w-[200px]"
-                title="Filter cabang (kota)"
-              >
-                <option value="">Semua cabang</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.code} - {b.name}{b.city ? ` (${b.city})` : ''}</option>
-                ))}
-              </select>
+                onChange={(v) => setBranchId(v)}
+                options={[{ value: '', label: 'Semua cabang' }, ...branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}${b.city ? ` (${b.city})` : ''}` }))]}
+                placeholder="Filter cabang (kota)"
+                emptyLabel="Semua cabang"
+              />
             </>
           )}
         </div>
 
-        <Table
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <Table
           columns={tableColumns}
           data={filteredUsers}
           sort={{ columnId: sortBy, order: sortOrder }}
@@ -480,6 +475,7 @@ const UsersPage: React.FC = () => {
             </tr>
           )}
         />
+        </div>
       </Card>
 
       {/* Modal Edit User */}
@@ -491,22 +487,10 @@ const UsersPage: React.FC = () => {
               <button type="button" className="p-1 rounded hover:bg-slate-100" onClick={() => setEditUser(null)}><X className="w-5 h-5" /></button>
             </div>
             <div className="p-4 space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Nama</label>
-                <input type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
-                <input type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Telepon</label>
-                <input type="text" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Opsional" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Perusahaan</label>
-                <input type="text" value={editForm.company_name} onChange={(e) => setEditForm((f) => ({ ...f, company_name: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Opsional" />
-              </div>
+              <Input label="Nama" type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+              <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
+              <Input label="Telepon" type="text" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Opsional" />
+              <Input label="Perusahaan" type="text" value={editForm.company_name} onChange={(e) => setEditForm((f) => ({ ...f, company_name: e.target.value }))} placeholder="Opsional" />
               {editUser.role === 'owner' && (
                 <div>
                   {editActivationPassword ? (
@@ -526,14 +510,8 @@ const UsersPage: React.FC = () => {
                   )}
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Ubah password (kosongkan jika tidak diubah)</label>
-                <input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Min. 6 karakter" autoComplete="new-password" />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={editForm.is_active} onChange={(e) => setEditForm((f) => ({ ...f, is_active: e.target.checked }))} className="rounded border-slate-300" />
-                <span className="text-sm text-slate-700">Aktif</span>
-              </label>
+              <Input label="Ubah password (kosongkan jika tidak diubah)" type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Min. 6 karakter" autoComplete="new-password" />
+              <Checkbox label="Aktif" checked={editForm.is_active} onChange={(e) => setEditForm((f) => ({ ...f, is_active: e.target.checked }))} />
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
               <Button variant="outline" onClick={() => setEditUser(null)}>Batal</Button>
