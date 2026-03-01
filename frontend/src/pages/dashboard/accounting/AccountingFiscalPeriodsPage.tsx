@@ -16,7 +16,9 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
+import { FilterIconButton, Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import {
   accountingApi,
   type FiscalYearItem,
@@ -224,42 +226,39 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
         hideToggleRow
       >
         <div className="flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Status Tahun Fiskal</label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'closed')}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-[#0D1A63]"
-            >
-              <option value="all">Semua</option>
-              <option value="active">Aktif</option>
-              <option value="closed">Ditutup</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Status Periode</label>
-            <select
-              value={filterPeriodLock}
-              onChange={(e) => setFilterPeriodLock(e.target.value as 'all' | 'locked' | 'unlocked')}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-[140px] focus:ring-2 focus:ring-[#0D1A63]"
-            >
-              <option value="all">Semua</option>
-              <option value="locked">Ada yang terkunci</option>
-              <option value="unlocked">Ada yang terbuka</option>
-            </select>
-          </div>
+          <Autocomplete
+            label="Status Tahun Fiskal"
+            value={filterStatus}
+            onChange={(v) => setFilterStatus(v as 'all' | 'active' | 'closed')}
+            options={[
+              { value: 'all', label: 'Semua' },
+              { value: 'active', label: 'Aktif' },
+              { value: 'closed', label: 'Ditutup' }
+            ]}
+            fullWidth={false}
+            className="min-w-[140px]"
+          />
+          <Autocomplete
+            label="Status Periode"
+            value={filterPeriodLock}
+            onChange={(v) => setFilterPeriodLock(v as 'all' | 'locked' | 'unlocked')}
+            options={[
+              { value: 'all', label: 'Semua' },
+              { value: 'locked', label: 'Ada yang terkunci' },
+              { value: 'unlocked', label: 'Ada yang terbuka' }
+            ]}
+            fullWidth={false}
+            className="min-w-[160px]"
+          />
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-medium text-slate-600 mb-1">Cari (kode / nama)</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="FY2025, Tahun Fiskal..."
-                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-[#0D1A63]"
-              />
-            </div>
+            <Input
+              label="Cari (kode / nama)"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="FY2025, Tahun Fiskal..."
+              icon={<Search className="w-4 h-4" />}
+            />
           </div>
         </div>
       </PageFilter>
@@ -274,157 +273,151 @@ const AccountingFiscalPeriodsPage: React.FC = () => {
               : 'Tidak ada data sesuai filter.'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-600 bg-slate-50/80">
-                  <th className="pb-3 pr-4 w-10 font-semibold"></th>
-                  <th className="pb-3 pr-4 font-semibold">Kode</th>
-                  <th className="pb-3 pr-4 font-semibold">Nama</th>
-                  <th className="pb-3 pr-4 font-semibold">Mulai</th>
-                  <th className="pb-3 pr-4 font-semibold">Selesai</th>
-                  <th className="pb-3 pr-4 font-semibold">Status Tahun</th>
-                  <th className="pb-3 pr-4 font-semibold">Periode</th>
-                  <th className="pb-3 font-semibold text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredYears.map((year) => {
-                  const expanded = expandedIds.has(year.id);
-                  const periods = year.Periods || [];
-                  const lockedCount = periods.filter((p) => p.is_locked).length;
-                  return (
-                    <React.Fragment key={year.id}>
-                      <tr
-                        className="border-b border-slate-100 hover:bg-slate-50/50 cursor-pointer"
-                        onClick={() => toggleExpand(year.id)}
+          <Table<FiscalYearItem>
+            columns={[
+              { id: 'expand', label: '', align: 'left' },
+              { id: 'code', label: 'Kode', align: 'left' },
+              { id: 'name', label: 'Nama', align: 'left' },
+              { id: 'start', label: 'Mulai', align: 'left' },
+              { id: 'end', label: 'Selesai', align: 'left' },
+              { id: 'status', label: 'Status Tahun', align: 'left' },
+              { id: 'periods', label: 'Periode', align: 'left' },
+              { id: 'actions', label: 'Aksi', align: 'right' }
+            ] as TableColumn[]}
+            data={filteredYears}
+            emptyMessage="Belum ada tahun fiskal"
+            renderRow={(year) => {
+              const expanded = expandedIds.has(year.id);
+              const periods = year.Periods || [];
+              const lockedCount = periods.filter((p) => p.is_locked).length;
+              return (
+                <React.Fragment key={year.id}>
+                  <tr
+                    className="border-b border-slate-100 hover:bg-slate-50/50 cursor-pointer"
+                    onClick={() => toggleExpand(year.id)}
+                  >
+                    <td className="py-3 px-4">
+                      {expanded ? (
+                        <ChevronDown className="w-5 h-5 text-slate-500" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-slate-500" />
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-medium">{year.code}</td>
+                    <td className="py-3 px-4">{year.name}</td>
+                    <td className="py-3 px-4">{formatDate(year.start_date)}</td>
+                    <td className="py-3 px-4">{formatDate(year.end_date)}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          year.is_closed ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}
                       >
-                        <td className="py-3 pr-4">
-                          {expanded ? (
-                            <ChevronDown className="w-5 h-5 text-slate-500" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-slate-500" />
-                          )}
-                        </td>
-                        <td className="py-3 pr-4 font-medium">{year.code}</td>
-                        <td className="py-3 pr-4">{year.name}</td>
-                        <td className="py-3 pr-4">{formatDate(year.start_date)}</td>
-                        <td className="py-3 pr-4">{formatDate(year.end_date)}</td>
-                        <td className="py-3 pr-4">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                              year.is_closed ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                            }`}
+                        {year.is_closed ? 'Ditutup' : 'Aktif'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-slate-600">
+                        {lockedCount}/{periods.length} terkunci
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end gap-2">
+                        {!year.is_closed && lockedCount < periods.length && periods.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleLockAllPeriods(year)}
+                            disabled={!!actionLoading}
                           >
-                            {year.is_closed ? 'Ditutup' : 'Aktif'}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className="text-slate-600">
-                            {lockedCount}/{periods.length} terkunci
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-end gap-2">
-                            {!year.is_closed && lockedCount < periods.length && periods.length > 0 && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleLockAllPeriods(year)}
-                                disabled={!!actionLoading}
-                              >
-                                <Lock className="w-4 h-4 mr-1" />
-                                Kunci Semua
-                              </Button>
-                            )}
-                            {!year.is_closed && lockedCount === periods.length && periods.length > 0 && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCloseYear(year)}
-                                disabled={!!actionLoading}
-                              >
-                                <LockKeyhole className="w-4 h-4 mr-1" />
-                                Tutup Tahun
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      {expanded && periods.length > 0 && (
+                            <Lock className="w-4 h-4 mr-1" />
+                            Kunci Semua
+                          </Button>
+                        )}
+                        {!year.is_closed && lockedCount === periods.length && periods.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCloseYear(year)}
+                            disabled={!!actionLoading}
+                          >
+                            <LockKeyhole className="w-4 h-4 mr-1" />
+                            Tutup Tahun
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {expanded && periods.length > 0 && (
                         <tr className="bg-slate-50/50">
                           <td colSpan={8} className="p-0">
                             <div className="px-4 pb-4">
                               <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                                      <th className="py-2 pl-4 pr-3 text-left font-medium">Periode</th>
-                                      <th className="py-2 pr-3 text-left font-medium">Mulai</th>
-                                      <th className="py-2 pr-3 text-left font-medium">Selesai</th>
-                                      <th className="py-2 pr-3 text-left font-medium">Status</th>
-                                      <th className="py-2 pr-4 text-right font-medium">Aksi</th>
+                                <Table<AccountingPeriodItem>
+                                  columns={[
+                                    { id: 'periode', label: 'Periode', align: 'left' },
+                                    { id: 'mulai', label: 'Mulai', align: 'left' },
+                                    { id: 'selesai', label: 'Selesai', align: 'left' },
+                                    { id: 'status', label: 'Status', align: 'left' },
+                                    { id: 'aksi', label: 'Aksi', align: 'right' }
+                                  ] as TableColumn[]}
+                                  data={periods}
+                                  emptyMessage="Tidak ada periode"
+                                  renderRow={(p) => (
+                                    <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                                      <td className="py-2 pl-4 pr-3 font-medium">
+                                        {periodLabel(p)} (Periode {p.period_number})
+                                      </td>
+                                      <td className="py-2 pr-3">{formatDate(p.start_date)}</td>
+                                      <td className="py-2 pr-3">{formatDate(p.end_date)}</td>
+                                      <td className="py-2 pr-3">
+                                        {p.is_locked ? (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                            <Lock className="w-3 h-3" /> Terkunci
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                            <Unlock className="w-3 h-3" /> Terbuka
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 pr-4 text-right">
+                                        {year.is_closed ? (
+                                          <span className="text-slate-400 text-xs">Tahun ditutup</span>
+                                        ) : p.is_locked ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleUnlockPeriod(p)}
+                                            disabled={actionLoading === p.id}
+                                          >
+                                            <Unlock className="w-4 h-4 mr-1" />
+                                            Buka
+                                          </Button>
+                                        ) : (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleLockPeriod(p)}
+                                            disabled={actionLoading === p.id}
+                                          >
+                                            <Lock className="w-4 h-4 mr-1" />
+                                            Kunci
+                                          </Button>
+                                        )}
+                                      </td>
                                     </tr>
-                                  </thead>
-                                  <tbody>
-                                    {periods.map((p) => (
-                                      <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                                        <td className="py-2 pl-4 pr-3 font-medium">
-                                          {periodLabel(p)} (Periode {p.period_number})
-                                        </td>
-                                        <td className="py-2 pr-3">{formatDate(p.start_date)}</td>
-                                        <td className="py-2 pr-3">{formatDate(p.end_date)}</td>
-                                        <td className="py-2 pr-3">
-                                          {p.is_locked ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                              <Lock className="w-3 h-3" /> Terkunci
-                                            </span>
-                                          ) : (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                              <Unlock className="w-3 h-3" /> Terbuka
-                                            </span>
-                                          )}
-                                        </td>
-                                        <td className="py-2 pr-4 text-right">
-                                          {year.is_closed ? (
-                                            <span className="text-slate-400 text-xs">Tahun ditutup</span>
-                                          ) : p.is_locked ? (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => handleUnlockPeriod(p)}
-                                              disabled={actionLoading === p.id}
-                                            >
-                                              <Unlock className="w-4 h-4 mr-1" />
-                                              Buka
-                                            </Button>
-                                          ) : (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => handleLockPeriod(p)}
-                                              disabled={actionLoading === p.id}
-                                            >
-                                              <Lock className="w-4 h-4 mr-1" />
-                                              Kunci
-                                            </Button>
-                                          )}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                  )}
+                                />
                               </div>
                             </div>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </React.Fragment>
+              );
+            }}
+          />
         )}
       </Card>
 

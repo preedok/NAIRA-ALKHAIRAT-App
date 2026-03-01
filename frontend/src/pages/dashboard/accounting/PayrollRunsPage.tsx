@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { DollarSign, ChevronLeft, Plus, Settings, Users, FileText, Calendar } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
 import { accountingApi, branchesApi, type PayrollRunData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
@@ -20,7 +22,7 @@ const PayrollRunsPage: React.FC = () => {
   const [periodMonth, setPeriodMonth] = useState<number>(new Date().getMonth() + 1);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit, setLimit] = useState(20);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createBranchId, setCreateBranchId] = useState<string>('');
@@ -86,6 +88,16 @@ const PayrollRunsPage: React.FC = () => {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
 
+  const columns: TableColumn[] = [
+    { id: 'period', label: 'Periode', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'status', label: 'Status', align: 'left' },
+    { id: 'method', label: 'Metode', align: 'left' },
+    { id: 'total', label: 'Total', align: 'right' },
+    { id: 'created_by', label: 'Dibuat', align: 'left' },
+    { id: 'actions', label: 'Aksi', align: 'center' }
+  ];
+
   return (
     <div className="flex flex-col min-h-0 w-full max-w-full space-y-4">
       <div className="flex flex-wrap items-center gap-3 shrink-0">
@@ -126,55 +138,41 @@ const PayrollRunsPage: React.FC = () => {
         {loading ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <div className="overflow-x-auto overflow-y-auto min-h-0 flex-1">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-600">
-                  <th className="pb-2 pr-4">Periode</th>
-                  <th className="pb-2 pr-4">Cabang</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2 pr-4">Metode</th>
-                  <th className="pb-2 pr-4">Total</th>
-                  <th className="pb-2 pr-4">Dibuat</th>
-                  <th className="pb-2 pr-4 w-24">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 pr-4 font-medium">
-                      <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {MONTH_NAMES[run.period_month - 1]} {run.period_year}</span>
-                    </td>
-                    <td className="py-3 pr-4">{run.Branch ? `${run.Branch.code} - ${run.Branch.name}` : 'Global'}</td>
-                    <td className="py-3 pr-4">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusColor(run.status)}`}>
-                        {statusLabel(run.status)}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-4">{run.method === 'scheduled' ? 'Terjadwal' : 'Manual'}</td>
-                    <td className="py-3 pr-4">{formatIDR(run.total_amount || 0)}</td>
-                    <td className="py-3 pr-4 text-slate-600">{run.CreatedBy?.name || '-'}</td>
-                    <td className="py-3 pr-4">
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/dashboard/accounting/payroll/runs/${run.id}`)}>
-                        <FileText className="w-4 h-4 mr-1" /> Detail
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {runs.length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada run payroll</p>}
-          </div>
-        )}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-4 border-t border-slate-200 shrink-0">
-            <p className="text-sm text-slate-600">Total {pagination.total} run</p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
-              <span className="py-1 px-2 text-sm">Hal {page} / {pagination.totalPages}</span>
-              <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Selanjutnya</Button>
-            </div>
-          </div>
+          <Table<PayrollRunData>
+            columns={columns}
+            data={runs}
+            emptyMessage="Belum ada run payroll"
+            stickyActionsColumn
+            pagination={pagination && pagination.total > 0 ? {
+              total: pagination.total,
+              page: pagination.page,
+              limit: pagination.limit,
+              totalPages: pagination.totalPages,
+              onPageChange: setPage,
+              onLimitChange: (l) => { setLimit(l); setPage(1); }
+            } : undefined}
+            renderRow={(run) => (
+              <tr key={run.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <td className="py-3 px-4 font-medium">
+                  <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {MONTH_NAMES[run.period_month - 1]} {run.period_year}</span>
+                </td>
+                <td className="py-3 px-4">{run.Branch ? `${run.Branch.code} - ${run.Branch.name}` : 'Global'}</td>
+                <td className="py-3 px-4">
+                  <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusColor(run.status)}`}>
+                    {statusLabel(run.status)}
+                  </span>
+                </td>
+                <td className="py-3 px-4">{run.method === 'scheduled' ? 'Terjadwal' : 'Manual'}</td>
+                <td className="py-3 px-4 text-right">{formatIDR(run.total_amount || 0)}</td>
+                <td className="py-3 px-4 text-slate-600">{run.CreatedBy?.name || '-'}</td>
+                <td className="py-3 px-4">
+                  <Button variant="ghost" size="sm" onClick={() => navigate(`/dashboard/accounting/payroll/runs/${run.id}`)}>
+                    <FileText className="w-4 h-4 mr-1" /> Detail
+                  </Button>
+                </td>
+              </tr>
+            )}
+          />
         )}
       </Card>
 

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, RefreshCw, ChevronRight, Calculator, Trash2 } from 'lucide-react';
+import { Building2, Plus, RefreshCw, ChevronRight, Calculator } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import { Input, Autocomplete } from '../../../components/common';
 import { accountingApi, branchesApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -49,6 +51,24 @@ const AccurateAsetTetapPage: React.FC = () => {
   useEffect(() => {
     branchesApi.list({ limit: 500 }).then((r) => { if (r.data.success) setBranches(r.data.data || []); }).catch(() => {});
   }, []);
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const paginatedList = useMemo(() => {
+    const start = (page - 1) * limit;
+    return list.slice(start, start + limit);
+  }, [list, page, limit]);
+  const totalPages = Math.max(1, Math.ceil(list.length / limit));
+
+  const columns: TableColumn[] = [
+    { id: 'code', label: 'Kode', align: 'left' },
+    { id: 'name', label: 'Nama', align: 'left' },
+    { id: 'date', label: 'Tgl Beli', align: 'left' },
+    { id: 'cost', label: 'Nilai Beli', align: 'right' },
+    { id: 'residual', label: 'Residu', align: 'right' },
+    { id: 'years', label: 'Umur (th)', align: 'center' },
+    { id: 'actions', label: 'Aksi', align: 'center' }
+  ];
 
   const handleCreate = async () => {
     if (!form.asset_code.trim() || !form.asset_name.trim()) {
@@ -105,7 +125,9 @@ const AccurateAsetTetapPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2 text-sm text-slate-500">
-          <button type="button" onClick={() => navigate('/dashboard')} className="hover:text-slate-700">Dashboard</button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="text-slate-500 hover:text-slate-700">
+            Dashboard
+          </Button>
           <ChevronRight className="w-4 h-4" />
           <span className="text-slate-700 font-medium">Aset Tetap</span>
         </div>
@@ -126,44 +148,43 @@ const AccurateAsetTetapPage: React.FC = () => {
         ) : list.length === 0 ? (
           <div className="py-12 text-center text-slate-500">Belum ada aset. Klik Tambah Aset untuk menambah.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-max">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Kode</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Nama</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Tgl Beli</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Nilai Beli</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Residu</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Umur (th)</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Aksi</th>
+          <>
+            <Table
+              columns={columns}
+              data={paginatedList}
+              emptyMessage="Belum ada aset"
+              stickyActionsColumn
+              pagination={list.length > 0 ? {
+                total: list.length,
+                page,
+                limit,
+                totalPages,
+                onPageChange: setPage,
+                onLimitChange: (l) => { setLimit(l); setPage(1); }
+              } : undefined}
+              renderRow={(a) => (
+                <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                  <td className="py-3 px-4 font-mono font-medium">{a.asset_code}</td>
+                  <td className="py-3 px-4">{a.asset_name}</td>
+                  <td className="py-3 px-4 text-slate-600">{formatDate(a.purchase_date)}</td>
+                  <td className="py-3 px-4 text-right font-medium">{formatIDR(Number(a.acquisition_cost))}</td>
+                  <td className="py-3 px-4 text-right text-slate-600">{formatIDR(Number(a.residual_value))}</td>
+                  <td className="py-3 px-4 text-center">{a.useful_life_years}</td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openSchedule(a.id)} title="Lihat jadwal penyusutan">
+                        Lihat Jadwal
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleCalculateDepreciation(a.id)} disabled={depreciationAssetId === a.id} title="Hitung penyusutan">
+                        {depreciationAssetId === a.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+                        Hitung
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {list.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                    <td className="py-3 px-4 font-mono font-medium">{a.asset_code}</td>
-                    <td className="py-3 px-4">{a.asset_name}</td>
-                    <td className="py-3 px-4 text-slate-600">{formatDate(a.purchase_date)}</td>
-                    <td className="py-3 px-4 text-right font-medium">{formatIDR(Number(a.acquisition_cost))}</td>
-                    <td className="py-3 px-4 text-right text-slate-600">{formatIDR(Number(a.residual_value))}</td>
-                    <td className="py-3 px-4 text-center">{a.useful_life_years}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openSchedule(a.id)} title="Lihat jadwal penyusutan">
-                          Lihat Jadwal
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleCalculateDepreciation(a.id)} disabled={depreciationAssetId === a.id} title="Hitung penyusutan">
-                          {depreciationAssetId === a.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
-                          Hitung
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              )}
+            />
+          </>
         )}
       </Card>
 
@@ -198,25 +219,23 @@ const AccurateAsetTetapPage: React.FC = () => {
             {schedule.length === 0 ? (
               <p className="text-slate-500 text-sm">Belum ada jadwal. Klik &quot;Hitung&quot; di baris aset untuk menghasilkan jadwal.</p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="text-left py-2 px-3">Periode</th>
-                      <th className="text-right py-2 px-3">Penyusutan</th>
-                      <th className="text-right py-2 px-3">Akumulasi</th>
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <Table
+                  columns={[
+                    { id: 'periode', label: 'Periode', align: 'left' },
+                    { id: 'penyusutan', label: 'Penyusutan', align: 'right' },
+                    { id: 'akumulasi', label: 'Akumulasi', align: 'right' }
+                  ]}
+                  data={schedule}
+                  emptyMessage="Belum ada jadwal"
+                  renderRow={(row: any) => (
+                    <tr key={row.id} className="border-t border-slate-100">
+                      <td className="py-2 px-4">{row.period_label}</td>
+                      <td className="py-2 px-4 text-right">{formatIDR(Number(row.depreciation_amount))}</td>
+                      <td className="py-2 px-4 text-right">{formatIDR(Number(row.accumulated_depreciation))}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {schedule.map((row: any) => (
-                      <tr key={row.id} className="border-t border-slate-100">
-                        <td className="py-2 px-3">{row.period_label}</td>
-                        <td className="py-2 px-3 text-right">{formatIDR(Number(row.depreciation_amount))}</td>
-                        <td className="py-2 px-3 text-right">{formatIDR(Number(row.accumulated_depreciation))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  )}
+                />
               </div>
             )}
           </ModalBody>

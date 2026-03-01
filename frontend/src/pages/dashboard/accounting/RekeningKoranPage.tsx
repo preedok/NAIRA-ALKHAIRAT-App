@@ -7,6 +7,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalBox, ModalBoxLg } from '../../../components/common/Modal';
 import Table from '../../../components/common/Table';
+import TablePagination from '../../../components/common/TablePagination';
 import type { TableColumn } from '../../../types';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
@@ -46,6 +47,8 @@ const RekeningKoranPage: React.FC = () => {
   const [filterName, setFilterName] = useState('');
   const [filterPeriodFrom, setFilterPeriodFrom] = useState('');
   const [filterPeriodTo, setFilterPeriodTo] = useState('');
+  const [listPage, setListPage] = useState(1);
+  const [listLimit, setListLimit] = useState(25);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -63,6 +66,10 @@ const RekeningKoranPage: React.FC = () => {
   useEffect(() => {
     fetchList();
   }, [fetchList]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [filterName, filterPeriodFrom, filterPeriodTo]);
 
   useEffect(() => {
     if (!reconId) {
@@ -94,6 +101,12 @@ const RekeningKoranPage: React.FC = () => {
     }
     return list;
   }, [uploads, filterName, filterPeriodFrom, filterPeriodTo]);
+
+  const paginatedUploads = useMemo(() => {
+    const start = (listPage - 1) * listLimit;
+    return filteredUploads.slice(start, start + listLimit);
+  }, [filteredUploads, listPage, listLimit]);
+  const totalFiltered = filteredUploads.length;
 
   const totalLines = useMemo(() => uploads.reduce((s, u) => s + (u.line_count ?? 0), 0), [uploads]);
 
@@ -312,9 +325,10 @@ const RekeningKoranPage: React.FC = () => {
         ) : filteredUploads.length === 0 ? (
           <div className="py-12 text-center text-slate-500 px-4">{uploads.length === 0 ? 'Belum ada data rekening koran. Upload file Excel di atas.' : 'Tidak ada hasil sesuai filter.'}</div>
         ) : (
+          <>
           <Table
             columns={tableColumns}
-            data={filteredUploads}
+            data={paginatedUploads}
             emptyMessage="Tidak ada data"
             stickyActionsColumn
             renderRow={(u: BankStatementUploadItem) => (
@@ -340,6 +354,17 @@ const RekeningKoranPage: React.FC = () => {
               </tr>
             )}
           />
+          {totalFiltered > 0 && (
+            <TablePagination
+              total={totalFiltered}
+              page={listPage}
+              limit={listLimit}
+              onPageChange={setListPage}
+              onLimitChange={(l) => { setListLimit(l); setListPage(1); }}
+              limitOptions={[10, 25, 50, 100]}
+            />
+          )}
+        </>
         )}
       </Card>
 
@@ -355,9 +380,9 @@ const RekeningKoranPage: React.FC = () => {
                 {exportingReconId === reconId ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
                 {exportingReconId === reconId ? 'Mengunduh...' : 'Export ke Excel'}
               </Button>
-              <button type="button" onClick={() => setReconId(null)} className="p-2 rounded-lg hover:bg-slate-200 text-slate-600">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setReconId(null)} title="Tutup">
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
           </div>
           {loadingRecon ? (
@@ -390,27 +415,25 @@ const RekeningKoranPage: React.FC = () => {
               {recon.matched.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-700 mb-2">Yang cocok (tanggal + nominal)</h3>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-sm min-w-max">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="text-left py-2 px-3 whitespace-nowrap">Tgl</th>
-                          <th className="text-right py-2 px-3 whitespace-nowrap">Nominal</th>
-                          <th className="text-left py-2 px-3 whitespace-nowrap">Invoice / Payer</th>
-                          <th className="text-left py-2 px-3 whitespace-nowrap">Keterangan bank</th>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <Table
+                      columns={[
+                        { id: 'tgl', label: 'Tgl', align: 'left' },
+                        { id: 'nominal', label: 'Nominal', align: 'right' },
+                        { id: 'invoice', label: 'Invoice / Payer', align: 'left' },
+                        { id: 'keterangan', label: 'Keterangan bank', align: 'left' }
+                      ]}
+                      data={recon.matched}
+                      emptyMessage="Tidak ada yang cocok"
+                      renderRow={(m, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="py-2 px-4 whitespace-nowrap">{formatDate(m.recorded.transfer_date)}</td>
+                          <td className="py-2 px-4 text-right font-medium">{formatIDR(m.recorded.amount)}</td>
+                          <td className="py-2 px-4">{m.recorded.invoice_number || m.recorded.payer || '–'}</td>
+                          <td className="py-2 px-4 text-slate-600 truncate max-w-[200px]">{m.bankLine.description || '–'}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {recon.matched.map((m, i) => (
-                          <tr key={i} className="border-t border-slate-100">
-                            <td className="py-2 px-3 whitespace-nowrap">{formatDate(m.recorded.transfer_date)}</td>
-                            <td className="py-2 px-3 text-right font-medium">{formatIDR(m.recorded.amount)}</td>
-                            <td className="py-2 px-3">{m.recorded.invoice_number || m.recorded.payer || '–'}</td>
-                            <td className="py-2 px-3 text-slate-600 truncate max-w-[200px]">{m.bankLine.description || '–'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                      )}
+                    />
                   </div>
                 </div>
               )}
@@ -419,55 +442,43 @@ const RekeningKoranPage: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-semibold text-amber-800 mb-2">Penerimaan hanya di sistem ({recon.onlyInRecorded.length})</h3>
                   <div className="rounded-xl border border-amber-200 bg-amber-50/50 max-h-[320px] overflow-y-auto">
-                    {recon.onlyInRecorded.length === 0 ? (
-                      <p className="p-4 text-sm text-slate-500">Tidak ada</p>
-                    ) : (
-                      <table className="w-full text-sm">
-                        <thead className="bg-amber-100/80 sticky top-0">
-                          <tr>
-                            <th className="text-left py-2 px-3">Tgl</th>
-                            <th className="text-right py-2 px-3">Nominal</th>
-                            <th className="text-left py-2 px-3">Invoice / Payer</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recon.onlyInRecorded.map((r) => (
-                            <tr key={r.id} className="border-t border-amber-200/50">
-                              <td className="py-2 px-3">{formatDate(r.transfer_date)}</td>
-                              <td className="py-2 px-3 text-right font-medium">{formatIDR(r.amount)}</td>
-                              <td className="py-2 px-3">{r.invoice_number || r.payer || '–'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                    <Table
+                      columns={[
+                        { id: 'tgl', label: 'Tgl', align: 'left' },
+                        { id: 'nominal', label: 'Nominal', align: 'right' },
+                        { id: 'invoice', label: 'Invoice / Payer', align: 'left' }
+                      ]}
+                      data={recon.onlyInRecorded}
+                      emptyMessage="Tidak ada"
+                      renderRow={(r) => (
+                        <tr key={r.id} className="border-t border-amber-200/50">
+                          <td className="py-2 px-4">{formatDate(r.transfer_date)}</td>
+                          <td className="py-2 px-4 text-right font-medium">{formatIDR(r.amount)}</td>
+                          <td className="py-2 px-4">{r.invoice_number || r.payer || '–'}</td>
+                        </tr>
+                      )}
+                    />
                   </div>
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-sky-800 mb-2">Transaksi hanya di bank ({recon.onlyInBank.length})</h3>
                   <div className="rounded-xl border border-sky-200 bg-sky-50/50 max-h-[320px] overflow-y-auto">
-                    {recon.onlyInBank.length === 0 ? (
-                      <p className="p-4 text-sm text-slate-500">Tidak ada</p>
-                    ) : (
-                      <table className="w-full text-sm">
-                        <thead className="bg-sky-100/80 sticky top-0">
-                          <tr>
-                            <th className="text-left py-2 px-3">Tgl</th>
-                            <th className="text-right py-2 px-3">Kredit</th>
-                            <th className="text-left py-2 px-3">Keterangan</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recon.onlyInBank.map((b: BankStatementLineItem) => (
-                            <tr key={b.id} className="border-t border-sky-200/50">
-                              <td className="py-2 px-3">{formatDate(b.transaction_date)}</td>
-                              <td className="py-2 px-3 text-right font-medium">{formatIDR(Number(b.amount))}</td>
-                              <td className="py-2 px-3 text-slate-600 truncate max-w-[200px]">{b.description || '–'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                    <Table
+                      columns={[
+                        { id: 'tgl', label: 'Tgl', align: 'left' },
+                        { id: 'kredit', label: 'Kredit', align: 'right' },
+                        { id: 'keterangan', label: 'Keterangan', align: 'left' }
+                      ]}
+                      data={recon.onlyInBank}
+                      emptyMessage="Tidak ada"
+                      renderRow={(b: BankStatementLineItem) => (
+                        <tr key={b.id} className="border-t border-sky-200/50">
+                          <td className="py-2 px-4">{formatDate(b.transaction_date)}</td>
+                          <td className="py-2 px-4 text-right font-medium">{formatIDR(Number(b.amount))}</td>
+                          <td className="py-2 px-4 text-slate-600 truncate max-w-[200px]">{b.description || '–'}</td>
+                        </tr>
+                      )}
+                    />
                   </div>
                 </div>
               </div>
@@ -493,33 +504,31 @@ const RekeningKoranPage: React.FC = () => {
                 <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
               </div>
             ) : detailUpload ? (
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-sm min-w-max">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="text-left py-2 px-3 whitespace-nowrap">No</th>
-                      <th className="text-left py-2 px-3 whitespace-nowrap">Tanggal</th>
-                      <th className="text-left py-2 px-3 whitespace-nowrap">Keterangan</th>
-                      <th className="text-left py-2 px-3 whitespace-nowrap">No Ref</th>
-                      <th className="text-right py-2 px-3 whitespace-nowrap">Debit</th>
-                      <th className="text-right py-2 px-3 whitespace-nowrap">Kredit</th>
-                      <th className="text-right py-2 px-3 whitespace-nowrap">Saldo</th>
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <Table
+                  columns={[
+                    { id: 'no', label: 'No', align: 'left' },
+                    { id: 'tanggal', label: 'Tanggal', align: 'left' },
+                    { id: 'keterangan', label: 'Keterangan', align: 'left' },
+                    { id: 'ref', label: 'No Ref', align: 'left' },
+                    { id: 'debit', label: 'Debit', align: 'right' },
+                    { id: 'kredit', label: 'Kredit', align: 'right' },
+                    { id: 'saldo', label: 'Saldo', align: 'right' }
+                  ]}
+                  data={detailUpload.Lines || []}
+                  emptyMessage="Tidak ada transaksi"
+                  renderRow={(line: BankStatementLineItem, idx: number) => (
+                    <tr key={line.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                      <td className="py-2 px-4 tabular-nums">{idx + 1}</td>
+                      <td className="py-2 px-4 whitespace-nowrap">{formatDate(line.transaction_date)}</td>
+                      <td className="py-2 px-4 text-slate-700 max-w-[280px] truncate" title={line.description || ''}>{line.description || '–'}</td>
+                      <td className="py-2 px-4 text-slate-600">{line.reference_number || '–'}</td>
+                      <td className="py-2 px-4 text-right tabular-nums">{Number(line.amount_debit) > 0 ? formatIDR(Number(line.amount_debit)) : '–'}</td>
+                      <td className="py-2 px-4 text-right tabular-nums font-medium">{Number(line.amount_credit) > 0 ? formatIDR(Number(line.amount_credit)) : '–'}</td>
+                      <td className="py-2 px-4 text-right tabular-nums text-slate-600">{line.balance_after != null ? formatIDR(Number(line.balance_after)) : '–'}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {(detailUpload.Lines || []).map((line: BankStatementLineItem, idx: number) => (
-                      <tr key={line.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className="py-2 px-3 tabular-nums">{idx + 1}</td>
-                        <td className="py-2 px-3 whitespace-nowrap">{formatDate(line.transaction_date)}</td>
-                        <td className="py-2 px-3 text-slate-700 max-w-[280px] truncate" title={line.description || ''}>{line.description || '–'}</td>
-                        <td className="py-2 px-3 text-slate-600">{line.reference_number || '–'}</td>
-                        <td className="py-2 px-3 text-right tabular-nums">{Number(line.amount_debit) > 0 ? formatIDR(Number(line.amount_debit)) : '–'}</td>
-                        <td className="py-2 px-3 text-right tabular-nums font-medium">{Number(line.amount_credit) > 0 ? formatIDR(Number(line.amount_credit)) : '–'}</td>
-                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{line.balance_after != null ? formatIDR(Number(line.balance_after)) : '–'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  )}
+                />
               </div>
             ) : (
               <div className="py-12 text-center text-slate-500">Data tidak tersedia.</div>

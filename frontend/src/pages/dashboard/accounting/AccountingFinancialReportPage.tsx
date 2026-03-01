@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Package, List, ExternalLink, TrendingUp, TrendingDown, Search, Calendar, MapPin, Map, ArrowUpDown, ArrowUp, ArrowDown, Receipt } from 'lucide-react';
+import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Package, List, ExternalLink, TrendingUp, TrendingDown, Search, Calendar, MapPin, Map, Receipt, DollarSign } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, Input, Autocomplete } from '../../../components/common';
-import TablePagination from '../../../components/common/TablePagination';
-import { accountingApi, branchesApi, type AccountingFinancialReportData } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { StatCard, CardSectionHeader, Input, Autocomplete } from '../../../components/common';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
+import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
+import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import { formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
@@ -74,14 +74,60 @@ const sortAndPaginate = <T extends Record<string, unknown>>(
   return { rows, total, totalPages: Math.max(1, Math.ceil(total / limit)) };
 };
 
-const SortableTh: React.FC<{ label: string; sortKey: SortKey; currentSort: SortKey; sortOrder: 'asc' | 'desc'; onClick: () => void }> = ({ label, sortKey, currentSort, sortOrder, onClick }) => (
-  <th className="pb-2 pr-4 cursor-pointer hover:bg-slate-100 select-none" onClick={onClick}>
-    <span className="flex items-center gap-1">
-      {label}
-      {currentSort === sortKey ? (sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />}
-    </span>
-  </th>
-);
+const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
+  wilayah: [
+    { id: 'no', label: 'No', align: 'left' },
+    { id: 'name', label: 'Wilayah', align: 'left' },
+    { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
+    { id: 'pct', label: '%', align: 'right' },
+    { id: 'count', label: 'Invoice', align: 'right' }
+  ],
+  provinsi: [
+    { id: 'no', label: 'No', align: 'left' },
+    { id: 'name', label: 'Provinsi', align: 'left' },
+    { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
+    { id: 'pct', label: '%', align: 'right' },
+    { id: 'count', label: 'Invoice', align: 'right' }
+  ],
+  cabang: [
+    { id: 'no', label: 'No', align: 'left' },
+    { id: 'name', label: 'Cabang', align: 'left' },
+    { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
+    { id: 'pct', label: '%', align: 'right' },
+    { id: 'count', label: 'Invoice', align: 'right' }
+  ],
+  owner: [
+    { id: 'no', label: 'No', align: 'left' },
+    { id: 'name', label: 'Owner / Partner', align: 'left' },
+    { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
+    { id: 'pct', label: '%', align: 'right' },
+    { id: 'count', label: 'Invoice', align: 'right' }
+  ],
+  produk: [
+    { id: 'no', label: 'No', align: 'left' },
+    { id: 'name', label: 'Jenis Produk', align: 'left' },
+    { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
+    { id: 'pct', label: '%', align: 'right' }
+  ],
+  periode: [
+    { id: 'no', label: 'No', align: 'left' },
+    { id: 'name', label: 'Periode', align: 'left' },
+    { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
+    { id: 'pct', label: '%', align: 'right' },
+    { id: 'count', label: 'Invoice', align: 'right' }
+  ],
+  detail: [
+    { id: 'invoice', label: 'Invoice', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'cabang', label: 'Cabang', align: 'left' },
+    { id: 'total', label: 'Total (IDR · SAR · USD)', align: 'right' },
+    { id: 'dibayar', label: 'Dibayar (IDR · SAR · USD)', align: 'right' },
+    { id: 'sisa', label: 'Sisa (IDR · SAR · USD)', align: 'right' },
+    { id: 'status', label: 'Status Invoice', align: 'left' },
+    { id: 'tanggal', label: 'Tanggal', align: 'left' },
+    { id: 'aksi', label: '', align: 'center' }
+  ]
+};
 
 const AccountingFinancialReportPage: React.FC = () => {
   const navigate = useNavigate();
@@ -89,6 +135,7 @@ const AccountingFinancialReportPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year' | 'custom'>('month');
   const [year, setYear] = useState(new Date().getFullYear());
+  const [datePresetId, setDatePresetId] = useState('');
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -109,7 +156,6 @@ const AccountingFinancialReportPage: React.FC = () => {
   const [provinsiList, setProvinsiList] = useState<{ id: string; name: string; wilayah_id?: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
   const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTab>('ringkasan');
   const [exporting, setExporting] = useState<string | null>(null);
   const [tablePage, setTablePage] = useState(1);
@@ -117,6 +163,23 @@ const AccountingFinancialReportPage: React.FC = () => {
   const [tableSortKey, setTableSortKey] = useState<SortKey>('revenue');
   const [tableSortOrder, setTableSortOrder] = useState<'asc' | 'desc'>('desc');
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
+
+  useEffect(() => {
+    businessRulesApi.get({}).then((res) => {
+      const cr = res.data?.data?.currency_rates;
+      if (cr) {
+        try {
+          const rates = typeof cr === 'string' ? JSON.parse(cr) : cr;
+          setCurrencyRates({ SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 });
+        } catch { /* keep default */ }
+      }
+    }).catch(() => { /* keep default */ });
+  }, []);
+
+  const sarToIdr = currencyRates.SAR_TO_IDR ?? 4200;
+  const usdToIdr = currencyRates.USD_TO_IDR ?? 15500;
+  const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdr, usd: idr / usdToIdr });
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number> = {};
@@ -208,6 +271,7 @@ const AccountingFinancialReportPage: React.FC = () => {
   }, [fetchReport]);
 
   const applyPreset = (preset: typeof DATE_PRESETS[0]) => {
+    setDatePresetId(preset.id);
     const v = preset.getValue();
     if ('period' in v) setPeriod(v.period);
     if ('dateFrom' in v) setDateFrom(v.dateFrom);
@@ -264,6 +328,7 @@ const AccountingFinancialReportPage: React.FC = () => {
   };
 
   const resetFilters = () => {
+    setDatePresetId('');
     setPeriod('month');
     setYear(new Date().getFullYear());
     setMonth(new Date().getMonth() + 1);
@@ -305,7 +370,7 @@ const AccountingFinancialReportPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Laporan Keuangan"
         subtitle="Pendapatan per wilayah, provinsi, cabang, owner, dan jenis produk"
@@ -315,7 +380,6 @@ const AccountingFinancialReportPage: React.FC = () => {
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
             <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={loading || !!exporting}>
               <Download className={`w-4 h-4 mr-2 ${exporting === 'excel' ? 'animate-pulse' : ''}`} />
               {exporting === 'excel' ? 'Exporting...' : 'Excel'}
@@ -327,147 +391,6 @@ const AccountingFinancialReportPage: React.FC = () => {
           </div>
         }
       />
-
-      <PageFilter
-        open={showFilters}
-        onToggle={() => setShowFilters((v: boolean) => !v)}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchReport(); }}
-        loading={loading}
-        applyLabel="Terapkan"
-        hideToggleRow
-      >
-          <div className="flex flex-wrap gap-2 mb-4">
-            {DATE_PRESETS.map((p) => (
-              <button key={p.id} type="button" onClick={() => applyPreset(p)} className="px-3 py-1.5 text-sm rounded-lg bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300">
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            <Autocomplete
-              label="Wilayah"
-              value={wilayahId}
-              onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
-              options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
-              emptyLabel="Semua wilayah"
-            />
-            <Autocomplete
-              label="Provinsi"
-              value={provinsiId}
-              onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
-              options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))}
-              emptyLabel="Semua provinsi"
-            />
-            <Autocomplete
-              label="Cabang"
-              value={branchId}
-              onChange={setBranchId}
-              options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
-              emptyLabel="Semua cabang"
-            />
-            <Autocomplete
-              label="Owner"
-              value={ownerId}
-              onChange={setOwnerId}
-              options={owners.map((o) => ({ value: o.id, label: o.name }))}
-              emptyLabel="Semua owner"
-            />
-            <Autocomplete
-              label="Status Invoice"
-              value={status}
-              onChange={setStatus}
-              options={Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-              emptyLabel="Semua status"
-            />
-            <Autocomplete
-              label="Jenis Produk"
-              value={productType}
-              onChange={setProductType}
-              options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-              emptyLabel="Semua produk"
-            />
-            <div className="sm:col-span-2">
-              <Input
-                label="Cari (Invoice / Order / Owner)"
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="No. invoice atau nama owner..."
-                icon={<Search className="w-4 h-4" />}
-              />
-            </div>
-            <Input
-              label="Min. Pendapatan (Rp)"
-              type="number"
-              value={minAmount}
-              onChange={(e) => setMinAmount(e.target.value)}
-              placeholder="0"
-              min={0}
-            />
-            <Input
-              label="Maks. Pendapatan (Rp)"
-              type="number"
-              value={maxAmount}
-              onChange={(e) => setMaxAmount(e.target.value)}
-              placeholder="0"
-              min={0}
-            />
-            <Autocomplete
-              label="Jenis Periode"
-              value={period}
-              onChange={(v) => setPeriod(v as typeof period)}
-              options={[
-                { value: 'month', label: 'Bulanan' },
-                { value: 'quarter', label: 'Triwulanan' },
-                { value: 'year', label: 'Tahunan' },
-                { value: 'custom', label: 'Rentang Tanggal' }
-              ]}
-            />
-            {period !== 'custom' ? (
-              <>
-                <Input
-                  label="Tahun"
-                  type="number"
-                  value={String(year)}
-                  onChange={(e) => setYear(parseInt(e.target.value, 10) || year)}
-                  min={2020}
-                  max={2030}
-                />
-                {period === 'month' && (
-                  <Autocomplete
-                    label="Bulan"
-                    value={String(month)}
-                    onChange={(v) => setMonth(parseInt(v, 10))}
-                    options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => ({
-                      value: String(m),
-                      label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' })
-                    }))}
-                  />
-                )}
-                {period === 'quarter' && (
-                  <Autocomplete
-                    label="Triwulan"
-                    value={String(Math.ceil(month / 3))}
-                    onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)}
-                    options={[
-                      { value: '1', label: 'Q1 (Jan–Mar)' },
-                      { value: '2', label: 'Q2 (Apr–Jun)' },
-                      { value: '3', label: 'Q3 (Jul–Sep)' },
-                      { value: '4', label: 'Q4 (Okt–Des)' }
-                    ]}
-                  />
-                )}
-              </>
-            ) : (
-              <>
-                <Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                <Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-              </>
-            )}
-          </div>
-      </PageFilter>
 
       {loading && !data && <div className="text-center py-12 text-slate-500">Memuat...</div>}
 
@@ -491,22 +414,45 @@ const AccountingFinancialReportPage: React.FC = () => {
 
       {data && (
         <>
-          <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+          <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-1.5">
             {tabs.map((tab) => (
-              <button key={tab.id} onClick={() => { setActiveTab(tab.id); setTablePage(1); }} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              <Button
+                key={tab.id}
+                type="button"
+                variant={activeTab === tab.id ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => { setActiveTab(tab.id); setTablePage(1); }}
+                className={activeTab === tab.id ? '' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}
+              >
                 {tab.icon}
                 {tab.label}
-              </button>
+              </Button>
             ))}
           </div>
 
           {activeTab === 'ringkasan' && (
-            <div className="space-y-6">
-              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <StatCard icon={<FileText className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle="Dari pembayaran terverifikasi" />
+            <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Ringkasan" subtitle="Periode & scope ringkasan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+                <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
+                <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
+                <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+                <Autocomplete label="Owner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name }))} emptyLabel="Semua owner" />
+                <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua status" />
+                <Autocomplete label="Jenis Produk" value={productType} onChange={setProductType} options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua produk" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={data.total_revenue > 0 ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ≈ ${formatUSD(data.total_revenue / usdToIdr, false)}` : 'Dari pembayaran terverifikasi'} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={data.invoice_count} subtitle="Dalam periode laporan" />
+                <StatCard icon={data.invoice_count > 0 ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />} label="Rata-rata per Invoice" value={data.invoice_count > 0 ? formatIDR(data.total_revenue / data.invoice_count) : '–'} subtitle={data.invoice_count > 0 ? `≈ ${formatSAR((data.total_revenue / data.invoice_count) / sarToIdr, false)} · ≈ ${formatUSD((data.total_revenue / data.invoice_count) / usdToIdr, false)}` : undefined} />
                 <StatCard icon={<Calendar className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} />
+                <StatCard icon={<MapPin className="w-5 h-5" />} label="Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
+                <StatCard icon={<Map className="w-5 h-5" />} label="Provinsi" value={(data.by_provinsi || []).length} subtitle="Provinsi dengan transaksi" />
                 <StatCard icon={<Building2 className="w-5 h-5" />} label="Cabang" value={data.by_branch.length} subtitle="Cabang dengan transaksi" />
+                <StatCard icon={<Users className="w-5 h-5" />} label="Owner" value={(data.by_owner || []).length} subtitle="Owner dengan transaksi" />
                 {prevPeriod && (
                   <StatCard
                     icon={prevPeriod.growth_percent != null && parseFloat(prevPeriod.growth_percent) >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
@@ -516,242 +462,373 @@ const AccountingFinancialReportPage: React.FC = () => {
                   />
                 )}
               </div>
-            </div>
+            </Card>
           )}
 
           {activeTab === 'wilayah' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><MapPin className="w-5 h-5 text-emerald-600" /> Pendapatan per Wilayah</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No</th>
-                    <SortableTh label="Wilayah" sortKey="name" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('name'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <SortableTh label="Pendapatan" sortKey="revenue" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('revenue'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <th className="pb-2 pr-4 text-right">%</th>
-                    <SortableTh label="Invoice" sortKey="count" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('count'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                  </tr></thead>
-                  <tbody>
-                    {sortAndPaginate(data.by_wilayah || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'wilayah_name', revenueKey: 'revenue' }).rows.map((row, idx) => (
-                      <tr key={row.wilayah_id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                        <td className="py-3 pr-4 font-medium">{row.wilayah_name || row.wilayah_id || 'Lainnya'}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(row.revenue)}</td>
-                        <td className="py-3 pr-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
-                        <td className="py-3 pr-4 text-right">{row.invoice_count ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<MapPin className="w-5 h-5" />} label="Jumlah Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_wilayah || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_wilayah || []).reduce((s, w) => s + (w.invoice_count ?? 0), 0)} subtitle="Seluruh wilayah" />
+                {(data.by_wilayah || []).length > 0 && (() => {
+                  const top = [...(data.by_wilayah || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Wilayah Tertinggi" value={top?.wilayah_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                })()}
               </div>
-              {(data.by_wilayah || []).length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {(data.by_wilayah || []).length > 0 && (
-                <TablePagination total={(data.by_wilayah || []).length} page={tablePage} limit={tableLimit} onPageChange={setTablePage} onLimitChange={(l) => { setTableLimit(l); setTablePage(1); }} loading={loading} />
-              )}
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Wilayah" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+              </div>
+              <CardSectionHeader
+                icon={<MapPin className="w-6 h-6" />}
+                title="Pendapatan per Wilayah"
+                subtitle={`${(data.by_wilayah || []).length} wilayah`}
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.wilayah}
+                data={sortAndPaginate(data.by_wilayah || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'wilayah_name', revenueKey: 'revenue' }).rows}
+                emptyMessage="Belum ada data"
+                pagination={(data.by_wilayah || []).length > 0 ? {
+                  total: (data.by_wilayah || []).length,
+                  page: tablePage,
+                  limit: tableLimit,
+                  totalPages: Math.max(1, Math.ceil((data.by_wilayah || []).length / tableLimit)),
+                  onPageChange: setTablePage,
+                  onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
+                } : undefined}
+                renderRow={(row, idx) => (
+                      <tr key={row.wilayah_id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                    <td className="py-3 px-4 font-medium">{row.wilayah_name || row.wilayah_id || 'Lainnya'}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(row.revenue)}</div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                      </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
 
           {activeTab === 'provinsi' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Map className="w-5 h-5 text-emerald-600" /> Pendapatan per Provinsi</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No</th>
-                    <SortableTh label="Provinsi" sortKey="name" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('name'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <SortableTh label="Pendapatan" sortKey="revenue" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('revenue'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <th className="pb-2 pr-4 text-right">%</th>
-                    <SortableTh label="Invoice" sortKey="count" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('count'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                  </tr></thead>
-                  <tbody>
-                    {sortAndPaginate(data.by_provinsi || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'provinsi_name', revenueKey: 'revenue' }).rows.map((row, idx) => (
-                      <tr key={row.provinsi_id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                        <td className="py-3 pr-4 font-medium">{row.provinsi_name || row.provinsi_id || 'Lainnya'}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(row.revenue)}</td>
-                        <td className="py-3 pr-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
-                        <td className="py-3 pr-4 text-right">{row.invoice_count ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<Map className="w-5 h-5" />} label="Jumlah Provinsi" value={(data.by_provinsi || []).length} subtitle="Provinsi dengan transaksi" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_provinsi || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_provinsi || []).reduce((s, p) => s + (p.invoice_count ?? 0), 0)} subtitle="Seluruh provinsi" />
+                {(data.by_provinsi || []).length > 0 && (() => {
+                  const top = [...(data.by_provinsi || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Provinsi Tertinggi" value={top?.provinsi_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                })()}
               </div>
-              {(data.by_provinsi || []).length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {(data.by_provinsi || []).length > 0 && (
-                <TablePagination total={(data.by_provinsi || []).length} page={tablePage} limit={tableLimit} onPageChange={setTablePage} onLimitChange={(l) => { setTableLimit(l); setTablePage(1); }} loading={loading} />
-              )}
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Provinsi" subtitle="Periode & wilayah" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+                <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
+              </div>
+              <CardSectionHeader
+                icon={<Map className="w-6 h-6" />}
+                title="Pendapatan per Provinsi"
+                subtitle={`${(data.by_provinsi || []).length} provinsi`}
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.provinsi}
+                data={sortAndPaginate(data.by_provinsi || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'provinsi_name', revenueKey: 'revenue' }).rows}
+                emptyMessage="Belum ada data"
+                pagination={(data.by_provinsi || []).length > 0 ? {
+                  total: (data.by_provinsi || []).length,
+                  page: tablePage,
+                  limit: tableLimit,
+                  totalPages: Math.max(1, Math.ceil((data.by_provinsi || []).length / tableLimit)),
+                  onPageChange: setTablePage,
+                  onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
+                } : undefined}
+                renderRow={(row, idx) => (
+                      <tr key={row.provinsi_id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                    <td className="py-3 px-4 font-medium">{row.provinsi_name || row.provinsi_id || 'Lainnya'}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(row.revenue)}</div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                      </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
 
           {activeTab === 'cabang' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Building2 className="w-5 h-5 text-emerald-600" /> Pendapatan per Cabang</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No</th>
-                    <SortableTh label="Cabang" sortKey="name" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('name'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <SortableTh label="Pendapatan" sortKey="revenue" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('revenue'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <th className="pb-2 pr-4 text-right">%</th>
-                    <SortableTh label="Invoice" sortKey="count" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('count'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                  </tr></thead>
-                  <tbody>
-                    {sortAndPaginate(data.by_branch || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'branch_name', revenueKey: 'revenue' }).rows.map((row, idx) => (
-                      <tr key={row.branch_id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                        <td className="py-3 pr-4 font-medium">{row.branch_name || row.branch_id || 'Lainnya'}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(row.revenue)}</td>
-                        <td className="py-3 pr-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
-                        <td className="py-3 pr-4 text-right">{row.invoice_count ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<Building2 className="w-5 h-5" />} label="Jumlah Cabang" value={data.by_branch.length} subtitle="Cabang dengan transaksi" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={data.by_branch.length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={data.by_branch.reduce((s, b) => s + (b.invoice_count ?? 0), 0)} subtitle="Seluruh cabang" />
+                {data.by_branch.length > 0 && (() => {
+                  const top = [...data.by_branch].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Cabang Tertinggi" value={top?.branch_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                })()}
               </div>
-              {(data.by_branch || []).length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {(data.by_branch || []).length > 0 && (
-                <TablePagination total={(data.by_branch || []).length} page={tablePage} limit={tableLimit} onPageChange={setTablePage} onLimitChange={(l) => { setTableLimit(l); setTablePage(1); }} loading={loading} />
-              )}
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Cabang" subtitle="Periode & wilayah/provinsi" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+                <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
+                <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
+              </div>
+              <CardSectionHeader
+                icon={<Building2 className="w-6 h-6" />}
+                title="Pendapatan per Cabang"
+                subtitle={`${(data.by_branch || []).length} cabang`}
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.cabang}
+                data={sortAndPaginate(data.by_branch || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'branch_name', revenueKey: 'revenue' }).rows}
+                emptyMessage="Belum ada data"
+                pagination={(data.by_branch || []).length > 0 ? {
+                  total: (data.by_branch || []).length,
+                  page: tablePage,
+                  limit: tableLimit,
+                  totalPages: Math.max(1, Math.ceil((data.by_branch || []).length / tableLimit)),
+                  onPageChange: setTablePage,
+                  onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
+                } : undefined}
+                renderRow={(row, idx) => (
+                      <tr key={row.branch_id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                    <td className="py-3 px-4 font-medium">{row.branch_name || row.branch_id || 'Lainnya'}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(row.revenue)}</div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                      </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
 
           {activeTab === 'owner' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-emerald-600" /> Pendapatan per Owner</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No</th>
-                    <SortableTh label="Owner / Partner" sortKey="name" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('name'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <SortableTh label="Pendapatan" sortKey="revenue" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('revenue'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <th className="pb-2 pr-4 text-right">%</th>
-                    <SortableTh label="Invoice" sortKey="count" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('count'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                  </tr></thead>
-                  <tbody>
-                    {sortAndPaginate(data.by_owner || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'owner_name', revenueKey: 'revenue' }).rows.map((row, idx) => (
-                      <tr key={row.owner_id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                        <td className="py-3 pr-4 font-medium">{row.owner_name || row.owner_id || 'Lainnya'}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(row.revenue)}</td>
-                        <td className="py-3 pr-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
-                        <td className="py-3 pr-4 text-right">{row.invoice_count ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<Users className="w-5 h-5" />} label="Jumlah Owner" value={(data.by_owner || []).length} subtitle="Owner dengan transaksi" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_owner || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_owner || []).reduce((s, o) => s + (o.invoice_count ?? 0), 0)} subtitle="Seluruh owner" />
+                {(data.by_owner || []).length > 0 && (() => {
+                  const top = [...(data.by_owner || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Owner Tertinggi" value={top?.owner_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                })()}
               </div>
-              {(data.by_owner || []).length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {(data.by_owner || []).length > 0 && (
-                <TablePagination total={(data.by_owner || []).length} page={tablePage} limit={tableLimit} onPageChange={setTablePage} onLimitChange={(l) => { setTableLimit(l); setTablePage(1); }} loading={loading} />
-              )}
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Owner" subtitle="Periode & scope cabang" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+                <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
+                <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
+                <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+              </div>
+              <CardSectionHeader
+                icon={<Users className="w-6 h-6" />}
+                title="Pendapatan per Owner"
+                subtitle={`${(data.by_owner || []).length} owner`}
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.owner}
+                data={sortAndPaginate(data.by_owner || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'owner_name', revenueKey: 'revenue' }).rows}
+                emptyMessage="Belum ada data"
+                pagination={(data.by_owner || []).length > 0 ? {
+                  total: (data.by_owner || []).length,
+                  page: tablePage,
+                  limit: tableLimit,
+                  totalPages: Math.max(1, Math.ceil((data.by_owner || []).length / tableLimit)),
+                  onPageChange: setTablePage,
+                  onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
+                } : undefined}
+                renderRow={(row, idx) => (
+                      <tr key={row.owner_id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                    <td className="py-3 px-4 font-medium">{row.owner_name || row.owner_id || 'Lainnya'}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(row.revenue)}</div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                      </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
 
           {activeTab === 'produk' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Package className="w-5 h-5 text-emerald-600" /> Pendapatan per Jenis Produk</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No</th>
-                    <SortableTh label="Jenis Produk" sortKey="name" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('name'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <SortableTh label="Pendapatan" sortKey="revenue" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('revenue'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <th className="pb-2 pr-4 text-right">%</th>
-                  </tr></thead>
-                  <tbody>
-                    {sortAndPaginate(data.by_product_type || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'type', revenueKey: 'revenue' }).rows.map((row, idx) => (
-                      <tr key={row.type} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                        <td className="py-3 pr-4 font-medium">{PRODUCT_TYPE_LABELS[row.type] || row.type}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(row.revenue)}</td>
-                        <td className="py-3 pr-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<Package className="w-5 h-5" />} label="Jenis Produk" value={(data.by_product_type || []).length} subtitle="Jenis dengan transaksi" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_product_type || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                {(data.by_product_type || []).length > 0 && (() => {
+                  const top = [...(data.by_product_type || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Produk Tertinggi" value={top ? (PRODUCT_TYPE_LABELS[top.type] || top.type) : '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                })()}
               </div>
-              {(data.by_product_type || []).length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {(data.by_product_type || []).length > 0 && (
-                <TablePagination total={(data.by_product_type || []).length} page={tablePage} limit={tableLimit} onPageChange={setTablePage} onLimitChange={(l) => { setTableLimit(l); setTablePage(1); }} loading={loading} />
-              )}
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Produk" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+              </div>
+              <CardSectionHeader
+                icon={<Package className="w-6 h-6" />}
+                title="Pendapatan per Jenis Produk"
+                subtitle={`${(data.by_product_type || []).length} jenis produk`}
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.produk}
+                data={sortAndPaginate(data.by_product_type || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'type', revenueKey: 'revenue' }).rows}
+                emptyMessage="Belum ada data"
+                pagination={(data.by_product_type || []).length > 0 ? {
+                  total: (data.by_product_type || []).length,
+                  page: tablePage,
+                  limit: tableLimit,
+                  totalPages: Math.max(1, Math.ceil((data.by_product_type || []).length / tableLimit)),
+                  onPageChange: setTablePage,
+                  onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
+                } : undefined}
+                renderRow={(row, idx) => (
+                      <tr key={row.type} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                    <td className="py-3 px-4 font-medium">{PRODUCT_TYPE_LABELS[row.type] || row.type}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(row.revenue)}</div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                      </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
 
           {activeTab === 'periode' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Calendar className="w-5 h-5 text-emerald-600" /> Pendapatan per Bulan</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">No</th>
-                    <SortableTh label="Periode" sortKey="name" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('name'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <SortableTh label="Pendapatan" sortKey="revenue" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('revenue'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                    <th className="pb-2 pr-4 text-right">%</th>
-                    <SortableTh label="Invoice" sortKey="count" currentSort={tableSortKey} sortOrder={tableSortOrder} onClick={() => { setTableSortKey('count'); setTableSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setTablePage(1); }} />
-                  </tr></thead>
-                  <tbody>
-                    {sortAndPaginate(data.by_period || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'period', revenueKey: 'revenue' }).rows.map((row, idx) => (
-                      <tr key={row.period} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                        <td className="py-3 pr-4 font-medium">{formatPeriodLabel(row.period)}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(row.revenue)}</td>
-                        <td className="py-3 pr-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
-                        <td className="py-3 pr-4 text-right">{row.invoice_count ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<Calendar className="w-5 h-5" />} label="Jumlah Periode" value={(data.by_period || []).length} subtitle="Bulan dalam laporan" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_period || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_period || []).reduce((s, p) => s + (p.invoice_count ?? 0), 0)} subtitle="Seluruh periode" />
+                {(data.by_period || []).length > 0 && (() => {
+                  const top = [...(data.by_period || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Bulan Tertinggi" value={top ? formatPeriodLabel(top.period) : '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                })()}
               </div>
-              {(data.by_period || []).length === 0 && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {(data.by_period || []).length > 0 && (
-                <TablePagination total={(data.by_period || []).length} page={tablePage} limit={tableLimit} onPageChange={setTablePage} onLimitChange={(l) => { setTableLimit(l); setTablePage(1); }} loading={loading} />
-              )}
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Bulan" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+              </div>
+              <CardSectionHeader
+                icon={<Calendar className="w-6 h-6" />}
+                title="Pendapatan per Bulan"
+                subtitle={`${(data.by_period || []).length} periode`}
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.periode}
+                data={sortAndPaginate(data.by_period || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'period', revenueKey: 'revenue' }).rows}
+                emptyMessage="Belum ada data"
+                pagination={(data.by_period || []).length > 0 ? {
+                  total: (data.by_period || []).length,
+                  page: tablePage,
+                  limit: tableLimit,
+                  totalPages: Math.max(1, Math.ceil((data.by_period || []).length / tableLimit)),
+                  onPageChange: setTablePage,
+                  onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
+                } : undefined}
+                renderRow={(row, idx) => (
+                      <tr key={row.period} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
+                    <td className="py-3 px-4 font-medium">{formatPeriodLabel(row.period)}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(row.revenue)}</div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                      </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
 
           {activeTab === 'detail' && (
-            <Card>
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><List className="w-5 h-5 text-emerald-600" /> Detail Invoice ({pagination.total})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-600">
-                      <th className="pb-2 pr-4">Invoice</th>
-                      <th className="pb-2 pr-4">Owner</th>
-                      <th className="pb-2 pr-4">Cabang</th>
-                      <th className="pb-2 pr-4 text-right">Total</th>
-                      <th className="pb-2 pr-4 text-right">Dibayar</th>
-                      <th className="pb-2 pr-4 text-right">Sisa</th>
-                      <th className="pb-2 pr-4">Status Invoice</th>
-                      <th className="pb-2 pr-4">Tanggal</th>
-                      <th className="pb-2 pr-4"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data.invoices || []).map((inv) => (
-                      <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="py-3 pr-4 font-medium">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</td>
-                        <td className="py-3 pr-4">{inv.owner_name || '-'}</td>
-                        <td className="py-3 pr-4">{inv.branch_name || '-'}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(inv.total_amount)}</td>
-                        <td className="py-3 pr-4 text-right text-emerald-600">{formatIDR(inv.paid_amount)}</td>
-                        <td className="py-3 pr-4 text-right">{formatIDR(inv.remaining_amount)}</td>
-                        <td className="py-3 pr-4"><span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
-                        <td className="py-3 pr-4">{formatDate(inv.issued_at ?? null)}</td>
-                        <td className="py-3 pr-4">
-                          <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices' + (inv.invoice_number ? '?invoice_number=' + encodeURIComponent(inv.invoice_number) : ''))}>
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <StatCard icon={<List className="w-5 h-5" />} label="Jumlah Invoice" value={pagination.total} subtitle="Dalam filter periode & filter lain" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={pagination.total > 0 ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={pagination.total > 0 ? <TrendingUp className="w-5 h-5" /> : <Receipt className="w-5 h-5" />} label="Rata-rata per Invoice" value={pagination.total > 0 ? formatIDR(data.total_revenue / pagination.total) : '–'} subtitle={pagination.total > 0 ? `≈ ${formatSAR((data.total_revenue / pagination.total) / sarToIdr, false)} · ${formatUSD((data.total_revenue / pagination.total) / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<FileText className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} subtitle="Rentang laporan" />
               </div>
-              {(data.invoices || []).length === 0 && !loading && <p className="text-slate-500 py-8 text-center">Belum ada data</p>}
-              {pagination.total > 0 && (
-                <>
-                  <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-t border-slate-200">
+              <Card className="min-w-0">
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Detail Invoice" subtitle="Periode, lokasi, status, cari & rentang pendapatan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
+                <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
+                <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
+                {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
+                <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
+                <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
+                <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+                <Autocomplete label="Owner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name }))} emptyLabel="Semua owner" />
+                <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua status" />
+                <Autocomplete label="Jenis Produk" value={productType} onChange={setProductType} options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua produk" />
+                <div className="sm:col-span-2"><Input label="Cari" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Invoice / Order / Owner" icon={<Search className="w-4 h-4" />} /></div>
+                <Input label="Min. Pendapatan (Rp)" type="number" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="0" min={0} />
+                <Input label="Maks. Pendapatan (Rp)" type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="0" min={0} />
+              </div>
+              <CardSectionHeader
+                icon={<List className="w-6 h-6" />}
+                title="Detail Invoice"
+                subtitle={`${pagination.total} invoice`}
+                right={
+                  <div className="flex flex-wrap items-center gap-2">
                     <Autocomplete
                       value={sortBy}
                       onChange={(v) => { setSortBy(v); setPage(1); }}
@@ -775,10 +852,53 @@ const AccountingFinancialReportPage: React.FC = () => {
                       className="min-w-[140px]"
                     />
                   </div>
-                  <TablePagination total={pagination.total} page={page} limit={limit} onPageChange={setPage} onLimitChange={(l) => { setLimit(l); setPage(1); }} loading={loading} limitOptions={[25, 50, 100, 200]} />
-                </>
-              )}
+                }
+                className="mb-2"
+              />
+              <div className="min-w-0 overflow-x-auto">
+              <Table
+                columns={REPORT_TABLE_COLUMNS.detail}
+                data={data.invoices || []}
+                emptyMessage="Belum ada data"
+                stickyActionsColumn
+                pagination={pagination.total > 0 ? {
+                  total: pagination.total,
+                  page,
+                  limit,
+                  totalPages: pagination.totalPages,
+                  onPageChange: setPage,
+                  onLimitChange: (l) => { setLimit(l); setPage(1); }
+                } : undefined}
+                renderRow={(inv) => (
+                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-medium">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 px-4">{inv.owner_name || '-'}</td>
+                    <td className="py-3 px-4">{inv.branch_name || '-'}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(inv.total_amount)}</div>
+                      {(() => { const t = amountTriple(Number(inv.total_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right text-emerald-600 align-top">
+                      <div>{formatIDR(inv.paid_amount)}</div>
+                      {(() => { const t = amountTriple(Number(inv.paid_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div>{formatIDR(inv.remaining_amount)}</div>
+                      {(() => { const t = amountTriple(Number(inv.remaining_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    </td>
+                    <td className="py-3 px-4"><span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
+                    <td className="py-3 px-4">{formatDate(inv.issued_at ?? null)}</td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices' + (inv.invoice_number ? '?invoice_number=' + encodeURIComponent(inv.invoice_number) : ''))}>
+                        <ExternalLink className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                )}
+              />
+              </div>
             </Card>
+            </>
           )}
         </>
       )}

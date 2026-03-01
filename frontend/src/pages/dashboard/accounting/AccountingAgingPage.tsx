@@ -6,6 +6,9 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import PageHeader from '../../../components/common/PageHeader';
 import PageFilter from '../../../components/common/PageFilter';
+import Table from '../../../components/common/Table';
+import TablePagination from '../../../components/common/TablePagination';
+import type { TableColumn } from '../../../types';
 import { FilterIconButton, Input, Autocomplete, StatCard, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
@@ -317,6 +320,21 @@ const AccountingAgingPage: React.FC = () => {
     { key: 'days_61_plus', label: 'Terlambat 61+' }
   ];
 
+  const agingColumns: TableColumn[] = [
+    { id: 'invoice', label: 'Invoice', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'total', label: 'Total', align: 'right' },
+    { id: 'paid', label: 'Dibayar', align: 'right' },
+    { id: 'remaining', label: 'Sisa', align: 'right' },
+    { id: 'status', label: 'Status Invoice', align: 'left' },
+    { id: 'due', label: 'Jatuh Tempo', align: 'left' },
+    { id: 'overdue', label: 'Terlambat', align: 'center' },
+    { id: 'proof', label: 'Bukti Bayar', align: 'left' },
+    { id: 'issued', label: 'Tgl Invoice', align: 'left' },
+    { id: 'actions', label: 'Aksi', align: 'center' }
+  ];
+
   useEffect(() => {
     setPage(1);
   }, [selectedBucketTab, limit]);
@@ -418,120 +436,79 @@ const AccountingAgingPage: React.FC = () => {
             </h2>
             <div className="flex flex-wrap gap-2 mb-4">
               {bucketTabs.map(({ key, label }) => (
-                <button
+                <Button
                   key={key}
                   type="button"
+                  variant={selectedBucketTab === key ? 'primary' : 'outline'}
+                  size="sm"
                   onClick={() => setSelectedBucketTab(key)}
-                  className={
-                    'px-4 py-2 rounded-lg font-medium text-sm transition-colors ' +
-                    (selectedBucketTab === key ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')
-                  }
+                  className={selectedBucketTab === key ? '' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-600">
-                    <th className="pb-2 pr-4">Invoice</th>
-                    <th className="pb-2 pr-4">Owner</th>
-                    <th className="pb-2 pr-4">Cabang</th>
-                    <th className="pb-2 pr-4 text-right">Total</th>
-                    <th className="pb-2 pr-4 text-right">Dibayar</th>
-                    <th className="pb-2 pr-4 text-right">Sisa</th>
-                    <th className="pb-2 pr-4">Status Invoice</th>
-                    <th className="pb-2 pr-4">Jatuh Tempo</th>
-                    <th className="pb-2 pr-4 text-center">Terlambat</th>
-                    <th className="pb-2 pr-4">Bukti Bayar</th>
-                    <th className="pb-2 pr-4">Tgl Invoice</th>
-                    <th className="pb-2 w-12">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((inv: any) => (
-                    <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 pr-4 font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number || '-', INVOICE_STATUS_LABELS)}</td>
-                      <td className="py-3 pr-4">{inv.User?.name || inv.User?.company_name || '-'}</td>
-                      <td className="py-3 pr-4">{inv.Branch?.name || inv.Branch?.code || '-'}</td>
-                      <td className="py-3 pr-4 text-right font-medium">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                      <td className="py-3 pr-4 text-right text-emerald-600 font-medium">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                      <td className="py-3 pr-4 text-right text-red-600 font-medium">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                      <td className="py-3 pr-4">
-                        <Badge variant={getStatusBadgeVariant(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
-                      </td>
-                      <td className="py-3 pr-4">{formatDate(inv.due_date_dp)}</td>
-                      <td className="py-3 pr-4 text-center">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
-                      <td className="py-3 pr-4">
-                        {(inv.PaymentProofs?.length ?? 0) === 0 ? (
-                          <span className="text-slate-400 text-xs">-</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {inv.PaymentProofs?.map((p: any) => {
-                              const ps = getProofStatus(p);
-                              return (
-                                <Badge key={p.id} variant={ps.variant} className="text-xs">
-                                  {getProofTypeLabel(p.payment_type)} {ps.status === 'verified' ? '✓' : ps.status === 'rejected' ? '✗' : '...'}
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4">{formatDate(inv.issued_at || inv.created_at)}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex justify-center">
-                          <ActionsMenu
-                            align="right"
-                            items={[
-                              { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
-                              { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                              { id: 'order', label: 'Order & Invoice', icon: <ExternalLink className="w-4 h-4" />, onClick: () => { const q = inv.Order?.order_number ? '?order_number=' + encodeURIComponent(inv.Order.order_number) : ''; navigate('/dashboard/orders-invoices' + q); } },
-                            ] as ActionsMenuItem[]}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              columns={agingColumns}
+              data={items}
+              emptyMessage="Tidak ada data"
+              stickyActionsColumn
+              renderRow={(inv: any) => (
+                <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="py-3 px-4 font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number || '-', INVOICE_STATUS_LABELS)}</td>
+                  <td className="py-3 px-4">{inv.User?.name || inv.User?.company_name || '-'}</td>
+                  <td className="py-3 px-4">{inv.Branch?.name || inv.Branch?.code || '-'}</td>
+                  <td className="py-3 px-4 text-right font-medium">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                  <td className="py-3 px-4 text-right text-emerald-600 font-medium">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                  <td className="py-3 px-4 text-right text-red-600 font-medium">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                  <td className="py-3 px-4">
+                    <Badge variant={getStatusBadgeVariant(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
+                  </td>
+                  <td className="py-3 px-4">{formatDate(inv.due_date_dp)}</td>
+                  <td className="py-3 px-4 text-center">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
+                  <td className="py-3 px-4">
+                    {(inv.PaymentProofs?.length ?? 0) === 0 ? (
+                      <span className="text-slate-400 text-xs">-</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {inv.PaymentProofs?.map((p: any) => {
+                          const ps = getProofStatus(p);
+                          return (
+                            <Badge key={p.id} variant={ps.variant} className="text-xs">
+                              {getProofTypeLabel(p.payment_type)} {ps.status === 'verified' ? '✓' : ps.status === 'rejected' ? '✗' : '...'}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">{formatDate(inv.issued_at || inv.created_at)}</td>
+                  <td className="py-3 px-4">
+                    <div className="flex justify-center">
+                      <ActionsMenu
+                        align="right"
+                        items={[
+                          { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
+                          { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
+                          { id: 'order', label: 'Order & Invoice', icon: <ExternalLink className="w-4 h-4" />, onClick: () => { const q = inv.Order?.order_number ? '?order_number=' + encodeURIComponent(inv.Order.order_number) : ''; navigate('/dashboard/orders-invoices' + q); } },
+                        ] as ActionsMenuItem[]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              )}
+            />
             {items.length === 0 && !loading && <p className="text-slate-500 py-6 text-center">Tidak ada data</p>}
             {pagination.total > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50 mt-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-slate-600">
-                    Menampilkan {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}-{Math.min(pagination.page * pagination.limit, pagination.total)} dari {pagination.total}
-                  </span>
-                  <Autocomplete
-                    value={String(limit)}
-                    onChange={(v) => { setLimit(Number(v)); setPage(1); }}
-                    options={[25, 50, 100, 200, 500].map((n) => ({ value: String(n), label: `${n} per halaman` }))}
-                    fullWidth={false}
-                    className="min-w-[140px]"
-                  />
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={pagination.page <= 1 || loading}
-                    className="p-2 rounded border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="py-2 px-3 text-sm text-slate-600">Halaman {pagination.page} / {pagination.totalPages}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-                    disabled={pagination.page >= pagination.totalPages || loading}
-                    className="p-2 rounded border border-slate-200 bg-white disabled:opacity-50 hover:bg-slate-50"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+              <TablePagination
+                total={pagination.total}
+                page={pagination.page}
+                limit={pagination.limit}
+                onPageChange={setPage}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                loading={loading}
+                limitOptions={[25, 50, 100, 200, 500]}
+              />
             )}
           </Card>
         </>
@@ -559,20 +536,26 @@ const AccountingAgingPage: React.FC = () => {
             </div>
 
             <ModalBody className="flex-1 overflow-hidden flex flex-col p-0">
-            <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 shrink-0">
-              <button
+            <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 shrink-0 gap-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setDetailTab('invoice')}
-                className={'flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ' + (detailTab === 'invoice' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-600 hover:text-slate-900')}
+                className={'rounded-b-none border-b-2 -mb-px ' + (detailTab === 'invoice' ? 'border-emerald-600 text-emerald-600 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900')}
               >
-                <FileSpreadsheet className="w-4 h-4" /> Invoice & Order
-              </button>
-              <button
+                <FileSpreadsheet className="w-4 h-4 mr-2" /> Invoice & Order
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setDetailTab('payments')}
-                className={'flex items-center gap-2 px-4 py-3 font-semibold border-b-2 transition-colors -mb-px ' + (detailTab === 'payments' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-600 hover:text-slate-900')}
+                className={'rounded-b-none border-b-2 -mb-px ' + (detailTab === 'payments' ? 'border-emerald-600 text-emerald-600 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900')}
               >
-                <CreditCard className="w-4 h-4" /> Bukti Bayar
-                {paymentProofs.length > 0 && <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">{paymentProofs.length}</span>}
-              </button>
+                <CreditCard className="w-4 h-4 mr-2" /> Bukti Bayar
+                {paymentProofs.length > 0 && <span className="ml-1 px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">{paymentProofs.length}</span>}
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">

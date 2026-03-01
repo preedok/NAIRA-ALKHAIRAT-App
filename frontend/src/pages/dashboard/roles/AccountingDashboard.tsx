@@ -493,8 +493,8 @@ const AccountingDashboard: React.FC = () => {
                 <span className="text-xs font-medium text-center leading-tight">Piutang (AR)</span>
               </Button>
               <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/chart-of-accounts')}>
-                <FileText className="w-5 h-5 text-slate-600 shrink-0" />
-                <span className="text-xs font-medium text-center leading-tight">Chart of Accounts</span>
+                <Landmark className="w-5 h-5 text-slate-600 shrink-0" />
+                <span className="text-xs font-medium text-center leading-tight">Data Rekening Bank</span>
               </Button>
               <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/rekening-koran')}>
                 <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, ChevronLeft, Settings, DollarSign, Plus, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
@@ -7,6 +7,9 @@ import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import Textarea from '../../../components/common/Textarea';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import TablePagination from '../../../components/common/TablePagination';
+import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, type PayrollEmployeeItem, type EmployeeSalaryData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -26,6 +29,24 @@ const PayrollEmployeesPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingSalary, setLoadingSalary] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+
+  const columns: TableColumn[] = [
+    { id: 'name', label: 'Nama', align: 'left' },
+    { id: 'email', label: 'Email', align: 'left' },
+    { id: 'role', label: 'Role', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'base', label: 'Gaji pokok', align: 'right' },
+    { id: 'allow_ded', label: 'Tunjangan / Potongan', align: 'left' },
+    { id: 'actions', label: 'Aksi', align: 'center' }
+  ];
+
+  const paginatedEmployees = useMemo(() => {
+    const start = (page - 1) * limit;
+    return employees.slice(start, start + limit);
+  }, [employees, page, limit]);
+  const totalPages = Math.max(1, Math.ceil(employees.length / limit));
 
   useEffect(() => {
     branchesApi.list({ limit: 500 }).then((r) => { if (r.data.success) setBranches(r.data.data || []); }).catch(() => {});
@@ -151,47 +172,45 @@ const PayrollEmployeesPage: React.FC = () => {
         {loading ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <div className="overflow-x-auto overflow-y-auto min-h-0 flex-1">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-600">
-                  <th className="pb-2 pr-4">Nama</th>
-                  <th className="pb-2 pr-4">Email</th>
-                  <th className="pb-2 pr-4">Role</th>
-                  <th className="pb-2 pr-4">Cabang</th>
-                  <th className="pb-2 pr-4">Gaji pokok</th>
-                  <th className="pb-2 pr-4">Tunjangan / Potongan</th>
-                  <th className="pb-2 pr-4 w-24">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp) => {
-                  const t = emp.salary_template;
-                  const base = t ? Number(t.base_salary) : 0;
-                  const allowSum = (t?.allowances || []).reduce((s: number, a: any) => s + Number(a.amount ?? a.value ?? 0), 0);
-                  const dedSum = (t?.deductions || []).reduce((s: number, d: any) => s + Number(d.amount ?? d.value ?? 0), 0);
-                  return (
-                    <tr key={emp.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 pr-4 font-medium text-slate-900">{emp.name}</td>
-                      <td className="py-3 pr-4 text-slate-600">{emp.email}</td>
-                      <td className="py-3 pr-4">{roleLabel(emp.role)}</td>
-                      <td className="py-3 pr-4">{emp.Branch ? `${emp.Branch.code} - ${emp.Branch.name}` : '-'}</td>
-                      <td className="py-3 pr-4">{formatIDR(base)}</td>
-                      <td className="py-3 pr-4 text-slate-600">
-                        {t ? `+${formatIDR(allowSum, false)} / -${formatIDR(dedSum, false)}` : '-'}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <Button variant="ghost" size="sm" onClick={() => openSalaryModal(emp)}>
-                          <DollarSign className="w-4 h-4" /> Atur
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {employees.length === 0 && <p className="text-slate-500 py-8 text-center">Tidak ada karyawan (non-owner) untuk cabang ini</p>}
-          </div>
+          <>
+            <Table<PayrollEmployeeItem>
+              columns={columns}
+              data={paginatedEmployees}
+              emptyMessage="Tidak ada karyawan (non-owner) untuk cabang ini"
+              stickyActionsColumn
+              pagination={employees.length > 0 ? {
+                total: employees.length,
+                page,
+                limit,
+                totalPages,
+                onPageChange: setPage,
+                onLimitChange: (l) => { setLimit(l); setPage(1); }
+              } : undefined}
+              renderRow={(emp) => {
+                const t = emp.salary_template;
+                const base = t ? Number(t.base_salary) : 0;
+                const allowSum = (t?.allowances || []).reduce((s: number, a: any) => s + Number(a.amount ?? a.value ?? 0), 0);
+                const dedSum = (t?.deductions || []).reduce((s: number, d: any) => s + Number(d.amount ?? d.value ?? 0), 0);
+                return (
+                  <tr key={emp.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-medium text-slate-900">{emp.name}</td>
+                    <td className="py-3 px-4 text-slate-600">{emp.email}</td>
+                    <td className="py-3 px-4">{roleLabel(emp.role)}</td>
+                    <td className="py-3 px-4">{emp.Branch ? `${emp.Branch.code} - ${emp.Branch.name}` : '-'}</td>
+                    <td className="py-3 px-4 text-right">{formatIDR(base)}</td>
+                    <td className="py-3 px-4 text-slate-600">
+                      {t ? `+${formatIDR(allowSum, false)} / -${formatIDR(dedSum, false)}` : '-'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="sm" onClick={() => openSalaryModal(emp)}>
+                        <DollarSign className="w-4 h-4" /> Atur
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              }}
+            />
+          </>
         )}
       </Card>
 

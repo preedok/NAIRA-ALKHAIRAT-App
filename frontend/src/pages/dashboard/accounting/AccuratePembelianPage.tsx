@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ShoppingCart, FileText, RotateCcw, CreditCard, RefreshCw } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import { accountingApi } from '../../../services/api';
 
 function formatDate(d: string | null | undefined) {
@@ -25,6 +27,21 @@ const AccuratePembelianPage: React.FC = () => {
   }, []);
 
   useEffect(() => { fetchPO(); }, [fetchPO]);
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const paginatedPO = useMemo(() => {
+    const start = (page - 1) * limit;
+    return purchaseOrders.slice(start, start + limit);
+  }, [purchaseOrders, page, limit]);
+  const totalPages = Math.max(1, Math.ceil(purchaseOrders.length / limit));
+
+  const columns: TableColumn[] = [
+    { id: 'po_number', label: 'No. PO', align: 'left' },
+    { id: 'date', label: 'Tanggal', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'status', label: 'Status', align: 'left' }
+  ];
 
   return (
     <div className="space-y-6">
@@ -74,28 +91,27 @@ const AccuratePembelianPage: React.FC = () => {
           <div className="py-12 text-center text-slate-500">Belum ada purchase order.</div>
         )}
         {!loading && purchaseOrders.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-max">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">No. PO</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Tanggal</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Cabang</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchaseOrders.map((po) => (
-                  <tr key={po.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                    <td className="py-3 px-4 font-mono font-medium">{po.po_number || po.order_number || String(po.id).slice(0, 8)}</td>
-                    <td className="py-3 px-4 text-slate-600">{formatDate(po.order_date || po.po_date)}</td>
-                    <td className="py-3 px-4">{po.Branch ? po.Branch.name : (po.branch_id || '–')}</td>
-                    <td className="py-3 px-4">{po.status || '–'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={columns}
+            data={paginatedPO}
+            emptyMessage="Belum ada purchase order"
+            pagination={purchaseOrders.length > 0 ? {
+              total: purchaseOrders.length,
+              page,
+              limit,
+              totalPages,
+              onPageChange: setPage,
+              onLimitChange: (l) => { setLimit(l); setPage(1); }
+            } : undefined}
+            renderRow={(po) => (
+              <tr key={po.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                <td className="py-3 px-4 font-mono font-medium">{po.po_number || po.order_number || String(po.id).slice(0, 8)}</td>
+                <td className="py-3 px-4 text-slate-600">{formatDate(po.order_date || po.po_date)}</td>
+                <td className="py-3 px-4">{po.Branch ? po.Branch.name : (po.branch_id || '–')}</td>
+                <td className="py-3 px-4">{po.status || '–'}</td>
+              </tr>
+            )}
+          />
         )}
       </Card>
     </div>

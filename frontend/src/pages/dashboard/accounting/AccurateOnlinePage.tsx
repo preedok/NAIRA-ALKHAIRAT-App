@@ -36,7 +36,9 @@ const AccurateOnlinePage: React.FC = () => {
       return (
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm text-slate-500">
-            <button type="button" onClick={() => navigate('/dashboard/accounting/accurate')} className="hover:text-slate-700">Accurate Online</button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/dashboard/accounting/accurate')} className="text-slate-500 hover:text-slate-700">
+              Accurate Online
+            </Button>
             <ChevronRight className="w-4 h-4" />
             <span className="text-slate-700 font-medium">{mod.title}</span>
           </div>
@@ -72,9 +74,10 @@ const AccurateOnlinePage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {MODULES.map((m) => (
           <Card key={m.id} className="overflow-hidden hover:shadow-md transition-shadow">
-            <button
+            <Button
               type="button"
-              className="w-full text-left p-5"
+              variant="ghost"
+              className="w-full text-left p-5 h-auto flex flex-col items-start justify-start"
               onClick={() => navigate(`/dashboard/accounting/accurate/${m.path}`)}
             >
               <div className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${m.color} text-white mb-4`}>
@@ -85,7 +88,7 @@ const AccurateOnlinePage: React.FC = () => {
               <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 mt-3">
                 Buka <ChevronRight className="w-4 h-4" />
               </span>
-            </button>
+            </Button>
           </Card>
         ))}
       </div>

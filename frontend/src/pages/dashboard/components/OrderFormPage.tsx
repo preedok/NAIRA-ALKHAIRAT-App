@@ -893,13 +893,20 @@ const OrderFormPage: React.FC = () => {
                                 <Input label="Qty" type="number" min={0} value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }} />
                               </div>
                               {canEditPrice ? (
-                                <div className="min-w-0 col-span-2 sm:col-span-1">
-                                  <Input label={`Harga Satuan (${rowCur(row)})`} type="number" min={0} value={(()=>{ const val=getInC(row.unit_price||0,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()} placeholder="0" onChange={e=>setRP(row.id,rowCur(row),parseFloat(e.target.value)||0)} />
+                                <div className="min-w-0 col-span-2 sm:col-span-1 flex flex-col justify-end">
+                                  <div className="flex items-center gap-2">
+                                    <label className={`${labelClass} shrink-0 mb-0`}>Harga Satuan ({rowCur(row)})</label>
+                                    <div className="flex-1 min-w-0">
+                                      <Input fullWidth label="" type="number" min={0} value={(()=>{ const val=getInC(row.unit_price||0,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()} placeholder="0" onChange={e=>setRP(row.id,rowCur(row),parseFloat(e.target.value)||0)} />
+                                    </div>
+                                  </div>
                                 </div>
                               ) : (
-                                <div className="min-w-0">
-                                  <label className={labelClass}>Harga Satuan ({rowCur(row)})</label>
-                                  <p className="text-sm font-bold text-slate-900 tabular-nums pt-1">{rowCur(row)==='SAR'?`${fmt(row.unit_price||0)} SAR`:rowCur(row)==='USD'?formatUSD(row.unit_price||0):formatIDR(row.unit_price||0)}</p>
+                                <div className="min-w-0 flex flex-col justify-end">
+                                  <div className="flex items-center gap-2">
+                                    <label className={`${labelClass} mb-0 shrink-0`}>Harga Satuan ({rowCur(row)})</label>
+                                    <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(row.unit_price||0)} SAR`:rowCur(row)==='USD'?formatUSD(row.unit_price||0):formatIDR(row.unit_price||0)}</p>
+                                  </div>
                                 </div>
                               )}
                               </div>

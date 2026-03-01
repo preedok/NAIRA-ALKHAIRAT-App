@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
-const { Invoice, Order, OrderItem, User, Branch, PaymentProof, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, Wilayah, Provinsi } = require('../models');
+const { Invoice, Order, OrderItem, User, Branch, PaymentProof, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
 const { INVOICE_STATUS } = require('../constants');
 
 // Role accounting bekerja di pusat: filter cabang untuk lihat order/invoice per cabang atau seluruh cabang.
@@ -1483,6 +1483,105 @@ const updateChartOfAccount = asyncHandler(async (req, res) => {
   res.json({ success: true, data: account, message: 'Akun berhasil diupdate' });
 });
 
+const ALLOWED_CURRENCIES = ['IDR', 'SAR', 'USD'];
+
+/**
+ * GET /api/v1/accounting/banks
+ * Daftar master bank untuk autocomplete (pembayaran IDR/SAR/USD).
+ */
+const getBanks = asyncHandler(async (req, res) => {
+  const { is_active } = req.query;
+  const where = {};
+  if (is_active === 'true') where.is_active = true;
+  else if (is_active === 'false') where.is_active = false;
+  const list = await Bank.findAll({
+    where,
+    order: [['sort_order', 'ASC'], ['name', 'ASC']]
+  });
+  res.json({ success: true, data: list });
+});
+
+/**
+ * GET /api/v1/accounting/bank-accounts
+ * Daftar rekening bank untuk pembayaran invoice (transfer/tunai).
+ */
+const getBankAccounts = asyncHandler(async (req, res) => {
+  const { is_active } = req.query;
+  const where = {};
+  if (is_active === 'true') where.is_active = true;
+  else if (is_active === 'false') where.is_active = false;
+  const list = await AccountingBankAccount.findAll({
+    where,
+    order: [['bank_name', 'ASC'], ['account_number', 'ASC']]
+  });
+  res.json({ success: true, data: list });
+});
+
+/**
+ * GET /api/v1/accounting/bank-accounts/:id
+ */
+const getBankAccountById = asyncHandler(async (req, res) => {
+  const rec = await AccountingBankAccount.findByPk(req.params.id);
+  if (!rec) return res.status(404).json({ success: false, message: 'Rekening tidak ditemukan' });
+  res.json({ success: true, data: rec });
+});
+
+/**
+ * POST /api/v1/accounting/bank-accounts
+ */
+const createBankAccount = asyncHandler(async (req, res) => {
+  const { code, name, bank_name, account_number, currency } = req.body;
+  if (!name || !bank_name || !account_number) {
+    return res.status(400).json({ success: false, message: 'Nama rekening, nama bank, dan nomor rekening wajib' });
+  }
+  const curr = (currency && String(currency).toUpperCase()) || 'IDR';
+  if (!ALLOWED_CURRENCIES.includes(curr)) {
+    return res.status(400).json({ success: false, message: 'Mata uang harus IDR, SAR, atau USD' });
+  }
+  const rec = await AccountingBankAccount.create({
+    code: (code && String(code).trim()) || `${String(bank_name).toUpperCase().replace(/\s+/g, '')}-${account_number}`,
+    name: String(name).trim(),
+    bank_name: String(bank_name).trim(),
+    account_number: String(account_number).trim(),
+    currency: curr,
+    is_active: true
+  });
+  res.status(201).json({ success: true, data: rec, message: 'Rekening berhasil ditambahkan' });
+});
+
+/**
+ * PATCH /api/v1/accounting/bank-accounts/:id
+ */
+const updateBankAccount = asyncHandler(async (req, res) => {
+  const rec = await AccountingBankAccount.findByPk(req.params.id);
+  if (!rec) return res.status(404).json({ success: false, message: 'Rekening tidak ditemukan' });
+  const { name, bank_name, account_number, currency, is_active } = req.body;
+  const updates = {};
+  if (name !== undefined) updates.name = String(name).trim();
+  if (bank_name !== undefined) updates.bank_name = String(bank_name).trim();
+  if (account_number !== undefined) updates.account_number = String(account_number).trim();
+  if (currency !== undefined) {
+    const curr = String(currency).toUpperCase() || 'IDR';
+    if (!ALLOWED_CURRENCIES.includes(curr)) {
+      return res.status(400).json({ success: false, message: 'Mata uang harus IDR, SAR, atau USD' });
+    }
+    updates.currency = curr;
+  }
+  if (is_active !== undefined) updates.is_active = !!is_active;
+  await rec.update(updates);
+  res.json({ success: true, data: rec, message: 'Rekening berhasil diupdate' });
+});
+
+/**
+ * DELETE /api/v1/accounting/bank-accounts/:id
+ */
+const deleteBankAccount = asyncHandler(async (req, res) => {
+  const rec = await AccountingBankAccount.findByPk(req.params.id);
+  if (!rec) return res.status(404).json({ success: false, message: 'Rekening tidak ditemukan' });
+  await rec.destroy();
+  res.json({ success: true, message: 'Rekening berhasil dihapus' });
+});
+
 /**
  * DELETE /api/v1/accounting/chart-of-accounts/:id
  * Hapus akun. Ditolak jika dipakai di mapping atau jurnal. Anak-anak di-set parent_id = null.
@@ -1800,6 +1899,12 @@ module.exports = {
   createChartOfAccount,
   updateChartOfAccount,
   deleteChartOfAccount,
+  getBanks,
+  getBankAccounts,
+  getBankAccountById,
+  createBankAccount,
+  updateBankAccount,
+  deleteBankAccount,
   getFiscalYears,
   getFiscalYearById,
   createFiscalYear,

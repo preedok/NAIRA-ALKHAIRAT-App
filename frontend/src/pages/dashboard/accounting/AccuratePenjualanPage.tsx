@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Receipt, FileText, RotateCcw, RefreshCw } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import { accountingApi } from '../../../services/api';
 
 const AccuratePenjualanPage: React.FC = () => {
@@ -23,6 +25,21 @@ const AccuratePenjualanPage: React.FC = () => {
   useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
 
   const fmt = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–';
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const paginatedQuotations = useMemo(() => {
+    const start = (page - 1) * limit;
+    return quotations.slice(start, start + limit);
+  }, [quotations, page, limit]);
+  const totalPages = Math.max(1, Math.ceil(quotations.length / limit));
+
+  const columns: TableColumn[] = [
+    { id: 'number', label: 'No.', align: 'left' },
+    { id: 'date', label: 'Tanggal', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'status', label: 'Status', align: 'left' }
+  ];
 
   return (
     <div className="space-y-6">
@@ -59,28 +76,27 @@ const AccuratePenjualanPage: React.FC = () => {
         {loading && <div className="py-12 text-center text-slate-500">Memuat...</div>}
         {!loading && quotations.length === 0 && <div className="py-12 text-center text-slate-500">Belum ada penawaran.</div>}
         {!loading && quotations.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-max">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">No.</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Tanggal</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Cabang</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quotations.map((q) => (
-                  <tr key={q.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                    <td className="py-3 px-4 font-mono">{q.quotation_number || q.id?.slice(0, 8)}</td>
-                    <td className="py-3 px-4 text-slate-600">{fmt(q.quotation_date)}</td>
-                    <td className="py-3 px-4">{q.Branch?.name || q.branch_id || '–'}</td>
-                    <td className="py-3 px-4">{q.status || '–'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={columns}
+            data={paginatedQuotations}
+            emptyMessage="Belum ada penawaran"
+            pagination={quotations.length > 0 ? {
+              total: quotations.length,
+              page,
+              limit,
+              totalPages,
+              onPageChange: setPage,
+              onLimitChange: (l) => { setLimit(l); setPage(1); }
+            } : undefined}
+            renderRow={(q) => (
+              <tr key={q.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                <td className="py-3 px-4 font-mono">{q.quotation_number || q.id?.slice(0, 8)}</td>
+                <td className="py-3 px-4 text-slate-600">{fmt(q.quotation_date)}</td>
+                <td className="py-3 px-4">{q.Branch?.name || q.branch_id || '–'}</td>
+                <td className="py-3 px-4">{q.status || '–'}</td>
+              </tr>
+            )}
+          />
         )}
       </Card>
     </div>

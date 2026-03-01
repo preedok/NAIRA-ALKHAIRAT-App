@@ -28,6 +28,8 @@ interface InputProps {
   /** Optional content after the input (e.g. password visibility toggle) */
   suffix?: React.ReactNode;
   title?: string;
+  /** For type="file": accepted MIME types or extensions (e.g. "image/*,.pdf") */
+  accept?: string;
 }
 
 const Input: React.FC<InputProps> = ({
@@ -54,7 +56,8 @@ const Input: React.FC<InputProps> = ({
   autoComplete,
   rightLabel,
   suffix,
-  title
+  title,
+  accept
 }) => {
   const borderStyles = error ? inputErrorBorderClass : inputBorderClass;
   const iconPadding = icon ? 'pl-12' : '';
@@ -79,7 +82,8 @@ const Input: React.FC<InputProps> = ({
         <input
           type={type}
           name={name}
-          value={value}
+          value={type === 'file' ? undefined : value}
+          accept={accept}
           onChange={onChange}
           onBlur={onBlur}
           onKeyDown={onKeyDown}

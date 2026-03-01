@@ -6,6 +6,8 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import { accountingApi, type PayrollRunData, type PayrollItemData } from '../../../services/api';
 import { formatIDR } from '../../../utils';
 
@@ -118,6 +120,17 @@ const PayrollRunDetailPage: React.FC = () => {
     }
   };
 
+  const columns: TableColumn[] = [
+    { id: 'karyawan', label: 'Karyawan', align: 'left' },
+    { id: 'base', label: 'Gaji pokok', align: 'right' },
+    { id: 'tunjangan', label: 'Tunjangan', align: 'right' },
+    { id: 'potongan', label: 'Potongan', align: 'right' },
+    { id: 'gross', label: 'Gross', align: 'right' },
+    { id: 'net', label: 'Net', align: 'right' },
+    ...(isDraft ? [{ id: 'edit', label: 'Edit', align: 'center' as const }] : []),
+    ...(run?.status === 'finalized' ? [{ id: 'slip', label: 'Slip', align: 'center' as const }] : [])
+  ].filter(Boolean) as TableColumn[];
+
   if (!id) return null;
 
   return (
@@ -174,51 +187,37 @@ const PayrollRunDetailPage: React.FC = () => {
         {loading ? (
           <p className="text-slate-500 py-8 text-center">Memuat...</p>
         ) : (
-          <div className="overflow-x-auto overflow-y-auto min-h-0 flex-1">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-600">
-                  <th className="pb-2 pr-4">Karyawan</th>
-                  <th className="pb-2 pr-4">Gaji pokok</th>
-                  <th className="pb-2 pr-4">Tunjangan</th>
-                  <th className="pb-2 pr-4">Potongan</th>
-                  <th className="pb-2 pr-4">Gross</th>
-                  <th className="pb-2 pr-4">Net</th>
-                  {isDraft && <th className="pb-2 pr-4 w-24">Edit</th>}
-                  {run?.status === 'finalized' && <th className="pb-2 pr-4 w-24">Slip</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 pr-4 font-medium">{item.User?.name || item.user_id}</td>
-                    <td className="py-3 pr-4">{formatIDR(Number(item.base_salary) || 0)}</td>
-                    <td className="py-3 pr-4">
-                      {formatIDR((item.allowances || []).reduce((s: number, a: any) => s + Number(a.amount ?? a.value ?? 0), 0))}
-                    </td>
-                    <td className="py-3 pr-4">
-                      {formatIDR((item.deductions || []).reduce((s: number, d: any) => s + Number(d.amount ?? d.value ?? 0), 0))}
-                    </td>
-                    <td className="py-3 pr-4">{formatIDR(item.gross || 0)}</td>
-                    <td className="py-3 pr-4 font-medium">{formatIDR(item.net || 0)}</td>
-                    {isDraft && (
-                      <td className="py-3 pr-4">
-                        <Button variant="ghost" size="sm" onClick={() => openEditItem(item)}>Edit</Button>
-                      </td>
-                    )}
-                    {run?.status === 'finalized' && (
-                      <td className="py-3 pr-4">
-                        <Button variant="ghost" size="sm" onClick={() => openSlipPdf(item.id)}>
-                          <ExternalLink className="w-4 h-4 mr-1" /> Lihat slip
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {items.length === 0 && <p className="text-slate-500 py-8 text-center">Tidak ada item</p>}
-          </div>
+          <Table<PayrollItemData>
+            columns={columns}
+            data={items}
+            emptyMessage="Tidak ada item"
+            renderRow={(item) => (
+              <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <td className="py-3 px-4 font-medium">{item.User?.name || item.user_id}</td>
+                <td className="py-3 px-4 text-right">{formatIDR(Number(item.base_salary) || 0)}</td>
+                <td className="py-3 px-4 text-right">
+                  {formatIDR((item.allowances || []).reduce((s: number, a: any) => s + Number(a.amount ?? a.value ?? 0), 0))}
+                </td>
+                <td className="py-3 px-4 text-right">
+                  {formatIDR((item.deductions || []).reduce((s: number, d: any) => s + Number(d.amount ?? d.value ?? 0), 0))}
+                </td>
+                <td className="py-3 px-4 text-right">{formatIDR(item.gross || 0)}</td>
+                <td className="py-3 px-4 text-right font-medium">{formatIDR(item.net || 0)}</td>
+                {isDraft && (
+                  <td className="py-3 px-4">
+                    <Button variant="ghost" size="sm" onClick={() => openEditItem(item)}>Edit</Button>
+                  </td>
+                )}
+                {run?.status === 'finalized' && (
+                  <td className="py-3 px-4">
+                    <Button variant="ghost" size="sm" onClick={() => openSlipPdf(item.id)}>
+                      <ExternalLink className="w-4 h-4 mr-1" /> Lihat slip
+                    </Button>
+                  </td>
+                )}
+              </tr>
+            )}
+          />
         )}
       </Card>
 

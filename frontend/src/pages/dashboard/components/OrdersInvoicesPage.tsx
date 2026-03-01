@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -15,7 +15,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
-import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, type InvoicesSummaryData } from '../../../services/api';
+import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, type InvoicesSummaryData, type BankAccountItem } from '../../../services/api';
 
 /** Konfigurasi icon untuk card Per Status Invoice (StatCard pakai satu warna) */
 const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
@@ -129,6 +129,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [reallocateSubmitting, setReallocateSubmitting] = useState(false);
   const [reallocateInvoiceList, setReallocateInvoiceList] = useState<any[]>([]);
   const [reallocateListLoading, setReallocateListLoading] = useState(false);
+  const [paymentBankAccounts, setPaymentBankAccounts] = useState<BankAccountItem[]>([]);
+  const [paymentBankAccountsLoading, setPaymentBankAccountsLoading] = useState(false);
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
@@ -462,6 +464,16 @@ const OrdersInvoicesPage: React.FC = () => {
     }
   }, [viewInvoice?.id, detailTab, fetchInvoicePdf]);
 
+  useEffect(() => {
+    if (showPaymentModal) {
+      setPaymentBankAccountsLoading(true);
+      accountingApi.getBankAccounts({ is_active: 'true' })
+        .then((r) => { if (r.data?.success && Array.isArray(r.data.data)) setPaymentBankAccounts(r.data.data); else setPaymentBankAccounts([]); })
+        .catch(() => setPaymentBankAccounts([]))
+        .finally(() => setPaymentBankAccountsLoading(false));
+    }
+  }, [showPaymentModal]);
+
   const closeModal = useCallback(() => {
     if (invoicePdfUrl) {
       URL.revokeObjectURL(invoicePdfUrl);
@@ -666,8 +678,14 @@ const OrdersInvoicesPage: React.FC = () => {
     );
   };
 
-  const bankAccounts = (viewInvoice?.bank_accounts || []) as { bank_name?: string; account_number?: string; account_name?: string }[];
-  const openPaymentModal = () => {
+
+  // Daftar rekening untuk pembayaran: dari detail invoice (getById, BE isi dari accounting) atau fallback dari API accounting
+  const bankAccountsForPayment: BankAccountItem[] =
+    viewInvoice?.bank_accounts?.length > 0
+      ? (viewInvoice.bank_accounts as BankAccountItem[])
+      : paymentBankAccounts;
+
+  const openPaymentModal = async () => {
     setPayAmountIdr('');
     setPayAmountSaudi('');
     setPayTransferDate(new Date().toISOString().slice(0, 10));
@@ -675,6 +693,15 @@ const OrdersInvoicesPage: React.FC = () => {
     setPayFile(null);
     setPaymentMethod(isInvoiceSaudi ? 'saudi' : 'bank');
     setShowPaymentModal(true);
+    // Agar owner/role lain dapat daftar rekening: muat ulang detail invoice (getById mengembalikan bank_accounts dari accounting)
+    if (viewInvoice?.id && (!viewInvoice.bank_accounts || viewInvoice.bank_accounts.length === 0)) {
+      try {
+        const res = await invoicesApi.getById(viewInvoice.id);
+        if (res.data?.success && res.data?.data) setViewInvoice(res.data.data);
+      } catch {
+        // ignore; paymentBankAccounts fallback dari API accounting tetap di-fetch di useEffect
+      }
+    }
   };
   const handleSubmitPayment = async () => {
     if (!viewInvoice?.id) return;
@@ -725,7 +752,11 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast('Upload bukti transfer wajib untuk metode Transfer Bank.', 'warning');
         return;
       }
-      const bank = bankAccounts[payBankIndex];
+      if (!bankAccountsForPayment.length || payBankIndex < 0 || payBankIndex >= bankAccountsForPayment.length) {
+        showToast('Pilih rekening tujuan transfer.', 'warning');
+        return;
+      }
+      const bank = bankAccountsForPayment[payBankIndex];
       const paymentType = parseFloat(viewInvoice.paid_amount || 0) === 0 ? 'dp' : (amount >= remaining ? 'full' : 'partial');
       const form = new FormData();
       form.append('amount', String(Math.round(amount)));
@@ -733,6 +764,7 @@ const OrdersInvoicesPage: React.FC = () => {
       form.append('transfer_date', payTransferDate);
       if (bank?.bank_name) form.append('bank_name', bank.bank_name);
       if (bank?.account_number) form.append('account_number', bank.account_number);
+      if (bank?.name) form.append('account_name', bank.name);
       form.append('proof_file', payFile);
       setPaySubmitting(true);
       try {
@@ -1222,6 +1254,17 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <><span className="text-slate-500">IDR:</span> {formatIDR(amt)} · <span className="text-slate-500">SAR:</span> {formatSAR(sar, false)} · <span className="text-slate-500">USD:</span> {formatUSD(usd, false)}</>
                                   )}
                                 </div>
+                                {(p.bank_name || p.account_number) && p.payment_location !== 'saudi' && (
+                                  <div className="text-slate-600 mt-0.5 truncate">
+                                    <span className="text-slate-500">Bank:</span> {[p.bank_name, p.account_number].filter(Boolean).join(' · ')}
+                                  </div>
+                                )}
+                                {p.created_at && (
+                                  <div className="text-slate-600 mt-0.5 truncate">
+                                    <span className="text-slate-500">Tanggal upload bukti:</span> {formatDate(p.created_at)}
+                                    <span className="text-slate-500"> · Jam:</span> {new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                )}
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                   <Badge variant={ps.variant} className="text-xs">{statusLabel}</Badge>
                                   {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
@@ -1843,8 +1886,11 @@ const OrdersInvoicesPage: React.FC = () => {
                                 {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
                                   <span className="text-xs text-slate-600">Diverifikasi oleh: <strong>{(p as any).VerifiedBy.name}</strong></span>
                                 )}
-                                {p.transfer_date && <span className="text-xs text-slate-500">Tgl transfer: {formatDate(p.transfer_date)}</span>}
-                                {p.created_at && <span className="text-xs text-slate-500">Upload: {new Date(p.created_at).toLocaleString('id-ID')}</span>}
+                                {p.created_at && (
+                                  <span className="text-xs text-slate-500">
+                                    Tanggal upload bukti: {formatDate(p.created_at)} · Jam: {new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-2">
                                 {fileUrl && (
@@ -2288,50 +2334,43 @@ const OrdersInvoicesPage: React.FC = () => {
               {paymentMethod === 'saudi' && isInvoiceSaudi && (
                 <>
                   <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl">Input pembayaran KES (Saudi) dalam SAR atau USD. Jumlah dikonversi ke IDR sesuai kurs cabang. Pembayaran otomatis terverifikasi (tanpa konfirmasi). Bisa upload bukti KES opsional.</p>
+                  <Autocomplete
+                    label="Mata uang"
+                    value={payCurrencySaudi}
+                    onChange={(v) => setPayCurrencySaudi((v as 'SAR' | 'USD') || 'SAR')}
+                    options={[
+                      { value: 'SAR', label: 'SAR (Riyal Saudi)' },
+                      { value: 'USD', label: 'USD' }
+                    ]}
+                    placeholder="Pilih mata uang"
+                  />
+                  <Input
+                    label={`Jumlah bayar (${payCurrencySaudi}) *`}
+                    type="text"
+                    value={payAmountSaudi}
+                    onChange={(e) => setPayAmountSaudi(e.target.value.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                    placeholder={payCurrencySaudi === 'SAR' ? 'Contoh: 5000' : 'Contoh: 1500'}
+                  />
+                  {payAmountSaudi && !isNaN(parseFloat(payAmountSaudi.replace(/,/g, ''))) && (() => {
+                    const amt = parseFloat(payAmountSaudi.replace(/,/g, ''));
+                    const idr = payCurrencySaudi === 'SAR' ? amt * sarToIdr : amt * usdToIdr;
+                    return (
+                      <p className="text-xs text-slate-500 mt-1">≈ {formatIDR(Math.round(idr))} IDR</p>
+                    );
+                  })()}
+                  <Input
+                    label="Tanggal transfer"
+                    type="date"
+                    value={payTransferDate}
+                    onChange={(e) => setPayTransferDate(e.target.value)}
+                  />
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Mata uang</label>
-                    <select
-                      value={payCurrencySaudi}
-                      onChange={(e) => setPayCurrencySaudi(e.target.value as 'SAR' | 'USD')}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                    >
-                      <option value="SAR">SAR (Riyal Saudi)</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Jumlah bayar ({payCurrencySaudi}) <span className="text-red-600">*</span></label>
-                    <input
-                      type="text"
-                      value={payAmountSaudi}
-                      onChange={(e) => setPayAmountSaudi(e.target.value.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
-                      placeholder={payCurrencySaudi === 'SAR' ? 'Contoh: 5000' : 'Contoh: 1500'}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                    />
-                    {payAmountSaudi && !isNaN(parseFloat(payAmountSaudi.replace(/,/g, ''))) && (() => {
-                      const amt = parseFloat(payAmountSaudi.replace(/,/g, ''));
-                      const idr = payCurrencySaudi === 'SAR' ? amt * sarToIdr : amt * usdToIdr;
-                      return (
-                        <p className="text-xs text-slate-500 mt-1">≈ {formatIDR(Math.round(idr))} IDR</p>
-                      );
-                    })()}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Tanggal transfer</label>
-                    <input
-                      type="date"
-                      value={payTransferDate}
-                      onChange={(e) => setPayTransferDate(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Upload bukti KES</label>
-                    <input
+                    <Input
+                      label="Upload bukti KES"
                       type="file"
                       accept="image/*,.pdf"
                       onChange={(e) => setPayFile(e.target.files?.[0] || null)}
-                      className="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700"
+                      className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
                     />
                     <p className="text-xs text-slate-500 mt-1">Opsional. Bukti transfer KES (foto/screenshot/PDF). Pembayaran otomatis terverifikasi tanpa konfirmasi.</p>
                   </div>
@@ -2339,31 +2378,43 @@ const OrdersInvoicesPage: React.FC = () => {
               )}
               {paymentMethod === 'bank' && (
                 <>
-                  {bankAccounts.length > 0 ? (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Rekening tujuan</label>
-                      <select
-                        value={payBankIndex}
-                        onChange={(e) => setPayBankIndex(parseInt(e.target.value, 10))}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                      >
-                        {bankAccounts.map((b, i) => (
-                          <option key={i} value={i}>{b.bank_name} – {b.account_number} {b.account_name ? `(${b.account_name})` : ''}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Daftar rekening belum dikonfigurasi. Hubungi admin untuk menambah di Business Rules (bank_accounts).</p>
-                  )}
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Jumlah bayar (IDR) <span className="text-red-600">*</span></label>
-                    <input
-                      type="text"
-                      value={payAmountIdr}
-                      onChange={(e) => setPayAmountIdr(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
-                      placeholder="Contoh: 5000000"
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                    />
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Transfer ke rekening</label>
+                    {!bankAccountsForPayment.length && paymentBankAccountsLoading ? (
+                      <p className="text-sm text-slate-500 py-2">Memuat data rekening bank...</p>
+                    ) : bankAccountsForPayment.length === 0 ? (
+                      <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Belum ada rekening bank. Konfigurasi di menu <strong>Data Rekening Bank</strong> (Accounting).</p>
+                    ) : (
+                      <>
+                        <Autocomplete
+                          label=""
+                          value={String(payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex)}
+                          onChange={(v) => setPayBankIndex(parseInt(v || '0', 10))}
+                          options={bankAccountsForPayment.map((b, i) => ({
+                            value: String(i),
+                            label: `${b.bank_name} – ${b.account_number} · ${b.name} · ${b.currency || 'IDR'}`
+                          }))}
+                          placeholder="Pilih rekening tujuan transfer..."
+                          emptyLabel="Pilih rekening"
+                        />
+                        {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex] && (
+                          <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
+                            <p className="font-medium">{bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].bank_name}</p>
+                            <p className="font-mono text-slate-600">No. Rekening: {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].account_number}</p>
+                            <p className="text-slate-600">A.n. {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].name} · {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].currency || 'IDR'}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <Input
+                    label="Jumlah bayar (IDR) *"
+                    type="text"
+                    value={payAmountIdr}
+                    onChange={(e) => setPayAmountIdr(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                    placeholder="Contoh: 5000000"
+                  />
+                  <div>
                     {payAmountIdr && !isNaN(parseFloat(payAmountIdr.replace(/,/g, ''))) && (() => {
                       const inputIdr = parseFloat(payAmountIdr.replace(/,/g, ''));
                       const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
@@ -2383,37 +2434,79 @@ const OrdersInvoicesPage: React.FC = () => {
                       );
                     })()}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Tanggal transfer <span className="text-red-600">*</span></label>
-                    <input
-                      type="date"
-                      value={payTransferDate}
-                      onChange={(e) => setPayTransferDate(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Upload bukti bayar <span className="text-red-600">*</span></label>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => setPayFile(e.target.files?.[0] || null)}
-                      className="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700"
-                    />
-                  </div>
+                  <Input
+                    label="Tanggal transfer *"
+                    type="date"
+                    value={payTransferDate}
+                    onChange={(e) => setPayTransferDate(e.target.value)}
+                  />
+                  <Input
+                    label="Upload bukti bayar *"
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => setPayFile(e.target.files?.[0] || null)}
+                    className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
+                  />
                 </>
               )}
               {paymentMethod === 'va' && (
-                <p className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl">Pembayaran via Virtual Account akan tampil di sini setelah nomor VA dikonfigurasi. Untuk saat ini gunakan <strong>Transfer Bank</strong>.</p>
+                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-[#0D1A63]/10 flex items-center justify-center">
+                      <Building2 className="w-7 h-7 text-[#0D1A63]" strokeWidth={1.5} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-base font-semibold text-slate-800 mb-1">Virtual Account</h4>
+                      <p className="text-sm text-slate-600 leading-relaxed">
+                        Pembayaran via Virtual Account akan tampil di sini setelah nomor VA dikonfigurasi.
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-500">Sementara ini gunakan</span>
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0D1A63]">
+                          <CreditCard className="w-4 h-4" />
+                          Transfer Bank
+                          <ArrowRight className="w-4 h-4 text-slate-400" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
               {paymentMethod === 'qris' && (
-                <p className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl">QRIS: Masukkan jumlah yang ingin dibayar lalu QR code akan tampil (integrasi payment gateway). Untuk saat ini gunakan <strong>Transfer Bank</strong>.</p>
+                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                      <QrCode className="w-7 h-7 text-emerald-600" strokeWidth={1.5} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-base font-semibold text-slate-800 mb-1">QRIS</h4>
+                      <p className="text-sm text-slate-600 leading-relaxed">
+                        Masukkan jumlah yang ingin dibayar, lalu QR code akan tampil (integrasi payment gateway).
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-500">Sementara ini gunakan</span>
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0D1A63]">
+                          <CreditCard className="w-4 h-4" />
+                          Transfer Bank
+                          <ArrowRight className="w-4 h-4 text-slate-400" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
             </ModalBody>
             <ModalFooter>
               <Button variant="outline" onClick={() => setShowPaymentModal(false)} disabled={paySubmitting}>Batal</Button>
-              <Button variant="primary" onClick={handleSubmitPayment} disabled={paySubmitting}>
+              <Button
+                variant="primary"
+                onClick={handleSubmitPayment}
+                disabled={
+                  paySubmitting ||
+                  (paymentMethod === 'bank' && bankAccountsForPayment.length === 0)
+                }
+              >
                 {paySubmitting ? 'Menyimpan...' : paymentMethod === 'saudi' ? 'Simpan Pembayaran Saudi' : paymentMethod === 'bank' ? 'Upload Bukti Bayar' : 'Lanjut'}
               </Button>
             </ModalFooter>

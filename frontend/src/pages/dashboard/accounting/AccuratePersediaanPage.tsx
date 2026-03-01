@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Package, Plus, RefreshCw, Warehouse, BarChart3 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import { accountingApi, branchesApi } from '../../../services/api';
@@ -39,6 +41,21 @@ const AccuratePersediaanPage: React.FC = () => {
       if (r.data.success) setBranches(r.data.data || []);
     }).catch(() => setBranches([]));
   }, []);
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const paginatedWarehouses = useMemo(() => {
+    const start = (page - 1) * limit;
+    return warehouses.slice(start, start + limit);
+  }, [warehouses, page, limit]);
+  const totalPages = Math.max(1, Math.ceil(warehouses.length / limit));
+
+  const columns: TableColumn[] = [
+    { id: 'code', label: 'Kode', align: 'left' },
+    { id: 'name', label: 'Nama', align: 'left' },
+    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'status', label: 'Status', align: 'left' }
+  ];
 
   const handleCreate = async () => {
     if (!form.code.trim() || !form.name.trim()) {
@@ -118,28 +135,27 @@ const AccuratePersediaanPage: React.FC = () => {
         ) : warehouses.length === 0 ? (
           <div className="py-12 text-center text-slate-500">Belum ada gudang. Klik Tambah Gudang untuk menambah.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-max">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Kode</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Nama</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Cabang</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {warehouses.map((w) => (
-                  <tr key={w.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                    <td className="py-3 px-4 font-mono font-medium">{w.code}</td>
-                    <td className="py-3 px-4">{w.name}</td>
-                    <td className="py-3 px-4">{w.Branch && w.Branch.name ? w.Branch.name : (w.branch_id || '–')}</td>
-                    <td className="py-3 px-4">{w.is_active !== false ? 'Aktif' : 'Nonaktif'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            columns={columns}
+            data={paginatedWarehouses}
+            emptyMessage="Belum ada gudang"
+            pagination={warehouses.length > 0 ? {
+              total: warehouses.length,
+              page,
+              limit,
+              totalPages,
+              onPageChange: setPage,
+              onLimitChange: (l) => { setLimit(l); setPage(1); }
+            } : undefined}
+            renderRow={(w) => (
+              <tr key={w.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                <td className="py-3 px-4 font-mono font-medium">{w.code}</td>
+                <td className="py-3 px-4">{w.name}</td>
+                <td className="py-3 px-4">{w.Branch && w.Branch.name ? w.Branch.name : (w.branch_id || '–')}</td>
+                <td className="py-3 px-4">{w.is_active !== false ? 'Aktif' : 'Nonaktif'}</td>
+              </tr>
+            )}
+          />
         )}
       </Card>
 

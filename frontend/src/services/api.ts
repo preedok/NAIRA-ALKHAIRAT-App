@@ -627,6 +627,18 @@ export const accountingApi = {
     api.patch<{ success: boolean; data: ChartOfAccountItem; message: string }>(`/accounting/chart-of-accounts/${id}`, body),
   deleteChartOfAccount: (id: string) =>
     api.delete<{ success: boolean; message: string }>(`/accounting/chart-of-accounts/${id}`),
+  getBanks: (params?: { is_active?: string }) =>
+    api.get<{ success: boolean; data: BankItem[] }>('/accounting/banks', { params }),
+  getBankAccounts: (params?: { is_active?: string }) =>
+    api.get<{ success: boolean; data: BankAccountItem[] }>('/accounting/bank-accounts', { params }),
+  getBankAccountById: (id: string) =>
+    api.get<{ success: boolean; data: BankAccountItem }>(`/accounting/bank-accounts/${id}`),
+  createBankAccount: (body: { code?: string; name: string; bank_name: string; account_number: string; currency?: string }) =>
+    api.post<{ success: boolean; data: BankAccountItem; message: string }>('/accounting/bank-accounts', body),
+  updateBankAccount: (id: string, body: { name?: string; bank_name?: string; account_number?: string; currency?: string; is_active?: boolean }) =>
+    api.patch<{ success: boolean; data: BankAccountItem; message: string }>(`/accounting/bank-accounts/${id}`, body),
+  deleteBankAccount: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/accounting/bank-accounts/${id}`),
   getFiscalYears: (params?: { is_closed?: string; search?: string }) =>
     api.get<{ success: boolean; data: FiscalYearItem[] }>('/accounting/fiscal-years', { params }),
   getFiscalYearById: (id: string) =>
@@ -836,6 +848,24 @@ export interface AccountingKpiData {
   by_wilayah: Array<{ wilayah_id: string; name: string; revenue: number; receivable: number }>;
   by_product: Record<string, number>;
   branches: { id: string; code: string; name: string }[];
+}
+export interface BankItem {
+  id: string;
+  code: string;
+  name: string;
+  is_active?: boolean;
+  sort_order?: number;
+}
+export interface BankAccountItem {
+  id: string;
+  code: string;
+  name: string;
+  bank_name: string;
+  account_number: string;
+  currency: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 export interface ChartOfAccountItem {
   id: string;

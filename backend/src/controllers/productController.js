@@ -145,7 +145,7 @@ const list = asyncHandler(async (req, res) => {
   const includeList = with_prices === 'true'
     ? [
         { model: ProductPrice, as: 'ProductPrices', required: false },
-        ...(type === 'hotel' || type === 'visa' || type === 'ticket' ? [{ model: ProductAvailability, as: 'ProductAvailability', required: false }] : [])
+        { model: ProductAvailability, as: 'ProductAvailability', required: false }
       ]
     : [];
   const { count, rows: products } = await Product.findAndCountAll({
@@ -184,16 +184,17 @@ const list = asyncHandler(async (req, res) => {
         price_general_sar: price_general_sar ?? null,
         price_general_usd: price_general_usd ?? null
       };
-      if (type === 'hotel') {
+      const productType = p.type || (p.toJSON && p.toJSON().type);
+      if (productType === 'hotel') {
         const av = p.ProductAvailability;
         const avMeta = (av?.meta || {}) || {};
         const roomTypesMeta = avMeta.room_types || {};
-        const generalPrices = prices.filter(pr => !pr.branch_id && !pr.owner_id);
+        const generalPricesHotel = prices.filter(pr => !pr.branch_id && !pr.owner_id);
         const rooms = {};
         let mealPriceIdr = base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null;
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
-          const priceRow = generalPrices.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
-          const priceWithMeal = generalPrices.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
+          const priceRow = generalPricesHotel.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
+          const priceWithMeal = generalPricesHotel.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
           if (mealPriceIdr == null && priceRow && priceWithMeal) {
             mealPriceIdr = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
           }
@@ -201,8 +202,8 @@ const list = asyncHandler(async (req, res) => {
         const mealToSubtract = mealPriceIdr ?? (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : 0);
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
-          const priceRow = generalPrices.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
-          const priceWithMeal = generalPrices.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
+          const priceRow = generalPricesHotel.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
+          const priceWithMeal = generalPricesHotel.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
           const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
           rooms[rt] = { quantity: qty, price: basePrice };
         });
@@ -210,11 +211,11 @@ const list = asyncHandler(async (req, res) => {
         base.prices_by_room = rooms;
         base.meal_price_idr = mealPriceIdr;
       }
-      if (type === 'visa') {
+      if (productType === 'visa') {
         const av = p.ProductAvailability;
         base.quota = av && av.quantity != null ? Number(av.quantity) : 0;
       }
-      if (type === 'ticket') {
+      if (productType === 'ticket') {
         const av = p.ProductAvailability;
         const bandaraSchedules = (av?.meta && av.meta.bandara_schedules) ? av.meta.bandara_schedules : {};
         const prices = p.ProductPrices || [];

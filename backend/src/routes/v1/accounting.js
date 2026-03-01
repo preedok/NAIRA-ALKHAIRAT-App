@@ -18,6 +18,11 @@ router.get('/export-financial-excel', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN
 router.get('/export-financial-pdf', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), accountingController.exportFinancialPdf);
 router.get('/export-invoices-excel', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), accountingController.exportInvoicesExcel);
 
+// Daftar bank & rekening bank (read-only): boleh semua user login, untuk dropdown pembayaran invoice
+router.get('/banks', accountingController.getBanks);
+router.get('/bank-accounts', accountingController.getBankAccounts);
+router.get('/bank-accounts/:id', accountingController.getBankAccountById);
+
 router.use(requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING));
 
 // Ping untuk cek koneksi modul accounting
@@ -30,6 +35,10 @@ router.get('/chart-of-accounts/:id', accountingController.getChartOfAccountById)
 router.post('/chart-of-accounts', accountingController.createChartOfAccount);
 router.patch('/chart-of-accounts/:id', accountingController.updateChartOfAccount);
 router.delete('/chart-of-accounts/:id', accountingController.deleteChartOfAccount);
+// Master bank & rekening bank: create/update/delete hanya role accounting
+router.post('/bank-accounts', accountingController.createBankAccount);
+router.patch('/bank-accounts/:id', accountingController.updateBankAccount);
+router.delete('/bank-accounts/:id', accountingController.deleteBankAccount);
 // Fiscal years: specific routes first (with :id)
 router.get('/fiscal-years', accountingController.getFiscalYears);
 router.get('/fiscal-years/:id', accountingController.getFiscalYearById);

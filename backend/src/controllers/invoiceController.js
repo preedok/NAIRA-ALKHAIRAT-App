@@ -3,7 +3,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
-const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation } = require('../models');
+const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -619,7 +619,13 @@ const getById = asyncHandler(async (req, res) => {
   const rules = await getRulesForBranch(invoice.branch_id);
   const data = invoice.toJSON();
   data.currency_rates = rules.currency_rates || {};
-  data.bank_accounts = Array.isArray(rules.bank_accounts) ? rules.bank_accounts : (typeof rules.bank_accounts === 'string' ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })() : []);
+  // Rekening bank untuk pembayaran: dari Data Rekening Bank (accounting), agar owner/role lain dapat daftar tanpa akses API accounting
+  const accountingBankAccounts = await AccountingBankAccount.findAll({
+    where: { is_active: true },
+    order: [['bank_name', 'ASC'], ['account_number', 'ASC']],
+    attributes: ['id', 'code', 'name', 'bank_name', 'account_number', 'currency']
+  });
+  data.bank_accounts = accountingBankAccounts.length > 0 ? accountingBankAccounts.map((a) => a.toJSON()) : (Array.isArray(rules.bank_accounts) ? rules.bank_accounts : (typeof rules.bank_accounts === 'string' ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })() : []));
   res.json({ success: true, data });
 });
 

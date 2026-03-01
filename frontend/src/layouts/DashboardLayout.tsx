@@ -129,7 +129,7 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_pusat', 'role_accounting']
   },
   {
-    title: 'Chart of Accounts',
+    title: 'Data Rekening Bank',
     icon: <FileText className="w-5 h-5" />,
     path: '/dashboard/accounting/chart-of-accounts',
     roles: ['role_accounting']

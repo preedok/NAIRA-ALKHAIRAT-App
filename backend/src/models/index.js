@@ -50,6 +50,8 @@ const AccuratePurchaseOrder = require('./AccuratePurchaseOrder');
 const AccurateWarehouse = require('./AccurateWarehouse');
 const AccurateFixedAsset = require('./AccurateFixedAsset');
 const AccurateDepreciationSchedule = require('./AccurateDepreciationSchedule');
+const AccountingBankAccount = require('./AccountingBankAccount');
+const Bank = require('./Bank');
 
 // Wilayah -> Provinsi -> Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
@@ -203,6 +205,10 @@ JournalEntry.hasMany(JournalEntryLine, { foreignKey: 'journal_entry_id', as: 'Li
 JournalEntryLine.belongsTo(JournalEntry, { foreignKey: 'journal_entry_id', as: 'JournalEntry' });
 JournalEntryLine.belongsTo(ChartOfAccount, { foreignKey: 'account_id', as: 'Account' });
 
+AccountingBankAccount.belongsTo(ChartOfAccount, { foreignKey: 'gl_account_id', as: 'GlAccount' });
+AccountingBankAccount.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+Branch.hasMany(AccountingBankAccount, { foreignKey: 'branch_id', as: 'BankAccounts' });
+
 PayrollSetting.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
 Branch.hasOne(PayrollSetting, { foreignKey: 'branch_id', as: 'PayrollSetting' });
 EmployeeSalary.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
@@ -288,7 +294,9 @@ const db = {
   AccuratePurchaseOrder,
   AccurateWarehouse,
   AccurateFixedAsset,
-  AccurateDepreciationSchedule
+  AccurateDepreciationSchedule,
+  AccountingBankAccount,
+  Bank
 };
 
 module.exports = db;
