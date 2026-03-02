@@ -339,6 +339,8 @@ export const invoicesApi = {
   getSummary: (params?: { status?: string; branch_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; order_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
     api.get<{ success: boolean; data: InvoicesSummaryData }>('/invoices/summary', { params }),
   getById: (id: string) => api.get(`/invoices/${id}`),
+  getStatusHistory: (id: string) => api.get(`/invoices/${id}/status-history`),
+  getOrderRevisions: (id: string) => api.get(`/invoices/${id}/order-revisions`),
   getPdf: (id: string) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
   create: (body: { order_id: string; is_super_promo?: boolean }) => api.post('/invoices', body),
   unblock: (id: string) => api.patch(`/invoices/${id}/unblock`),

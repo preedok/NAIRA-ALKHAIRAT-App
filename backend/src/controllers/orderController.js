@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
 const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES } = require('../constants');
 const { getEffectivePrice } = require('./productController');
@@ -18,6 +18,23 @@ const generateOrderNumber = () => {
   return `ORD-${y}-${String(n).padStart(5, '0')}`;
 };
 
+async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta }) {
+  try {
+    await InvoiceStatusHistory.create({
+      invoice_id,
+      from_status: from_status ?? null,
+      to_status,
+      changed_at: new Date(),
+      changed_by: changed_by || null,
+      reason: reason || null,
+      meta: meta && typeof meta === 'object' ? meta : {}
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('orderController logInvoiceStatusChange failed:', e?.message || e);
+  }
+}
+
 /** Jumlah malam dari check_in s/d check_out (tanggal saja, tanpa waktu). Return 0 jika invalid. */
 function getNights(checkIn, checkOut) {
   if (!checkIn || !checkOut) return 0;
@@ -25,6 +42,83 @@ function getNights(checkIn, checkOut) {
   const b = new Date(String(checkOut).slice(0, 10));
   if (isNaN(a.getTime()) || isNaN(b.getTime()) || b <= a) return 0;
   return Math.floor((b - a) / (24 * 60 * 60 * 1000));
+}
+
+function pickDiffMeta(type, meta) {
+  const m = meta && typeof meta === 'object' ? meta : {};
+  if (type === ORDER_ITEM_TYPE.HOTEL) return { room_type: m.room_type ?? null, with_meal: m.with_meal ?? m.meal ?? false, check_in: m.check_in ?? null, check_out: m.check_out ?? null };
+  if (type === ORDER_ITEM_TYPE.TICKET) return { bandara: m.bandara ?? null, trip_type: m.trip_type ?? null, departure_date: m.departure_date ?? null, return_date: m.return_date ?? null };
+  if (type === ORDER_ITEM_TYPE.BUS) return { travel_date: m.travel_date ?? null, route_type: m.route_type ?? null, bus_type: m.bus_type ?? null, trip_type: m.trip_type ?? null };
+  if (type === ORDER_ITEM_TYPE.VISA) return { travel_date: m.travel_date ?? null };
+  return {};
+}
+
+function orderItemDiffKey(it) {
+  const type = String(it.type || '');
+  const pid = String(it.product_ref_id || it.product_id || '');
+  const meta = it.meta && typeof it.meta === 'object' ? it.meta : {};
+  if (type === ORDER_ITEM_TYPE.HOTEL) {
+    const rt = String(meta.room_type || it.room_type || '');
+    const wm = (meta.with_meal ?? meta.meal) ? '1' : '0';
+    return `${type}:${pid}:${rt}:${wm}`;
+  }
+  if (type === ORDER_ITEM_TYPE.TICKET) {
+    const bandara = String(meta.bandara || '');
+    const trip = String(meta.trip_type || '');
+    return `${type}:${pid}:${bandara}:${trip}`;
+  }
+  if (type === ORDER_ITEM_TYPE.BUS) {
+    const route = String(meta.route_type || '');
+    const busType = String(meta.bus_type || '');
+    const trip = String(meta.trip_type || '');
+    return `${type}:${pid}:${route}:${busType}:${trip}`;
+  }
+  return `${type}:${pid}`;
+}
+
+function groupForDiff(items) {
+  const map = new Map();
+  for (const raw of items || []) {
+    const key = orderItemDiffKey(raw);
+    const prev = map.get(key);
+    const qty = Math.max(0, Number(raw.quantity) || 0);
+    const unit = Number.parseFloat(raw.unit_price) || 0;
+    const base = prev || {
+      type: raw.type,
+      product_ref_id: raw.product_ref_id || raw.product_id,
+      quantity: 0,
+      unit_price: unit,
+      meta: pickDiffMeta(raw.type, raw.meta)
+    };
+    base.quantity += qty;
+    // Jika unit_price berbeda antar item dengan key sama, simpan 0 agar UI tidak misleading
+    if (prev && Math.abs((prev.unit_price || 0) - unit) > 0.01) base.unit_price = 0;
+    map.set(key, base);
+  }
+  return map;
+}
+
+function diffGrouped(beforeMap, afterMap) {
+  const added = [];
+  const removed = [];
+  const updated = [];
+  const keys = new Set([...beforeMap.keys(), ...afterMap.keys()]);
+  for (const k of keys) {
+    const b = beforeMap.get(k);
+    const a = afterMap.get(k);
+    if (!b && a) added.push({ key: k, after: a });
+    else if (b && !a) removed.push({ key: k, before: b });
+    else if (b && a) {
+      const changed = [];
+      if (Math.abs((b.quantity || 0) - (a.quantity || 0)) > 0.0001) changed.push('quantity');
+      if (Math.abs((b.unit_price || 0) - (a.unit_price || 0)) > 0.01) changed.push('unit_price');
+      const bm = JSON.stringify(b.meta || {});
+      const am = JSON.stringify(a.meta || {});
+      if (bm !== am) changed.push('meta');
+      if (changed.length) updated.push({ key: k, before: b, after: a, changed_fields: changed });
+    }
+  }
+  return { added, removed, updated };
 }
 
 /**
@@ -229,11 +323,10 @@ const create = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Visa wajib bersama hotel' });
   }
 
-  const busMinPack = rules.bus_min_pack ?? 35;
-  const busPenaltyIdr = rules.bus_penalty_idr ?? 500000;
   let subtotal = 0;
   let totalJamaah = 0;
-  let penaltyAmount = 0;
+  // Penalti bus dihapus: total_amount = subtotal (sesuai UI).
+  const penaltyAmount = 0;
   const orderItems = [];
 
   for (const it of items) {
@@ -287,10 +380,6 @@ const create = asyncHandler(async (req, res) => {
     }
     if (it.type === ORDER_ITEM_TYPE.BUS) {
       totalJamaah += qty;
-      const busType = it.meta?.bus_type || 'besar';
-      if (busType === 'besar' && qty < busMinPack) {
-        penaltyAmount += (busMinPack - qty) * busPenaltyIdr;
-      }
     }
     const meta = {
       room_type: it.room_type,
@@ -345,7 +434,7 @@ const create = asyncHandler(async (req, res) => {
       total_jamaah: totalJamaah,
       subtotal,
       penalty_amount: penaltyAmount,
-      total_amount: subtotal + penaltyAmount,
+      total_amount: subtotal,
       status: 'draft',
       created_by: req.user.id,
       notes,
@@ -462,12 +551,25 @@ const update = asyncHandler(async (req, res) => {
     if (visaNeedsHotel && !hasHotel) {
       return res.status(400).json({ success: false, message: 'Visa wajib bersama hotel' });
     }
-    const rules = await getRulesForBranch(order.branch_id);
-    const busMinPack = rules.bus_min_pack ?? 35;
-    const busPenaltyIdr = rules.bus_penalty_idr ?? 500000;
+
+    const totalsBefore = {
+      subtotal: parseFloat(order.subtotal) || 0,
+      penalty_amount: parseFloat(order.penalty_amount) || 0,
+      total_amount: parseFloat(order.total_amount) || 0
+    };
+    const beforeItemsRaw = (order.OrderItems || []).map((oi) => ({
+      type: oi.type,
+      product_ref_id: oi.product_ref_id,
+      quantity: oi.quantity,
+      unit_price: oi.unit_price,
+      meta: oi.meta
+    }));
+    const beforeMap = groupForDiff(beforeItemsRaw);
+    const afterItemsRaw = [];
+
+    // Penalti bus dihapus: total_amount = subtotal (sesuai UI).
     await OrderItem.destroy({ where: { order_id: order.id } });
-    let subtotal = 0, totalJamaah = 0, penaltyAmount = 0;
-    const isOwner = req.user.role === 'owner';
+    let subtotal = 0, totalJamaah = 0;
     for (const it of items) {
       if (it.type === ORDER_ITEM_TYPE.TICKET) {
         const bandara = it.meta?.bandara;
@@ -489,14 +591,9 @@ const update = asyncHandler(async (req, res) => {
         }
       }
       const qty = parseInt(it.quantity, 10) || 1;
-      let unitPrice;
-      if (isOwner) {
+      let unitPrice = parseFloat(it.unit_price);
+      if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
         unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, it.currency || 'IDR') || 0;
-      } else {
-        unitPrice = parseFloat(it.unit_price);
-        if (unitPrice == null || isNaN(unitPrice)) {
-          unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, it.currency || 'IDR') || 0;
-        }
       }
       const checkIn = it.check_in || it.meta?.check_in;
       const checkOut = it.check_out || it.meta?.check_out;
@@ -521,10 +618,6 @@ const update = asyncHandler(async (req, res) => {
       }
       if (it.type === ORDER_ITEM_TYPE.BUS) {
         totalJamaah += qty;
-        const busType = it.meta?.bus_type || 'besar';
-        if (busType === 'besar' && qty < busMinPack) {
-          penaltyAmount += (busMinPack - qty) * busPenaltyIdr;
-        }
       }
       const meta = { room_type: it.room_type, meal: it.meal, ...(it.meta || {}) };
       if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_in || it.meta?.check_in)) meta.check_in = it.check_in || it.meta.check_in;
@@ -533,6 +626,13 @@ const update = asyncHandler(async (req, res) => {
         const nights = getNights(checkIn, checkOut);
         if (nights > 0) meta.nights = nights;
       }
+      afterItemsRaw.push({
+        type: it.type,
+        product_id: it.product_id,
+        quantity: qty,
+        unit_price: unitPrice || 0,
+        meta
+      });
       await OrderItem.create({
         order_id: order.id,
         type: it.type,
@@ -548,11 +648,61 @@ const update = asyncHandler(async (req, res) => {
     await order.update({
       subtotal,
       total_jamaah: totalJamaah,
-      penalty_amount: penaltyAmount,
-      total_amount: subtotal + penaltyAmount
+      penalty_amount: 0,
+      total_amount: subtotal
     });
     const orderReloaded = await Order.findByPk(order.id, { attributes: ['id', 'total_amount', 'subtotal', 'penalty_amount'] });
-    await syncInvoiceFromOrder(orderReloaded || order);
+
+    // Simpan revisi (diff) untuk audit perubahan order
+    const afterMap = groupForDiff(afterItemsRaw.map((x) => ({ ...x, product_ref_id: x.product_id })));
+    const diff = diffGrouped(beforeMap, afterMap);
+    const hasChanges = (diff.added?.length || 0) + (diff.removed?.length || 0) + (diff.updated?.length || 0) > 0;
+
+    let revision = null;
+    const inv = await Invoice.findOne({ where: { order_id: order.id } });
+    if (hasChanges) {
+      const maxNo = await OrderRevision.max('revision_no', { where: { order_id: order.id } });
+      const revisionNo = (Number.isFinite(maxNo) ? Number(maxNo) : 0) + 1;
+
+      const productIds = [...new Set([
+        ...Array.from(beforeMap.values()).map((v) => v.product_ref_id).filter(Boolean),
+        ...Array.from(afterMap.values()).map((v) => v.product_ref_id).filter(Boolean)
+      ])];
+      const productRows = productIds.length ? await Product.findAll({ where: { id: productIds }, attributes: ['id', 'name'], raw: true }) : [];
+      const productNameMap = new Map(productRows.map((p) => [p.id, p.name]));
+      const attachNames = (obj) => {
+        if (!obj) return obj;
+        const pid = obj.product_ref_id;
+        return { ...obj, product_name: productNameMap.get(pid) || null };
+      };
+      const diffWithNames = {
+        added: (diff.added || []).map((x) => ({ ...x, after: attachNames(x.after) })),
+        removed: (diff.removed || []).map((x) => ({ ...x, before: attachNames(x.before) })),
+        updated: (diff.updated || []).map((x) => ({ ...x, before: attachNames(x.before), after: attachNames(x.after) }))
+      };
+
+      revision = await OrderRevision.create({
+        order_id: order.id,
+        invoice_id: inv ? inv.id : null,
+        revision_no: revisionNo,
+        changed_at: new Date(),
+        changed_by: req.user.id,
+        diff: diffWithNames,
+        totals_before: totalsBefore,
+        totals_after: { subtotal, penalty_amount: 0, total_amount: subtotal }
+      });
+    }
+
+    // Sinkronkan invoice & tandai “DP + Update Invoice” jika sudah ada pembayaran
+    const paid = inv ? (parseFloat(inv.paid_amount) || 0) : 0;
+    const shouldMarkUpdated = inv && paid > 0;
+    await syncInvoiceFromOrder(orderReloaded || order, {
+      changed_by: req.user.id,
+      reason: shouldMarkUpdated ? 'order_updated_after_payment' : 'sync_from_order',
+      order_updated_at: shouldMarkUpdated ? new Date() : null,
+      last_order_revision_id: revision ? revision.id : null,
+      meta: revision ? { revision_id: revision.id, revision_no: revision.revision_no } : null
+    });
   }
   if (notes !== undefined) await order.update({ notes });
   const full = await Order.findByPk(req.params.id, {
@@ -627,7 +777,36 @@ const destroy = asyncHandler(async (req, res) => {
   }
 
   await order.update({ status: 'cancelled' });
-  if (inv) await inv.update({ status: 'canceled' });
+  if (inv) {
+    await logInvoiceStatusChange({
+      invoice_id: inv.id,
+      from_status: inv.status,
+      to_status: 'canceled',
+      changed_by: req.user.id,
+      reason: 'canceled',
+      meta: { action: action || null, refund_id: refund?.id || null, order_id: order.id }
+    });
+    await inv.update({ status: 'canceled' });
+    if (refund) {
+      await logInvoiceStatusChange({
+        invoice_id: inv.id,
+        from_status: 'canceled',
+        to_status: 'canceled',
+        changed_by: req.user.id,
+        reason: 'refund_requested',
+        meta: { refund_id: refund.id, amount: paidAmount, bank_name: bankName, account_number: accountNumber }
+      });
+    } else if (balanceAdded != null) {
+      await logInvoiceStatusChange({
+        invoice_id: inv.id,
+        from_status: 'canceled',
+        to_status: 'canceled',
+        changed_by: req.user.id,
+        reason: 'to_balance',
+        meta: { amount: paidAmount }
+      });
+    }
+  }
 
   let message = 'Invoice dibatalkan.';
   if (balanceAdded != null) message = `Invoice dibatalkan. Saldo akun ditambah Rp ${Number(paidAmount).toLocaleString('id-ID')}. Dapat digunakan untuk order baru atau alokasi ke tagihan.`;

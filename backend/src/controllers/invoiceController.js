@@ -3,7 +3,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
-const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount } = require('../models');
+const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, InvoiceStatusHistory, OrderRevision } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -21,6 +21,42 @@ const generateInvoiceNumber = () => {
   return `INV-${y}-${String(n).padStart(5, '0')}`;
 };
 
+async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta, changed_at, transaction }) {
+  try {
+    await InvoiceStatusHistory.create({
+      invoice_id,
+      from_status: from_status ?? null,
+      to_status,
+      changed_at: changed_at || new Date(),
+      changed_by: changed_by || null,
+      reason: reason || null,
+      meta: meta && typeof meta === 'object' ? meta : {}
+    }, transaction ? { transaction } : undefined);
+  } catch (e) {
+    // Jangan mengganggu flow utama jika logging gagal
+    // eslint-disable-next-line no-console
+    console.error('logInvoiceStatusChange failed:', e?.message || e);
+  }
+}
+
+async function updateInvoiceWithAudit(invoice, updates, { changedBy, reason, meta, transaction } = {}) {
+  const nextStatus = updates && Object.prototype.hasOwnProperty.call(updates, 'status') ? updates.status : undefined;
+  const willLog = nextStatus != null && (String(nextStatus) !== String(invoice.status) || !!reason);
+  if (willLog) {
+    await logInvoiceStatusChange({
+      invoice_id: invoice.id,
+      from_status: invoice.status,
+      to_status: nextStatus,
+      changed_by: changedBy || null,
+      reason,
+      meta,
+      transaction
+    });
+  }
+  await invoice.update(updates, transaction ? { transaction } : undefined);
+  return invoice;
+}
+
 async function ensureBlockedStatus(invoice) {
   if (invoice.status !== INVOICE_STATUS.TENTATIVE || invoice.is_blocked) return;
   if (invoice.unblocked_at) return;
@@ -30,6 +66,31 @@ async function ensureBlockedStatus(invoice) {
     const order = await Order.findByPk(invoice.order_id);
     if (order) await order.update({ status: 'blocked', blocked_at: new Date(), blocked_reason: 'DP lewat 1x24 jam' });
   }
+}
+
+/**
+ * Hitung ulang paid_amount dan status invoice dari semua bukti bayar yang verified.
+ * Dipanggil setelah konfirmasi/tolak bukti bayar agar status Tagihan DP → Pembayaran DP jika DP terpenuhi.
+ */
+async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, meta } = {}) {
+  const proofs = await PaymentProof.findAll({
+    where: { invoice_id: invoice.id, verified_status: 'verified' }
+  });
+  const verifiedSum = proofs.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const total = parseFloat(invoice.total_amount) || 0;
+  const dpAmount = parseFloat(invoice.dp_amount) || 0;
+  const remaining = Math.max(0, total - verifiedSum);
+  let newStatus;
+  if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
+  else if (dpAmount > 0 && verifiedSum >= dpAmount) newStatus = INVOICE_STATUS.PARTIAL_PAID; // Pembayaran DP (DP terpenuhi)
+  else if (verifiedSum > 0) newStatus = INVOICE_STATUS.PARTIAL_PAID; // Ada pembayaran terverifikasi
+  else newStatus = INVOICE_STATUS.TENTATIVE; // Tagihan DP
+  await updateInvoiceWithAudit(invoice, {
+    paid_amount: verifiedSum,
+    remaining_amount: remaining,
+    status: newStatus
+  }, { changedBy, reason: reason || 'recalc_from_verified_proofs', meta: { ...(meta || {}), verified_sum: verifiedSum } });
+  return { verifiedSum, remaining, newStatus };
 }
 
 /**
@@ -156,7 +217,7 @@ const list = asyncHandler(async (req, res) => {
       {
         model: OrderItem,
         as: 'OrderItems',
-        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
+        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
         required: false,
         attributes: ['id', 'type', 'quantity'],
         include: [
@@ -212,7 +273,7 @@ const list = asyncHandler(async (req, res) => {
   let orderItemsByOrderId = {};
   if (orderIdsFromRows.length > 0) {
     const items = await OrderItem.findAll({
-      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
+      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
       include: [
         { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false },
         { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
@@ -344,7 +405,7 @@ const listDraftOrders = asyncHandler(async (req, res) => {
     {
       model: OrderItem,
       as: 'OrderItems',
-      where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
+      where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
       required: false,
       attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta'],
       include: [
@@ -565,6 +626,14 @@ const create = asyncHandler(async (req, res) => {
       `Jatuh tempo DP ${dpDueDays} hari setelah issued`
     ]
   });
+  await logInvoiceStatusChange({
+    invoice_id: invoice.id,
+    from_status: null,
+    to_status: invoice.status,
+    changed_by: req.user?.id || null,
+    reason: 'invoice_created',
+    meta: { order_id: order.id }
+  });
 
   await Notification.create({
     user_id: order.owner_id,
@@ -631,6 +700,14 @@ async function createInvoiceForOrder(order, opts = {}) {
       `Jatuh tempo DP ${dpDueDays} hari setelah issued`
     ]
   });
+  await logInvoiceStatusChange({
+    invoice_id: invoice.id,
+    from_status: null,
+    to_status: invoice.status,
+    changed_by: opts?.created_by || null,
+    reason: 'invoice_auto_created',
+    meta: { order_id: orderId }
+  });
   await Notification.create({
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
@@ -692,14 +769,14 @@ const getById = asyncHandler(async (req, res) => {
     if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
     else if ((parseFloat(invoice.dp_amount) || 0) > 0 && verifiedSum >= parseFloat(invoice.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
     else if (verifiedSum > 0 && [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-    await invoice.update({ paid_amount: verifiedSum, remaining_amount: remaining, status: newStatus });
+    await updateInvoiceWithAudit(invoice, { paid_amount: verifiedSum, remaining_amount: remaining, status: newStatus }, { changedBy: null, reason: 'sync_paid_on_get', meta: { verified_sum: verifiedSum } });
     invoice.paid_amount = verifiedSum;
     invoice.remaining_amount = remaining;
     invoice.status = newStatus;
   } else if (invoice.status === INVOICE_STATUS.TENTATIVE && verifiedSum > 0) {
     const dpAmt = parseFloat(invoice.dp_amount) || 0;
     if (dpAmt > 0 && verifiedSum >= dpAmt) {
-      await invoice.update({ status: INVOICE_STATUS.PARTIAL_PAID });
+      await updateInvoiceWithAudit(invoice, { status: INVOICE_STATUS.PARTIAL_PAID }, { changedBy: null, reason: 'sync_paid_on_get', meta: { verified_sum: verifiedSum } });
       invoice.status = INVOICE_STATUS.PARTIAL_PAID;
     }
   }
@@ -776,40 +853,29 @@ const verifyPayment = asyncHandler(async (req, res) => {
   }
   if (isApproved) {
     await proof.update({ verified_by: req.user.id, verified_at: new Date(), verified_status: 'verified', notes: notes || proof.notes });
-    const currentPaid = parseFloat(invoice.paid_amount) || 0;
-    const newPaid = currentPaid + (parseFloat(proof.amount) || 0);
-    const remaining = Math.max(0, (parseFloat(invoice.total_amount) || 0) - newPaid);
-    let newStatus = invoice.status;
-    if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
-    else if ((parseFloat(invoice.dp_amount) || 0) > 0 && newPaid >= parseFloat(invoice.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-    await invoice.update({
-      paid_amount: newPaid,
-      remaining_amount: remaining,
-      status: newStatus
-    });
+    const inv = await Invoice.findByPk(invoice.id);
+    const { newStatus } = await recalcInvoiceFromVerifiedProofs(inv, { changedBy: req.user.id, reason: 'payment_proof_verified', meta: { payment_proof_id: proof.id } });
     if (newStatus === INVOICE_STATUS.PAID) {
-      const order = await Order.findByPk(invoice.order_id);
+      const order = await Order.findByPk(inv.order_id);
       if (order && !['completed', 'cancelled'].includes(order.status)) {
         await order.update({ status: 'processing' });
       }
     }
     await Notification.create({
-      user_id: invoice.owner_id,
+      user_id: inv.owner_id,
       trigger: newStatus === INVOICE_STATUS.PAID ? NOTIFICATION_TRIGGER.LUNAS : NOTIFICATION_TRIGGER.DP_RECEIVED,
       title: newStatus === INVOICE_STATUS.PAID ? 'Invoice lunas' : 'DP diterima',
-      message: `Pembayaran untuk ${invoice.invoice_number} telah diverifikasi.`,
-      data: { invoice_id: invoice.id }
+      message: `Pembayaran untuk ${inv.invoice_number} telah diverifikasi.`,
+      data: { invoice_id: inv.id }
     });
+    Object.assign(invoice, await Invoice.findByPk(inv.id, { raw: true }));
   } else {
     const wasVerified = proof.verified_status === 'verified' || (proof.verified_at != null);
     await proof.update({ verified_status: 'rejected', verified_by: null, verified_at: null, notes: notes || proof.notes });
     if (wasVerified) {
-      const newPaid = Math.max(0, (parseFloat(invoice.paid_amount) || 0) - (parseFloat(proof.amount) || 0));
-      const remaining = Math.max(0, parseFloat(invoice.total_amount) - newPaid);
-      let newStatus = INVOICE_STATUS.TENTATIVE;
-      if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
-      else if (parseFloat(invoice.dp_amount) > 0 && newPaid >= parseFloat(invoice.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-      await invoice.update({ paid_amount: newPaid, remaining_amount: remaining, status: newStatus });
+      const inv = await Invoice.findByPk(invoice.id);
+      await recalcInvoiceFromVerifiedProofs(inv, { changedBy: req.user.id, reason: 'payment_proof_rejected', meta: { payment_proof_id: proof.id } });
+      Object.assign(invoice, await Invoice.findByPk(inv.id, { raw: true }));
     }
   }
   const full = await Invoice.findByPk(invoice.id, { include: [{ model: PaymentProof, as: 'PaymentProofs', include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }] });
@@ -839,11 +905,11 @@ const handleOverpaid = asyncHandler(async (req, res) => {
     if (target && target.owner_id === invoice.owner_id) {
       const newPaid = parseFloat(target.paid_amount) + overpaid;
       const remaining = Math.max(0, parseFloat(target.total_amount) - newPaid);
-      await target.update({
+      await updateInvoiceWithAudit(target, {
         paid_amount: newPaid,
         remaining_amount: remaining,
         status: remaining <= 0 ? INVOICE_STATUS.PAID : target.status
-      });
+      }, { changedBy: req.user.id, reason: 'overpaid_transfer_in', meta: { source_invoice_id: invoice.id, amount: overpaid } });
     }
   }
   const full = await Invoice.findByPk(invoice.id);
@@ -882,7 +948,7 @@ const allocateBalance = asyncHandler(async (req, res) => {
   else if (newPaid >= (parseFloat(invoice.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
 
   await profile.update({ balance: newBalance });
-  await invoice.update({ paid_amount: newPaid, remaining_amount: newRemaining, status: newStatus });
+  await updateInvoiceWithAudit(invoice, { paid_amount: newPaid, remaining_amount: newRemaining, status: newStatus }, { changedBy: req.user.id, reason: 'allocate_balance', meta: { amount: allocateAmount } });
   await OwnerBalanceTransaction.create({
     owner_id: invoice.owner_id,
     amount: -allocateAmount,
@@ -956,7 +1022,7 @@ const getPdf = asyncHandler(async (req, res) => {
  * Sinkronkan invoice dengan order setelah order (items/total) berubah.
  * Update total_amount, dp_amount, remaining_amount, status. paid_amount tidak berubah.
  */
-async function syncInvoiceFromOrder(order) {
+async function syncInvoiceFromOrder(order, opts = {}) {
   const invoice = await Invoice.findOne({ where: { order_id: order.id } });
   if (!invoice) return null;
   const newTotal = parseFloat(order.total_amount) || 0;
@@ -982,12 +1048,18 @@ async function syncInvoiceFromOrder(order) {
   } else {
     newStatus = INVOICE_STATUS.TENTATIVE;
   }
-  await invoice.update({
+  await updateInvoiceWithAudit(invoice, {
     total_amount: newTotal,
     dp_amount: dpAmount,
     remaining_amount: remainingAmount,
     overpaid_amount: overpaidAmount,
-    status: newStatus
+    status: newStatus,
+    ...(opts.order_updated_at ? { order_updated_at: opts.order_updated_at } : {}),
+    ...(opts.last_order_revision_id ? { last_order_revision_id: opts.last_order_revision_id } : {})
+  }, {
+    changedBy: opts.changed_by || null,
+    reason: opts.reason || 'sync_from_order',
+    meta: opts.meta || null
   });
   return invoice;
 }
@@ -1111,12 +1183,12 @@ const reallocatePayments = asyncHandler(async (req, res) => {
       if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
       else if (newPaid >= (parseFloat(inv.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
       else newStatus = INVOICE_STATUS.TENTATIVE;
-      await inv.update({
+      await updateInvoiceWithAudit(inv, {
         paid_amount: newPaid,
         remaining_amount: newRemaining,
         overpaid_amount: newOverpaid,
         status: newStatus
-      }, { transaction: tx });
+      }, { changedBy: req.user.id, reason: 'reallocate_out', meta: { amount: deduct, notes, is_canceled: isCanceled }, transaction: tx });
     }
 
     const targetAdd = {};
@@ -1132,11 +1204,11 @@ const reallocatePayments = asyncHandler(async (req, res) => {
       let newStatus = inv.status;
       if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
       else if (newPaid >= (parseFloat(inv.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-      await inv.update({
+      await updateInvoiceWithAudit(inv, {
         paid_amount: newPaid,
         remaining_amount: newRemaining,
         status: newStatus
-      }, { transaction: tx });
+      }, { changedBy: req.user.id, reason: 'reallocate_in', meta: { amount: add, notes }, transaction: tx });
     }
 
     for (const p of parsed) {
@@ -1228,6 +1300,34 @@ const getReleasable = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, releasable_amount: releasable } });
 });
 
+/**
+ * GET /api/v1/invoices/:id/status-history
+ */
+const getStatusHistory = asyncHandler(async (req, res) => {
+  const access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const rows = await InvoiceStatusHistory.findAll({
+    where: { invoice_id: req.params.id },
+    order: [['changed_at', 'ASC']],
+    include: [{ model: User, as: 'ChangedBy', attributes: ['id', 'name', 'email'], required: false }]
+  });
+  res.json({ success: true, data: rows });
+});
+
+/**
+ * GET /api/v1/invoices/:id/order-revisions
+ */
+const getOrderRevisions = asyncHandler(async (req, res) => {
+  const access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const rows = await OrderRevision.findAll({
+    where: { invoice_id: req.params.id },
+    order: [['revision_no', 'DESC']],
+    include: [{ model: User, as: 'ChangedBy', attributes: ['id', 'name', 'email'], required: false }]
+  });
+  res.json({ success: true, data: rows });
+});
+
 module.exports = {
   list,
   listDraftOrders,
@@ -1244,5 +1344,7 @@ module.exports = {
   syncInvoiceFromOrder,
   reallocatePayments,
   listReallocations,
-  getReleasable
+  getReleasable,
+  getStatusHistory,
+  getOrderRevisions
 };

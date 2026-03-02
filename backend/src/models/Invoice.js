@@ -102,6 +102,16 @@ const Invoice = sequelize.define('Invoice', {
   overpaid_handling: {
     type: DataTypes.STRING(50),
     comment: 'refund, transfer_invoice, transfer_order'
+  },
+  order_updated_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Waktu terakhir order diubah setelah ada pembayaran (untuk label DP + update)'
+  },
+  last_order_revision_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Pointer ke order_revisions terakhir (untuk tampilkan diff di UI)'
   }
 }, {
   tableName: 'invoices',

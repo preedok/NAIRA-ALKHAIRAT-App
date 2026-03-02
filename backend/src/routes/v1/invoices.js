@@ -15,6 +15,8 @@ router.get('/', invoiceController.list);
 router.post('/', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
 router.post('/reallocate-payments', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.ADMIN_KOORDINATOR, ROLES.SUPER_ADMIN), invoiceController.reallocatePayments);
 router.get('/:id/pdf', invoiceController.getPdf);
+router.get('/:id/status-history', invoiceController.getStatusHistory);
+router.get('/:id/order-revisions', invoiceController.getOrderRevisions);
 router.get('/:id/payment-proofs/:proofId/file', paymentProofController.getFile);
 router.get('/:id/releasable', invoiceController.getReleasable);
 router.get('/:id', invoiceController.getById);

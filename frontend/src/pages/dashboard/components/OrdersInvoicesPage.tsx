@@ -94,6 +94,9 @@ const OrdersInvoicesPage: React.FC = () => {
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [detailTab, setDetailTab] = useState<'invoice' | 'payments' | 'progress'>('invoice');
+  const [statusHistory, setStatusHistory] = useState<any[]>([]);
+  const [orderRevisions, setOrderRevisions] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [invoicePdfUrl, setInvoicePdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -471,6 +474,25 @@ const OrdersInvoicesPage: React.FC = () => {
   }, [viewInvoice?.id, detailTab, fetchInvoicePdf]);
 
   useEffect(() => {
+    if (!viewInvoice?.id) {
+      setStatusHistory([]);
+      setOrderRevisions([]);
+      return;
+    }
+    setAuditLoading(true);
+    Promise.all([invoicesApi.getStatusHistory(viewInvoice.id), invoicesApi.getOrderRevisions(viewInvoice.id)])
+      .then(([h, r]) => {
+        setStatusHistory((h.data as any)?.data || []);
+        setOrderRevisions((r.data as any)?.data || []);
+      })
+      .catch(() => {
+        setStatusHistory([]);
+        setOrderRevisions([]);
+      })
+      .finally(() => setAuditLoading(false));
+  }, [viewInvoice?.id]);
+
+  useEffect(() => {
     if (showPaymentModal) {
       setPaymentBankAccountsLoading(true);
       accountingApi.getBankAccounts({ is_active: 'true' })
@@ -492,13 +514,13 @@ const OrdersInvoicesPage: React.FC = () => {
     setVerifyingId(paymentProofId);
     try {
       const res = await invoicesApi.verifyPayment(invoiceId, { payment_proof_id: paymentProofId, verified });
-      showToast(verified ? 'Pembayaran dikonfirmasi' : 'Pembayaran ditolak', 'success');
+      showToast(verified ? 'Pembayaran dikonfirmasi. Status invoice diperbarui.' : 'Pembayaran ditolak', 'success');
       if (res.data?.success && res.data?.data) {
         const updated = res.data.data;
         setViewInvoice(updated);
         setInvoices((prev) => prev.map((inv) => (inv.id === invoiceId ? { ...inv, status: updated.status, paid_amount: updated.paid_amount, remaining_amount: updated.remaining_amount, PaymentProofs: updated.PaymentProofs || inv.PaymentProofs } : inv)));
       }
-      fetchInvoices();
+      await fetchInvoices();
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal', 'error');
     } finally {
@@ -824,6 +846,8 @@ const OrdersInvoicesPage: React.FC = () => {
     { id: 'status_ticket', label: 'Status Tiket', align: 'left' },
     { id: 'status_hotel', label: 'Status Hotel', align: 'left' },
     { id: 'status_bus', label: 'Status Bus', align: 'left' },
+    { id: 'status_handling', label: 'Status Handling', align: 'left' },
+    { id: 'status_package', label: 'Status Paket', align: 'left' },
     { id: 'proof', label: 'Bukti Bayar', align: 'left' },
     { id: 'date', label: 'Tgl', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'center' }
@@ -1134,7 +1158,17 @@ const OrdersInvoicesPage: React.FC = () => {
                       })()}
                     </td>
                     <td className="py-3 px-4 align-top">
-                      <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
+                      {(() => {
+                        const updatedAt = inv.order_updated_at || inv.orderUpdatedAt || null;
+                        const isDpUpdated = String(inv.status) === 'partial_paid' && !!updatedAt;
+                        const label = isDpUpdated ? 'Pembayaran DP + Update Invoice' : (INVOICE_STATUS_LABELS[inv.status] || inv.status);
+                        return (
+                          <>
+                            <Badge variant={getStatusBadge(inv.status)}>{label}</Badge>
+                            {isDpUpdated && <div className="text-xs text-slate-500 mt-1">Update order: {formatDate(updatedAt)}</div>}
+                          </>
+                        );
+                      })()}
                       {inv.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}
                       {isDraftRow(inv) ? (
                         <div className="text-xs text-slate-500 mt-1">Belum diterbitkan — pembayaran belum tersedia</div>
@@ -1253,6 +1287,50 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
                                   </div>
                                   {metaLine ? <div className="text-slate-500 pl-0.5">{metaLine}</div> : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                      {(() => {
+                        const handlingItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'handling');
+                        if (handlingItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                        return (
+                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                            {handlingItems.map((item: any, idx: number) => {
+                              const name = item.Product?.name || item.product_name || 'Handling';
+                              const qty = Math.max(0, item.quantity ?? 1);
+                              return (
+                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-1">
+                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                    <span className="text-slate-600">Qty {qty}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                      {(() => {
+                        const packageItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'package');
+                        if (packageItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                        return (
+                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                            {packageItems.map((item: any, idx: number) => {
+                              const name = item.Product?.name || item.product_name || 'Paket';
+                              const qty = Math.max(0, item.quantity ?? 1);
+                              return (
+                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-1">
+                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                    <span className="text-slate-600">Qty {qty}</span>
+                                  </div>
                                 </div>
                               );
                             })}
@@ -1720,7 +1798,17 @@ const OrdersInvoicesPage: React.FC = () => {
                         {/* Baris aksi & ringkasan utama */}
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/80 border border-slate-200/80 shadow-sm">
                           <div className="flex flex-wrap items-center gap-3">
-                            <Badge variant={getStatusBadge(viewInvoice.status)} className="text-sm px-3 py-1">{INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status}</Badge>
+                            {(() => {
+                              const updatedAt = viewInvoice.order_updated_at || viewInvoice.orderUpdatedAt || null;
+                              const isDpUpdated = String(viewInvoice.status) === 'partial_paid' && !!updatedAt;
+                              const label = isDpUpdated ? 'Pembayaran DP + Update Invoice' : (INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status);
+                              return (
+                                <div className="flex flex-col">
+                                  <Badge variant={getStatusBadge(viewInvoice.status)} className="text-sm px-3 py-1 w-fit">{label}</Badge>
+                                  {isDpUpdated && <span className="text-xs text-slate-500 mt-1">Update order: {formatDate(updatedAt)}</span>}
+                                </div>
+                              );
+                            })()}
                             {viewInvoice.is_blocked && <Badge variant="error">Block</Badge>}
                             <span className="text-slate-500 text-sm">{formatDate(viewInvoice.issued_at || viewInvoice.created_at)} · Jatuh tempo DP {formatDate(viewInvoice.due_date_dp)}</span>
                           </div>
@@ -1825,6 +1913,117 @@ const OrdersInvoicesPage: React.FC = () => {
                       </>
                     );
                   })()}
+
+                  {/* Audit: Riwayat Status + Perubahan Order */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <div className="lg:col-span-5 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                      <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                        <span className="w-1 h-5 rounded-full bg-primary-500" /> Riwayat Status
+                      </h4>
+                      {auditLoading ? (
+                        <div className="text-sm text-slate-500">Memuat...</div>
+                      ) : statusHistory.length === 0 ? (
+                        <div className="text-sm text-slate-500">Belum ada riwayat.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {statusHistory.slice().reverse().map((h: any) => (
+                            <div key={h.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/40">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant={getStatusBadge(h.to_status)} className="text-xs">{INVOICE_STATUS_LABELS[h.to_status] || h.to_status}</Badge>
+                                  <span className="text-xs text-slate-600">
+                                    {h.from_status ? `${INVOICE_STATUS_LABELS[h.from_status] || h.from_status} → ` : ''}{INVOICE_STATUS_LABELS[h.to_status] || h.to_status}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-slate-500">{h.changed_at ? new Date(h.changed_at).toLocaleString('id-ID') : '–'}</span>
+                              </div>
+                              <div className="text-xs text-slate-600 mt-1">
+                                {(h.ChangedBy?.name || h.ChangedBy?.email) ? <>oleh <strong className="text-slate-800">{h.ChangedBy?.name || h.ChangedBy?.email}</strong></> : <span className="text-slate-500">oleh sistem</span>}
+                                {h.reason ? <span className="text-slate-500"> · {String(h.reason).replace(/_/g, ' ')}</span> : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="lg:col-span-7 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                      <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                        <span className="w-1 h-5 rounded-full bg-primary-500" /> Perubahan Order
+                      </h4>
+                      {auditLoading ? (
+                        <div className="text-sm text-slate-500">Memuat...</div>
+                      ) : orderRevisions.length === 0 ? (
+                        <div className="text-sm text-slate-500">Belum ada revisi.</div>
+                      ) : (() => {
+                        const rev = orderRevisions[0];
+                        const diff = rev?.diff || {};
+                        const added = diff.added || [];
+                        const removed = diff.removed || [];
+                        const updated = diff.updated || [];
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/40 border border-slate-200">
+                              <div className="text-sm text-slate-700">
+                                <span className="font-semibold">Revisi #{rev.revision_no}</span>
+                                <span className="text-slate-500"> · {rev.changed_at ? new Date(rev.changed_at).toLocaleString('id-ID') : '–'}</span>
+                                {(rev.ChangedBy?.name || rev.ChangedBy?.email) && <span className="text-slate-500"> · {rev.ChangedBy?.name || rev.ChangedBy?.email}</span>}
+                              </div>
+                              <div className="text-xs text-slate-600 flex gap-2 flex-wrap">
+                                <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Tambah {added.length}</span>
+                                <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Ubah {updated.length}</span>
+                                <span className="px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">Hapus {removed.length}</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div className="p-3 rounded-xl border border-slate-200 bg-white">
+                                <div className="text-xs font-semibold text-slate-600 mb-2">Ditambah</div>
+                                {added.length === 0 ? <div className="text-xs text-slate-400">–</div> : (
+                                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                    {added.map((x: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-slate-700 p-2 rounded-lg bg-emerald-50/40 border border-emerald-100">
+                                        <div className="font-medium">{x.after?.product_name || x.after?.product_ref_id || 'Item'}</div>
+                                        <div className="text-slate-600">Qty {x.after?.quantity} · {formatIDR(Number(x.after?.unit_price || 0))}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-3 rounded-xl border border-slate-200 bg-white">
+                                <div className="text-xs font-semibold text-slate-600 mb-2">Diubah</div>
+                                {updated.length === 0 ? <div className="text-xs text-slate-400">–</div> : (
+                                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                    {updated.map((x: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-slate-700 p-2 rounded-lg bg-amber-50/40 border border-amber-100">
+                                        <div className="font-medium">{x.after?.product_name || x.before?.product_name || x.after?.product_ref_id || 'Item'}</div>
+                                        <div className="text-slate-600">
+                                          Qty {x.before?.quantity} → {x.after?.quantity} · {formatIDR(Number(x.before?.unit_price || 0))} → {formatIDR(Number(x.after?.unit_price || 0))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-3 rounded-xl border border-slate-200 bg-white">
+                                <div className="text-xs font-semibold text-slate-600 mb-2">Dihapus</div>
+                                {removed.length === 0 ? <div className="text-xs text-slate-400">–</div> : (
+                                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                    {removed.map((x: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-slate-700 p-2 rounded-lg bg-rose-50/40 border border-rose-100">
+                                        <div className="font-medium">{x.before?.product_name || x.before?.product_ref_id || 'Item'}</div>
+                                        <div className="text-slate-600">Qty {x.before?.quantity} · {formatIDR(Number(x.before?.unit_price || 0))}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
 
                   {/* Info Refund (jika invoice dibatalkan dengan pembayaran) */}
                   {(viewInvoice?.Refunds?.length ?? 0) > 0 && (

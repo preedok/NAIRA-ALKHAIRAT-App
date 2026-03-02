@@ -215,13 +215,14 @@ const VisaPage: React.FC<VisaPageProps> = ({
         quantity: Math.max(0, Math.floor(Number(editVisaForm.quota) || 0))
       });
       if (editVisaForm.price_idr > 0) {
+        const triple = fillFromSource('IDR', editVisaForm.price_idr || 0, currencyRates);
         await productsApi.createPrice({
           product_id: editingVisa.id,
           branch_id: null,
           owner_id: null,
-          amount_idr: Math.round(editVisaForm.price_idr),
-          amount_sar: null,
-          amount_usd: null
+          amount_idr: Math.round(triple.idr || 0),
+          amount_sar: triple.sar,
+          amount_usd: triple.usd
         });
       }
       showToast('Produk visa berhasil diperbarui', 'success');
@@ -253,13 +254,14 @@ const VisaPage: React.FC<VisaPageProps> = ({
       const productId = product?.id;
 
       if (productId && addVisaForm.price_idr > 0) {
+        const triple = fillFromSource('IDR', addVisaForm.price_idr || 0, currencyRates);
         await productsApi.createPrice({
           product_id: productId,
           branch_id: null,
           owner_id: null,
-          amount_idr: Math.round(addVisaForm.price_idr),
-          amount_sar: null,
-          amount_usd: null
+          amount_idr: Math.round(triple.idr || 0),
+          amount_sar: triple.sar,
+          amount_usd: triple.usd
         });
       }
 

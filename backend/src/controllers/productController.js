@@ -243,18 +243,22 @@ const list = asyncHandler(async (req, res) => {
         const roundTrip = typeof byTrip.round_trip === 'number' && !Number.isNaN(byTrip.round_trip) ? Number(byTrip.round_trip) : 0;
         const oneWay = typeof byTrip.one_way === 'number' && !Number.isNaN(byTrip.one_way) ? Number(byTrip.one_way) : 0;
         const returnOnly = typeof byTrip.return_only === 'number' && !Number.isNaN(byTrip.return_only) ? Number(byTrip.return_only) : 0;
+        const pricePerVehicleIdr = typeof meta.price_per_vehicle_idr === 'number' && !Number.isNaN(meta.price_per_vehicle_idr) ? Number(meta.price_per_vehicle_idr) : 0;
         base.meta = {
           ...meta,
           route_prices_by_trip: byTrip,
           route_prices: {
-            full_route: roundTrip || oneWay,
-            bandara_makkah: oneWay || roundTrip,
-            bandara_madinah: oneWay || returnOnly,
-            bandara_madinah_only: returnOnly || oneWay
+            full_route: roundTrip || oneWay || pricePerVehicleIdr,
+            bandara_makkah: oneWay || roundTrip || pricePerVehicleIdr,
+            bandara_madinah: oneWay || returnOnly || pricePerVehicleIdr,
+            bandara_madinah_only: returnOnly || oneWay || pricePerVehicleIdr
           }
         };
         if ((base.price_general_idr == null || base.price_general_idr === 0) && (roundTrip > 0 || oneWay > 0 || returnOnly > 0)) {
           base.price_general_idr = roundTrip || oneWay || returnOnly;
+        }
+        if ((base.price_general_idr == null || base.price_general_idr === 0) && pricePerVehicleIdr > 0) {
+          base.price_general_idr = pricePerVehicleIdr;
         }
       }
       return base;

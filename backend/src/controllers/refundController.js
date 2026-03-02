@@ -1,9 +1,26 @@
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
-const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction } = require('../models');
-const { REFUND_STATUS, REFUND_SOURCE } = require('../constants');
+const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory } = require('../models');
+const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS } = require('../constants');
 
 const REFUND_STATUS_LABELS = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
+
+async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta }) {
+  try {
+    await InvoiceStatusHistory.create({
+      invoice_id,
+      from_status: from_status ?? null,
+      to_status,
+      changed_at: new Date(),
+      changed_by: changed_by || null,
+      reason: reason || null,
+      meta: meta && typeof meta === 'object' ? meta : {}
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('refundController logInvoiceStatusChange failed:', e?.message || e);
+  }
+}
 
 /**
  * POST /api/v1/refunds (request refund dari saldo - owner)
@@ -185,6 +202,42 @@ const updateStatus = asyncHandler(async (req, res) => {
   if (status === REFUND_STATUS.REFUNDED) updates.refunded_at = new Date();
 
   await r.update(updates);
+
+  // Jika refund terkait invoice, simpan jejak proses dan update status invoice saat refund selesai.
+  if (r.invoice_id) {
+    const inv = await Invoice.findByPk(r.invoice_id);
+    if (inv) {
+      if (status === REFUND_STATUS.APPROVED) {
+        await logInvoiceStatusChange({
+          invoice_id: inv.id,
+          from_status: inv.status,
+          to_status: inv.status,
+          changed_by: req.user.id,
+          reason: 'refund_approved',
+          meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 }
+        });
+      } else if (status === REFUND_STATUS.REJECTED) {
+        await logInvoiceStatusChange({
+          invoice_id: inv.id,
+          from_status: inv.status,
+          to_status: inv.status,
+          changed_by: req.user.id,
+          reason: 'refund_rejected',
+          meta: { refund_id: r.id, rejection_reason: rejection_reason ? String(rejection_reason).trim() : null }
+        });
+      } else if (status === REFUND_STATUS.REFUNDED) {
+        await logInvoiceStatusChange({
+          invoice_id: inv.id,
+          from_status: inv.status,
+          to_status: INVOICE_STATUS.REFUNDED,
+          changed_by: req.user.id,
+          reason: 'refund_refunded',
+          meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 }
+        });
+        await inv.update({ status: INVOICE_STATUS.REFUNDED });
+      }
+    }
+  }
 
   if (status === REFUND_STATUS.REFUNDED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
     const profile = await OwnerProfile.findOne({ where: { user_id: r.owner_id } });

@@ -53,6 +53,8 @@ const AccurateDepreciationSchedule = require('./AccurateDepreciationSchedule');
 const AccountingBankAccount = require('./AccountingBankAccount');
 const Bank = require('./Bank');
 const ReconciliationLog = require('./ReconciliationLog');
+const InvoiceStatusHistory = require('./InvoiceStatusHistory');
+const OrderRevision = require('./OrderRevision');
 
 // Wilayah -> Provinsi -> Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
@@ -97,6 +99,17 @@ Invoice.hasOne(InvoiceFile, { foreignKey: 'invoice_id', as: 'InvoiceFile' });
 InvoiceFile.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 InvoiceFile.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 InvoiceFile.belongsTo(User, { foreignKey: 'generated_by', as: 'GeneratedBy' });
+
+// Invoice status history & order revisions (audit)
+InvoiceStatusHistory.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'Invoice' });
+InvoiceStatusHistory.belongsTo(User, { foreignKey: 'changed_by', as: 'ChangedBy' });
+Invoice.hasMany(InvoiceStatusHistory, { foreignKey: 'invoice_id', as: 'StatusHistories' });
+
+OrderRevision.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
+OrderRevision.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'Invoice' });
+OrderRevision.belongsTo(User, { foreignKey: 'changed_by', as: 'ChangedBy' });
+Order.hasMany(OrderRevision, { foreignKey: 'order_id', as: 'Revisions' });
+Invoice.hasMany(OrderRevision, { foreignKey: 'invoice_id', as: 'OrderRevisions' });
 
 // Refund
 Refund.belongsTo(Invoice, { foreignKey: 'invoice_id' });
@@ -305,7 +318,9 @@ const db = {
   AccurateDepreciationSchedule,
   AccountingBankAccount,
   Bank,
-  ReconciliationLog
+  ReconciliationLog,
+  InvoiceStatusHistory,
+  OrderRevision
 };
 
 module.exports = db;
