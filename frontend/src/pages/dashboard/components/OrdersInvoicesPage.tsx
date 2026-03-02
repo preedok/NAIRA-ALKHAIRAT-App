@@ -49,8 +49,8 @@ const getFileUrl = (path: string) => {
 };
 
 /**
- * Order & Invoice - Satu halaman untuk semua role yang mengerjakan order/invoice:
- * owner, invoice_koordinator, role_invoice_saudi, role_hotel (pekerjaan hotel), admin pusat/cabang, accounting, dll. (role_invoice dihapus — pakai invoice_koordinator.)
+ * Order & Invoice - Satu komponen untuk menu Invoice (admin pusat, koordinator, divisi hotel/bus/visa/tiket, accounting, owner).
+ * Data dibatasi: koordinator & divisi visa/tiket = wilayah masing-masing; hotel & bus = semua wilayah.
  * Modal Detail Invoice: tab Invoice & Order & tab Bukti Bayar, file preview inline.
  */
 type ApiOrder = {
@@ -412,12 +412,18 @@ const OrdersInvoicesPage: React.FC = () => {
   }, [branchId, wilayahId, provinsiId, isAdminPusat, isAccounting, page, limit, filterStatus, filterOwnerId, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus, sortBy, sortOrder]);
 
   useEffect(() => {
-    if ((location.state as { refreshList?: boolean })?.refreshList) {
-      fetchInvoices();
-      fetchSummary();
+    const state = location.state as { refreshList?: boolean } | undefined;
+    if (!state?.refreshList) return;
+    let cancelled = false;
+    (async () => {
+      await fetchInvoices();
+      if (cancelled) return;
+      await fetchSummary();
+      if (cancelled) return;
       if (viewInvoice?.id) fetchInvoiceDetail(viewInvoice.id);
       navigate(location.pathname + location.search, { replace: true, state: {} });
-    }
+    })();
+    return () => { cancelled = true; };
   }, [location.state]);
 
   useEffect(() => {
@@ -833,7 +839,10 @@ const OrdersInvoicesPage: React.FC = () => {
     by_order_status: {}
   };
 
-  const invoiceSubtitle = user?.role === 'role_hotel' ? 'Pekerjaan hotel: daftar order yang berisi item hotel. Buka invoice untuk update status & nomor kamar.' : user?.role === 'role_bus' ? 'Pekerjaan bus: daftar order yang berisi item bus. Buka invoice untuk detail.' : (isAdminPusat || isAccounting) ? 'Semua invoice dalam satu daftar.' : isInvoiceSaudi ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD (Saudi) otomatis update invoice.' : (user?.role === 'owner' ? 'Invoice Anda.' : 'Invoice cabang Anda.');
+  const isHotelOrBus = user?.role === 'role_hotel' || user?.role === 'role_bus';
+  const isKoordinator = ['admin_koordinator', 'invoice_koordinator', 'visa_koordinator', 'tiket_koordinator'].includes(user?.role || '');
+  const scopeHint = isHotelOrBus ? ' Data: semua wilayah.' : isKoordinator ? ' Data: wilayah Anda.' : '';
+  const invoiceSubtitle = `Daftar invoice. Buka untuk detail, pembayaran, dan update status produk (Visa, Tiket, Hotel, Bus).${scopeHint}`;
 
   return (
     <div className="space-y-6 w-full">
@@ -1137,20 +1146,24 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <div className="text-xs text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {(() => {
                         const visaItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa');
                         if (visaItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
                         return (
-                          <div className="text-xs space-y-1.5">
+                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                             {visaItems.map((item: any, idx: number) => {
-                              const s = labels[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+                              const name = item.Product?.name || item.product_name || 'Visa';
+                              const statusLabel = labels[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
                               const depDate = formatDate(item.meta?.travel_date ?? null);
                               return (
-                                <div key={idx} className="flex flex-col gap-0.5">
-                                  <Badge variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs truncate w-fit">{s}</Badge>
-                                  <span className="text-slate-500">Tgl keberangkatan: {depDate}</span>
+                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-1">
+                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                    <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                                  </div>
+                                  <div className="text-slate-500 pl-0.5">Tgl keberangkatan {depDate}</div>
                                 </div>
                               );
                             })}
@@ -1158,20 +1171,30 @@ const OrdersInvoicesPage: React.FC = () => {
                         );
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {(() => {
                         const ticketItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'ticket');
                         if (ticketItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
                         return (
-                          <div className="text-xs space-y-1.5">
+                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                             {ticketItems.map((item: any, idx: number) => {
-                              const s = labels[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
-                              const depDate = formatDate(item.meta?.departure_date ?? null);
+                              const name = item.Product?.name || item.product_name || 'Tiket';
+                              const statusLabel = labels[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+                              const tripType = String(item.meta?.trip_type || 'round_trip');
+                              const dep = formatDate(item.meta?.departure_date ?? null);
+                              const ret = formatDate(item.meta?.return_date ?? null);
+                              const dateLine =
+                                tripType === 'one_way' ? `Berangkat ${dep}` :
+                                tripType === 'return_only' ? `Pulang ${ret}` :
+                                `Berangkat ${dep} · Pulang ${ret}`;
                               return (
-                                <div key={idx} className="flex flex-col gap-0.5">
-                                  <Badge variant={s === 'Tiket terbit' ? 'success' : 'info'} className="text-xs truncate w-fit">{s}</Badge>
-                                  <span className="text-slate-500">Tgl keberangkatan: {depDate}</span>
+                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-1">
+                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                    <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                                  </div>
+                                  <div className="text-slate-500 pl-0.5">{dateLine}</div>
                                 </div>
                               );
                             })}
@@ -1179,64 +1202,71 @@ const OrdersInvoicesPage: React.FC = () => {
                         );
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {(() => {
                         const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
                         if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
-                        const byHotel = hotelItems.reduce((acc: { key: string; name: string; status: string; checkIn: string; checkOut: string }[], item: any) => {
-                          const pid = String(item.product_ref_id || item.product_id || '');
-                          const name = item.Product?.name || (item as any).product_name || 'Hotel';
-                          const status = labels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
-                          const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
-                          const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
-                          if (!acc.some((g) => g.key === pid)) acc.push({ key: pid, name, status, checkIn, checkOut });
-                          return acc;
-                        }, [] as { key: string; name: string; status: string; checkIn: string; checkOut: string }[]);
-                        if (byHotel.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         return (
-                          <div className="text-xs space-y-2">
-                            {byHotel.map((h: { key: string; name: string; status: string; checkIn: string; checkOut: string }, idx: number) => (
-                              <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                <div className="flex flex-wrap items-baseline gap-1">
-                                  <span className="font-medium text-slate-800 truncate max-w-[140px]" title={h.name}>{h.name}:</span>
-                                  <span className={h.status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{h.status}</span>
+                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                            {hotelItems.map((item: any, idx: number) => {
+                              const name = item.Product?.name || item.product_name || 'Hotel';
+                              const status = labels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
+                              const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
+                              const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
+                              return (
+                                <div key={item.id || idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-1">
+                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                    <span className={status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
+                                  </div>
+                                  <div className="text-slate-500 pl-0.5">
+                                    <span>CI {checkIn}</span>
+                                    <span className="mx-1">·</span>
+                                    <span>CO {checkOut}</span>
+                                  </div>
                                 </div>
-                                <div className="text-slate-500 pl-0.5">
-                                  <span>CI {h.checkIn}</span>
-                                  <span className="mx-1">·</span>
-                                  <span>CO {h.checkOut}</span>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {(() => {
                         const busItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'bus');
                         if (busItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         const labels: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
-                        const statuses = busItems.map((i: any) => labels[i.BusProgress?.bus_ticket_status] || i.BusProgress?.bus_ticket_status || 'Pending');
                         return (
-                          <div className="text-xs">
-                            <div className="grid grid-cols-2 gap-1">
-                              {statuses.map((s: string, idx: number) => (
-                                <Badge key={idx} variant={s === 'Terbit' ? 'success' : 'info'} className="text-xs truncate">{s}</Badge>
-                              ))}
-                            </div>
+                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                            {busItems.map((item: any, idx: number) => {
+                              const name = item.Product?.name || item.product_name || 'Bus';
+                              const statusLabel = labels[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
+                              const travelDate = formatDate(item.meta?.travel_date ?? null);
+                              const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
+                              const tripType = item.meta?.trip_type ? String(item.meta.trip_type) : '';
+                              const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripType ? `Trip ${tripType}` : null].filter(Boolean).join(' · ');
+                              return (
+                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                                  <div className="flex flex-wrap items-baseline gap-1">
+                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                    <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                                  </div>
+                                  {metaLine ? <div className="text-slate-500 pl-0.5">{metaLine}</div> : null}
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {isDraftRow(inv) ? (
                         <span className="text-slate-400 text-xs">Tidak tersedia (belum diterbitkan)</span>
                       ) : (inv.PaymentProofs?.length ?? 0) === 0 ? (
                         <span className="text-slate-400 text-xs">–</span>
                       ) : (
-                        <div className="grid grid-cols-1 gap-2 min-w-[160px]">
+                        <div className="max-h-[140px] overflow-y-auto grid grid-cols-1 gap-2 min-w-[160px] pr-1">
                           {inv.PaymentProofs?.map((p: any) => {
                             const ps = getProofStatus(p);
                             const amt = parseFloat(p.amount || 0);

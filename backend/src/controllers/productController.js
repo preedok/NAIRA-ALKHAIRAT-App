@@ -237,6 +237,26 @@ const list = asyncHandler(async (req, res) => {
           };
         });
       }
+      if (productType === 'bus') {
+        const meta = base.meta && typeof base.meta === 'object' ? base.meta : {};
+        const byTrip = meta.route_prices_by_trip && typeof meta.route_prices_by_trip === 'object' ? meta.route_prices_by_trip : {};
+        const roundTrip = typeof byTrip.round_trip === 'number' && !Number.isNaN(byTrip.round_trip) ? Number(byTrip.round_trip) : 0;
+        const oneWay = typeof byTrip.one_way === 'number' && !Number.isNaN(byTrip.one_way) ? Number(byTrip.one_way) : 0;
+        const returnOnly = typeof byTrip.return_only === 'number' && !Number.isNaN(byTrip.return_only) ? Number(byTrip.return_only) : 0;
+        base.meta = {
+          ...meta,
+          route_prices_by_trip: byTrip,
+          route_prices: {
+            full_route: roundTrip || oneWay,
+            bandara_makkah: oneWay || roundTrip,
+            bandara_madinah: oneWay || returnOnly,
+            bandara_madinah_only: returnOnly || oneWay
+          }
+        };
+        if ((base.price_general_idr == null || base.price_general_idr === 0) && (roundTrip > 0 || oneWay > 0 || returnOnly > 0)) {
+          base.price_general_idr = roundTrip || oneWay || returnOnly;
+        }
+      }
       return base;
     });
     const totalPages = Math.ceil(count / lim) || 1;

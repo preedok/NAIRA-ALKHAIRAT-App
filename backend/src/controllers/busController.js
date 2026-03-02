@@ -12,7 +12,7 @@ const {
   BusProgress,
   Invoice
 } = require('../models');
-const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES } = require('../constants');
+const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
 /** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, role bus = cabang/wilayah. Fallback semua cabang agar tidak 403. */
@@ -132,8 +132,13 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
 
+  const statusesForProgress = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
   const where = { order_id: orderIdsFromBus, branch_id: { [Op.in]: branchIds } };
-  if (status) where.status = status;
+  if (status && statusesForProgress.includes(status)) {
+    where.status = status;
+  } else {
+    where.status = { [Op.in]: statusesForProgress };
+  }
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
@@ -155,7 +160,10 @@ const listInvoices = asyncHandler(async (req, res) => {
             as: 'OrderItems',
             where: { type: ORDER_ITEM_TYPE.BUS },
             required: true,
-            include: [{ model: BusProgress, as: 'BusProgress', required: false }]
+            include: [
+              { model: BusProgress, as: 'BusProgress', required: false },
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }
+            ]
           }
         ]
       }
@@ -191,7 +199,10 @@ const getInvoice = asyncHandler(async (req, res) => {
           {
             model: OrderItem,
             as: 'OrderItems',
-            include: [{ model: BusProgress, as: 'BusProgress', required: false }]
+            include: [
+              { model: BusProgress, as: 'BusProgress', required: false },
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }
+            ]
           }
         ]
       }
@@ -202,7 +213,14 @@ const getInvoice = asyncHandler(async (req, res) => {
   const busItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.BUS);
   if (busItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item bus' });
 
-  res.json({ success: true, data: invoice });
+  const data = invoice.get ? invoice.get({ plain: true }) : invoice;
+  (data?.Order?.OrderItems || []).forEach((oi) => {
+    if (oi.type === ORDER_ITEM_TYPE.BUS && (oi.Product || oi.product)) {
+      const p = oi.Product || oi.product;
+      oi.product_name = p.name || p.code || null;
+    }
+  });
+  res.json({ success: true, data: data || invoice });
 });
 
 /**

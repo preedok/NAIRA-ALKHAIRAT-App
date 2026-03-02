@@ -52,6 +52,7 @@ const AccurateFixedAsset = require('./AccurateFixedAsset');
 const AccurateDepreciationSchedule = require('./AccurateDepreciationSchedule');
 const AccountingBankAccount = require('./AccountingBankAccount');
 const Bank = require('./Bank');
+const ReconciliationLog = require('./ReconciliationLog');
 
 // Wilayah -> Provinsi -> Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
@@ -230,9 +231,16 @@ Invoice.hasMany(PaymentReallocation, { foreignKey: 'target_invoice_id', as: 'Rea
 User.hasMany(PaymentReallocation, { foreignKey: 'performed_by', as: 'PaymentReallocations' });
 
 BankStatementUpload.belongsTo(User, { foreignKey: 'uploaded_by', as: 'UploadedBy' });
+  BankStatementUpload.belongsTo(User, { foreignKey: 'finalized_by', as: 'FinalizedBy' });
   User.hasMany(BankStatementUpload, { foreignKey: 'uploaded_by', as: 'BankStatementUploads' });
   BankStatementUpload.hasMany(BankStatementLine, { foreignKey: 'upload_id', as: 'Lines' });
   BankStatementLine.belongsTo(BankStatementUpload, { foreignKey: 'upload_id', as: 'Upload' });
+  BankStatementLine.belongsTo(PaymentProof, { foreignKey: 'matched_payment_proof_id', as: 'MatchedPaymentProof' });
+  BankStatementUpload.hasMany(ReconciliationLog, { foreignKey: 'upload_id', as: 'ReconciliationLogs' });
+  ReconciliationLog.belongsTo(BankStatementUpload, { foreignKey: 'upload_id', as: 'Upload' });
+  ReconciliationLog.belongsTo(BankStatementLine, { foreignKey: 'bank_statement_line_id', as: 'BankStatementLine' });
+  ReconciliationLog.belongsTo(PaymentProof, { foreignKey: 'payment_proof_id', as: 'PaymentProof' });
+  ReconciliationLog.belongsTo(User, { foreignKey: 'matched_by', as: 'MatchedBy' });
 
   AccurateQuotation.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
   AccuratePurchaseOrder.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
@@ -296,7 +304,8 @@ const db = {
   AccurateFixedAsset,
   AccurateDepreciationSchedule,
   AccountingBankAccount,
-  Bank
+  Bank,
+  ReconciliationLog
 };
 
 module.exports = db;

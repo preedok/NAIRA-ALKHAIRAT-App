@@ -159,12 +159,12 @@ const listInvoices = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
   }
 
-  const statusWithDpPaid = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  const statusesForProgress = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
   const where = { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } };
-  if (status && statusWithDpPaid.includes(status)) {
+  if (status && statusesForProgress.includes(status)) {
     where.status = status;
   } else {
-    where.status = { [Op.in]: statusWithDpPaid };
+    where.status = { [Op.in]: statusesForProgress };
   }
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
@@ -187,7 +187,10 @@ const listInvoices = asyncHandler(async (req, res) => {
             as: 'OrderItems',
             where: { type: ORDER_ITEM_TYPE.TICKET },
             required: true,
-            include: [{ model: TicketProgress, as: 'TicketProgress', required: false }]
+            include: [
+              { model: TicketProgress, as: 'TicketProgress', required: false },
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }
+            ]
           }
         ]
       }
@@ -234,9 +237,9 @@ const getInvoice = asyncHandler(async (req, res) => {
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
-  const statusWithDpPaidGet = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
-  if (!invoice.status || !statusWithDpPaidGet.includes(invoice.status)) {
-    return res.status(403).json({ success: false, message: 'Detail invoice hanya tersedia setelah ada pembayaran DP.' });
+  const allowedStatuses = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (!invoice.status || !allowedStatuses.includes(invoice.status)) {
+    return res.status(403).json({ success: false, message: 'Invoice tidak tersedia untuk divisi tiket.' });
   }
   const ticketItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.TICKET);
   if (ticketItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item tiket' });

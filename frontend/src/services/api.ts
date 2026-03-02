@@ -684,8 +684,14 @@ export const accountingApi = {
   bankStatements: {
     list: () => api.get<{ success: boolean; data: BankStatementUploadItem[] }>('/accounting/bank-statements'),
     get: (id: string) => api.get<{ success: boolean; data: BankStatementUploadWithLines }>(`/accounting/bank-statements/${id}`),
+    getOriginalFile: (id: string, inline?: boolean) => api.get<Blob>(`/accounting/bank-statements/${id}/original-file`, { responseType: 'blob', params: inline ? { inline: '1' } : undefined }),
     getReconciliation: (id: string) => api.get<{ success: boolean; data: BankStatementReconciliationData }>(`/accounting/bank-statements/${id}/reconcile`),
+    approveSuggested: (uploadId: string, bankLineId: string) => api.post<{ success: boolean; data: unknown; message: string }>(`/accounting/bank-statements/${uploadId}/reconcile/approve`, { bank_line_id: bankLineId }),
+    manualMap: (uploadId: string, bankLineId: string, paymentProofId: string) => api.post<{ success: boolean; data: unknown; message: string }>(`/accounting/bank-statements/${uploadId}/reconcile/manual-map`, { bank_line_id: bankLineId, payment_proof_id: paymentProofId }),
+    finalize: (uploadId: string) => api.post<{ success: boolean; message: string; data: { finalized_at: string; pairs_count: number } }>(`/accounting/bank-statements/${uploadId}/reconcile/finalize`),
+    getOriginalFileUrl: (id: string, inline?: boolean) => `${api.defaults.baseURL}/accounting/bank-statements/${id}/original-file${inline ? '?inline=1' : ''}`,
     exportReconciliation: (id: string) => api.get<Blob>(`/accounting/bank-statements/${id}/reconcile/export`, { responseType: 'blob' }),
+    exportPdf: (id: string) => api.get<Blob>(`/accounting/bank-statements/${id}/export-pdf`, { responseType: 'blob' }),
     upload: (formData: FormData) => api.post<{ success: boolean; data: BankStatementUploadWithLines; message: string }>('/accounting/bank-statements/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
     delete: (id: string) => api.delete<{ success: boolean; message: string }>(`/accounting/bank-statements/${id}`),
     downloadTemplate: () => api.get<Blob>('/accounting/bank-statements/template', { responseType: 'blob' })
@@ -929,6 +935,16 @@ export interface BankStatementLineItem {
   amount: number;
   balance_after?: number | null;
   row_index?: number | null;
+  reconciliation_status?: 'unreconciled' | 'matched' | 'suggested' | 'unmatched' | null;
+  match_type?: 'exact' | 'fuzzy' | 'manual' | null;
+  matched_payment_proof_id?: string | null;
+  suggestedMatch?: {
+    id: string;
+    transfer_date: string;
+    amount: number;
+    invoice_number?: string;
+    payer?: string;
+  } | null;
 }
 export interface BankStatementUploadItem {
   id: string;
@@ -936,6 +952,7 @@ export interface BankStatementUploadItem {
   period_from?: string | null;
   period_to?: string | null;
   file_name?: string | null;
+  original_file_path?: string | null;
   uploaded_by?: string | null;
   created_at: string;
   UploadedBy?: { id: string; name: string };
@@ -944,21 +961,26 @@ export interface BankStatementUploadItem {
 export interface BankStatementUploadWithLines extends Omit<BankStatementUploadItem, 'line_count'> {
   Lines?: BankStatementLineItem[];
 }
+export type SystemTransactionItem = {
+  id: string;
+  transfer_date: string;
+  amount: number;
+  bank_name?: string;
+  account_number?: string;
+  invoice_number?: string;
+  payer?: string;
+  payment_type: string;
+};
+
 export interface BankStatementReconciliationData {
-  upload: BankStatementUploadWithLines;
-  recorded: Array<{
-    id: string;
-    transfer_date: string;
-    amount: number;
-    bank_name?: string;
-    account_number?: string;
-    invoice_number?: string;
-    payer?: string;
-    payment_type: string;
-  }>;
+  upload: BankStatementUploadWithLines & { finalized_at?: string | null; finalized_by?: string | null; FinalizedBy?: { id: string; name: string } };
+  systemTransactions: SystemTransactionItem[];
+  recorded?: SystemTransactionItem[]; // legacy alias
   bankLines: BankStatementLineItem[];
-  matched: Array<{ recorded: BankStatementReconciliationData['recorded'][0]; bankLine: BankStatementLineItem }>;
-  onlyInRecorded: BankStatementReconciliationData['recorded'];
+  matched: Array<{ recorded: SystemTransactionItem; bankLine: BankStatementLineItem }>;
+  suggested: BankStatementLineItem[];
+  unmatched: BankStatementLineItem[];
+  onlyInRecorded: SystemTransactionItem[];
   onlyInBank: BankStatementLineItem[];
 }
 

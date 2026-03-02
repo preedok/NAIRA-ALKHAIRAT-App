@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Upload, FileSpreadsheet, RefreshCw, ArrowRightLeft, CheckCircle, AlertCircle, List, Trash2, X, Banknote, Download, Eye, Filter, Search
+  Upload, FileSpreadsheet, RefreshCw, ArrowRightLeft, CheckCircle, AlertCircle, List, Trash2, X, Banknote, Download, Eye, Filter, Search, FileText, Check, Link2, Lock
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -18,7 +18,8 @@ import type {
   BankStatementUploadItem,
   BankStatementReconciliationData,
   BankStatementLineItem,
-  BankStatementUploadWithLines
+  BankStatementUploadWithLines,
+  SystemTransactionItem
 } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR } from '../../../utils';
@@ -42,6 +43,8 @@ const RekeningKoranPage: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [exportingReconId, setExportingReconId] = useState<string | null>(null);
+  const [exportingPdfId, setExportingPdfId] = useState<string | null>(null);
+  const [downloadingOriginalId, setDownloadingOriginalId] = useState<string | null>(null);
   const [detailUpload, setDetailUpload] = useState<BankStatementUploadWithLines | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [filterName, setFilterName] = useState('');
@@ -49,6 +52,10 @@ const RekeningKoranPage: React.FC = () => {
   const [filterPeriodTo, setFilterPeriodTo] = useState('');
   const [listPage, setListPage] = useState(1);
   const [listLimit, setListLimit] = useState(25);
+  const [reconPdfUrl, setReconPdfUrl] = useState<string | null>(null);
+  const [approvingLineId, setApprovingLineId] = useState<string | null>(null);
+  const [finalizingId, setFinalizingId] = useState<string | null>(null);
+  const [manualMapLineId, setManualMapLineId] = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -74,18 +81,46 @@ const RekeningKoranPage: React.FC = () => {
   useEffect(() => {
     if (!reconId) {
       setRecon(null);
+      if (reconPdfUrl) {
+        URL.revokeObjectURL(reconPdfUrl);
+        setReconPdfUrl(null);
+      }
       return;
     }
     setLoadingRecon(true);
     accountingApi.bankStatements
       .getReconciliation(reconId)
-      .then((res) => {
-        if (res.data.success && res.data.data) setRecon(res.data.data);
-        else setRecon(null);
+      .then(async (res) => {
+        if (res.data.success && res.data.data) {
+          setRecon(res.data.data);
+          const data = res.data.data;
+          const upload = data.upload as BankStatementReconciliationData['upload'];
+          const isPdf = (upload?.file_name || '').toLowerCase().endsWith('.pdf');
+          if (upload?.original_file_path && isPdf) {
+            try {
+              const fileRes = await accountingApi.bankStatements.getOriginalFile(reconId, true);
+              const blob = fileRes.data instanceof Blob ? fileRes.data : new Blob([fileRes.data]);
+              const url = URL.createObjectURL(blob);
+              setReconPdfUrl(url);
+            } catch {
+              setReconPdfUrl(null);
+            }
+          } else {
+            setReconPdfUrl(null);
+          }
+        } else {
+          setRecon(null);
+        }
       })
       .catch(() => setRecon(null))
       .finally(() => setLoadingRecon(false));
   }, [reconId]);
+
+  useEffect(() => {
+    return () => {
+      if (reconPdfUrl) URL.revokeObjectURL(reconPdfUrl);
+    };
+  }, [reconPdfUrl]);
 
   const filteredUploads = useMemo(() => {
     let list = uploads;
@@ -196,6 +231,108 @@ const RekeningKoranPage: React.FC = () => {
     }
   };
 
+  const handleExportPdf = async (id: string) => {
+    setExportingPdfId(id);
+    try {
+      const res = await accountingApi.bankStatements.exportPdf(id);
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data]);
+      const disposition = res.headers?.['content-disposition'];
+      let filename = `Acc_Statement_${id.slice(0, 8)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      if (typeof disposition === 'string' && disposition.includes('filename=')) {
+        const m = disposition.match(/filename="?([^";\n]+)"?/);
+        if (m && m[1]) filename = m[1].trim();
+      }
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      showToast('Export PDF rekening koran berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal export PDF', 'error');
+    } finally {
+      setExportingPdfId(null);
+    }
+  };
+
+  const refetchRecon = useCallback(() => {
+    if (!reconId) return;
+    accountingApi.bankStatements.getReconciliation(reconId).then((res) => {
+      if (res.data.success && res.data.data) setRecon(res.data.data);
+    });
+  }, [reconId]);
+
+  const handleApproveSuggested = async (bankLineId: string) => {
+    if (!reconId) return;
+    setApprovingLineId(bankLineId);
+    try {
+      await accountingApi.bankStatements.approveSuggested(reconId, bankLineId);
+      showToast('Saran cocok disetujui', 'success');
+      refetchRecon();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal menyetujui', 'error');
+    } finally {
+      setApprovingLineId(null);
+    }
+  };
+
+  const handleManualMap = async (bankLineId: string, paymentProofId: string) => {
+    if (!reconId) return;
+    try {
+      await accountingApi.bankStatements.manualMap(reconId, bankLineId, paymentProofId);
+      showToast('Pemetaan manual berhasil', 'success');
+      setManualMapLineId(null);
+      refetchRecon();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal memetakan', 'error');
+    }
+  };
+
+  const handleFinalize = async () => {
+    if (!reconId) return;
+    setFinalizingId(reconId);
+    try {
+      await accountingApi.bankStatements.finalize(reconId);
+      showToast('Rekonsiliasi berhasil difinalisasi', 'success');
+      refetchRecon();
+      fetchList();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal finalisasi', 'error');
+    } finally {
+      setFinalizingId(null);
+    }
+  };
+
+  const handleDownloadOriginalFile = async (id: string) => {
+    setDownloadingOriginalId(id);
+    try {
+      const res = await accountingApi.bankStatements.getOriginalFile(id);
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data]);
+      const disposition = res.headers?.['content-disposition'];
+      let filename = `RekeningKoran_${id.slice(0, 8)}.pdf`;
+      if (typeof disposition === 'string' && disposition.includes('filename=')) {
+        const m = disposition.match(/filename="?([^";\n]+)"?/);
+        if (m && m[1]) filename = m[1].trim();
+      }
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      showToast('File asli berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'File asli tidak tersedia', 'error');
+    } finally {
+      setDownloadingOriginalId(null);
+    }
+  };
+
   const openDetail = (id: string) => {
     setDetailUpload(null);
     setLoadingDetail(true);
@@ -249,10 +386,10 @@ const RekeningKoranPage: React.FC = () => {
         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <Upload className="w-5 h-5 text-primary-600" /> Upload Rekening Koran (Excel)
+              <Upload className="w-5 h-5 text-primary-600" /> Upload Rekening Koran (Excel / PDF)
             </h2>
             <p className="text-sm text-slate-500 mt-1">
-              File Excel (.xlsx / .xls) dengan kolom: <strong>Tanggal</strong>, <strong>Keterangan</strong>, <strong>No. Ref</strong>, <strong>Debit</strong>, <strong>Kredit</strong> (nama kolom bisa bervariasi). Baris pertama dianggap header.
+              File Excel atau PDF dengan urutan kolom: <strong>Posting Date (Tanggal)</strong>, <strong>Remark (Keterangan)</strong>, <strong>Reference No.</strong>, <strong>Debit</strong>, <strong>Credit (Kredit)</strong>, <strong>Balance (Saldo)</strong>. Excel: baris pertama = header. PDF: diekstrak otomatis sesuai kolom tersebut.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={handleDownloadTemplate} disabled={downloadingTemplate}>
@@ -262,10 +399,10 @@ const RekeningKoranPage: React.FC = () => {
         </div>
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">File Excel</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">File Excel atau PDF</label>
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.pdf"
               className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-50 file:text-primary-700 file:font-medium"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
@@ -343,6 +480,12 @@ const RekeningKoranPage: React.FC = () => {
                     <Button size="sm" variant="outline" onClick={() => openDetail(u.id)} title="Lihat detail transaksi">
                       <Eye className="w-4 h-4" />
                     </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleExportPdf(u.id)} disabled={exportingPdfId === u.id} title="Export PDF (kolom bank)">
+                      {exportingPdfId === u.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleDownloadOriginalFile(u.id)} disabled={downloadingOriginalId === u.id} title="Unduh file asli (PDF/Excel yang diunggah)">
+                      {downloadingOriginalId === u.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setReconId(u.id)} title="Rekonsiliasi">
                       <ArrowRightLeft className="w-4 h-4 mr-1" /> Rekon
                     </Button>
@@ -373,12 +516,20 @@ const RekeningKoranPage: React.FC = () => {
         <Card className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-200 bg-slate-50/80">
             <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5 text-primary-600" /> Rekonsiliasi: Penerimaan Tercatat vs Bank
+              <ArrowRightLeft className="w-5 h-5 text-primary-600" /> Rekonsiliasi: File Asli vs Hasil Pencocokan
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {recon?.upload?.finalized_at ? (
+                <span className="text-sm text-slate-600 flex items-center gap-1"><Lock className="w-4 h-4" /> Sudah difinalisasi</span>
+              ) : (
+                <Button size="sm" variant="primary" onClick={handleFinalize} disabled={!!finalizingId || !recon}>
+                  {finalizingId === reconId ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                  {finalizingId === reconId ? 'Memproses...' : 'Finalize'}
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => reconId && handleExportReconciliation(reconId)} disabled={!!exportingReconId || !recon}>
                 {exportingReconId === reconId ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-                {exportingReconId === reconId ? 'Mengunduh...' : 'Export ke Excel'}
+                Export Excel
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={() => setReconId(null)} title="Tutup">
                 <X className="w-5 h-5" />
@@ -390,95 +541,134 @@ const RekeningKoranPage: React.FC = () => {
               <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
             </div>
           ) : recon ? (
-            <div className="p-5 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <StatCard
-                  icon={<CheckCircle className="w-5 h-5" />}
-                  label="Cocok"
-                  value={recon.matched.length}
-                  subtitle="Penerimaan yang cocok tanggal & nominal dengan bank"
-                />
-                <StatCard
-                  icon={<Banknote className="w-5 h-5" />}
-                  label="Hanya di sistem"
-                  value={recon.onlyInRecorded.length}
-                  subtitle="Penerimaan tercatat belum ada di bank"
-                />
-                <StatCard
-                  icon={<AlertCircle className="w-5 h-5" />}
-                  label="Hanya di bank"
-                  value={recon.onlyInBank.length}
-                  subtitle="Transaksi bank belum tercatat di sistem"
-                />
+            <div className="flex flex-col lg:flex-row gap-0 min-h-[480px]">
+              {/* Kiri: PDF Viewer (file asli) */}
+              <div className="lg:w-[42%] border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/50 flex flex-col">
+                <div className="px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700">File asli (PDF)</div>
+                <div className="flex-1 min-h-[320px] p-2">
+                  {reconPdfUrl ? (
+                    <iframe src={reconPdfUrl} title="PDF asli" className="w-full h-full min-h-[400px] rounded border border-slate-200 bg-white" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-slate-500 text-sm">File asli tidak tersedia atau bukan PDF. Gunakan tombol &quot;File asli&quot; di daftar untuk unduh.</div>
+                  )}
+                </div>
               </div>
-
-              {recon.matched.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Yang cocok (tanggal + nominal)</h3>
+              {/* Kanan: Tabel hasil pencocokan dengan label warna */}
+              <div className="lg:w-[58%] flex flex-col overflow-hidden">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-4 border-b border-slate-200 bg-white">
+                  <StatCard icon={<CheckCircle className="w-4 h-4 text-green-600" />} label="Matched" value={recon.matched?.length ?? 0} subtitle="Hijau" />
+                  <StatCard icon={<AlertCircle className="w-4 h-4 text-amber-600" />} label="Suggested" value={recon.suggested?.length ?? 0} subtitle="Kuning" />
+                  <StatCard icon={<AlertCircle className="w-4 h-4 text-red-600" />} label="Unmatched" value={recon.unmatched?.length ?? 0} subtitle="Merah" />
+                  <StatCard icon={<Banknote className="w-4 h-4" />} label="Hanya sistem" value={recon.onlyInRecorded?.length ?? 0} />
+                  <StatCard icon={<List className="w-4 h-4" />} label="Hanya bank" value={recon.onlyInBank?.length ?? 0} />
+                </div>
+                <div className="flex-1 overflow-auto p-4">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Semua baris bank (warna = status)</h3>
                   <div className="rounded-xl border border-slate-200 overflow-hidden">
                     <Table
                       columns={[
-                        { id: 'tgl', label: 'Tgl', align: 'left' },
-                        { id: 'nominal', label: 'Nominal', align: 'right' },
-                        { id: 'invoice', label: 'Invoice / Payer', align: 'left' },
-                        { id: 'keterangan', label: 'Keterangan bank', align: 'left' }
-                      ]}
-                      data={recon.matched}
-                      emptyMessage="Tidak ada yang cocok"
-                      renderRow={(m, i) => (
-                        <tr key={i} className="border-t border-slate-100">
-                          <td className="py-2 px-4 whitespace-nowrap">{formatDate(m.recorded.transfer_date)}</td>
-                          <td className="py-2 px-4 text-right font-medium">{formatIDR(m.recorded.amount)}</td>
-                          <td className="py-2 px-4">{m.recorded.invoice_number || m.recorded.payer || '–'}</td>
-                          <td className="py-2 px-4 text-slate-600 truncate max-w-[200px]">{m.bankLine.description || '–'}</td>
-                        </tr>
-                      )}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-800 mb-2">Penerimaan hanya di sistem ({recon.onlyInRecorded.length})</h3>
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/50 max-h-[320px] overflow-y-auto">
-                    <Table
-                      columns={[
-                        { id: 'tgl', label: 'Tgl', align: 'left' },
-                        { id: 'nominal', label: 'Nominal', align: 'right' },
-                        { id: 'invoice', label: 'Invoice / Payer', align: 'left' }
-                      ]}
-                      data={recon.onlyInRecorded}
-                      emptyMessage="Tidak ada"
-                      renderRow={(r) => (
-                        <tr key={r.id} className="border-t border-amber-200/50">
-                          <td className="py-2 px-4">{formatDate(r.transfer_date)}</td>
-                          <td className="py-2 px-4 text-right font-medium">{formatIDR(r.amount)}</td>
-                          <td className="py-2 px-4">{r.invoice_number || r.payer || '–'}</td>
-                        </tr>
-                      )}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-sky-800 mb-2">Transaksi hanya di bank ({recon.onlyInBank.length})</h3>
-                  <div className="rounded-xl border border-sky-200 bg-sky-50/50 max-h-[320px] overflow-y-auto">
-                    <Table
-                      columns={[
-                        { id: 'tgl', label: 'Tgl', align: 'left' },
+                        { id: 'status', label: 'Status', align: 'left' },
+                        { id: 'tanggal', label: 'Tanggal', align: 'left' },
                         { id: 'kredit', label: 'Kredit', align: 'right' },
-                        { id: 'keterangan', label: 'Keterangan', align: 'left' }
+                        { id: 'keterangan', label: 'Keterangan', align: 'left' },
+                        { id: 'pasangan', label: 'Pasangan sistem', align: 'left' },
+                        { id: 'aksi', label: 'Aksi', align: 'center' }
                       ]}
-                      data={recon.onlyInBank}
-                      emptyMessage="Tidak ada"
-                      renderRow={(b: BankStatementLineItem) => (
-                        <tr key={b.id} className="border-t border-sky-200/50">
-                          <td className="py-2 px-4">{formatDate(b.transaction_date)}</td>
-                          <td className="py-2 px-4 text-right font-medium">{formatIDR(Number(b.amount))}</td>
-                          <td className="py-2 px-4 text-slate-600 truncate max-w-[200px]">{b.description || '–'}</td>
-                        </tr>
-                      )}
+                      data={recon.bankLines || []}
+                      emptyMessage="Tidak ada baris"
+                      renderRow={(line: BankStatementLineItem) => {
+                        const status = line.reconciliation_status || 'unreconciled';
+                        const bg = status === 'matched' ? 'bg-green-50' : status === 'suggested' ? 'bg-amber-50' : 'bg-red-50';
+                        const border = status === 'matched' ? 'border-l-4 border-l-green-500' : status === 'suggested' ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-red-500';
+                        const suggested = line.suggestedMatch;
+                        const isFinalized = !!(recon.upload as { finalized_at?: string })?.finalized_at;
+                        return (
+                          <tr key={line.id} className={`border-t border-slate-100 ${bg} ${border}`}>
+                            <td className="py-2 px-4">
+                              <span className={`text-xs font-medium ${status === 'matched' ? 'text-green-700' : status === 'suggested' ? 'text-amber-700' : 'text-red-700'}`}>
+                                {status === 'matched' ? 'Matched' : status === 'suggested' ? 'Suggested' : 'Unmatched'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-4 whitespace-nowrap">{formatDate(line.transaction_date)}</td>
+                            <td className="py-2 px-4 text-right font-medium">{formatIDR(Number(line.amount))}</td>
+                            <td className="py-2 px-4 text-slate-700 max-w-[180px] truncate" title={line.description || ''}>{line.description || '–'}</td>
+                            <td className="py-2 px-4 text-slate-600 text-sm">
+                              {suggested ? `${suggested.invoice_number || suggested.payer || '–'} · ${formatIDR(suggested.amount)}` : '–'}
+                            </td>
+                            <td className="py-2 px-4">
+                              {!isFinalized && status === 'suggested' && (
+                                <Button size="sm" variant="outline" onClick={() => handleApproveSuggested(line.id)} disabled={approvingLineId === line.id} title="Approve saran">
+                                  {approvingLineId === line.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                </Button>
+                              )}
+                              {!isFinalized && (status === 'unmatched' || !status) && (
+                                <>
+                                  {manualMapLineId === line.id ? (
+                                    <div className="flex flex-col gap-1">
+                                      <select
+                                        className="text-xs border rounded px-2 py-1"
+                                        onChange={(e) => {
+                                          const id = e.target.value;
+                                          if (id) handleManualMap(line.id, id);
+                                        }}
+                                        onBlur={() => setManualMapLineId(null)}
+                                        autoFocus
+                                      >
+                                        <option value="">Pilih pembayaran...</option>
+                                        {(recon.systemTransactions || recon.recorded || []).map((r: SystemTransactionItem) => (
+                                          <option key={r.id} value={r.id}>{formatDate(r.transfer_date)} · {formatIDR(r.amount)} · {r.invoice_number || r.payer || '–'}</option>
+                                        ))}
+                                      </select>
+                                      <button type="button" className="text-xs text-slate-500" onClick={() => setManualMapLineId(null)}>Batal</button>
+                                    </div>
+                                  ) : (
+                                    <Button size="sm" variant="ghost" onClick={() => setManualMapLineId(line.id)} title="Manual mapping">
+                                      <Link2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }}
                     />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-amber-800 mb-2">Penerimaan hanya di sistem ({recon.onlyInRecorded?.length ?? 0})</h3>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/50 max-h-[200px] overflow-y-auto">
+                        <Table
+                          columns={[{ id: 'tgl', label: 'Tgl', align: 'left' }, { id: 'nominal', label: 'Nominal', align: 'right' }, { id: 'invoice', label: 'Invoice / Payer', align: 'left' }]}
+                          data={recon.onlyInRecorded || []}
+                          emptyMessage="Tidak ada"
+                          renderRow={(r: SystemTransactionItem) => (
+                            <tr key={r.id} className="border-t border-amber-200/50">
+                              <td className="py-2 px-4">{formatDate(r.transfer_date)}</td>
+                              <td className="py-2 px-4 text-right font-medium">{formatIDR(r.amount)}</td>
+                              <td className="py-2 px-4">{r.invoice_number || r.payer || '–'}</td>
+                            </tr>
+                          )}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-sky-800 mb-2">Transaksi hanya di bank ({recon.onlyInBank?.length ?? 0})</h3>
+                      <div className="rounded-xl border border-sky-200 bg-sky-50/50 max-h-[200px] overflow-y-auto">
+                        <Table
+                          columns={[{ id: 'tgl', label: 'Tgl', align: 'left' }, { id: 'kredit', label: 'Kredit', align: 'right' }, { id: 'keterangan', label: 'Keterangan', align: 'left' }]}
+                          data={recon.onlyInBank || []}
+                          emptyMessage="Tidak ada"
+                          renderRow={(b: BankStatementLineItem) => (
+                            <tr key={b.id} className="border-t border-sky-200/50">
+                              <td className="py-2 px-4">{formatDate(b.transaction_date)}</td>
+                              <td className="py-2 px-4 text-right font-medium">{formatIDR(Number(b.amount))}</td>
+                              <td className="py-2 px-4 text-slate-600 truncate max-w-[160px]">{b.description || '–'}</td>
+                            </tr>
+                          )}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -499,6 +689,18 @@ const RekeningKoranPage: React.FC = () => {
             onClose={() => setDetailUpload(null)}
           />
           <ModalBody className="flex-1 overflow-auto">
+            {detailUpload && !loadingDetail && (
+              <div className="flex justify-end gap-2 mb-3 flex-wrap">
+                <Button size="sm" variant="outline" onClick={() => handleDownloadOriginalFile(detailUpload.id)} disabled={!!downloadingOriginalId} title="Unduh file asli yang diunggah">
+                  {downloadingOriginalId === detailUpload.id ? <RefreshCw className="w-4 h-4 animate-spin mr-1" /> : <FileText className="w-4 h-4 mr-1" />}
+                  {downloadingOriginalId === detailUpload.id ? 'Mengunduh...' : 'File asli'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleExportPdf(detailUpload.id)} disabled={!!exportingPdfId} title="Export PDF (kolom bank)">
+                  {exportingPdfId === detailUpload.id ? <RefreshCw className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}
+                  {exportingPdfId === detailUpload.id ? 'Mengunduh...' : 'Export PDF'}
+                </Button>
+              </div>
+            )}
             {loadingDetail ? (
               <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
                 <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...

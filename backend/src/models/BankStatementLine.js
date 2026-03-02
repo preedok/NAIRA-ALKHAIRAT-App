@@ -46,6 +46,35 @@ const BankStatementLine = sequelize.define('BankStatementLine', {
   row_index: {
     type: DataTypes.INTEGER,
     allowNull: true
+  },
+  reconciliation_status: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    defaultValue: 'unreconciled',
+    comment: 'unreconciled | matched | suggested | unmatched'
+  },
+  matched_payment_proof_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'payment_proofs', key: 'id' },
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
+  },
+  match_type: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'exact | fuzzy | manual'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  reconciled_by: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'users', key: 'id' },
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
   }
 }, {
   tableName: 'bank_statement_lines',

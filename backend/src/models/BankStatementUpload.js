@@ -24,10 +24,27 @@ const BankStatementUpload = sequelize.define('BankStatementUpload', {
     type: DataTypes.STRING(255),
     allowNull: true
   },
+  original_file_path: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path relatif file asli (dari upload root) untuk referensi/audit'
+  },
   uploaded_by: {
     type: DataTypes.UUID,
     allowNull: true,
     references: { model: 'users', key: 'id' }
+  },
+  finalized_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Waktu user menekan Finalize rekonsiliasi'
+  },
+  finalized_by: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'users', key: 'id' },
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
   }
 }, {
   tableName: 'bank_statement_uploads',

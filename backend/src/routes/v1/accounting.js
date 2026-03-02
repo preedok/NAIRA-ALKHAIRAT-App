@@ -67,8 +67,13 @@ router.post('/bank-statements/upload', bankStatementController.uploadBankStateme
 router.get('/bank-statements/template', bankStatementController.downloadTemplate);
 router.get('/bank-statements', bankStatementController.listBankStatements);
 router.get('/bank-statements/:id', bankStatementController.getBankStatement);
+router.get('/bank-statements/:id/original-file', bankStatementController.getOriginalFile);
+router.get('/bank-statements/:id/export-pdf', bankStatementController.exportStatementPdf);
 router.get('/bank-statements/:id/reconcile/export', bankStatementController.exportReconciliationExcel);
 router.get('/bank-statements/:id/reconcile', bankStatementController.getReconciliation);
+router.post('/bank-statements/:id/reconcile/approve', bankStatementController.approveSuggested);
+router.post('/bank-statements/:id/reconcile/manual-map', bankStatementController.manualMap);
+router.post('/bank-statements/:id/reconcile/finalize', bankStatementController.finalizeReconciliation);
 router.delete('/bank-statements/:id', bankStatementController.deleteBankStatement);
 
 // Accurate Online module

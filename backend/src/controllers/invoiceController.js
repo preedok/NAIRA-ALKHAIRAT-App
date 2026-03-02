@@ -39,6 +39,8 @@ const ALLOWED_SORT = ['invoice_number', 'created_at', 'total_amount', 'status'];
 
 async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user) {
   if (!user) return branch_id ? { branch_id } : {};
+  // Role hotel & bus: lihat semua wilayah (tidak batasi by branch/wilayah)
+  if (user.role === 'role_hotel' || user.role === 'role_bus') return {};
   // Role invoice Saudi: lihat semua invoice seluruh wilayah (filter branch hanya jika dikirim eksplisit)
   if (user.role === 'role_invoice_saudi') return branch_id ? { branch_id } : {};
   // Koordinator / invoice koordinator: scope ke semua cabang di wilayah mereka
@@ -118,15 +120,27 @@ const list = asyncHandler(async (req, res) => {
   if (req.user.role === 'owner') where.owner_id = req.user.id;
   // Role hotel: hanya tampilkan invoice yang order-nya punya item hotel (pekerjaan hotel di menu Invoice).
   if (req.user.role === 'role_hotel') {
-    const hotelRows = await OrderItem.findAll({ where: { type: 'hotel' }, attributes: ['order_id'], raw: true });
+    const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
     const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))];
     where.order_id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
   }
   // Role bus: hanya tampilkan invoice yang order-nya punya item bus (pekerjaan bus di menu Invoice).
   if (req.user.role === 'role_bus') {
-    const busRows = await OrderItem.findAll({ where: { type: 'bus' }, attributes: ['order_id'], raw: true });
+    const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
     const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))];
     where.order_id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
+  }
+  // Visa koordinator: hanya invoice yang order-nya punya item visa (scope wilayah dari resolveBranchFilterList).
+  if (req.user.role === 'visa_koordinator') {
+    const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
+    const visaOrderIds = [...new Set((visaRows || []).map((r) => r.order_id))];
+    where.order_id = visaOrderIds.length ? { [Op.in]: visaOrderIds } : { [Op.in]: [] };
+  }
+  // Tiket koordinator: hanya invoice yang order-nya punya item tiket (scope wilayah dari resolveBranchFilterList).
+  if (req.user.role === 'tiket_koordinator') {
+    const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
+    const ticketOrderIds = [...new Set((ticketRows || []).map((r) => r.order_id))];
+    where.order_id = ticketOrderIds.length ? { [Op.in]: ticketOrderIds } : { [Op.in]: [] };
   }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
   // role_accounting, role_invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
@@ -200,7 +214,7 @@ const list = asyncHandler(async (req, res) => {
     const items = await OrderItem.findAll({
       where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
       include: [
-        { model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false },
+        { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false },
         { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
         { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] },
         { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'check_in_date', 'check_in_time', 'check_out_date', 'check_out_time'] },
@@ -211,7 +225,10 @@ const list = asyncHandler(async (req, res) => {
     for (const it of items) {
       const oid = it.order_id;
       if (!orderItemsByOrderId[oid]) orderItemsByOrderId[oid] = [];
-      orderItemsByOrderId[oid].push(it.get ? it.get({ plain: true }) : it);
+      const plain = it.get ? it.get({ plain: true }) : it;
+      plain.product_name = (plain.Product && plain.Product.name) ? plain.Product.name : null;
+      plain.product_type = plain.type || (plain.Product && plain.Product.type) || null;
+      orderItemsByOrderId[oid].push(plain);
     }
   }
   for (const d of data) {
@@ -276,14 +293,50 @@ const listDraftOrders = asyncHandler(async (req, res) => {
   if (req.user.role === 'owner') orderWhereDraft.owner_id = req.user.id;
   if (Object.keys(branchFilter).length) Object.assign(orderWhereDraft, branchFilter);
   if (req.user.role === 'role_hotel') {
-    const hotelRows = await OrderItem.findAll({ where: { type: 'hotel' }, attributes: ['order_id'], raw: true });
+    const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
     const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))].filter((id) => !withInvIds.includes(id));
     orderWhereDraft.id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
   }
   if (req.user.role === 'role_bus') {
-    const busRows = await OrderItem.findAll({ where: { type: 'bus' }, attributes: ['order_id'], raw: true });
+    const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
     const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))].filter((id) => !withInvIds.includes(id));
     orderWhereDraft.id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
+  }
+  if (req.user.role === 'visa_koordinator' && req.user.wilayah_id) {
+    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+    const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
+    const visaOrderIds = [...new Set((visaRows || []).map((r) => r.order_id))];
+    const draftWithVisa = await Order.findAll({
+      where: {
+        [Op.and]: [
+          { id: { [Op.in]: visaOrderIds.length ? visaOrderIds : [null] } },
+          { id: { [Op.notIn]: withInvIds.length ? withInvIds : [null] } },
+          { branch_id: { [Op.in]: branchIds.length ? branchIds : [] } },
+          { status: 'draft' }
+        ]
+      },
+      attributes: ['id'],
+      raw: true
+    });
+    orderWhereDraft.id = draftWithVisa.length ? { [Op.in]: draftWithVisa.map((o) => o.id) } : { [Op.in]: [] };
+  }
+  if (req.user.role === 'tiket_koordinator' && req.user.wilayah_id) {
+    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+    const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
+    const ticketOrderIds = [...new Set((ticketRows || []).map((r) => r.order_id))];
+    const draftWithTicket = await Order.findAll({
+      where: {
+        [Op.and]: [
+          { id: { [Op.in]: ticketOrderIds.length ? ticketOrderIds : [null] } },
+          { id: { [Op.notIn]: withInvIds.length ? withInvIds : [null] } },
+          { branch_id: { [Op.in]: branchIds.length ? branchIds : [] } },
+          { status: 'draft' }
+        ]
+      },
+      attributes: ['id'],
+      raw: true
+    });
+    orderWhereDraft.id = draftWithTicket.length ? { [Op.in]: draftWithTicket.map((o) => o.id) } : { [Op.in]: [] };
   }
   const draftOrderInclude = [
     { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
@@ -293,8 +346,9 @@ const listDraftOrders = asyncHandler(async (req, res) => {
       as: 'OrderItems',
       where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS] } },
       required: false,
-      attributes: ['id', 'type', 'quantity'],
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta'],
       include: [
+        { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false },
         { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
         { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] },
         { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'check_in_date', 'check_in_time', 'check_out_date', 'check_out_time'] },
@@ -310,6 +364,11 @@ const listDraftOrders = asyncHandler(async (req, res) => {
   const data = draftOrders.map((ord) => {
     const plain = ord.get ? ord.get({ plain: true }) : ord;
     const total = parseFloat(plain.total_amount) || 0;
+    const orderItems = (plain.OrderItems || []).map((it) => ({
+      ...it,
+      product_name: (it.Product && it.Product.name) ? it.Product.name : null,
+      product_type: it.type || (it.Product && it.Product.type) || null
+    }));
     return {
       id: `draft-${plain.id}`,
       order_id: plain.id,
@@ -320,7 +379,7 @@ const listDraftOrders = asyncHandler(async (req, res) => {
       total_amount: total,
       paid_amount: 0,
       remaining_amount: total,
-      Order: { ...plain, OrderItems: plain.OrderItems || [] },
+      Order: { ...plain, OrderItems: orderItems },
       User: plain.User,
       Branch: plain.Branch,
       PaymentProofs: [],
@@ -335,10 +394,11 @@ const listDraftOrders = asyncHandler(async (req, res) => {
  * Same query params as list (no page/limit). Returns aggregates for Order & Invoice stats.
  */
 const getSummary = asyncHandler(async (req, res) => {
-  const { status, branch_id, owner_id, order_status, invoice_number, order_number, date_from, date_to, due_status } = req.query;
+  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, order_number, date_from, date_to, due_status } = req.query;
   const where = {};
   if (status) where.status = status;
-  if (branch_id) where.branch_id = branch_id;
+  const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
+  if (Object.keys(branchFilter).length) Object.assign(where, branchFilter);
   if (owner_id) where.owner_id = owner_id;
   if (invoice_number) where.invoice_number = { [Op.iLike]: `%${String(invoice_number).trim()}%` };
   if (date_from || date_to) {
@@ -362,13 +422,33 @@ const getSummary = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
-  if (req.user.branch_id && req.user.role !== 'owner' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
   if (req.user.wilayah_id && isKoordinatorRole(req.user.role)) {
     const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
     if (branchIds.length) where.branch_id = { [Op.in]: branchIds };
     else where.branch_id = { [Op.in]: [] };
+  }
+  if (req.user.role === 'role_hotel') {
+    const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
+    const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))];
+    where.order_id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
+  }
+  if (req.user.role === 'role_bus') {
+    const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
+    const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))];
+    where.order_id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
+  }
+  if (req.user.role === 'visa_koordinator') {
+    const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
+    const visaOrderIds = [...new Set((visaRows || []).map((r) => r.order_id))];
+    where.order_id = visaOrderIds.length ? { [Op.in]: visaOrderIds } : { [Op.in]: [] };
+  }
+  if (req.user.role === 'tiket_koordinator') {
+    const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
+    const ticketOrderIds = [...new Set((ticketRows || []).map((r) => r.order_id))];
+    where.order_id = ticketOrderIds.length ? { [Op.in]: ticketOrderIds } : { [Op.in]: [] };
   }
 
   const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'status'] };
@@ -611,10 +691,17 @@ const getById = asyncHandler(async (req, res) => {
     let newStatus = invoice.status;
     if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
     else if ((parseFloat(invoice.dp_amount) || 0) > 0 && verifiedSum >= parseFloat(invoice.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+    else if (verifiedSum > 0 && [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
     await invoice.update({ paid_amount: verifiedSum, remaining_amount: remaining, status: newStatus });
     invoice.paid_amount = verifiedSum;
     invoice.remaining_amount = remaining;
     invoice.status = newStatus;
+  } else if (invoice.status === INVOICE_STATUS.TENTATIVE && verifiedSum > 0) {
+    const dpAmt = parseFloat(invoice.dp_amount) || 0;
+    if (dpAmt > 0 && verifiedSum >= dpAmt) {
+      await invoice.update({ status: INVOICE_STATUS.PARTIAL_PAID });
+      invoice.status = INVOICE_STATUS.PARTIAL_PAID;
+    }
   }
   const rules = await getRulesForBranch(invoice.branch_id);
   const data = invoice.toJSON();
@@ -882,11 +969,16 @@ async function syncInvoiceFromOrder(order) {
     overpaidAmount = Math.abs(remainingAmount);
     remainingAmount = 0;
   }
+  // Jangan turunkan ke Tagihan DP jika sudah ada pembayaran (tetap Pembayaran DP)
+  const hadPayment = paidAmount > 0;
+  const alreadyPartialOrPaid = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status);
   let newStatus = invoice.status;
   if (remainingAmount <= 0) {
     newStatus = INVOICE_STATUS.PAID;
   } else if (paidAmount >= dpAmount) {
     newStatus = INVOICE_STATUS.PARTIAL_PAID;
+  } else if (hadPayment && alreadyPartialOrPaid) {
+    newStatus = INVOICE_STATUS.PARTIAL_PAID; // tetap Pembayaran DP setelah update order
   } else {
     newStatus = INVOICE_STATUS.TENTATIVE;
   }

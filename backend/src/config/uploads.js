@@ -40,7 +40,8 @@ const SUBDIRS = {
   TICKET_DOCS: 'ticket-docs',
   JAMAAH_DATA: 'jamaah-data',
   INVOICES: 'invoices',
-  PAYROLL_SLIPS: 'payroll-slips'
+  PAYROLL_SLIPS: 'payroll-slips',
+  BANK_STATEMENTS: 'bank-statements'
 };
 
 function getDir(subdir) {

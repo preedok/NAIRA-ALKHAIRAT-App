@@ -89,19 +89,20 @@ const listInvoices = asyncHandler(async (req, res) => {
   if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
 
   const where = { order_id: orderIdsFromHotel, branch_id: { [Op.in]: branchIds } };
-  // Hanya tampilkan invoice yang sudah ada pembayaran DP (bukan tagihan DP / tentative)
-  const statusWithDpPaid = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
-  if (status && statusWithDpPaid.includes(status)) {
+  // Tampilkan semua invoice yang punya item hotel: tentative (tagihan DP) + yang sudah DP/lunas agar divisi bisa lihat & kerjakan
+  const statusesForProgress = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (status && statusesForProgress.includes(status)) {
     where.status = status;
   } else {
-    where.status = { [Op.in]: statusWithDpPaid };
+    where.status = { [Op.in]: statusesForProgress };
   }
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
   const offset = (pg - 1) * lim;
 
-  const { count, rows: invoices } = await Invoice.findAndCountAll({
+  const count = await Invoice.count({ where });
+  const invoices = await Invoice.findAll({
     where,
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
@@ -111,21 +112,22 @@ const listInvoices = asyncHandler(async (req, res) => {
         as: 'Order',
         attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
         include: [
-          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {
             model: OrderItem,
             as: 'OrderItems',
             where: { type: ORDER_ITEM_TYPE.HOTEL },
             required: true,
-            include: [{ model: HotelProgress, as: 'HotelProgress', required: false }]
+            include: [
+              { model: HotelProgress, as: 'HotelProgress', required: false },
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }
+            ]
           }
         ]
       }
     ],
     order: [['created_at', 'DESC']],
     limit: lim,
-    offset,
-    distinct: true
+    offset
   });
 
   const totalPages = Math.ceil((count || 0) / lim) || 1;
@@ -164,9 +166,9 @@ const getInvoice = asyncHandler(async (req, res) => {
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
-  const statusWithDpPaidGet = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
-  if (!invoice.status || !statusWithDpPaidGet.includes(invoice.status)) {
-    return res.status(403).json({ success: false, message: 'Detail invoice hanya tersedia setelah ada pembayaran DP.' });
+  const allowedStatuses = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (!invoice.status || !allowedStatuses.includes(invoice.status)) {
+    return res.status(403).json({ success: false, message: 'Invoice tidak tersedia untuk divisi hotel.' });
   }
   const hotelItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   if (hotelItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item hotel' });
