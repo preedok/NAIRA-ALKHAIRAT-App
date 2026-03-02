@@ -26,9 +26,6 @@ import {
   UserPlus,
   Calendar,
   DollarSign,
-  BookOpen,
-  ShoppingCart,
-  Percent,
   Wallet
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -144,54 +141,6 @@ const menuItems: MenuItem[] = [
     title: 'Piutang (AR)',
     icon: <BarChart3 className="w-5 h-5" />,
     path: '/dashboard/accounting/aging',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Rekening Koran',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/accounting/rekening-koran',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Akuntansi & Laporan',
-    icon: <BookOpen className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/akuntansi',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Penjualan',
-    icon: <Receipt className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/penjualan',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Pembelian',
-    icon: <ShoppingCart className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/pembelian',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Persediaan',
-    icon: <Package className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/persediaan',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Perpajakan',
-    icon: <Percent className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/perpajakan',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Kas & Bank',
-    icon: <Wallet className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/kas-bank',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Aset Tetap',
-    icon: <Building2 className="w-5 h-5" />,
-    path: '/dashboard/accounting/accurate/aset-tetap',
     roles: ['role_accounting']
   },
   {

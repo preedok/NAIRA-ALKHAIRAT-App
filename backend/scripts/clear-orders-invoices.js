@@ -46,14 +46,6 @@ async function run() {
   console.log('Menghapus data order, invoice, dan data terkait...');
   console.log('(Tetap: products, users, branches, product_prices, owner_profiles, data master)\n');
 
-  try {
-    const [r] = await sequelize.query('UPDATE bank_statement_lines SET matched_payment_proof_id = NULL WHERE matched_payment_proof_id IS NOT NULL');
-    const updated = r && typeof r === 'number' ? r : (r && r.rowCount != null ? r.rowCount : 0);
-    console.log('  ✓ bank_statement_lines (unlink payment proof)');
-  } catch (err) {
-    console.error('  ✗ bank_statement_lines:', err.message);
-  }
-
   for (const table of TABLES_IN_ORDER) {
     try {
       const [r] = await sequelize.query(`DELETE FROM "${table}"`);

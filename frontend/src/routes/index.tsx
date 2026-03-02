@@ -38,15 +38,6 @@ import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
 import AccountingAgingPage from '../pages/dashboard/accounting/AccountingAgingPage';
 import AccountingChartOfAccountsPage from '../pages/dashboard/accounting/AccountingChartOfAccountsPage';
-import RekeningKoranPage from '../pages/dashboard/accounting/RekeningKoranPage';
-import AccurateOnlineLayout from '../pages/dashboard/accounting/AccurateOnlineLayout';
-import AccurateAkuntansiPage from '../pages/dashboard/accounting/AccurateAkuntansiPage';
-import AccuratePenjualanPage from '../pages/dashboard/accounting/AccuratePenjualanPage';
-import AccuratePembelianPage from '../pages/dashboard/accounting/AccuratePembelianPage';
-import AccuratePersediaanPage from '../pages/dashboard/accounting/AccuratePersediaanPage';
-import AccuratePerpajakanPage from '../pages/dashboard/accounting/AccuratePerpajakanPage';
-import AccurateKasBankPage from '../pages/dashboard/accounting/AccurateKasBankPage';
-import AccurateAsetTetapPage from '../pages/dashboard/accounting/AccurateAsetTetapPage';
 
 const router = createBrowserRouter([
   {
@@ -87,10 +78,6 @@ const router = createBrowserRouter([
           {
             path: 'super-admin',
             element: <SuperAdminDashboard />
-          },
-          {
-            path: 'super-admin/order-statistics',
-            element: <Navigate to="/dashboard" replace />
           },
           {
             path: 'super-admin/logs',
@@ -222,16 +209,8 @@ const router = createBrowserRouter([
             element: <ProfilePage />
           },
           {
-            path: 'koordinator',
-            element: <Navigate to="/dashboard" replace />
-          },
-          {
             path: 'koordinator/owners',
             element: <KoordinatorOwnersPage />
-          },
-          {
-            path: 'combined-recap',
-            element: <Navigate to="/dashboard" replace />
           },
           {
             path: 'admin-pusat/users',
@@ -246,48 +225,8 @@ const router = createBrowserRouter([
             element: <AccountingChartOfAccountsPage />
           },
           {
-            path: 'accounting/rekening-koran',
-            element: <RekeningKoranPage />
-          },
-          {
-            path: 'accounting/reconciliation',
-            element: <Navigate to="/dashboard/accounting/rekening-koran" replace />
-          },
-          {
             path: 'accounting/aging',
             element: <AccountingAgingPage />
-          },
-          {
-            path: 'accounting/accurate/akuntansi',
-            element: <AccurateAkuntansiPage />
-          },
-          {
-            path: 'accounting/accurate/penjualan',
-            element: <AccuratePenjualanPage />
-          },
-          {
-            path: 'accounting/accurate/pembelian',
-            element: <AccuratePembelianPage />
-          },
-          {
-            path: 'accounting/accurate/persediaan',
-            element: <AccuratePersediaanPage />
-          },
-          {
-            path: 'accounting/accurate/perpajakan',
-            element: <AccuratePerpajakanPage />
-          },
-          {
-            path: 'accounting/accurate/kas-bank',
-            element: <AccurateKasBankPage />
-          },
-          {
-            path: 'accounting/accurate/aset-tetap',
-            element: <AccurateAsetTetapPage />
-          },
-          {
-            path: 'accounting/accurate',
-            element: <Navigate to="/dashboard/accounting/accurate/akuntansi" replace />
           },
           {
             path: '*',

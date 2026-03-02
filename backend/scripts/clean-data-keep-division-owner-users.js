@@ -7,8 +7,7 @@
  * - master wilayah/provinsi/branches (agar relasi user tidak rusak)
  *
  * Yang dihapus: orders, invoices, payment proofs, refunds, notifikasi, log,
- * progress hotel/visa/tiket/bus, rekening koran (bank_statement_*), rekonsiliasi,
- * accounting & payroll, products & product_prices, business_rules, dll.
+ * progress hotel/visa/tiket/bus, accounting, products & product_prices, business_rules, dll.
  *
  * Cara pakai:
  *   Dari folder backend:
@@ -47,11 +46,6 @@ const KEEP_ROLES = [
 
 // Hapus: child dulu (FK), baru parent. Case-sensitive untuk PostgreSQL.
 const TABLES_DELETE_ORDER = [
-  // Rekening koran & rekonsiliasi
-  'reconciliation_logs',
-  'bank_statement_lines',
-  'bank_statement_uploads',
-
   // Pembayaran / refund / invoice file
   'payment_reallocations',
   'payment_proofs',
@@ -65,12 +59,6 @@ const TABLES_DELETE_ORDER = [
   'account_mappings',
   'accounting_periods',
   'accounting_fiscal_years',
-
-  // Payroll
-  'payroll_items',
-  'payroll_runs',
-  'employee_salaries',
-  'payroll_settings',
 
   // Progress per divisi
   'hotel_progress',

@@ -221,20 +221,7 @@ const NOTIFICATION_TRIGGER = {
   TICKET_ISSUED: 'ticket_issued',
   ORDER_COMPLETED: 'order_completed',
   CANCEL: 'cancel',
-  REFUND: 'refund',
-  PAYROLL_SLIP_ISSUED: 'payroll_slip_issued'
-};
-
-// Payroll
-const PAYROLL_METHOD = {
-  SCHEDULED: 'scheduled',
-  MANUAL: 'manual'
-};
-
-const PAYROLL_RUN_STATUS = {
-  DRAFT: 'draft',
-  PROCESSED: 'processed',
-  FINALIZED: 'finalized'
+  REFUND: 'refund'
 };
 
 // Accounting Document Workflow
@@ -274,7 +261,6 @@ const ACCOUNT_MAPPING_TYPE = {
   SALES_HANDLING: 'sales_handling',
   PURCHASE_HOTEL: 'purchase_hotel',
   PURCHASE_BUS: 'purchase_bus',
-  PAYROLL: 'payroll',
   CASH_RECEIPT: 'cash_receipt',
   CASH_DISBURSEMENT: 'cash_disbursement',
   BANK_TRANSFER: 'bank_transfer'
@@ -326,7 +312,5 @@ module.exports = {
   ROOM_CAPACITY,
   BUSINESS_RULE_KEYS,
   NOTIFICATION_TRIGGER,
-  BUSINESS_RULES,
-  PAYROLL_METHOD,
-  PAYROLL_RUN_STATUS
+  BUSINESS_RULES
 };

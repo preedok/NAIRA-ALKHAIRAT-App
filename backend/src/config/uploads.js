@@ -12,7 +12,6 @@
  *   ├── visa-docs/           Dokumen visa terbit (role visa upload)
  *   ├── ticket-docs/         Dokumen tiket terbit (role ticket upload)
  *   ├── invoices/            PDF invoice yang digenerate
- *   └── payroll-slips/       Slip gaji PDF
  *
  * Format nama file (mudah dibaca dan dicari):
  *   - mou:           MOU_Owner_{userId}_YYYYMMDD_HHmmss.{ext}
@@ -39,9 +38,7 @@ const SUBDIRS = {
   VISA_DOCS: 'visa-docs',
   TICKET_DOCS: 'ticket-docs',
   JAMAAH_DATA: 'jamaah-data',
-  INVOICES: 'invoices',
-  PAYROLL_SLIPS: 'payroll-slips',
-  BANK_STATEMENTS: 'bank-statements'
+  INVOICES: 'invoices'
 };
 
 function getDir(subdir) {
@@ -143,13 +140,6 @@ function invoiceFilename(invoiceNumber, status) {
   return `INV_${safeNum}_${safeStatus}_${date}_${time}.pdf`;
 }
 
-function payrollSlipFilename(employeeName, periodYear, periodMonth, itemId) {
-  const { date, time } = dateTimeForFilename();
-  const safeName = (employeeName || 'emp').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
-  const id6 = (itemId || '').toString().slice(-6);
-  return `SLIP_${safeName}_${periodYear}_${periodMonth}_${id6}_${date}_${time}.pdf`;
-}
-
 /**
  * URL path untuk akses file dari API (tanpa host). Contoh: /uploads/mou/MOU_Owner_xxx.pdf
  */
@@ -171,7 +161,6 @@ module.exports = {
   ticketDocFilename,
   jamaahDataFilename,
   invoiceFilename,
-  payrollSlipFilename,
   registrationPaymentFilename,
   registrationPaymentFilenameAtRegister,
   toUrlPath

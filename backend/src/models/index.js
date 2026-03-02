@@ -38,21 +38,9 @@ const ChartOfAccount = require('./ChartOfAccount');
 const AccountMapping = require('./AccountMapping');
 const JournalEntry = require('./JournalEntry');
 const JournalEntryLine = require('./JournalEntryLine');
-const PayrollSetting = require('./PayrollSetting');
-const EmployeeSalary = require('./EmployeeSalary');
-const PayrollRun = require('./PayrollRun');
-const PayrollItem = require('./PayrollItem');
 const PaymentReallocation = require('./PaymentReallocation');
-const BankStatementUpload = require('./BankStatementUpload');
-const BankStatementLine = require('./BankStatementLine');
-const AccurateQuotation = require('./AccurateQuotation');
-const AccuratePurchaseOrder = require('./AccuratePurchaseOrder');
-const AccurateWarehouse = require('./AccurateWarehouse');
-const AccurateFixedAsset = require('./AccurateFixedAsset');
-const AccurateDepreciationSchedule = require('./AccurateDepreciationSchedule');
 const AccountingBankAccount = require('./AccountingBankAccount');
 const Bank = require('./Bank');
-const ReconciliationLog = require('./ReconciliationLog');
 const InvoiceStatusHistory = require('./InvoiceStatusHistory');
 const OrderRevision = require('./OrderRevision');
 
@@ -223,18 +211,6 @@ AccountingBankAccount.belongsTo(ChartOfAccount, { foreignKey: 'gl_account_id', a
 AccountingBankAccount.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
 Branch.hasMany(AccountingBankAccount, { foreignKey: 'branch_id', as: 'BankAccounts' });
 
-PayrollSetting.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
-Branch.hasOne(PayrollSetting, { foreignKey: 'branch_id', as: 'PayrollSetting' });
-EmployeeSalary.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
-User.hasMany(EmployeeSalary, { foreignKey: 'user_id', as: 'EmployeeSalaries' });
-PayrollRun.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
-PayrollRun.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
-Branch.hasMany(PayrollRun, { foreignKey: 'branch_id', as: 'PayrollRuns' });
-PayrollRun.hasMany(PayrollItem, { foreignKey: 'payroll_run_id', as: 'PayrollItems' });
-PayrollItem.belongsTo(PayrollRun, { foreignKey: 'payroll_run_id', as: 'PayrollRun' });
-PayrollItem.belongsTo(User, { foreignKey: 'user_id', as: 'User' });
-User.hasMany(PayrollItem, { foreignKey: 'user_id', as: 'PayrollItems' });
-
 // Payment reallocation (pemindahan dana antar invoice)
 PaymentReallocation.belongsTo(Invoice, { foreignKey: 'source_invoice_id', as: 'SourceInvoice' });
 PaymentReallocation.belongsTo(Invoice, { foreignKey: 'target_invoice_id', as: 'TargetInvoice' });
@@ -242,25 +218,6 @@ PaymentReallocation.belongsTo(User, { foreignKey: 'performed_by', as: 'Performed
 Invoice.hasMany(PaymentReallocation, { foreignKey: 'source_invoice_id', as: 'ReallocationsOut' });
 Invoice.hasMany(PaymentReallocation, { foreignKey: 'target_invoice_id', as: 'ReallocationsIn' });
 User.hasMany(PaymentReallocation, { foreignKey: 'performed_by', as: 'PaymentReallocations' });
-
-BankStatementUpload.belongsTo(User, { foreignKey: 'uploaded_by', as: 'UploadedBy' });
-  BankStatementUpload.belongsTo(User, { foreignKey: 'finalized_by', as: 'FinalizedBy' });
-  User.hasMany(BankStatementUpload, { foreignKey: 'uploaded_by', as: 'BankStatementUploads' });
-  BankStatementUpload.hasMany(BankStatementLine, { foreignKey: 'upload_id', as: 'Lines' });
-  BankStatementLine.belongsTo(BankStatementUpload, { foreignKey: 'upload_id', as: 'Upload' });
-  BankStatementLine.belongsTo(PaymentProof, { foreignKey: 'matched_payment_proof_id', as: 'MatchedPaymentProof' });
-  BankStatementUpload.hasMany(ReconciliationLog, { foreignKey: 'upload_id', as: 'ReconciliationLogs' });
-  ReconciliationLog.belongsTo(BankStatementUpload, { foreignKey: 'upload_id', as: 'Upload' });
-  ReconciliationLog.belongsTo(BankStatementLine, { foreignKey: 'bank_statement_line_id', as: 'BankStatementLine' });
-  ReconciliationLog.belongsTo(PaymentProof, { foreignKey: 'payment_proof_id', as: 'PaymentProof' });
-  ReconciliationLog.belongsTo(User, { foreignKey: 'matched_by', as: 'MatchedBy' });
-
-  AccurateQuotation.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
-  AccuratePurchaseOrder.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
-  AccurateWarehouse.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
-  AccurateFixedAsset.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
-  AccurateFixedAsset.hasMany(AccurateDepreciationSchedule, { foreignKey: 'fixed_asset_id', as: 'DepreciationSchedules' });
-  AccurateDepreciationSchedule.belongsTo(AccurateFixedAsset, { foreignKey: 'fixed_asset_id', as: 'FixedAsset' });
 
 const db = {
   sequelize,
@@ -304,21 +261,9 @@ const db = {
   AccountMapping,
   JournalEntry,
   JournalEntryLine,
-  PayrollSetting,
-  EmployeeSalary,
-  PayrollRun,
-  PayrollItem,
   PaymentReallocation,
-  BankStatementUpload,
-  BankStatementLine,
-  AccurateQuotation,
-  AccuratePurchaseOrder,
-  AccurateWarehouse,
-  AccurateFixedAsset,
-  AccurateDepreciationSchedule,
   AccountingBankAccount,
   Bank,
-  ReconciliationLog,
   InvoiceStatusHistory,
   OrderRevision
 };

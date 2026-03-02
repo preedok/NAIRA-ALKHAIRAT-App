@@ -45,16 +45,7 @@
     "extends": [
       "react-app"
     ],
-    "overrides": [
-      {
-        "files": [
-          "src/pages/dashboard/accounting/PayrollRunDetailPage.tsx"
-        ],
-        "rules": {
-          "no-restricted-globals": "off"
-        }
-      }
-    ]
+    "overrides": []
   },
   "browserslist": {
     "production": [

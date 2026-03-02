@@ -16,7 +16,6 @@ try {
   getDir(SUBDIRS.VISA_DOCS);
   getDir(SUBDIRS.TICKET_DOCS);
   getDir(SUBDIRS.INVOICES);
-  getDir(SUBDIRS.PAYROLL_SLIPS);
 } catch (e) { /* ignore */ }
 
 const app = express();

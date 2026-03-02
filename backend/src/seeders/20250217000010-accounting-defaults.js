@@ -109,7 +109,6 @@ module.exports = {
       { type: 'sales_handling', debit: '1-2-01', credit: '4-5' },
       { type: 'purchase_hotel', debit: '5-1', credit: '2-1-01' },
       { type: 'purchase_bus', debit: '5-4', credit: '2-1-02' },
-      { type: 'payroll', debit: '5-5', credit: '2-2' },
       { type: 'cash_receipt', debit: '1-1-01', credit: '1-2-01' }
     ];
     const mappings = mappingTypes.map(m => ({

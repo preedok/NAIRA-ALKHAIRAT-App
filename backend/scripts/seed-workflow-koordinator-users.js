@@ -46,9 +46,6 @@ async function main() {
   await sequelize.query('DELETE FROM notifications').catch(() => {});
   await sequelize.query('DELETE FROM audit_logs').catch(() => {});
   await sequelize.query('UPDATE invoices SET unblocked_by = NULL WHERE unblocked_by IS NOT NULL').catch(() => {});
-  await sequelize.query('UPDATE payroll_runs SET created_by = NULL WHERE created_by IS NOT NULL').catch(() => {});
-  await sequelize.query('DELETE FROM payroll_items').catch(() => {});
-  await sequelize.query('DELETE FROM employee_salaries').catch(() => {});
   await sequelize.query('UPDATE refunds SET requested_by = NULL, approved_by = NULL WHERE requested_by IS NOT NULL OR approved_by IS NOT NULL').catch(() => {});
   await sequelize.query('UPDATE invoice_files SET generated_by = NULL WHERE generated_by IS NOT NULL').catch(() => {});
   await sequelize.query('UPDATE maintenance_notices SET created_by = NULL WHERE created_by IS NOT NULL').catch(() => {});
@@ -59,8 +56,7 @@ async function main() {
     ['journal_entries', 'created_by'],
     ['journal_entries', 'approved_by'],
     ['journal_entries', 'posted_by'],
-    ['system_logs', 'user_id'],
-    ['payroll_runs', 'approved_by']
+    ['system_logs', 'user_id']
   ];
   for (const [table, col] of userFkTables) {
     await sequelize.query(`UPDATE ${table} SET ${col} = NULL WHERE ${col} IS NOT NULL`).catch(() => {});

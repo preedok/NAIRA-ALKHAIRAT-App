@@ -1,22 +1,26 @@
+'use strict';
+
 /**
- * Hapus semua data di database KECUALI data master:
- * - Data wilayah (wilayah, provinsi, branches/cabang)
- * - Data user (semua role termasuk divisi dan owner)
- * - Data owner (owner_profiles)
+ * Hapus SEMUA data transaksional & master lain di database,
+ * KECUALI:
+ * - tabel `users`
+ * - tabel `wilayah`
  *
- * Yang dihapus: orders, invoices, payment proofs, refunds, notifikasi, log,
- * progress hotel/visa/tiket/bus, accounting transaksional,
- * products & product_prices, business_rules, dll.
+ * Yang DIHAPUS (baris datanya, bukan tabelnya):
+ * - orders, invoices, payment_proofs, refunds, reallocations, notifications, logs, dll.
+ * - products & product_prices, business_rules, seasons/quota, payroll, accounting, bank statements, dll.
+ * - master cabang & provinsi & owner_profiles.
  *
- * Cara pakai:
- *   Dari folder backend:  node scripts/clean-data-keep-master-only.js
- *   Dari root project:    node backend/scripts/clean-data-keep-master-only.js
- *   Atau:                npm run clean:data-keep-master   (dari folder backend)
+ * Cara pakai (dari folder backend):
+ *   PowerShell:
+ *     cd c:\dev\BGG_App\backend
+ *     $env:CONFIRM=\"YES\"
+ *     node scripts/clean-data-keep-users-wilayah-only.js
  */
+
 require('dotenv').config();
 const path = require('path');
 
-// Load env from backend folder if run from root
 if (!process.env.DATABASE_URL && !process.env.DB_NAME) {
   try {
     require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -25,36 +29,63 @@ if (!process.env.DATABASE_URL && !process.env.DB_NAME) {
 
 const { sequelize } = require('../src/models');
 
+// Urutan hapus: child dulu (FK), baru parent. Case-sensitive untuk PostgreSQL.
 const TABLES_DELETE_ORDER = [
+  // Pembayaran / refund / invoice file
   'payment_reallocations',
   'payment_proofs',
   'invoice_files',
   'refunds',
   'owner_balance_transactions',
+
+  // Accounting
   'journal_entry_lines',
   'journal_entries',
   'account_mappings',
   'accounting_periods',
   'accounting_fiscal_years',
+
+  // Progress per divisi
   'hotel_progress',
   'ticket_progress',
   'visa_progress',
   'bus_progress',
+
+  // Core order/invoice
   'order_items',
   'invoices',
   'orders',
+
+  // App-level logs/settings
   'notifications',
   'audit_logs',
   'maintenance_notices',
   'system_logs',
   'financial_report_presets',
+
+  // Product master & pricing
   'product_availability',
   'hotel_room_inventory',
   'hotel_seasons',
+  'visa_seasons',
+  'visa_season_quotas',
+  'bus_seasons',
+  'bus_season_quotas',
+  'ticket_seasons',
+  'ticket_season_quotas',
   'product_prices',
   'business_rule_configs',
   'products',
-  'app_settings'
+  'app_settings',
+
+  // Bank master
+  'accounting_bank_accounts',
+  'banks',
+
+  // Master owner & cabang/provinsi
+  'owner_profiles',
+  'branches',
+  'provinsi'
 ];
 
 // chart_of_accounts punya self-reference (parent_id): hapus anak dulu
@@ -67,7 +98,16 @@ async function run() {
     process.exit(1);
   }
 
-  console.log('Menghapus data transaksional & non-master (tetap: wilayah, provinsi, branches, users, owner_profiles)...\n');
+  if (String(process.env.CONFIRM || '').toUpperCase() !== 'YES') {
+    console.log('STOP: Script ini DESTRUKTIF dan akan menghapus hampir semua data.');
+    console.log('Jika Anda yakin, set env CONFIRM=YES lalu jalankan lagi.');
+    console.log('Contoh PowerShell:');
+    console.log('  cd c:\\dev\\BGG_App\\backend');
+    console.log('  $env:CONFIRM=\"YES\"; node scripts/clean-data-keep-users-wilayah-only.js');
+    process.exit(1);
+  }
+
+  console.log('Menghapus SEMUA data non-master (tetap: tabel users & wilayah)...\n');
 
   for (const table of TABLES_DELETE_ORDER) {
     try {
@@ -95,11 +135,12 @@ async function run() {
     }
   }
 
-  console.log('\nSelesai. Data yang TETAP ADA:');
-  console.log('  - wilayah, provinsi, branches (cabang)');
-  console.log('  - users (semua role: super_admin, admin_pusat, koordinator, role hotel/visa/tiket/bus, accounting, owner, dll)');
-  console.log('  - owner_profiles');
-  console.log('\nJalankan seed jika perlu mengisi ulang produk & contoh: npm run seed');
+  console.log('\nSelesai.');
+  console.log('Tabel yang TETAP ADA datanya:');
+  console.log('  - users');
+  console.log('  - wilayah');
+  console.log('Tabel lain sudah dikosongkan (data dihapus).');
+
   await sequelize.close();
   process.exit(0);
 }
@@ -108,3 +149,4 @@ run().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
