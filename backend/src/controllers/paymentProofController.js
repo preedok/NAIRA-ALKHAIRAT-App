@@ -4,7 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { PaymentProof, Invoice, Order, Notification } = require('../models');
 const { ROLES } = require('../constants');
-const { INVOICE_STATUS, NOTIFICATION_TRIGGER } = require('../constants');
+const { INVOICE_STATUS, NOTIFICATION_TRIGGER, DP_PAYMENT_STATUS } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const uploadConfig = require('../config/uploads');
 
@@ -84,6 +84,8 @@ const create = [
       invoice_id: invoice.id,
       payment_type: type,
       amount: amt,
+      amount_idr: amt,
+      amount_sar: paymentCurrency === 'SAR' && amountOriginal != null ? amountOriginal : null,
       payment_currency: paymentCurrency,
       amount_original: amountOriginal,
       bank_name: bank_name || null,
@@ -110,11 +112,17 @@ const create = [
       if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
       else if ((parseFloat(inv.dp_amount) || 0) > 0 && verifiedSum >= parseFloat(inv.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
       await inv.update({ paid_amount: verifiedSum, remaining_amount: remaining, status: newStatus });
-      if (newStatus === INVOICE_STATUS.PAID) {
-        const order = await Order.findByPk(inv.order_id);
-        if (order && !['completed', 'cancelled'].includes(order.status)) {
-          await order.update({ status: 'processing' });
-        }
+      const order = await Order.findByPk(inv.order_id);
+      if (order) {
+        const total = parseFloat(inv.total_amount) || 0;
+        const dpAmount = parseFloat(inv.dp_amount) || 0;
+        const pct = total > 0 ? Math.round((verifiedSum / total) * 10000) / 100 : null;
+        const hasDpPaid = dpAmount > 0 && verifiedSum >= dpAmount;
+        await order.update({
+          dp_payment_status: hasDpPaid ? DP_PAYMENT_STATUS.PEMBAYARAN_DP : DP_PAYMENT_STATUS.TAGIHAN_DP,
+          dp_percentage_paid: pct,
+          ...(newStatus === INVOICE_STATUS.PAID && !['completed', 'cancelled'].includes(order.status) ? { status: 'processing' } : {})
+        });
       }
       await Notification.create({
         user_id: inv.owner_id,

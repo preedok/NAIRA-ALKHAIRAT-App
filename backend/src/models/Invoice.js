@@ -108,6 +108,10 @@ const Invoice = sequelize.define('Invoice', {
     allowNull: true,
     comment: 'Waktu terakhir order diubah setelah ada pembayaran (untuk label DP + update)'
   },
+  total_amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
+  total_amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
+  paid_amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true, defaultValue: 0 },
+  paid_amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true, defaultValue: 0 },
   last_order_revision_id: {
     type: DataTypes.UUID,
     allowNull: true,

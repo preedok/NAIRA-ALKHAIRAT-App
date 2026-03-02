@@ -151,8 +151,14 @@ const listInvoices = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
   }
 
-  const statusesForProgress = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
-  const where = { order_id: orderIdsFromVisa, branch_id: { [Op.in]: branchIds } };
+  const { DP_PAYMENT_STATUS } = require('../constants');
+  const ordersWithDpPaid = await Order.findAll({
+    where: { id: orderIdsFromVisa, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
+    attributes: ['id'],
+    raw: true
+  }).then(rows => rows.map(r => r.id));
+  const where = { order_id: ordersWithDpPaid.length ? { [Op.in]: ordersWithDpPaid } : { [Op.in]: [] }, branch_id: { [Op.in]: branchIds } };
+  const statusesForProgress = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
   if (status && statusesForProgress.includes(status)) {
     where.status = status;
   } else {
@@ -171,7 +177,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
+        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
         include: [
           { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {

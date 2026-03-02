@@ -254,10 +254,21 @@ export interface TicketDashboardData {
     issued_at?: string;
   }>;
 }
+/** Status pembayaran DP order: tagihan_dp = belum bayar DP, pembayaran_dp = sudah ada bukti bayar DP */
+export const DP_PAYMENT_STATUS = { TAGIHAN_DP: 'tagihan_dp', PEMBAYARAN_DP: 'pembayaran_dp' } as const;
+
 interface Order {
   id: string;
   order_number: string;
   status?: string;
+  dp_payment_status?: 'tagihan_dp' | 'pembayaran_dp' | null;
+  dp_percentage_paid?: number | null;
+  order_updated_at?: string | null;
+  total_amount?: number;
+  total_amount_idr?: number | null;
+  total_amount_sar?: number | null;
+  currency?: string;
+  currency_rates_override?: { SAR_TO_IDR?: number; USD_TO_IDR?: number } | null;
   User?: { id: string; name: string; email?: string; company_name?: string };
   Branch?: { id: string; code: string; name: string };
   OrderItems?: OrderItem[];

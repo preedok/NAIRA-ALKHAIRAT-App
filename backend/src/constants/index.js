@@ -183,6 +183,12 @@ const ORDER_STATUS = {
   BLOCKED: 'blocked'
 };
 
+// Status pembayaran DP order (untuk filter tampil: tagihan_dp = hanya owner/accounting/admin/invoice; pembayaran_dp = tampil di Invoice + Progress divisi)
+const DP_PAYMENT_STATUS = {
+  TAGIHAN_DP: 'tagihan_dp',       // Belum ada bukti bayar DP - tampil hanya owner, accounting, admin_pusat, invoice_saudi, invoice_koordinator
+  PEMBAYARAN_DP: 'pembayaran_dp'  // Sudah ada bukti bayar DP - tampil di menu Invoice dan Progress masing-masing divisi
+};
+
 // Business rule keys (configurable by pusat / cabang)
 const BUSINESS_RULE_KEYS = {
   BUS_MIN_PACK: 'bus_min_pack',
@@ -308,6 +314,7 @@ module.exports = {
   TICKET_TRIP_ROUND_TRIP,
   TICKET_TRIP_TYPES,
   ORDER_STATUS,
+  DP_PAYMENT_STATUS,
   ROOM_TYPES,
   ROOM_CAPACITY,
   BUSINESS_RULE_KEYS,

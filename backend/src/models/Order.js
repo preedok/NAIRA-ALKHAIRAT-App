@@ -72,7 +72,20 @@ const Order = sequelize.define('Order', {
     type: DataTypes.JSONB,
     allowNull: true,
     comment: 'Kurs khusus order (SAR_TO_IDR, USD_TO_IDR). Kosong = pakai kurs global.'
-  }
+  },
+  dp_payment_status: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'tagihan_dp = belum bayar DP, pembayaran_dp = sudah ada bukti bayar DP'
+  },
+  dp_percentage_paid: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    comment: 'Persen pembayaran DP dari total tagihan terbaru (0-100)'
+  },
+  total_amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
+  total_amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
+  order_updated_at: { type: DataTypes.DATE, allowNull: true }
 }, {
   tableName: 'orders',
   underscored: true,

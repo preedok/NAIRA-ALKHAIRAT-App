@@ -14,7 +14,7 @@ const {
   TicketProgress,
   Notification
 } = require('../models');
-const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS } = require('../constants');
+const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
@@ -159,8 +159,13 @@ const listInvoices = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
   }
 
-  const statusesForProgress = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
-  const where = { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } };
+  const ordersWithDpPaid = await Order.findAll({
+    where: { id: orderIdsFromTicket, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
+    attributes: ['id'],
+    raw: true
+  }).then(rows => rows.map(r => r.id));
+  const where = { order_id: ordersWithDpPaid.length ? { [Op.in]: ordersWithDpPaid } : { [Op.in]: [] }, branch_id: { [Op.in]: branchIds } };
+  const statusesForProgress = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
   if (status && statusesForProgress.includes(status)) {
     where.status = status;
   } else {
@@ -179,7 +184,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency'],
+        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
         include: [
           { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {

@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, InvoiceStatusHistory, OrderRevision } = require('../models');
-const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE } = require('../constants');
+const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
@@ -37,6 +37,28 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
     // eslint-disable-next-line no-console
     console.error('logInvoiceStatusChange failed:', e?.message || e);
   }
+}
+
+/**
+ * Update order.dp_payment_status dan order.dp_percentage_paid dari invoice.
+ * tagihan_dp = belum ada DP terverifikasi; pembayaran_dp = sudah ada bukti bayar DP.
+ */
+async function updateOrderDpStatusFromInvoice(invoice, order = null) {
+  if (!order) order = await Order.findByPk(invoice.order_id, { attributes: ['id', 'total_amount', 'currency'] });
+  if (!order) return;
+  const total = parseFloat(invoice.total_amount) || 0;
+  const paid = parseFloat(invoice.paid_amount) || 0;
+  const dpAmount = parseFloat(invoice.dp_amount) || 0;
+  const pct = total > 0 ? Math.round((paid / total) * 10000) / 100 : null;
+  const hasDpPaid = dpAmount > 0 && paid >= dpAmount;
+  const isIssued = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status);
+  const dpPaymentStatus = !isIssued ? null : (hasDpPaid ? DP_PAYMENT_STATUS.PEMBAYARAN_DP : DP_PAYMENT_STATUS.TAGIHAN_DP);
+  const orderCurrency = (order.currency || 'IDR').toUpperCase();
+  const orderTotal = parseFloat(order.total_amount) || 0;
+  const payload = { dp_payment_status: dpPaymentStatus, dp_percentage_paid: pct };
+  if (orderCurrency === 'IDR') payload.total_amount_idr = orderTotal;
+  if (orderCurrency === 'SAR') payload.total_amount_sar = orderTotal;
+  await order.update(payload);
 }
 
 async function updateInvoiceWithAudit(invoice, updates, { changedBy, reason, meta, transaction } = {}) {
@@ -90,6 +112,8 @@ async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, met
     remaining_amount: remaining,
     status: newStatus
   }, { changedBy, reason: reason || 'recalc_from_verified_proofs', meta: { ...(meta || {}), verified_sum: verifiedSum } });
+  const invReload = await Invoice.findByPk(invoice.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
+  if (invReload) await updateOrderDpStatusFromInvoice(invReload);
   return { verifiedSum, remaining, newStatus };
 }
 
@@ -179,29 +203,27 @@ const list = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
-  // Role hotel: hanya tampilkan invoice yang order-nya punya item hotel (pekerjaan hotel di menu Invoice).
-  if (req.user.role === 'role_hotel') {
-    const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
-    const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))];
-    where.order_id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
-  }
-  // Role bus: hanya tampilkan invoice yang order-nya punya item bus (pekerjaan bus di menu Invoice).
-  if (req.user.role === 'role_bus') {
-    const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
-    const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))];
-    where.order_id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
-  }
-  // Visa koordinator: hanya invoice yang order-nya punya item visa (scope wilayah dari resolveBranchFilterList).
-  if (req.user.role === 'visa_koordinator') {
-    const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
-    const visaOrderIds = [...new Set((visaRows || []).map((r) => r.order_id))];
-    where.order_id = visaOrderIds.length ? { [Op.in]: visaOrderIds } : { [Op.in]: [] };
-  }
-  // Tiket koordinator: hanya invoice yang order-nya punya item tiket (scope wilayah dari resolveBranchFilterList).
-  if (req.user.role === 'tiket_koordinator') {
-    const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
-    const ticketOrderIds = [...new Set((ticketRows || []).map((r) => r.order_id))];
-    where.order_id = ticketOrderIds.length ? { [Op.in]: ticketOrderIds } : { [Op.in]: [] };
+  // Role hotel/bus/visa_koordinator/tiket_koordinator: hanya tampilkan invoice dengan status pembayaran_dp (sudah ada bukti bayar DP), agar tampil di menu Invoice dan Progress.
+  const divisiProgressRoles = ['role_hotel', 'role_bus', 'visa_koordinator', 'tiket_koordinator'];
+  if (divisiProgressRoles.includes(req.user.role)) {
+    let orderIdsByType = [];
+    if (req.user.role === 'role_hotel') {
+      const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((hotelRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'role_bus') {
+      const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((busRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'visa_koordinator') {
+      const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((visaRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'tiket_koordinator') {
+      const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((ticketRows || []).map((r) => r.order_id))];
+    }
+    const orderIdsWithDpPaid = orderIdsByType.length
+      ? (await Order.findAll({ where: { id: { [Op.in]: orderIdsByType }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP }, attributes: ['id'], raw: true })).map((o) => o.id)
+      : [];
+    where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
   }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
   // role_accounting, role_invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
@@ -212,7 +234,7 @@ const list = asyncHandler(async (req, res) => {
   const orderInclude = {
     model: Order,
     as: 'Order',
-    attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override'],
+    attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar'],
     include: [
       {
         model: OrderItem,
@@ -605,12 +627,15 @@ const create = asyncHandler(async (req, res) => {
   const autoCancelAt = new Date();
   autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
 
+  const orderCurrency = (order.currency || 'IDR').toUpperCase();
   const invoice = await Invoice.create({
     invoice_number: generateInvoiceNumber(),
     order_id: order.id,
     owner_id: order.owner_id,
     branch_id: order.branch_id,
     total_amount: totalAmount,
+    total_amount_idr: orderCurrency === 'IDR' ? totalAmount : null,
+    total_amount_sar: orderCurrency === 'SAR' ? totalAmount : null,
     dp_percentage: dpPercentage,
     dp_amount: dpAmount,
     paid_amount: 0,
@@ -626,6 +651,7 @@ const create = asyncHandler(async (req, res) => {
       `Jatuh tempo DP ${dpDueDays} hari setelah issued`
     ]
   });
+  await updateOrderDpStatusFromInvoice(invoice);
   await logInvoiceStatusChange({
     invoice_id: invoice.id,
     from_status: null,
@@ -679,12 +705,15 @@ async function createInvoiceForOrder(order, opts = {}) {
   dueDateDp.setDate(dueDateDp.getDate() + dpDueDays);
   const autoCancelAt = new Date();
   autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
+  const orderCurrency = (order.currency || 'IDR').toUpperCase();
   const invoice = await Invoice.create({
     invoice_number: generateInvoiceNumber(),
     order_id: orderId,
     owner_id: order.owner_id,
     branch_id: order.branch_id,
     total_amount: totalAmount,
+    total_amount_idr: orderCurrency === 'IDR' ? totalAmount : null,
+    total_amount_sar: orderCurrency === 'SAR' ? totalAmount : null,
     dp_percentage: dpPercentage,
     dp_amount: dpAmount,
     paid_amount: 0,
@@ -708,6 +737,7 @@ async function createInvoiceForOrder(order, opts = {}) {
     reason: 'invoice_auto_created',
     meta: { order_id: orderId }
   });
+  await updateOrderDpStatusFromInvoice(invoice);
   await Notification.create({
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
@@ -1026,6 +1056,7 @@ async function syncInvoiceFromOrder(order, opts = {}) {
   const invoice = await Invoice.findOne({ where: { order_id: order.id } });
   if (!invoice) return null;
   const newTotal = parseFloat(order.total_amount) || 0;
+  const orderCurrency = (order.currency || 'IDR').toUpperCase();
   const dpPct = parseInt(invoice.dp_percentage, 10) || 30;
   const dpAmount = Math.round(newTotal * dpPct / 100);
   const paidAmount = parseFloat(invoice.paid_amount) || 0;
@@ -1048,8 +1079,12 @@ async function syncInvoiceFromOrder(order, opts = {}) {
   } else {
     newStatus = INVOICE_STATUS.TENTATIVE;
   }
+  const totalAmountIdr = orderCurrency === 'IDR' ? newTotal : null;
+  const totalAmountSar = orderCurrency === 'SAR' ? newTotal : null;
   await updateInvoiceWithAudit(invoice, {
     total_amount: newTotal,
+    total_amount_idr: totalAmountIdr,
+    total_amount_sar: totalAmountSar,
     dp_amount: dpAmount,
     remaining_amount: remainingAmount,
     overpaid_amount: overpaidAmount,
@@ -1061,6 +1096,18 @@ async function syncInvoiceFromOrder(order, opts = {}) {
     reason: opts.reason || 'sync_from_order',
     meta: opts.meta || null
   });
+  const invReload = await Invoice.findByPk(invoice.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
+  if (invReload) {
+    await updateOrderDpStatusFromInvoice(invReload);
+    const ord = await Order.findByPk(invoice.order_id, { attributes: ['id', 'currency'] });
+    if (ord) {
+      const upd = {};
+      if (opts.order_updated_at) upd.order_updated_at = opts.order_updated_at;
+      if (orderCurrency === 'IDR') upd.total_amount_idr = newTotal;
+      if (orderCurrency === 'SAR') upd.total_amount_sar = newTotal;
+      if (Object.keys(upd).length) await ord.update(upd);
+    }
+  }
   return invoice;
 }
 

@@ -1159,26 +1159,26 @@ const OrdersInvoicesPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 align-top">
                       {(() => {
-                        const updatedAt = inv.order_updated_at || inv.orderUpdatedAt || null;
-                        const isDpUpdated = String(inv.status) === 'partial_paid' && !!updatedAt;
-                        const label = isDpUpdated ? 'Pembayaran DP + Update Invoice' : (INVOICE_STATUS_LABELS[inv.status] || inv.status);
+                        const dpStatus = inv.Order?.dp_payment_status;
+                        const pct = inv.Order?.dp_percentage_paid != null ? Number(inv.Order.dp_percentage_paid) : null;
+                        const updatedAt = inv.Order?.order_updated_at || inv.order_updated_at || inv.orderUpdatedAt || null;
+                        const isDpUpdated = (inv.status === 'partial_paid' || dpStatus === 'pembayaran_dp') && !!updatedAt;
+                        let label = INVOICE_STATUS_LABELS[inv.status] || inv.status;
+                        if (dpStatus === 'tagihan_dp') label = 'Tagihan DP';
+                        else if (dpStatus === 'pembayaran_dp') label = 'Pembayaran DP';
+                        else if (isDpUpdated) label = 'Pembayaran DP + Update Invoice';
                         return (
                           <>
                             <Badge variant={getStatusBadge(inv.status)}>{label}</Badge>
-                            {isDpUpdated && <div className="text-xs text-slate-500 mt-1">Update order: {formatDate(updatedAt)}</div>}
+                            {(pct != null && !isDraftRow(inv)) && <div className="text-xs text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>}
+                            {updatedAt && <div className="text-xs text-slate-500 mt-0.5">Update order: {formatDate(updatedAt)}</div>}
                           </>
                         );
                       })()}
                       {inv.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}
                       {isDraftRow(inv) ? (
                         <div className="text-xs text-slate-500 mt-1">Belum diterbitkan — pembayaran belum tersedia</div>
-                      ) : (() => {
-                        const total = parseFloat(inv.total_amount || 0);
-                        const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
-                        const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                        const pct = total > 0 ? Math.round((paid / total) * 100) : 0;
-                        return <div className="text-xs text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>;
-                      })()}
+                      ) : null}
                     </td>
                     <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {(() => {
@@ -1799,13 +1799,19 @@ const OrdersInvoicesPage: React.FC = () => {
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/80 border border-slate-200/80 shadow-sm">
                           <div className="flex flex-wrap items-center gap-3">
                             {(() => {
-                              const updatedAt = viewInvoice.order_updated_at || viewInvoice.orderUpdatedAt || null;
-                              const isDpUpdated = String(viewInvoice.status) === 'partial_paid' && !!updatedAt;
-                              const label = isDpUpdated ? 'Pembayaran DP + Update Invoice' : (INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status);
+                              const dpStatus = viewInvoice.Order?.dp_payment_status;
+                              const pct = viewInvoice.Order?.dp_percentage_paid != null ? Number(viewInvoice.Order.dp_percentage_paid) : null;
+                              const updatedAt = viewInvoice.Order?.order_updated_at || viewInvoice.order_updated_at || viewInvoice.orderUpdatedAt || null;
+                              const isDpUpdated = (viewInvoice.status === 'partial_paid' || dpStatus === 'pembayaran_dp') && !!updatedAt;
+                              let label = INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status;
+                              if (dpStatus === 'tagihan_dp') label = 'Tagihan DP';
+                              else if (dpStatus === 'pembayaran_dp') label = 'Pembayaran DP';
+                              else if (isDpUpdated) label = 'Pembayaran DP + Update Invoice';
                               return (
                                 <div className="flex flex-col">
                                   <Badge variant={getStatusBadge(viewInvoice.status)} className="text-sm px-3 py-1 w-fit">{label}</Badge>
-                                  {isDpUpdated && <span className="text-xs text-slate-500 mt-1">Update order: {formatDate(updatedAt)}</span>}
+                                  {pct != null && <span className="text-sm text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</span>}
+                                  {updatedAt && <span className="text-xs text-slate-500 mt-0.5">Update order: {formatDate(updatedAt)}</span>}
                                 </div>
                               );
                             })()}
