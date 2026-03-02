@@ -5,12 +5,11 @@ import {
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import Modal, { ModalHeader, ModalBody, ModalBox, ModalBoxLg } from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
 import Table from '../../../components/common/Table';
 import TablePagination from '../../../components/common/TablePagination';
 import type { TableColumn } from '../../../types';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import Input from '../../../components/common/Input';
 import { accountingApi } from '../../../services/api';
@@ -26,6 +25,13 @@ import { formatIDR } from '../../../utils';
 
 const formatDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–';
+
+const MAX_DISPLAY_AMOUNT = 999e9;
+const formatAmountSafe = (n: number | null | undefined): string => {
+  const v = Number(n);
+  if (Number.isNaN(v) || !Number.isFinite(v) || Math.abs(v) > MAX_DISPLAY_AMOUNT) return '–';
+  return formatIDR(v);
+};
 
 const RekeningKoranPage: React.FC = () => {
   const navigate = useNavigate();
@@ -114,6 +120,7 @@ const RekeningKoranPage: React.FC = () => {
       })
       .catch(() => setRecon(null))
       .finally(() => setLoadingRecon(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reconPdfUrl is set in this effect and cleaned in another; omit to avoid refetch loops
   }, [reconId]);
 
   useEffect(() => {
@@ -389,7 +396,7 @@ const RekeningKoranPage: React.FC = () => {
               <Upload className="w-5 h-5 text-primary-600" /> Upload Rekening Koran (Excel / PDF)
             </h2>
             <p className="text-sm text-slate-500 mt-1">
-              File Excel atau PDF dengan urutan kolom: <strong>Posting Date (Tanggal)</strong>, <strong>Remark (Keterangan)</strong>, <strong>Reference No.</strong>, <strong>Debit</strong>, <strong>Credit (Kredit)</strong>, <strong>Balance (Saldo)</strong>. Excel: baris pertama = header. PDF: diekstrak otomatis sesuai kolom tersebut.
+              File Excel atau PDF dengan urutan kolom: <strong>Posting Date (Tanggal)</strong>, <strong>Remark (Keterangan)</strong>, <strong>Reference No.</strong>, <strong>Debit</strong>, <strong>Credit (Kredit)</strong>, <strong>Balance (Saldo)</strong>. Excel: baris pertama = header. PDF digital (mis. Kopra): teks diekstrak langsung.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={handleDownloadTemplate} disabled={downloadingTemplate}>
@@ -563,6 +570,11 @@ const RekeningKoranPage: React.FC = () => {
                   <StatCard icon={<List className="w-4 h-4" />} label="Hanya bank" value={recon.onlyInBank?.length ?? 0} />
                 </div>
                 <div className="flex-1 overflow-auto p-4">
+                  {(recon.onlyInRecorded?.length === 0 && (recon.onlyInBank?.length ?? 0) > 0 && !recon.upload?.finalized_at) && (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      Tidak ada pembayaran terverifikasi di sistem untuk periode ini. Matching membutuhkan bukti bayar yang sudah terverifikasi dengan tanggal transfer dalam periode rekening koran.
+                    </p>
+                  )}
                   <h3 className="text-sm font-semibold text-slate-700 mb-2">Semua baris bank (warna = status)</h3>
                   <div className="rounded-xl border border-slate-200 overflow-hidden">
                     <Table
@@ -590,7 +602,7 @@ const RekeningKoranPage: React.FC = () => {
                               </span>
                             </td>
                             <td className="py-2 px-4 whitespace-nowrap">{formatDate(line.transaction_date)}</td>
-                            <td className="py-2 px-4 text-right font-medium">{formatIDR(Number(line.amount))}</td>
+                            <td className="py-2 px-4 text-right font-medium">{formatAmountSafe(line.amount)}</td>
                             <td className="py-2 px-4 text-slate-700 max-w-[180px] truncate" title={line.description || ''}>{line.description || '–'}</td>
                             <td className="py-2 px-4 text-slate-600 text-sm">
                               {suggested ? `${suggested.invoice_number || suggested.payer || '–'} · ${formatIDR(suggested.amount)}` : '–'}
@@ -662,7 +674,7 @@ const RekeningKoranPage: React.FC = () => {
                           renderRow={(b: BankStatementLineItem) => (
                             <tr key={b.id} className="border-t border-sky-200/50">
                               <td className="py-2 px-4">{formatDate(b.transaction_date)}</td>
-                              <td className="py-2 px-4 text-right font-medium">{formatIDR(Number(b.amount))}</td>
+                              <td className="py-2 px-4 text-right font-medium">{formatAmountSafe(b.amount)}</td>
                               <td className="py-2 px-4 text-slate-600 truncate max-w-[160px]">{b.description || '–'}</td>
                             </tr>
                           )}

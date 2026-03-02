@@ -4,22 +4,33 @@ const path = require('path');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
-const pdfParse = require('pdf-parse');
 const Fuse = require('fuse.js');
 const { Op } = require('sequelize');
 const { BankStatementUpload, BankStatementLine, PaymentProof, Invoice, User, ReconciliationLog } = require('../models');
 const uploadsConfig = require('../config/uploads');
+const pdfParse = require('pdf-parse');
 
 /** Toleransi selisih hari untuk fuzzy match (efek kliring bank). */
 const FUZZY_DATE_DAYS = 2;
+
+/**
+ * Ekstrak teks dari PDF digital (mis. Kopra) langsung tanpa OCR.
+ * Untuk PDF dengan teks pilih (digital) hasil lebih akurat dan cepat.
+ */
+async function extractTextFromPdf(pdfBuffer) {
+  const data = await pdfParse(pdfBuffer);
+  return (data && data.text) ? String(data.text).trim() : '';
+}
 
 const memoryStorage = multer.memoryStorage();
 const uploadExcelOrPdf = multer({
   storage: memoryStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const isExcel = /\.(xlsx|xls)$/i.test(file.originalname) || file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.mimetype === 'application/vnd.ms-excel';
-    const isPdf = /\.pdf$/i.test(file.originalname) || file.mimetype === 'application/pdf';
+    const name = (file.originalname || '').toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    const isExcel = /\.(xlsx|xls)$/i.test(name) || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || mime === 'application/vnd.ms-excel';
+    const isPdf = /\.pdf$/i.test(name) || mime === 'application/pdf' || (mime === 'application/octet-stream' && name.endsWith('.pdf'));
     if (isExcel || isPdf) cb(null, true);
     else cb(new Error('Hanya file Excel (.xlsx, .xls) atau PDF (.pdf) yang diperbolehkan'));
   }
@@ -50,12 +61,27 @@ function detectColumns(headerRow) {
 }
 
 /**
- * Parse nilai angka dari cell (string atau number).
+ * Parse nilai amount. Format Indonesia (15.094.874,49) vs Inggris (15,094,874.49).
+ * Jika koma terakhir ada setelah titik terakhir = desimal koma (ID), else = ribuan koma (EN).
  */
 function parseAmount(val) {
   if (val == null) return 0;
   if (typeof val === 'number' && !Number.isNaN(val)) return Math.abs(val);
-  const s = String(val).replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  let s = String(val).replace(/\s/g, '');
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma !== -1 && lastDot !== -1) {
+    if (lastComma > lastDot) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (lastComma !== -1) {
+    s = s.replace(/,/g, '.');
+  } else if (lastDot !== -1) {
+    if (s.match(/\.\d{3}\./)) s = s.replace(/\./g, '');
+    else s = s.replace(/,/g, '');
+  }
   const n = parseFloat(s);
   return Number.isNaN(n) ? 0 : Math.abs(n);
 }
@@ -107,6 +133,9 @@ function toDateOnly(s) {
 /** Batas aman DECIMAL(18,2): dalam rentang JS safe integer agar tidak rounding ke 17 digit. */
 const MAX_DECIMAL_18_2 = 999999999999999.99;
 
+/** Batas nominal wajar per transaksi (500 milyar). Nilai di atas ini (mis. saldo salah kolom) tidak dipakai untuk matching. */
+const MAX_REASONABLE_AMOUNT = 500000000000;
+
 /** Bulatkan ke 2 desimal dan clamp ke rentang DECIMAL(18,2). Nilai sangat besar dari parser di-clamp. */
 function toDecimal2(n) {
   if (n == null) return 0;
@@ -120,6 +149,34 @@ function toDecimal2(n) {
   return v;
 }
 
+/** Clamp amount dari parser: hindari saldo/kolom salah terbaca sebagai nominal transaksi. */
+function clampReasonbleAmount(n) {
+  if (n == null) return 0;
+  const num = Number(n);
+  if (Number.isNaN(num) || !Number.isFinite(num)) return 0;
+  if (num > MAX_REASONABLE_AMOUNT) return MAX_REASONABLE_AMOUNT;
+  if (num < -MAX_REASONABLE_AMOUNT) return -MAX_REASONABLE_AMOUNT;
+  return num;
+}
+
+/** Jika deskripsi seperti biaya/charge dan satu amount sangat besar (saldo salah kolom), nolkan yang besar. */
+const FEE_DESC_REGEX = /CHARGE|FEE|BIAYA|ADMIN|MONTHLY\s+CARD|Pajak|Bunga/i;
+const SMALL_AMOUNT_MAX = 100000;
+const HUGE_AMOUNT_MIN = 1e9;
+function correctFeeRowAmounts(description, amountDebit, amountCredit) {
+  const desc = (description || '').trim();
+  if (!FEE_DESC_REGEX.test(desc)) return { amountDebit, amountCredit };
+  const d = Number(amountDebit);
+  const c = Number(amountCredit);
+  const big = Math.max(d, c);
+  const small = Math.min(d, c);
+  if (big >= HUGE_AMOUNT_MIN && small <= SMALL_AMOUNT_MAX) {
+    if (d >= HUGE_AMOUNT_MIN) return { amountDebit: 0, amountCredit: c };
+    if (c >= HUGE_AMOUNT_MIN) return { amountDebit: d, amountCredit: 0 };
+  }
+  return { amountDebit: d, amountCredit: c };
+}
+
 const MONTH_NAME_TO_NUM = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
 /**
@@ -128,7 +185,8 @@ const MONTH_NAME_TO_NUM = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05
  */
 function parseDateString(s) {
   if (!s || typeof s !== 'string') return null;
-  const t = String(s).trim();
+  let t = String(s).trim();
+  t = t.replace(/\s*,\s*\d{1,2}:\d{2}(?::\d{2})?\s*$/i, '').trim();
   const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
   const dmy = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
   const m = iso || dmy;
@@ -163,7 +221,30 @@ const LAST_THREE_AMOUNTS_REGEX = /\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s*$
 const THREE_AMOUNTS_REGEX = /\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)/g;
 
 /**
+ * Regex untuk satu nilai amount penuh (format EN: 10,000.00 atau ID: 10.000.000,00; termasuk 0.00/0,00).
+ * Dipakai untuk teks yang menggabungkan Debit/Credit/Saldo tanpa spasi (mis. -293,000,000.000.00339,292,374.49).
+ */
+const ONE_AMOUNT_REGEX = /-?(?:\d{1,3}(?:,\d{3})*\.\d{2}|\d{1,3}(?:\.\d{3})*,\d{2}|0\.\d{2}|0,\d{2})/g;
+
+/**
+ * Ekstrak 3 amount terakhir dari teks (Debit, Credit, Balance) dengan regex amount penuh.
+ * Berguna saat kolom digabung tanpa spasi (contoh: -293,000,000.000.00339,292,374.49).
+ */
+function extractLastThreeAmountsFromText(row) {
+  const matches = row.match(ONE_AMOUNT_REGEX);
+  if (!matches || matches.length < 3) return null;
+  const three = matches.slice(-3);
+  const a = parseAmount(three[0]);
+  const b = parseAmount(three[1]);
+  const c = parseAmount(three[2]);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c)) return null;
+  if (c > MAX_REASONABLE_AMOUNT) return null;
+  return { amountDebit: a, amountCredit: b, balanceAfter: c };
+}
+
+/**
  * Ambil kemunculan terakhir tiga angka (Debit, Credit, Balance) di teks. Abaikan jika ketiganya kecil (seperti nomor ref).
+ * Coba dulu pola spasi, lalu pola amount penuh (untuk teks gabungan tanpa spasi).
  */
 function findLastThreeAmounts(row) {
   let atEnd = row.match(LAST_THREE_AMOUNTS_REGEX);
@@ -172,27 +253,34 @@ function findLastThreeAmounts(row) {
   THREE_AMOUNTS_REGEX.lastIndex = 0;
   let m;
   while ((m = THREE_AMOUNTS_REGEX.exec(row)) !== null) last = m;
-  if (!last) return null;
-  const a = parseAmount(last[1]);
-  const b = parseAmount(last[2]);
-  const c = parseAmount(last[3]);
-  if (a < 10000 && b < 10000 && c < 10000 && (a > 0 || b > 0 || c > 0)) return null;
-  return last;
+  if (last) {
+    const a = parseAmount(last[1]);
+    const b = parseAmount(last[2]);
+    const c = parseAmount(last[3]);
+    if (!(a < 10000 && b < 10000 && c < 10000 && (a > 0 || b > 0 || c > 0))) return last;
+  }
+  const triple = extractLastThreeAmountsFromText(row);
+  if (triple) return [null, String(triple.amountDebit), String(triple.amountCredit), String(triple.balanceAfter)];
+  return null;
 }
 
 /**
  * Fallback: ambil 3 angka terakhir di row yang "amount-like" (0 atau >= 1000), urutan = Debit, Credit, Balance.
- * Hanya dipakai jika seperti amount sungguhan: ada 0 (debit/credit kosong) atau balance >= 10000 (bukan nomor ref).
+ * Abaikan angka yang mirip tahun (2020-2030) agar tidak salah baca sebagai amount.
  */
 function lastThreeAmountLikeFromAllNumbers(row) {
   const numRegex = /\d[\d.,]*/g;
   const nums = [];
   let match;
-  while ((match = numRegex.exec(row)) !== null) nums.push(parseAmount(match[0]));
+  while ((match = numRegex.exec(row)) !== null) {
+    const n = parseAmount(match[0]);
+    if (n >= 2020 && n <= 2030) continue;
+    nums.push(n);
+  }
   const amountLike = [];
   for (let k = nums.length - 1; k >= 0 && amountLike.length < 3; k--) {
     const n = nums[k];
-    if (n === 0 || n >= 1000) amountLike.unshift(n);
+    if (n === 0 || (n >= 1000 && !(n >= 2020 && n <= 2030))) amountLike.unshift(n);
   }
   if (amountLike.length !== 3) return null;
   const [debit, credit, balance] = amountLike;
@@ -219,6 +307,8 @@ function parsePdfBankStatementByDateChunks(raw) {
     if (/^\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*-\s*\d{1,2}/i.test(row)) continue;
     const transactionDate = parseDateString(dateMatch[1].trim());
     if (!transactionDate) continue;
+    const rowLower = row.toLowerCase();
+    if (/account\s+statement\s+summary|opening\s+balance|closing\s+balance|total\s+amount\s+(debited|credited)|no\.?\s*of\s+(debit|credit)\s*\d|account\s+no\.?\s*account\s+name/i.test(rowLower)) continue;
 
     let amountsMatch = row.match(LAST_THREE_AMOUNTS_REGEX);
     let nextSegmentIndex = i;
@@ -252,6 +342,12 @@ function parsePdfBankStatementByDateChunks(raw) {
     description = description.replace(/\s+\d[\d.,]*\s+\d[\d.,]*\s+\d[\d.,]*\s*$/, '').trim();
     const refMatch = description.match(/\b(\d{4,}(?:,\d{3,})*)\b/);
     const referenceNumber = refMatch ? refMatch[1].slice(0, 100) : null;
+    const corrected = correctFeeRowAmounts(description, amountDebit, amountCredit);
+    amountDebit = corrected.amountDebit;
+    amountCredit = corrected.amountCredit;
+    amountDebit = clampReasonbleAmount(amountDebit);
+    amountCredit = clampReasonbleAmount(amountCredit);
+    if (balanceAfter != null) balanceAfter = clampReasonbleAmount(balanceAfter);
     const amount = amountCredit > 0 ? amountCredit : -amountDebit;
     result.push({
       transaction_date: transactionDate,
@@ -275,6 +371,10 @@ function parsePdfBankStatement(text) {
   if (!text || typeof text !== 'string') return [];
   const raw = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = raw.split(/\n/).map((s) => s.trim()).filter(Boolean);
+  if (raw.includes('\n\n') || lines.length > 15) {
+    const chunkResult = parsePdfBankStatementByDateChunks(raw);
+    if (chunkResult.length > 0) return chunkResult;
+  }
   const result = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -295,17 +395,19 @@ function parsePdfBankStatement(text) {
       if (!transactionDate) continue;
       description = (parts[1] != null ? String(parts[1]).trim().slice(0, 2000) : null) || null;
       referenceNumber = (parts[2] != null ? String(parts[2]).trim().slice(0, 100) : null) || null;
-      amountDebit = parseAmount(parts[3]);
-      amountCredit = parseAmount(parts[4]);
-      balanceAfter = parseAmount(parts[5]) || null;
+      amountDebit = clampReasonbleAmount(parseAmount(parts[3]));
+      amountCredit = clampReasonbleAmount(parseAmount(parts[4]));
+      balanceAfter = parseAmount(parts[5]);
+      balanceAfter = balanceAfter != null ? clampReasonbleAmount(balanceAfter) : null;
     } else if (parts.length === 5) {
       transactionDate = parseDateString(parts[0]);
       if (!transactionDate) continue;
       description = (parts[1] != null ? String(parts[1]).trim().slice(0, 2000) : null) || null;
       referenceNumber = null;
-      amountDebit = parseAmount(parts[2]);
-      amountCredit = parseAmount(parts[3]);
-      balanceAfter = parseAmount(parts[4]) || null;
+      amountDebit = clampReasonbleAmount(parseAmount(parts[2]));
+      amountCredit = clampReasonbleAmount(parseAmount(parts[3]));
+      balanceAfter = parseAmount(parts[4]);
+      balanceAfter = balanceAfter != null ? clampReasonbleAmount(balanceAfter) : null;
     } else if (partsBySpace1.length >= 6) {
       const first = partsBySpace1[0];
       let dateStr = first;
@@ -316,9 +418,10 @@ function parsePdfBankStatement(text) {
       const last3AreNums = last3.every((p) => /^\d[\d.,]*$/.test(String(p).trim()));
       if (parseDateString(dateStr) && last3AreNums) {
         transactionDate = parseDateString(dateStr);
-        amountDebit = parseAmount(last3[0]);
-        amountCredit = parseAmount(last3[1]);
-        balanceAfter = parseAmount(last3[2]) || null;
+        amountDebit = clampReasonbleAmount(parseAmount(last3[0]));
+        amountCredit = clampReasonbleAmount(parseAmount(last3[1]));
+        balanceAfter = parseAmount(last3[2]);
+        balanceAfter = balanceAfter != null ? clampReasonbleAmount(balanceAfter) : null;
         const mid = partsBySpace1.slice(1, -3);
         if (dateStr !== first) {
           const dateTokenCount = dateStr.split(/\s+/).length;
@@ -348,6 +451,12 @@ function parsePdfBankStatement(text) {
       description = afterDate.replace(/\s+\d[\d.,]*\s+\d[\d.,]*\s+\d[\d.,]*\s*$/, '').trim().slice(0, 2000) || null;
     }
 
+    const corrected = correctFeeRowAmounts(description, amountDebit, amountCredit);
+    amountDebit = corrected.amountDebit;
+    amountCredit = corrected.amountCredit;
+    amountDebit = clampReasonbleAmount(amountDebit);
+    amountCredit = clampReasonbleAmount(amountCredit);
+    if (balanceAfter != null) balanceAfter = clampReasonbleAmount(balanceAfter);
     const amount = amountCredit > 0 ? amountCredit : -amountDebit;
     result.push({
       transaction_date: transactionDate,
@@ -378,18 +487,33 @@ const uploadBankStatement = [
     const periodFrom = req.body.period_from && String(req.body.period_from).trim() ? String(req.body.period_from).trim() : null;
     const periodTo = req.body.period_to && String(req.body.period_to).trim() ? String(req.body.period_to).trim() : null;
 
-    const isPdf = /\.pdf$/i.test(req.file.originalname) || req.file.mimetype === 'application/pdf';
+    const isPdf = /\.pdf$/i.test(req.file.originalname) || (req.file.mimetype || '').includes('pdf');
+    const isExcel = /\.(xlsx|xls)$/i.test(req.file.originalname) || (req.file.mimetype || '').includes('spreadsheet') || (req.file.mimetype || '').includes('ms-excel');
     let parsedLines = [];
 
+    if (!isPdf && !isExcel) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hanya file Excel (.xlsx, .xls) atau PDF (.pdf) yang dapat diproses.'
+      });
+    }
     if (isPdf) {
-      const pdfData = await pdfParse(req.file.buffer);
-      const text = (pdfData && pdfData.text) ? String(pdfData.text) : '';
+      let text = '';
+      try {
+        text = await extractTextFromPdf(req.file.buffer);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: 'Ekstraksi teks PDF gagal: ' + (err.message || String(err))
+        });
+      }
+      text = text ? String(text).trim() : '';
       parsedLines = parsePdfBankStatement(text);
       if (parsedLines.length === 0) {
         const preview = text.slice(0, 500).replace(/\s+/g, ' ');
         return res.status(400).json({
           success: false,
-          message: 'Tidak ada baris transaksi valid ditemukan di PDF. Pastikan kolom: Tanggal, Keterangan, No Ref, Debit, Kredit, Saldo.',
+          message: 'Tidak ada baris transaksi valid ditemukan dari PDF. Pastikan file PDF digital (mis. Kopra) berisi kolom: Tanggal, Keterangan, No Ref, Debit, Kredit, Saldo.',
           debug: { textLength: text.length, lineCount: text.split(/\n/).filter(Boolean).length, preview }
         });
       }
@@ -585,7 +709,10 @@ const getOriginalFile = asyncHandler(async (req, res) => {
  */
 async function runMatchingEngine(upload, bankLines, payments) {
   const round = (n) => Math.round(Number(n) * 100) / 100;
-  const creditLines = bankLines.filter((l) => Number(l.amount) > 0);
+  const creditLines = bankLines.filter((l) => {
+    const a = Number(l.amount);
+    return a > 0 && a <= MAX_REASONABLE_AMOUNT;
+  });
   const usedLineIds = new Set();
   const usedPaymentIds = new Set();
 
@@ -661,9 +788,10 @@ async function runMatchingEngine(upload, bankLines, payments) {
     await line.update({ reconciliation_status: 'unmatched', matched_payment_proof_id: null, match_type: null });
   }
 
-  // Debit-only lines (amount <= 0) tetap unreconciled atau unmatched
+  // Debit-only (amount <= 0) atau nominal tidak wajar (amount > MAX) -> unmatched
   for (const line of bankLines) {
-    if (Number(line.amount) <= 0 && !line.reconciliation_status) {
+    const a = Number(line.amount);
+    if ((a <= 0 || a > MAX_REASONABLE_AMOUNT) && !line.reconciliation_status) {
       await line.update({ reconciliation_status: 'unmatched' });
     }
   }
