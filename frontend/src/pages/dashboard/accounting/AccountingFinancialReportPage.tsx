@@ -117,9 +117,9 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'count', label: 'Invoice', align: 'right' }
   ],
   detail: [
-    { id: 'invoice', label: 'Invoice', align: 'left' },
+    { id: 'invoice', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'cabang', label: 'Cabang', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total (IDR · SAR · USD)', align: 'right' },
     { id: 'dibayar', label: 'Dibayar (IDR · SAR · USD)', align: 'right' },
     { id: 'sisa', label: 'Sisa (IDR · SAR · USD)', align: 'right' },
@@ -866,11 +866,34 @@ const AccountingFinancialReportPage: React.FC = () => {
                   onPageChange: setPage,
                   onLimitChange: (l) => { setLimit(l); setPage(1); }
                 } : undefined}
-                renderRow={(inv) => (
+                renderRow={(inv) => {
+                  const row = inv as typeof inv & { company_name?: string; wilayah_name?: string; provinsi_name?: string; city?: string; created_at?: string; order_updated_at?: string };
+                  const isNewInvoice = (i: typeof row) => {
+                    if (!i) return false;
+                    const at = i.issued_at || i.created_at;
+                    if (!at) return false;
+                    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
+                  };
+                  const getOrderChangeDate = (i: typeof row) => (i?.order_updated_at ? new Date(i.order_updated_at) : null);
+                  const perusahaanLine2 = [row.wilayah_name, row.provinsi_name, row.city].filter(Boolean).join(' · ') || '–';
+                  return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-medium">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</td>
-                    <td className="py-3 px-4">{inv.owner_name || '-'}</td>
-                    <td className="py-3 px-4">{inv.branch_name || '-'}</td>
+                    <td className="py-3 px-4 align-top">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isNewInvoice(row) && <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">Baru</span>}
+                          {getOrderChangeDate(row) && (
+                            <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(row)!)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 align-top">{inv.owner_name || '-'}</td>
+                    <td className="py-3 px-4 align-top text-sm">
+                      <div>{row.company_name || inv.owner_name || inv.branch_name || '–'}</div>
+                      {perusahaanLine2 !== '–' && <div className="text-xs text-slate-600 mt-0.5">{perusahaanLine2}</div>}
+                    </td>
                     <td className="py-3 px-4 text-right align-top">
                       <div>{formatIDR(inv.total_amount)}</div>
                       {(() => { const t = amountTriple(Number(inv.total_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
@@ -883,15 +906,16 @@ const AccountingFinancialReportPage: React.FC = () => {
                       <div>{formatIDR(inv.remaining_amount)}</div>
                       {(() => { const t = amountTriple(Number(inv.remaining_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
                     </td>
-                    <td className="py-3 px-4"><span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
-                    <td className="py-3 px-4">{formatDate(inv.issued_at ?? null)}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 align-top"><span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
+                    <td className="py-3 px-4 align-top">{formatDate(inv.issued_at ?? null)}</td>
+                    <td className="py-3 px-4 align-top">
                       <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices' + (inv.invoice_number ? '?invoice_number=' + encodeURIComponent(inv.invoice_number) : ''))}>
                         <ExternalLink className="w-4 h-4" />
                       </Button>
                     </td>
                   </tr>
-                )}
+                  );
+                }}
               />
               </div>
             </Card>

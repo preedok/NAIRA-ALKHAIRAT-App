@@ -930,12 +930,32 @@ const OrdersInvoicesPage: React.FC = () => {
   const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
   const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
   const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList });
+  /** Total invoice: gunakan total_amount_idr & total_amount_sar dari BE agar sama dengan form order & backend. */
+  const invoiceTotalTriple = (inv: any) => {
+    const idr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
+    const sar = inv?.total_amount_sar != null ? parseFloat(inv.total_amount_sar) : idr / sarToIdrList;
+    return { idr, sar, usd: idr / usdToIdrList };
+  };
+
+  /** Baru: tampil hanya jika invoice diterbitkan/dibuat dalam 1 hari terakhir (24 jam). */
+  const isNewInvoice = (inv: any) => {
+    if (!inv || isDraftRow(inv)) return false;
+    const at = inv.issued_at || inv.created_at;
+    if (!at) return false;
+    const then = new Date(at).getTime();
+    const now = Date.now();
+    return now - then < 24 * 60 * 60 * 1000;
+  };
+  /** Perubahan: ada update form order (bukan update pembayaran). Diambil dari order_updated_at. */
+  const getOrderChangeDate = (inv: any) => {
+    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
+    return at ? new Date(at) : null;
+  };
 
   const invoiceTableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'company', label: 'Perusahaan', align: 'left' },
-    { id: 'wilayah', label: 'Wilayah', align: 'left' },
+    { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
     { id: 'paid', label: 'Dibayar (IDR·SAR·USD)', align: 'right' },
     { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
@@ -1231,16 +1251,29 @@ const OrdersInvoicesPage: React.FC = () => {
               renderRow={(inv) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
-                      {isDraftRow(inv) ? `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}` : formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}
+                      <div className="flex flex-col gap-1">
+                        <span>
+                          {isDraftRow(inv) ? `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}` : formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isNewInvoice(inv) && (
+                            <Badge variant="success" className="text-xs">Baru</Badge>
+                          )}
+                          {getOrderChangeDate(inv) && (
+                            <span className="text-xs text-slate-600" title="Perubahan form order">
+                              Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name || inv.User?.company_name || '-'}</td>
-                    <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '-'}</td>
-                    <td className="py-3 px-4 text-slate-600 align-top text-xs">
-                      {[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}
+                    <td className="py-3 px-4 text-slate-700 align-top text-sm">
+                      <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
-                      <div>{formatIDR(parseFloat(inv.total_amount || 0))}</div>
-                      {(() => { const t = amountTriple(parseFloat(inv.total_amount || 0)); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      {(() => { const t = invoiceTotalTriple(inv); return <><div>{formatIDR(t.idr)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>; })()}
                       {inv.Order?.currency_rates_override && (inv.Order.currency_rates_override.SAR_TO_IDR != null || inv.Order.currency_rates_override.USD_TO_IDR != null) && (
                         <div className="text-xs text-amber-700 mt-1 font-medium" title="Kurs & harga khusus order ini">
                           Kurs: {inv.Order.currency_rates_override.SAR_TO_IDR != null ? `SAR ${Number(inv.Order.currency_rates_override.SAR_TO_IDR).toLocaleString('id-ID')}` : ''}{inv.Order.currency_rates_override.SAR_TO_IDR != null && inv.Order.currency_rates_override.USD_TO_IDR != null ? ', ' : ''}{inv.Order.currency_rates_override.USD_TO_IDR != null ? `USD ${Number(inv.Order.currency_rates_override.USD_TO_IDR).toLocaleString('id-ID')}` : ''}
@@ -1913,7 +1946,9 @@ const OrdersInvoicesPage: React.FC = () => {
               {detailTab === 'invoice' && (
                 <div className="space-y-6">
                   {(() => {
-                    const totalInv = Number(viewInvoice.total_amount) || 0;
+                    const totalInvIdr = viewInvoice.total_amount_idr != null ? Number(viewInvoice.total_amount_idr) : Number(viewInvoice.total_amount) || 0;
+                    const totalInvSar = viewInvoice.total_amount_sar != null ? Number(viewInvoice.total_amount_sar) : totalInvIdr / sarToIdr;
+                    const totalInv = totalInvIdr;
                     const paidFromProofs = (viewInvoice?.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                     const paidFromInvoice = Number(viewInvoice.paid_amount) || 0;
                     const displayPaid = paidFromInvoice > 0 ? paidFromInvoice : paidFromProofs;
@@ -1977,7 +2012,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               <div className="pb-4 border-b border-slate-100">
                                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
                                 <p className="text-xl font-bold text-slate-900 mt-1">{formatIDR(totalInv)}</p>
-                                <p className="text-sm text-slate-500 mt-0.5">{formatSAR(totalInv / sarToIdr)} · {formatUSD(totalInv / usdToIdr)}</p>
+                                <p className="text-sm text-slate-500 mt-0.5">{formatSAR(totalInvSar)} · {formatUSD(totalInv / usdToIdr)}</p>
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5">{formatIDR(Number(viewInvoice.dp_amount) || 0)}</p></div>
@@ -2035,7 +2070,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               <p className="text-sm text-slate-700">1 SAR = {formatIDR(sarToIdr)}</p>
                               <p className="text-sm text-slate-700">1 USD = {formatIDR(usdToIdr)}</p>
                               {(viewInvoice.Order?.currency === 'SAR' || viewInvoice.Order?.currency === 'USD') && (
-                                <p className="text-xs font-semibold text-slate-600 mt-2 pt-2 border-t border-slate-200">Total = {formatIDR(parseFloat(viewInvoice.total_amount || 0))} IDR</p>
+                                <p className="text-xs font-semibold text-slate-600 mt-2 pt-2 border-t border-slate-200">Total = {formatIDR(totalInv)} IDR</p>
                               )}
                             </div>
                           </div>
@@ -2858,9 +2893,9 @@ const OrdersInvoicesPage: React.FC = () => {
                     const amt = parseFloat(payAmountSaudi.replace(/,/g, ''));
                     const idr = payCurrencySaudi === 'IDR' ? amt : payCurrencySaudi === 'SAR' ? amt * sarToIdr : amt * usdToIdr;
                     const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
-                    const totalInv = parseFloat(viewInvoice.total_amount || 0);
+                    const totalInvPay = viewInvoice.total_amount_idr != null ? parseFloat(viewInvoice.total_amount_idr) : parseFloat(viewInvoice.total_amount || 0);
                     const newPaid = currentPaid + Math.round(idr);
-                    const newRemain = Math.max(0, totalInv - newPaid);
+                    const newRemain = Math.max(0, totalInvPay - newPaid);
                     return (
                       <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
                         {payCurrencySaudi !== 'IDR' && <p className="text-xs text-slate-600">≈ {formatIDR(Math.round(idr))} IDR (konversi untuk tagihan)</p>}

@@ -14,7 +14,8 @@ import type { TableColumn } from '../../../types';
 import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
-import { formatInvoiceDisplay } from '../../../utils';
+import { formatInvoiceDisplay, formatIDR } from '../../../utils';
+import Badge from '../../../components/common/Badge';
 
 const STATUS_OPTIONS = [
   { value: 'waiting_confirmation', label: 'Progress' },
@@ -203,12 +204,22 @@ const HotelWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus]);
 
+  const isNewInvoice = (inv: any) => {
+    if (!inv) return false;
+    const at = inv.issued_at || inv.created_at;
+    if (!at) return false;
+    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
+  };
+  const getOrderChangeDate = (inv: any) => {
+    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
+    return at ? new Date(at) : null;
+  };
+
   const tableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-    { id: 'order_number', label: 'No. Order', align: 'left' },
-    { id: 'owner', label: 'Yang memesan', align: 'left' },
-    { id: 'branch', label: 'Cabang', align: 'left' },
-    { id: 'invoice_date', label: 'Tgl Invoice', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
+    { id: 'total', label: 'Total', align: 'right' },
     { id: 'invoice_status', label: 'Status Invoice', align: 'left' },
     { id: 'hotel_count', label: 'Jml Item Hotel', align: 'center' },
     { id: 'check_in', label: 'Check-in', align: 'left' },
@@ -312,21 +323,36 @@ const HotelWorkPage: React.FC = () => {
               const checkOutTime = firstHotel?.HotelProgress?.check_out_time ?? firstHotel?.meta?.check_out_time ?? '12:00';
               const checkInDisplay = formatDateWithTime(checkInDate, checkInTime);
               const checkOutDisplay = formatDateWithTime(checkOutDate, checkOutTime);
+              const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
               return (
                 <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 font-mono font-semibold text-slate-800 text-sm">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                  <td className="px-6 py-4 font-mono text-slate-700 text-sm">{o?.order_number ?? '–'}</td>
-                  <td className="px-6 py-4 text-slate-700 text-sm">{inv.User?.name ?? inv.User?.company_name ?? o?.User?.name ?? '–'}</td>
-                  <td className="px-6 py-4 text-slate-700 text-sm">{inv.Branch?.name ?? inv.Branch?.code ?? '–'}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700">{invStatusLabel}</span>
+                  <td className="px-6 py-4 align-top">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono font-semibold text-slate-800 text-sm">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
+                        {getOrderChangeDate(inv) && (
+                          <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
+                        )}
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-6 py-4 text-center font-semibold text-slate-900 tabular-nums">{hotelCount}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{checkInDisplay}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{checkOutDisplay}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm">{progressSummary}</td>
-                  <td className="px-6 py-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
+                  <td className="px-6 py-4 text-slate-700 text-sm align-top">{inv.User?.name ?? inv.User?.company_name ?? o?.User?.name ?? '–'}</td>
+                  <td className="px-6 py-4 text-slate-700 align-top text-sm">
+                    <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                    <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                  </td>
+                  <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
+                  <td className="px-6 py-4 align-top">
+                    <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>
+                      {invStatusLabel}
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4 text-center font-semibold text-slate-900 tabular-nums align-top">{hotelCount}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap align-top">{checkInDisplay}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap align-top">{checkOutDisplay}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm align-top">{progressSummary}</td>
+                  <td className="px-6 py-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] align-top">
                     <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                       <Eye className="w-4 h-4 mr-1" /> Detail
                     </Button>

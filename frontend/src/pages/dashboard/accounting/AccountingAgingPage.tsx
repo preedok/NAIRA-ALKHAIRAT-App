@@ -321,10 +321,21 @@ const AccountingAgingPage: React.FC = () => {
     { key: 'days_61_plus', label: 'Terlambat 61+' }
   ];
 
+  const isNewInvoice = (inv: any) => {
+    if (!inv) return false;
+    const at = inv.issued_at || inv.created_at;
+    if (!at) return false;
+    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
+  };
+  const getOrderChangeDate = (inv: any) => {
+    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
+    return at ? new Date(at) : null;
+  };
+
   const agingColumns: TableColumn[] = [
-    { id: 'invoice', label: 'Invoice', align: 'left' },
+    { id: 'invoice', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total', align: 'right' },
     { id: 'paid', label: 'Dibayar', align: 'right' },
     { id: 'remaining', label: 'Sisa', align: 'right' },
@@ -453,18 +464,31 @@ const AccountingAgingPage: React.FC = () => {
               stickyActionsColumn
               renderRow={(inv: any) => (
                 <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-3 px-4 font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number || '-', INVOICE_STATUS_LABELS)}</td>
-                  <td className="py-3 px-4">{inv.User?.name || inv.User?.company_name || '-'}</td>
-                  <td className="py-3 px-4">{inv.Branch?.name || inv.Branch?.code || '-'}</td>
-                  <td className="py-3 px-4 text-right font-medium">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                  <td className="py-3 px-4 text-right text-emerald-600 font-medium">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                  <td className="py-3 px-4 text-right text-red-600 font-medium">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-4 align-top">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number || '-', INVOICE_STATUS_LABELS)}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
+                        {getOrderChangeDate(inv) && (
+                          <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 align-top">{inv.User?.name || inv.User?.company_name || '-'}</td>
+                  <td className="py-3 px-4 align-top text-sm">
+                    <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                    <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                  </td>
+                  <td className="py-3 px-4 text-right font-medium align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                  <td className="py-3 px-4 text-right text-emerald-600 font-medium align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                  <td className="py-3 px-4 align-top">
                     <Badge variant={getStatusBadgeVariant(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
                   </td>
-                  <td className="py-3 px-4">{formatDate(inv.due_date_dp)}</td>
-                  <td className="py-3 px-4 text-center">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>
+                  <td className="py-3 px-4 text-center align-top">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
+                  <td className="py-3 px-4 align-top">
                     {(inv.PaymentProofs?.length ?? 0) === 0 ? (
                       <span className="text-slate-400 text-xs">-</span>
                     ) : (
@@ -480,8 +504,8 @@ const AccountingAgingPage: React.FC = () => {
                       </div>
                     )}
                   </td>
-                  <td className="py-3 px-4">{formatDate(inv.issued_at || inv.created_at)}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-4 align-top">{formatDate(inv.issued_at || inv.created_at)}</td>
+                  <td className="py-3 px-4 align-top">
                     <div className="flex justify-center">
                       <ActionsMenu
                         align="right"

@@ -408,11 +408,12 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
-  // Penalti bus: minimal 35 pack; jika kurang, penalty per pack yang kurang (sampai 35)
+  // Penalti bus: hanya jika order ada item bus; minimal 35 pack, jika kurang maka penalty per pack yang kurang
+  const hasBusItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS);
   const totalBusPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
   const penaltyPerPack = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = totalBusPacks < minPack ? Math.max(0, (minPack - totalBusPacks) * penaltyPerPack) : 0;
+  const penaltyAmount = hasBusItems && totalBusPacks < minPack ? Math.max(0, (minPack - totalBusPacks) * penaltyPerPack) : 0;
 
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
@@ -690,12 +691,13 @@ const update = asyncHandler(async (req, res) => {
         ...itemRatesPayload
       });
     }
-    // Penalti bus: minimal 35 pack; jika kurang, penalty per pack yang kurang
+    // Penalti bus: hanya jika order ada item bus; minimal 35 pack, jika kurang maka penalty per pack yang kurang
+    const hasBusItemsUpdate = items.some((i) => i.type === ORDER_ITEM_TYPE.BUS);
     const totalBusPacks = items.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
     const rulesUpdate = await getRulesForBranch(order.branch_id);
     const minPackUpdate = parseInt(rulesUpdate.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
     const penaltyPerPackUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
-    const penaltyAmountUpdate = totalBusPacks < minPackUpdate ? Math.max(0, (minPackUpdate - totalBusPacks) * penaltyPerPackUpdate) : 0;
+    const penaltyAmountUpdate = hasBusItemsUpdate && totalBusPacks < minPackUpdate ? Math.max(0, (minPackUpdate - totalBusPacks) * penaltyPerPackUpdate) : 0;
     await order.update({
       subtotal,
       total_jamaah: totalJamaah,
@@ -749,8 +751,8 @@ const update = asyncHandler(async (req, res) => {
     const shouldMarkUpdated = inv && paid > 0;
     await syncInvoiceFromOrder(orderReloaded || order, {
       changed_by: req.user.id,
-      reason: shouldMarkUpdated ? 'order_updated_after_payment' : 'sync_from_order',
-      order_updated_at: shouldMarkUpdated ? new Date() : null,
+      reason: hasChanges ? (shouldMarkUpdated ? 'order_updated_after_payment' : 'sync_from_order') : 'sync_from_order',
+      order_updated_at: hasChanges ? new Date() : null,
       last_order_revision_id: revision ? revision.id : null,
       meta: revision ? { revision_id: revision.id, revision_no: revision.revision_no } : null
     });

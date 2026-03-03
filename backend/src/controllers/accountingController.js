@@ -235,7 +235,7 @@ const getAgingReport = asyncHandler(async (req, res) => {
     include: [
       orderInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_type', 'verified_at', 'verified_status', 'proof_file_url'] }
     ],
     order: [['due_date_dp', 'ASC'], ['created_at', 'ASC']]
@@ -937,7 +937,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   const branchInclude = {
     model: Branch,
     as: 'Branch',
-    attributes: ['id', 'code', 'name', 'provinsi_id'],
+    attributes: ['id', 'code', 'name', 'city', 'provinsi_id'],
     required: false,
     include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'] }] }]
   };
@@ -1021,13 +1021,19 @@ const getFinancialReport = asyncHandler(async (req, res) => {
       invoice_number: inv.invoice_number,
       order_number: inv.Order?.order_number,
       owner_name: inv.User?.company_name || inv.User?.name,
+      company_name: inv.User?.company_name || inv.User?.name,
       branch_name: inv.Branch?.name || inv.Branch?.code,
+      wilayah_name: inv.Branch?.Provinsi?.Wilayah?.name,
+      provinsi_name: inv.Branch?.Provinsi?.name,
+      city: inv.Branch?.city,
       total_amount: parseFloat(inv.total_amount || 0),
       paid_amount: paid,
       remaining_amount: parseFloat(inv.remaining_amount || 0),
       status: inv.status,
       order_status: inv.Order?.status,
-      issued_at: inv.issued_at || inv.created_at
+      issued_at: inv.issued_at || inv.created_at,
+      created_at: inv.created_at,
+      order_updated_at: inv.order_updated_at
     });
   });
 

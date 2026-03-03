@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Product, ProductPrice, HotelProgress, Invoice } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice, HotelProgress, Invoice } = require('../models');
 const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -114,7 +114,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     where,
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       {
         model: Order,
         as: 'Order',

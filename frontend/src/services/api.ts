@@ -734,13 +734,19 @@ export interface AccountingFinancialReportData {
     invoice_number: string;
     order_number?: string;
     owner_name?: string;
+    company_name?: string;
     branch_name?: string;
+    wilayah_name?: string;
+    provinsi_name?: string;
+    city?: string;
     total_amount: number;
     paid_amount: number;
     remaining_amount: number;
     status: string;
     order_status?: string;
     issued_at?: string;
+    created_at?: string;
+    order_updated_at?: string;
   }>;
   pagination?: { total: number; page: number; limit: number; totalPages: number };
   previous_period?: {

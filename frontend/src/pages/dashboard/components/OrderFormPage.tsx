@@ -499,18 +499,52 @@ const OrderFormPage: React.FC = () => {
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
-  const subtotalIDR=items.reduce((s,r)=>s+toIDR(rowSub(r),r),0);
   const totalBusPacks=items.filter(r=>r.type==='bus').reduce((s,r)=>s+Math.max(0,r.quantity),0);
   const busPenaltyIDR=totalBusPacks>0&&totalBusPacks<busPenaltyRule.bus_min_pack
     ?(busPenaltyRule.bus_min_pack-totalBusPacks)*busPenaltyRule.bus_penalty_idr
     :0;
+
+  /* submit */
+  const latestRates = { SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 };
+  /** Subtotal IDR dengan logika sama persis seperti payload (agar Ringkasan = total yang akan disimpan). */
+  const payloadSubtotalIDR=(valid:OrderItemRow[]):number=>{
+    let sum=0;
+    for(const r of valid){
+      if(r.type==='hotel'&&r.room_breakdown?.length){
+        for(const l of r.room_breakdown){
+          if(l.quantity<=0||!l.room_type) continue;
+          const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
+          const isNew=!initialOrderItemKeysRef.current.has(key);
+          const useLatestRates=hasDpPayment&&isNew;
+          const unitPriceIdr=useLatestRates?toIDRWithRates(l.unit_price,r,latestRates):toIDR(l.unit_price,r);
+          const nights=nightsFor(r)||1;
+          sum+=l.quantity*unitPriceIdr*nights;
+        }
+      } else if(r.type==='hotel'&&r.room_type){
+        const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
+        const isNew=!initialOrderItemKeysRef.current.has(key);
+        const useLatestRates=hasDpPayment&&isNew;
+        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
+        const nights=nightsFor(r)||1;
+        sum+=Math.max(1,r.quantity)*unitPriceIdr*nights;
+      } else{
+        const metaKey=JSON.stringify(r.meta||{});
+        const key=`${r.type}:${r.product_id}:${metaKey}`;
+        const isNew=!initialOrderItemKeysRef.current.has(key);
+        const useLatestRates=hasDpPayment&&isNew;
+        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
+        sum+=Math.max(1,r.quantity)*unitPriceIdr;
+      }
+    }
+    return sum;
+  };
+  const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+  const subtotalIDR=payloadSubtotalIDR(validForTotal);
   const totalIDR=subtotalIDR+busPenaltyIDR;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
-  /* submit */
-  const latestRates = { SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 };
   const buildPayloadWithRates=(valid:OrderItemRow[])=>{
     const out:Record<string,any>[]=[];
     for(const r of valid){
@@ -1091,7 +1125,7 @@ const OrderFormPage: React.FC = () => {
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total USD</p>
-                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatUSD(totalIDR/(rates.USD_TO_IDR||15500))}</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatUSD(totalIDR/(effectiveRates.USD_TO_IDR||15500))}</p>
                 <p className="text-xs text-slate-500">Pembayaran USD</p>
               </div>
             </div>

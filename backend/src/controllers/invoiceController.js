@@ -142,11 +142,15 @@ async function updateOrderDpStatusFromInvoice(invoice, order = null) {
   const orderWasPembayaranDp = order.dp_payment_status === DP_PAYMENT_STATUS.PEMBAYARAN_DP;
   const hasDpPaid = dpMetByPayment || (hadAnyPayment && (alreadyPembayaranDp || orderWasPembayaranDp));
   const dpPaymentStatus = !isIssued ? null : (hasDpPaid ? DP_PAYMENT_STATUS.PEMBAYARAN_DP : DP_PAYMENT_STATUS.TAGIHAN_DP);
-  const orderCurrency = (order.currency || 'IDR').toUpperCase();
   const orderTotal = parseFloat(order.total_amount) || 0;
-  const payload = { dp_payment_status: dpPaymentStatus, dp_percentage_paid: pct };
-  if (orderCurrency === 'IDR') payload.total_amount_idr = orderTotal;
-  if (orderCurrency === 'SAR') payload.total_amount_sar = orderTotal;
+  const rates = await getOrderRatesForConversion(invoice.order_id);
+  const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
+  const payload = {
+    dp_payment_status: dpPaymentStatus,
+    dp_percentage_paid: pct,
+    total_amount_idr: total,
+    total_amount_sar: total / sarToIdr
+  };
   await order.update(payload);
 }
 
@@ -735,15 +739,16 @@ const create = asyncHandler(async (req, res) => {
   const autoCancelAt = new Date();
   autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
 
-  const orderCurrency = (order.currency || 'IDR').toUpperCase();
+  const rates = await getOrderRatesForConversion(order.id);
+  const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
   const invoice = await Invoice.create({
     invoice_number: generateInvoiceNumber(),
     order_id: order.id,
     owner_id: order.owner_id,
     branch_id: order.branch_id,
     total_amount: totalAmount,
-    total_amount_idr: orderCurrency === 'IDR' ? totalAmount : null,
-    total_amount_sar: orderCurrency === 'SAR' ? totalAmount : null,
+    total_amount_idr: totalAmount,
+    total_amount_sar: totalAmount / sarToIdr,
     dp_percentage: dpPercentage,
     dp_amount: dpAmount,
     paid_amount: 0,
@@ -817,15 +822,16 @@ async function createInvoiceForOrder(order, opts = {}) {
   dueDateDp.setDate(dueDateDp.getDate() + dpDueDays);
   const autoCancelAt = new Date();
   autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
-  const orderCurrency = (order.currency || 'IDR').toUpperCase();
+  const rates = await getOrderRatesForConversion(orderId);
+  const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
   const invoice = await Invoice.create({
     invoice_number: generateInvoiceNumber(),
     order_id: orderId,
     owner_id: order.owner_id,
     branch_id: order.branch_id,
     total_amount: totalAmount,
-    total_amount_idr: orderCurrency === 'IDR' ? totalAmount : null,
-    total_amount_sar: orderCurrency === 'SAR' ? totalAmount : null,
+    total_amount_idr: totalAmount,
+    total_amount_sar: totalAmount / sarToIdr,
     dp_percentage: dpPercentage,
     dp_amount: dpAmount,
     paid_amount: 0,
@@ -1178,14 +1184,48 @@ const getPdf = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Ambil kurs untuk konversi IDR -> SAR (order.currency_rates_override atau business rules cabang).
+ * Return { SAR_TO_IDR } default 4200.
+ */
+async function getOrderRatesForConversion(orderId) {
+  const ord = await Order.findByPk(orderId, { attributes: ['id', 'branch_id', 'currency_rates_override'] });
+  if (!ord) return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+  const ov = ord.currency_rates_override && typeof ord.currency_rates_override === 'object' ? ord.currency_rates_override : null;
+  if (ov && (typeof ov.SAR_TO_IDR === 'number' || typeof ov.USD_TO_IDR === 'number')) {
+    return {
+      SAR_TO_IDR: typeof ov.SAR_TO_IDR === 'number' ? ov.SAR_TO_IDR : 4200,
+      USD_TO_IDR: typeof ov.USD_TO_IDR === 'number' ? ov.USD_TO_IDR : 15500
+    };
+  }
+  if (ord.branch_id) {
+    try {
+      const rules = await getRulesForBranch(ord.branch_id);
+      const cr = rules.currency_rates;
+      const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
+      if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
+        return {
+          SAR_TO_IDR: typeof crObj.SAR_TO_IDR === 'number' ? crObj.SAR_TO_IDR : 4200,
+          USD_TO_IDR: typeof crObj.USD_TO_IDR === 'number' ? crObj.USD_TO_IDR : 15500
+        };
+      }
+    } catch (e) { /* ignore */ }
+  }
+  return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+}
+
+/**
  * Sinkronkan invoice dengan order setelah order (items/total) berubah.
- * Update total_amount, dp_amount, remaining_amount, status. paid_amount tidak berubah.
+ * total_amount dari order selalu dalam IDR (frontend kirim unit_price dalam IDR).
+ * Simpan total_amount_idr dan total_amount_sar agar form order & list invoice konsisten.
  */
 async function syncInvoiceFromOrder(order, opts = {}) {
   const invoice = await Invoice.findOne({ where: { order_id: order.id } });
   if (!invoice) return null;
   const newTotal = parseFloat(order.total_amount) || 0;
-  const orderCurrency = (order.currency || 'IDR').toUpperCase();
+  const rates = await getOrderRatesForConversion(order.id);
+  const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
+  const totalAmountIdr = newTotal;
+  const totalAmountSar = newTotal / sarToIdr;
   const dpPct = parseInt(invoice.dp_percentage, 10) || 30;
   const dpAmount = Math.round(newTotal * dpPct / 100);
   const paidAmount = parseFloat(invoice.paid_amount) || 0;
@@ -1195,7 +1235,6 @@ async function syncInvoiceFromOrder(order, opts = {}) {
     overpaidAmount = Math.abs(remainingAmount);
     remainingAmount = 0;
   }
-  // Jangan turunkan ke Tagihan DP jika sudah ada pembayaran (tetap Pembayaran DP setelah edit order)
   const hadPayment = paidAmount > 0;
   let newStatus = invoice.status;
   if (remainingAmount <= 0) {
@@ -1203,12 +1242,10 @@ async function syncInvoiceFromOrder(order, opts = {}) {
   } else if (paidAmount >= dpAmount) {
     newStatus = INVOICE_STATUS.PARTIAL_PAID;
   } else if (hadPayment) {
-    newStatus = INVOICE_STATUS.PARTIAL_PAID; // sudah ada pembayaran (termasuk setelah edit/tambah item), tetap Pembayaran DP
+    newStatus = INVOICE_STATUS.PARTIAL_PAID;
   } else {
     newStatus = INVOICE_STATUS.TENTATIVE;
   }
-  const totalAmountIdr = orderCurrency === 'IDR' ? newTotal : null;
-  const totalAmountSar = orderCurrency === 'SAR' ? newTotal : null;
   await updateInvoiceWithAudit(invoice, {
     total_amount: newTotal,
     total_amount_idr: totalAmountIdr,
@@ -1227,13 +1264,14 @@ async function syncInvoiceFromOrder(order, opts = {}) {
   const invReload = await Invoice.findByPk(invoice.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
   if (invReload) {
     await updateOrderDpStatusFromInvoice(invReload);
-    const ord = await Order.findByPk(invoice.order_id, { attributes: ['id', 'currency'] });
+    const ord = await Order.findByPk(invoice.order_id, { attributes: ['id'] });
     if (ord) {
-      const upd = {};
+      const upd = {
+        total_amount_idr: totalAmountIdr,
+        total_amount_sar: totalAmountSar
+      };
       if (opts.order_updated_at) upd.order_updated_at = opts.order_updated_at;
-      if (orderCurrency === 'IDR') upd.total_amount_idr = newTotal;
-      if (orderCurrency === 'SAR') upd.total_amount_sar = newTotal;
-      if (Object.keys(upd).length) await ord.update(upd);
+      await ord.update(upd);
     }
   }
   return invoice;

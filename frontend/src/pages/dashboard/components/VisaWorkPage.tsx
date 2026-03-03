@@ -15,7 +15,8 @@ import { visaApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
-import { formatInvoiceDisplay } from '../../../utils';
+import { formatInvoiceDisplay, formatIDR } from '../../../utils';
+import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -201,12 +202,27 @@ const VisaWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus]);
 
+  const formatDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
+  const isNewInvoice = (inv: any) => {
+    if (!inv) return false;
+    const at = inv.issued_at || inv.created_at;
+    if (!at) return false;
+    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
+  };
+  const getOrderChangeDate = (inv: any) => {
+    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
+    return at ? new Date(at) : null;
+  };
+
   const tableColumns: TableColumn[] = [
-    { id: 'invoice', label: 'No. Invoice' },
-    { id: 'owner', label: 'Owner' },
+    { id: 'invoice', label: 'No. Invoice', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
+    { id: 'total', label: 'Total', align: 'right' },
+    { id: 'status_invoice', label: 'Status Invoice', align: 'left' },
     { id: 'items', label: 'Item Visa', align: 'right' },
-    { id: 'status', label: 'Status' },
-    { id: 'action', label: 'Aksi' }
+    { id: 'status', label: 'Status Progress', align: 'left' },
+    { id: 'action', label: 'Aksi', align: 'left' }
   ];
 
   return (
@@ -269,13 +285,35 @@ const VisaWorkPage: React.FC = () => {
                 const orderItems = o?.OrderItems || [];
                 const visaCount = orderItems.filter((i: any) => i.type === 'visa').length;
                 const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
+                const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
+                const statusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                    <td className="px-6 py-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-slate-900">{visaCount}</td>
-                    <td className="px-6 py-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
+                          {getOrderChangeDate(inv) && (
+                            <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 align-top">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                    <td className="px-6 py-4 text-slate-700 align-top text-sm">
+                      <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
+                    <td className="px-6 py-4 align-top">
+                      <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>
+                        {statusLabel}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-slate-900 align-top">{visaCount}</td>
+                    <td className="px-6 py-4 align-top">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
+                    <td className="px-6 py-4 align-top">
                       <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                         <Eye className="w-4 h-4 mr-1" /> Detail
                       </Button>

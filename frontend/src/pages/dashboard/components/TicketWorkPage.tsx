@@ -15,7 +15,8 @@ import { ticketApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
-import { formatInvoiceDisplay } from '../../../utils';
+import { formatInvoiceDisplay, formatIDR } from '../../../utils';
+import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -201,14 +202,6 @@ const TicketWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus]);
 
-  const tableColumns: TableColumn[] = [
-    { id: 'invoice', label: 'No. Invoice' },
-    { id: 'owner', label: 'Owner' },
-    { id: 'items', label: 'Item Tiket', align: 'right' },
-    { id: 'status', label: 'Status' },
-    { id: 'action', label: 'Aksi' }
-  ];
-
   const formatDate = (d: string | null | undefined) => {
     if (!d) return '–';
     try {
@@ -217,6 +210,27 @@ const TicketWorkPage: React.FC = () => {
       return '–';
     }
   };
+  const isNewInvoice = (inv: any) => {
+    if (!inv) return false;
+    const at = inv.issued_at || inv.created_at;
+    if (!at) return false;
+    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
+  };
+  const getOrderChangeDate = (inv: any) => {
+    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
+    return at ? new Date(at) : null;
+  };
+
+  const tableColumns: TableColumn[] = [
+    { id: 'invoice', label: 'No. Invoice', align: 'left' },
+    { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
+    { id: 'total', label: 'Total', align: 'right' },
+    { id: 'status_invoice', label: 'Status Invoice', align: 'left' },
+    { id: 'items', label: 'Item Tiket', align: 'right' },
+    { id: 'status', label: 'Status Progress', align: 'left' },
+    { id: 'action', label: 'Aksi', align: 'left' }
+  ];
 
   return (
     <div className="space-y-6">
@@ -271,18 +285,40 @@ const TicketWorkPage: React.FC = () => {
                 const orderItems = o?.OrderItems || [];
                 const ticketCount = orderItems.filter((i: any) => i.type === 'ticket').length;
                 const firstStatus = orderItems.find((i: any) => i.type === 'ticket')?.TicketProgress?.status || 'pending';
+                const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
+                const statusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                    <td className="px-6 py-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-800">{ticketCount}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
+                          {getOrderChangeDate(inv) && (
+                            <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 align-top">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                    <td className="px-6 py-4 text-slate-700 align-top text-sm">
+                      <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
+                    <td className="px-6 py-4 align-top">
+                      <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>
+                        {statusLabel}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-800 align-top">{ticketCount}</td>
+                    <td className="px-6 py-4 align-top">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium ${RECAP_STATUS_COLORS[firstStatus] || 'bg-slate-100 text-slate-600'}`}>
                         {RECAP_STATUS_ICONS[firstStatus]}
                         {STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 align-top">
                       <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                         <Eye className="w-4 h-4 mr-1" /> Detail
                       </Button>

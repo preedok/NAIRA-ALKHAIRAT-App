@@ -8,7 +8,8 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { formatIDR, formatInvoiceDisplay } from '../../../utils';
+import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import type { TableColumn } from '../../../types';
 
 /** Modal daftar invoice lengkap dengan filter dan pagination */
@@ -132,12 +133,11 @@ const InvoiceListModal: React.FC<{
           <Table
             columns={[
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-              { id: 'order_number', label: 'No. Order', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
-              { id: 'branch', label: 'Cabang', align: 'left' },
-              { id: 'total', label: 'Total', align: 'left' },
-              { id: 'paid', label: 'Terbayar', align: 'left' },
-              { id: 'remaining', label: 'Sisa', align: 'left' },
+              { id: 'company', label: 'Perusahaan', align: 'left' },
+              { id: 'total', label: 'Total', align: 'right' },
+              { id: 'paid', label: 'Terbayar', align: 'right' },
+              { id: 'remaining', label: 'Sisa', align: 'right' },
               { id: 'status', label: 'Status', align: 'left' }
             ] as TableColumn[]}
             data={loading ? [] : invoices}
@@ -154,18 +154,44 @@ const InvoiceListModal: React.FC<{
                   }
                 : undefined
             }
-            renderRow={(inv) => (
-              <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono">{inv.invoice_number}</td>
-                <td className="px-4 py-3 font-mono">{inv.Order?.order_number ?? '-'}</td>
-                <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
-                <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                <td className="px-4 py-3 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
-              </tr>
-            )}
+            renderRow={(inv) => {
+              const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
+              const isNewInvoice = (i: any) => {
+                if (!i) return false;
+                const at = i.issued_at || i.created_at;
+                if (!at) return false;
+                return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
+              };
+              const getOrderChangeDate = (i: any) => {
+                const at = i?.order_updated_at ?? i?.Order?.order_updated_at ?? null;
+                return at ? new Date(at) : null;
+              };
+              const statusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
+              return (
+                <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-4 py-3 align-top">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
+                        {getOrderChangeDate(inv) && (
+                          <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
+                  <td className="px-4 py-3 align-top text-sm">
+                    <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                    <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                  </td>
+                  <td className="px-4 py-3 text-right align-top">{formatIDR(parseFloat((inv.total_amount_idr ?? inv.total_amount) || 0))}</td>
+                  <td className="px-4 py-3 text-right text-blue-600 align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                  <td className="px-4 py-3 text-right align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                  <td className="px-4 py-3 align-top"><Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>{statusLabel}</Badge></td>
+                </tr>
+              );
+            }}
           />
         </div>
       </div>

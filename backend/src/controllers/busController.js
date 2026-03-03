@@ -7,6 +7,8 @@ const {
   OrderItem,
   User,
   Branch,
+  Provinsi,
+  Wilayah,
   Product,
   ProductPrice,
   BusProgress,
@@ -156,7 +158,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     where,
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       {
         model: Order,
         as: 'Order',
