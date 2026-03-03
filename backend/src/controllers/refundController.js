@@ -3,8 +3,8 @@ const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
-const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory } = require('../models');
-const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS } = require('../constants');
+const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory, Notification } = require('../models');
+const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS, NOTIFICATION_TRIGGER } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { sendRefundProofToOwner } = require('../utils/emailService');
 
@@ -333,8 +333,9 @@ const uploadProof = [
 
     const ownerEmail = r.Owner?.email || null;
     const proofPath = fs.existsSync(newPath) ? newPath : oldPath;
+    let emailSent = false;
     if (ownerEmail) {
-      await sendRefundProofToOwner(
+      emailSent = await sendRefundProofToOwner(
         ownerEmail,
         r.Owner?.name || 'Pemesan',
         parseFloat(r.amount) || 0,
@@ -342,6 +343,16 @@ const uploadProof = [
         proofPath
       );
     }
+    await Notification.create({
+      user_id: r.owner_id,
+      trigger: NOTIFICATION_TRIGGER.REFUND,
+      title: 'Refund diproses – bukti terkirim',
+      message: `Refund untuk invoice ${r.Invoice?.invoice_number || ''} telah diproses. Bukti transfer telah dikirim ke email Anda.`,
+      data: { refund_id: r.id, invoice_id: r.invoice_id, proof_file_url: r.proof_file_url },
+      channel_in_app: true,
+      channel_email: true,
+      ...(emailSent ? { email_sent_at: new Date() } : {})
+    });
 
     const updated = await Refund.findByPk(r.id, {
       include: [

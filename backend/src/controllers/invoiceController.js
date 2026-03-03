@@ -14,12 +14,96 @@ function isKoordinatorRole(role) {
 }
 const { buildInvoicePdfBuffer } = require('../utils/invoicePdf');
 const { SUBDIRS, getDir, invoiceFilename, toUrlPath } = require('../config/uploads');
+const { sendInvoiceCreatedEmail, sendPaymentReceivedEmail } = require('../utils/emailService');
+const logger = require('../config/logger');
 
 const generateInvoiceNumber = () => {
   const y = new Date().getFullYear();
   const n = Math.floor(Math.random() * 99999) + 1;
   return `INV-${y}-${String(n).padStart(5, '0')}`;
 };
+
+/** Kirim notifikasi invoice baru ke email owner dengan lampiran PDF (jalan di background). */
+async function sendInvoiceCreatedNotificationEmail(invoiceId, notificationId, dueInfo) {
+  try {
+    const invoice = await Invoice.findByPk(invoiceId, {
+      include: [
+        { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }] }] },
+        { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+        { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+        { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }
+      ]
+    });
+    if (!invoice || !invoice.User) return;
+    const data = invoice.toJSON();
+    try {
+      const rules = await getRulesForBranch(invoice.branch_id);
+      data.currency_rates = rules.currency_rates || {};
+    } catch (e) { data.currency_rates = {}; }
+    if (data.Order?.currency_rates_override) data.currency_rates_override = data.Order.currency_rates_override;
+    const pdfBuffer = await buildInvoicePdfBuffer(data);
+    const sent = await sendInvoiceCreatedEmail(
+      invoice.User.email,
+      invoice.User.name,
+      invoice.invoice_number,
+      invoice.Order?.order_number,
+      pdfBuffer,
+      dueInfo
+    );
+    if (sent && notificationId) await Notification.update({ email_sent_at: new Date() }, { where: { id: notificationId } });
+  } catch (err) {
+    logger.error('sendInvoiceCreatedNotificationEmail failed: ' + (err.message || String(err)));
+  }
+}
+
+/** Kirim notifikasi DP/Lunas ke email owner dengan lampiran bukti bayar + invoice PDF (background). */
+async function sendPaymentReceivedNotificationEmail(invoiceId, notificationId, paymentProofId, isLunas) {
+  try {
+    const invoice = await Invoice.findByPk(invoiceId, {
+      include: [
+        { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }] }] },
+        { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+        { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+        { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }] }
+      ]
+    });
+    if (!invoice || !invoice.User) return;
+    let paymentProofPath = null;
+    if (paymentProofId) {
+      const proof = await PaymentProof.findByPk(paymentProofId, { attributes: ['id', 'proof_file_url', 'amount'] });
+      if (proof && proof.proof_file_url) {
+        const urlNorm = (proof.proof_file_url || '').replace(/\\/g, '/').trim();
+        const match = urlNorm.match(/payment-proofs\/?(.+)$/i);
+        const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : path.basename(urlNorm);
+        if (filename) {
+          const proofDir = getDir(SUBDIRS.PAYMENT_PROOFS || 'payment-proofs');
+          const fullPath = path.join(proofDir, filename);
+          if (fs.existsSync(fullPath)) paymentProofPath = fullPath;
+        }
+      }
+    }
+    const data = invoice.toJSON();
+    try {
+      const rules = await getRulesForBranch(invoice.branch_id);
+      data.currency_rates = rules.currency_rates || {};
+    } catch (e) { data.currency_rates = {}; }
+    if (data.Order?.currency_rates_override) data.currency_rates_override = data.Order.currency_rates_override;
+    const pdfBuffer = await buildInvoicePdfBuffer(data);
+    const paidAmount = parseFloat(invoice.paid_amount) || 0;
+    const sent = await sendPaymentReceivedEmail(
+      invoice.User.email,
+      invoice.User.name,
+      invoice.invoice_number,
+      paidAmount,
+      isLunas,
+      paymentProofPath,
+      pdfBuffer
+    );
+    if (sent && notificationId) await Notification.update({ email_sent_at: new Date() }, { where: { id: notificationId } });
+  } catch (err) {
+    logger.error('sendPaymentReceivedNotificationEmail failed: ' + (err.message || String(err)));
+  }
+}
 
 async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta, changed_at, transaction }) {
   try {
@@ -672,13 +756,17 @@ const create = asyncHandler(async (req, res) => {
     meta: { order_id: order.id }
   });
 
-  await Notification.create({
+  const notif = await Notification.create({
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
     title: 'Invoice baru',
     message: `Invoice ${invoice.invoice_number} untuk order ${order.order_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
-    data: { order_id: order.id, invoice_id: invoice.id }
+    data: { order_id: order.id, invoice_id: invoice.id },
+    channel_in_app: true,
+    channel_email: true
   });
+  const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
+  setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
 
   const full = await Invoice.findByPk(invoice.id, { include: [{ model: Order, as: 'Order' }] });
   res.status(201).json({ success: true, data: full });
@@ -749,13 +837,17 @@ async function createInvoiceForOrder(order, opts = {}) {
     meta: { order_id: orderId }
   });
   await updateOrderDpStatusFromInvoice(invoice);
-  await Notification.create({
+  const notif = await Notification.create({
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
     title: 'Invoice baru',
     message: `Invoice ${invoice.invoice_number} untuk order ${order.order_number || orderId}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
-    data: { order_id: orderId, invoice_id: invoice.id }
+    data: { order_id: orderId, invoice_id: invoice.id },
+    channel_in_app: true,
+    channel_email: true
   });
+  const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
+  setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
   return invoice;
 }
 
@@ -862,13 +954,16 @@ const unblock = asyncHandler(async (req, res) => {
   if (order && order.status === 'blocked') {
     await order.update({ status: 'tentative', unblocked_by: req.user.id, unblocked_at: new Date(), blocked_at: null, blocked_reason: null });
   }
-  await Notification.create({
+  const notif = await Notification.create({
     user_id: invoice.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
     title: 'Invoice diaktifkan kembali',
     message: `Invoice ${invoice.invoice_number} dapat dibayar kembali. Silakan upload bukti DP.`,
-    data: { invoice_id: invoice.id }
+    data: { invoice_id: invoice.id },
+    channel_in_app: true,
+    channel_email: true
   });
+  setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, 'Silakan upload bukti DP.'));
   const full = await Invoice.findByPk(invoice.id, { include: [{ model: Order, as: 'Order' }] });
   res.json({ success: true, data: full });
 });
@@ -902,13 +997,16 @@ const verifyPayment = asyncHandler(async (req, res) => {
         await order.update({ status: 'processing' });
       }
     }
-    await Notification.create({
+    const notif = await Notification.create({
       user_id: inv.owner_id,
       trigger: newStatus === INVOICE_STATUS.PAID ? NOTIFICATION_TRIGGER.LUNAS : NOTIFICATION_TRIGGER.DP_RECEIVED,
       title: newStatus === INVOICE_STATUS.PAID ? 'Invoice lunas' : 'DP diterima',
       message: `Pembayaran untuk ${inv.invoice_number} telah diverifikasi.`,
-      data: { invoice_id: inv.id }
+      data: { invoice_id: inv.id, payment_proof_id: proof.id },
+      channel_in_app: true,
+      channel_email: true
     });
+    setImmediate(() => sendPaymentReceivedNotificationEmail(inv.id, notif.id, proof.id, newStatus === INVOICE_STATUS.PAID));
     Object.assign(invoice, await Invoice.findByPk(inv.id, { raw: true }));
   } else {
     const wasVerified = proof.verified_status === 'verified' || (proof.verified_at != null);
@@ -1032,9 +1130,13 @@ const getPdf = asyncHandler(async (req, res) => {
   } catch (e) {
     data.currency_rates = {};
   }
+  // Prioritaskan kurs order/invoice agar PDF selalu sesuai data transaksi
+  if (data.Order?.currency_rates_override) {
+    data.currency_rates_override = data.Order.currency_rates_override;
+  }
   const buf = await buildInvoicePdfBuffer(data);
 
-  // Simpan ke disk (local - uploads/invoices/)
+  // Simpan ke disk (local - uploads/invoices/) — setiap request regenerate agar selalu terupdate
   const dir = getDir(SUBDIRS.INVOICES);
   const fileName = invoiceFilename(invoice.invoice_number, invoice.status);
   const filePath = path.join(dir, fileName);
@@ -1056,6 +1158,9 @@ const getPdf = asyncHandler(async (req, res) => {
   const downloadName = `invoice-${invoice.invoice_number}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.send(buf);
 });
 
@@ -1404,5 +1509,6 @@ module.exports = {
   listReallocations,
   getReleasable,
   getStatusHistory,
-  getOrderRevisions
+  getOrderRevisions,
+  sendPaymentReceivedNotificationEmail
 };

@@ -5,6 +5,7 @@ const multer = require('multer');
 const { PaymentProof, Invoice, Order, Notification } = require('../models');
 const { ROLES } = require('../constants');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, DP_PAYMENT_STATUS } = require('../constants');
+const { sendPaymentReceivedNotificationEmail } = require('./invoiceController');
 const { getRulesForBranch } = require('./businessRuleController');
 const uploadConfig = require('../config/uploads');
 
@@ -124,13 +125,16 @@ const create = [
           ...(newStatus === INVOICE_STATUS.PAID && !['completed', 'cancelled'].includes(order.status) ? { status: 'processing' } : {})
         });
       }
-      await Notification.create({
+      const notif = await Notification.create({
         user_id: inv.owner_id,
         trigger: newStatus === INVOICE_STATUS.PAID ? NOTIFICATION_TRIGGER.LUNAS : NOTIFICATION_TRIGGER.DP_RECEIVED,
         title: newStatus === INVOICE_STATUS.PAID ? 'Invoice lunas' : 'DP diterima',
         message: `Pembayaran untuk ${inv.invoice_number} telah dicatat (Saudi) dan diverifikasi.`,
-        data: { invoice_id: inv.id }
+        data: { invoice_id: inv.id, payment_proof_id: proof.id },
+        channel_in_app: true,
+        channel_email: true
       });
+      setImmediate(() => sendPaymentReceivedNotificationEmail(inv.id, notif.id, proof.id, newStatus === INVOICE_STATUS.PAID));
     }
 
     const full = await PaymentProof.findByPk(proof.id);

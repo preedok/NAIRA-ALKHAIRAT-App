@@ -7,3 +7,5 @@ temp/
 coverage/
 dist/
 build/
+*.env
+.env

@@ -993,7 +993,7 @@ const sendOrderResult = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Invoice tidak dalam scope Anda' });
   }
 
-  await Notification.create({
+  const notif = await Notification.create({
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.ORDER_COMPLETED,
     title: 'Trip selesai',
@@ -1003,6 +1003,16 @@ const sendOrderResult = asyncHandler(async (req, res) => {
     channel_email: channel === 'email' || channel === 'both',
     channel_whatsapp: channel === 'whatsapp' || channel === 'both'
   });
+  const sendEmail = channel === 'email' || channel === 'both';
+  if (sendEmail && order.User?.email) {
+    const { sendOrderResultEmail } = require('../utils/emailService');
+    const msg = `Order ${order.order_number} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`;
+    sendOrderResultEmail(order.User.email, order.User.name, order.order_number, msg)
+      .then((sent) => {
+        if (sent && notif.id) return Notification.update({ email_sent_at: new Date() }, { where: { id: notif.id } });
+      })
+      .catch((err) => require('../config/logger').error('sendOrderResultEmail failed: ' + (err.message || String(err))));
+  }
 
   res.json({ success: true, message: 'Notifikasi telah dikirim ke owner.', data: { order_id: order.id } });
 });

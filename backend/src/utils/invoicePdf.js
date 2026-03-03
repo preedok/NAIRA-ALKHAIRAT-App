@@ -56,11 +56,23 @@ function idrToSarUsd(idr, currencyRates) {
 }
 
 function checkNewPage(doc, y, margin, need) {
-  if (y + need > doc.page.height - 60) {
+  const bottomMargin = 80;
+  if (y + need > doc.page.height - bottomMargin) {
     doc.addPage();
     return margin;
   }
   return y;
+}
+
+/** Ambil kurs untuk konversi: prioritaskan order/invoice override, lalu branch rules */
+function getRates(data) {
+  const orderRates = data.Order?.currency_rates_override;
+  const invRates = data.currency_rates_override || data.currency_rates;
+  if (orderRates && typeof orderRates === 'object' && (orderRates.SAR_TO_IDR != null || orderRates.USD_TO_IDR != null)) {
+    return orderRates;
+  }
+  if (invRates && typeof invRates === 'object') return invRates;
+  return {};
 }
 
 /**
@@ -135,29 +147,33 @@ function renderInvoicePdf(doc, data) {
   y += 22;
 
   // ---- Tabel Item: No | Tipe | Deskripsi | Qty | Harga Satuan | Subtotal ----
-  y = checkNewPage(doc, y, margin, 120);
+  y = checkNewPage(doc, y, margin, 140);
   doc.fontSize(11).fillColor('#0f172a').text('Rincian Barang / Jasa', margin, y);
-  y += 18;
+  y += 20;
 
   const tableTop = y;
-  const colW = [0.04, 0.09, 0.28, 0.06, 0.24, 0.24]; // No, Tipe, Deskripsi, Qty, Harga Satuan (IDR+SAR+USD), Subtotal (IDR+SAR+USD)
-  const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 8;
-  const w = (i) => pageWidth * colW[i] - 12;
-  const rowH = 22;
-  const dataRowH = 34;
-  const rates = data.currency_rates || {};
-  doc.rect(margin, tableTop, pageWidth, rowH).fillAndStroke('#0D1A63', '#1e3a8a');
+  // Kolom: No, Tipe, Deskripsi (lebih lebar), Qty, Harga Satuan, Subtotal — hindari tumpang tindih
+  const colW = [0.035, 0.08, 0.32, 0.055, 0.24, 0.24];
+  const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 6;
+  const w = (i) => pageWidth * colW[i] - 10;
+  const headerRowH = 24;
+  const dataRowHMin = 38; // tinggi minimum per baris agar tidak tertumpuk
+  const rates = getRates(data);
+  doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke('#0D1A63', '#1e3a8a');
   doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
-  doc.text('No', x(0), tableTop + 7, { width: w(0) });
-  doc.text('Tipe', x(1), tableTop + 7, { width: w(1) });
-  doc.text('Deskripsi', x(2), tableTop + 7, { width: w(2) });
-  doc.text('Qty', x(3), tableTop + 7, { width: w(3) });
-  doc.text('Harga Satuan (IDR · SAR · USD)', x(4), tableTop + 7, { width: w(4) });
-  doc.text('Subtotal (IDR · SAR · USD)', x(5), tableTop + 7, { width: w(5) });
-  y = tableTop + rowH;
+  doc.text('No', x(0), tableTop + 8, { width: w(0) });
+  doc.text('Tipe', x(1), tableTop + 8, { width: w(1) });
+  doc.text('Deskripsi', x(2), tableTop + 8, { width: w(2) });
+  doc.text('Qty', x(3), tableTop + 8, { width: w(3) });
+  doc.text('Harga Satuan (IDR · SAR · USD)', x(4), tableTop + 8, { width: w(4) });
+  doc.text('Subtotal (IDR · SAR · USD)', x(5), tableTop + 8, { width: w(5) });
+  y = tableTop + headerRowH;
 
   const items = data.Order?.OrderItems || [];
-  const totalAmount = parseFloat(String(data.total_amount || 0));
+  let totalAmount = parseFloat(String(data.total_amount || 0));
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    totalAmount = parseFloat(String(data.Order?.total_amount || 0)) || 0;
+  }
   // Tanggal referensi: check-in hotel paling awal (untuk visa = sesuai check-in, tiket = 1 hari sebelum check-in)
   let hotelCheckIn = null;
   items.forEach((it) => {
@@ -174,7 +190,7 @@ function renderInvoicePdf(doc, data) {
   if (items.length > 0) {
     items.forEach((item, i) => {
       const itemType = (item.type || '').toLowerCase();
-      const desc = item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`;
+      const desc = (item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`).toString();
       let dateLine = '';
       let mealLine = '';
       if (itemType === 'hotel') {
@@ -216,59 +232,72 @@ function renderInvoicePdf(doc, data) {
         const parts = [tripType, travelDate ? `Tgl: ${travelDate}` : '', route, busType].filter(Boolean);
         if (parts.length) mealLine = parts.join('  |  ');
       }
-      const hasExtraLines = dateLine || mealLine;
-      const rowH = hasExtraLines ? (mealLine ? 50 : 42) : dataRowH;
-      y = checkNewPage(doc, y, margin, rowH + 4);
       const qty = item.quantity != null ? Number(item.quantity) : 1;
       const metaForQty = itemType === 'hotel' && item.meta && typeof item.meta === 'object' ? item.meta : {};
       const nightsForDisplay = metaForQty.nights != null ? Number(metaForQty.nights) : 0;
+      const effectiveQty = (itemType === 'hotel' && nightsForDisplay > 0) ? qty * nightsForDisplay : qty;
+      let unitPrice = parseFloat(String(item.unit_price || 0));
+      let subtotalVal = parseFloat(String(item.subtotal || 0));
+      if (!Number.isFinite(unitPrice)) unitPrice = 0;
+      if (!Number.isFinite(subtotalVal) || subtotalVal <= 0) {
+        subtotalVal = unitPrice * effectiveQty;
+      }
       const qtyLabel = (itemType === 'hotel' && nightsForDisplay > 0) ? `${qty} × ${nightsForDisplay}` : String(qty);
-      const unitPrice = parseFloat(String(item.unit_price || 0));
-      const subtotal = parseFloat(String(item.subtotal || 0)) || (nightsForDisplay > 0 ? unitPrice * qty * nightsForDisplay : unitPrice * qty);
       const unitSarUsd = idrToSarUsd(unitPrice, rates);
-      const subSarUsd = idrToSarUsd(subtotal, rates);
-      doc.rect(margin, y - 4, pageWidth, rowH).stroke('#e2e8f0');
+      const subSarUsd = idrToSarUsd(subtotalVal, rates);
       doc.fontSize(9);
-      doc.text(String(i + 1), x(0), y + 4, { width: w(0) });
-      doc.text(typeLabel(item.type), x(1), y + 4, { width: w(1) });
-      doc.text(String(desc).slice(0, 40), x(2), y + 2, { width: w(2) });
+      const descStr = desc.slice(0, 55);
+      const descHeight = doc.heightOfString(descStr, { width: w(2) });
+      const lineH = 11;
+      const extraLines = (dateLine ? 1 : 0) + (mealLine ? 1 : 0);
+      const rowH = Math.max(dataRowHMin, Math.ceil(descHeight) + 6 + extraLines * lineH + 20);
+      y = checkNewPage(doc, y, margin, rowH + 6);
+      doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
+      doc.fillColor('#334155');
+      doc.text(String(i + 1), x(0), y + 6, { width: w(0) });
+      doc.text(typeLabel(item.type), x(1), y + 6, { width: w(1) });
+      doc.text(descStr, x(2), y + 4, { width: w(2) });
+      let descY = y + 6 + Math.ceil(descHeight);
       if (dateLine) {
         doc.fontSize(7).fillColor('#64748b');
-        doc.text(dateLine, x(2), y + 14, { width: w(2) });
+        doc.text(dateLine, x(2), descY, { width: w(2) });
+        descY += lineH;
       }
       if (mealLine) {
         doc.fontSize(7).fillColor('#64748b');
-        doc.text(mealLine, x(2), y + 22, { width: w(2) });
+        doc.text(mealLine, x(2), descY, { width: w(2) });
       }
-      if (dateLine || mealLine) doc.fontSize(9).fillColor('#334155');
-      doc.text(qtyLabel, x(3), y + (rowH === dataRowH ? 4 : (mealLine ? 12 : 8)), { width: w(3) });
-      doc.text(formatIDR(unitPrice), x(4), y + 2, { width: w(4) });
-      doc.fontSize(7).fillColor('#64748b');
-      doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
       doc.fontSize(9).fillColor('#334155');
-      doc.text(formatIDR(subtotal), x(5), y + 2, { width: w(5) });
+      const qtyY = y + (rowH >= 44 ? 14 : 8);
+      doc.text(qtyLabel, x(3), qtyY, { width: w(3) });
+      doc.text(formatIDR(unitPrice), x(4), y + 4, { width: w(4) });
       doc.fontSize(7).fillColor('#64748b');
-      doc.text(`${formatSAR(subSarUsd.sar)}  |  ${formatUSD(subSarUsd.usd)}`, x(5), y + 14, { width: w(5) });
+      doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 16, { width: w(4) });
+      doc.fontSize(9).fillColor('#334155');
+      doc.text(formatIDR(subtotalVal), x(5), y + 4, { width: w(5) });
+      doc.fontSize(7).fillColor('#64748b');
+      doc.text(`${formatSAR(subSarUsd.sar)}  |  ${formatUSD(subSarUsd.usd)}`, x(5), y + 16, { width: w(5) });
       doc.fontSize(9).fillColor('#334155');
       y += rowH;
     });
   } else {
     const totalSarUsd = idrToSarUsd(totalAmount, rates);
-    doc.rect(margin, y - 4, pageWidth, dataRowH).stroke('#e2e8f0');
-    doc.fontSize(9);
-    doc.text('1', x(0), y + 4, { width: w(0) });
-    doc.text('Paket', x(1), y + 4, { width: w(1) });
-    doc.text('Layanan Umroh', x(2), y + 4, { width: w(2) });
-    doc.text('1', x(3), y + 4, { width: w(3) });
-    doc.text(formatIDR(totalAmount), x(4), y + 2, { width: w(4) });
-    doc.fontSize(7).fillColor('#64748b');
-    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
+    const emptyRowH = dataRowHMin;
+    doc.rect(margin, y - 2, pageWidth, emptyRowH).stroke('#e2e8f0');
     doc.fontSize(9).fillColor('#334155');
-    doc.text(formatIDR(totalAmount), x(5), y + 2, { width: w(5) });
+    doc.text('1', x(0), y + 6, { width: w(0) });
+    doc.text('Paket', x(1), y + 6, { width: w(1) });
+    doc.text('Layanan Umroh', x(2), y + 6, { width: w(2) });
+    doc.text('1', x(3), y + 6, { width: w(3) });
+    doc.text(formatIDR(totalAmount), x(4), y + 4, { width: w(4) });
     doc.fontSize(7).fillColor('#64748b');
-    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(5), y + 14, { width: w(5) });
+    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(4), y + 16, { width: w(4) });
     doc.fontSize(9).fillColor('#334155');
-    y += dataRowH;
+    doc.text(formatIDR(totalAmount), x(5), y + 4, { width: w(5) });
+    doc.fontSize(7).fillColor('#64748b');
+    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(5), y + 16, { width: w(5) });
+    doc.fontSize(9).fillColor('#334155');
+    y += emptyRowH;
   }
   y += 16;
 

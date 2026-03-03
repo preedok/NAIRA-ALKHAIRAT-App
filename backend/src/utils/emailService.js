@@ -168,6 +168,134 @@ async function sendRefundProofToOwner(toEmail, ownerName, amount, invoiceNumber,
   }
 }
 
+/**
+ * Kirim email notifikasi transaksi: invoice baru (lampiran: PDF invoice).
+ * @param {string} toEmail
+ * @param {string} ownerName
+ * @param {string} invoiceNumber
+ * @param {string} orderNumber
+ * @param {Buffer} invoicePdfBuffer - PDF invoice (lampiran)
+ * @param {string} [dueInfo] - Contoh: "Silakan bayar DP dalam 24 jam."
+ */
+async function sendInvoiceCreatedEmail(toEmail, ownerName, invoiceNumber, orderNumber, invoicePdfBuffer, dueInfo = '') {
+  if (!toEmail || !toEmail.trim()) return false;
+  if (!emailConfig.from && !emailConfig.user) return false;
+  const trans = getTransporter();
+  if (!trans) return false;
+  const attachments = [];
+  if (Buffer.isBuffer(invoicePdfBuffer) && invoicePdfBuffer.length > 0) {
+    attachments.push({ filename: `invoice-${(invoiceNumber || 'inv').replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`, content: invoicePdfBuffer });
+  }
+  const subject = `Invoice ${invoiceNumber || ''} – Order ${orderNumber || ''} | Bintang Global Group`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;line-height:1.6;color:#334155;max-width:560px;margin:0 auto;padding:24px;} .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin:16px 0;} .label{font-size:12px;color:#64748b;} .value{font-size:16px;font-weight:600;color:#0f172a;} h1{font-size:20px;color:#0f172a;} p{color:#475569;} .footer{font-size:12px;color:#94a3b8;margin-top:24px;}</style></head>
+<body>
+  <h1>Invoice Baru</h1>
+  <p>Halo <strong>${escapeHtml(ownerName || 'Pemesan')}</strong>,</p>
+  <p>Invoice <strong>${escapeHtml(invoiceNumber || '')}</strong> untuk order <strong>${escapeHtml(orderNumber || '')}</strong> telah dibuat.</p>
+  <div class="box"><p class="label">Lampiran</p><p class="value">Invoice PDF terlampir.</p></div>
+  ${dueInfo ? `<p>${escapeHtml(dueInfo)}</p>` : ''}
+  <p class="footer">Email ini dikirim otomatis oleh sistem Bintang Global Group.</p>
+</body>
+</html>`;
+  const text = `Invoice Baru\n\nHalo ${ownerName || 'Pemesan'},\n\nInvoice ${invoiceNumber || ''} untuk order ${orderNumber || ''} telah dibuat. Invoice PDF terlampir.\n${dueInfo ? dueInfo + '\n' : ''}\n— Bintang Global Group`;
+  return sendMail(toEmail, subject, text, html, attachments);
+}
+
+/**
+ * Kirim email notifikasi: DP diterima / Invoice lunas (lampiran: bukti bayar + opsional invoice PDF).
+ */
+async function sendPaymentReceivedEmail(toEmail, ownerName, invoiceNumber, amount, isLunas, paymentProofPath, invoicePdfBuffer) {
+  if (!toEmail || !toEmail.trim()) return false;
+  if (!emailConfig.from && !emailConfig.user) return false;
+  const trans = getTransporter();
+  if (!trans) return false;
+  const attachments = [];
+  if (paymentProofPath && fs.existsSync(paymentProofPath)) {
+    attachments.push({ filename: path.basename(paymentProofPath), content: fs.createReadStream(paymentProofPath) });
+  }
+  if (Buffer.isBuffer(invoicePdfBuffer) && invoicePdfBuffer.length > 0) {
+    attachments.push({ filename: `invoice-${(invoiceNumber || 'inv').replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`, content: invoicePdfBuffer });
+  }
+  const amountStr = Number(amount || 0).toLocaleString('id-ID');
+  const title = isLunas ? 'Invoice Lunas' : 'DP Diterima';
+  const subject = `${title} – Invoice ${invoiceNumber || ''} | Bintang Global Group`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;line-height:1.6;color:#334155;max-width:560px;margin:0 auto;padding:24px;} .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin:16px 0;} .label{font-size:12px;color:#64748b;} .value{font-size:16px;font-weight:600;color:#0f172a;} h1{font-size:20px;color:#0f172a;} p{color:#475569;} .footer{font-size:12px;color:#94a3b8;margin-top:24px;}</style></head>
+<body>
+  <h1>${title}</h1>
+  <p>Halo <strong>${escapeHtml(ownerName || 'Pemesan')}</strong>,</p>
+  <p>Pembayaran untuk invoice <strong>${escapeHtml(invoiceNumber || '')}</strong> telah dicatat dan diverifikasi.</p>
+  <div class="box"><p class="label">Jumlah</p><p class="value">Rp ${amountStr}</p></div>
+  <p>${attachments.length ? 'Bukti pembayaran dan invoice PDF terlampir.' : 'Detail dapat dilihat di aplikasi.'}</p>
+  <p class="footer">Email ini dikirim otomatis oleh sistem Bintang Global Group.</p>
+</body>
+</html>`;
+  const text = `${title}\n\nHalo ${ownerName || 'Pemesan'},\n\nPembayaran untuk invoice ${invoiceNumber || ''} telah diverifikasi. Jumlah: Rp ${amountStr}.\n\n— Bintang Global Group`;
+  return sendMail(toEmail, subject, text, html, attachments);
+}
+
+/**
+ * Kirim email notifikasi: trip selesai / hasil order.
+ */
+async function sendOrderResultEmail(toEmail, ownerName, orderNumber, message) {
+  if (!toEmail || !toEmail.trim()) return false;
+  if (!emailConfig.from && !emailConfig.user) return false;
+  const trans = getTransporter();
+  if (!trans) return false;
+  const subject = `Trip Selesai – Order ${orderNumber || ''} | Bintang Global Group`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;line-height:1.6;color:#334155;max-width:560px;margin:0 auto;padding:24px;} .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin:16px 0;} h1{font-size:20px;color:#0f172a;} p{color:#475569;} .footer{font-size:12px;color:#94a3b8;margin-top:24px;}</style></head>
+<body>
+  <h1>Trip Selesai</h1>
+  <p>Halo <strong>${escapeHtml(ownerName || 'Pemesan')}</strong>,</p>
+  <p>${escapeHtml(message || `Order ${orderNumber || ''} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`)}</p>
+  <p class="footer">Email ini dikirim otomatis oleh sistem Bintang Global Group.</p>
+</body>
+</html>`;
+  const text = `Trip Selesai\n\nHalo ${ownerName || 'Pemesan'},\n\n${message || `Order ${orderNumber || ''} telah selesai.`}\n\n— Bintang Global Group`;
+  return sendMail(toEmail, subject, text, html, []);
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function sendMail(toEmail, subject, text, html, attachments) {
+  const fromAddr = emailConfig.from || emailConfig.user;
+  if (!fromAddr) return false;
+  try {
+    const trans = getTransporter();
+    await trans.sendMail({
+      from: `"${(emailConfig.fromName || 'Bintang Global').replace(/"/g, '')}" <${fromAddr}>`,
+      to: toEmail.trim(),
+      subject,
+      text,
+      html,
+      attachments: attachments || []
+    });
+    logger.info('Email notifikasi terkirim ke ' + toEmail);
+    return true;
+  } catch (err) {
+    logger.error('Gagal kirim email notifikasi ke ' + toEmail + ': ' + (err.message || String(err)));
+    return false;
+  }
+}
+
 /** Alias for owner terminology */
 const sendMouToOwner = sendMouToTravel;
-module.exports = { sendMouToTravel, sendMouToOwner, getTransporter, sendRefundProofToOwner };
+module.exports = {
+  sendMouToTravel,
+  sendMouToOwner,
+  getTransporter,
+  sendRefundProofToOwner,
+  sendInvoiceCreatedEmail,
+  sendPaymentReceivedEmail,
+  sendOrderResultEmail
+};
