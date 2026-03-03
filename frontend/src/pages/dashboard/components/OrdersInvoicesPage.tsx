@@ -946,9 +946,15 @@ const OrdersInvoicesPage: React.FC = () => {
   const isHotelOrBus = user?.role === 'role_hotel' || user?.role === 'role_bus';
   const isKoordinator = ['invoice_koordinator', 'visa_koordinator', 'tiket_koordinator'].includes(user?.role || '');
   const scopeHint = isHotelOrBus ? ' Data: semua wilayah.' : isKoordinator ? ' Data: wilayah Anda.' : '';
-  // Role hotel/bus/handling/tiket_koordinator/visa_koordinator: card statistik & Per Status hanya tampil jika sudah ada pembayaran DP (data invoice muncul di table)
-  const divisiRolesHideStatsWhenEmpty = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
-  const showInvoiceStatCards = !divisiRolesHideStatsWhenEmpty.includes(user?.role || '') || (s.total_invoices > 0 || s.total_orders > 0);
+  // Card statistik & Per Status selalu tampil untuk semua role (termasuk tiket, handling, bus, visa, hotel) meskipun belum ada data
+  const showInvoiceStatCards = true;
+  // Tombol Pemindahan Dana hanya tampil jika ada invoice yang dibatalkan dan sudah ada pembayaran (paid_amount > 0)
+  const hasCancelledInvoiceWithPayment = invoices.some((inv: any) => {
+    const st = (inv.status || '').toLowerCase();
+    const paid = parseFloat(inv.paid_amount || 0);
+    return (st === 'canceled' || st === 'cancelled') && paid > 0;
+  });
+  const showReallocateButton = canReallocate && hasCancelledInvoiceWithPayment;
   const invoiceSubtitle = `Daftar invoice. Buka untuk detail, pembayaran, dan update status produk (Visa, Tiket, Hotel, Bus).${scopeHint}`;
 
   return (
@@ -1075,7 +1081,7 @@ const OrdersInvoicesPage: React.FC = () => {
           />
       </PageFilter>
 
-      {/* Summary cards & Per Status: untuk role hotel/bus/handling hanya tampil jika sudah ada pembayaran DP */}
+      {/* Summary cards & Per Status: tampil untuk semua role termasuk saat belum ada data */}
       {showInvoiceStatCards && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -1161,7 +1167,7 @@ const OrdersInvoicesPage: React.FC = () => {
           className="mb-5 px-1"
           right={
             <div className="flex items-center gap-2 shrink-0">
-              {canReallocate && (
+              {showReallocateButton && (
                 <Button variant="outline" size="sm" onClick={() => {
                   setShowReallocateModal(true);
                   setReallocateRows([{ source_invoice_id: '', target_invoice_id: '', amount: '' }]);
