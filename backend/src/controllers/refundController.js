@@ -1,9 +1,27 @@
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory } = require('../models');
 const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS } = require('../constants');
+const uploadConfig = require('../config/uploads');
+const { sendRefundProofToOwner } = require('../utils/emailService');
 
 const REFUND_STATUS_LABELS = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
+
+const refundProofDir = uploadConfig.getDir(uploadConfig.SUBDIRS.REFUND_PROOFS);
+const MIME_BY_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf' };
+const refundProofStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, refundProofDir),
+  filename: (req, file, cb) => {
+    const { dateTimeForFilename, safeExt } = uploadConfig;
+    const { date, time } = dateTimeForFilename();
+    const ext = safeExt(file.originalname);
+    cb(null, `REFUND_${(req.params.id || '').slice(-6)}_${date}_${time}${ext}`);
+  }
+});
+const refundProofUpload = multer({ storage: refundProofStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta }) {
   try {
@@ -266,4 +284,101 @@ const updateStatus = asyncHandler(async (req, res) => {
   res.json({ success: true, data: updated, message: `Status refund diubah menjadi ${REFUND_STATUS_LABELS[status] || status}` });
 });
 
-module.exports = { getStats, list, getById, updateStatus, createFromBalance };
+/**
+ * POST /api/v1/refunds/:id/upload-proof
+ * Role accounting: upload bukti bayar refund. Setelah upload, bukti dikirim ke email pemesan (owner).
+ */
+const uploadProof = [
+  refundProofUpload.single('proof_file'),
+  asyncHandler(async (req, res) => {
+    const allowed = ['admin_pusat', 'super_admin', 'role_accounting'].includes(req.user.role);
+    if (!allowed) return res.status(403).json({ success: false, message: 'Hanya admin pusat dan accounting yang dapat upload bukti refund' });
+
+    const r = await Refund.findByPk(req.params.id, {
+      include: [
+        { model: User, as: 'Owner', attributes: ['id', 'name', 'email'], required: false },
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false }
+      ]
+    });
+    if (!r) return res.status(404).json({ success: false, message: 'Refund tidak ditemukan' });
+    if (!req.file || !req.file.path) return res.status(400).json({ success: false, message: 'File bukti refund wajib' });
+
+    const finalName = uploadConfig.refundProofFilename(r.id, r.Invoice?.invoice_number, req.file.originalname);
+    const oldPath = req.file.path;
+    const newPath = path.join(refundProofDir, finalName);
+    try { fs.renameSync(oldPath, newPath); } catch (e) { /* keep temp name */ }
+    const savedName = fs.existsSync(newPath) ? finalName : path.basename(oldPath);
+    const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.REFUND_PROOFS, savedName);
+
+    const wasRefunded = r.status === REFUND_STATUS.REFUNDED;
+    await r.update({
+      proof_file_url: fileUrl,
+      ...(wasRefunded ? {} : { status: REFUND_STATUS.REFUNDED, refunded_at: new Date(), approved_by: req.user.id, approved_at: new Date() })
+    });
+
+    if (r.invoice_id) {
+      const inv = await Invoice.findByPk(r.invoice_id);
+      if (inv && !wasRefunded) {
+        await logInvoiceStatusChange({
+          invoice_id: inv.id,
+          from_status: inv.status,
+          to_status: INVOICE_STATUS.REFUNDED,
+          changed_by: req.user.id,
+          reason: 'refund_refunded',
+          meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 }
+        });
+        await inv.update({ status: INVOICE_STATUS.REFUNDED });
+      }
+    }
+
+    const ownerEmail = r.Owner?.email || null;
+    const proofPath = fs.existsSync(newPath) ? newPath : oldPath;
+    if (ownerEmail) {
+      await sendRefundProofToOwner(
+        ownerEmail,
+        r.Owner?.name || 'Pemesan',
+        parseFloat(r.amount) || 0,
+        r.Invoice?.invoice_number || '',
+        proofPath
+      );
+    }
+
+    const updated = await Refund.findByPk(r.id, {
+      include: [
+        { model: User, as: 'Owner', attributes: ['id', 'name', 'email'], required: false },
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false }
+      ]
+    });
+    res.json({
+      success: true,
+      data: updated,
+      message: 'Bukti refund berhasil diupload.' + (ownerEmail ? ' Email bukti refund telah dikirim ke pemesan.' : '')
+    });
+  })
+];
+
+/**
+ * GET /api/v1/refunds/:id/proof/file
+ * Stream file bukti refund (owner & accounting bisa akses).
+ */
+const getProofFile = asyncHandler(async (req, res) => {
+  const r = await Refund.findByPk(req.params.id, { attributes: ['id', 'proof_file_url', 'owner_id'] });
+  if (!r || !r.proof_file_url) return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
+  const canAccess = req.user.role === 'owner' ? r.owner_id === req.user.id : ['admin_pusat', 'super_admin', 'role_accounting', 'invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
+  if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
+
+  const urlNorm = (r.proof_file_url || '').replace(/\\/g, '/').trim();
+  const match = urlNorm.match(/refund-proofs\/?(.+)$/i);
+  const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : null;
+  if (!filename) return res.status(404).json({ success: false, message: 'Path tidak valid' });
+  const filePath = path.join(refundProofDir, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada di server' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+module.exports = { getStats, list, getById, updateStatus, createFromBalance, uploadProof, getProofFile };

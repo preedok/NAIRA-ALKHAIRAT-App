@@ -8,7 +8,7 @@ const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { generateMouPdf } = require('../utils/mouPdf');
 const { sendMouToOwner } = require('../utils/emailService');
 
-const KOORDINATOR_ROLES = [ROLES.ADMIN_KOORDINATOR, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
+const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
 function isKoordinatorRole(role) {
   return KOORDINATOR_ROLES.includes(role);
 }

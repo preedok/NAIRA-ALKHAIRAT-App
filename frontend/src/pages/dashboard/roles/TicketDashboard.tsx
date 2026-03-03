@@ -59,14 +59,6 @@ const TicketDashboard: React.FC = () => {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
-
   const byStatus = data?.by_status || {};
   const totalInvoices = data?.total_invoices ?? 0;
   const totalItems = data?.total_ticket_items ?? 0;
@@ -75,7 +67,7 @@ const TicketDashboard: React.FC = () => {
   const completionPct = totalItems > 0 ? Math.round((ticketIssued / totalItems) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div className="flex items-start gap-4">
@@ -115,7 +107,7 @@ const TicketDashboard: React.FC = () => {
 
       {/* Progress & Perlu Tindakan */}
       {totalItems > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
             <p className="text-sm font-semibold text-slate-700 mb-4">Progress Penerbitan</p>
             <div className="flex items-center gap-4">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Receipt, Users, FileText, Hotel, Plane, Bus, RefreshCw, Settings } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -23,6 +24,7 @@ const OWNER_STATUS_LABELS: Record<string, string> = {
 };
 
 const KoordinatorDashboard: React.FC = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [data, setData] = useState<any>(null);
@@ -45,14 +47,6 @@ const KoordinatorDashboard: React.FC = () => {
     fetchDashboard();
   }, []);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
-
   const d = data || {};
   const orders = d.orders || {};
   const owners = d.owners || {};
@@ -63,7 +57,7 @@ const KoordinatorDashboard: React.FC = () => {
   const recapBus = d.recap_bus || {};
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Dashboard Koordinator Wilayah"
         subtitle="Rekapitulasi wilayah Anda: order, owner, dan pekerjaan. Hanya data wilayah Anda."

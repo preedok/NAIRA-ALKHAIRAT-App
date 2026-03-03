@@ -18,13 +18,14 @@ const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, IN
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
-/** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, tiket_koordinator = cabang/wilayah. Jika belum terikat, fallback semua cabang agar tidak 403. */
+const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
+/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, tiket_koordinator = cabang/wilayah. Jika belum terikat, fallback semua cabang agar tidak 403. */
 async function getTicketBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
     const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
     return branches.map(b => b.id);
   }
-  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+  if (KOORDINATOR_ROLES.includes(user.role) && user.wilayah_id) {
     const ids = await getBranchIdsForWilayah(user.wilayah_id);
     if (ids.length > 0) return ids;
   }

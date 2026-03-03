@@ -4,7 +4,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import { FilterIconButton } from '../../../components/common';
 import HotelsPage from './HotelsPage';
 import HotelCalendarView from './HotelCalendarView';
 import type { HotelProduct } from './HotelsPage';
@@ -23,8 +22,6 @@ const ProductHotelPage: React.FC = () => {
   const [hotelsLoading, setHotelsLoading] = useState(true);
   const [openSeasonsForHotelId, setOpenSeasonsForHotelId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filterActive, setFilterActive] = useState(false);
 
   const canAddRoom = user?.role === 'super_admin' || user?.role === 'admin_pusat';
 
@@ -68,18 +65,7 @@ const ProductHotelPage: React.FC = () => {
       <PageHeader
         title="Hotel"
         subtitle="Harga & ketersediaan dikelola Admin Pusat"
-        right={
-          <div className="flex items-center gap-2">
-            <AutoRefreshControl onRefresh={handleRefresh} disabled={hotelsLoading} />
-            {activeTab === 'list' && (
-              <FilterIconButton
-                open={filterOpen}
-                onToggle={() => setFilterOpen((v) => !v)}
-                hasActiveFilters={filterActive}
-              />
-            )}
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={handleRefresh} disabled={hotelsLoading} />}
       />
 
       <nav
@@ -109,9 +95,6 @@ const ProductHotelPage: React.FC = () => {
             embedInProducts
             openSeasonsForHotelId={openSeasonsForHotelId}
             refreshTrigger={refreshTrigger}
-            embedFilterOpen={filterOpen}
-            embedFilterOnToggle={() => setFilterOpen((v) => !v)}
-            onFilterActiveChange={setFilterActive}
           />
         )}
         {activeTab === 'calendar' && (

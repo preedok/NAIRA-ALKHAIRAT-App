@@ -47,10 +47,12 @@ function fillTriple(sourceCurrency, value, rates) {
  * Untuk produk tiket: jika meta.bandara diisi, cari harga general dengan meta.bandara yang sama.
  */
 async function getEffectivePrice(productId, branchId, ownerId, meta = {}, currency = 'IDR') {
-  if (meta.trip_type && BUS_TRIP_TYPES.includes(meta.trip_type)) {
+  const maybeBus = meta.trip_type != null || meta.travel_date != null || meta.route_type != null || meta.bus_type != null;
+  if (maybeBus) {
     const product = await Product.findByPk(productId, { attributes: ['id', 'type', 'meta'] });
     if (product && product.type === 'bus' && product.meta && product.meta.route_prices_by_trip) {
-      const price = product.meta.route_prices_by_trip[meta.trip_type];
+      const tripType = (meta.trip_type && BUS_TRIP_TYPES.includes(meta.trip_type)) ? meta.trip_type : 'round_trip';
+      const price = product.meta.route_prices_by_trip[tripType];
       if (typeof price === 'number' && price >= 0) return price;
     }
   }
@@ -129,11 +131,15 @@ const PRODUCT_ALLOWED_SORT = ['code', 'name', 'type', 'is_active', 'created_at']
  * List products (with optional prices for branch/owner). For invoice: show general + branch prices.
  */
 const list = asyncHandler(async (req, res) => {
-  const { type, branch_id, owner_id, with_prices, is_package, include_inactive, limit = 25, page = 1, sort_by, sort_order } = req.query;
+  const { type, branch_id, owner_id, with_prices, is_package, include_inactive, limit = 25, page = 1, sort_by, sort_order, name } = req.query;
   const where = {};
   if (include_inactive !== 'true' && include_inactive !== '1') where.is_active = true;
   if (type) where.type = type;
   if (is_package === 'true' || is_package === '1') where.is_package = true;
+  if (name != null && String(name).trim() !== '') {
+    const term = String(name).trim().replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    where.name = { [Op.iLike]: `%${term}%` };
+  }
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
@@ -179,7 +185,7 @@ const list = asyncHandler(async (req, res) => {
         price_general: general ? parseFloat(general.amount) : null,
         price_branch: branch ? parseFloat(branch.amount) : null,
         price_special: special ? parseFloat(special.amount) : null,
-        currency: general?.currency || branch?.currency || 'IDR',
+        currency: (p.meta && typeof p.meta === 'object' && p.meta.currency) ? p.meta.currency : (general?.currency || branch?.currency || 'IDR'),
         price_general_idr: price_general_idr ?? null,
         price_general_sar: price_general_sar ?? null,
         price_general_usd: price_general_usd ?? null
@@ -264,6 +270,7 @@ const list = asyncHandler(async (req, res) => {
       return base;
     });
     const totalPages = Math.ceil(count / lim) || 1;
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.json({
       success: true,
       data: result,
@@ -272,6 +279,7 @@ const list = asyncHandler(async (req, res) => {
   }
 
   const totalPages = Math.ceil(count / lim) || 1;
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.json({
     success: true,
     data: products,
@@ -345,7 +353,7 @@ async function generateVisaCode(visaKind) {
  * Body: name, description?, visa_kind, require_hotel? (boolean, default false)
  */
 const createVisa = asyncHandler(async (req, res) => {
-  const { name, description, visa_kind, require_hotel, default_quota } = req.body;
+  const { name, description, visa_kind, require_hotel, default_quota, currency } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
   const kind = (visa_kind && VISA_KIND_VALUES.includes(visa_kind)) ? visa_kind : VISA_KIND.ONLY;
   const code = await generateVisaCode(kind);
@@ -354,6 +362,7 @@ const createVisa = asyncHandler(async (req, res) => {
     ? Math.round(default_quota)
     : (parseInt(default_quota, 10) >= 0 ? parseInt(default_quota, 10) : null);
   if (quotaNum != null) meta.default_quota = quotaNum;
+  if (currency && ['IDR', 'SAR', 'USD'].includes(String(currency).toUpperCase())) meta.currency = String(currency).toUpperCase();
   const product = await Product.create({
     type: 'visa',
     code,
@@ -423,12 +432,16 @@ const BUS_KIND_VALUES = ['bus', 'hiace'];
  *   - bus: route_prices_by_trip? { one_way?, return_only?, round_trip? } satu harga per tipe (IDR)
  *   - hiace: price_per_vehicle_idr? (harga per mobil)
  */
+const PRICE_CURRENCY_VALUES = ['IDR', 'SAR', 'USD'];
 const createBus = asyncHandler(async (req, res) => {
-  const { name, description, bus_kind, route_prices_by_trip, price_per_vehicle_idr, default_quota } = req.body;
+  const { name, description, bus_kind, route_prices_by_trip, price_per_vehicle_idr, default_quota, trip_type, price_currency } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
   const kind = (bus_kind && BUS_KIND_VALUES.includes(bus_kind)) ? bus_kind : 'bus';
   const code = await generateBusCode();
   const meta = { bus_kind: kind };
+  if (price_currency && PRICE_CURRENCY_VALUES.includes(String(price_currency).toUpperCase())) {
+    meta.price_currency = String(price_currency).toUpperCase();
+  }
 
   const quotaNum = typeof default_quota === 'number' && !Number.isNaN(default_quota) && default_quota >= 0
     ? Math.round(default_quota)
@@ -436,6 +449,7 @@ const createBus = asyncHandler(async (req, res) => {
   if (quotaNum != null) meta.default_quota = quotaNum;
 
   if (kind === 'bus') {
+    if (trip_type && BUS_TRIP_TYPES.includes(trip_type)) meta.trip_type = trip_type;
     if (route_prices_by_trip && typeof route_prices_by_trip === 'object') {
       meta.route_prices_by_trip = {};
       BUS_TRIP_TYPES.forEach(tt => {
@@ -444,6 +458,7 @@ const createBus = asyncHandler(async (req, res) => {
       });
     }
   } else {
+    if (trip_type && BUS_TRIP_TYPES.includes(trip_type)) meta.trip_type = trip_type;
     const v = typeof price_per_vehicle_idr === 'number' && !Number.isNaN(price_per_vehicle_idr)
       ? Math.max(0, price_per_vehicle_idr)
       : (parseFloat(price_per_vehicle_idr) || 0);
@@ -658,6 +673,9 @@ const update = asyncHandler(async (req, res) => {
       if (nextMeta.hasOwnProperty('default_quota')) {
         if (nextMeta.default_quota === null || nextMeta.default_quota === '') delete nextMeta.default_quota;
         else { const q = parseInt(nextMeta.default_quota, 10); nextMeta.default_quota = (Number.isNaN(q) || q < 0) ? 0 : Math.round(q); }
+      }
+      if (nextMeta.price_currency && PRICE_CURRENCY_VALUES.includes(String(nextMeta.price_currency).toUpperCase())) {
+        nextMeta.price_currency = String(nextMeta.price_currency).toUpperCase();
       }
     }
     product.meta = nextMeta;

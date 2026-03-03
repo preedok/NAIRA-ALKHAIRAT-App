@@ -30,14 +30,6 @@ const BusDashboard: React.FC = () => {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
-
   const totalOrders = data?.total_orders ?? 0;
   const totalItems = data?.total_bus_items ?? 0;
   const ticketPending = data?.bus_ticket?.pending ?? 0;
@@ -49,7 +41,7 @@ const BusDashboard: React.FC = () => {
   const completionPct = totalItems > 0 ? Math.round(((totalItems - pendingList.length) / totalItems) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-violet-100 rounded-2xl shadow-sm shrink-0">
@@ -83,7 +75,7 @@ const BusDashboard: React.FC = () => {
       </div>
 
       {totalItems > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card className="p-6 rounded-2xl border border-slate-200/80 shadow-sm bg-white">
             <p className="text-sm font-semibold text-slate-700 mb-4">Progress Pekerjaan</p>
             <div className="flex items-center gap-4">

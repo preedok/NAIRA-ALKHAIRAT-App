@@ -4,6 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { authApi, ownersApi, type OwnerProfile } from '../../../services/api';
 import { API_BASE_URL } from '../../../utils/constants';
+import { CONTENT_LOADING_MESSAGE } from '../../../components/common';
 
 const UPLOAD_BASE = (API_BASE_URL || '').replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -179,7 +180,7 @@ const ProfilePage: React.FC = () => {
             {ownerLoading ? (
               <div style={styles.mouLoading}>
                 <div style={styles.spinner} />
-                <p style={{ color: '#94a3b8', fontSize: 14 }}>Memuat dokumen...</p>
+                <p style={{ color: '#94a3b8', fontSize: 14 }}>{CONTENT_LOADING_MESSAGE}</p>
               </div>
             ) : mouUrl ? (
               <div>

@@ -10,11 +10,11 @@ import type { ReactNode } from 'react';
 export type UserRole = 
   | 'super_admin'
   | 'admin_pusat'
-  | 'admin_koordinator'
   | 'invoice_koordinator'
   | 'tiket_koordinator'
   | 'visa_koordinator'
-  | 'role_invoice_saudi'
+  | 'invoice_saudi'
+  | 'handling'
   | 'admin_cabang'
   | 'owner'
   | 'role_hotel'
@@ -67,11 +67,11 @@ export const OWNER_STATUS_LABELS: Record<OwnerStatus, string> = {
 export const ROLE_NAMES: Record<UserRole, string> = {
   super_admin: 'Super Admin',
   admin_pusat: 'Admin Pusat',
-  admin_koordinator: 'Admin Koordinator',
   invoice_koordinator: 'Invoice Koordinator',
   tiket_koordinator: 'Tiket Koordinator',
   visa_koordinator: 'Visa Koordinator',
-  role_invoice_saudi: 'Invoice Saudi',
+  invoice_saudi: 'Invoice Saudi',
+  handling: 'Handling',
   admin_cabang: 'Admin Cabang',
   owner: 'Owner',
   role_hotel: 'Hotel',
@@ -79,7 +79,7 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   role_accounting: 'Accounting'
 };
 
-export const KOORDINATOR_ROLES: UserRole[] = ['admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
+export const KOORDINATOR_ROLES: UserRole[] = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
 export function isKoordinatorRole(role: UserRole): boolean {
   return KOORDINATOR_ROLES.includes(role);
 }

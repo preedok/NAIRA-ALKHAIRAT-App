@@ -162,7 +162,7 @@ export const ModalBoxLg: React.FC<ModalBoxProps> = ({ children, className = '' }
 
 /** ModalBoxXl: untuk daftar/dashboard full (order list, invoice list) */
 export const ModalBoxXl: React.FC<ModalBoxProps> = ({ children, className = '' }) => (
-  <div className={`${MODAL_BOX_BASE} max-w-8xl ${className}`}>
+  <div className={`${MODAL_BOX_BASE} max-w-6xl ${className}`}>
     {children}
   </div>
 );

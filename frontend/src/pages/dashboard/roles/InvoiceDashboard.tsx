@@ -21,6 +21,7 @@ import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import ContentLoading from '../../../components/common/ContentLoading';
 import Table from '../../../components/common/Table';
 import { formatIDR } from '../../../utils';
 import type { TableColumn } from '../../../types';
@@ -119,22 +120,14 @@ const InvoiceDashboard: React.FC = () => {
     navigate(`/dashboard/orders-invoices?tab=invoices&invoice_id=${inv.id}`);
   };
 
-  if (loading && invoices.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
+  const scopeLabel = user?.role === 'invoice_saudi' ? 'Semua wilayah' : 'Cabang Anda';
 
-  const scopeLabel = user?.role === 'role_invoice_saudi' ? 'Semua wilayah' : 'Cabang Anda';
-
-  const invoiceSubtitle = user?.role === 'role_invoice_saudi'
-    ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD otomatis update invoice.'
+  const invoiceSubtitle = user?.role === 'invoice_saudi'
+    ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD/IDR + upload bukti bayar; sistem update sisa tagihan otomatis.'
     : `Rekapitulasi pekerjaan invoice ${scopeLabel.toLowerCase()}.`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Invoice Dashboard"
         subtitle={invoiceSubtitle}
@@ -191,7 +184,10 @@ const InvoiceDashboard: React.FC = () => {
             className="mb-0"
           />
         </div>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
         <Table
           columns={invoiceTableColumns}
           data={pagedInvoices}
@@ -239,6 +235,7 @@ const InvoiceDashboard: React.FC = () => {
             );
           }}
         />
+          )}
         </div>
         {invoices.length > 0 && (
           <div className="p-3 border-t border-slate-100 flex justify-end">

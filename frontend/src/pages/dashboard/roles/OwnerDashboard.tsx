@@ -16,6 +16,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import ContentLoading from '../../../components/common/ContentLoading';
 import { formatIDR } from '../../../utils';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
@@ -118,7 +119,7 @@ const OwnerDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-8 w-full">
       {/* Notifikasi: Akun telah diaktivasi, MoU tersedia */}
       {ownerProfile?.mou_generated_url && (
         <Card className="bg-primary-50 border-primary-200">
@@ -227,7 +228,7 @@ const OwnerDashboard: React.FC = () => {
         </div>
       </Card>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-8">
         {/* Paket - CTA */}
         <div className="lg:col-span-2">
           <Card className="travel-card">
@@ -258,7 +259,7 @@ const OwnerDashboard: React.FC = () => {
         <CardSectionHeader icon={<Receipt className="w-6 h-6" />} title="Invoice Saya" subtitle="Daftar invoice Anda. Buat pesanan untuk membuat invoice." right={<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Lihat Semua</Button>} className="mb-4" />
         <div className="space-y-4">
           {loading ? (
-            <p className="text-stone-500 py-4">Memuat...</p>
+            <ContentLoading minHeight={120} />
           ) : recentInvoices.length === 0 ? (
             <p className="text-stone-500 py-4">Belum ada invoice. Buat pesanan untuk membuat invoice.</p>
           ) : (
@@ -285,7 +286,7 @@ const OwnerDashboard: React.FC = () => {
       </Card>
 
       {/* Pembayaran Tertunda & Keberangkatan */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-8">
         <Card className="travel-card">
           <CardSectionHeader icon={<Receipt className="w-6 h-6" />} title="Pembayaran Tertunda" subtitle="Invoice yang belum lunas. Upload bukti bayar sebelum jatuh tempo." right={<Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>Semua</Button>} className="mb-4" />
           <div className="space-y-4">

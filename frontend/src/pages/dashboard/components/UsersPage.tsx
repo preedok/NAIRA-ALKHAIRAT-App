@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, Copy } from 'lucide-react';
+import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, Copy, Power, PowerOff } from 'lucide-react';
 import { ROLE_NAMES, TableColumn, OWNER_STATUS_LABELS } from '../../../types';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -12,13 +12,13 @@ import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import ContentLoading from '../../../components/common/ContentLoading';
 import Input from '../../../components/common/Input';
-import Checkbox from '../../../components/common/Checkbox';
 import Autocomplete from '../../../components/common/Autocomplete';
-import { adminPusatApi, branchesApi, ownersApi, UserListItem } from '../../../services/api';
+import { adminPusatApi, branchesApi, ownersApi, UserListItem, type KabupatenForOwnerItem } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
-import { API_BASE_URL } from '../../../utils/constants';
+import { API_BASE_URL, AUTOCOMPLETE_FILTER, AUTOCOMPLETE_PILIH } from '../../../utils/constants';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 const roleLabel = (role: string): string =>
@@ -57,7 +57,13 @@ const UsersPage: React.FC = () => {
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
 
   const [editUser, setEditUser] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState<{ name: string; email: string; phone: string; company_name: string; is_active: boolean; password: string }>({ name: '', email: '', phone: '', company_name: '', is_active: true, password: '' });
+  const [editForm, setEditForm] = useState<{
+    name: string; email: string; phone: string; company_name: string; is_active: boolean; password: string;
+    role: string; region: string; provinsi_id: string; kabupaten_kode: string; kabupaten_nama: string;
+  }>({
+    name: '', email: '', phone: '', company_name: '', is_active: true, password: '',
+    role: 'role_bus', region: '', provinsi_id: '', kabupaten_kode: '', kabupaten_nama: ''
+  });
   const [editActivationPassword, setEditActivationPassword] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserListItem | null>(null);
@@ -68,6 +74,28 @@ const UsersPage: React.FC = () => {
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
   const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
 
+  /** Modal Tambah User: owner (kabupaten→provinsi&wilayah), koordinator (pilih wilayah), pusat/bus/hotel/accounting (tanpa wilayah) */
+  const [addUserModalOpen, setAddUserModalOpen] = useState(false);
+  const [addUserForm, setAddUserForm] = useState<{
+    name: string; email: string; password: string; role: string; region: string;
+    provinsi_id: string; kabupaten_kode: string; kabupaten_nama: string;
+  }>({
+    name: '',
+    email: '',
+    password: '',
+    role: 'role_bus',
+    region: '',
+    provinsi_id: '',
+    kabupaten_kode: '',
+    kabupaten_nama: ''
+  });
+  const [addUserSaving, setAddUserSaving] = useState(false);
+  const [addUserProvinces, setAddUserProvinces] = useState<{ id: string; name: string }[]>([]);
+  /** Semua kabupaten dengan provinsi & wilayah untuk dropdown owner (pilih kabupaten → auto provinsi & wilayah) */
+  const [kabupatenForOwner, setKabupatenForOwner] = useState<KabupatenForOwnerItem[]>([]);
+  /** Legacy: reset when opening modal (owner now uses kabupatenForOwner) */
+  const [, setAddUserKabupaten] = useState<{ id: string; kode: string; nama: string }[]>([]);
+
   const canListUsers =
     currentUser?.role === 'super_admin' || currentUser?.role === 'admin_pusat';
 
@@ -75,14 +103,23 @@ const UsersPage: React.FC = () => {
     branchesApi.listWilayah().then((res) => {
       if (res.data?.data) setWilayahList(res.data.data);
     }).catch(() => {});
-    branchesApi.listProvinces().then((res) => {
-      if (res.data?.data) setProvincesList(Array.isArray(res.data.data) ? (res.data.data as { id: string; name: string; wilayah_id?: string }[]).map((p: any) => ({ id: p.id, name: p.name || p.nama, wilayah_id: p.wilayah_id })) : []);
-    }).catch(() => {});
   }, []);
 
-  const provincesFiltered = wilayahId
-    ? provincesList.filter((p) => p.wilayah_id === wilayahId)
-    : provincesList;
+  useEffect(() => {
+    const params = wilayahId && String(wilayahId).trim() !== '' ? { wilayah_id: wilayahId } : undefined;
+    branchesApi.listProvinces(params).then((res) => {
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        const list = (res.data.data as { id: string; name?: string; nama?: string; wilayah_id?: string }[]).map((p: any) => ({
+          id: p.id,
+          name: p.name || p.nama || '',
+          wilayah_id: p.wilayah_id
+        }));
+        setProvincesList(list);
+      } else setProvincesList([]);
+    }).catch(() => setProvincesList([]));
+  }, [wilayahId]);
+
+  const provincesFiltered = provincesList;
 
   useEffect(() => {
     const params: { limit: number; page: number; provinsi_id?: string; wilayah_id?: string } = { limit: 500, page: 1 };
@@ -93,44 +130,202 @@ const UsersPage: React.FC = () => {
     }).catch(() => {});
   }, [wilayahId, provinsiId]);
 
+  useEffect(() => {
+    if (addUserModalOpen) {
+      branchesApi.listProvinces().then((res) => {
+        if (res.data?.data && Array.isArray(res.data.data)) {
+          const list = (res.data.data as { id: string; name?: string; nama?: string }[]).map((p: any) => ({
+            id: p.id,
+            name: p.name || p.nama || ''
+          }));
+          setAddUserProvinces(list);
+        } else setAddUserProvinces([]);
+      }).catch(() => setAddUserProvinces([]));
+    }
+  }, [addUserModalOpen]);
+
+  /** Untuk owner: load semua kabupaten dengan provinsi & wilayah (pilih kabupaten → auto provinsi & wilayah) */
+  useEffect(() => {
+    if (!addUserModalOpen || addUserForm.role !== 'owner') {
+      setKabupatenForOwner([]);
+      return;
+    }
+    branchesApi.listKabupatenForOwner().then((res) => {
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        setKabupatenForOwner(res.data.data);
+      } else setKabupatenForOwner([]);
+    }).catch(() => setKabupatenForOwner([]));
+  }, [addUserModalOpen, addUserForm.role]);
+
+  const openAddUserModal = useCallback(() => {
+    setAddUserForm({
+      name: '',
+      email: '',
+      password: '',
+      role: 'role_bus',
+      region: '',
+      provinsi_id: '',
+      kabupaten_kode: '',
+      kabupaten_nama: ''
+    });
+    setAddUserKabupaten([]);
+    setAddUserModalOpen(true);
+  }, []);
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { name, email, password, role, region, provinsi_id, kabupaten_kode, kabupaten_nama } = addUserForm;
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      showToast('Nama, email, dan password wajib diisi', 'error');
+      return;
+    }
+    if (password.length < 6) {
+      showToast('Password minimal 6 karakter', 'error');
+      return;
+    }
+    const isKoordinatorRole = ['visa_koordinator', 'tiket_koordinator', 'invoice_koordinator'].includes(role);
+    if (isKoordinatorRole && !region.trim()) {
+      showToast('Pilih wilayah untuk koordinator', 'error');
+      return;
+    }
+    if (role === 'owner' && (!provinsi_id.trim() || !kabupaten_kode.trim())) {
+      showToast('Pilih kabupaten (provinsi dan kabupaten/kota)', 'error');
+      return;
+    }
+    setAddUserSaving(true);
+    try {
+      const body: Parameters<typeof adminPusatApi.createUser>[0] = {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        role
+      };
+      if (isKoordinatorRole && region.trim()) body.region = region.trim();
+      if (role === 'owner') {
+        body.provinsi_id = provinsi_id.trim();
+        body.kabupaten_kode = kabupaten_kode.trim();
+        if (kabupaten_nama.trim()) body.kabupaten_nama = kabupaten_nama.trim();
+      }
+      await adminPusatApi.createUser(body);
+      showToast('User berhasil ditambahkan', 'success');
+      setAddUserModalOpen(false);
+      setAddUserForm({
+        name: '', email: '', password: '', role: 'role_bus', region: '',
+        provinsi_id: '', kabupaten_kode: '', kabupaten_nama: ''
+      });
+      fetchUsers();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Gagal menambah user', 'error');
+    } finally {
+      setAddUserSaving(false);
+    }
+  };
+
   const openEdit = useCallback(async (user: UserListItem) => {
     setEditUser(user);
     const listPw = (user as UserListItem & { activation_generated_password?: string | null }).activation_generated_password;
     setEditActivationPassword(listPw && String(listPw).trim() ? String(listPw).trim() : null);
-    setEditForm({
+    const baseForm = {
       name: user.name || '',
       email: user.email || '',
       phone: (user as any).phone ?? '',
       company_name: user.company_name ?? '',
       is_active: user.is_active !== false,
-      password: ''
-    });
+      password: '',
+      role: (user as any).role || 'role_bus',
+      region: '',
+      provinsi_id: '',
+      kabupaten_kode: '',
+      kabupaten_nama: ''
+    };
+    if ((user as any).role && ['visa_koordinator', 'tiket_koordinator', 'invoice_koordinator'].includes((user as any).role)) {
+      baseForm.region = (user as any).wilayah_id ?? '';
+    }
+    setEditForm(baseForm);
     try {
+      let kabList: KabupatenForOwnerItem[] = [];
+      if ((user as any).role === 'owner') {
+        const kabRes = await branchesApi.listKabupatenForOwner();
+        if (kabRes.data?.data) {
+          kabList = kabRes.data.data;
+          setKabupatenForOwner(kabList);
+        }
+      }
       const res = await adminPusatApi.getUserById(user.id);
       if (res.data?.success && res.data?.data) {
-        const d = res.data.data as { name?: string; email?: string; phone?: string; company_name?: string; is_active?: boolean; activation_generated_password?: string | null; OwnerProfile?: { activation_generated_password?: string | null } };
-        setEditForm((f) => ({
-          ...f,
+        const d = res.data.data as {
+          name?: string; email?: string; phone?: string; company_name?: string; is_active?: boolean;
+          role?: string; wilayah_id?: string; Branch?: { id?: string; provinsi_id?: string; name?: string; city?: string };
+          activation_generated_password?: string | null; OwnerProfile?: { activation_generated_password?: string | null }; assigned_branch_id?: string; operational_region?: string;
+        };
+        const next: typeof baseForm = {
+          ...baseForm,
           name: d.name || '',
           email: d.email || '',
           phone: d.phone ?? '',
           company_name: d.company_name ?? '',
-          is_active: d.is_active !== false
-        }));
+          is_active: d.is_active !== false,
+          role: d.role || baseForm.role,
+          region: d.wilayah_id ?? baseForm.region,
+          provinsi_id: '',
+          kabupaten_kode: '',
+          kabupaten_nama: ''
+        };
+        if (d.role === 'owner' && d.Branch?.provinsi_id) {
+          next.provinsi_id = d.Branch.provinsi_id;
+          const cityOrName = (d.Branch.city || d.Branch.name || '').trim();
+          if (cityOrName && kabList.length > 0) {
+            const match = kabList.find((k) => k.provinsi_id === d.Branch!.provinsi_id && (k.nama.toLowerCase().includes(cityOrName.toLowerCase()) || cityOrName.toLowerCase().includes(k.nama.toLowerCase())));
+            if (match) {
+              next.kabupaten_kode = match.kode;
+              next.kabupaten_nama = match.nama;
+            }
+          }
+        }
+        setEditForm(next);
         const activationPw = d.activation_generated_password ?? d.OwnerProfile?.activation_generated_password;
         if (activationPw && String(activationPw).trim()) setEditActivationPassword(String(activationPw).trim());
       }
-      } catch {
+    } catch {
       setEditForm((f) => ({ ...f, name: user.name || '', email: user.email || '' }));
     }
   }, []);
 
+  const handleToggleActive = async (user: UserListItem) => {
+    try {
+      await adminPusatApi.updateUser(user.id, { is_active: !user.is_active });
+      showToast(user.is_active ? 'User dinonaktifkan' : 'User diaktifkan', 'success');
+      fetchUsers();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal mengubah status', 'error');
+    }
+  };
+
   const saveEdit = async () => {
     if (!editUser) return;
+    const isKoordinator = ['visa_koordinator', 'tiket_koordinator', 'invoice_koordinator'].includes(editForm.role);
+    if (isKoordinator && !editForm.region.trim()) {
+      showToast('Pilih wilayah untuk koordinator', 'error');
+      return;
+    }
+    if (editForm.role === 'owner' && (!editForm.provinsi_id.trim() || !editForm.kabupaten_kode.trim())) {
+      showToast('Pilih kabupaten/kota untuk owner', 'error');
+      return;
+    }
     setSaving(true);
     try {
-      const body: any = { name: editForm.name.trim(), email: editForm.email.trim(), phone: editForm.phone || undefined, company_name: editForm.company_name || undefined, is_active: editForm.is_active };
+      const body: any = {
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        role: editForm.role
+      };
       if (editForm.password.length >= 6) body.password = editForm.password;
+      if (isKoordinator) body.region = editForm.region.trim();
+      if (editForm.role === 'owner') {
+        body.provinsi_id = editForm.provinsi_id.trim();
+        body.kabupaten_kode = editForm.kabupaten_kode.trim();
+        if (editForm.kabupaten_nama.trim()) body.kabupaten_nama = editForm.kabupaten_nama.trim();
+      }
       await adminPusatApi.updateUser(editUser.id, body);
       showToast('Data berhasil disimpan', 'success');
       setEditUser(null);
@@ -258,6 +453,12 @@ const UsersPage: React.FC = () => {
     const isOwner = user.role === 'owner';
     const hideEdit = isOwner && ownerStatus != null && ownerStatus !== 'active';
     const items: ActionsMenuItem[] = [];
+    items.push({
+      id: 'toggle_active',
+      label: user.is_active ? 'Nonaktifkan' : 'Aktifkan',
+      icon: user.is_active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />,
+      onClick: () => handleToggleActive(user)
+    });
     if (!hideEdit) {
       items.push({ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => openEdit(user) });
     }
@@ -281,33 +482,12 @@ const UsersPage: React.FC = () => {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-slate-600">Memuat daftar user...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg bg-red-50 p-4 text-red-700">
-        {error}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Manajemen User"
         subtitle="Daftar user – tambah akun via Admin Pusat / Admin Cabang"
-        right={
-          <div className="flex flex-wrap items-center gap-3">
-            <AutoRefreshControl onRefresh={fetchUsers} disabled={loading} />
-            <Button variant="primary"><Plus className="w-5 h-5 mr-2" />Tambah User</Button>
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={fetchUsers} disabled={loading} />}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -328,31 +508,17 @@ const UsersPage: React.FC = () => {
           title="Daftar User"
           subtitle="Filter menurut tipe, wilayah, provinsi, cabang. Hanya dapat diakses Super Admin dan Admin Pusat."
           className="mb-4"
+          right={
+            canListUsers ? (
+              <Button variant="primary" size="sm" className="gap-1.5" onClick={openAddUserModal}>
+                <Plus className="w-4 h-4" /> Tambah User
+              </Button>
+            ) : undefined
+          }
         />
 
-        {/* Filter block: terpisah dari tabel agar input/dropdown tidak tertimpa */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 mb-6 overflow-visible relative z-10">
-          {/* Tab: Semua / Divisi / Owner */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm font-medium text-slate-600">Filter:</span>
-            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-              {(['all', 'divisi', 'owner'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setTabFilter(tab)}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    tabFilter === tab
-                      ? 'bg-white text-primary-600 shadow-sm border border-slate-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {tab === 'all' ? 'Semua' : tab === 'divisi' ? 'Divisi' : 'Owner'}
-                </button>
-              ))}
-            </div>
-          </div>
-
+        {/* Filter: judul section + input + tombol Semua/Divisi/Owner */}
+        <div className="mb-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <div className="sm:col-span-2 lg:col-span-1 min-w-0">
               <Input
@@ -381,9 +547,9 @@ const UsersPage: React.FC = () => {
                   <Autocomplete
                     value={provinsiId}
                     onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
-                    options={[{ value: '', label: 'Semua provinsi' }, ...provincesFiltered.map((p) => ({ value: p.id, label: p.name }))]}
-                    placeholder="Provinsi"
-                    emptyLabel="Semua provinsi"
+                    options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_PROVINSI }, ...provincesFiltered.map((p) => ({ value: p.id, label: p.name }))]}
+                    placeholder={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI}
+                    emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI}
                     fullWidth
                   />
                 </div>
@@ -400,9 +566,28 @@ const UsersPage: React.FC = () => {
               </>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {(['all', 'divisi', 'owner'] as const).map((tab) => (
+              <Button
+                key={tab}
+                variant={tabFilter === tab ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setTabFilter(tab)}
+              >
+                {tab === 'all' ? 'Semua' : tab === 'divisi' ? 'Divisi' : 'Owner'}
+              </Button>
+            ))}
+          </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {error ? (
+            <div className="rounded-lg bg-red-50 p-4 text-red-700 text-sm m-4">
+              {error}
+            </div>
+          ) : loading ? (
+            <ContentLoading />
+          ) : (
           <Table
           columns={tableColumns}
           data={filteredUsers}
@@ -490,31 +675,93 @@ const UsersPage: React.FC = () => {
             </tr>
           )}
         />
+          )}
         </div>
       </Card>
 
-      {/* Modal Edit User */}
+      {/* Modal Edit User — isi sama dengan Tambah User */}
       <Modal open={!!editUser} onClose={() => { setEditUser(null); setEditActivationPassword(null); }}>
         {editUser && (
           <ModalBox>
-            <ModalHeader title="Edit User" subtitle="Ubah data nama, email, telepon, dan perusahaan" icon={<Edit className="w-5 h-5" />} onClose={() => { setEditUser(null); setEditActivationPassword(null); }} />
-            <ModalBody className="space-y-3">
-              <Input label="Nama" type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
-              <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
-              <Input label="Telepon" type="text" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Opsional" />
-              <Input label="Perusahaan" type="text" value={editForm.company_name} onChange={(e) => setEditForm((f) => ({ ...f, company_name: e.target.value }))} placeholder="Opsional" />
-              {editUser.role === 'owner' && (
+            <ModalHeader
+              title="Edit User"
+              subtitle="Ubah data user. Untuk Owner: pilih Kabupaten/Kota. Koordinator: pilih Wilayah. Pusat, Bus, Hotel, Accounting tidak perlu lokasi."
+              icon={<Edit className="w-5 h-5" />}
+              onClose={() => { setEditUser(null); setEditActivationPassword(null); }}
+            />
+            <ModalBody className="space-y-4">
+              <Input label="Nama *" type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} placeholder="Nama lengkap" />
+              <Input label="Email *" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@contoh.com" />
+              <Autocomplete
+                label="Role *"
+                value={editForm.role}
+                onChange={(v) => setEditForm((f) => ({ ...f, role: v, region: '', provinsi_id: '', kabupaten_kode: '', kabupaten_nama: '' }))}
+                options={[
+                  { value: 'owner', label: 'Owner' },
+                  { value: 'role_bus', label: 'Bus Saudi' },
+                  { value: 'role_hotel', label: 'Hotel Saudi' },
+                  { value: 'admin_pusat', label: 'Admin Pusat' },
+                  { value: 'role_accounting', label: 'Accounting' },
+                  { value: 'visa_koordinator', label: 'Visa Koordinator' },
+                  { value: 'tiket_koordinator', label: 'Tiket Koordinator' },
+                  { value: 'invoice_koordinator', label: 'Invoice Koordinator' },
+                  { value: 'invoice_saudi', label: 'Invoice Saudi' },
+                  { value: 'handling', label: 'Handling' }
+                ]}
+                placeholder={AUTOCOMPLETE_PILIH.PILIH_ROLE}
+              />
+              {(editForm.role === 'visa_koordinator' || editForm.role === 'tiket_koordinator' || editForm.role === 'invoice_koordinator') && (
+                <>
+                  <Autocomplete
+                    label="Wilayah *"
+                    value={editForm.region}
+                    onChange={(v) => setEditForm((f) => ({ ...f, region: v }))}
+                    options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+                    placeholder={AUTOCOMPLETE_PILIH.PILIH_WILAYAH}
+                    emptyLabel={AUTOCOMPLETE_PILIH.PILIH_WILAYAH}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Provinsi dan kota di wilayah ini otomatis berlaku.</p>
+                </>
+              )}
+              {editForm.role === 'owner' && (
+                <>
+                  <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                    Untuk role Owner: cukup pilih <strong>Kabupaten/Kota</strong>. Provinsi dan Wilayah otomatis mengikuti.
+                  </p>
+                  <Autocomplete
+                    label="Kabupaten/Kota *"
+                    value={editForm.provinsi_id && editForm.kabupaten_kode ? `${editForm.provinsi_id}:${editForm.kabupaten_kode}` : ''}
+                    onChange={(v) => {
+                      const item = kabupatenForOwner.find((k) => `${k.provinsi_id}:${k.kode}` === v);
+                      if (item) {
+                        setEditForm((f) => ({ ...f, provinsi_id: item.provinsi_id, kabupaten_kode: item.kode, kabupaten_nama: item.nama }));
+                      } else {
+                        setEditForm((f) => ({ ...f, provinsi_id: '', kabupaten_kode: '', kabupaten_nama: '' }));
+                      }
+                    }}
+                    options={kabupatenForOwner.map((k) => ({
+                      value: `${k.provinsi_id}:${k.kode}`,
+                      label: `${k.nama} (${k.provinsi_nama}${k.wilayah_nama ? `, ${k.wilayah_nama}` : ''})`
+                    }))}
+                    placeholder={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                    emptyLabel={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                  />
+                  {editForm.provinsi_id && editForm.kabupaten_kode && (() => {
+                    const sel = kabupatenForOwner.find((k) => k.provinsi_id === editForm.provinsi_id && k.kode === editForm.kabupaten_kode);
+                    return sel ? (
+                      <p className="text-xs text-slate-500 mt-1">Otomatis: Provinsi <strong>{sel.provinsi_nama}</strong>{sel.wilayah_nama ? <> · Wilayah <strong>{sel.wilayah_nama}</strong></> : null}</p>
+                    ) : null;
+                  })()}
+                </>
+              )}
+              {editForm.role === 'owner' && (
                 <div>
                   {editActivationPassword ? (
                     <>
                       <label className="block text-xs font-medium text-slate-500 mb-1">Password saat ini (dari aktivasi sistem)</label>
                       <div className="flex items-center gap-2">
-                        <code className="flex-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono break-all">
-                          {editActivationPassword}
-                        </code>
-                        <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(editActivationPassword); showToast('Password disalin', 'success'); }}>
-                          Salin
-                        </Button>
+                        <code className="flex-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono break-all">{editActivationPassword}</code>
+                        <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(editActivationPassword); showToast('Password disalin', 'success'); }}>Salin</Button>
                       </div>
                     </>
                   ) : (
@@ -523,7 +770,6 @@ const UsersPage: React.FC = () => {
                 </div>
               )}
               <Input label="Ubah password (kosongkan jika tidak diubah)" type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Min. 6 karakter" autoComplete="new-password" />
-              <Checkbox label="Aktif" checked={editForm.is_active} onChange={(e) => setEditForm((f) => ({ ...f, is_active: e.target.checked }))} />
             </ModalBody>
             <ModalFooter>
               <Button variant="outline" onClick={() => setEditUser(null)}>Batal</Button>
@@ -594,7 +840,8 @@ const UsersPage: React.FC = () => {
                   value={verifyRegPaymentReject}
                   onChange={(v) => setVerifyRegPaymentReject(v)}
                   options={REGISTRATION_REJECTION_REASONS}
-                  placeholder="— Pilih alasan (jika tolak) —"
+                  placeholder={AUTOCOMPLETE_PILIH.PILIH_ALASAN}
+                  emptyLabel={AUTOCOMPLETE_PILIH.PILIH_ALASAN}
                   fullWidth
                 />
               </ModalBody>
@@ -634,6 +881,134 @@ const UsersPage: React.FC = () => {
             </ModalFooter>
           </ModalBox>
         )}
+      </Modal>
+
+      {/* Modal Tambah User */}
+      <Modal open={addUserModalOpen} onClose={() => !addUserSaving && setAddUserModalOpen(false)}>
+        <ModalBox>
+          <ModalHeader
+            title="Tambah User"
+            subtitle="Buat akun baru: pilih role. Untuk Owner: cukup pilih Kabupaten/Kota — provinsi dan wilayah otomatis terisi. Koordinator pilih Wilayah. Pusat, Bus, Hotel, Accounting tidak perlu lokasi."
+            icon={<UsersIcon className="w-5 h-5" />}
+            onClose={() => !addUserSaving && setAddUserModalOpen(false)}
+          />
+          <form onSubmit={handleAddUserSubmit}>
+            <ModalBody className="space-y-4">
+              <Input
+                label="Nama *"
+                type="text"
+                value={addUserForm.name}
+                onChange={(e) => setAddUserForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Nama lengkap"
+                required
+              />
+              <Input
+                label="Email *"
+                type="email"
+                value={addUserForm.email}
+                onChange={(e) => setAddUserForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="email@contoh.com"
+                required
+              />
+              <Input
+                label="Password * (min. 6 karakter)"
+                type="password"
+                value={addUserForm.password}
+                onChange={(e) => setAddUserForm((f) => ({ ...f, password: e.target.value }))}
+                placeholder="••••••••"
+                minLength={6}
+                required
+              />
+              <Autocomplete
+                label="Role *"
+                value={addUserForm.role}
+                onChange={(v) => setAddUserForm((f) => ({
+                  ...f,
+                  role: v,
+                  region: '',
+                  provinsi_id: '',
+                  kabupaten_kode: '',
+                  kabupaten_nama: ''
+                }))}
+                options={[
+                  { value: 'owner', label: 'Owner' },
+                  { value: 'role_bus', label: 'Bus Saudi' },
+                  { value: 'role_hotel', label: 'Hotel Saudi' },
+                  { value: 'admin_pusat', label: 'Admin Pusat' },
+                  { value: 'role_accounting', label: 'Accounting' },
+                  { value: 'visa_koordinator', label: 'Visa Koordinator' },
+                  { value: 'tiket_koordinator', label: 'Tiket Koordinator' },
+                  { value: 'invoice_koordinator', label: 'Invoice Koordinator' },
+                  { value: 'invoice_saudi', label: 'Invoice Saudi' },
+                  { value: 'handling', label: 'Handling' }
+                ]}
+                placeholder={AUTOCOMPLETE_PILIH.PILIH_ROLE}
+              />
+              {(addUserForm.role === 'visa_koordinator' || addUserForm.role === 'tiket_koordinator' || addUserForm.role === 'invoice_koordinator') && (
+                <>
+                  <Autocomplete
+                    label="Wilayah *"
+                    value={addUserForm.region}
+                    onChange={(v) => setAddUserForm((f) => ({ ...f, region: v }))}
+                    options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+                    placeholder={AUTOCOMPLETE_PILIH.PILIH_WILAYAH}
+                    emptyLabel={AUTOCOMPLETE_PILIH.PILIH_WILAYAH}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Provinsi dan kota di wilayah ini otomatis berlaku. User bekerja di daerah-daerah dalam wilayah tersebut.
+                  </p>
+                </>
+              )}
+              {addUserForm.role === 'owner' && (
+                <>
+                  <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                    Untuk role Owner: cukup pilih <strong>Kabupaten/Kota</strong>. Provinsi dan Wilayah otomatis mengikuti.
+                  </p>
+                  <Autocomplete
+                    label="Kabupaten/Kota *"
+                    value={addUserForm.provinsi_id && addUserForm.kabupaten_kode ? `${addUserForm.provinsi_id}:${addUserForm.kabupaten_kode}` : ''}
+                    onChange={(v) => {
+                      const item = kabupatenForOwner.find((k) => `${k.provinsi_id}:${k.kode}` === v);
+                      if (item) {
+                        setAddUserForm((f) => ({
+                          ...f,
+                          provinsi_id: item.provinsi_id,
+                          kabupaten_kode: item.kode,
+                          kabupaten_nama: item.nama
+                        }));
+                      } else {
+                        setAddUserForm((f) => ({ ...f, provinsi_id: '', kabupaten_kode: '', kabupaten_nama: '' }));
+                      }
+                    }}
+                    options={kabupatenForOwner.map((k) => ({
+                      value: `${k.provinsi_id}:${k.kode}`,
+                      label: `${k.nama} (${k.provinsi_nama}${k.wilayah_nama ? `, ${k.wilayah_nama}` : ''})`
+                    }))}
+                    placeholder={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                    emptyLabel={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                  />
+                  {addUserForm.provinsi_id && addUserForm.kabupaten_kode && (() => {
+                    const sel = kabupatenForOwner.find((k) => k.provinsi_id === addUserForm.provinsi_id && k.kode === addUserForm.kabupaten_kode);
+                    return sel ? (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Otomatis: Provinsi <strong>{sel.provinsi_nama}</strong>
+                        {sel.wilayah_nama ? <> · Wilayah <strong>{sel.wilayah_nama}</strong></> : null}
+                      </p>
+                    ) : null;
+                  })()}
+                </>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={() => setAddUserModalOpen(false)} disabled={addUserSaving}>
+                Batal
+              </Button>
+              <Button type="submit" variant="primary" disabled={addUserSaving}>
+                {addUserSaving ? 'Menyimpan...' : 'Simpan'}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalBox>
       </Modal>
     </div>
   );

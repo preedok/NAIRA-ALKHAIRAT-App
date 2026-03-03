@@ -4,7 +4,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import { FilterIconButton } from '../../../components/common';
 import BusPage from './BusPage';
 import BusCalendarView from './BusCalendarView';
 import type { BusProduct } from './BusCalendarView';
@@ -22,8 +21,6 @@ const ProductBusPage: React.FC = () => {
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [busLoading, setBusLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filterActive, setFilterActive] = useState(false);
 
   const fetchBusProducts = useCallback(() => {
     setBusLoading(true);
@@ -57,18 +54,7 @@ const ProductBusPage: React.FC = () => {
       <PageHeader
         title="Bus Saudi"
         subtitle="Pilih tipe perjalanan (jemput saja / pulang saja / pulang pergi), lalu isi harga per rute dalam IDR, SAR, atau USD. Data tampil di tabel dan dipakai untuk order."
-        right={
-          <div className="flex items-center gap-2">
-            <AutoRefreshControl onRefresh={handleRefresh} disabled={busLoading} />
-            {activeTab === 'list' && (
-              <FilterIconButton
-                open={filterOpen}
-                onToggle={() => setFilterOpen((v) => !v)}
-                hasActiveFilters={filterActive}
-              />
-            )}
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={handleRefresh} disabled={busLoading} />}
       />
 
       <nav
@@ -94,16 +80,13 @@ const ProductBusPage: React.FC = () => {
 
       <div className="flex-1 min-h-[420px]">
         {activeTab === 'list' && (
-          <BusPage
-            embedInProducts
-            refreshTrigger={refreshTrigger}
-            embedFilterOpen={filterOpen}
-            embedFilterOnToggle={() => setFilterOpen((v) => !v)}
-            onFilterActiveChange={setFilterActive}
-          />
+          <BusPage embedInProducts refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'calendar' && (
-          <BusCalendarView busProducts={busLoading ? [] : busProducts} />
+          <BusCalendarView
+            busProducts={busLoading ? [] : busProducts}
+            onAddQuotaClick={() => setActiveTab('list')}
+          />
         )}
       </div>
     </div>

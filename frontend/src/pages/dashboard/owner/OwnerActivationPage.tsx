@@ -555,7 +555,7 @@ const OwnerActivationPage: React.FC = () => {
         {loading ? (
           <div className="oap-loading">
             <div className="oap-loading-ring" />
-            <p className="oap-loading-text">Memuat Data</p>
+            <p className="oap-loading-text">Memuat data...</p>
           </div>
         ) : (
           <div className={`oap-inner${mounted ? ' mounted' : ''}`}>

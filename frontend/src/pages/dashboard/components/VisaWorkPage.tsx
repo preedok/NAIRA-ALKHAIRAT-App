@@ -10,11 +10,11 @@ import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
-import { Input, Autocomplete } from '../../../components/common';
+import { Input, Autocomplete, ContentLoading } from '../../../components/common';
 import { visaApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { API_BASE_URL, INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceDisplay } from '../../../utils';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -238,38 +238,30 @@ const VisaWorkPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter */}
-      <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+      {/* Filter + Table card — layout konsisten dengan halaman lain */}
+      <Card className="travel-card overflow-visible">
+        <CardSectionHeader
+          icon={<FileText className="w-6 h-6" />}
+          title="Daftar Invoice Visa"
+          subtitle={pagination ? `${pagination.total} invoice` : `${filteredInvoices.length} invoice. Filter menurut status invoice & progress.`}
+          className="mb-4"
+        />
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
           </div>
           <div className="sm:w-44">
-            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel="Semua status" />
+            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
           </div>
           <div className="sm:w-44">
-            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel="Semua progress" />
+            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
           </div>
           <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }} className="rounded-xl">Reset</Button>
         </div>
-      </Card>
-
-      {/* Table */}
-      <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/60">
-          <CardSectionHeader
-            icon={<FileText className="w-6 h-6" />}
-            title="Daftar Invoice Visa"
-            subtitle={pagination ? `${pagination.total} invoice` : `${filteredInvoices.length} invoice`}
-            className="mb-0"
-          />
-        </div>
-        {loading ? (
-          <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
-            <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
-          </div>
-        ) : (
-          <div className="min-w-0 overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
             <Table
               columns={tableColumns}
               data={filteredInvoices}
@@ -280,11 +272,11 @@ const VisaWorkPage: React.FC = () => {
                 const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                    <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                    <td className="py-3 px-4 text-right font-semibold tabular-nums text-slate-900">{visaCount}</td>
-                    <td className="py-3 px-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
+                    <td className="px-6 py-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                    <td className="px-6 py-4 text-right font-semibold tabular-nums text-slate-900">{visaCount}</td>
+                    <td className="px-6 py-4">{STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}</td>
+                    <td className="px-6 py-4">
                       <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                         <Eye className="w-4 h-4 mr-1" /> Detail
                       </Button>
@@ -304,8 +296,8 @@ const VisaWorkPage: React.FC = () => {
                 onLimitChange: (l) => { setLimit(l); setPage(1); }
               } : undefined}
             />
-          </div>
-        )}
+          )}
+        </div>
       </Card>
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>

@@ -23,7 +23,8 @@ async function getVisaBranchIds(user) {
     const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
     return branches.map(b => b.id);
   }
-  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+  const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
+  if (KOORDINATOR_ROLES.includes(user.role) && user.wilayah_id) {
     const ids = await getBranchIdsForWilayah(user.wilayah_id);
     if (ids.length > 0) return ids;
   }

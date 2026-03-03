@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, Eye, ClipboardList, Bus, Ticket, MapPin, Plane, RotateCcw, Search, FileSpreadsheet, FileText, AlertCircle, ChevronRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
@@ -9,7 +10,7 @@ import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import Table from '../../../components/common/Table';
-import { Input, Autocomplete, Textarea } from '../../../components/common';
+import { Input, Autocomplete, Textarea, ContentLoading } from '../../../components/common';
 import type { TableColumn } from '../../../types';
 import { busApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -292,9 +293,10 @@ const BusWorkPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Filter */}
-      <Card className="p-4 rounded-xl border border-slate-200/80 shadow-sm overflow-visible">
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
+      {/* Filter + Table card — layout konsisten dengan halaman lain */}
+      <Card className="travel-card overflow-visible">
+        <CardSectionHeader icon={<Bus className="w-6 h-6" />} title="Daftar Invoice Bus" subtitle="Invoice dengan item bus. Filter menurut status invoice, tiket, kedatangan, keberangkatan, kepulangan." className="mb-4" />
+        <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
           <div className="flex-1 min-w-0 sm:min-w-[180px]">
             <Input
               label="Cari"
@@ -371,16 +373,10 @@ const BusWorkPage: React.FC = () => {
             Reset filter
           </Button>
         </div>
-      </Card>
-
-      {/* Tabel */}
-      <Card className="rounded-xl border border-slate-200/80 shadow-sm min-w-0 overflow-hidden">
-        {loading && (
-          <div className="py-8 text-center text-slate-500 flex items-center justify-center gap-2 border-b border-slate-100">
-            <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
-          </div>
-        )}
-        <div className="min-w-0 overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
           <Table
             columns={[
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
@@ -389,7 +385,7 @@ const BusWorkPage: React.FC = () => {
               { id: 'status_tiket', label: 'Status Tiket', align: 'left' },
               { id: 'actions', label: 'Aksi', align: 'left' }
             ] as TableColumn[]}
-            data={loading ? [] : filteredInvoices}
+            data={filteredInvoices}
             emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item bus' : 'Tidak ada hasil untuk filter ini'}
             emptyDescription={invoices.length === 0 ? 'Buat order & invoice dari menu Order/Invoice terlebih dahulu.' : 'Ubah filter atau kata kunci pencarian.'}
             emptyIcon={<Bus className="w-8 h-8" />}
@@ -409,20 +405,20 @@ const BusWorkPage: React.FC = () => {
               const firstTicketStatus = orderItems.find((i: any) => i.type === 'bus')?.BusProgress?.bus_ticket_status || 'pending';
               return (
                 <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 px-4">
+                  <td className="px-6 py-4">
                     <span className="font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
                     {inv.Order?.order_number && (
                       <span className="block text-xs text-slate-500 mt-0.5">{inv.Order.order_number}</span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                  <td className="py-3 px-4 text-right font-medium tabular-nums">{busCount}</td>
-                  <td className="py-3 px-4">
+                  <td className="px-6 py-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                  <td className="px-6 py-4 text-right font-medium tabular-nums">{busCount}</td>
+                  <td className="px-6 py-4">
                     <Badge variant={firstTicketStatus === 'issued' ? 'success' : 'warning'}>
                       {TICKET_OPTIONS.find(s => s.value === firstTicketStatus)?.label ?? firstTicketStatus}
                     </Badge>
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="px-6 py-4">
                     <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
                       <Eye className="w-4 h-4 mr-1" /> Detail
                     </Button>
@@ -431,6 +427,7 @@ const BusWorkPage: React.FC = () => {
               );
             }}
           />
+          )}
         </div>
       </Card>
 

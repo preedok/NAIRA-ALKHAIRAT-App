@@ -7,14 +7,14 @@ import Checkbox from '../../../components/common/Checkbox';
 import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { Input, Autocomplete } from '../../../components/common';
+import { Input, Autocomplete, CardSectionHeader, ContentLoading } from '../../../components/common';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import { ticketApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { API_BASE_URL, INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceDisplay } from '../../../utils';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -245,30 +245,25 @@ const TicketWorkPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter */}
-      <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+      {/* Filter + Table card — layout konsisten dengan halaman lain */}
+      <Card className="travel-card overflow-visible">
+        <CardSectionHeader icon={<Ticket className="w-6 h-6" />} title="Daftar Invoice Tiket" subtitle="Invoice dengan item tiket. Filter menurut status invoice & progress." className="mb-4" />
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <Input label="Cari (Invoice / Order / Owner)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="No. invoice, order, owner..." icon={<Search className="w-4 h-4" />} fullWidth />
           </div>
           <div className="sm:w-48">
-            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel="Semua status" />
+            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
           </div>
           <div className="sm:w-48">
-            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel="Semua progress" />
+            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
           </div>
           <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); setPage(1); }} className="rounded-xl">Reset</Button>
         </div>
-      </Card>
-
-      {/* Tabel invoice tiket */}
-      <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-slate-500 flex items-center justify-center gap-2">
-            <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
-          </div>
-        ) : (
-          <div className="min-w-0 overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
             <Table
               columns={tableColumns}
               data={filteredInvoices}
@@ -279,16 +274,16 @@ const TicketWorkPage: React.FC = () => {
                 const firstStatus = orderItems.find((i: any) => i.type === 'ticket')?.TicketProgress?.status || 'pending';
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                    <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-800">{ticketCount}</td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-4 font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
+                    <td className="px-6 py-4 text-slate-700">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-800">{ticketCount}</td>
+                    <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium ${RECAP_STATUS_COLORS[firstStatus] || 'bg-slate-100 text-slate-600'}`}>
                         {RECAP_STATUS_ICONS[firstStatus]}
                         {STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-4">
                       <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                         <Eye className="w-4 h-4 mr-1" /> Detail
                       </Button>
@@ -308,8 +303,8 @@ const TicketWorkPage: React.FC = () => {
                 onLimitChange: (l) => { setLimit(l); setPage(1); }
               } : undefined}
             />
-          </div>
-        )}
+          )}
+        </div>
       </Card>
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>

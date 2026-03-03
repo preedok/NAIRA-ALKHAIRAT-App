@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Package, Plus, Edit, Trash2, XCircle, ShoppingCart } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -7,8 +7,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
-import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, Autocomplete, Input, PriceInput, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
+import { StatCard, Autocomplete, Input, PriceInput, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -172,7 +171,8 @@ const PackagesPage: React.FC = () => {
   const [productsLoading, setProductsLoading] = useState(false);
 
   const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat';
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
 
   useEffect(() => {
     if (canCreatePackage) {
@@ -224,16 +224,27 @@ const PackagesPage: React.FC = () => {
   const [sortBy, setSortBy] = useState('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+  const [searchName, setSearchName] = useState('');
+  const [debouncedSearchName, setDebouncedSearchName] = useState('');
+  const lastFilterKeyRef = useRef<string>('');
 
-  const hasActiveFilters = filterIncludeInactive === 'true';
-  const resetFilters = () => setFilterIncludeInactive('false');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
+    return () => clearTimeout(t);
+  }, [searchName]);
 
   const fetchPackages = useCallback(() => {
+    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    let pageToUse = page;
+    if (lastFilterKeyRef.current !== filterKey) {
+      lastFilterKeyRef.current = filterKey;
+      setPage(1);
+      pageToUse = 1;
+    }
     setLoading(true);
     setError(null);
-    const params = { is_package: 'true', with_prices: 'true', include_inactive: filterIncludeInactive, limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { is_package: 'true', with_prices: 'true', include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi
       .list(params)
       .then((res) => {
@@ -246,7 +257,7 @@ const PackagesPage: React.FC = () => {
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive]);
+  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive, debouncedSearchName]);
 
   useEffect(() => {
     fetchPackages();
@@ -267,14 +278,13 @@ const PackagesPage: React.FC = () => {
     { id: 'days', label: 'Hari', align: 'center' },
     { id: 'hotel_makkah', label: 'Hotel Mekkah', align: 'left' },
     { id: 'hotel_madinah', label: 'Hotel Madinah', align: 'left' },
-    { id: 'ticket_info', label: 'Tiket', align: 'left' },
-    { id: 'ticket_workflow', label: 'Perjalanan', align: 'left' },
+    { id: 'currency', label: 'Mata Uang', align: 'center' },
     { id: 'price', label: PRICE_COLUMN_LABEL, align: 'right' },
     { id: 'discount', label: 'Diskon %', align: 'center' },
     { id: 'price_after', label: 'Setelah Diskon (IDR · SAR · USD)', align: 'right' },
     { id: 'includes', label: 'Include', align: 'left' },
     { id: 'status', label: 'Status', align: 'center' },
-    { id: 'actions', label: 'Aksi', align: 'center' }
+    ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
   ];
 
   const formatPrice = (amount: number | null | undefined, currencyId?: string) => {
@@ -476,67 +486,13 @@ const PackagesPage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-slate-600">Memuat data paket...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg bg-red-50 p-4 text-red-700">
-        {error}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Paket"
         subtitle="Daftar paket umroh & travel. Harga adalah total untuk seluruh hari (bukan per hari)."
-        right={
-          <div className="flex items-center gap-2">
-            <AutoRefreshControl onRefresh={fetchPackages} disabled={loading} />
-            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v) => !v)} hasActiveFilters={hasActiveFilters} />
-            {canCreatePackage && (
-              <Button variant="primary" className="flex items-center gap-2 shrink-0" onClick={openAdd}>
-                <Plus className="w-5 h-5" />
-                Buat paket baru
-              </Button>
-            )}
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={fetchPackages} disabled={loading} />}
       />
-
-      <PageFilter
-        open={showFilters}
-        onToggle={() => setShowFilters((v) => !v)}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchPackages(); }}
-        loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
-        cardTitle="Pengaturan Filter"
-        cardDescription="Sembunyikan atau tampilkan paket nonaktif."
-        hideToggleRow
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <Autocomplete
-            label="Tampilkan"
-            value={filterIncludeInactive}
-            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
-            options={[
-              { value: 'false', label: 'Aktif saja' },
-              { value: 'true', label: 'Semua (termasuk nonaktif)' }
-            ]}
-          />
-        </div>
-      </PageFilter>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -557,8 +513,32 @@ const PackagesPage: React.FC = () => {
           icon={<Package className="w-6 h-6" />}
           title="Daftar paket"
           subtitle={`${pagination?.total ?? packages.length} paket · Setiap kolom dipisahkan agar mudah dibaca`}
+          right={canCreatePackage ? (
+            <Button variant="primary" size="sm" className="gap-1.5 shrink-0" onClick={openAdd}>
+              <Plus className="w-4 h-4" /> Buat paket baru
+            </Button>
+          ) : undefined}
         />
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+          <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama paket..." fullWidth />
+          <Autocomplete
+            label="Tampilkan"
+            value={filterIncludeInactive}
+            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+            options={[
+              { value: 'false', label: 'Aktif saja' },
+              { value: 'true', label: 'Semua (termasuk nonaktif)' }
+            ]}
+          />
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {error ? (
+            <div className="rounded-lg bg-red-50 p-4 text-red-700 text-sm m-4">
+              {error}
+            </div>
+          ) : loading ? (
+            <ContentLoading />
+          ) : (
           <Table
           columns={tableColumns}
           data={packages}
@@ -603,24 +583,7 @@ const PackagesPage: React.FC = () => {
                 <td className="px-4 py-3 text-center text-slate-700 whitespace-nowrap">{days} hari</td>
                 <td className="px-4 py-3 text-sm text-slate-700">{hotelMakkahName}</td>
                 <td className="px-4 py-3 text-sm text-slate-700">{hotelMadinahName}</td>
-                <td className="px-4 py-3 text-sm text-slate-700">
-                  {pkgMeta?.ticket_ids?.length ? (() => {
-                    const tid = pkgMeta.ticket_ids[0];
-                    const ticketProduct = ticketProducts.find((p) => p.id === tid);
-                    const productName = ticketProduct?.name ?? 'Tiket';
-                    const maskapaiName = pkgMeta.ticket_maskapai ? MASKAPAI_OPTIONS.find((m) => m.code === pkgMeta.ticket_maskapai)?.name : '';
-                    const bandaraName = pkgMeta.ticket_bandara ? BANDARA_TIKET.find((b) => b.code === pkgMeta.ticket_bandara)?.name : '';
-                    const parts = [productName, maskapaiName, bandaraName].filter(Boolean);
-                    return parts.length > 1 ? <span>{parts[0]} <span className="text-slate-500">·</span> {parts.slice(1).join(' · ')}</span> : (parts[0] || '-');
-                  })() : <span className="text-slate-400">-</span>}
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-700">
-                  {pkgMeta?.ticket_ids?.length && pkgMeta?.ticket_trip_type ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-sky-100 text-sky-800">
-                      {TICKET_TRIP_OPTIONS.find((t) => t.value === pkgMeta.ticket_trip_type)?.label ?? pkgMeta.ticket_trip_type}
-                    </span>
-                  ) : <span className="text-slate-400">-</span>}
-                </td>
+                <td className="px-4 py-3 text-center text-sm text-slate-700">IDR</td>
                 <td className="px-4 py-3 text-right text-slate-800 align-top">
                   {(() => {
                     const t = getPriceTripleForTable(priceIdr, priceSar, priceUsd);
@@ -658,17 +621,18 @@ const PackagesPage: React.FC = () => {
                   })()}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 min-w-[120px]">
                     {includesList.length > 0 ? includesList.map((inc) => {
                       const opt = INCLUDE_OPTIONS.find((o) => o.id === inc);
                       const label = opt ? opt.label : inc;
                       return <span key={inc} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700">{label}</span>;
-                    }) : <span className="text-slate-400 text-sm">-</span>}
+                    }) : <span className="text-slate-400 text-sm col-span-full">-</span>}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-center whitespace-nowrap">
                   {pkg.is_active ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Aktif</span> : <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Nonaktif</span>}
                 </td>
+                {canShowProductActions && (
                 <td className="px-4 py-3">
                   <div className="flex justify-center gap-1">
                     {canAddToOrder && (
@@ -677,7 +641,10 @@ const PackagesPage: React.FC = () => {
                         size="sm"
                         className="p-2"
                         onClick={() => {
-                          const idr = Number(priceIdr) || Number(pkg.price_general) || 0;
+                          // Pakai harga setelah diskon jika ada diskon, otherwise harga normal
+                          const idr = discountPercent > 0 && priceAfterIdr != null && priceAfterIdr > 0
+                            ? priceAfterIdr
+                            : basePriceIdr;
                           addDraftItem({
                             type: 'package',
                             product_id: pkg.id,
@@ -704,10 +671,12 @@ const PackagesPage: React.FC = () => {
                     )}
                   </div>
                 </td>
+                )}
               </tr>
             );
           }}
         />
+          )}
         </div>
       </Card>
 
@@ -768,7 +737,7 @@ const PackagesPage: React.FC = () => {
                           value={form.hotel_makkah_id}
                           onChange={(v) => setForm((f) => ({ ...f, hotel_makkah_id: v }))}
                           options={hotelsMakkah.map((h) => ({ value: h.id, label: h.name }))}
-                          placeholder={hotelsLoading && hotelsMakkah.length === 0 ? 'Memuat...' : '-- Pilih hotel Mekkah --'}
+                          placeholder={hotelsLoading && hotelsMakkah.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih hotel Mekkah --'}
                           fullWidth
                         />
                         <Autocomplete
@@ -776,7 +745,7 @@ const PackagesPage: React.FC = () => {
                           value={form.hotel_madinah_id}
                           onChange={(v) => setForm((f) => ({ ...f, hotel_madinah_id: v }))}
                           options={hotelsMadinah.map((h) => ({ value: h.id, label: h.name }))}
-                          placeholder={hotelsLoading && hotelsMadinah.length === 0 ? 'Memuat...' : '-- Pilih hotel Madinah --'}
+                          placeholder={hotelsLoading && hotelsMadinah.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih hotel Madinah --'}
                           fullWidth
                         />
                       </div>
@@ -833,7 +802,7 @@ const PackagesPage: React.FC = () => {
                         value={form.visa_ids[0] ?? ''}
                         onChange={(v) => setForm((f) => ({ ...f, visa_ids: v ? [v] : [] }))}
                         options={visaProducts.map((p) => ({ value: p.id, label: p.name }))}
-                        placeholder={productsLoading && visaProducts.length === 0 ? 'Memuat visa...' : '-- Pilih visa --'}
+                        placeholder={productsLoading && visaProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih visa --'}
                         fullWidth
                       />
                     )}
@@ -844,7 +813,7 @@ const PackagesPage: React.FC = () => {
                           value={form.ticket_ids[0] ?? ''}
                           onChange={(v) => setForm((f) => ({ ...f, ticket_ids: v ? [v] : [] }))}
                           options={ticketProducts.map((p) => ({ value: p.id, label: p.name }))}
-                          placeholder={productsLoading && ticketProducts.length === 0 ? 'Memuat tiket...' : '-- Pilih produk tiket --'}
+                          placeholder={productsLoading && ticketProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih produk tiket --'}
                           fullWidth
                         />
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -881,7 +850,7 @@ const PackagesPage: React.FC = () => {
                         value={form.bus_ids[0] ?? ''}
                         onChange={(v) => setForm((f) => ({ ...f, bus_ids: v ? [v] : [] }))}
                         options={busProducts.map((p) => ({ value: p.id, label: p.name }))}
-                        placeholder={productsLoading && busProducts.length === 0 ? 'Memuat bis...' : '-- Pilih bis --'}
+                        placeholder={productsLoading && busProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih bis --'}
                         fullWidth
                       />
                     )}
@@ -890,7 +859,7 @@ const PackagesPage: React.FC = () => {
                         <label className="block text-sm font-medium text-slate-800">Handling – pilih yang masuk paket</label>
                         <p className="text-xs text-slate-500">Bisa pilih lebih dari satu produk handling.</p>
                         {productsLoading && handlingProducts.length === 0 ? (
-                          <p className="text-slate-500 text-sm">Memuat handling...</p>
+                          <p className="text-slate-500 text-sm">{CONTENT_LOADING_MESSAGE}</p>
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 w-full">
                             {handlingProducts.map((p) => (
@@ -957,11 +926,23 @@ const PackagesPage: React.FC = () => {
                     )}
                   </div>
                   {editingPackage && form.discountPercent > 0 && (
-                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
-                      <span className="text-slate-600">Harga setelah diskon (IDR): </span>
-                      <span className="font-semibold text-[#0D1A63]">
-                        {formatPrice(getPriceAfterDiscount(form.price_total_idr || 0, form.discountPercent), 'IDR')}
-                      </span>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm space-y-1">
+                      <div>
+                        <span className="text-slate-600">Harga setelah diskon (IDR): </span>
+                        <span className="font-semibold text-[#0D1A63]">
+                          {formatPrice(getPriceAfterDiscount(form.price_total_idr || 0, form.discountPercent), 'IDR')}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-amber-700 font-medium">Total diskon: </span>
+                        <span className="font-semibold text-amber-800">
+                          {(() => {
+                            const amount = Math.round((form.price_total_idr || 0) * (form.discountPercent / 100));
+                            const cur = CURRENCIES.find((c) => c.id === 'IDR') || CURRENCIES[0];
+                            return `${cur.symbol} ${amount.toLocaleString(cur.locale)}`;
+                          })()}
+                        </span>
+                      </div>
                     </div>
                   )}
                   {(form.price_total_idr > 0) && (() => {
@@ -987,7 +968,10 @@ const PackagesPage: React.FC = () => {
                   return 0;
                 };
                 const daysVal = (() => { const v = parseInt(daysInput.trim(), 10); return (Number.isNaN(v) || v < 1) ? 1 : v; })();
-                const packageTotalIdr = form.price_total_idr || 0;
+                const baseTotalIdr = form.price_total_idr || 0;
+                const packageTotalIdr = form.discountPercent > 0
+                  ? getPriceAfterDiscount(baseTotalIdr, form.discountPercent)
+                  : baseTotalIdr;
                 const rows: { label: string; listIdr: number }[] = [];
                 if (form.hotel_makkah_id) {
                   const h = hotels.find((x) => x.id === form.hotel_makkah_id);
@@ -1030,31 +1014,33 @@ const PackagesPage: React.FC = () => {
                   if (p) rows.push({ label: `Handling: ${p.name}`, listIdr: toIdr(p) });
                 });
                 const totalListIdr = rows.reduce((s, r) => s + r.listIdr, 0);
-                const totalDiscount = totalListIdr - packageTotalIdr;
-                if (rows.length > 0 && packageTotalIdr > 0 && totalListIdr > 0) {
-                  const ratio = packageTotalIdr / totalListIdr;
+                const totalDiscountAmount = baseTotalIdr - packageTotalIdr;
+                if (rows.length > 0 && baseTotalIdr > 0 && totalListIdr > 0) {
+                  const weightTotal = totalListIdr;
                   return (
                     <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-4 space-y-2">
                       <p className="text-sm font-semibold text-slate-800">Kalkulasi diskon (otomatis dari harga total paket & kurs)</p>
+                      <p className="text-xs text-slate-600">List = bagian proporsional dari harga paket penuh; Alokasi = bagian dari harga jual; Diskon = List − Alokasi.</p>
                       <div className="text-xs space-y-1 max-h-48 overflow-y-auto">
                         {rows.map((r, i) => {
-                          const allocated = Math.round(r.listIdr * ratio);
-                          const discount = r.listIdr - allocated;
-                          const pct = r.listIdr > 0 ? Math.round((discount / r.listIdr) * 100) : 0;
+                          const weightRatio = weightTotal > 0 ? r.listIdr / weightTotal : 0;
+                          const listShare = Math.round(weightRatio * baseTotalIdr);
+                          const allocated = Math.round(weightRatio * packageTotalIdr);
+                          const discount = listShare - allocated;
+                          const pct = listShare > 0 ? Math.round((discount / listShare) * 100) : 0;
                           return (
                             <div key={i} className="py-1.5 border-b border-slate-200/80">
                               <div className="text-slate-700 font-medium truncate">{r.label}</div>
                               <div className="text-xs text-slate-600 mt-0.5">
-                                List: {formatPrice(r.listIdr, 'IDR')} → Alokasi: {formatPrice(allocated, 'IDR')} · Diskon: {formatPrice(discount, 'IDR')} ({pct}%)
+                                List: {formatPrice(listShare, 'IDR')} → Alokasi: {formatPrice(allocated, 'IDR')} · Diskon: {formatPrice(discount, 'IDR')} ({pct}%)
                               </div>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm font-medium">
-                        <span>Total list: {formatPrice(totalListIdr, 'IDR')}</span>
-                        <span>Total paket: {formatPrice(packageTotalIdr, 'IDR')}</span>
-                        <span className="text-amber-700">Total diskon: {formatPrice(totalDiscount, 'IDR')}</span>
+                      <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-medium">
+                        <span>Total list (harga penuh): {formatPrice(baseTotalIdr, 'IDR')}</span>
+                        <span>Total paket (setelah diskon): {formatPrice(packageTotalIdr, 'IDR')}</span>
                       </div>
                     </div>
                   );

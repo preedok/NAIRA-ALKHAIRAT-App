@@ -36,6 +36,7 @@ router.use('/hotel', require('./hotel'));
 router.use('/ticket', require('./ticket'));
 router.use('/visa', require('./visa'));
 router.use('/bus', require('./bus'));
+router.use('/handling', require('./handling'));
 router.use('/koordinator', require('./koordinator'));
 router.delete('/admin-pusat/users/:id', auth, requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), adminPusatController.deleteUser);
 router.use('/admin-pusat', require('./adminPusat'));

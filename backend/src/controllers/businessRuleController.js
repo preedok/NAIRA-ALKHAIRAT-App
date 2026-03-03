@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const { BusinessRuleConfig, Branch, Provinsi } = require('../models');
 const { ROLES } = require('../constants');
 const { BUSINESS_RULES, BUSINESS_RULE_KEYS } = require('../constants');
+const { recalcProductPricesByRates } = require('../services/recalcProductPricesByRates');
 
 const DEFAULTS = {
   [BUSINESS_RULE_KEYS.BUS_MIN_PACK]: BUSINESS_RULES.BUS_MIN_PACK,
@@ -81,6 +82,7 @@ const set = asyncHandler(async (req, res) => {
   if (finalBranchId && finalWilayahId) return res.status(400).json({ success: false, message: 'Pilih branch_id atau wilayah_id, tidak keduanya' });
 
   const validKeys = Object.values(BUSINESS_RULE_KEYS);
+  let currencyRatesUpdated = null;
   for (const [key, value] of Object.entries(rules || {})) {
     if (!validKeys.includes(key)) continue;
     const val = typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -89,6 +91,18 @@ const set = asyncHandler(async (req, res) => {
       defaults: { value: val, updated_by: req.user.id }
     });
     await row.update({ value: val, updated_by: req.user.id });
+    if (key === BUSINESS_RULE_KEYS.CURRENCY_RATES && !finalBranchId && !finalWilayahId) {
+      let cr = value;
+      if (typeof cr === 'string') {
+        try { cr = JSON.parse(cr); } catch (e) { cr = null; }
+      }
+      if (cr && typeof cr === 'object' && ((typeof cr.SAR_TO_IDR === 'number' && cr.SAR_TO_IDR > 0) || (typeof cr.USD_TO_IDR === 'number' && cr.USD_TO_IDR > 0))) {
+        currencyRatesUpdated = await recalcProductPricesByRates({
+          SAR_TO_IDR: typeof cr.SAR_TO_IDR === 'number' && cr.SAR_TO_IDR > 0 ? cr.SAR_TO_IDR : 4200,
+          USD_TO_IDR: typeof cr.USD_TO_IDR === 'number' && cr.USD_TO_IDR > 0 ? cr.USD_TO_IDR : 15500
+        });
+      }
+    }
   }
   const updated = await BusinessRuleConfig.findAll({
     where: finalBranchId ? { branch_id: finalBranchId } : { branch_id: null, wilayah_id: finalWilayahId },
@@ -96,7 +110,9 @@ const set = asyncHandler(async (req, res) => {
   });
   const result = {};
   updated.forEach(r => { result[r.key] = r.value; });
-  res.json({ success: true, data: result });
+  const response = { success: true, data: result };
+  if (currencyRatesUpdated) response.pricesUpdated = currencyRatesUpdated;
+  res.json(response);
 });
 
 /**

@@ -4,7 +4,7 @@ import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Pac
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, CardSectionHeader, Input, Autocomplete } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
@@ -392,10 +392,12 @@ const AccountingFinancialReportPage: React.FC = () => {
         }
       />
 
-      {loading && !data && <div className="text-center py-12 text-slate-500">Memuat...</div>}
-
-      {!loading && !data && (
-        <Card className="bg-slate-50 border-slate-200">
+      <Card className="travel-card min-h-[200px]">
+        <CardSectionHeader icon={<FileText className="w-6 h-6" />} title="Laporan Keuangan" subtitle="Ringkasan, per wilayah, cabang, owner, dan detail invoice." className="mb-4" />
+        {loading && !data ? (
+          <ContentLoading />
+        ) : !loading && !data ? (
+        <div className="bg-slate-50 border-slate-200 rounded-xl p-6 text-center">
           <div className="text-center py-12">
             <FileText className="w-12 h-12 text-slate-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-slate-700 mb-2">
@@ -409,10 +411,8 @@ const AccountingFinancialReportPage: React.FC = () => {
               Muat ulang
             </Button>
           </div>
-        </Card>
-      )}
-
-      {data && (
+        </div>
+        ) : data ? (
         <>
           <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-1.5">
             {tabs.map((tab) => (
@@ -432,7 +432,7 @@ const AccountingFinancialReportPage: React.FC = () => {
 
           {activeTab === 'ringkasan' && (
             <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Ringkasan" subtitle="Periode & scope ringkasan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Ringkasan" subtitle="Periode & scope ringkasan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -477,7 +477,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Wilayah" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Wilayah" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -532,7 +532,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Provinsi" subtitle="Periode & wilayah" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Provinsi" subtitle="Periode & wilayah" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -588,7 +588,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Cabang" subtitle="Periode & wilayah/provinsi" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Cabang" subtitle="Periode & wilayah/provinsi" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -645,7 +645,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Owner" subtitle="Periode & scope cabang" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Owner" subtitle="Periode & scope cabang" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -702,7 +702,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Produk" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Produk" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -756,7 +756,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Bulan" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Bulan" subtitle="Periode laporan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -808,7 +808,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 <StatCard icon={<FileText className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} subtitle="Rentang laporan" />
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Detail Invoice" subtitle="Periode, lokasi, status, cari & rentang pendapatan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat...' : 'Terapkan'}</Button></>} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Detail Invoice" subtitle="Periode, lokasi, status, cari & rentang pendapatan" right={<><Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button><Button variant="primary" size="sm" onClick={() => fetchReport()} disabled={loading} className="ml-2">{loading ? 'Memuat data...' : 'Terapkan'}</Button></>} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -901,7 +901,8 @@ const AccountingFinancialReportPage: React.FC = () => {
             </>
           )}
         </>
-      )}
+      ) : null}
+      </Card>
     </div>
   );
 };

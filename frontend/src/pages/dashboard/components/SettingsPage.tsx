@@ -4,6 +4,8 @@ import { Settings as SettingsIcon, DollarSign, Bell, Save } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
+import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import ContentLoading from '../../../components/common/ContentLoading';
 import Input from '../../../components/common/Input';
 import Textarea from '../../../components/common/Textarea';
 import Checkbox from '../../../components/common/Checkbox';
@@ -97,7 +99,7 @@ const SettingsPage: React.FC = () => {
     if (!canEdit) return;
     setSaving(true);
     try {
-      await businessRulesApi.set({
+      const res = await businessRulesApi.set({
         rules: {
           currency_rates: {
             SAR_TO_IDR: form.SAR_TO_IDR === '' ? 0 : Number(form.SAR_TO_IDR),
@@ -105,7 +107,12 @@ const SettingsPage: React.FC = () => {
           }
         }
       });
-      showToast('Kurs disimpan', 'success');
+      const data = res.data as { success?: boolean; pricesUpdated?: { updated: number; created: number } };
+      if (data?.pricesUpdated) {
+        showToast('Kurs disimpan. Semua harga produk (IDR, SAR, USD) telah disesuaikan dengan kurs baru.', 'success');
+      } else {
+        showToast('Kurs disimpan', 'success');
+      }
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
     } finally {
@@ -131,14 +138,6 @@ const SettingsPage: React.FC = () => {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-slate-600">Memuat pengaturan...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -170,37 +169,42 @@ const SettingsPage: React.FC = () => {
         </div>
 
         <div className="lg:col-span-3">
-          {activeTab === 'general' && (
-            <Card className="travel-card">
-              <h3 className="text-xl font-bold text-[#0D1A63] mb-6">General</h3>
-              <div className="space-y-6">
-                <Input
-                  label="Nama Perusahaan"
-                  type="text"
-                  value={form.company_name}
-                  onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
-                  disabled={!canEdit}
-                />
-                <Textarea
-                  label="Alamat Perusahaan"
-                  value={form.company_address}
-                  onChange={(e) => setForm((f) => ({ ...f, company_address: e.target.value }))}
-                  disabled={!canEdit}
-                  rows={3}
-                />
-                {canEdit && (
-                  <Button variant="primary" onClick={handleSaveGeneral} disabled={saving}>
-                    <Save className="w-5 h-5 mr-2" />
-                    {saving ? 'Menyimpan...' : 'Simpan'}
-                  </Button>
-                )}
-              </div>
-            </Card>
-          )}
+          <Card className="travel-card">
+            {loading ? (
+              <ContentLoading />
+            ) : (
+            <>
+              {activeTab === 'general' && (
+                <Card className="travel-card">
+                  <CardSectionHeader title="General" subtitle="Nama perusahaan dan alamat." className="mb-6" />
+                  <div className="space-y-6">
+                    <Input
+                      label="Nama Perusahaan"
+                      type="text"
+                      value={form.company_name}
+                      onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
+                      disabled={!canEdit}
+                    />
+                    <Textarea
+                      label="Alamat Perusahaan"
+                      value={form.company_address}
+                      onChange={(e) => setForm((f) => ({ ...f, company_address: e.target.value }))}
+                      disabled={!canEdit}
+                      rows={3}
+                    />
+                    {canEdit && (
+                      <Button variant="primary" onClick={handleSaveGeneral} disabled={saving}>
+                        <Save className="w-5 h-5 mr-2" />
+                        {saving ? 'Menyimpan...' : 'Simpan'}
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              )}
 
-          {activeTab === 'currency' && (
+              {activeTab === 'currency' && (
             <Card className="travel-card">
-              <h3 className="text-xl font-bold text-stone-900 mb-6">Currency & Kurs</h3>
+              <CardSectionHeader title="Currency & Kurs" subtitle="Nilai tukar ke IDR untuk konversi tagihan." className="mb-6" />
               <div className="space-y-6">
                 <p className="text-sm text-slate-600">Nilai tukar ke IDR (untuk konversi tagihan). Hanya Admin Pusat / Super Admin yang dapat mengubah kurs global.</p>
                 <div className="space-y-4">
@@ -233,38 +237,41 @@ const SettingsPage: React.FC = () => {
             </Card>
           )}
 
-          {activeTab === 'notifications' && (
-            <Card className="travel-card">
-              <h3 className="text-xl font-bold text-[#0D1A63] mb-6">Notifikasi</h3>
-              <div className="space-y-4">
-                {[
-                  { key: 'notification_order' as const, label: 'Notifikasi Order', description: 'Notifikasi saat ada order baru' },
-                  { key: 'notification_payment' as const, label: 'Notifikasi Pembayaran', description: 'Notifikasi saat pembayaran diverifikasi' },
-                  { key: 'notification_invoice' as const, label: 'Notifikasi Invoice', description: 'Notifikasi saat invoice diterbitkan atau diupdate' }
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                    <div>
-                      <p className="font-semibold text-slate-900">{item.label}</p>
-                      <p className="text-sm text-slate-600">{item.description}</p>
-                    </div>
-                    <Checkbox
-                      checked={form[item.key]}
-                      onChange={(e) => setForm((f) => ({ ...f, [item.key]: e.target.checked }))}
-                      disabled={!canEdit}
-                    />
+              {activeTab === 'notifications' && (
+                <Card className="travel-card">
+                  <CardSectionHeader title="Notifikasi" subtitle="Aktifkan atau nonaktifkan notifikasi per jenis." className="mb-6" />
+                  <div className="space-y-4">
+                    {[
+                      { key: 'notification_order' as const, label: 'Notifikasi Order', description: 'Notifikasi saat ada order baru' },
+                      { key: 'notification_payment' as const, label: 'Notifikasi Pembayaran', description: 'Notifikasi saat pembayaran diverifikasi' },
+                      { key: 'notification_invoice' as const, label: 'Notifikasi Invoice', description: 'Notifikasi saat invoice diterbitkan atau diupdate' }
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.label}</p>
+                          <p className="text-sm text-slate-600">{item.description}</p>
+                        </div>
+                        <Checkbox
+                          checked={form[item.key]}
+                          onChange={(e) => setForm((f) => ({ ...f, [item.key]: e.target.checked }))}
+                          disabled={!canEdit}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {canEdit && (
-                <div className="mt-6">
-                  <Button variant="primary" onClick={handleSaveNotifications} disabled={saving}>
-                    <Save className="w-5 h-5 mr-2" />
-                    {saving ? 'Menyimpan...' : 'Simpan Notifikasi'}
-                  </Button>
-                </div>
+                  {canEdit && (
+                    <div className="mt-6">
+                      <Button variant="primary" onClick={handleSaveNotifications} disabled={saving}>
+                        <Save className="w-5 h-5 mr-2" />
+                        {saving ? 'Menyimpan...' : 'Simpan Notifikasi'}
+                      </Button>
+                    </div>
+                  )}
+                </Card>
               )}
-            </Card>
-          )}
+            </>
+            )}
+          </Card>
         </div>
       </div>
     </div>

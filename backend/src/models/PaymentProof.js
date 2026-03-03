@@ -32,7 +32,7 @@ const PaymentProof = sequelize.define('PaymentProof', {
   amount_original: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: true,
-    comment: 'Jumlah dalam payment_currency (SAR/USD) saat input oleh role_invoice_saudi'
+    comment: 'Jumlah dalam payment_currency (SAR/USD) saat input oleh invoice_saudi'
   },
   amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true, comment: 'Nominal transaksi dalam IDR' },
   amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true, comment: 'Nominal transaksi dalam SAR jika ada' },

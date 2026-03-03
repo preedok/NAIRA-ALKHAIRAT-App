@@ -38,7 +38,8 @@ const SUBDIRS = {
   VISA_DOCS: 'visa-docs',
   TICKET_DOCS: 'ticket-docs',
   JAMAAH_DATA: 'jamaah-data',
-  INVOICES: 'invoices'
+  INVOICES: 'invoices',
+  REFUND_PROOFS: 'refund-proofs'
 };
 
 function getDir(subdir) {
@@ -140,6 +141,15 @@ function invoiceFilename(invoiceNumber, status) {
   return `INV_${safeNum}_${safeStatus}_${date}_${time}.pdf`;
 }
 
+/** Nama file bukti refund: REFUND_{refundId6}_{invoiceNumber}_YYYYMMDD_HHmmss.{ext} */
+function refundProofFilename(refundId, invoiceNumber, originalName) {
+  const { date, time } = dateTimeForFilename();
+  const id6 = (refundId || '').toString().slice(-6);
+  const inv = (invoiceNumber || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
+  const ext = safeExt(originalName);
+  return `REFUND_${id6}_${inv}_${date}_${time}${ext}`;
+}
+
 /**
  * URL path untuk akses file dari API (tanpa host). Contoh: /uploads/mou/MOU_Owner_xxx.pdf
  */
@@ -161,6 +171,7 @@ module.exports = {
   ticketDocFilename,
   jamaahDataFilename,
   invoiceFilename,
+  refundProofFilename,
   registrationPaymentFilename,
   registrationPaymentFilenameAtRegister,
   toUrlPath

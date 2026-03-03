@@ -13,6 +13,9 @@ const verifiedStatusLabel = (s) => (s === 'verified' ? 'Diverifikasi' : s === 'r
 const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[String(t).toLowerCase()] || t);
 const mealStatusLabel = (s) => ({ pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' }[String(s).toLowerCase()] || s || '-');
 const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '-');
+const tripTypeLabel = (tt) => ({ one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' }[String(tt || '')] || tt || '');
+const busRouteLabel = (r) => ({ full_route: 'Full rute (Mekkah–Madinah)', bandara_makkah: 'Bandara–Mekkah', bandara_madinah: 'Bandara–Madinah', bandara_madinah_only: 'Bandara–Madinah saja', hotel_makkah_madinah: 'Hotel Mekkah–Madinah', hotel_madinah_makkah: 'Hotel Madinah–Mekkah' }[String(r || '')] || r || '');
+const busTypeLabel = (b) => ({ besar: 'Bus besar', menengah_hiace: 'Hiace', kecil: 'Mobil kecil' }[String(b || '')] || b || '');
 
 const STATUS_LABELS = {
   draft: 'Draft',
@@ -69,11 +72,11 @@ function renderInvoicePdf(doc, data) {
   const pageWidth = doc.page.width - margin * 2;
   let y = margin;
 
-  // ---- Header modern: strip warna + judul ----
-  doc.rect(0, 0, doc.page.width, 72).fill('#0f766e');
+  // ---- Header modern: strip warna biru dongker + judul ----
+  doc.rect(0, 0, doc.page.width, 72).fill('#0D1A63');
   doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('BINTANG GLOBAL GROUP', margin, 22);
   doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.9)').text('Travel & Umroh | Invoice Resmi', margin, 48);
-  doc.fillColor('#0f766e').fontSize(14).font('Helvetica-Bold').text('INVOICE', doc.page.width - margin - 80, 28);
+  doc.fillColor('#0D1A63').fontSize(14).font('Helvetica-Bold').text('INVOICE', doc.page.width - margin - 80, 28);
   doc.fillColor('#334155');
   y = 88;
 
@@ -88,7 +91,7 @@ function renderInvoicePdf(doc, data) {
   y += 12;
   doc.fontSize(10).fillColor('#0f172a');
   doc.text(data.invoice_number || '-', infoX(0), y, { width: infoColW - 20 });
-  doc.font('Helvetica-Bold').fillColor('#0f766e').text(statusLabel, infoX(1), y, { width: infoColW - 20 }).font('Helvetica').fillColor('#0f172a');
+  doc.font('Helvetica-Bold').fillColor('#0D1A63').text(statusLabel, infoX(1), y, { width: infoColW - 20 }).font('Helvetica').fillColor('#0f172a');
   doc.text(data.Order?.order_number || '-', infoX(2), y, { width: infoColW - 20 });
   y += 18;
   doc.fontSize(9).fillColor('#64748b');
@@ -143,7 +146,7 @@ function renderInvoicePdf(doc, data) {
   const rowH = 22;
   const dataRowH = 34;
   const rates = data.currency_rates || {};
-  doc.rect(margin, tableTop, pageWidth, rowH).fillAndStroke('#0f766e', '#0d9488');
+  doc.rect(margin, tableTop, pageWidth, rowH).fillAndStroke('#0D1A63', '#1e3a8a');
   doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
   doc.text('No', x(0), tableTop + 7, { width: w(0) });
   doc.text('Tipe', x(1), tableTop + 7, { width: w(1) });
@@ -190,10 +193,28 @@ function renderInvoicePdf(doc, data) {
         if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);
         if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
         if (parts.length) mealLine = parts.join('  |  ');
-      } else if (itemType === 'visa' && hotelCheckIn) {
-        dateLine = `Tanggal sesuai check-in hotel: ${formatDateShort(hotelCheckIn)}`;
-      } else if (itemType === 'ticket' && ticketDeparture) {
-        dateLine = `Keberangkatan: ${formatDateShort(ticketDeparture)} (1 hari sebelum check-in)`;
+      } else if (itemType === 'visa') {
+        const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
+        const travelDate = meta.travel_date ? formatDateShort(meta.travel_date) : null;
+        if (travelDate) dateLine = `Tanggal keberangkatan: ${travelDate}`;
+        else if (hotelCheckIn) dateLine = `Tanggal sesuai check-in hotel: ${formatDateShort(hotelCheckIn)}`;
+      } else if (itemType === 'ticket') {
+        const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
+        const bandara = meta.bandara ? `Bandara ${meta.bandara}` : '';
+        const tripType = tripTypeLabel(meta.trip_type);
+        const dep = meta.departure_date ? formatDateShort(meta.departure_date) : (ticketDeparture ? formatDateShort(ticketDeparture) : null);
+        const ret = meta.return_date ? formatDateShort(meta.return_date) : null;
+        const parts = [bandara, tripType].filter(Boolean);
+        if (dep || ret) parts.push(dep ? `Berangkat: ${dep}` : '', ret ? `Pulang: ${ret}` : '');
+        dateLine = parts.filter(Boolean).join('  |  ') || (ticketDeparture ? `Keberangkatan: ${formatDateShort(ticketDeparture)} (1 hari sebelum check-in)` : '');
+      } else if (itemType === 'bus') {
+        const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
+        const tripType = tripTypeLabel(meta.trip_type);
+        const travelDate = meta.travel_date ? formatDateShort(meta.travel_date) : null;
+        const route = meta.route_type ? busRouteLabel(meta.route_type) : '';
+        const busType = meta.bus_type ? busTypeLabel(meta.bus_type) : '';
+        const parts = [tripType, travelDate ? `Tgl: ${travelDate}` : '', route, busType].filter(Boolean);
+        if (parts.length) mealLine = parts.join('  |  ');
       }
       const hasExtraLines = dateLine || mealLine;
       const rowH = hasExtraLines ? (mealLine ? 50 : 42) : dataRowH;
@@ -263,17 +284,17 @@ function renderInvoicePdf(doc, data) {
   const overpaidAmount = parseFloat(data.overpaid_amount || 0);
   const totalSarUsd = idrToSarUsd(totalAmount, rates);
   const remainingSarUsd = idrToSarUsd(remainingAmount, rates);
-  doc.rect(boxLeft, y, boxW, 155).fillAndStroke('#f0fdfa', '#99f6e4');
+  doc.rect(boxLeft, y, boxW, 155).fillAndStroke('#eef2ff', '#93c5fd');
   let by = y + 12;
   const amountX = boxLeft + boxW - 14 - amountBoxW;
-  doc.fontSize(10).fillColor('#0f766e');
+  doc.fontSize(10).fillColor('#0D1A63');
   doc.text('Total Tagihan', boxLeft + 14, by);
   doc.text(formatIDR(totalAmount), amountX, by, { width: amountBoxW, align: 'right' });
   by += 11;
   doc.fontSize(7).fillColor('#64748b');
   doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, amountX, by, { width: amountBoxW, align: 'right' });
   by += 16;
-  doc.fontSize(10).fillColor('#0f766e');
+  doc.fontSize(10).fillColor('#0D1A63');
   doc.text(`DP (${dpPct}%)`, boxLeft + 14, by);
   doc.text(formatIDR(dpAmount), amountX, by, { width: amountBoxW, align: 'right' });
   by += 18;
@@ -339,7 +360,7 @@ function renderInvoicePdf(doc, data) {
       y += 20;
     });
     y += 8;
-    doc.fontSize(9).fillColor('#0f766e').font('Helvetica-Bold');
+    doc.fontSize(9).fillColor('#0D1A63').font('Helvetica-Bold');
     const totalPaidFromProofs = proofs.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
     doc.text(`Total Jumlah Pembayaran (dari ${proofs.length} bukti): ${formatIDR(totalPaidFromProofs)}`, margin, y);
     y += 22;

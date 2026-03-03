@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingCart, X, ChevronDown, ChevronUp, Hotel, FileText, Plane, Bus, Package } from 'lucide-react';
+import { ShoppingCart, X, ChevronDown, ChevronUp, Hotel, FileText, Plane, Bus, Package, HandHelping } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrderDraft, type OrderDraftItem, type OrderDraftItemType } from '../contexts/OrderDraftContext';
 import Button from './common/Button';
@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<OrderDraftItemType, string> = {
   visa: 'Visa',
   ticket: 'Tiket',
   bus: 'Bus',
+  handling: 'Handling',
   package: 'Paket'
 };
 
@@ -18,6 +19,7 @@ const TYPE_ICONS: Record<OrderDraftItemType, React.ReactNode> = {
   visa: <FileText className="w-4 h-4" />,
   ticket: <Plane className="w-4 h-4" />,
   bus: <Bus className="w-4 h-4" />,
+  handling: <HandHelping className="w-4 h-4" />,
   package: <Package className="w-4 h-4" />
 };
 
@@ -28,7 +30,7 @@ const ProductDraftBar: React.FC = () => {
   const { items, count, removeItem } = useOrderDraft();
   const [expanded, setExpanded] = useState(true);
 
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const onProductsPath = location.pathname.startsWith('/dashboard/products');
   const showBar = onProductsPath && canAddToOrder && count > 0;
 

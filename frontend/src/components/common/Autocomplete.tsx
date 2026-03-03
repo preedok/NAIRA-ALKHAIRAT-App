@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import type { SelectOption } from '../../types';
 import { inputBaseClass, inputBorderClass, labelClass } from './formStyles';
+import { AUTOCOMPLETE_PILIH } from '../../utils/constants';
 
 export interface AutocompleteProps {
   value: string;
@@ -22,7 +23,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
   onChange,
   options,
   label,
-  placeholder = 'Pilih...',
+  placeholder = AUTOCOMPLETE_PILIH.PILIH,
   disabled = false,
   fullWidth = true,
   className = '',
@@ -108,7 +109,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari..."
+          placeholder={AUTOCOMPLETE_PILIH.CARI}
           className={`${inputBaseClass} ${inputBorder} w-full py-2 text-sm`}
           autoFocus
           onKeyDown={(e) => e.stopPropagation()}
@@ -139,7 +140,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
           </li>
         ))}
         {filtered.length === 0 && (
-          <li className="px-4 py-3 text-sm text-slate-500">Tidak ada hasil</li>
+          <li className="px-4 py-3 text-sm text-slate-500">{AUTOCOMPLETE_PILIH.TIDAK_ADA_HASIL}</li>
         )}
       </ul>
     </div>

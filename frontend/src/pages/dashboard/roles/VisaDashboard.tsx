@@ -56,20 +56,12 @@ const VisaDashboard: React.FC = () => {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
-
   const byStatus = data?.by_status || {};
   const totalInvoices = data?.total_invoices ?? 0;
   const totalItems = data?.total_visa_items ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-sky-100 rounded-2xl shadow-sm shrink-0">

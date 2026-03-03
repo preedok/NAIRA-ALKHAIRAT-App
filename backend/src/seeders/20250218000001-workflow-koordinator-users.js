@@ -96,7 +96,6 @@ module.exports = {
       const wName = w.name || '';
       const pre = slug(wName).slice(0, 20) || 'wilayah';
       usersToInsert.push(
-        { id: uuid(), email: `admin-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Admin Koordinator ${wName}`, role: ROLES.ADMIN_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
         { id: uuid(), email: `invoice-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Invoice Koordinator ${wName}`, role: ROLES.INVOICE_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
         { id: uuid(), email: `tiket-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Tiket Koordinator ${wName}`, role: ROLES.TIKET_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
         { id: uuid(), email: `visa-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Visa Koordinator ${wName}`, role: ROLES.VISA_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now }

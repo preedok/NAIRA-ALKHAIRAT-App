@@ -33,6 +33,11 @@ const Refund = sequelize.define('Refund', {
     allowNull: true,
     comment: 'Nomor rekening untuk refund (diisi owner)'
   },
+  account_holder_name: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Nama pemilik rekening (untuk proses refund oleh accounting)'
+  },
   source: {
     type: DataTypes.STRING(20),
     allowNull: true,
@@ -67,6 +72,11 @@ const Refund = sequelize.define('Refund', {
   },
   refunded_at: {
     type: DataTypes.DATE
+  },
+  proof_file_url: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Bukti transfer refund (upload oleh accounting); dikirim ke email pemesan setelah proses selesai'
   }
 }, {
   tableName: 'refunds',

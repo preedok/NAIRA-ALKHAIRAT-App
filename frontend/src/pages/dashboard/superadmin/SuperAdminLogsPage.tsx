@@ -4,6 +4,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import { Input, Autocomplete } from '../../../components/common';
+import ContentLoading from '../../../components/common/ContentLoading';
 import { superAdminApi } from '../../../services/api';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -58,7 +59,8 @@ export const SuperAdminLogsPage: React.FC = () => {
 
   const limit = 200;
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await superAdminApi.getLogs({
         source: source || undefined,
@@ -85,8 +87,7 @@ export const SuperAdminLogsPage: React.FC = () => {
   useEffect(() => {
     if (!live) return;
     const t = setInterval(() => {
-      setLoading(false);
-      fetchLogs();
+      fetchLogs(false);
     }, POLL_INTERVAL_MS);
     return () => clearInterval(t);
   }, [live, source, level, search]);
@@ -119,8 +120,8 @@ export const SuperAdminLogsPage: React.FC = () => {
       />
 
       <Card className="overflow-hidden">
-        {loading && items.length === 0 ? (
-          <div className="py-12 text-center text-slate-500">Memuat log...</div>
+        {loading ? (
+          <ContentLoading />
         ) : items.length === 0 ? (
           <div className="py-12 text-center text-slate-500">
             Belum ada log. Log akan muncul saat ada aktivitas atau error di aplikasi (backend/frontend/database).

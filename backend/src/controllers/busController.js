@@ -15,13 +15,14 @@ const {
 const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
-/** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, role bus = cabang/wilayah. Fallback semua cabang agar tidak 403. */
+const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
+/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role bus = cabang/wilayah. Fallback semua cabang agar tidak 403. */
 async function getBusBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
     const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
     return branches.map(b => b.id);
   }
-  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+  if (KOORDINATOR_ROLES.includes(user.role) && user.wilayah_id) {
     const ids = await getBranchIdsForWilayah(user.wilayah_id);
     if (ids.length > 0) return ids;
   }

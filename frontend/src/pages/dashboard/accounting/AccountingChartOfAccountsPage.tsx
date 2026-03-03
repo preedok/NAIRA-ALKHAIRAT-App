@@ -7,7 +7,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu } from '../../../components/common';
+import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, type BankAccountItem } from '../../../services/api';
 
@@ -230,7 +230,7 @@ const AccountingChartOfAccountsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={fetchAccounts} disabled={loading} aria-label="Refresh">
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Memuat...' : 'Refresh'}
+              {loading ? CONTENT_LOADING_MESSAGE : 'Refresh'}
             </Button>
             <Button variant="primary" size="sm" onClick={openCreate}>
               <Plus className="w-4 h-4 mr-2" />
@@ -256,9 +256,10 @@ const AccountingChartOfAccountsPage: React.FC = () => {
             <Input label="Cari" type="text" value={search} onChange={(e) => { setSearch(e.target.value); setTablePage(1); }} placeholder="Nama bank, no. rekening, atau nama rekening..." icon={<Search className="w-4 h-4" />} />
           </div>
         </div>
-        {loading ? (
-          <p className="py-6 text-center text-slate-500">Memuat...</p>
-        ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[120px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
           <Table<BankAccountItem>
             columns={columns}
             data={paginatedRows}
@@ -297,7 +298,8 @@ const AccountingChartOfAccountsPage: React.FC = () => {
               </tr>
             )}
           />
-        )}
+          )}
+        </div>
       </Card>
 
       {modalOpen === 'create' && (

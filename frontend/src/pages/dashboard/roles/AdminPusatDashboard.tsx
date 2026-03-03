@@ -18,7 +18,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl } from '../../../components/common';
+import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
@@ -151,7 +151,7 @@ const OrderListModal: React.FC<{
               { id: 'actions', label: 'Aksi', align: 'left' }
             ] as TableColumn[]}
             data={loading ? [] : orders}
-            emptyMessage={loading ? 'Memuat...' : 'Tidak ada data'}
+            emptyMessage={loading ? 'Memuat data...' : 'Tidak ada data'}
             pagination={
               pagination && pagination.total > 0
                 ? {
@@ -260,7 +260,7 @@ const InvoiceListModalAdmin: React.FC<{
               { id: 'status', label: 'Status', align: 'left' }
             ] as TableColumn[]}
             data={loading ? [] : invoices}
-            emptyMessage={loading ? 'Memuat...' : 'Tidak ada data'}
+            emptyMessage={loading ? 'Memuat data...' : 'Tidak ada data'}
             pagination={
               pagination && pagination.total > 0
                 ? {
@@ -447,12 +447,12 @@ const AdminPusatDashboard: React.FC = () => {
         </div>
       )}
 
-      {loading && !data && (
-        <div className="text-center py-16 text-slate-500">Memuat data...</div>
-      )}
-
-      {data && (
-        <>
+      <Card className="travel-card min-h-[200px]">
+        <CardSectionHeader icon={<Receipt className="w-6 h-6" />} title="Ringkasan Admin Pusat" subtitle="Total order, revenue, invoice, dan owner. Filter untuk mempersempit scope." className="mb-4" />
+        {loading && !data ? (
+          <ContentLoading />
+        ) : data ? (
+        <div className="space-y-8">
           {/* Cards total lengkap */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
@@ -490,7 +490,7 @@ const AdminPusatDashboard: React.FC = () => {
           </div>
 
           {/* Order per Status, Cabang, Wilayah, Provinsi - 2x2 grid */}
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-8">
             <Card className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -648,18 +648,15 @@ const AdminPusatDashboard: React.FC = () => {
                 <Receipt className="w-6 h-6" />
                 <span className="text-sm">Invoice</span>
               </Button>
-              <Button variant="outline" className="flex flex-col h-24 gap-2 justify-center hover:border-emerald-500 hover:bg-emerald-50" onClick={() => navigate('/dashboard/branches')}>
-                <Building2 className="w-6 h-6" />
-                <span className="text-sm">Cabang & Akun</span>
-              </Button>
               <Button variant="outline" className="flex flex-col h-24 gap-2 justify-center hover:border-emerald-500 hover:bg-emerald-50" onClick={() => navigate('/dashboard/admin-pusat/users')}>
                 <Users className="w-6 h-6" />
                 <span className="text-sm">Buat Akun Bus/Hotel</span>
               </Button>
             </div>
           </Card>
-        </>
-      )}
+        </div>
+      ) : null}
+      </Card>
 
       <OrderListModal
         open={modalType !== null && modalType !== 'invoices'}

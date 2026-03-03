@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
+import ContentLoading from '../../../components/common/ContentLoading';
 import StatCard from '../../../components/common/StatCard';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -22,6 +23,7 @@ import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { FilterIconButton } from '../../../components/common/PageFilter';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { TableColumn } from '../../../types';
+import { AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import {
   reportsApi,
   type ReportType,
@@ -317,14 +319,14 @@ const ReportsPage: React.FC = () => {
                   return true;
                 })
                 .map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
-              emptyLabel="Semua cabang"
+              emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG}
             />
             <Autocomplete
               label="Wilayah"
               value={wilayahId}
               onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
               options={filterOptions.wilayah.map((w) => ({ value: w.id, label: w.name }))}
-              emptyLabel="Semua wilayah"
+              emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_WILAYAH}
             />
             <Autocomplete
               label="Provinsi"
@@ -333,7 +335,7 @@ const ReportsPage: React.FC = () => {
               options={filterOptions.provinsi
                 .filter((p) => !wilayahId || (p.Wilayah && p.Wilayah.id === wilayahId))
                 .map((p) => ({ value: p.id, label: p.name }))}
-              emptyLabel="Semua provinsi"
+              emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI}
             />
             {reportType !== 'logs' && reportType !== 'financial' && (
               <Autocomplete
@@ -364,14 +366,14 @@ const ReportsPage: React.FC = () => {
                     { value: 'error', label: 'Error' },
                     { value: 'debug', label: 'Debug' }
                   ]}
-                  emptyLabel="Semua"
+                  emptyLabel={AUTOCOMPLETE_FILTER.SEMUA}
                 />
               </>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-slate-200/80">
             <Button variant="primary" size="sm" onClick={() => { setFiltersOpen(false); fetchAnalytics(); }} disabled={loading} className="bg-[#0D1A63] hover:bg-[#0a1449] focus:ring-[#0D1A63]">
-              {loading ? 'Memuat...' : 'Terapkan'}
+              {loading ? 'Memuat data...' : 'Terapkan'}
             </Button>
             <Button variant="outline" size="sm" onClick={resetFilters} className="border-slate-200 text-slate-700 hover:bg-slate-100">
               Reset
@@ -380,11 +382,11 @@ const ReportsPage: React.FC = () => {
         </Card>
       )}
 
-      {loading && !data && (
-        <div className="text-center py-12 text-slate-500">Memuat data...</div>
-      )}
-
-      {data && (
+      <Card className="travel-card min-h-[200px]">
+        <CardSectionHeader icon={<FileText className="w-6 h-6" />} title="Data Laporan" subtitle="Ringkasan dan detail sesuai tipe dan filter." className="mb-4" />
+        {loading && !data ? (
+          <ContentLoading />
+        ) : data ? (
         <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-6">
           {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
@@ -519,6 +521,7 @@ const ReportsPage: React.FC = () => {
           {/* Detail table */}
           <Card className="travel-card">
             <CardSectionHeader
+              icon={<FileText className="w-6 h-6" />}
               title={reportType === 'logs' ? 'Log Entri' : reportType === 'financial' ? 'Detail Invoice' : 'Detail Order'}
               subtitle="Detail data sesuai tipe laporan dan filter."
               className="mb-4"
@@ -623,7 +626,8 @@ const ReportsPage: React.FC = () => {
             </div>
           </Card>
         </div>
-      )}
+        ) : null}
+      </Card>
     </div>
   );
 };

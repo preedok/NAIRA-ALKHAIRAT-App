@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Bus,
-  Users,
-  X
-} from 'lucide-react';
+import { Bus, Users, X, Plus } from 'lucide-react';
 import Autocomplete from '../../../components/common/Autocomplete';
+import ProductCalendar, { type ProductCalendarMonth } from '../../../components/common/ProductCalendar';
 import { productsApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
+import { useAuth } from '../../../contexts/AuthContext';
+
+const ALMOST_FULL_THRESHOLD = 0.2;
+type AvailabilityStatus = 'available' | 'almost_full' | 'full';
+function getAvailabilityStatus(quota: number, available: number): AvailabilityStatus {
+  if (quota <= 0) return 'available';
+  if (available <= 0) return 'full';
+  if (available <= Math.max(1, Math.ceil(quota * ALMOST_FULL_THRESHOLD))) return 'almost_full';
+  return 'available';
+}
 
 export interface BusProduct {
   id: string;
@@ -29,12 +34,17 @@ type CalendarDayData = {
 
 interface BusCalendarViewProps {
   busProducts: BusProduct[];
+  onAddQuotaClick?: () => void;
 }
 
-const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
+const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts, onAddQuotaClick }) => {
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const isOwner = user?.role === 'owner';
+  const canSeeBookingDetails = !isOwner;
+  const canAddQuota = !isOwner && !!onAddQuotaClick;
   const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [calendarMonth, setCalendarMonth] = useState(() => {
+  const [calendarMonth, setCalendarMonth] = useState<ProductCalendarMonth>(() => {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
@@ -81,11 +91,6 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
     return () => clearInterval(interval);
   }, [selectedProductId, fromStr, toStr, fetchCalendar]);
 
-  const daysInMonth = monthEnd.getDate();
-  const firstDayOfWeek = monthStart.getDay();
-  const leadingEmpty = firstDayOfWeek;
-  const totalCells = Math.ceil((leadingEmpty + daysInMonth) / 7) * 7;
-
   const handlePrevMonth = () => {
     setCalendarMonth((p) => (p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 }));
   };
@@ -94,20 +99,26 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
     setCalendarMonth((p) => (p.month === 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: p.month + 1 }));
   };
 
-  const monthLabel = `${new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`;
+  const handleToday = () => {
+    const d = new Date();
+    setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() });
+  };
 
   if (busProducts.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-600">
-        <Bus className="mx-auto h-12 w-12 text-slate-400 mb-3" />
-        <p>Belum ada produk bus. Tambah bus di tab Daftar Bus.</p>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 text-center shadow-sm">
+        <div className="inline-flex p-4 rounded-2xl bg-slate-100 text-slate-500 mb-4">
+          <Bus className="h-12 w-12" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-800">Belum ada produk bus</h3>
+        <p className="text-slate-600 mt-1">Tambah bus di tab Daftar Bus untuk melihat kalender kuota.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end gap-4">
         <Autocomplete
           label="Pilih Produk Bus"
           value={selectedProductId}
@@ -117,151 +128,91 @@ const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts }) => {
           className="min-w-[220px]"
           fullWidth={false}
         />
-        {selectedProductId && (
-          <span className="text-sm text-slate-500">{productName}</span>
+        {selectedProductId && productName && (
+          <span className="text-sm text-slate-600 font-medium pb-1">{productName}</span>
         )}
       </div>
 
       {!selectedProductId && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center text-amber-800 text-sm">
-          Pilih produk bus di atas untuk menampilkan kalender kuota per tanggal dan booking owner.
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-8 text-center text-amber-800 text-sm shadow-sm">
+          <p className="font-medium">Pilih produk bus di atas untuk menampilkan kalender kuota per tanggal dan booking owner.</p>
         </div>
       )}
 
       {selectedProductId && (
-        <>
-          <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-            <button
-              type="button"
-              onClick={handlePrevMonth}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
-              aria-label="Bulan sebelumnya"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <h3 className="text-lg font-semibold text-slate-800 capitalize">{monthLabel}</h3>
-            <button
-              type="button"
-              onClick={handleNextMonth}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
-              aria-label="Bulan berikutnya"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500">
-              Memuat kalender...
-            </div>
-          ) : (
-            <div className="rounded-xl border border-slate-200 bg-white overflow-visible shadow-sm">
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((d) => (
-                  <div key={d} className="py-2 text-center text-xs font-medium text-slate-600">
-                    {d}
+        <ProductCalendar<CalendarDayData>
+          month={calendarMonth}
+          onPrevMonth={handlePrevMonth}
+          onNextMonth={handleNextMonth}
+          onToday={handleToday}
+          data={calendarData}
+          loading={loading}
+          popoverDate={popoverDate}
+          onPopoverToggle={setPopoverDate}
+          footer="Hijau = tersedia, Kuning = hampir penuh, Merah = penuh. Role selain owner bisa lihat siapa yang beli dan tambah kuota (kuning/merah)."
+          renderDayContent={({ dayIndex, isToday, data: day, openPopover, isPopoverOpen }) => {
+            const quota = day?.quota ?? 0;
+            const available = day?.available ?? 0;
+            const hasQuota = day && (day.quota !== undefined || day.booked !== undefined);
+            const status: AvailabilityStatus = hasQuota && quota > 0 ? getAvailabilityStatus(quota, available) : 'available';
+            const statusStyles = status === 'full' ? 'bg-rose-50 text-rose-700 border-rose-200' : status === 'almost_full' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            const dotColor = status === 'full' ? 'bg-rose-400' : status === 'almost_full' ? 'bg-amber-400' : 'bg-emerald-400';
+            const showAddQuota = canAddQuota && (status === 'full' || status === 'almost_full');
+            return (
+              <>
+                <div className="flex items-start justify-between gap-1">
+                  <span className={`tabular-nums font-bold ${isToday ? 'flex items-center justify-center min-w-[32px] h-8 px-2 rounded-lg bg-blue-600 text-white text-lg' : `text-xl text-slate-800 ${!day ? 'text-slate-300' : ''}`}`}>
+                    {dayIndex}
+                  </span>
+                  {showAddQuota && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onAddQuotaClick?.(); }} className="flex items-center justify-center w-8 h-8 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors shrink-0" title="Tambah kuota">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {hasQuota && (
+                  <div className={`mt-2 flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[11px] font-semibold tabular-nums ${statusStyles}`}>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                    <span>
+                      {day?.booked ?? 0}/{day?.quota ?? '—'}
+                      {day?.available !== undefined && <span className="font-normal opacity-90"> · {day.available} tersedia</span>}
+                    </span>
+                  </div>
+                )}
+                {day?._noSeason && day.quota === undefined && day.booked === undefined && <p className="mt-2 text-[11px] text-slate-400">—</p>}
+                {canSeeBookingDetails && day?.bookings?.length ? (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); openPopover(); }} className={`mt-3 text-[11px] font-semibold flex items-center gap-1.5 rounded-lg py-1.5 px-2 w-full justify-center transition-colors ${isPopoverOpen ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}>
+                    <Users className="w-3.5 h-3.5" /> {day.bookings.length} owner
+                  </button>
+                ) : null}
+              </>
+            );
+          }}
+          renderPopover={canSeeBookingDetails ? ({ dateStr, data: day, onClose }) => (
+            <>
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                <span className="text-sm font-bold text-slate-800">{dateStr}</span>
+                <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                {day?.bookings?.map((b) => (
+                  <div key={b.order_id} className="rounded-xl bg-slate-50 p-3">
+                    <div className="font-semibold text-slate-800 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-blue-600" />
+                      {b.owner_name}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">Jumlah: <strong>{b.quantity}</strong></p>
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 overflow-visible">
-                {Array.from({ length: totalCells }, (_, i) => {
-                  const dayIndex = i - leadingEmpty + 1;
-                  const isInMonth = dayIndex >= 1 && dayIndex <= daysInMonth;
-                  const date = isInMonth
-                    ? new Date(calendarMonth.year, calendarMonth.month, dayIndex)
-                    : null;
-                  const dateStr = date ? date.toISOString().slice(0, 10) : '';
-                  const day = dateStr ? calendarData?.[dateStr] : null;
-                  const isPopover = popoverDate === dateStr;
-
-                  return (
-                    <div
-                      key={i}
-                      className={`relative min-h-[100px] border-b border-r border-slate-100 p-1.5 ${
-                        !isInMonth ? 'bg-slate-50/50' : 'bg-white'
-                      } ${isPopover ? 'ring-2 ring-[#0D1A63]/50 ring-inset' : ''}`}
-                    >
-                      {isInMonth && (
-                        <>
-                          <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${!day ? 'text-slate-400' : 'text-slate-800'}`}>
-                              {dayIndex}
-                            </span>
-                          </div>
-                          {day && (day.quota !== undefined || day.booked !== undefined) && (
-                            <div className="mt-1 space-y-0.5">
-                              <div className="text-[10px] text-slate-600 flex justify-between gap-0.5">
-                                <span>Kuota</span>
-                                <span className={day.available !== undefined && day.available <= 0 && (day.quota ?? 0) > 0 ? 'text-red-600 font-medium' : ''}>
-                                  {day.booked ?? 0}/{day.quota ?? '—'}
-                                </span>
-                              </div>
-                              {day.available !== undefined && (
-                                <div className="text-[10px] text-emerald-600">
-                                  Tersedia: {day.available}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {day?._noSeason && day.quota === undefined && day.booked === undefined && (
-                            <p className="text-[10px] text-slate-400 mt-1">—</p>
-                          )}
-                          {popoverDate === dateStr && day?.bookings?.length ? (
-                            <div className="absolute z-50 mt-1 left-0 rounded-lg border border-slate-200 bg-white shadow-xl p-2 max-h-48 overflow-y-auto w-[240px]">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-xs font-semibold text-slate-700">
-                                  {dateStr} — Booking
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setPopoverDate(null)}
-                                  className="p-0.5 text-slate-400 hover:text-slate-600"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              {day?.bookings?.map((b) => (
-                                <div
-                                  key={b.order_id}
-                                  className="text-xs py-1.5 border-b border-slate-100 last:border-0"
-                                >
-                                  <div className="font-medium text-slate-800 flex items-center gap-1">
-                                    <Users className="w-3.5 h-3.5 text-[#0D1A63]" />
-                                    {b.owner_name}
-                                  </div>
-                                  <div className="text-slate-600 mt-0.5">
-                                    Jumlah: <strong>{b.quantity}</strong>
-                                  </div>
-                                </div>
-                              ))}
-                              {day?.seasonName && (
-                                <p className="text-[10px] text-slate-400 mt-1">Periode: {day.seasonName}</p>
-                              )}
-                            </div>
-                          ) : null}
-                          {day?.bookings?.length ? (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); setPopoverDate(popoverDate === dateStr ? null : dateStr); }}
-                              className="mt-1 text-[10px] text-[#0D1A63] hover:underline flex items-center gap-0.5"
-                            >
-                              <Users className="w-3 h-3" />
-                              {day.bookings.length} owner
-                            </button>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-4 text-xs text-slate-600">
-            <span>Keterangan: angka = dipesan/kuota per tanggal. Booking dihitung dari item bus dengan tanggal keberangkatan (travel_date).</span>
-          </div>
-        </>
+              {day?.seasonName && (
+                <p className="text-[11px] text-slate-400 mt-3">Periode: {day.seasonName}</p>
+              )}
+            </>
+          ) : undefined}
+        />
       )}
     </div>
   );

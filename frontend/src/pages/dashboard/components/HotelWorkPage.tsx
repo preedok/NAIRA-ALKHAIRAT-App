@@ -9,11 +9,11 @@ import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
-import { Input, Autocomplete, Textarea } from '../../../components/common';
+import { Input, Autocomplete, Textarea, ContentLoading } from '../../../components/common';
 import type { TableColumn } from '../../../types';
 import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceDisplay } from '../../../utils';
 
 const STATUS_OPTIONS = [
@@ -248,37 +248,30 @@ const HotelWorkPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter */}
-      <Card className="p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+      {/* Filter + Table card — layout konsisten dengan halaman lain */}
+      <Card className="travel-card overflow-visible">
+        <CardSectionHeader
+          icon={<Building2 className="w-6 h-6" />}
+          title="Daftar Invoice Hotel"
+          subtitle={`${filteredInvoices.length} invoice. Filter menurut status invoice & progress.`}
+          className="mb-4"
+        />
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
           </div>
           <div className="sm:w-44">
-            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel="Semua status" />
+            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
           </div>
           <div className="sm:w-44">
-            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel="Semua progress" />
+            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
           </div>
           <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }} className="rounded-xl">Reset</Button>
         </div>
-      </Card>
-
-      {/* Table */}
-      <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/60">
-          <CardSectionHeader
-            icon={<Building2 className="w-6 h-6" />}
-            title="Daftar Invoice Hotel"
-            subtitle={`${filteredInvoices.length} invoice`}
-            className="mb-0"
-          />
-        </div>
-        {loading ? (
-          <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
-            <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
-          </div>
-        ) : !hasHotelInvoices ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : !hasHotelInvoices ? (
           <div className="py-16 text-center">
             <div className="p-5 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
               <Hotel className="w-14 h-14 text-slate-400" />
@@ -322,19 +315,19 @@ const HotelWorkPage: React.FC = () => {
               const checkOutDisplay = formatDateWithTime(checkOutDate, checkOutTime);
               return (
                 <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 px-4 font-mono font-semibold text-slate-800 text-sm">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
-                  <td className="py-3 px-4 font-mono text-slate-700 text-sm">{o?.order_number ?? '–'}</td>
-                  <td className="py-3 px-4 text-slate-700 text-sm">{inv.User?.name ?? inv.User?.company_name ?? o?.User?.name ?? '–'}</td>
-                  <td className="py-3 px-4 text-slate-700 text-sm">{inv.Branch?.name ?? inv.Branch?.code ?? '–'}</td>
-                  <td className="py-3 px-4 text-slate-600 text-sm whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
-                  <td className="py-3 px-4">
+                  <td className="px-6 py-4 font-mono font-semibold text-slate-800 text-sm">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</td>
+                  <td className="px-6 py-4 font-mono text-slate-700 text-sm">{o?.order_number ?? '–'}</td>
+                  <td className="px-6 py-4 text-slate-700 text-sm">{inv.User?.name ?? inv.User?.company_name ?? o?.User?.name ?? '–'}</td>
+                  <td className="px-6 py-4 text-slate-700 text-sm">{inv.Branch?.name ?? inv.Branch?.code ?? '–'}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
+                  <td className="px-6 py-4">
                     <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700">{invStatusLabel}</span>
                   </td>
-                  <td className="py-3 px-4 text-center font-semibold text-slate-900 tabular-nums">{hotelCount}</td>
-                  <td className="py-3 px-4 text-slate-600 text-sm whitespace-nowrap">{checkInDisplay}</td>
-                  <td className="py-3 px-4 text-slate-600 text-sm whitespace-nowrap">{checkOutDisplay}</td>
-                  <td className="py-3 px-4 text-slate-600 text-sm">{progressSummary}</td>
-                  <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
+                  <td className="px-6 py-4 text-center font-semibold text-slate-900 tabular-nums">{hotelCount}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{checkInDisplay}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{checkOutDisplay}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm">{progressSummary}</td>
+                  <td className="px-6 py-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                     <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
                       <Eye className="w-4 h-4 mr-1" /> Detail
                     </Button>
@@ -343,7 +336,8 @@ const HotelWorkPage: React.FC = () => {
               );
             }}
           />
-        )}
+          )}
+        </div>
       </Card>
 
       <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>

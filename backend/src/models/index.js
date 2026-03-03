@@ -1,6 +1,7 @@
 const sequelize = require('../config/sequelize');
 const Wilayah = require('./Wilayah');
 const Provinsi = require('./Provinsi');
+const Kabupaten = require('./Kabupaten');
 const Branch = require('./Branch');
 const User = require('./User');
 const OwnerProfile = require('./OwnerProfile');
@@ -44,9 +45,11 @@ const Bank = require('./Bank');
 const InvoiceStatusHistory = require('./InvoiceStatusHistory');
 const OrderRevision = require('./OrderRevision');
 
-// Wilayah -> Provinsi -> Branch
+// Wilayah -> Provinsi -> Kabupaten, Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
 Provinsi.belongsTo(Wilayah, { foreignKey: 'wilayah_id', as: 'Wilayah' });
+Provinsi.hasMany(Kabupaten, { foreignKey: 'provinsi_id' });
+Kabupaten.belongsTo(Provinsi, { foreignKey: 'provinsi_id', as: 'Provinsi' });
 Provinsi.hasMany(Branch, { foreignKey: 'provinsi_id' });
 Branch.belongsTo(Provinsi, { foreignKey: 'provinsi_id', as: 'Provinsi' });
 
@@ -224,6 +227,7 @@ const db = {
   Sequelize: require('sequelize'),
   Wilayah,
   Provinsi,
+  Kabupaten,
   Branch,
   User,
   OwnerProfile,

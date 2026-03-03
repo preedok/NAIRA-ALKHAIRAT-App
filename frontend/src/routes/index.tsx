@@ -24,15 +24,14 @@ import ProductBusPage from '../pages/dashboard/components/ProductBusPage';
 import BusWorkPage from '../pages/dashboard/components/BusWorkPage';
 import PackagesPage from '../pages/dashboard/components/PackagesPage';
 import HandlingPage from '../pages/dashboard/components/HandlingPage';
+import HandlingWorkPage from '../pages/dashboard/components/HandlingWorkPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
-import BranchesPage from '../pages/dashboard/components/BranchesPage';
 import ReportsPage from '../pages/dashboard/components/ReportsPage';
 import SettingsPage from '../pages/dashboard/components/SettingsPage';
 import ProfilePage from '../pages/dashboard/components/ProfilePage';
 import KoordinatorOwnersPage from '../pages/dashboard/components/KoordinatorOwnersPage';
 import OwnerActivationPage from '../pages/dashboard/owner/OwnerActivationPage';
-import AdminPusatCreateUserPage from '../pages/dashboard/adminpusat/AdminPusatCreateUserPage';
 import OrdersInvoicesPage from '../pages/dashboard/components/OrdersInvoicesPage';
 import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
@@ -110,6 +109,10 @@ const router = createBrowserRouter([
           {
             path: 'progress-bus',
             element: <BusWorkPage />
+          },
+          {
+            path: 'progress-handling',
+            element: <HandlingWorkPage />
           },
           {
             path: 'products/visa',
@@ -193,10 +196,6 @@ const router = createBrowserRouter([
             element: <UsersPage />
           },
           {
-            path: 'branches',
-            element: <BranchesPage />
-          },
-          {
             path: 'reports',
             element: <ReportsPage />
           },
@@ -214,7 +213,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'admin-pusat/users',
-            element: <AdminPusatCreateUserPage />
+            element: <Navigate to="/dashboard/users" replace />
           },
           {
             path: 'accounting/financial-report',

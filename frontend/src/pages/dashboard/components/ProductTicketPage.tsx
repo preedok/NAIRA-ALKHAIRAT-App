@@ -4,7 +4,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import { FilterIconButton } from '../../../components/common';
 import TicketsPage from './TicketsPage';
 import TicketCalendarView from './TicketCalendarView';
 import type { TicketProduct } from './TicketCalendarView';
@@ -57,14 +56,7 @@ const ProductTicketPage: React.FC = () => {
       <PageHeader
         title="Tiket"
         subtitle="Harga dan kuota seat per bandara: default, per bulan, per minggu, per hari. Pekerjaan tiket di menu Tiket."
-        right={
-          <div className="flex items-center gap-2">
-            <AutoRefreshControl onRefresh={handleRefresh} disabled={ticketLoading} />
-            {activeTab === 'list' && (
-              <FilterIconButton open={filterOpen} onToggle={() => setFilterOpen((v) => !v)} hasActiveFilters={filterActive} />
-            )}
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={handleRefresh} disabled={ticketLoading} />}
       />
 
       <nav
@@ -90,16 +82,13 @@ const ProductTicketPage: React.FC = () => {
 
       <div className="flex-1 min-h-[420px]">
         {activeTab === 'list' && (
-          <TicketsPage
-            embedInProducts
-            refreshTrigger={refreshTrigger}
-            embedFilterOpen={filterOpen}
-            embedFilterOnToggle={() => setFilterOpen((v) => !v)}
-            onFilterActiveChange={setFilterActive}
-          />
+          <TicketsPage embedInProducts refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'calendar' && (
-          <TicketCalendarView ticketProducts={ticketLoading ? [] : ticketProducts} />
+          <TicketCalendarView
+            ticketProducts={ticketLoading ? [] : ticketProducts}
+            onAddQuotaClick={() => setActiveTab('list')}
+          />
         )}
       </div>
     </div>

@@ -3,9 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof, PaymentReallocation } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
-const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES } = require('../constants');
+const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS } = require('../constants');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
@@ -147,8 +147,8 @@ const list = asyncHandler(async (req, res) => {
   if (req.user.role === 'owner') where.owner_id = req.user.id;
 
   // Role invoice Saudi / super_admin / admin_pusat: lihat semua order (tanpa filter branch dari role)
-  const isKoordinatorOrInvoiceKoordinator = ['admin_koordinator', 'invoice_koordinator'].includes(req.user.role);
-  const seeAllOrdersByRole = ['super_admin', 'admin_pusat', 'role_invoice_saudi'].includes(req.user.role);
+  const isKoordinatorOrInvoiceKoordinator = ['invoice_koordinator'].includes(req.user.role);
+  const seeAllOrdersByRole = ['super_admin', 'admin_pusat', 'invoice_saudi'].includes(req.user.role);
   let branchIdsWilayah = [];
   let effectiveWilayahId = req.user.wilayah_id;
   if (!seeAllOrdersByRole) {
@@ -245,7 +245,7 @@ const create = asyncHandler(async (req, res) => {
   // Gunakan branch_id dari body hanya jika benar-benar string non-kosong (body tanpa branch_id = undefined)
   const bodyBranchOk = typeof branch_id === 'string' && branch_id.trim() !== '';
   let effectiveBranchId = bodyBranchOk ? branch_id.trim() : (req.user.branch_id || null);
-  const isInvoiceRole = ['invoice_koordinator', 'role_invoice_saudi'].includes(req.user.role);
+  const isInvoiceRole = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
 
   // Untuk owner: ambil assigned_branch_id dari OwnerProfile jika belum ada branch_id
   if (req.user.role === 'owner' && !effectiveBranchId) {
@@ -325,8 +325,6 @@ const create = asyncHandler(async (req, res) => {
 
   let subtotal = 0;
   let totalJamaah = 0;
-  // Penalti bus dihapus: total_amount = subtotal (sesuai UI).
-  const penaltyAmount = 0;
   const orderItems = [];
 
   for (const it of items) {
@@ -347,6 +345,11 @@ const create = asyncHandler(async (req, res) => {
       }
       if (tripType === 'return_only' && !it.meta?.return_date) {
         return res.status(400).json({ success: false, message: 'Tiket pulang saja wajib isi tanggal kepulangan' });
+      }
+    }
+    if (it.type === ORDER_ITEM_TYPE.BUS) {
+      if (it.meta?.trip_type && !BUS_TRIP_TYPES.includes(it.meta.trip_type)) {
+        return res.status(400).json({ success: false, message: 'Trip type bus harus one_way, return_only, atau round_trip (pulang pergi)' });
       }
     }
     const qty = parseInt(it.quantity, 10) || 1;
@@ -392,6 +395,7 @@ const create = asyncHandler(async (req, res) => {
       const nights = getNights(checkIn, checkOut);
       if (nights > 0) meta.nights = nights;
     }
+    if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
     orderItems.push({
       type: it.type,
       product_ref_id: it.product_id,
@@ -404,6 +408,12 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
+  // Penalti bus: minimal 35 pack; jika kurang, penalty per pack yang kurang (sampai 35)
+  const totalBusPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+  const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
+  const penaltyPerPack = parseFloat(rules.bus_penalty_idr) || 500000;
+  const penaltyAmount = totalBusPacks < minPack ? Math.max(0, (minPack - totalBusPacks) * penaltyPerPack) : 0;
+
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
     return res.status(400).json({
@@ -414,13 +424,23 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
-  const canSetRates = ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
-  const ratesOverride = canSetRates && currency_rates_override && typeof currency_rates_override === 'object'
+  const canSetRates = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+  let ratesOverride = canSetRates && currency_rates_override && typeof currency_rates_override === 'object'
     ? {
         SAR_TO_IDR: typeof currency_rates_override.SAR_TO_IDR === 'number' ? currency_rates_override.SAR_TO_IDR : null,
         USD_TO_IDR: typeof currency_rates_override.USD_TO_IDR === 'number' ? currency_rates_override.USD_TO_IDR : null
       }
     : null;
+  if (!ratesOverride || (ratesOverride.SAR_TO_IDR == null && ratesOverride.USD_TO_IDR == null)) {
+    const cr = rules.currency_rates;
+    const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
+    if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
+      ratesOverride = {
+        SAR_TO_IDR: typeof crObj.SAR_TO_IDR === 'number' ? crObj.SAR_TO_IDR : null,
+        USD_TO_IDR: typeof crObj.USD_TO_IDR === 'number' ? crObj.USD_TO_IDR : null
+      };
+    }
+  }
   const ratesPayload = (ratesOverride && (ratesOverride.SAR_TO_IDR != null || ratesOverride.USD_TO_IDR != null))
     ? { currency_rates_override: ratesOverride }
     : {};
@@ -434,7 +454,7 @@ const create = asyncHandler(async (req, res) => {
       total_jamaah: totalJamaah,
       subtotal,
       penalty_amount: penaltyAmount,
-      total_amount: subtotal,
+      total_amount: subtotal + penaltyAmount,
       status: 'draft',
       created_by: req.user.id,
       notes,
@@ -524,7 +544,7 @@ const getById = asyncHandler(async (req, res) => {
 const update = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id, { include: [{ model: OrderItem, as: 'OrderItems' }] });
   if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  const canUpdate = ['invoice_koordinator', 'role_invoice_saudi'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
+  const canUpdate = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
   if (!canUpdate) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau invoice koordinator/Saudi yang dapat mengubah order' });
   }
@@ -532,14 +552,26 @@ const update = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa diubah saat draft/tentative/confirmed/processing' });
   }
   const { items, notes, currency_rates_override } = req.body;
-  const canSetRates = ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
-  if (canSetRates && currency_rates_override !== undefined) {
-    const ratesOverride = (currency_rates_override && typeof currency_rates_override === 'object')
+  const canSetRates = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+  const hasDpPayment = order.dp_payment_status === DP_PAYMENT_STATUS.PEMBAYARAN_DP;
+  if (canSetRates && !hasDpPayment) {
+    let ratesOverride = (currency_rates_override && typeof currency_rates_override === 'object')
       ? {
           SAR_TO_IDR: typeof currency_rates_override.SAR_TO_IDR === 'number' ? currency_rates_override.SAR_TO_IDR : null,
           USD_TO_IDR: typeof currency_rates_override.USD_TO_IDR === 'number' ? currency_rates_override.USD_TO_IDR : null
         }
       : null;
+    if ((!ratesOverride || (ratesOverride.SAR_TO_IDR == null && ratesOverride.USD_TO_IDR == null)) && order.branch_id) {
+      const rules = await getRulesForBranch(order.branch_id);
+      const cr = rules.currency_rates;
+      const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
+      if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
+        ratesOverride = {
+          SAR_TO_IDR: typeof crObj.SAR_TO_IDR === 'number' ? crObj.SAR_TO_IDR : null,
+          USD_TO_IDR: typeof crObj.USD_TO_IDR === 'number' ? crObj.USD_TO_IDR : null
+        };
+      }
+    }
     const payload = (ratesOverride && (ratesOverride.SAR_TO_IDR != null || ratesOverride.USD_TO_IDR != null))
       ? { currency_rates_override: ratesOverride }
       : { currency_rates_override: null };
@@ -567,7 +599,6 @@ const update = asyncHandler(async (req, res) => {
     const beforeMap = groupForDiff(beforeItemsRaw);
     const afterItemsRaw = [];
 
-    // Penalti bus dihapus: total_amount = subtotal (sesuai UI).
     await OrderItem.destroy({ where: { order_id: order.id } });
     let subtotal = 0, totalJamaah = 0;
     for (const it of items) {
@@ -588,6 +619,11 @@ const update = asyncHandler(async (req, res) => {
         }
         if (tripType === 'return_only' && !it.meta?.return_date) {
           return res.status(400).json({ success: false, message: 'Tiket pulang saja wajib isi tanggal kepulangan' });
+        }
+      }
+      if (it.type === ORDER_ITEM_TYPE.BUS) {
+        if (it.meta?.trip_type && !BUS_TRIP_TYPES.includes(it.meta.trip_type)) {
+          return res.status(400).json({ success: false, message: 'Trip type bus harus one_way, return_only, atau round_trip (pulang pergi)' });
         }
       }
       const qty = parseInt(it.quantity, 10) || 1;
@@ -626,6 +662,7 @@ const update = asyncHandler(async (req, res) => {
         const nights = getNights(checkIn, checkOut);
         if (nights > 0) meta.nights = nights;
       }
+      if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
       afterItemsRaw.push({
         type: it.type,
         product_id: it.product_id,
@@ -633,6 +670,13 @@ const update = asyncHandler(async (req, res) => {
         unit_price: unitPrice || 0,
         meta
       });
+      const itemRates = hasDpPayment && it.currency_rates_override && typeof it.currency_rates_override === 'object'
+        ? {
+            SAR_TO_IDR: typeof it.currency_rates_override.SAR_TO_IDR === 'number' ? it.currency_rates_override.SAR_TO_IDR : null,
+            USD_TO_IDR: typeof it.currency_rates_override.USD_TO_IDR === 'number' ? it.currency_rates_override.USD_TO_IDR : null
+          }
+        : null;
+      const itemRatesPayload = (itemRates && (itemRates.SAR_TO_IDR != null || itemRates.USD_TO_IDR != null)) ? { currency_rates_override: itemRates } : {};
       await OrderItem.create({
         order_id: order.id,
         type: it.type,
@@ -642,14 +686,21 @@ const update = asyncHandler(async (req, res) => {
         unit_price: unitPrice || 0,
         subtotal: st,
         manifest_file_url: it.manifest_file_url || null,
-        meta
+        meta,
+        ...itemRatesPayload
       });
     }
+    // Penalti bus: minimal 35 pack; jika kurang, penalty per pack yang kurang
+    const totalBusPacks = items.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+    const rulesUpdate = await getRulesForBranch(order.branch_id);
+    const minPackUpdate = parseInt(rulesUpdate.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
+    const penaltyPerPackUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
+    const penaltyAmountUpdate = totalBusPacks < minPackUpdate ? Math.max(0, (minPackUpdate - totalBusPacks) * penaltyPerPackUpdate) : 0;
     await order.update({
       subtotal,
       total_jamaah: totalJamaah,
-      penalty_amount: 0,
-      total_amount: subtotal
+      penalty_amount: penaltyAmountUpdate,
+      total_amount: subtotal + penaltyAmountUpdate
     });
     const orderReloaded = await Order.findByPk(order.id, { attributes: ['id', 'total_amount', 'subtotal', 'penalty_amount'] });
 
@@ -689,7 +740,7 @@ const update = asyncHandler(async (req, res) => {
         changed_by: req.user.id,
         diff: diffWithNames,
         totals_before: totalsBefore,
-        totals_after: { subtotal, penalty_amount: 0, total_amount: subtotal }
+        totals_after: { subtotal, penalty_amount: penaltyAmountUpdate, total_amount: subtotal + penaltyAmountUpdate }
       });
     }
 
@@ -713,14 +764,15 @@ const update = asyncHandler(async (req, res) => {
 
 /**
  * DELETE /api/v1/orders/:id
- * Batalkan order (soft: status = cancelled). Jika ada pembayaran (paid_amount > 0), body wajib: action = 'to_balance' | 'refund'.
- * - to_balance: saldo ditambahkan ke akun owner (untuk order baru atau alokasi ke tagihan).
- * - refund: buat permintaan refund; body wajib bank_name, account_number (owner memasukkan untuk proses refund).
+ * Batalkan order (soft: status = cancelled). Jika ada pembayaran, body wajib: action = 'to_balance' | 'refund' | 'allocate_to_order'.
+ * - to_balance: seluruh pembayaran jadi saldo akun (untuk order baru atau alokasi ke tagihan).
+ * - refund: permintaan refund; wajib bank_name, account_number. Opsional: refund_amount (default full). Jika partial: remainder_action = 'to_balance' | 'allocate_to_order', remainder_target_invoice_id jika allocate.
+ * - allocate_to_order: pindahkan seluruh pembayaran ke invoice lain; wajib target_invoice_id.
  */
 const destroy = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  const canDelete = ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
+  const canDelete = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
   if (!canDelete) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau tim invoice/admin yang dapat membatalkan order' });
   }
@@ -730,20 +782,45 @@ const destroy = asyncHandler(async (req, res) => {
 
   const inv = await Invoice.findOne({ where: { order_id: order.id } });
   const paidAmount = inv ? parseFloat(inv.paid_amount) || 0 : 0;
-  const action = req.body && (req.body.action === 'to_balance' || req.body.action === 'refund') ? req.body.action : (paidAmount > 0 ? null : null);
+  const action = req.body && ['to_balance', 'refund', 'allocate_to_order'].includes(req.body.action) ? req.body.action : (paidAmount > 0 ? null : null);
   const reason = req.body && req.body.reason ? String(req.body.reason).trim() || null : null;
   const bankName = req.body && req.body.bank_name ? String(req.body.bank_name).trim() || null : null;
   const accountNumber = req.body && req.body.account_number ? String(req.body.account_number).trim() || null : null;
+  const accountHolderName = req.body && req.body.account_holder_name ? String(req.body.account_holder_name).trim() || null : null;
+  let refundAmount = req.body && req.body.refund_amount != null ? parseFloat(req.body.refund_amount) : null;
+  const remainderAction = req.body && (req.body.remainder_action === 'to_balance' || req.body.remainder_action === 'allocate_to_order') ? req.body.remainder_action : null;
+  const remainderTargetInvoiceId = req.body && req.body.remainder_target_invoice_id ? String(req.body.remainder_target_invoice_id).trim() || null : null;
+  const targetInvoiceId = req.body && req.body.target_invoice_id ? String(req.body.target_invoice_id).trim() || null : null;
 
   if (paidAmount > 0 && !action) {
-    return res.status(400).json({ success: false, message: 'Ada pembayaran. Pilih action: to_balance (jadikan saldo) atau refund (minta refund ke rekening). Kirim bank_name dan account_number jika refund.' });
+    return res.status(400).json({ success: false, message: 'Ada pembayaran. Pilih: to_balance (jadikan saldo), refund (minta refund ke rekening), atau allocate_to_order (pindah ke invoice lain).' });
   }
-  if (action === 'refund' && (!bankName || !accountNumber)) {
-    return res.status(400).json({ success: false, message: 'Untuk refund wajib isi bank_name dan account_number (rekening tujuan pengembalian).' });
+  if (action === 'refund') {
+    if (!bankName || !accountNumber) {
+      return res.status(400).json({ success: false, message: 'Untuk refund wajib isi bank_name dan account_number (rekening tujuan pengembalian).' });
+    }
+    if (refundAmount == null || isNaN(refundAmount) || refundAmount <= 0) refundAmount = paidAmount;
+    if (refundAmount > paidAmount) refundAmount = paidAmount;
+    const remainder = paidAmount - refundAmount;
+    if (remainder > 0 && !remainderAction) {
+      return res.status(400).json({ success: false, message: 'Refund sebagian: pilih sisa dana: remainder_action = to_balance (jadikan saldo) atau allocate_to_order (alokasi ke invoice lain). Jika allocate_to_order wajib isi remainder_target_invoice_id.' });
+    }
+    if (remainder > 0 && remainderAction === 'allocate_to_order' && !remainderTargetInvoiceId) {
+      return res.status(400).json({ success: false, message: 'Sisa dana dialokasikan ke invoice lain: wajib isi remainder_target_invoice_id.' });
+    }
+  }
+  if (action === 'allocate_to_order') {
+    if (!targetInvoiceId) return res.status(400).json({ success: false, message: 'Untuk pindah ke order lain wajib isi target_invoice_id.' });
+    const targetInv = await Invoice.findByPk(targetInvoiceId);
+    if (!targetInv) return res.status(404).json({ success: false, message: 'Invoice tujuan tidak ditemukan' });
+    if (targetInv.owner_id !== order.owner_id) return res.status(400).json({ success: false, message: 'Invoice tujuan harus milik owner yang sama' });
+    const targetStatus = (targetInv.status || '').toLowerCase();
+    if (targetStatus === 'canceled' || targetStatus === 'cancelled') return res.status(400).json({ success: false, message: 'Invoice tujuan tidak boleh yang sudah dibatalkan' });
   }
 
   let refund = null;
   let balanceAdded = null;
+  let reallocationAdded = null;
 
   if (inv && paidAmount > 0 && action === 'to_balance') {
     const profile = await OwnerProfile.findOne({ where: { user_id: order.owner_id } });
@@ -762,29 +839,91 @@ const destroy = asyncHandler(async (req, res) => {
       balanceAdded = { previous: currentBalance, new: newBalance };
     }
   } else if (inv && paidAmount > 0 && action === 'refund') {
+    const remainder = paidAmount - refundAmount;
+    if (remainder > 0 && remainderAction === 'to_balance') {
+      const profile = await OwnerProfile.findOne({ where: { user_id: order.owner_id } });
+      if (profile) {
+        const currentBalance = parseFloat(profile.balance) || 0;
+        const newBalance = currentBalance + remainder;
+        await profile.update({ balance: newBalance });
+        await OwnerBalanceTransaction.create({
+          owner_id: order.owner_id,
+          amount: remainder,
+          type: 'cancel_credit',
+          reference_type: 'order',
+          reference_id: order.id,
+          notes: `Pembatalan order ${order.order_number}; sisa setelah refund. Saldo +${Number(remainder).toLocaleString('id-ID')}`
+        });
+        balanceAdded = { previous: currentBalance, new: newBalance, amount: remainder };
+      }
+    } else if (remainder > 0 && remainderAction === 'allocate_to_order' && remainderTargetInvoiceId) {
+      const targetInv = await Invoice.findByPk(remainderTargetInvoiceId);
+      if (targetInv && targetInv.owner_id === order.owner_id) {
+        const targetPaid = parseFloat(targetInv.paid_amount) || 0;
+        const targetTotal = parseFloat(targetInv.total_amount) || 0;
+        const newTargetPaid = targetPaid + remainder;
+        const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
+        let newTargetStatus = targetInv.status;
+        if (newTargetRemaining <= 0) newTargetStatus = 'paid';
+        else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = 'partial_paid';
+        await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus });
+        await PaymentReallocation.create({
+          source_invoice_id: inv.id,
+          target_invoice_id: remainderTargetInvoiceId,
+          amount: remainder,
+          performed_by: req.user.id,
+          notes: `Pembatalan order ${order.order_number}; sisa setelah refund dialokasikan ke invoice ${targetInv.invoice_number}`
+        });
+        reallocationAdded = { target_invoice_id: remainderTargetInvoiceId, amount: remainder };
+      }
+    }
+    await inv.update({ paid_amount: refundAmount, remaining_amount: 0 });
     refund = await Refund.create({
       invoice_id: inv.id,
       order_id: order.id,
       owner_id: order.owner_id,
-      amount: paidAmount,
+      amount: refundAmount,
       status: REFUND_STATUS.REQUESTED,
       source: REFUND_SOURCE.CANCEL,
       reason: reason || null,
       bank_name: bankName,
       account_number: accountNumber,
+      account_holder_name: accountHolderName,
       requested_by: req.user.id
     });
+  } else if (inv && paidAmount > 0 && action === 'allocate_to_order' && targetInvoiceId) {
+    const targetInv = await Invoice.findByPk(targetInvoiceId);
+    if (targetInv && targetInv.owner_id === order.owner_id) {
+      const targetPaid = parseFloat(targetInv.paid_amount) || 0;
+      const targetTotal = parseFloat(targetInv.total_amount) || 0;
+      const newTargetPaid = targetPaid + paidAmount;
+      const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
+      let newTargetStatus = targetInv.status;
+      if (newTargetRemaining <= 0) newTargetStatus = 'paid';
+      else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = 'partial_paid';
+      await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus });
+      await PaymentReallocation.create({
+        source_invoice_id: inv.id,
+        target_invoice_id: targetInvoiceId,
+        amount: paidAmount,
+        performed_by: req.user.id,
+        notes: `Pembatalan order ${order.order_number}; dana dialihkan ke invoice ${targetInv.invoice_number}`
+      });
+      reallocationAdded = { target_invoice_id: targetInvoiceId, amount: paidAmount };
+    }
+    await inv.update({ paid_amount: 0, remaining_amount: 0 });
   }
 
   await order.update({ status: 'cancelled' });
   if (inv) {
+    await inv.update({ status: 'canceled' });
     await logInvoiceStatusChange({
       invoice_id: inv.id,
       from_status: inv.status,
       to_status: 'canceled',
       changed_by: req.user.id,
       reason: 'canceled',
-      meta: { action: action || null, refund_id: refund?.id || null, order_id: order.id }
+      meta: { action: action || null, refund_id: refund?.id || null, order_id: order.id, reallocation: reallocationAdded || null }
     });
     await inv.update({ status: 'canceled' });
     if (refund) {
@@ -794,7 +933,7 @@ const destroy = asyncHandler(async (req, res) => {
         to_status: 'canceled',
         changed_by: req.user.id,
         reason: 'refund_requested',
-        meta: { refund_id: refund.id, amount: paidAmount, bank_name: bankName, account_number: accountNumber }
+        meta: { refund_id: refund.id, amount: refundAmount, bank_name: bankName, account_number: accountNumber }
       });
     } else if (balanceAdded != null) {
       await logInvoiceStatusChange({
@@ -803,16 +942,33 @@ const destroy = asyncHandler(async (req, res) => {
         to_status: 'canceled',
         changed_by: req.user.id,
         reason: 'to_balance',
-        meta: { amount: paidAmount }
+        meta: { amount: balanceAdded.amount != null ? balanceAdded.amount : paidAmount }
+      });
+    } else if (reallocationAdded) {
+      await logInvoiceStatusChange({
+        invoice_id: inv.id,
+        from_status: 'canceled',
+        to_status: 'canceled',
+        changed_by: req.user.id,
+        reason: 'allocate_to_order',
+        meta: reallocationAdded
       });
     }
   }
 
   let message = 'Invoice dibatalkan.';
-  if (balanceAdded != null) message = `Invoice dibatalkan. Saldo akun ditambah Rp ${Number(paidAmount).toLocaleString('id-ID')}. Dapat digunakan untuk order baru atau alokasi ke tagihan.`;
-  else if (refund) message = `Invoice dibatalkan. Permintaan refund Rp ${Number(paidAmount).toLocaleString('id-ID')} ke ${bankName} ${accountNumber} telah dicatat. Admin/accounting akan memproses.`;
+  if (balanceAdded != null) {
+    const amt = balanceAdded.amount != null ? balanceAdded.amount : paidAmount;
+    message = `Invoice dibatalkan. Saldo akun +Rp ${Number(amt).toLocaleString('id-ID')}. Dapat digunakan untuk order baru atau alokasi ke tagihan.`;
+  } else if (refund) {
+    message = `Invoice dibatalkan. Permintaan refund Rp ${Number(refundAmount).toLocaleString('id-ID')} ke ${bankName} ${accountNumber} telah dicatat. Role accounting akan memproses.`;
+    if (reallocationAdded) message += ` Sisa Rp ${Number(reallocationAdded.amount).toLocaleString('id-ID')} dialokasikan ke invoice lain.`;
+    else if (balanceAdded != null) message += ` Sisa telah ditambahkan ke saldo akun.`;
+  } else if (reallocationAdded) {
+    message = `Invoice dibatalkan. Dana Rp ${Number(reallocationAdded.amount).toLocaleString('id-ID')} dialihkan ke invoice lain.`;
+  }
 
-  res.json({ success: true, message, data: { order, refund, balance_added: balanceAdded } });
+  res.json({ success: true, message, data: { order, refund, balance_added: balanceAdded, reallocation: reallocationAdded } });
 });
 
 /**
@@ -829,7 +985,7 @@ const sendOrderResult = asyncHandler(async (req, res) => {
 
   const role = req.user.role;
   let allowed = false;
-  if (['admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'].includes(role) && req.user.wilayah_id) {
+  if (['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'].includes(role) && req.user.wilayah_id) {
     const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
     if (branchIds.includes(order.branch_id)) allowed = true;
   }
@@ -876,7 +1032,7 @@ const uploadJamaahData = [
     const order = await Order.findByPk(orderId, { include: [{ model: OrderItem, as: 'OrderItems' }] });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
     const canUpload = (req.user.role === 'owner' && order.owner_id === req.user.id) ||
-      ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+      ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
     if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice yang dapat mengupload data jamaah' });
 
     const item = order.OrderItems.find(i => i.id === itemId);

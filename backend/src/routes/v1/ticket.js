@@ -5,7 +5,7 @@ const { ROLES } = require('../../constants');
 const ticketController = require('../../controllers/ticketController');
 
 router.use(auth);
-router.use(requireRole(ROLES.TIKET_KOORDINATOR, ROLES.ADMIN_KOORDINATOR, ROLES.SUPER_ADMIN));
+router.use(requireRole(ROLES.TIKET_KOORDINATOR, ROLES.SUPER_ADMIN));
 
 router.get('/dashboard', ticketController.getDashboard);
 router.get('/export-excel', ticketController.exportExcel);

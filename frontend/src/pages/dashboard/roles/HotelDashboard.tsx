@@ -36,14 +36,6 @@ const HotelDashboard: React.FC = () => {
     fetchDashboard();
   }, []);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-      </div>
-    );
-  }
-
   const d = data || {};
   const byStatus = d.by_status || {};
   const pending = d.pending_room_allocation || [];
@@ -56,7 +48,7 @@ const HotelDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Dashboard Hotel"
         subtitle="Rekapitulasi pekerjaan hotel cabang Anda."
@@ -67,7 +59,7 @@ const HotelDashboard: React.FC = () => {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
           <StatCard key={i} icon={stat.icon} label={stat.label} value={stat.value} subtitle={stat.subtitle} iconClassName={stat.iconClassName} />
         ))}

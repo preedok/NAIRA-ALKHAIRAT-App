@@ -4,7 +4,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
-import { PageFilter, AutoRefreshControl, PageHeader, FilterIconButton, StatCard } from '../../../components/common';
+import { PageFilter, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { ownersApi, branchesApi, type OwnerStats } from '../../../services/api';
@@ -62,10 +62,9 @@ const KoordinatorOwnersPage: React.FC = () => {
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
   const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
 
-  const isAdminKoordinator = user?.role === 'admin_koordinator';
   const isInvoiceKoordinator = user?.role === 'invoice_koordinator';
-  const canAssignOrActivate = isAdminKoordinator || isInvoiceKoordinator;
-  const canVerifyDeposit = isAdminKoordinator;
+  const canAssignOrActivate = isInvoiceKoordinator;
+  const canVerifyDeposit = user?.role === 'admin_pusat' || user?.role === 'super_admin';
   const isAdminPusatOrSuperAdmin = user?.role === 'admin_pusat' || user?.role === 'super_admin';
   const canVerifyMou = isAdminPusatOrSuperAdmin;
 
@@ -374,29 +373,38 @@ const KoordinatorOwnersPage: React.FC = () => {
       </PageFilter>
 
       <Card>
-        {loading ? (
-          <div className="py-12 text-center text-slate-500 flex items-center justify-center gap-2">
-            <RefreshCw className="w-5 h-5 animate-spin" /> Memuat...
-          </div>
-        ) : list.length === 0 ? (
-          <div className="py-12 text-center text-slate-500">
-            {hasActiveFilters ? 'Tidak ada owner sesuai filter.' : 'Belum ada owner di wilayah Anda.'}
-          </div>
-        ) : (
-          <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+        <CardSectionHeader
+          icon={<Users className="w-6 h-6" />}
+          title="Daftar Owner"
+          subtitle={isAdminPusatOrSuperAdmin ? 'Daftar owner per wilayah. Verifikasi, aktivasi, atau kelola dari tabel.' : 'Owner yang dilayani koordinator wilayah Anda.'}
+          className="mb-4"
+        />
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left py-3 px-4">Nama / Perusahaan</th>
+                <th className="text-left py-3 px-4">Email</th>
+                <th className="text-left py-3 px-4">Status</th>
+                <th className="text-left py-3 px-4">Cabang</th>
+                <th className="text-left py-3 px-4 w-32">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
                 <tr>
-                  <th className="text-left py-3 px-4">Nama / Perusahaan</th>
-                  <th className="text-left py-3 px-4">Email</th>
-                  <th className="text-left py-3 px-4">Status</th>
-                  <th className="text-left py-3 px-4">Cabang</th>
-                  <th className="text-left py-3 px-4 w-32">Aksi</th>
+                  <td colSpan={5} className="py-8 text-center">
+                    <ContentLoading inline />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {list.map((o) => (
+              ) : list.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-500">
+                    {hasActiveFilters ? 'Tidak ada owner sesuai filter.' : 'Belum ada owner di wilayah Anda.'}
+                  </td>
+                </tr>
+              ) : (
+                list.map((o) => (
                   <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">
                       <p className="font-medium">{o.User?.name}</p>
@@ -452,39 +460,38 @@ const KoordinatorOwnersPage: React.FC = () => {
                       })()}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {total > limit && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50">
-              <span className="text-sm text-slate-600">
-                Menampilkan {from}–{to} dari {total}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {total > limit && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/50">
+            <span className="text-sm text-slate-600">
+              Menampilkan {from}–{to} dari {total}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-slate-600 px-1">
+                Halaman {page} / {totalPages}
               </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1 || loading}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="text-sm text-slate-600 px-1">
-                  Halaman {page} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages || loading}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || loading}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
-          )}
-          </>
+          </div>
         )}
       </Card>
 

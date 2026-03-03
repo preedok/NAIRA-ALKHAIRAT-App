@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet, Calendar, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -6,8 +6,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
-import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -40,7 +39,7 @@ interface VisaProduct {
   code: string;
   name: string;
   description?: string | null;
-  meta?: { visa_kind?: VisaKind; require_hotel?: boolean } | null;
+  meta?: { visa_kind?: VisaKind; require_hotel?: boolean; currency?: string } | null;
   quota?: number;
   price_general_idr?: number | null;
   price_general_sar?: number | null;
@@ -70,7 +69,9 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
 
   const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat';
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  /** Kolom Aksi hanya untuk owner, invoice, admin pusat */
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   const [visaProducts, setVisaProducts] = useState<VisaProduct[]>([]);
   const [loadingVisaProducts, setLoadingVisaProducts] = useState(false);
   const [visaPage, setVisaPage] = useState(1);
@@ -106,17 +107,16 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const [addSeasonSaving, setAddSeasonSaving] = useState(false);
   const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
   const [quotaSaving, setQuotaSaving] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+  const [searchName, setSearchName] = useState('');
+  const [debouncedSearchName, setDebouncedSearchName] = useState('');
+  const lastFilterKeyRef = useRef<string>('');
   const { addItem: addDraftItem } = useOrderDraft();
 
-  const hasActiveFilters = filterIncludeInactive === 'true';
-  const resetFilters = () => setFilterIncludeInactive('false');
-  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
-  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
   useEffect(() => {
-    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
-  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
+    const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
+    return () => clearTimeout(t);
+  }, [searchName]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -132,8 +132,15 @@ const VisaPage: React.FC<VisaPageProps> = ({
 
   const fetchVisaProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
+    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    let pageToUse = visaPage;
+    if (lastFilterKeyRef.current !== filterKey) {
+      lastFilterKeyRef.current = filterKey;
+      setVisaPage(1);
+      pageToUse = 1;
+    }
     setLoadingVisaProducts(true);
-    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: visaLimit, page: visaPage, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: visaLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
         const body = res.data as { data?: VisaProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };
@@ -148,9 +155,8 @@ const VisaPage: React.FC<VisaPageProps> = ({
       })
       .catch(() => setVisaProducts([]))
       .finally(() => setLoadingVisaProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, visaLimit, visaPage]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, visaLimit, visaPage, debouncedSearchName]);
 
-  useEffect(() => { setVisaPage(1); }, [filterIncludeInactive]);
   useEffect(() => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
@@ -248,7 +254,8 @@ const VisaPage: React.FC<VisaPageProps> = ({
         description: addVisaForm.description.trim() || undefined,
         visa_kind: addVisaForm.visa_kind,
         require_hotel: addVisaForm.require_hotel,
-        default_quota: addVisaForm.quota > 0 || addVisaForm.quota === 0 ? addVisaForm.quota : undefined
+        default_quota: addVisaForm.quota > 0 || addVisaForm.quota === 0 ? addVisaForm.quota : undefined,
+        currency: addVisaForm.price_currency
       });
       const product = (createRes.data as { data?: { id: string } })?.data;
       const productId = product?.id;
@@ -342,63 +349,25 @@ const VisaPage: React.FC<VisaPageProps> = ({
           title="Visa"
           subtitle="Produk visa umroh: kelola harga, kuota, dan periode. Admin pusat dapat edit dan hapus."
           right={
-            <div className="flex items-center gap-2">
-              <AutoRefreshControl onRefresh={refetchAll} disabled={loadingVisaProducts} />
-              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
-            </div>
+            <AutoRefreshControl onRefresh={refetchAll} disabled={loadingVisaProducts} />
           }
         />
       )}
 
-      <PageFilter
-        open={filterOpen}
-        onToggle={filterOnToggle}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { refetchAll(); if (embedFilterOnToggle) embedFilterOnToggle(); else setShowFilters(false); }}
-        loading={loadingVisaProducts}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
-        cardTitle="Pengaturan Filter"
-        cardDescription="Tampilkan produk visa aktif saja atau termasuk nonaktif."
-        hideToggleRow
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Autocomplete
-            label="Tampilkan"
-            value={filterIncludeInactive}
-            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
-            options={[
-              { value: 'false', label: 'Aktif saja' },
-              { value: 'true', label: 'Semua (termasuk nonaktif)' }
-            ]}
-          />
-        </div>
-      </PageFilter>
-
-      {/* Stats — layout sama dengan halaman produk Bus/Tiket */}
+      {/* Stats — selalu tampil (data bisa stale saat loading) */}
       {(canAddToOrder || embedInProducts) && (
-        loadingVisaProducts ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-xl bg-slate-100 animate-pulse h-[88px]" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            <StatCard icon={<Package className="w-5 h-5" />} label="Total produk" value={visaStats.total} subtitle="produk visa aktif" />
-            <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Only" value={visaStats.byKind.only} subtitle="produk" />
-            <StatCard icon={<Layers className="w-5 h-5" />} label="Visa + Tasreh" value={visaStats.byKind.tasreh} subtitle="produk" />
-            <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Premium" value={visaStats.byKind.premium} subtitle="produk" />
-            <StatCard icon={<BarChart3 className="w-5 h-5" />} label="Total kuota" value={visaStats.totalQuota > 0 ? visaStats.totalQuota.toLocaleString('id-ID') : '—'} subtitle={visaStats.withQuotaLimit > 0 ? `${visaStats.withQuotaLimit} produk berkuota` : 'Tanpa batas'} />
-            <StatCard icon={<Hotel className="w-5 h-5" />} label="Wajib hotel" value={visaStats.requireHotelCount} subtitle={`dari ${visaStats.total} produk`} />
-            <StatCard icon={<Wallet className="w-5 h-5" />} label="Dengan harga" value={visaStats.withPriceCount} subtitle="produk punya harga" />
-            <StatCard icon={<Coins className="w-5 h-5" />} label="Rata-rata harga" value={visaStats.avgPriceIdr > 0 ? `Rp ${visaStats.avgPriceIdr.toLocaleString('id-ID')}` : '—'} subtitle="IDR" />
-            <StatCard icon={<Coins className="w-5 h-5" />} label="Harga terendah" value={visaStats.minPriceIdr > 0 ? `Rp ${visaStats.minPriceIdr.toLocaleString('id-ID')}` : '—'} />
-            <StatCard icon={<Coins className="w-5 h-5" />} label="Harga tertinggi" value={visaStats.maxPriceIdr > 0 ? `Rp ${visaStats.maxPriceIdr.toLocaleString('id-ID')}` : '—'} />
-          </div>
-        )
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <StatCard icon={<Package className="w-5 h-5" />} label="Total produk" value={visaStats.total} subtitle="produk visa aktif" />
+          <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Only" value={visaStats.byKind.only} subtitle="produk" />
+          <StatCard icon={<Layers className="w-5 h-5" />} label="Visa + Tasreh" value={visaStats.byKind.tasreh} subtitle="produk" />
+          <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Premium" value={visaStats.byKind.premium} subtitle="produk" />
+          <StatCard icon={<BarChart3 className="w-5 h-5" />} label="Total kuota" value={visaStats.totalQuota > 0 ? visaStats.totalQuota.toLocaleString('id-ID') : '—'} subtitle={visaStats.withQuotaLimit > 0 ? `${visaStats.withQuotaLimit} produk berkuota` : 'Tanpa batas'} />
+          <StatCard icon={<Hotel className="w-5 h-5" />} label="Wajib hotel" value={visaStats.requireHotelCount} subtitle={`dari ${visaStats.total} produk`} />
+          <StatCard icon={<Wallet className="w-5 h-5" />} label="Dengan harga" value={visaStats.withPriceCount} subtitle="produk punya harga" />
+          <StatCard icon={<Coins className="w-5 h-5" />} label="Rata-rata harga" value={visaStats.avgPriceIdr > 0 ? `Rp ${visaStats.avgPriceIdr.toLocaleString('id-ID')}` : '—'} subtitle="IDR" />
+          <StatCard icon={<Coins className="w-5 h-5" />} label="Harga terendah" value={visaStats.minPriceIdr > 0 ? `Rp ${visaStats.minPriceIdr.toLocaleString('id-ID')}` : '—'} />
+          <StatCard icon={<Coins className="w-5 h-5" />} label="Harga tertinggi" value={visaStats.maxPriceIdr > 0 ? `Rp ${visaStats.maxPriceIdr.toLocaleString('id-ID')}` : '—'} />
+        </div>
       )}
 
       {/* 2. Produk visa (harga dari admin pusat) — tabel */}
@@ -414,7 +383,22 @@ const VisaPage: React.FC<VisaPageProps> = ({
               </Button>
             ) : undefined}
           />
-          <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+          <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+            <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama produk visa..." fullWidth />
+            <Autocomplete
+              label="Tampilkan"
+              value={filterIncludeInactive}
+              onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+              options={[
+                { value: 'false', label: 'Aktif saja' },
+                { value: 'true', label: 'Semua (termasuk nonaktif)' }
+              ]}
+            />
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200/80 relative min-h-[120px]">
+            {loadingVisaProducts ? (
+              <ContentLoading />
+            ) : (
             <Table<VisaProduct>
               columns={[
                 { id: 'code', label: 'Kode', align: 'left' },
@@ -423,10 +407,11 @@ const VisaPage: React.FC<VisaPageProps> = ({
                 { id: 'description', label: 'Deskripsi', align: 'left' },
                 { id: 'quota', label: 'Kuota', align: 'right' },
                 { id: 'require_hotel', label: 'Wajib hotel', align: 'center' },
+                { id: 'currency', label: 'Mata Uang', align: 'center' },
                 { id: 'price', label: PRICE_COLUMN_LABEL, align: 'right' },
-                { id: 'actions', label: 'Aksi', align: 'center' }
+                ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
               ]}
-              data={loadingVisaProducts ? [] : visaProducts}
+              data={visaProducts}
               renderRow={(p) => {
                 const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
                 const triple = fromIDR(Number(priceIdr), currencyRates);
@@ -442,6 +427,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
                     <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate" title={p.description || undefined}>{p.description || '—'}</td>
                     <td className="py-3 px-4 text-right font-medium text-slate-800">{quota === 0 ? '—' : quota}</td>
                     <td className="py-3 px-4 text-center">{requireHotel ? <Badge variant="info">Ya</Badge> : <span className="text-slate-500">Tidak</span>}</td>
+                    <td className="py-3 px-4 text-center text-sm text-slate-700">{p.meta?.currency || p.currency || 'IDR'}</td>
                     <td className="py-3 px-4 text-right text-slate-800 align-top">
                       {(() => {
                         const idr = Number(priceIdr) || 0;
@@ -461,40 +447,42 @@ const VisaPage: React.FC<VisaPageProps> = ({
                         );
                       })()}
                     </td>
-                    <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {canAddToOrder && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="p-2"
-                            onClick={() => {
-                              addDraftItem({ type: 'visa', product_id: p.id, product_name: p.name, unit_price_idr: Number(priceIdr) || 0, quantity: 1 });
-                              showToast('Visa ditambahkan ke order.', 'success');
-                            }}
-                            title="Tambah ke order"
-                            aria-label="Tambah ke order"
-                          >
-                            <ShoppingCart className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {isPusat && (
-                          <ActionsMenu
-                            align="right"
-                            items={[
-                              { id: 'periode', label: 'Periode & Kuota', icon: <Calendar className="w-4 h-4" />, onClick: () => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
-                              { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => handleOpenEdit(p) },
-                              { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteVisa(p), danger: true },
-                            ]}
-                          />
-                        )}
-                      </div>
-                    </td>
+                    {canShowProductActions ? (
+                      <td className="py-3 px-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                          {canAddToOrder && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="p-2"
+                              onClick={() => {
+                                addDraftItem({ type: 'visa', product_id: p.id, product_name: p.name, unit_price_idr: Number(priceIdr) || 0, quantity: 1 });
+                                showToast('Visa ditambahkan ke order.', 'success');
+                              }}
+                              title="Tambah ke order"
+                              aria-label="Tambah ke order"
+                            >
+                              <ShoppingCart className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {isPusat && (
+                            <ActionsMenu
+                              align="right"
+                              items={[
+                                { id: 'periode', label: 'Periode & Kuota', icon: <Calendar className="w-4 h-4" />, onClick: () => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
+                                { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => handleOpenEdit(p) },
+                                { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteVisa(p), danger: true },
+                              ]}
+                            />
+                          )}
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 );
               }}
-              emptyMessage={loadingVisaProducts ? 'Memuat produk...' : 'Belum ada produk visa.'}
-              emptyDescription={!loadingVisaProducts ? (isPusat ? 'Klik "Tambah produk visa" untuk menambah.' : 'Tambah produk visa di master produk (admin pusat).') : undefined}
+              emptyMessage="Belum ada produk visa."
+              emptyDescription={isPusat ? 'Klik "Tambah produk visa" untuk menambah.' : 'Tambah produk visa di master produk (admin pusat).'}
               pagination={{
                 total: visaTotal,
                 page: visaPage,
@@ -505,6 +493,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
               }}
               stickyActionsColumn
             />
+            )}
           </div>
         </Card>
       )}
@@ -859,7 +848,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
               <div>
                 <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
                 {visaSeasonsLoading ? (
-                  <p className="text-sm text-slate-500">Memuat...</p>
+                  <ContentLoading inline />
                 ) : visaSeasons.length === 0 ? (
                   <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk kalender visa.</p>
                 ) : (

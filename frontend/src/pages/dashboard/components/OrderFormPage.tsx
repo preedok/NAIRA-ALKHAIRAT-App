@@ -10,11 +10,12 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, ordersApi, invoicesApi, businessRulesApi, branchesApi, ownersApi } from '../../../services/api';
 import { formatIDR, formatSAR, formatUSD } from '../../../utils';
+import { AUTOCOMPLETE_PILIH } from '../../../utils/constants';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { Autocomplete, Input } from '../../../components/common';
+import { Autocomplete, Input, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 
 /* ═══════════════════════════════════════════════
    TYPES & CONSTANTS
@@ -36,33 +37,23 @@ const ROOM_TYPES = [
   { id:'quint',  label:'Quint',  cap:5 },
 ] as const;
 
-const BANDARA_TIKET = [
-  { code: 'BTH', name: 'Batam' },
-  { code: 'CGK', name: 'Jakarta' },
-  { code: 'SBY', name: 'Surabaya' },
-  { code: 'UPG', name: 'Makassar' },
-] as const;
-
 type TicketTripType = 'one_way' | 'return_only' | 'round_trip';
-const TICKET_TRIP_OPTIONS: { value: TicketTripType; label: string }[] = [
-  { value: 'one_way', label: 'Pergi saja' },
-  { value: 'return_only', label: 'Pulang saja' },
-  { value: 'round_trip', label: 'Pulang pergi' },
-];
+const TICKET_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
 
 type BusRouteType = 'full_route' | 'bandara_makkah' | 'bandara_madinah' | 'bandara_madinah_only';
-const BUS_ROUTE_OPTIONS: { value: BusRouteType; label: string }[] = [
-  { value: 'full_route', label: 'Full rute (Mekkah–Madinah)' },
-  { value: 'bandara_makkah', label: 'Bandara Jeddah–Mekkah' },
-  { value: 'bandara_madinah', label: 'Bandara Jeddah–Madinah' },
-  { value: 'bandara_madinah_only', label: 'Bandara Jeddah–Madinah saja' },
-];
+const BUS_ROUTE_LABELS: Record<string, string> = {
+  full_route: 'Full rute (Mekkah–Madinah)',
+  bandara_makkah: 'Bandara Jeddah–Mekkah',
+  bandara_madinah: 'Bandara Jeddah–Madinah',
+  bandara_madinah_only: 'Bandara Jeddah–Madinah saja',
+};
 type BusType = 'besar' | 'menengah_hiace' | 'kecil';
-const BUS_TYPE_OPTIONS: { value: BusType; label: string }[] = [
-  { value: 'besar', label: 'Bus Besar (min 35 orang, penalti jika kurang)' },
-  { value: 'menengah_hiace', label: 'Bus Menengah (HIACE)' },
-  { value: 'kecil', label: 'Mobil Kecil' },
-];
+const BUS_KIND_TO_TYPE: Record<string, BusType> = { bus: 'besar', hiace: 'menengah_hiace' };
+const BUS_TYPE_LABELS: Record<string, string> = {
+  besar: 'Bus Besar (min 35 orang, penalti jika kurang)',
+  menengah_hiace: 'Bus Menengah (HIACE)',
+  kecil: 'Mobil Kecil',
+};
 
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
@@ -80,14 +71,13 @@ interface ProductOption {
   route_prices?: Partial<Record<BusRouteType, number>>;
 }
 
-/** Mata uang tampilan per tipe: Hotel SAR, Handling SAR, Bus IDR, Tiket IDR, Visa USD. Lainnya dari product.currency atau IDR. */
+/** Mata uang tampilan: mengikuti mata uang produk; jika produk tidak punya currency, fallback per tipe. */
 function getDisplayCurrency(type: ItemType, product?: ProductOption | null): DisplayCurrency {
-  if (type === 'hotel') return 'SAR';
-  if (type === 'handling') return 'SAR';
+  const c = (product?.currency ?? (product?.meta as { currency?: string })?.currency)?.toUpperCase();
+  if (c === 'SAR' || c === 'USD' || c === 'IDR') return c as DisplayCurrency;
+  if (type === 'hotel' || type === 'handling') return 'SAR';
   if (type === 'bus' || type === 'ticket') return 'IDR';
   if (type === 'visa') return 'USD';
-  const c = product?.currency?.toUpperCase();
-  if (c === 'SAR' || c === 'USD') return c as DisplayCurrency;
   return 'IDR';
 }
 interface HotelRoomLine { id:string; room_type:RoomTypeId|''; quantity:number; unit_price:number; meal_unit_price?:number; with_meal?:boolean; }
@@ -98,7 +88,7 @@ const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'', quantity:0, unit_price:0, with_meal:false });
 const newRow  = (): OrderItemRow  => ({ id:`row-${uid()}`, type:'hotel', product_id:'', product_name:'', quantity:0, unit_price:0, room_breakdown:[newLine()] });
 const rCap = (rt?:RoomTypeId) => rt ? (ROOM_TYPES.find(t=>t.id===rt)?.cap??0) : 0;
-const canManage = (role?:string) => role==='owner' || role==='invoice_koordinator' || role==='role_invoice_saudi';
+const canManage = (role?:string) => role==='owner' || role==='invoice_koordinator' || role==='invoice_saudi';
 /** Jumlah malam dari check_in s/d check_out (tanggal saja). Return 0 jika invalid. */
 function getNights(checkIn?: string, checkOut?: string): number {
   if (!checkIn || !checkOut) return 0;
@@ -119,7 +109,7 @@ const OrderFormPage: React.FC = () => {
   const isEdit = Boolean(orderId);
 
   // Owner tidak bisa mengubah harga (dapat harga khusus); invoice_koordinator boleh mengubah harga yang sudah ada.
-  const canEditPrice = ['invoice_koordinator','role_invoice_saudi','super_admin','admin_pusat','admin_koordinator'].includes(user?.role ?? '');
+  const canEditPrice = ['invoice_koordinator','invoice_saudi','super_admin','admin_pusat'].includes(user?.role ?? '');
 
   useEffect(() => {
     if (user && !canManage(user.role)) navigate('/dashboard/orders-invoices', { replace:true });
@@ -138,9 +128,11 @@ const OrderFormPage: React.FC = () => {
   const [owners,      setOwners]     = useState<OwnerListItem[]>([]);
   const [ownerSel,    setOwnerSel]   = useState('');
   const [hotelAvailability, setHotelAvailability] = useState<Record<string, { byRoomType: Record<string, number> } | 'loading' | null>>({});
+  const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
+  const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
 
   const isOwner      = user?.role === 'owner';
-  const canPickOwner = !isEdit && ['invoice_koordinator','role_invoice_saudi'].includes(user?.role ?? '');
+  const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
   const ownerProf    = canPickOwner && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
   const bFromOwner   = ownerProf?.AssignedBranch?.id ?? ownerProf?.assigned_branch_id ?? null;
   const branchId     = order?.branch_id || (canPickOwner ? bFromOwner : null) || branchSel || user?.branch_id || undefined;
@@ -177,17 +169,21 @@ const OrderFormPage: React.FC = () => {
     }).catch(()=>{});
   },[canPickOwner]);
 
-  // Kurs SAR & USD dari Menu Settings (global business rules).
+  // Kurs SAR & USD + aturan bus (min pack, penalty per pack) dari business rules.
   useEffect(()=>{
-    businessRulesApi.get().then(r=>{
+    const params = branchId ? { branch_id: branchId } : undefined;
+    businessRulesApi.get(params).then(r=>{
       const d=(r.data as any)?.data;
       let cr=d?.currency_rates;
       if(typeof cr==='string'){ try{ cr=JSON.parse(cr); }catch{ cr=null; } }
       const s=typeof cr?.SAR_TO_IDR==='number'?cr.SAR_TO_IDR:4200;
       const u=typeof cr?.USD_TO_IDR==='number'?cr.USD_TO_IDR:15500;
       setRates({SAR_TO_IDR:s, USD_TO_IDR:u});
+      const minPack=typeof d?.bus_min_pack==='number'?d.bus_min_pack:parseInt(String(d?.bus_min_pack),10)||35;
+      const penaltyIdr=typeof d?.bus_penalty_idr==='number'?d.bus_penalty_idr:parseFloat(String(d?.bus_penalty_idr))||500000;
+      setBusPenaltyRule({ bus_min_pack: minPack, bus_penalty_idr: penaltyIdr });
     }).catch(()=>{ setRates({SAR_TO_IDR:4200,USD_TO_IDR:15500}); });
-  },[]);
+  },[branchId]);
 
   const fetchProducts = useCallback(()=>{
     setLoadingProd(true);
@@ -238,7 +234,7 @@ const OrderFormPage: React.FC = () => {
     if(!orderId||!order||!products.length) return;
     const rawItems=order.OrderItems??order.order_items;
     const ois:any[]=Array.isArray(rawItems)?rawItems:[];
-    if(ois.length===0){ setItems([newRow()]); return; }
+    if(ois.length===0){ initialOrderItemKeysRef.current=new Set(); setItems([newRow()]); return; }
     const ov = order.currency_rates_override && typeof order.currency_rates_override === 'object' ? order.currency_rates_override as { SAR_TO_IDR?: number; USD_TO_IDR?: number } : null;
     const s2i = (ov?.SAR_TO_IDR != null ? ov.SAR_TO_IDR : rates.SAR_TO_IDR) || 4200;
     const u2i = (ov?.USD_TO_IDR != null ? ov.USD_TO_IDR : rates.USD_TO_IDR) || 15500;
@@ -274,6 +270,15 @@ const OrderFormPage: React.FC = () => {
         rows.push({ id:oi.id||`row-${uid()}`, type:t, product_id:productRefId, product_name:productName, quantity:Math.max(0,qty(oi)), room_type:(meta.room_type??getVal(oi,'room_type')) as RoomTypeId|undefined, unit_price:unitPrice, meta:Object.keys(meta).length?meta:undefined });
       }
     }
+    const keys = new Set<string>();
+    for (const oi of ois) {
+      const t = (getVal(oi,'type')||'hotel') as string;
+      const pid = getVal(oi,'product_ref_id')||'';
+      const m = typeof oi.meta==='object'?oi.meta:{};
+      if (t==='hotel') keys.add(`hotel:${pid}:${m.room_type||''}:${m.check_in||''}:${m.check_out||''}`);
+      else keys.add(`${t}:${pid}:${JSON.stringify(m)}`);
+    }
+    initialOrderItemKeysRef.current = keys;
     setItems(rows.length?rows:[newRow()]);
   },[orderId,order,products,rates.SAR_TO_IDR,rates.USD_TO_IDR]);
 
@@ -299,18 +304,43 @@ const OrderFormPage: React.FC = () => {
 
   /* helpers */
   const byType=(type:ItemType)=> type==='package'?products.filter(p=>p.is_package):products.filter(p=>!p.is_package&&p.type===type);
+  /** Hanya tipe yang punya produk di data — agar dropdown Tipe hanya tampil pilihan yang tersedia */
+  const availableItemTypes = ITEM_TYPES.filter((t) => byType(t.id).length > 0);
+  /** Mata uang dari data produk (tanpa hardcode); fallback IDR jika belum ada produk */
+  const currencyOptionsFromProducts = React.useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p) => {
+      const c = (p.currency ?? (p.meta as { currency?: string })?.currency);
+      if (c) set.add(String(c).toUpperCase());
+    });
+    const list = Array.from(set).sort();
+    return list.length ? list.map((c) => ({ value: c, label: c })) : [{ value: 'IDR', label: 'IDR' }];
+  }, [products]);
   const s2i=rates.SAR_TO_IDR||4200;
   const u2iR=rates.USD_TO_IDR||15500;
   const effP=(p:ProductOption,type?:ItemType)=>{ const cur=type?getDisplayCurrency(type,p):'IDR'; const n=p.price_owner??p.price_branch??p.price_general; const raw=typeof n==='number'&&!isNaN(n)?n:0; if(cur==='SAR') return (p.price_general_sar ?? (raw&&p.currency==='IDR'?raw/s2i:raw))??0; if(cur==='USD') return (p.price_general_usd ?? (raw&&p.currency==='USD'?raw:raw/u2iR))??0; return (p.price_general_idr ?? raw)??0; };
+  /** Harga paket per unit dalam IDR: jika ada diskon pakai harga setelah diskon, jika tidak pakai harga normal. */
+  const packageUnitPriceIdr=(p:ProductOption):number=>{
+    const rawIdr=Number(p.price_general_idr ?? (p.currency==='IDR'||!p.currency?p.price_general??p.price_branch:null)??0)||0;
+    const meta=p.meta as { price_total_idr?: number; days?: number; discount_percent?: number } | undefined;
+    const days=Number(meta?.days??1);
+    const baseIdr=meta?.price_total_idr ?? (days>=1 ? rawIdr/days : rawIdr);
+    const discountPercent=Number(meta?.discount_percent??0);
+    if(baseIdr<=0) return 0;
+    if(discountPercent>0) return Math.round(baseIdr*(1-discountPercent/100));
+    return baseIdr;
+  };
   const ticketPrice=(p:ProductOption|undefined,bandara:string)=>{ if(!p?.bandara_options) return 0; const opt=p.bandara_options.find(b=>b.bandara===bandara); return (opt?.default?.price_idr != null && !isNaN(opt.default.price_idr)) ? Number(opt.default.price_idr) : 0; };
-  /** Harga satuan bus dalam IDR (dari route_prices, route_prices_by_trip, price_per_vehicle_idr, atau price_general_idr/SAR). */
-  const busRoutePrice=(p:ProductOption|undefined,route:BusRouteType):number=>{
+  /** Harga satuan bus dalam IDR (dari route_prices, route_prices_by_trip per trip_type, price_per_vehicle_idr, atau price_general_idr/SAR). */
+  const busRoutePrice=(p:ProductOption|undefined,route:BusRouteType,tripType:TicketTripType='round_trip'):number=>{
     if(!p) return 0;
     const rp=p.meta?.route_prices as Record<string,number>|undefined;
     const byTrip=p.meta?.route_prices_by_trip as Record<string,number>|undefined;
     const priceVehicle=p.meta?.price_per_vehicle_idr; const pv=typeof priceVehicle==='number'&&!Number.isNaN(priceVehicle)?Number(priceVehicle):0;
-    const fromRoute=rp?.[route]; const fromTrip=byTrip?.round_trip ?? byTrip?.one_way ?? byTrip?.return_only;
-    const raw=typeof fromRoute==='number'&&fromRoute>0?fromRoute:(typeof fromTrip==='number'&&fromTrip>0?fromTrip:(p.price_general_idr ?? p.price_general ?? pv));
+    const fromRoute=rp?.[route];
+    const tripPrice=byTrip && typeof byTrip[tripType]==='number' ? byTrip[tripType] : (byTrip?.round_trip ?? byTrip?.one_way ?? byTrip?.return_only);
+    const fromTrip=tripPrice;
+    const raw=typeof fromRoute==='number'&&fromRoute>0?fromRoute:(typeof fromTrip==='number'&&fromTrip>=0?fromTrip:(p.price_general_idr ?? p.price_general ?? pv));
     if(typeof raw==='number'&&raw>0) return raw;
     if(p.price_general_sar != null && p.price_general_sar > 0) return Math.round(p.price_general_sar*s2i);
     if(pv>0) return pv;
@@ -333,13 +363,17 @@ const OrderFormPage: React.FC = () => {
       : fallbackGeneral;
     return meal ? roomSar + toSar((p.meta?.meal_price as number|undefined)??0) : roomSar;
   };
+  const hasDpPayment = isEdit && order?.dp_payment_status === 'pembayaran_dp';
   const effectiveRates = (orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null))
     ? { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR ?? rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: orderRatesOverride.USD_TO_IDR ?? rates.USD_TO_IDR ?? 15500 }
     : rates;
   const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
   const toIDR=(price:number,row:OrderItemRow)=>{ const c=rowCur(row); if(c==='SAR') return price*(effectiveRates.SAR_TO_IDR||4200); if(c==='USD') return price*(effectiveRates.USD_TO_IDR||15500); return price; };
+  const toIDRWithRates=(price:number,row:OrderItemRow,rateSet:{SAR_TO_IDR?:number;USD_TO_IDR?:number})=>{ const c=rowCur(row); const s=rateSet.SAR_TO_IDR||4200; const u=rateSet.USD_TO_IDR||15500; if(c==='SAR') return price*s; if(c==='USD') return price*u; return price; };
   const getInC=(priceInRow:number,row:OrderItemRow,cur:'IDR'|'SAR'|'USD')=>{ const idr=toIDR(priceInRow,row); const t=fillFromSource('IDR',idr,effectiveRates); return cur==='IDR'?t.idr:cur==='SAR'?t.sar:t.usd; };
   const toRowCurrency=(idr:number,row:OrderItemRow)=>{ const c=rowCur(row); const s2i=effectiveRates.SAR_TO_IDR||4200; const u2i=effectiveRates.USD_TO_IDR||15500; if(c==='SAR') return idr/s2i; if(c==='USD') return idr/u2i; return idr; };
+  const s2iEff=effectiveRates.SAR_TO_IDR||4200; const u2iEff=effectiveRates.USD_TO_IDR||15500;
+  const toCurrencyFromSAR=(sar:number,cur:DisplayCurrency)=> cur==='SAR'?sar: cur==='IDR'?sar*s2iEff: sar*s2iEff/u2iEff;
   const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updateRow(rowId,{unit_price:toRowCurrency(idr,row)}); };
   const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row)}); };
   const setMealLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updLine(rowId,lineId,{meal_unit_price:toRowCurrency(idr,row)}); };
@@ -367,18 +401,21 @@ const OrderFormPage: React.FC = () => {
       const prod=byType(next.type).find(x=>x.id===upd.product_id);
       if(prod){
         next.product_name=prod.name;
+        next.price_currency=(prod.currency ?? (prod.meta as { currency?: string })?.currency ?? getDisplayCurrency(next.type, prod)) as DisplayCurrency;
         if(next.type==='ticket'){
-          const bandara=(next.meta?.bandara as string)||(prod.bandara_options?.[0]?.bandara)||'BTH';
+          const bandara=(next.meta?.bandara as string)||(prod.bandara_options?.[0]?.bandara)||'';
           const tripFromProduct=(prod.meta?.trip_type as TicketTripType)||'round_trip';
           next.meta={ ...(next.meta||{}), bandara, trip_type: upd.product_id!==r.product_id ? tripFromProduct : ((next.meta?.trip_type as TicketTripType)||tripFromProduct) };
           next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?ticketPrice(prod,bandara):next.unit_price;
         } else if(next.type==='bus'){
           const rp=prod.meta?.route_prices as Record<string,number>|undefined;
-          const routeOption=BUS_ROUTE_OPTIONS.find(o=>(rp?.[o.value] ?? 0)>0);
-          const routeOpt=routeOption?.value;
+          const routeOpt=rp&&Object.keys(rp).length?Object.entries(rp).find(([,v])=>(v??0)>0)?.[0] as BusRouteType|undefined:undefined;
           const route:BusRouteType=(next.meta?.route_type as BusRouteType)||routeOpt||'full_route';
-          next.meta={ ...(next.meta||{}), route_type:route, trip_type:(next.meta?.trip_type as TicketTripType)||(prod.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(next.meta?.bus_type as BusType)||'besar' };
-          next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?busRoutePrice(prod,route):next.unit_price;
+          const tripType=(next.meta?.trip_type as TicketTripType)||(prod.meta?.trip_type as TicketTripType)||'round_trip';
+          next.meta={ ...(next.meta||{}), route_type:route, trip_type:tripType, bus_type:(next.meta?.bus_type as BusType)||'besar' };
+          next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?busRoutePrice(prod,route,tripType):next.unit_price;
+        } else if(next.type==='package'){
+          if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=toRowCurrency(packageUnitPriceIdr(prod),next);
         } else {
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod,next.type);
         }
@@ -386,10 +423,13 @@ const OrderFormPage: React.FC = () => {
           next.room_breakdown=[{id:`rl-${uid()}`,room_type:'',quantity:0,unit_price:0,with_meal:false}];
         }
         if(next.type==='hotel'&&next.room_breakdown?.length){
+          const rowCurHotel=next.price_currency??getDisplayCurrency(next.type,prod);
           next.room_breakdown=next.room_breakdown.map(l=>{
             if(!l.room_type) return l;
-            const roomP=hrp(prod,l.room_type as RoomTypeId,false);
-            const mealP=getMealPriceSar(prod);
+            const roomPSar=hrp(prod,l.room_type as RoomTypeId,false);
+            const mealPSar=getMealPriceSar(prod);
+            const roomP=toCurrencyFromSAR(roomPSar,rowCurHotel);
+            const mealP=toCurrencyFromSAR(mealPSar,rowCurHotel);
             return { ...l, unit_price: l.unit_price||roomP, meal_unit_price: l.with_meal?(l.meal_unit_price??mealP):0 };
           });
         }
@@ -403,7 +443,8 @@ const OrderFormPage: React.FC = () => {
     if(upd.meta!=null&&next.type==='bus'){
       const prodBus=byType('bus').find(x=>x.id===next.product_id);
       const route:BusRouteType=(upd.meta.route_type as BusRouteType)||(next.meta?.route_type as BusRouteType)||'full_route';
-      if(prodBus) next.unit_price=busRoutePrice(prodBus,route);
+      const tripType:TicketTripType=(upd.meta.trip_type as TicketTripType)||(next.meta?.trip_type as TicketTripType)||'round_trip';
+      if(prodBus) next.unit_price=busRoutePrice(prodBus,route,tripType);
     }
     if(upd.type!=null&&upd.type!==r.type){
       next.product_id=''; next.product_name=''; next.unit_price=0; next.meta=undefined;
@@ -412,29 +453,32 @@ const OrderFormPage: React.FC = () => {
     return next;
   }));
 
-  /* totals — hotel: harga per malam × jumlah malam × qty; non-hotel: unit_price × qty. Jika harga kamar tidak diubah, pakai harga admin pusat. */
+  /* totals — hotel: harga per malam × jumlah malam × qty; non-hotel: unit_price × qty. Semua dalam mata uang baris (product); konversi pakai kurs sistem. */
   const getEffectiveLinePrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const cur=rowCur(r);
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return l.unit_price||hrp(prod,l.room_type as RoomTypeId,true);
-    const roomPart=l.unit_price||hrp(prod,l.room_type as RoomTypeId,false);
-    const mealPart=l.with_meal?(l.meal_unit_price??getMealPriceSar(prod)):0;
+    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur);
+    const roomPart=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false),cur);
+    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur)):0;
     return roomPart+mealPart;
   };
   const getEffectiveRoomPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const cur=rowCur(r);
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||hrp(prod,l.room_type as RoomTypeId,true); const meal=getMealPriceSar(prod); return Math.max(0,combined-meal); }
-    return l.unit_price||hrp(prod,l.room_type as RoomTypeId,false);
+    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod),cur); return Math.max(0,combined-meal); }
+    return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false),cur);
   };
   const getEffectiveMealPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.with_meal) return 0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const cur=rowCur(r);
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(!hasSplitMeal){ const combined=l.unit_price||hrp(prod,l.room_type as RoomTypeId,true); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
-    return l.meal_unit_price??getMealPriceSar(prod);
+    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
+    return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur);
   };
   const nightsFor=(r:OrderItemRow)=> r.type==='hotel' ? getNights(r.check_in,r.check_out) : 0;
   const rowSub=(r:OrderItemRow)=>{
@@ -455,12 +499,70 @@ const OrderFormPage: React.FC = () => {
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
-  const totalIDR=items.reduce((s,r)=>s+toIDR(rowSub(r),r),0);
+  const subtotalIDR=items.reduce((s,r)=>s+toIDR(rowSub(r),r),0);
+  const totalBusPacks=items.filter(r=>r.type==='bus').reduce((s,r)=>s+Math.max(0,r.quantity),0);
+  const busPenaltyIDR=totalBusPacks>0&&totalBusPacks<busPenaltyRule.bus_min_pack
+    ?(busPenaltyRule.bus_min_pack-totalBusPacks)*busPenaltyRule.bus_penalty_idr
+    :0;
+  const totalIDR=subtotalIDR+busPenaltyIDR;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
   /* submit */
+  const latestRates = { SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 };
+  const buildPayloadWithRates=(valid:OrderItemRow[])=>{
+    const out:Record<string,any>[]=[];
+    for(const r of valid){
+      if(r.type==='hotel'&&r.room_breakdown?.length){
+        for(const l of r.room_breakdown){
+          if(l.quantity<=0||!l.room_type) continue;
+          const meal=l.with_meal??false;
+          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out;
+          const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
+          const isNew=!initialOrderItemKeysRef.current.has(key);
+          const useLatestRates=hasDpPayment&&isNew;
+          const unitPriceIdr=useLatestRates?toIDRWithRates(l.unit_price,r,latestRates):toIDR(l.unit_price,r);
+          const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:unitPriceIdr,room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta};
+          if(useLatestRates) item.currency_rates_override=latestRates;
+          out.push(item);
+        }
+      } else if(r.type==='hotel'&&r.room_type){
+        const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out;
+        const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
+        const isNew=!initialOrderItemKeysRef.current.has(key);
+        const useLatestRates=hasDpPayment&&isNew;
+        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
+        const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:unitPriceIdr,room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta};
+        if(useLatestRates) item.currency_rates_override=latestRates;
+        out.push(item);
+      } else{
+        const metaKey=JSON.stringify(r.meta||{});
+        const key=`${r.type}:${r.product_id}:${metaKey}`;
+        const isNew=!initialOrderItemKeysRef.current.has(key);
+        const useLatestRates=hasDpPayment&&isNew;
+        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
+        const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:unitPriceIdr};
+        if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta;
+        if(useLatestRates) item.currency_rates_override=latestRates;
+        out.push(item);
+      }
+    }
+    return out;
+  };
+  /** Hanya kirim kurs override jika ada permintaan khusus (invoice koordinator mengisi kurs). Tanpa override = pakai kurs sistem. */
+  const getRatesPayload=()=>{
+    if(isEdit&&hasDpPayment) return {};
+    const hasCustomRates=canEditPrice&&orderRatesOverride&&(orderRatesOverride.SAR_TO_IDR!=null||orderRatesOverride.USD_TO_IDR!=null);
+    return hasCustomRates ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride!.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride!.USD_TO_IDR } } : {};
+  };
+  const validForRates=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+  const hasNewItemsAfterDp=hasDpPayment&&validForRates.some(r=>{
+    if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0||!l.room_type) continue; const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`; if(!initialOrderItemKeysRef.current.has(key)) return true; } return false; }
+    if(r.type==='hotel'&&r.room_type){ const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`; return !initialOrderItemKeysRef.current.has(key); }
+    const key=`${r.type}:${r.product_id}:${JSON.stringify(r.meta||{})}`;
+    return !initialOrderItemKeysRef.current.has(key);
+  });
   const handleSubmit=(e:React.FormEvent)=>{
     e.preventDefault();
     const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
@@ -480,15 +582,8 @@ const OrderFormPage: React.FC = () => {
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
-    const payload:Record<string,any>[]=[];
-    for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0||!l.room_type) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
-      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
-    }
-    const ratesPayload = canEditPrice && orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null)
-      ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride.USD_TO_IDR } }
-      : {};
+    const payload=buildPayloadWithRates(valid);
+    const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
       ordersApi.update(orderId,{items:payload,...ratesPayload})
@@ -525,15 +620,8 @@ const OrderFormPage: React.FC = () => {
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
-    const payload:Record<string,any>[]=[];
-    for(const r of valid){
-      if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0||!l.room_type) continue; const meal=l.with_meal??false; const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:toIDR(l.unit_price,r),room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta}); } }
-      else if(r.type==='hotel'&&r.room_type){ const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; payload.push({product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r),room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta}); }
-      else{ const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:toIDR(r.unit_price,r)}; if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta; payload.push(item); }
-    }
-    const ratesPayload = canEditPrice && orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null)
-      ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride.USD_TO_IDR } }
-      : {};
+    const payload=buildPayloadWithRates(valid);
+    const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
       ordersApi.update(orderId,{items:payload,...ratesPayload})
@@ -572,9 +660,8 @@ const OrderFormPage: React.FC = () => {
   const typeOf=(id:string)=>ITEM_TYPES.find(t=>t.id===id)??ITEM_TYPES[0];
 
   if(loadingOrd&&isEdit) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-slate-600">
-      <Loader2 className="w-10 h-10 animate-spin text-[#0D1A63]" />
-      <span className="text-sm font-medium">Memuat detail order…</span>
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <ContentLoading minHeight={300} />
     </div>
   );
 
@@ -634,7 +721,7 @@ const OrderFormPage: React.FC = () => {
               </div>
             </div>
             <div className="p-4">
-              <Autocomplete label="Cabang" value={branchSel} onChange={v=>{setBranchSel(v);setOwnerSel('');}} options={branches.map(b=>({ value: b.id, label: `${b.name} (${b.code})` }))} placeholder="— Pilih cabang —" />
+              <Autocomplete label="Cabang" value={branchSel} onChange={v=>{setBranchSel(v);setOwnerSel('');}} options={branches.map(b=>({ value: b.id, label: `${b.name} (${b.code})` }))} placeholder={AUTOCOMPLETE_PILIH.PILIH_CABANG} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_CABANG} />
             </div>
           </section>
         )}
@@ -652,7 +739,7 @@ const OrderFormPage: React.FC = () => {
               </div>
             </div>
             <div className="p-4">
-              <Autocomplete label="Owner" value={ownerSel} onChange={setOwnerSel} options={owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return { value: uid2, label: lbl }; })} placeholder="— Pilih owner —" />
+              <Autocomplete label="Owner" value={ownerSel} onChange={setOwnerSel} options={owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return { value: uid2, label: lbl }; })} placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_OWNER} />
             </div>
           </section>
         )}
@@ -676,7 +763,7 @@ const OrderFormPage: React.FC = () => {
           <div className="p-4 space-y-4">
               {loadingProd ? (
                 <div className="flex items-center gap-2 py-3 text-slate-500 text-sm">
-                  <Loader2 className="w-4 h-4 animate-spin text-[#0D1A63]" /> Memuat produk…
+                  <Loader2 className="w-4 h-4 animate-spin text-[#0D1A63]" /> {CONTENT_LOADING_MESSAGE}
                 </div>
               ) : (
                 <>
@@ -694,35 +781,35 @@ const OrderFormPage: React.FC = () => {
                           if (!Number.isNaN(from)) moveItem(from, index);
                         }}
                       >
-                        {/* Baris item: isi penuh, tanpa ruang kosong */}
-                        <div className="flex flex-wrap items-end gap-2 p-3 bg-slate-50/70 border-b border-slate-100">
+                        {/* Baris item: header Tipe & Produk — warna sama dengan button (biru dongker) */}
+                        <div className="flex flex-wrap items-end gap-2 p-3 bg-[#0D1A63] border-b border-white/20 [&_label]:text-white [&_p]:text-white">
                           <div
                             draggable
                             onDragStart={(e)=>{ e.dataTransfer.setData('text/plain', String(index)); e.dataTransfer.effectAllowed='move'; }}
-                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-400 cursor-grab active:cursor-grabbing hover:border-slate-300 hover:text-slate-600 shrink-0"
+                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 border border-white/30 text-white cursor-grab active:cursor-grabbing hover:bg-white/30 shrink-0"
                             title="Tarik untuk pindah urutan"
                           >
                             <GripVertical size={16}/>
                           </div>
-                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 shrink-0">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 border border-white/30 text-white shrink-0">
                             <tc.Icon size={16}/>
                           </div>
                           <div className="min-w-[90px] flex-1 sm:flex-initial sm:w-[120px]">
-                            <Autocomplete label="Tipe" value={row.type} onChange={v=>updateRow(row.id,{type:v as ItemType})} options={ITEM_TYPES.map(t=>({value:t.id,label:t.label}))} />
+                            <Autocomplete label="Tipe" value={row.type} onChange={v=>updateRow(row.id,{type:v as ItemType})} options={(availableItemTypes.some(t=>t.id===row.type) ? availableItemTypes : [...availableItemTypes, ITEM_TYPES.find(t=>t.id===row.type)!].filter(Boolean)).map(t=>({value:t.id,label:t.label}))} emptyLabel="— Pilih tipe —" />
                           </div>
                           <div className="min-w-0 flex-1 basis-40">
                             <Autocomplete label="Produk" value={row.product_id} onChange={v=>{ const p=byType(row.type).find(x=>x.id===v); updateRow(row.id,{product_id:v,product_name:p?.name??'',unit_price:p?effP(p):0}); }} options={byType(row.type).map(p=>({value:p.id,label:`${p.name} (${p.code})`}))} emptyLabel="— Pilih produk —" />
                           </div>
                           {canEditPrice && (
                             <div className="min-w-[80px] flex-1 sm:flex-initial sm:w-[100px]">
-                              <Autocomplete label="Mata uang" value={row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id))} onChange={v=>updateRow(row.id,{ price_currency: (v==='' ? undefined : v) as DisplayCurrency })} options={[{value:'IDR',label:'IDR'},{value:'SAR',label:'SAR'},{value:'USD',label:'USD'}]} />
+                              <Autocomplete label="Mata uang" value={row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id))} onChange={v=>updateRow(row.id,{ price_currency: (v==='' ? undefined : v) as DisplayCurrency })} options={currencyOptionsFromProducts} />
                             </div>
                           )}
-                          <div className="text-right min-w-[80px] shrink-0">
-                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Subtotal</p>
-                            <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(rowSub(row))} SAR`:rowCur(row)==='USD'?formatUSD(rowSub(row)):formatIDR(rowSub(row))}</p>
+                          <div className="text-right min-w-[80px] shrink-0 text-white">
+                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Subtotal</p>
+                            <p className="text-sm font-bold tabular-nums">{rowCur(row)==='SAR'?`${fmt(rowSub(row))} SAR`:rowCur(row)==='USD'?formatUSD(rowSub(row)):formatIDR(rowSub(row))}</p>
                           </div>
-                          <Button type="button" variant="ghost" size="sm" onClick={()=>removeRow(row.id)} aria-label="Hapus item" className="text-slate-400 hover:text-red-600 hover:bg-red-50 w-8 h-8 min-w-[32px] min-h-[32px] p-0 rounded-lg shrink-0 self-end inline-flex items-center justify-center">
+                          <Button type="button" variant="ghost" size="sm" onClick={()=>removeRow(row.id)} aria-label="Hapus item" className="text-white/90 hover:text-white hover:bg-white/20 w-8 h-8 min-w-[32px] min-h-[32px] p-0 rounded-lg shrink-0 self-end inline-flex items-center justify-center">
                             <Trash2 size={16} className="shrink-0"/>
                           </Button>
                         </div>
@@ -753,7 +840,7 @@ const OrderFormPage: React.FC = () => {
                                       {hotelAvailability[row.id] === 'loading' && (
                                         <div className="flex items-center gap-2 text-sm text-slate-500">
                                           <Loader2 className="w-4 h-4 animate-spin shrink-0"/>
-                                          <span>Memuat ketersediaan…</span>
+                                          <span>{CONTENT_LOADING_MESSAGE}</span>
                                         </div>
                                       )}
                                       {hotelAvailability[row.id] && typeof hotelAvailability[row.id] === 'object' && (
@@ -781,14 +868,14 @@ const OrderFormPage: React.FC = () => {
                               {(row.room_breakdown||[]).map(line=>(
                                 <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-slate-50/60 border border-slate-100">
                                   <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
-                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ const rt=v as RoomTypeId|''; updLine(row.id,line.id,{room_type:rt,unit_price:rt?hrp(hProd,rt,false):0,meal_unit_price:line.with_meal&&rt?getMealPriceSar(hProd):(line.meal_unit_price??0)}); }} options={ROOM_TYPES.map(rt=>({value:rt.id,label:`${rt.label} · ${rt.cap}px`}))} emptyLabel="— Pilih —" />
+                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ const rt=v as RoomTypeId|''; const cur=rowCur(row); updLine(row.id,line.id,{room_type:rt,unit_price:rt?toCurrencyFromSAR(hrp(hProd,rt,false),cur):0,meal_unit_price:line.with_meal&&rt?toCurrencyFromSAR(getMealPriceSar(hProd),cur):(line.meal_unit_price??0)}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
                                   </div>
                                   <div className="w-16 min-w-[60px]">
                                     <Input label="Jumlah" type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
                                   </div>
                                   <div className="flex items-center gap-1.5 text-slate-500 text-sm pb-2.5"><Users size={14} className="text-slate-400"/>{Math.max(0,line.quantity)*rCap(line.room_type||undefined)} jamaah</div>
                                   <Button type="button" variant={line.with_meal?'primary':'outline'} size="sm" className="rounded-xl"
-                                    onClick={()=>updLine(row.id,line.id,{with_meal:!(line.with_meal??false),meal_unit_price:(!(line.with_meal??false))?getMealPriceSar(hProd):0})}>
+                                    onClick={()=>updLine(row.id,line.id,{with_meal:!(line.with_meal??false),meal_unit_price:(!(line.with_meal??false))?toCurrencyFromSAR(getMealPriceSar(hProd),rowCur(row)):0})}>
                                     <Utensils size={14} className="mr-1.5"/> Makan
                                   </Button>
                                   <div className="flex-1 min-w-[100px]">
@@ -875,7 +962,7 @@ const OrderFormPage: React.FC = () => {
                                 return (
                                 <>
                                   <div className="min-w-0">
-                                    <Autocomplete label="Bandara" value={(row.meta?.bandara as string)||''} onChange={v=>{ updateRow(row.id,{ meta: { ...(row.meta||{}), bandara:v } }); }} options={BANDARA_TIKET.map(b=>({value:b.code,label:`${b.name} (${b.code})`}))} emptyLabel="— Pilih bandara —" />
+                                    <Autocomplete label="Bandara" value={(row.meta?.bandara as string)||''} onChange={v=>{ updateRow(row.id,{ meta: { ...(row.meta||{}), bandara:v } }); }} options={(ticketProduct?.bandara_options ?? []).map(b=>({value:b.bandara,label:`${b.name} (${b.bandara})`}))} emptyLabel="— Pilih bandara —" />
                                   </div>
                                   {tripType==='round_trip' && (
                                     <>
@@ -895,14 +982,23 @@ const OrderFormPage: React.FC = () => {
                               {row.type==='visa' && (
                                 <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender visa" /></div>
                               )}
-                              {row.type==='bus' && (
+                              {row.type==='bus' && (()=>{
+                                const busProduct = products.find((p:ProductOption)=>p.type==='bus'&&p.id===row.product_id);
+                                const productTripType = busProduct?.meta?.trip_type as TicketTripType | undefined;
+                                const tripType = (row.meta?.trip_type as TicketTripType)||productTripType||'round_trip';
+                                return (
                                 <>
                                   <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender bus" /></div>
-                                  <div className="min-w-0"><Autocomplete label="Jenis bus" value={(row.meta?.bus_type as BusType)||'besar'} onChange={v=>{ const bus_type=v as BusType; updateRow(row.id,{ meta: { ...(row.meta||{}), bus_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip' } }); }} options={BUS_TYPE_OPTIONS.map(o=>({value:o.value,label:o.label}))} /></div>
-                                  <div className="min-w-0"><Autocomplete label="Rute" value={(row.meta?.route_type as BusRouteType)||'full_route'} onChange={v=>{ const route_type=v as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type:(row.meta?.trip_type as TicketTripType)||'round_trip', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={BUS_ROUTE_OPTIONS.map(o=>({value:o.value,label:o.label}))} /></div>
-                                  <div className="min-w-0"><Autocomplete label="Perjalanan" value={(row.meta?.trip_type as TicketTripType)||'round_trip'} onChange={v=>{ const trip_type=v as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={TICKET_TRIP_OPTIONS.map(o=>({value:o.value,label:o.label}))} /></div>
+                                  <div className="min-w-0"><Autocomplete label="Jenis bus" value={(row.meta?.bus_type as BusType)||'besar'} onChange={v=>{ const bus_type=v as BusType; updateRow(row.id,{ meta: { ...(row.meta||{}), bus_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', trip_type: tripType } }); }} options={(()=>{ const kind=busProduct?.meta?.bus_kind as string|undefined; const t=kind?BUS_KIND_TO_TYPE[kind]:undefined; if(!t) return []; const lbl=BUS_TYPE_LABELS[t]; return [{ value: t, label: lbl ?? t }]; })()} /></div>
+                                  <div className="min-w-0"><Autocomplete label="Rute" value={(row.meta?.route_type as BusRouteType)||'full_route'} onChange={v=>{ const route_type=v as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type: tripType, bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={(()=>{ const rp=busProduct?.meta?.route_prices as Record<string,number>|undefined; if(!rp) return []; return Object.entries(rp).filter(([,v])=>(v??0)>0).map(([k])=>({ value: k, label: BUS_ROUTE_LABELS[k] ?? k })); })()} /></div>
+                                  {productTripType ? (
+                                    <div className="min-w-0"><p className="text-sm font-medium text-slate-700 mb-0.5">Perjalanan</p><p className="text-sm text-slate-600">{TICKET_TRIP_LABELS[productTripType] ?? productTripType}</p></div>
+                                  ) : (
+                                    <div className="min-w-0"><Autocomplete label="Perjalanan" value={tripType} onChange={v=>{ const tt=v as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type: tt, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={(()=>{ const byTrip=busProduct?.meta?.route_prices_by_trip as Record<string,number>|undefined; const keys=byTrip?Object.keys(byTrip).filter(k=>['one_way','return_only','round_trip'].includes(k)):[]; return keys.map(k=>({ value: k, label: TICKET_TRIP_LABELS[k] ?? k })); })()} /></div>
+                                  )}
                                 </>
-                              )}
+                                );
+                              })()}
                               <div className="min-w-0 w-20">
                                 <Input label="Qty" type="number" min={0} value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }} />
                               </div>
@@ -947,14 +1043,26 @@ const OrderFormPage: React.FC = () => {
               </div>
               <div>
                 <h2 className="font-semibold text-slate-900 text-sm">Kurs untuk order ini</h2>
-                <p className="text-xs text-slate-500">Kosongkan = pakai kurs dari Settings</p>
+                <p className="text-xs text-slate-500">{hasDpPayment ? 'Sudah ada DP: kurs order dipakai untuk item lama; kurs terbaru untuk item tambahan.' : 'Isi hanya jika ada permintaan khusus; kosong = pakai kurs dari sistem (Settings).'}</p>
               </div>
             </div>
-            <div className="p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input label="1 SAR = (IDR)" type="number" min={0} step={1} placeholder={String(rates.SAR_TO_IDR ?? 4200)} value={orderRatesOverride?.SAR_TO_IDR != null ? String(orderRatesOverride.SAR_TO_IDR) : ''} onChange={e=>{ const v=e.target.value; setOrderRatesOverride(prev=>({ ...(prev||{}), SAR_TO_IDR: v===''?undefined:Math.max(0,parseFloat(v)||0) })); }} />
-                <Input label="1 USD = (IDR)" type="number" min={0} step={1} placeholder={String(rates.USD_TO_IDR ?? 15500)} value={orderRatesOverride?.USD_TO_IDR != null ? String(orderRatesOverride.USD_TO_IDR) : ''} onChange={e=>{ const v=e.target.value; setOrderRatesOverride(prev=>({ ...(prev||{}), USD_TO_IDR: v===''?undefined:Math.max(0,parseFloat(v)||0) })); }} />
+            <div className="p-4 space-y-4">
+              <div>
+                {hasDpPayment && <p className="text-xs font-medium text-slate-600 mb-2">Kurs order (item yang sudah ada)</p>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="1 SAR = (IDR)" type="number" min={0} step={1} placeholder={String(rates.SAR_TO_IDR ?? 4200)} value={orderRatesOverride?.SAR_TO_IDR != null ? String(orderRatesOverride.SAR_TO_IDR) : ''} onChange={e=>{ const v=e.target.value; setOrderRatesOverride(prev=>({ ...(prev||{}), SAR_TO_IDR: v===''?undefined:Math.max(0,parseFloat(v)||0) })); }} disabled={!!hasDpPayment} />
+                  <Input label="1 USD = (IDR)" type="number" min={0} step={1} placeholder={String(rates.USD_TO_IDR ?? 15500)} value={orderRatesOverride?.USD_TO_IDR != null ? String(orderRatesOverride.USD_TO_IDR) : ''} onChange={e=>{ const v=e.target.value; setOrderRatesOverride(prev=>({ ...(prev||{}), USD_TO_IDR: v===''?undefined:Math.max(0,parseFloat(v)||0) })); }} disabled={!!hasDpPayment} />
+                </div>
               </div>
+              {hasNewItemsAfterDp && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200/80 p-3">
+                  <p className="text-xs font-semibold text-emerald-800 mb-2">Kurs terbaru (untuk item tambahan)</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <span>1 SAR = <b className="text-slate-900">{formatIDR(latestRates.SAR_TO_IDR)}</b></span>
+                    <span>1 USD = <b className="text-slate-900">{formatIDR(latestRates.USD_TO_IDR)}</b></span>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -987,10 +1095,10 @@ const OrderFormPage: React.FC = () => {
                 <p className="text-xs text-slate-500">Pembayaran USD</p>
               </div>
             </div>
-            {totalPax>0&&(
-              <div className="flex items-center gap-2 text-slate-700 text-sm">
-                <Users size={16} className="text-[#0D1A63]"/>
-                <span>Total jamaah: <strong className="text-slate-900">{totalPax}</strong> orang</span>
+            {busPenaltyIDR>0&&(
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
+                <p className="text-amber-800 font-medium">Penalti bus: {totalBusPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
+                <p className="text-slate-600 text-xs mt-0.5">{busPenaltyRule.bus_min_pack - totalBusPacks} pack × {formatIDR(busPenaltyRule.bus_penalty_idr)} = {formatIDR(busPenaltyIDR)}</p>
               </div>
             )}
             <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">

@@ -14,7 +14,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { Card, Button, PageHeader, StatCard } from '../../../components/common';
+import { Card, Button, PageHeader, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
 import { formatIDR, DONUT_COLORS } from '../../../utils';
 import { superAdminApi, branchesApi } from '../../../services/api';
 import { ROLE_NAMES } from '../../../types';
@@ -40,7 +40,7 @@ async function readBlobError(blob: Blob): Promise<string> {
 }
 
 const MONITORING_ROLES: UserRole[] = [
-  'admin_pusat', 'owner', 'invoice_koordinator', 'role_invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting'
+  'admin_pusat', 'owner', 'invoice_koordinator', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_accounting'
 ];
 
 const SuperAdminDashboard: React.FC = () => {
@@ -135,7 +135,7 @@ const SuperAdminDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title={`Selamat datang, ${user?.name ?? 'Admin'}`}
         subtitle="Super Admin – Informasi transaksi & monitoring sistem"
@@ -192,24 +192,28 @@ const SuperAdminDashboard: React.FC = () => {
         }
       />
 
-      {loading && !data ? (
-        <Card className="travel-card"><div className="py-12 text-center text-stone-500">Memuat...</div></Card>
-      ) : (
-        <>
+      <Card className="travel-card">
+        <CardSectionHeader icon={<Activity className="w-6 h-6" />} title="Dashboard Super Admin" subtitle="Rekap transaksi dan kesehatan sistem." className="mb-4" />
+        {loading && !data ? (
+          <ContentLoading />
+        ) : (
+        <div className="space-y-8">
           {/* Informasi transaksi keseluruhan */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatIDR(o.total_revenue || 0)} subtitle={`Hari ini: ${formatIDR(o.revenue_today || 0)}`} iconClassName="bg-[#0D1A63] text-white" />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order" value={o.total_orders ?? 0} subtitle={`Hari ini: ${o.orders_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
-            <StatCard icon={<FileCheck className="w-5 h-5" />} label="Total Faktur" value={o.total_invoices ?? 0} subtitle={`Hari ini: ${o.invoices_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
-            <StatCard icon={<Users className="w-5 h-5" />} label="Pengguna Aktif (24j)" value={o.active_users_24h ?? 0} subtitle={`Total: ${o.total_users ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
-            <StatCard icon={<Activity className="w-5 h-5" />} label="Kesehatan Sistem" value={perf.database === 'ok' ? 'OK' : 'Error'} subtitle={`Uptime: ${perf.uptime_human || '-'}`} iconClassName={perf.database === 'ok' ? 'bg-[#0D1A63] text-white' : 'bg-red-100 text-red-600'} />
+            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={loading && !data ? '–' : formatIDR(o.total_revenue || 0)} subtitle={loading && !data ? '–' : `Hari ini: ${formatIDR(o.revenue_today || 0)}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order" value={loading && !data ? '–' : (o.total_orders ?? 0)} subtitle={loading && !data ? '–' : `Hari ini: ${o.orders_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<FileCheck className="w-5 h-5" />} label="Total Faktur" value={loading && !data ? '–' : (o.total_invoices ?? 0)} subtitle={loading && !data ? '–' : `Hari ini: ${o.invoices_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<Users className="w-5 h-5" />} label="Pengguna Aktif (24j)" value={loading && !data ? '–' : (o.active_users_24h ?? 0)} subtitle={loading && !data ? '–' : `Total: ${o.total_users ?? 0}`} iconClassName="bg-[#0D1A63] text-white" />
+            <StatCard icon={<Activity className="w-5 h-5" />} label="Kesehatan Sistem" value={loading && !data ? '–' : (perf.database === 'ok' ? 'OK' : 'Error')} subtitle={loading && !data ? '–' : `Uptime: ${perf.uptime_human || '-'}`} iconClassName={perf.database === 'ok' ? 'bg-[#0D1A63] text-white' : 'bg-red-100 text-red-600'} />
           </div>
 
           {/* Chart Invoice per Status + Performance */}
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-8">
             <Card className="travel-card">
               <h3 className="text-lg font-bold text-stone-900 mb-4">Invoice per Status</h3>
-              {Object.keys(ordersByStatus).length > 0 ? (
+              {loading && !data ? (
+                <ContentLoading />
+              ) : Object.keys(ordersByStatus).length > 0 ? (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -265,8 +269,9 @@ const SuperAdminDashboard: React.FC = () => {
               ))}
             </div>
           </Card>
-        </>
+        </div>
       )}
+      </Card>
     </div>
   );
 };

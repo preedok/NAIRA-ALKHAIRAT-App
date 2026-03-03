@@ -39,7 +39,7 @@ const create = [
   asyncHandler(async (req, res) => {
     const invoice = await Invoice.findByPk(req.params.id);
     if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-    if (invoice.owner_id !== req.user.id && !['invoice_koordinator', 'role_invoice_saudi', 'super_admin'].includes(req.user.role)) {
+    if (invoice.owner_id !== req.user.id && !['invoice_koordinator', 'invoice_saudi', 'super_admin'].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
 
@@ -51,6 +51,7 @@ const create = [
 
     const isIssueByInvoice = req.user.role === ROLES.ROLE_INVOICE_SAUDI && payment_location === 'saudi';
     let paymentCurrency = (payment_currency || 'IDR').toUpperCase();
+    if (paymentCurrency !== 'SAR' && paymentCurrency !== 'USD') paymentCurrency = 'IDR';
     let amountOriginal = null;
     if (isIssueByInvoice && (paymentCurrency === 'SAR' || paymentCurrency === 'USD')) {
       const rules = await getRulesForBranch(invoice.branch_id);
@@ -60,9 +61,8 @@ const create = [
       amountOriginal = amt;
       amt = paymentCurrency === 'SAR' ? amt * SAR_TO_IDR : amt * USD_TO_IDR;
       amt = Math.round(amt);
-    } else {
-      paymentCurrency = 'IDR';
     }
+    // IDR: jumlah sesuai mata uang, tidak perlu konversi
 
     let fileUrl = null;
     if (req.file) {
@@ -78,7 +78,7 @@ const create = [
       }
       fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.PAYMENT_PROOFS, savedName);
     }
-    if (!fileUrl && !isIssueByInvoice) return res.status(400).json({ success: false, message: 'File bukti bayar wajib atau gunakan payment_location=saudi untuk terbitkan bukti' });
+    if (!fileUrl) return res.status(400).json({ success: false, message: 'Upload bukti bayar wajib.' });
 
     const proof = await PaymentProof.create({
       invoice_id: invoice.id,
@@ -91,7 +91,7 @@ const create = [
       bank_name: bank_name || null,
       account_number: account_number || null,
       transfer_date: transfer_date || null,
-      proof_file_url: fileUrl || (isIssueByInvoice ? 'issued-saudi' : ''),
+      proof_file_url: fileUrl,
       uploaded_by: isIssueByInvoice ? null : req.user.id,
       issued_by: isIssueByInvoice ? req.user.id : null,
       payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
@@ -103,7 +103,7 @@ const create = [
       await proof.update({ verified_by: req.user.id, verified_at: new Date(), verified_status: 'verified' });
       const allProofs = await PaymentProof.findAll({ where: { invoice_id: invoice.id } });
       const verifiedSum = allProofs
-        .filter(p => p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
+        .filter(p => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
         .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
       const inv = await Invoice.findByPk(invoice.id);
       const totalInv = parseFloat(inv.total_amount) || 0;
@@ -157,7 +157,7 @@ const getFile = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(proof.invoice_id, { attributes: ['owner_id'] });
   const canAccess = invoice && (
     invoice.owner_id === req.user.id ||
-    ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_accounting'].includes(req.user.role)
+    ['super_admin', 'admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting'].includes(req.user.role)
   );
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
   // Ekstrak nama file: terima /uploads/payment-proofs/xxx, uploads/payment-proofs/xxx, atau URL penuh

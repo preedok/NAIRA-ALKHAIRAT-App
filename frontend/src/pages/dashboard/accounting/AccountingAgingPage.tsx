@@ -9,7 +9,8 @@ import PageFilter from '../../../components/common/PageFilter';
 import Table from '../../../components/common/Table';
 import TablePagination from '../../../components/common/TablePagination';
 import type { TableColumn } from '../../../types';
-import { FilterIconButton, Input, Autocomplete, StatCard, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading } from '../../../components/common';
+import { AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, branchesApi, invoicesApi, businessRulesApi, type AccountingAgingData } from '../../../services/api';
@@ -361,7 +362,7 @@ const AccountingAgingPage: React.FC = () => {
   };
 
   const canUnblock = (inv: any) =>
-    inv?.is_blocked && ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'].includes(user?.role || '');
+    inv?.is_blocked && ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'].includes(user?.role || '');
 
   const canVerify = ['admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
 
@@ -403,11 +404,11 @@ const AccountingAgingPage: React.FC = () => {
         hideToggleRow
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
-            <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={filteredProvinsi.map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
-            <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
-            <Autocomplete label="Owner / Partner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name || 'Owner' }))} emptyLabel="Semua owner" />
-            <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={INVOICE_STATUS_OPTIONS.map((s) => ({ value: s, label: INVOICE_STATUS_LABELS[s] || s }))} emptyLabel="Semua status (Piutang)" />
+            <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_WILAYAH} />
+            <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={filteredProvinsi.map((p) => ({ value: p.id, label: p.name }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI} />
+            <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG} />
+            <Autocomplete label="Owner / Partner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name || 'Owner' }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_OWNER} />
+            <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={INVOICE_STATUS_OPTIONS.map((s) => ({ value: s, label: INVOICE_STATUS_LABELS[s] || s }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
             <Input label="Tanggal Buat (dari)" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} fullWidth />
             <Input label="Tanggal Buat (sampai)" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} fullWidth />
             <Input label="Jatuh Tempo (dari)" type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} fullWidth />
@@ -418,9 +419,11 @@ const AccountingAgingPage: React.FC = () => {
           </div>
       </PageFilter>
 
-      {loading && !data && <div className="text-center py-12 text-slate-500">Memuat...</div>}
-
-      {data && (
+      <Card className="travel-card min-h-[200px]">
+        <CardSectionHeader icon={<Receipt className="w-6 h-6" />} title="Piutang Usaha (AR)" subtitle="Ringkasan piutang dan daftar invoice per bucket." className="mb-4" />
+        {loading && !data ? (
+          <ContentLoading />
+        ) : data ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={formatIDR(data.total_outstanding)} />
@@ -512,7 +515,8 @@ const AccountingAgingPage: React.FC = () => {
             )}
           </Card>
         </>
-      )}
+        ) : null}
+      </Card>
 
       {/* Modal Detail Invoice - Lengkap seperti Admin Pusat */}
       {viewInvoice && (
@@ -607,7 +611,7 @@ const AccountingAgingPage: React.FC = () => {
                       </Button>
                     </div>
                     <div className="h-[400px] min-h-[300px]">
-                      {loadingPdf && <div className="flex items-center justify-center h-full text-slate-500"><div className="animate-pulse">Memuat PDF...</div></div>}
+                      {loadingPdf && <div className="flex items-center justify-center h-full"><ContentLoading minHeight={300} /></div>}
                       {!loadingPdf && invoicePdfUrl && <iframe src={invoicePdfUrl} title="Invoice PDF" className="w-full h-full border-0" />}
                       {!loadingPdf && !invoicePdfUrl && <div className="flex items-center justify-center h-full text-slate-500">PDF tidak tersedia</div>}
                     </div>

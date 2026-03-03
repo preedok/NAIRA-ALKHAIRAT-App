@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ownersApi, branchesApi, type Branch } from '../../services/api';
 import { validateEmail } from '../../utils';
+import { AUTOCOMPLETE_PILIH } from '../../utils/constants';
 import Input from '../../components/common/Input';
 import Autocomplete from '../../components/common/Autocomplete';
 import Textarea from '../../components/common/Textarea';
@@ -466,8 +467,8 @@ const RegisterPage: React.FC = () => {
                     value={form.preferred_branch_id}
                     onChange={handleBranchChange}
                     options={branchOptions.map(b => ({ value: b.value, label: b.label }))}
-                    placeholder="Pilih kabupaten..."
-                    emptyLabel="Pilih kabupaten..."
+                    placeholder={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                    emptyLabel={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
                   />
                   {selectedBranch && (
                     <div className="branch-info mt-1.5 text-xs text-slate-600">

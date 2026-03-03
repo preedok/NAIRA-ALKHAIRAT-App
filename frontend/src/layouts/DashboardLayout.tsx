@@ -13,7 +13,6 @@ import {
   Package,
   Receipt,
   Users,
-  Building2,
   BarChart3,
   Settings,
   Bell,
@@ -23,7 +22,6 @@ import {
   ChevronRight,
   ChevronDown,
   Rocket,
-  UserPlus,
   Calendar,
   DollarSign,
   Wallet
@@ -38,62 +36,71 @@ import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
+// Semua submenu Products tampil untuk setiap role yang punya akses Products.
+const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling', 'owner'];
+
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner']
   },
   {
     title: 'Owners Wilayah',
     icon: <Users className="w-5 h-5" />,
     path: '/dashboard/koordinator/owners',
-    roles: ['super_admin', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
+    roles: ['super_admin', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
   },
   {
     title: 'Products',
     icon: <Package className="w-5 h-5" />,
     path: '/dashboard/products',
-    roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'role_invoice_saudi', 'owner'],
+    roles: productMenuRoles,
     children: [
-      { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'role_bus', 'owner'] },
-      { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'visa_koordinator', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
-      { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
-      { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'tiket_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'owner'] },
-      { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
-      { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: ['super_admin', 'admin_pusat', 'admin_koordinator', 'role_hotel', 'role_bus', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi', 'owner'] },
+      { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: productMenuRoles },
+      { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: productMenuRoles },
+      { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: productMenuRoles },
+      { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: productMenuRoles },
+      { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: productMenuRoles },
+      { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: productMenuRoles },
     ]
   },
   {
     title: 'Progress Hotel',
     icon: <Hotel className="w-5 h-5" />,
     path: '/dashboard/progress-hotel',
-    roles: ['super_admin', 'admin_koordinator', 'role_hotel']
+    roles: ['super_admin', 'role_hotel']
   },
   {
     title: 'Progress Tiket',
     icon: <Plane className="w-5 h-5" />,
     path: '/dashboard/progress-tiket',
-    roles: ['super_admin', 'admin_koordinator', 'tiket_koordinator']
+    roles: ['super_admin', 'tiket_koordinator']
   },
   {
     title: 'Progress Visa',
     icon: <FileText className="w-5 h-5" />,
     path: '/dashboard/progress-visa',
-    roles: ['super_admin', 'admin_koordinator', 'visa_koordinator']
+    roles: ['super_admin', 'visa_koordinator'] as UserRole[]
   },
   {
     title: 'Progress Bus',
     icon: <Bus className="w-5 h-5" />,
     path: '/dashboard/progress-bus',
-    roles: ['super_admin', 'admin_koordinator', 'role_bus']
+    roles: ['super_admin', 'role_bus']
+  },
+  {
+    title: 'Progress Handling',
+    icon: <HandHelping className="w-5 h-5" />,
+    path: '/dashboard/progress-handling',
+    roles: ['super_admin', 'handling']
   },
   {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner', 'super_admin', 'role_invoice_saudi', 'role_hotel', 'role_bus']
+    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus']
   },
   {
     title: 'Refund',
@@ -105,18 +112,6 @@ const menuItems: MenuItem[] = [
     title: 'Users',
     icon: <Users className="w-5 h-5" />,
     path: '/dashboard/users',
-    roles: ['super_admin', 'admin_pusat']
-  },
-  {
-    title: 'Branches',
-    icon: <Building2 className="w-5 h-5" />,
-    path: '/dashboard/branches',
-    roles: ['super_admin', 'admin_pusat']
-  },
-  {
-    title: 'Buat Akun',
-    icon: <UserPlus className="w-5 h-5" />,
-    path: '/dashboard/admin-pusat/users',
     roles: ['super_admin', 'admin_pusat']
   },
   {

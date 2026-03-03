@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plane, ShoppingCart, Plus, Pencil, X, Package, MapPin, ArrowRight, ArrowLeft, ArrowLeftRight, Calendar, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -6,8 +6,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
@@ -129,20 +128,20 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
   const [addSeasonSaving, setAddSeasonSaving] = useState(false);
   const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
   const [quotaSaving, setQuotaSaving] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+  const [searchName, setSearchName] = useState('');
+  const [debouncedSearchName, setDebouncedSearchName] = useState('');
+  const lastFilterKeyRef = useRef<string>('');
   const { addItem: addDraftItem } = useOrderDraft();
 
-  const hasActiveFilters = filterIncludeInactive === 'true';
-  const resetFilters = () => setFilterIncludeInactive('false');
-  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
-  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
   useEffect(() => {
-    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
-  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
+    const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
+    return () => clearTimeout(t);
+  }, [searchName]);
 
   const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat';
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -158,8 +157,15 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
 
   const fetchTicketProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
+    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    let pageToUse = ticketPage;
+    if (lastFilterKeyRef.current !== filterKey) {
+      lastFilterKeyRef.current = filterKey;
+      setTicketPage(1);
+      pageToUse = 1;
+    }
     setLoadingTicketProducts(true);
-    const params = { type: 'ticket', with_prices: 'true', include_inactive: filterIncludeInactive, limit: ticketLimit, page: ticketPage, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'ticket', with_prices: 'true', include_inactive: filterIncludeInactive, limit: ticketLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
         const body = res.data as { data?: TicketProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };
@@ -174,9 +180,8 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       })
       .catch(() => setTicketProducts([]))
       .finally(() => setLoadingTicketProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, ticketLimit, ticketPage]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, ticketLimit, ticketPage, debouncedSearchName]);
 
-  useEffect(() => { setTicketPage(1); }, [filterIncludeInactive]);
   useEffect(() => { fetchTicketProducts(); }, [fetchTicketProducts]);
 
   useEffect(() => {
@@ -335,40 +340,10 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
           title="Tiket"
           subtitle="Harga dan kuota seat per bandara: default, per bulan, per minggu, per hari. Pekerjaan tiket di menu Tiket."
           right={
-            <div className="flex items-center gap-2">
-              <AutoRefreshControl onRefresh={refetchAll} disabled={loadingTicketProducts} />
-              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
-            </div>
+            <AutoRefreshControl onRefresh={refetchAll} disabled={loadingTicketProducts} />
           }
         />
       )}
-
-      <PageFilter
-        open={filterOpen}
-        onToggle={filterOnToggle}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { refetchAll(); if (embedFilterOnToggle) embedFilterOnToggle(); else setShowFilters(false); }}
-        loading={loadingTicketProducts}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
-        cardTitle="Pengaturan Filter"
-        cardDescription="Tampilkan produk tiket aktif saja atau termasuk nonaktif."
-        hideToggleRow
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Autocomplete
-            label="Tampilkan"
-            value={filterIncludeInactive}
-            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
-            options={[
-              { value: 'false', label: 'Aktif saja' },
-              { value: 'true', label: 'Semua (termasuk nonaktif)' }
-            ]}
-          />
-        </div>
-      </PageFilter>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -389,17 +364,32 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
               </Button>
             ) : undefined}
           />
-
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+            <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama produk tiket..." fullWidth />
+            <Autocomplete
+              label="Tampilkan"
+              value={filterIncludeInactive}
+              onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+              options={[
+                { value: 'false', label: 'Aktif saja' },
+                { value: 'true', label: 'Semua (termasuk nonaktif)' }
+              ]}
+            />
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[120px]">
+            {loadingTicketProducts ? (
+              <ContentLoading />
+            ) : (
             <Table<TicketProduct>
               columns={[
                 { id: 'code', label: 'Kode', align: 'left' },
                 { id: 'name', label: 'Nama Produk', align: 'left' },
                 { id: 'workflow', label: 'Workflow', align: 'left' },
+                { id: 'currency', label: 'Mata Uang', align: 'center' },
                 ...BANDARA_TIKET.map((b) => ({ id: `bandara_${b.code}`, label: `${b.name} (${b.code})`, align: 'left' as const })),
-                { id: 'actions', label: 'Aksi', align: 'right' }
+                ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'right' as const }] : [])
               ]}
-              data={loadingTicketProducts ? [] : ticketProducts}
+              data={ticketProducts}
               renderRow={(p) => (
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="py-2 px-4 font-medium text-slate-900">{p.code}</td>
@@ -409,6 +399,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                       {TICKET_TRIP_LABELS[(p.meta?.trip_type as TicketTripType) || 'round_trip']}
                     </span>
                   </td>
+                  <td className="py-2 px-4 text-center text-sm text-slate-700">{((p as any).meta?.price_currency || (p as any).currency || 'IDR') as string}</td>
                   {BANDARA_TIKET.map((b) => {
                     const s = getSchedule(p, b.code);
                     const def = s?.default ?? { price_idr: 0, seat_quota: 0 };
@@ -444,6 +435,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                       </td>
                     );
                   })}
+                  {canShowProductActions && (
                   <td className="py-2 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                     {isPusat && (
                       <div className="flex items-center justify-end">
@@ -458,10 +450,11 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                       </div>
                     )}
                   </td>
+                  )}
                 </tr>
               )}
-              emptyMessage={loadingTicketProducts ? 'Memuat produk...' : 'Belum ada produk tiket.'}
-              emptyDescription={!loadingTicketProducts ? (isPusat ? 'Klik "Tambah produk tiket".' : 'Tambah di master produk (admin pusat).') : undefined}
+              emptyMessage="Belum ada produk tiket."
+              emptyDescription={isPusat ? 'Klik "Tambah produk tiket".' : 'Tambah di master produk (admin pusat).'}
               pagination={{
                 total: ticketTotal,
                 page: ticketPage,
@@ -472,6 +465,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
               }}
               stickyActionsColumn
             />
+            )}
           </div>
         </Card>
       )}
@@ -789,7 +783,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
               <div>
                 <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
                 {ticketSeasonsLoading ? (
-                  <p className="text-sm text-slate-500">Memuat...</p>
+                  <ContentLoading inline />
                 ) : ticketSeasons.length === 0 ? (
                   <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk mengatur kuota tiket per periode.</p>
                 ) : (

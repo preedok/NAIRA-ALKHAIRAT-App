@@ -12,6 +12,6 @@ router.post('/:orderId/items/:itemId/jamaah-data', requireRole(ROLES.OWNER, ROLE
 router.get('/:id', orderController.getById);
 router.patch('/:id', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR), orderController.update);
 router.delete('/:id', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), orderController.destroy);
-router.post('/:id/send-result', requireRole(ROLES.ADMIN_KOORDINATOR, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR), orderController.sendOrderResult);
+router.post('/:id/send-result', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR), orderController.sendOrderResult);
 
 module.exports = router;

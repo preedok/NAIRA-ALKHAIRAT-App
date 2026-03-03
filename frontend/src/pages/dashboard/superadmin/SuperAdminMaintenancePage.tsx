@@ -4,7 +4,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import ActionsMenu from '../../../components/common/ActionsMenu';
-import { Input, Checkbox, Textarea } from '../../../components/common';
+import { Input, Checkbox, Textarea, ContentLoading } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { superAdminApi } from '../../../services/api';
 
@@ -132,7 +132,7 @@ export const SuperAdminMaintenancePage: React.FC = () => {
       <Card>
         <p className="text-sm text-slate-600 mb-4">Pemberitahuan pemeliharaan atau bug akan ditampilkan ke semua pengguna aplikasi.</p>
         {loading ? (
-          <div className="py-8 text-center text-slate-500"><RefreshCw className="w-6 h-6 animate-spin inline" /></div>
+          <ContentLoading minHeight={120} />
         ) : list.length === 0 ? (
           <div className="py-8 text-center text-slate-500">Belum ada pemberitahuan.</div>
         ) : (

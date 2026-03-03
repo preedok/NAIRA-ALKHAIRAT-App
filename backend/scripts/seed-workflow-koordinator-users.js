@@ -108,14 +108,6 @@ async function main() {
     const wName = w.name || '';
     const pre = slug(wName).slice(0, 20) || 'wilayah';
     await User.create({
-      email: `admin-koord.${pre}@bintangglobal.com`,
-      password_hash: hash,
-      name: `Admin Koordinator ${wName}`,
-      role: ROLES.ADMIN_KOORDINATOR,
-      wilayah_id: w.id,
-      is_active: true
-    });
-    await User.create({
       email: `invoice-koord.${pre}@bintangglobal.com`,
       password_hash: hash,
       name: `Invoice Koordinator ${wName}`,

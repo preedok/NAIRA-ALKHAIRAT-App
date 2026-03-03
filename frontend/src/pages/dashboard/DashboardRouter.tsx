@@ -10,6 +10,7 @@ import OwnerDashboard from './roles/OwnerDashboard';
 import InvoiceDashboard from './roles/InvoiceDashboard';
 import HotelDashboard from './roles/HotelDashboard';
 import BusDashboard from './roles/BusDashboard';
+import HandlingDashboard from './roles/HandlingDashboard';
 import AccountingDashboard from './roles/AccountingDashboard';
 import { isKoordinatorRole } from '../../types';
 import Card from '../../components/common/Card';
@@ -42,7 +43,6 @@ const DashboardRouter: React.FC = () => {
       return <AdminPusatDashboard />;
     case 'admin_cabang':
       return <RoleDeprecatedMessage label="Role Admin Cabang" />;
-    case 'admin_koordinator':
     case 'invoice_koordinator':
       return <KoordinatorDashboard />;
     case 'visa_koordinator':
@@ -51,12 +51,14 @@ const DashboardRouter: React.FC = () => {
       return <TicketDashboard />;
     case 'owner':
       return <OwnerDashboard />;
-    case 'role_invoice_saudi':
+    case 'invoice_saudi':
       return <InvoiceDashboard />;
     case 'role_hotel':
       return <HotelDashboard />;
     case 'role_bus':
       return <BusDashboard />;
+    case 'handling':
+      return <HandlingDashboard />;
     case 'role_accounting':
       return <AccountingDashboard />;
     default:

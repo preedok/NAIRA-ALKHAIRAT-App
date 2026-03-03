@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight, ShoppingCart, Calendar, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -6,8 +6,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, CardSectionHeader, Input, PriceInput, Autocomplete, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, PriceInput, Autocomplete, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
@@ -38,9 +37,11 @@ interface BusProduct {
   description?: string | null;
   meta?: {
     bus_kind?: BusKind;
+    trip_type?: BusTripType;
     route_prices_by_trip?: Partial<RoutePricesByTrip>;
     price_per_vehicle_idr?: number;
     default_quota?: number;
+    price_currency?: 'IDR' | 'SAR' | 'USD';
   };
   price_general_idr?: number | null;
   price_general_sar?: number | null;
@@ -79,7 +80,8 @@ const BusPage: React.FC<BusPageProps> = ({
   const { user } = useAuth();
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [loadingBusProducts, setLoadingBusProducts] = useState(false);
 
@@ -93,6 +95,7 @@ const BusPage: React.FC<BusPageProps> = ({
     name: string;
     description: string;
     bus_kind: BusKind;
+    product_trip_type: BusTripType;
     route_prices_by_trip: RoutePricesByTrip;
     price_per_vehicle_idr: number;
     price_currency: PriceCurrency;
@@ -105,6 +108,7 @@ const BusPage: React.FC<BusPageProps> = ({
     name: '',
     description: '',
     bus_kind: 'bus' as BusKind,
+    product_trip_type: 'round_trip' as BusTripType,
     route_prices_by_trip: emptyPricesByTrip(),
     price_per_vehicle_idr: 0,
     price_currency: 'IDR' as PriceCurrency,
@@ -124,16 +128,15 @@ const BusPage: React.FC<BusPageProps> = ({
   const [addSeasonSaving, setAddSeasonSaving] = useState(false);
   const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
   const [quotaSaving, setQuotaSaving] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+  const [searchName, setSearchName] = useState('');
+  const [debouncedSearchName, setDebouncedSearchName] = useState('');
+  const lastFilterKeyRef = useRef<string>('');
 
-  const hasActiveFilters = filterIncludeInactive === 'true';
-  const resetFilters = () => setFilterIncludeInactive('false');
-  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
-  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
   useEffect(() => {
-    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
-  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
+    const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
+    return () => clearTimeout(t);
+  }, [searchName]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
@@ -150,8 +153,15 @@ const BusPage: React.FC<BusPageProps> = ({
 
   const fetchBusProducts = useCallback(() => {
     if (!canAddToOrder && !embedInProducts) return;
+    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    let pageToUse = busPage;
+    if (lastFilterKeyRef.current !== filterKey) {
+      lastFilterKeyRef.current = filterKey;
+      setBusPage(1);
+      pageToUse = 1;
+    }
     setLoadingBusProducts(true);
-    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: busLimit, page: busPage, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: busLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
     productsApi.list(params)
       .then((res) => {
         const body = res.data as { data?: BusProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };
@@ -166,11 +176,7 @@ const BusPage: React.FC<BusPageProps> = ({
       })
       .catch(() => setBusProducts([]))
       .finally(() => setLoadingBusProducts(false));
-  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, busLimit, busPage]);
-
-  useEffect(() => {
-    setBusPage(1);
-  }, [filterIncludeInactive]);
+  }, [canAddToOrder, embedInProducts, user?.role, filterIncludeInactive, busLimit, busPage, debouncedSearchName]);
 
   useEffect(() => {
     fetchBusProducts();
@@ -210,14 +216,26 @@ const BusPage: React.FC<BusPageProps> = ({
     if (!editProductModal.name.trim()) { showToast('Nama produk wajib', 'error'); return; }
     setEditProductSaving(true);
     try {
+      const busMeta = editProductModal.bus_kind === 'bus'
+        ? {
+            trip_type: editProductModal.product_trip_type,
+            route_prices_by_trip: {
+              one_way: 0,
+              return_only: 0,
+              round_trip: 0,
+              [editProductModal.product_trip_type]: editProductModal.route_prices_by_trip[editProductModal.product_trip_type] ?? 0
+            } as RoutePricesByTrip
+          }
+        : { trip_type: editProductModal.product_trip_type };
       await productsApi.update(editProductModal.product.id, {
         name: editProductModal.name.trim(),
         description: editProductModal.description.trim() || null,
         meta: {
           bus_kind: editProductModal.bus_kind,
-          route_prices_by_trip: editProductModal.bus_kind === 'bus' ? editProductModal.route_prices_by_trip : undefined,
+          ...busMeta,
           price_per_vehicle_idr: editProductModal.bus_kind === 'hiace' ? editProductModal.price_per_vehicle_idr : undefined,
-          default_quota: editProductModal.default_quota !== '' && editProductModal.default_quota !== undefined ? Number(editProductModal.default_quota) : null
+          default_quota: editProductModal.default_quota !== '' && editProductModal.default_quota !== undefined ? Number(editProductModal.default_quota) : null,
+          price_currency: editProductModal.price_currency
         }
       });
       showToast('Produk bus diperbarui', 'success');
@@ -238,14 +256,18 @@ const BusPage: React.FC<BusPageProps> = ({
     }
     setAddBusSaving(true);
     try {
-      const payload: { name: string; description?: string; bus_kind: BusKind; route_prices_by_trip?: RoutePricesByTrip; price_per_vehicle_idr?: number; default_quota?: number | null } = {
+      const payload: { name: string; description?: string; bus_kind: BusKind; trip_type?: BusTripType; price_currency?: PriceCurrency; route_prices_by_trip?: RoutePricesByTrip; price_per_vehicle_idr?: number; default_quota?: number | null } = {
         name: addBusForm.name.trim(),
         description: addBusForm.description.trim() || undefined,
-        bus_kind: addBusForm.bus_kind
+        bus_kind: addBusForm.bus_kind,
+        price_currency: addBusForm.price_currency
       };
       if (addBusForm.bus_kind === 'bus') {
-        payload.route_prices_by_trip = addBusForm.route_prices_by_trip;
+        payload.trip_type = addBusForm.product_trip_type;
+        const singlePrice = addBusForm.route_prices_by_trip[addBusForm.product_trip_type] ?? 0;
+        payload.route_prices_by_trip = { one_way: 0, return_only: 0, round_trip: 0, [addBusForm.product_trip_type]: singlePrice };
       } else {
+        payload.trip_type = addBusForm.product_trip_type;
         payload.price_per_vehicle_idr = Math.max(0, addBusForm.price_per_vehicle_idr || 0);
       }
       const q = addBusForm.default_quota === '' ? undefined : Math.max(0, parseInt(String(addBusForm.default_quota), 10) || 0);
@@ -253,7 +275,7 @@ const BusPage: React.FC<BusPageProps> = ({
       await productsApi.createBus(payload);
       showToast('Produk bus ditambahkan', 'success');
       setAddBusModalOpen(false);
-      setAddBusForm({ name: '', description: '', bus_kind: 'bus', route_prices_by_trip: emptyPricesByTrip(), price_per_vehicle_idr: 0, price_currency: 'IDR', default_quota: '' });
+      setAddBusForm({ name: '', description: '', bus_kind: 'bus', product_trip_type: 'round_trip', route_prices_by_trip: emptyPricesByTrip(), price_per_vehicle_idr: 0, price_currency: 'IDR', default_quota: '' });
       fetchBusProducts();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -291,32 +313,10 @@ const BusPage: React.FC<BusPageProps> = ({
           title="Bus Saudi"
           subtitle="Pilih tipe perjalanan (jemput saja / pulang saja / pulang pergi), lalu isi harga per rute dalam IDR, SAR, atau USD. Data tampil di tabel dan dipakai untuk order."
           right={
-            <div className="flex items-center gap-2">
-              <AutoRefreshControl onRefresh={refetchAll} disabled={loadingBusProducts} />
-              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
-            </div>
+            <AutoRefreshControl onRefresh={refetchAll} disabled={loadingBusProducts} />
           }
         />
       )}
-
-      <PageFilter
-        open={filterOpen}
-        onToggle={filterOnToggle}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { refetchAll(); if (embedFilterOnToggle) embedFilterOnToggle(); else setShowFilters(false); }}
-        loading={loadingBusProducts}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
-        cardTitle="Pengaturan Filter"
-        cardDescription="Tampilkan produk bus aktif saja atau termasuk nonaktif."
-        hideToggleRow
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Autocomplete label="Tampilkan" value={filterIncludeInactive} onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')} options={[{ value: 'false', label: 'Aktif saja' }, { value: 'true', label: 'Semua (termasuk nonaktif)' }]} />
-        </div>
-      </PageFilter>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -338,35 +338,50 @@ const BusPage: React.FC<BusPageProps> = ({
               </Button>
             ) : undefined}
           />
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+            <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama produk bus..." fullWidth />
+            <Autocomplete label="Tampilkan" value={filterIncludeInactive} onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')} options={[{ value: 'false', label: 'Aktif saja' }, { value: 'true', label: 'Semua (termasuk nonaktif)' }]} />
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[120px]">
+            {loadingBusProducts ? (
+              <ContentLoading />
+            ) : (
             <Table<BusProduct>
               columns={[
                 { id: 'code', label: 'Kode', align: 'left' },
                 { id: 'name', label: 'Nama', align: 'left' },
                 { id: 'kind', label: 'Jenis', align: 'left' },
+                { id: 'currency', label: 'Mata Uang', align: 'center' },
                 { id: 'price', label: PRICE_COLUMN_LABEL, align: 'left' },
                 { id: 'price_vehicle', label: 'Harga / mobil (IDR · SAR · USD)', align: 'left' },
                 { id: 'quota', label: 'Kuota', align: 'left' },
-                { id: 'actions', label: 'Aksi', align: 'right' }
+                ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'right' as const }] : [])
               ]}
-              data={loadingBusProducts ? [] : busProducts}
+              data={busProducts}
               renderRow={(p) => {
                     const isHiace = p.meta?.bus_kind === 'hiace';
                     return (
                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                       <td className="py-2 px-4 font-mono text-slate-600">{p.code || '-'}</td>
-                      <td className="py-2 px-4 font-medium text-slate-900">{p.name}</td>
+                      <td className="py-2 px-4 font-medium text-slate-900">
+                        {p.name}
+                        {p.meta?.trip_type && (
+                          <span className="ml-1.5 text-xs font-normal text-slate-500">({BUS_TRIP_LABELS[p.meta.trip_type as BusTripType]})</span>
+                        )}
+                      </td>
                       <td className="py-2 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${isHiace ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-700'}`}>
                           {isHiace ? 'Hiace' : 'Bus'}
                         </span>
                       </td>
+                      <td className="py-2 px-4 text-center text-sm text-slate-700">{(p.meta?.price_currency as string) || p.currency || 'IDR'}</td>
                       <td className="py-2 px-4 align-top">
                         {isHiace ? (
                           <span className="text-slate-400">—</span>
                         ) : (
                           (() => {
-                            const priceIdr = getPriceForTrip(p, 'round_trip');
+                            const productTripType = (p.meta?.trip_type as BusTripType) || 'round_trip';
+                            const priceIdr = getPriceForTrip(p, productTripType);
                             const triple = fillFromSource('IDR', priceIdr, currencyRates);
                             const t = getPriceTripleForTable(priceIdr, triple.sar, triple.usd);
                             if (!t.hasPrice) return <span className="text-slate-400">—</span>;
@@ -375,7 +390,7 @@ const BusPage: React.FC<BusPageProps> = ({
                                 <span className="text-slate-700 font-medium tabular-nums">{t.idrText}</span>
                                 <span className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</span>
                                 <span className="text-xs text-slate-400">per orang</span>
-                                <span className="text-xs text-amber-700 mt-0.5">Penalti: {formatIDR(busPenaltyRule.bus_penalty_idr)}/org (jika &lt; {busPenaltyRule.bus_min_pack} org)</span>
+                                <span className="text-xs text-amber-700 mt-0.5">Penalti: {formatIDR(busPenaltyRule.bus_penalty_idr)}/pack yang kurang (min {busPenaltyRule.bus_min_pack} pack)</span>
                               </div>
                             );
                           })()
@@ -404,6 +419,7 @@ const BusPage: React.FC<BusPageProps> = ({
                         <span className="text-slate-700 tabular-nums">{typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0 ? p.meta.default_quota : '—'}</span>
                         <p className="text-[10px] text-slate-500 mt-0.5">per hari (kalender)</p>
                       </td>
+                      {canShowProductActions && (
                       <td className="py-2 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         <div className="flex items-center justify-end gap-1 flex-wrap">
                           {canAddToOrder && (
@@ -414,7 +430,7 @@ const BusPage: React.FC<BusPageProps> = ({
                               onClick={() => {
                                 const priceIdr = isHiace
                                   ? (p.meta?.price_per_vehicle_idr ?? p.price_general_idr ?? 0)
-                                  : getPriceForTrip(p, 'round_trip');
+                                  : getPriceForTrip(p, (p.meta?.trip_type as BusTripType) || 'round_trip');
                                 addDraftItem({
                                   type: 'bus',
                                   product_id: p.id,
@@ -442,14 +458,19 @@ const BusPage: React.FC<BusPageProps> = ({
                                     if (v && typeof v === 'object' && typeof (v as Record<string, unknown>).full_route === 'number') return Number((v as Record<string, number>).full_route) || 0;
                                     return 0;
                                   };
+                                  const rpt = { one_way: raw ? toNum(raw.one_way) : 0, return_only: raw ? toNum(raw.return_only) : 0, round_trip: raw ? toNum(raw.round_trip) : 0 };
+                                  const inferredTripType: BusTripType = (p.meta?.trip_type as BusTripType) || (rpt.round_trip > 0 ? 'round_trip' : rpt.one_way > 0 ? 'one_way' : rpt.return_only > 0 ? 'return_only' : 'round_trip');
+                                  const savedCurrency = (p.meta?.price_currency as PriceCurrency);
+                                  const editPriceCurrency: PriceCurrency = (savedCurrency === 'SAR' || savedCurrency === 'USD' || savedCurrency === 'IDR') ? savedCurrency : 'IDR';
                                   setEditProductModal({
                                     product: p,
                                     name: p.name,
                                     description: p.description ?? '',
                                     bus_kind: (p.meta?.bus_kind as BusKind) || 'bus',
-                                    route_prices_by_trip: { one_way: raw ? toNum(raw.one_way) : 0, return_only: raw ? toNum(raw.return_only) : 0, round_trip: raw ? toNum(raw.round_trip) : 0 },
+                                    product_trip_type: inferredTripType,
+                                    route_prices_by_trip: rpt,
                                     price_per_vehicle_idr: p.meta?.price_per_vehicle_idr ?? 0,
-                                    price_currency: 'IDR',
+                                    price_currency: editPriceCurrency,
                                     default_quota: (typeof p.meta?.default_quota === 'number' && p.meta.default_quota >= 0) ? p.meta.default_quota : ''
                                   });
                                 } },
@@ -459,11 +480,12 @@ const BusPage: React.FC<BusPageProps> = ({
                           )}
                         </div>
                       </td>
+                      )}
                     </tr>
                   );
               }}
-              emptyMessage={loadingBusProducts ? 'Memuat produk...' : 'Belum ada produk bus.'}
-              emptyDescription={!loadingBusProducts && !isPusat ? 'Admin pusat dapat menambah produk bus.' : undefined}
+              emptyMessage="Belum ada produk bus."
+              emptyDescription={!isPusat ? 'Admin pusat dapat menambah produk bus.' : undefined}
               pagination={{
                 total: busTotal,
                 page: busPage,
@@ -474,6 +496,7 @@ const BusPage: React.FC<BusPageProps> = ({
               }}
               stickyActionsColumn
             />
+            )}
             </div>
         </Card>
       )}
@@ -515,60 +538,94 @@ const BusPage: React.FC<BusPageProps> = ({
                 <p className="text-xs text-slate-500">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
               </section>
               {addBusForm.bus_kind === 'hiace' && (
-                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">Harga per mobil</h3>
-                  <p className="text-xs text-slate-500">Pilih mata uang input; nilai lain terkonversi otomatis.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
-                        {cur}
+                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-4">
+                  <h3 className="text-sm font-semibold text-slate-700">Tipe perjalanan produk</h3>
+                  <p className="text-xs text-slate-500">Satu produk = satu tipe. Pilih produk ini untuk perjalanan apa (jemput saja / pulang saja / pulang pergi). Nanti di order, pilih produk yang sesuai tipe perjalanan.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(['one_way', 'return_only', 'round_trip'] as const).map((tripType) => (
+                      <Button
+                        key={tripType}
+                        type="button"
+                        variant={addBusForm.product_trip_type === tripType ? 'primary' : 'outline'}
+                        size="sm"
+                        className="w-full justify-center py-3"
+                        onClick={() => setAddBusForm((f) => ({ ...f, product_trip_type: tripType }))}
+                      >
+                        {BUS_TRIP_LABELS[tripType]}
                       </Button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(() => {
-                      const idr = addBusForm.price_per_vehicle_idr ?? 0;
-                      const triple = fillFromSource('IDR', idr, currencyRates);
-                      const cur = addBusForm.price_currency;
-                      return (
-                        <>
-                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: n }))} disabled={cur !== 'IDR'} placeholder="0" />
-                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr }))} disabled={cur !== 'SAR'} placeholder="0" />
-                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr }))} disabled={cur !== 'USD'} placeholder="0" />
-                        </>
-                      );
-                    })()}
+                  <div className="pt-2">
+                    <p className="text-xs text-slate-500 mb-2">Harga per mobil untuk tipe &quot;{BUS_TRIP_LABELS[addBusForm.product_trip_type]}&quot;</p>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                        <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
+                          {cur}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {(() => {
+                        const idr = addBusForm.price_per_vehicle_idr ?? 0;
+                        const triple = fillFromSource('IDR', idr, currencyRates);
+                        const cur = addBusForm.price_currency;
+                        return (
+                          <>
+                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: n }))} disabled={cur !== 'IDR'} placeholder="0" />
+                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr }))} disabled={cur !== 'SAR'} placeholder="0" />
+                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr }))} disabled={cur !== 'USD'} placeholder="0" />
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </section>
               )}
               {addBusForm.bus_kind === 'bus' && (
-                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">Harga (per tipe perjalanan)</h3>
-                  <p className="text-xs text-slate-500">Pilih mata uang input; nilai lain terkonversi otomatis.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
-                        {cur}
+                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-4">
+                  <h3 className="text-sm font-semibold text-slate-700">Tipe perjalanan produk</h3>
+                  <p className="text-xs text-slate-500">Satu produk = satu tipe. Pilih produk ini untuk perjalanan apa (jemput saja / pulang saja / pulang pergi). Nanti di order, pilih produk yang sesuai tipe perjalanan.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(['one_way', 'return_only', 'round_trip'] as const).map((tripType) => (
+                      <Button
+                        key={tripType}
+                        type="button"
+                        variant={addBusForm.product_trip_type === tripType ? 'primary' : 'outline'}
+                        size="sm"
+                        className="w-full justify-center py-3"
+                        onClick={() => setAddBusForm((f) => ({ ...f, product_trip_type: tripType }))}
+                      >
+                        {BUS_TRIP_LABELS[tripType]}
                       </Button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(() => {
-                      const idr = addBusForm.route_prices_by_trip.round_trip ?? 0;
-                      const triple = fillFromSource('IDR', idr, currencyRates);
-                      const cur = addBusForm.price_currency;
-                      const setPrice = (valueIdr: number) => setAddBusForm((f) => ({
-                        ...f,
-                        route_prices_by_trip: { one_way: valueIdr, return_only: valueIdr, round_trip: valueIdr }
-                      }));
-                      return (
-                        <>
-                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
-                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
-                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
-                        </>
-                      );
-                    })()}
+                  <div className="pt-2">
+                    <p className="text-xs text-slate-500 mb-2">Harga untuk tipe &quot;{BUS_TRIP_LABELS[addBusForm.product_trip_type]}&quot;</p>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                        <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
+                          {cur}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {(() => {
+                        const idr = addBusForm.route_prices_by_trip[addBusForm.product_trip_type] ?? 0;
+                        const triple = fillFromSource('IDR', idr, currencyRates);
+                        const cur = addBusForm.price_currency;
+                        const setPrice = (valueIdr: number) => setAddBusForm((f) => ({
+                          ...f,
+                          route_prices_by_trip: { ...f.route_prices_by_trip, [f.product_trip_type]: valueIdr }
+                        }));
+                        return (
+                          <>
+                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
+                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
+                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </section>
               )}
@@ -583,18 +640,22 @@ const BusPage: React.FC<BusPageProps> = ({
         </Modal>
       )}
 
-      {/* Modal Edit produk bus */}
+      {/* Modal Edit produk bus — struktur sama dengan modal Tambah */}
       {editProductModal && (
         <Modal open onClose={() => !editProductSaving && setEditProductModal(null)}>
           <ModalBox>
             <ModalHeader title="Edit produk bus" subtitle="Ubah nama, deskripsi, dan harga produk" icon={<Pencil className="w-5 h-5" />} onClose={() => !editProductSaving && setEditProductModal(null)} />
             <ModalBody className="flex-1 overflow-y-auto space-y-6">
               <section className="space-y-3">
-                <Input label="Nama produk *" type="text" value={editProductModal.name} onChange={(e) => setEditProductModal((m) => m ? { ...m, name: e.target.value } : null)} fullWidth />
-                <Textarea label="Deskripsi" value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} fullWidth />
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Info produk</h3>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-4">
+                  <Input label="Nama produk *" type="text" value={editProductModal.name} onChange={(e) => setEditProductModal((m) => m ? { ...m, name: e.target.value } : null)} fullWidth />
+                  <Textarea label="Deskripsi (opsional)" value={editProductModal.description} onChange={(e) => setEditProductModal((m) => m ? { ...m, description: e.target.value } : null)} rows={2} placeholder="Deskripsi singkat" fullWidth />
+                </div>
               </section>
               <section className="space-y-3">
-                <label className="block text-sm font-semibold text-slate-700">Jenis</label>
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Jenis</h3>
+                <p className="text-xs text-slate-500">Pilih jenis kendaraan: Bus (besar, min 35 orang) atau Hiace (harga per mobil).</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(['bus', 'hiace'] as const).map((k) => (
                     <Button
@@ -602,7 +663,7 @@ const BusPage: React.FC<BusPageProps> = ({
                       type="button"
                       variant={editProductModal.bus_kind === k ? 'primary' : 'outline'}
                       size="sm"
-                      className="w-full justify-center py-3 flex flex-col gap-0.5"
+                      className="w-full justify-center py-4 flex flex-col gap-1"
                       onClick={() => setEditProductModal((m) => m ? { ...m, bus_kind: k } : null)}
                     >
                       <span className="font-medium">{k === 'bus' ? 'Bus' : 'Hiace'}</span>
@@ -611,67 +672,101 @@ const BusPage: React.FC<BusPageProps> = ({
                   ))}
                 </div>
               </section>
-              <div>
-                <Input label="Kuota default (kalender)" type="number" min={0} value={editProductModal.default_quota === '' ? '' : String(editProductModal.default_quota)} onChange={(e) => setEditProductModal((m) => m ? { ...m, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) } : null)} placeholder="Opsional" className="max-w-[140px]" fullWidth={false} />
-                <p className="text-xs text-slate-500 mt-1">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
-              </div>
+              <section className="space-y-2">
+                <Input label="Kuota (opsional)" type="number" min={0} value={editProductModal.default_quota === '' ? '' : String(editProductModal.default_quota)} onChange={(e) => setEditProductModal((m) => m ? { ...m, default_quota: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) } : null)} placeholder="Total Kuota Bus Operasi" fullWidth />
+                <p className="text-xs text-slate-500">Jumlah kursi/unit per hari untuk monitoring di Kalender. Kosongkan jika tidak pakai kuota.</p>
+              </section>
               {editProductModal.bus_kind === 'hiace' && (
-                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
-                  <label className="block text-sm font-medium text-slate-700">Harga per mobil</label>
-                  <p className="text-xs text-slate-500 mb-2">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
-                        {cur}
+                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-4">
+                  <h3 className="text-sm font-semibold text-slate-700">Tipe perjalanan produk</h3>
+                  <p className="text-xs text-slate-500">Satu produk = satu tipe. Pilih produk ini untuk perjalanan apa (jemput saja / pulang saja / pulang pergi). Nanti di order, pilih produk yang sesuai tipe perjalanan.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(['one_way', 'return_only', 'round_trip'] as const).map((tripType) => (
+                      <Button
+                        key={tripType}
+                        type="button"
+                        variant={editProductModal.product_trip_type === tripType ? 'primary' : 'outline'}
+                        size="sm"
+                        className="w-full justify-center py-3"
+                        onClick={() => setEditProductModal((m) => m ? { ...m, product_trip_type: tripType } : null)}
+                      >
+                        {BUS_TRIP_LABELS[tripType]}
                       </Button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(() => {
-                      const idr = editProductModal.price_per_vehicle_idr ?? 0;
-                      const triple = fillFromSource('IDR', idr, currencyRates);
-                      const cur = editProductModal.price_currency;
-                      return (
-                        <>
-                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: n } : null)} disabled={cur !== 'IDR'} placeholder="0" />
-                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr } : null)} disabled={cur !== 'SAR'} placeholder="0" />
-                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr } : null)} disabled={cur !== 'USD'} placeholder="0" />
-                        </>
-                      );
-                    })()}
+                  <div className="pt-2">
+                    <p className="text-xs text-slate-500 mb-2">Harga per mobil untuk tipe &quot;{BUS_TRIP_LABELS[editProductModal.product_trip_type]}&quot;</p>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                        <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
+                          {cur}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {(() => {
+                        const idr = editProductModal.price_per_vehicle_idr ?? 0;
+                        const triple = fillFromSource('IDR', idr, currencyRates);
+                        const cur = editProductModal.price_currency;
+                        return (
+                          <>
+                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: n } : null)} disabled={cur !== 'IDR'} placeholder="0" />
+                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr } : null)} disabled={cur !== 'SAR'} placeholder="0" />
+                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr } : null)} disabled={cur !== 'USD'} placeholder="0" />
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-                </div>
+                </section>
               )}
               {editProductModal.bus_kind === 'bus' && (
-                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50 space-y-2">
-                  <label className="block text-sm font-medium text-slate-700">Harga</label>
-                  <p className="text-xs text-slate-500">Pilih mata uang input; hanya input tersebut yang bisa diisi. Mata uang lain otomatis terkonversi sesuai kurs aplikasi.</p>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
-                        {cur}
+                <section className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-4">
+                  <h3 className="text-sm font-semibold text-slate-700">Tipe perjalanan produk</h3>
+                  <p className="text-xs text-slate-500">Satu produk = satu tipe. Pilih produk ini untuk perjalanan apa (jemput saja / pulang saja / pulang pergi). Nanti di order, pilih produk yang sesuai tipe perjalanan.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(['one_way', 'return_only', 'round_trip'] as const).map((tripType) => (
+                      <Button
+                        key={tripType}
+                        type="button"
+                        variant={editProductModal.product_trip_type === tripType ? 'primary' : 'outline'}
+                        size="sm"
+                        className="w-full justify-center py-3"
+                        onClick={() => setEditProductModal((m) => m ? { ...m, product_trip_type: tripType } : null)}
+                      >
+                        {BUS_TRIP_LABELS[tripType]}
                       </Button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(() => {
-                      const idr = editProductModal.route_prices_by_trip.round_trip ?? 0;
-                      const triple = fillFromSource('IDR', idr, currencyRates);
-                      const cur = editProductModal.price_currency;
-                      const setPrice = (valueIdr: number) => setEditProductModal((m) => m ? {
-                        ...m,
-                        route_prices_by_trip: { one_way: valueIdr, return_only: valueIdr, round_trip: valueIdr }
-                      } : null);
-                      return (
-                        <>
-                          <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
-                          <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
-                          <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
-                        </>
-                      );
-                    })()}
+                  <div className="pt-2">
+                    <p className="text-xs text-slate-500 mb-2">Harga untuk tipe &quot;{BUS_TRIP_LABELS[editProductModal.product_trip_type]}&quot;</p>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
+                        <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
+                          {cur}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {(() => {
+                        const idr = editProductModal.route_prices_by_trip[editProductModal.product_trip_type] ?? 0;
+                        const triple = fillFromSource('IDR', idr, currencyRates);
+                        const cur = editProductModal.price_currency;
+                        const setPrice = (valueIdr: number) => setEditProductModal((m) => m ? {
+                          ...m,
+                          route_prices_by_trip: { ...m.route_prices_by_trip, [m.product_trip_type]: valueIdr }
+                        } : null);
+                        return (
+                          <>
+                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
+                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
+                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-                </div>
+                </section>
               )}
             </ModalBody>
             <ModalFooter>
@@ -716,7 +811,7 @@ const BusPage: React.FC<BusPageProps> = ({
               <div>
                 <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
                 {busSeasonsLoading ? (
-                  <p className="text-sm text-slate-500">Memuat...</p>
+                  <ContentLoading inline />
                 ) : busSeasons.length === 0 ? (
                   <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk mengatur kuota bus per periode.</p>
                 ) : (

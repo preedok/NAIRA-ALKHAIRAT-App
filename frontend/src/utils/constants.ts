@@ -4,6 +4,33 @@
  */
 
 // ============================================
+// AUTOCOMPLETE (seragam di seluruh app)
+// ============================================
+/** Teks placeholder/empty untuk filter: "Semua [x]" */
+export const AUTOCOMPLETE_FILTER = {
+  SEMUA_WILAYAH: 'Semua wilayah',
+  SEMUA_PROVINSI: 'Semua provinsi',
+  SEMUA_CABANG: 'Semua cabang',
+  SEMUA_STATUS: 'Semua status',
+  SEMUA_PROGRESS: 'Semua progress',
+  SEMUA_OWNER: 'Semua owner',
+  SEMUA: 'Semua'
+} as const;
+/** Teks placeholder/empty untuk form: "Pilih [x]..." */
+export const AUTOCOMPLETE_PILIH = {
+  PILIH: 'Pilih...',
+  PILIH_ROLE: 'Pilih role...',
+  PILIH_WILAYAH: 'Pilih wilayah...',
+  PILIH_PROVINSI: 'Pilih provinsi...',
+  PILIH_CABANG: 'Pilih cabang...',
+  PILIH_OWNER: 'Pilih owner...',
+  PILIH_KABUPATEN: 'Pilih kabupaten/kota...',
+  PILIH_ALASAN: 'Pilih alasan (jika tolak)...',
+  CARI: 'Cari...',
+  TIDAK_ADA_HASIL: 'Tidak ada hasil'
+} as const;
+
+// ============================================
 // API CONFIGURATION
 // ============================================
 
@@ -279,7 +306,6 @@ export const ROUTES = {
   ORDERS: '/dashboard/orders-invoices',
   INVOICES: '/dashboard/orders-invoices',
   USERS: '/dashboard/users',
-  BRANCHES: '/dashboard/branches',
   REPORTS: '/dashboard/reports',
   SETTINGS: '/dashboard/settings',
   PROFILE: '/dashboard/profile',

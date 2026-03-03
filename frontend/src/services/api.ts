@@ -85,7 +85,8 @@ export const notificationsApi = {
 };
 
 export const productsApi = {
-  list: (params?: { type?: string; with_prices?: string; branch_id?: string; owner_id?: string; view_as_pusat?: string; is_package?: string; include_inactive?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get('/products', { params }),
+  list: (params?: { type?: string; with_prices?: string; branch_id?: string; owner_id?: string; view_as_pusat?: string; is_package?: string; include_inactive?: string; name?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+    api.get('/products', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   getById: (id: string) => api.get(`/products/${id}`),
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),
   getAvailability: (id: string, params: { from: string; to: string }) =>
@@ -154,9 +155,9 @@ export const productsApi = {
   listPrices: (params?: { product_id?: string; branch_id?: string }) => api.get('/products/prices', { params }),
   create: (body: { type: string; code?: string; name: string; description?: string; is_package?: boolean; meta?: object }) => api.post('/products', body),
   createHotel: (body: { name: string; description?: string; meta?: object }) => api.post('/products/hotels', body),
-  createVisa: (body: { name: string; description?: string; visa_kind: 'only' | 'tasreh' | 'premium'; require_hotel?: boolean; default_quota?: number | null }) => api.post('/products/visas', body),
+  createVisa: (body: { name: string; description?: string; visa_kind: 'only' | 'tasreh' | 'premium'; require_hotel?: boolean; default_quota?: number | null; currency?: 'IDR' | 'SAR' | 'USD' }) => api.post('/products/visas', body),
   createTicket: (body: { name: string; description?: string; trip_type?: 'one_way' | 'return_only' | 'round_trip' }) => api.post('/products/tickets', body),
-  createBus: (body: { name: string; description?: string; bus_kind?: 'bus' | 'hiace'; route_prices_by_trip?: Record<'one_way' | 'return_only' | 'round_trip', number>; price_per_vehicle_idr?: number; default_quota?: number | null }) => api.post('/products/bus', body),
+  createBus: (body: { name: string; description?: string; bus_kind?: 'bus' | 'hiace'; trip_type?: 'one_way' | 'return_only' | 'round_trip'; price_currency?: 'IDR' | 'SAR' | 'USD'; route_prices_by_trip?: Record<'one_way' | 'return_only' | 'round_trip', number>; price_per_vehicle_idr?: number; default_quota?: number | null }) => api.post('/products/bus', body),
   setTicketBandara: (productId: string, body: { bandara: string; period_type?: 'default' | 'month' | 'week' | 'day'; period_key?: string; price_idr: number; seat_quota: number }) => api.put(`/products/${productId}/ticket-bandara`, body),
   setTicketBandaraBulk: (productId: string, body: { bandara_defaults: Record<string, { price_idr?: number; seat_quota?: number }> }) => api.put(`/products/${productId}/ticket-bandara-bulk`, body),
   update: (id: string, body: object) => api.patch(`/products/${id}`, body),
@@ -176,8 +177,18 @@ export const ordersApi = {
   getById: (id: string) => api.get(`/orders/${id}`),
   create: (body: object) => api.post('/orders', body),
   update: (id: string, body: object) => api.patch(`/orders/${id}`, body),
-  /** Batalkan order. Jika ada pembayaran: body.action = 'to_balance' | 'refund'; jika refund wajib bank_name & account_number. */
-  delete: (id: string, body?: { action?: 'to_balance' | 'refund'; reason?: string; bank_name?: string; account_number?: string }) => api.delete(`/orders/${id}`, { data: body }),
+  /** Batalkan order. Jika ada pembayaran: action = 'to_balance' | 'refund' | 'allocate_to_order'. Refund: bank_name, account_number wajib; refund_amount opsional (default full); partial → remainder_action + remainder_target_invoice_id. allocate_to_order: target_invoice_id wajib. */
+  delete: (id: string, body?: {
+    action?: 'to_balance' | 'refund' | 'allocate_to_order';
+    reason?: string;
+    bank_name?: string;
+    account_number?: string;
+    account_holder_name?: string;
+    refund_amount?: number;
+    remainder_action?: 'to_balance' | 'allocate_to_order';
+    remainder_target_invoice_id?: string;
+    target_invoice_id?: string;
+  }) => api.delete(`/orders/${id}`, { data: body }),
   sendResult: (orderId: string, channel?: 'email' | 'whatsapp' | 'both') => api.post(`/orders/${orderId}/send-result`, { channel }),
   /** Upload data jamaah (ZIP file atau link Google Drive) untuk order item visa/tiket */
   uploadJamaahData: (orderId: string, itemId: string, data: FormData | { jamaah_data_link: string }) =>
@@ -234,6 +245,29 @@ export const busApi = {
     api.patch(`/bus/order-items/${orderItemId}/progress`, body),
   exportExcel: () => api.get('/bus/export-excel', { responseType: 'blob' }),
   exportPdf: () => api.get('/bus/export-pdf', { responseType: 'blob' })
+};
+
+export interface HandlingDashboardData {
+  total_orders: number;
+  total_handling_items: number;
+  by_status: { pending?: number; in_progress?: number; completed?: number };
+  pending_list: Array<{
+    order_id: string;
+    order_number: string;
+    invoice_id?: string;
+    invoice_number?: string;
+    order_item_id: string;
+    owner_name?: string;
+    product_name?: string;
+    quantity: number;
+    status: string;
+  }>;
+}
+
+export const handlingApi = {
+  getDashboard: () => api.get<{ success: boolean; data: HandlingDashboardData }>('/handling/dashboard'),
+  updateOrderItemProgress: (orderItemId: string, body: { handling_status: 'pending' | 'in_progress' | 'completed' }) =>
+    api.patch(`/handling/order-items/${orderItemId}/progress`, body)
 };
 
 // Minimal types for ticket dashboard (invoice-based)
@@ -343,7 +377,7 @@ export interface InvoicesSummaryData {
 }
 
 export const invoicesApi = {
-  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; order_number?: string; date_from?: string; date_to?: string; due_status?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; order_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/invoices', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   getDraftOrders: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: any[] }>('/invoices/draft-orders', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
@@ -397,7 +431,10 @@ export const refundsApi = {
   getStats: (params?: Omit<RefundListParams, 'limit' | 'page'>) => api.get<{ success: boolean; data: RefundStats }>('/refunds/stats', { params }),
   getById: (id: string) => api.get(`/refunds/${id}`),
   updateStatus: (id: string, body: { status: string; rejection_reason?: string }) => api.patch(`/refunds/${id}`, body),
-  createFromBalance: (body: { amount: number; bank_name: string; account_number: string }) => api.post('/refunds', body)
+  createFromBalance: (body: { amount: number; bank_name: string; account_number: string }) => api.post('/refunds', body),
+  /** Role accounting: upload bukti bayar refund. Setelah upload, status jadi refunded & bukti dikirim ke email pemesan. */
+  uploadProof: (id: string, formData: FormData) => api.post(`/refunds/${id}/upload-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getProofFile: (id: string) => api.get(`/refunds/${id}/proof/file`, { responseType: 'blob' })
 };
 
 export interface ProvinceItem {
@@ -414,26 +451,23 @@ export interface KabupatenItem {
   nama: string;
 }
 
-export interface BranchStats {
-  total_branches: number;
-  active_branches: number;
-  inactive_branches: number;
-  branches_with_manager: number;
-  total_provinces: number;
-  total_wilayah: number;
+export interface KabupatenForOwnerItem {
+  id: string | number;
+  kode: string;
+  nama: string;
+  provinsi_id: string;
+  provinsi_nama: string;
+  wilayah_id: string | null;
+  wilayah_nama: string | null;
 }
 
 export const branchesApi = {
   list: (params?: { limit?: number; page?: number; include_inactive?: string; search?: string; region?: string; provinsi_id?: string; wilayah_id?: string; city?: string; is_active?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get<{ success: boolean; data: Branch[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/branches', { params }),
-  getStats: (params?: { wilayah_id?: string }) => api.get<{ success: boolean; data: BranchStats }>('/branches/stats', { params }),
   listPublic: (params?: { search?: string; region?: string; limit?: number }) => api.get<{ success: boolean; data: Branch[] }>('/branches/public', { params }),
-  listProvinces: () => api.get<{ success: boolean; data: ProvinceItem[] }>('/branches/provinces'),
+  listProvinces: (params?: { wilayah_id?: string }) => api.get<{ success: boolean; data: ProvinceItem[] }>('/branches/provinces', { params }),
   listWilayah: () => api.get<{ success: boolean; data: Array<{ id: string; name: string }> }>('/branches/wilayah'),
   listKabupaten: (provinceId: string | number) => api.get<{ success: boolean; data: KabupatenItem[] }>(`/branches/kabupaten/${provinceId}`),
-  getById: (id: string) => api.get<{ success: boolean; data: Branch }>(`/branches/${id}`),
-  create: (body: BranchCreateBody) => api.post<{ success: boolean; data: Branch; created_admin_account?: any }>('/branches', body),
-  createBulkByProvince: (provinceId: string | number) => api.post<{ success: boolean; data: Branch[]; message: string; created: number }>('/branches/bulk-by-province', { province_id: provinceId }),
-  update: (id: string, body: Partial<Branch> & { admin_account?: { name?: string; email?: string; password?: string } }) => api.patch<{ success: boolean; data: Branch }>(`/branches/${id}`, body)
+  listKabupatenForOwner: () => api.get<{ success: boolean; data: KabupatenForOwnerItem[] }>('/branches/kabupaten-for-owner')
 };
 export interface Branch {
   id: string;
@@ -453,20 +487,6 @@ export interface Branch {
   koordinator_wilayah_email?: string;
   is_active?: boolean;
 }
-export interface BranchCreateBody {
-  code?: string;
-  name?: string;
-  city?: string;
-  region?: string;
-  province_id?: string | number;
-  kabupaten_id?: string | number;
-  manager_name?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  create_admin_account?: { name: string; email: string; password: string };
-}
-
 export interface UserListItem {
   id: string;
   email: string;
@@ -497,8 +517,11 @@ export const adminPusatApi = {
     api.get<{ success: boolean; data: UserListItem[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/admin-pusat/users', { params }),
   getUserById: (id: string) =>
     api.get<{ success: boolean; data: UserListItem & { OwnerProfile?: any; address?: string; whatsapp?: string; npwp?: string; preferred_branch_id?: string } }>(`/admin-pusat/users/${id}`),
-  createUser: (body: { name: string; email: string; password: string; role: string; branch_id?: string; region?: string }) =>
-    api.post<{ success: boolean; data: any }>('/admin-pusat/users', body),
+  createUser: (body: {
+    name: string; email: string; password: string; role: string;
+    branch_id?: string; region?: string;
+    provinsi_id?: string; kabupaten_kode?: string; kabupaten_nama?: string;
+  }) => api.post<{ success: boolean; data: any }>('/admin-pusat/users', body),
   updateUser: (id: string, body: { name?: string; email?: string; phone?: string; company_name?: string; password?: string; is_active?: boolean; address?: string; whatsapp?: string; npwp?: string; preferred_branch_id?: string }) =>
     api.patch<{ success: boolean; data: any }>(`/admin-pusat/users/${id}`, body),
   deleteUser: (id: string) => api.delete<{ success: boolean; message?: string }>(`/admin-pusat/users/${id}`),

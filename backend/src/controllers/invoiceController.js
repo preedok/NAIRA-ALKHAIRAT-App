@@ -8,7 +8,7 @@ const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
-const KOORDINATOR_ROLES = ['admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
+const KOORDINATOR_ROLES = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
 function isKoordinatorRole(role) {
   return KOORDINATOR_ROLES.includes(role);
 }
@@ -92,11 +92,17 @@ async function ensureBlockedStatus(invoice) {
 
 /**
  * Hitung ulang paid_amount dan status invoice dari semua bukti bayar yang verified.
- * Dipanggil setelah konfirmasi/tolak bukti bayar agar status Tagihan DP → Pembayaran DP jika DP terpenuhi.
+ * Pembayaran KES (payment_location = saudi) selalu dianggap terverifikasi, tidak perlu konfirmasi admin.
  */
 async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, meta } = {}) {
   const proofs = await PaymentProof.findAll({
-    where: { invoice_id: invoice.id, verified_status: 'verified' }
+    where: {
+      invoice_id: invoice.id,
+      [Op.or]: [
+        { verified_status: 'verified' },
+        { payment_location: 'saudi' }
+      ]
+    }
   });
   const verifiedSum = proofs.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   const total = parseFloat(invoice.total_amount) || 0;
@@ -127,7 +133,7 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
   // Role hotel & bus: lihat semua wilayah (tidak batasi by branch/wilayah)
   if (user.role === 'role_hotel' || user.role === 'role_bus') return {};
   // Role invoice Saudi: lihat semua invoice seluruh wilayah (filter branch hanya jika dikirim eksplisit)
-  if (user.role === 'role_invoice_saudi') return branch_id ? { branch_id } : {};
+  if (user.role === 'invoice_saudi') return branch_id ? { branch_id } : {};
   // Koordinator / invoice koordinator: scope ke semua cabang di wilayah mereka
   if (isKoordinatorRole(user.role)) {
     let effectiveWilayahId = user.wilayah_id;
@@ -173,13 +179,18 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
 }
 
 const list = asyncHandler(async (req, res) => {
-  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, order_number, date_from, date_to, due_status, limit = 25, page = 1, sort_by, sort_order } = req.query;
+  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, order_number, date_from, date_to, due_status, has_handling, limit = 25, page = 1, sort_by, sort_order } = req.query;
   const where = {};
   if (status) where.status = status;
   const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
   if (Object.keys(branchFilter).length) Object.assign(where, branchFilter);
   if (owner_id) where.owner_id = owner_id;
   if (invoice_number) where.invoice_number = { [Op.iLike]: `%${String(invoice_number).trim()}%` };
+  if (has_handling === true || has_handling === 'true' || has_handling === '1') {
+    const handlingRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HANDLING }, attributes: ['order_id'], raw: true });
+    const orderIdsWithHandling = [...new Set((handlingRows || []).map((r) => r.order_id))];
+    where.order_id = orderIdsWithHandling.length ? { [Op.in]: orderIdsWithHandling } : { [Op.in]: [] };
+  }
   if (date_from || date_to) {
     where.issued_at = {};
     if (date_from) where.issued_at[Op.gte] = new Date(date_from);
@@ -226,8 +237,8 @@ const list = asyncHandler(async (req, res) => {
     where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
   }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
-  // role_accounting, role_invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
-  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  // role_accounting, invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
 
@@ -505,7 +516,7 @@ const getSummary = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
-  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'role_invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
   if (req.user.wilayah_id && isKoordinatorRole(req.user.role)) {
@@ -602,7 +613,7 @@ const create = asyncHandler(async (req, res) => {
   const { order_id, is_super_promo, dp_percentage: bodyDpPct, dp_amount: bodyDpAmount } = req.body;
   const order = await Order.findByPk(order_id, { include: ['OrderItems'] });
   if (!order) return res.status(404).json({ success: false, message: 'Trip tidak ditemukan' });
-  if (order.owner_id !== req.user.id && !['invoice_koordinator', 'role_invoice_saudi', 'super_admin'].includes(req.user.role)) {
+  if (order.owner_id !== req.user.id && !['invoice_koordinator', 'invoice_saudi', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Akses ditolak' });
   }
 
@@ -786,10 +797,10 @@ const getById = asyncHandler(async (req, res) => {
     if (!hasBus) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item bus' });
   }
   await ensureBlockedStatus(invoice);
-  // Sinkronkan paid_amount dari jumlah semua bukti terverifikasi (KES + transfer) jika tidak sesuai
+  // Sinkronkan paid_amount dari jumlah semua bukti terverifikasi (KES otomatis terverifikasi + transfer yang dikonfirmasi)
   const proofs = invoice.PaymentProofs || [];
   const verifiedSum = proofs
-    .filter(p => p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
+    .filter(p => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
     .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const currentPaid = parseFloat(invoice.paid_amount) || 0;
   if (Math.abs(verifiedSum - currentPaid) > 0.01) {
@@ -830,7 +841,7 @@ const getById = asyncHandler(async (req, res) => {
 const unblock = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id);
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  if (!['invoice_koordinator', 'role_invoice_saudi', 'admin_koordinator', 'admin_pusat', 'super_admin'].includes(req.user.role)) {
+  if (!['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang mengaktifkan invoice' });
   }
   if (isKoordinatorRole(req.user.role) && invoice) {
@@ -872,7 +883,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
   const proof = await PaymentProof.findByPk(payment_proof_id);
   if (!proof || proof.invoice_id !== req.params.id) return res.status(404).json({ success: false, message: 'Bukti bayar tidak ditemukan' });
   // Hanya karyawan (bukan owner/pembeli) yang boleh verifikasi
-  const allowedVerify = ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_accounting', 'super_admin'];
+  const allowedVerify = ['admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting', 'super_admin'];
   if (!allowedVerify.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang verifikasi' });
   }
@@ -955,7 +966,7 @@ const allocateBalance = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id);
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   const canAllocate = req.user.role === 'owner' && invoice.owner_id === req.user.id ||
-    ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+    ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
   if (!canAllocate) return res.status(403).json({ success: false, message: 'Tidak dapat mengalokasikan saldo ke invoice ini' });
 
   const amount = parseFloat(req.body && req.body.amount);
@@ -1133,7 +1144,7 @@ async function canAccessInvoiceForReallocation(invoiceId, user) {
     const branchIds = await getBranchIdsForWilayah(user.wilayah_id);
     if (!branchIds.includes(invoice.branch_id)) return { ok: false, message: 'Invoice bukan di wilayah Anda' };
   }
-  if (user.branch_id && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'role_invoice_saudi', 'owner'].includes(user.role) && !isKoordinatorRole(user.role)) {
+  if (user.branch_id && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'owner'].includes(user.role) && !isKoordinatorRole(user.role)) {
     if (invoice.branch_id !== user.branch_id) return { ok: false, message: 'Invoice bukan di cabang Anda' };
   }
   return { ok: true, invoice };
@@ -1145,7 +1156,7 @@ async function canAccessInvoiceForReallocation(invoiceId, user) {
  * Pemindahan dana dari invoice sumber (canceled/overpaid) ke invoice penerima. Bisa banyak sumber -> banyak penerima.
  */
 const reallocatePayments = asyncHandler(async (req, res) => {
-  const allowed = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'];
+  const allowed = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
   if (!allowed.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Hanya owner atau role invoice yang dapat memindahkan dana' });
   }
@@ -1282,7 +1293,7 @@ const reallocatePayments = asyncHandler(async (req, res) => {
  * Query: invoice_id (optional, filter sebagai sumber atau target), limit, page
  */
 const listReallocations = asyncHandler(async (req, res) => {
-  const allowed = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin', 'role_accounting'];
+  const allowed = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'];
   if (!allowed.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang melihat riwayat pemindahan dana' });
   }
@@ -1339,7 +1350,7 @@ const getReleasable = asyncHandler(async (req, res) => {
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   const access = await canAccessInvoiceForReallocation(invoice.id, req.user);
   if (!access.ok) return res.status(403).json({ success: false, message: access.message });
-  const allowed = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'];
+  const allowed = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
   if (!allowed.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang' });
   }

@@ -28,7 +28,7 @@ Dokumen ini menjelaskan workflow per role dan integrasi backend–frontend–dat
 - **Satu API:** `GET/POST/PATCH/DELETE /api/v1/orders` dan `POST /api/v1/orders/:id/send-result`.
 - Scope diterapkan di controller: owner → `owner_id`, koordinator → `branch_id IN wilayah`, admin_pusat → semua.
 - Tambah/Edit/Hapus order: hanya **owner** dan **invoice_koordinator** (requireRole + cek di controller).
-- Kirim hasil order (send-result): **admin_koordinator**, **invoice_koordinator**, **tiket_koordinator**, **visa_koordinator** (scope: order harus dalam wilayah mereka).
+- Kirim hasil order (send-result): **invoice_koordinator**, **tiket_koordinator**, **visa_koordinator** (scope: order harus dalam wilayah mereka).
 
 ### Dashboard scope (wilayah/cabang)
 

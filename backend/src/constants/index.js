@@ -7,22 +7,21 @@
 const ROLES = {
   SUPER_ADMIN: 'super_admin',
   ADMIN_PUSAT: 'admin_pusat',
-  // Koordinator per wilayah (menggantikan admin_cabang/admin_provinsi/admin_wilayah + role per cabang)
-  ADMIN_KOORDINATOR: 'admin_koordinator',
+  // Koordinator per wilayah (invoice / tiket / visa — admin_koordinator dihapus)
   INVOICE_KOORDINATOR: 'invoice_koordinator',
   TIKET_KOORDINATOR: 'tiket_koordinator',
   VISA_KOORDINATOR: 'visa_koordinator',
   // Saudi Arabia: hotel, bus, invoice
   ROLE_HOTEL: 'role_hotel',
   ROLE_BUS: 'role_bus',
-  ROLE_INVOICE_SAUDI: 'role_invoice_saudi',
+  ROLE_INVOICE_SAUDI: 'invoice_saudi',
   ROLE_ACCOUNTING: 'role_accounting',
   OWNER: 'owner',
   // Deprecated (tetap di enum DB untuk kompatibilitas, tidak dipakai)
   ADMIN_PROVINSI: 'admin_provinsi',
   ADMIN_WILAYAH: 'admin_wilayah',
   ADMIN_CABANG: 'admin_cabang',
-  ROLE_HANDLING: 'role_handling'
+  ROLE_HANDLING: 'handling'
 };
 
 // PROSES A - Registrasi & Aktivasi Owner (Partner)
@@ -108,6 +107,13 @@ const BUS_TICKET_STATUS = {
 const BUS_TRIP_STATUS = {
   PENDING: 'pending',
   SCHEDULED: 'scheduled',
+  COMPLETED: 'completed'
+};
+
+// VI. Handling progress (Role Handling) - status disimpan di OrderItem.meta.handling_status
+const HANDLING_PROGRESS_STATUS = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed'
 };
 
@@ -290,6 +296,7 @@ module.exports = {
   MOU_REGISTRATION_FEE_IDR,
   OWNER_STATUS,
   INVOICE_STATUS,
+  HANDLING_PROGRESS_STATUS,
   REFUND_STATUS,
   REFUND_SOURCE,
   ACCOUNTING_DOC_STATUS,

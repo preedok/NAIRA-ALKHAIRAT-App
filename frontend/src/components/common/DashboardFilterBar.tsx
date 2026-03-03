@@ -3,6 +3,7 @@ import { Filter } from 'lucide-react';
 import Button from './Button';
 import Input from './Input';
 import Autocomplete from './Autocomplete';
+import { AUTOCOMPLETE_FILTER, AUTOCOMPLETE_PILIH } from '../../utils/constants';
 
 export interface DashboardFilterBarProps {
   variant?: 'page' | 'modal';
@@ -63,7 +64,7 @@ export interface DashboardFilterBarProps {
 }
 
 const DEFAULT_INVOICE_STATUS_OPTIONS = [
-  { value: '', label: 'Semua' },
+  { value: '', label: AUTOCOMPLETE_FILTER.SEMUA },
   { value: 'tentative', label: 'Tentative' },
   { value: 'partial_paid', label: 'Partial Paid' },
   { value: 'paid', label: 'Paid' },
@@ -81,9 +82,9 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   statusType = 'order',
   showDateRange = false,
   showSearch = false,
-  searchPlaceholder = 'Cari...',
+  searchPlaceholder = AUTOCOMPLETE_PILIH.CARI,
   showSearch2 = false,
-  search2Placeholder = 'Cari...',
+  search2Placeholder = AUTOCOMPLETE_PILIH.CARI,
   showReset = true,
   showOrderStatus = false,
   showOwner = false,
@@ -158,7 +159,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
           value={wilayahId}
           onChange={(v) => onWilayahChange?.(v)}
           options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
-          emptyLabel={isModal ? 'Semua' : 'Semua wilayah'}
+          emptyLabel={isModal ? AUTOCOMPLETE_FILTER.SEMUA : AUTOCOMPLETE_FILTER.SEMUA_WILAYAH}
         />
       )}
       {showProvinsi && (
@@ -167,7 +168,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
           value={provinsiId}
           onChange={(v) => onProvinsiChange?.(v)}
           options={provinces.map((p) => ({ value: String(p.id), label: p.name ?? (p as { nama?: string }).nama ?? '' }))}
-          emptyLabel={isModal ? 'Semua' : 'Semua provinsi'}
+          emptyLabel={isModal ? AUTOCOMPLETE_FILTER.SEMUA : AUTOCOMPLETE_FILTER.SEMUA_PROVINSI}
         />
       )}
       {showBranch && (
@@ -176,7 +177,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
           value={branchId}
           onChange={(v) => onBranchChange?.(v)}
           options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
-          emptyLabel={isModal ? 'Semua' : 'Semua cabang'}
+          emptyLabel={isModal ? AUTOCOMPLETE_FILTER.SEMUA : AUTOCOMPLETE_FILTER.SEMUA_CABANG}
         />
       )}
       {showStatus && (
@@ -189,7 +190,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
               ? Object.entries(orderStatusOptions).map(([k, v]) => ({ value: k, label: v }))
               : invoiceStatusOptions
           }
-          emptyLabel="Semua status"
+          emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS}
         />
       )}
       {showOwner && (
@@ -198,7 +199,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
           value={ownerId}
           onChange={(v) => onOwnerChange?.(v)}
           options={owners.map((o) => ({ value: o.id, label: o.name ?? o.User?.name ?? o.User?.company_name ?? o.id }))}
-          emptyLabel="Semua owner"
+          emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_OWNER}
         />
       )}
       {showDueStatus && (

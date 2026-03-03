@@ -33,15 +33,14 @@ const { sequelize } = require('../src/models');
 // Role yang dianggap "divisi + owner"
 const KEEP_ROLES = [
   'owner',
-  'admin_koordinator',
   'invoice_koordinator',
   'tiket_koordinator',
   'visa_koordinator',
   'role_hotel',
   'role_bus',
-  'role_invoice_saudi',
+  'invoice_saudi',
   'role_accounting',
-  'role_handling'
+  'handling'
 ];
 
 // Hapus: child dulu (FK), baru parent. Case-sensitive untuk PostgreSQL.

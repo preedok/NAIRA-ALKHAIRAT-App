@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Plus, Pencil, Trash2, HandHelping } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Package, Plus, Pencil, Trash2, HandHelping, ShoppingCart } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -8,10 +8,11 @@ import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, PageFilter, FilterIconButton } from '../../../components/common';
+import { Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
+import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL, parsePriceInput } from '../../../utils';
@@ -34,7 +35,10 @@ const PAGE_SIZE = 25;
 const HandlingPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { addItem: addDraftItem } = useOrderDraft();
   const canConfig = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
 
   const [list, setList] = useState<HandlingProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,22 +60,28 @@ const HandlingPage: React.FC = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
 
-  const [deleteTarget, setDeleteTarget] = useState<HandlingProduct | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [showFilters, setShowFilters] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [filterSortBy, setFilterSortBy] = useState<string>('code');
   const [filterSortOrder, setFilterSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [searchName, setSearchName] = useState('');
+  const [debouncedSearchName, setDebouncedSearchName] = useState('');
+  const lastFilterKeyRef = useRef<string>('');
 
-  const hasActiveFilters = filterIncludeInactive === 'true' || filterSortBy !== 'code' || filterSortOrder !== 'asc';
-  const resetFilters = () => {
-    setFilterIncludeInactive('false');
-    setFilterSortBy('code');
-    setFilterSortOrder('asc');
-  };
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
+    return () => clearTimeout(t);
+  }, [searchName]);
 
   const fetchList = useCallback(() => {
+    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    let pageToUse = page;
+    if (lastFilterKeyRef.current !== filterKey) {
+      lastFilterKeyRef.current = filterKey;
+      setPage(1);
+      pageToUse = 1;
+    }
     setLoading(true);
     businessRulesApi.get().then((res) => {
       const data = (res.data as { data?: { currency_rates?: unknown } })?.data;
@@ -89,8 +99,9 @@ const HandlingPage: React.FC = () => {
         include_inactive: filterIncludeInactive,
         sort_by: filterSortBy,
         sort_order: filterSortOrder,
+        ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}),
         limit,
-        page
+        page: pageToUse
       })
       .then((res) => {
         const body = res.data as { data?: HandlingProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };
@@ -105,7 +116,7 @@ const HandlingPage: React.FC = () => {
       })
       .catch(() => setList([]))
       .finally(() => setLoading(false));
-  }, [page, limit, filterIncludeInactive, filterSortBy, filterSortOrder]);
+  }, [page, limit, filterIncludeInactive, filterSortBy, filterSortOrder, debouncedSearchName]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
@@ -216,13 +227,11 @@ const HandlingPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleDelete = async (row: HandlingProduct) => {
     setDeleting(true);
     try {
-      await productsApi.delete(deleteTarget.id);
+      await productsApi.delete(row.id);
       showToast('Produk handling berhasil dihapus', 'success');
-      setDeleteTarget(null);
       fetchList();
     } catch {
       showToast('Gagal menghapus produk', 'error');
@@ -235,9 +244,11 @@ const HandlingPage: React.FC = () => {
     { id: 'code', label: 'Kode', align: 'left' },
     { id: 'name', label: 'Nama', align: 'left' },
     { id: 'description', label: 'Deskripsi', align: 'left' },
+    { id: 'currency', label: 'Mata Uang', align: 'center' },
     { id: 'price', label: 'Harga (IDR · SAR · USD)', align: 'right' },
     { id: 'status', label: 'Status', align: 'center' },
-    ...(canConfig ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
+    ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : []),
+    ...(canAddToOrder ? [{ id: 'order_action', label: 'Aksi order', align: 'center' as const }] : [])
   ].filter(Boolean) as TableColumn[];
 
   return (
@@ -245,34 +256,22 @@ const HandlingPage: React.FC = () => {
       <PageHeader
         title="Produk Handling"
         subtitle="Daftar produk jasa handling. Set harga default per produk."
-        right={
-          <div className="flex flex-wrap items-center gap-2">
-            <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
-            <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
-            {canConfig && (
-              <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => { setShowAddModal(true); setAddError(''); setAddForm({ name: '', description: '', price_currency: 'IDR', price_value: 0 }); }}>
-                Tambah Produk Handling
-              </Button>
-            )}
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />}
       />
 
-      <PageFilter
-        open={showFilters}
-        onToggle={() => setShowFilters((v: boolean) => !v)}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { fetchList(); setShowFilters(false); }}
-        loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
-        cardTitle="Pengaturan Filter"
-        cardDescription="Tampilkan produk aktif saja atau termasuk nonaktif. Atur urutan data."
-        hideToggleRow
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Card>
+        <CardSectionHeader
+          icon={<HandHelping className="w-6 h-6" />}
+          title="Daftar Handling"
+          subtitle={`${total} produk handling · Set harga default per produk`}
+          right={canConfig ? (
+            <Button variant="primary" size="sm" className="gap-1.5" onClick={() => { setShowAddModal(true); setAddError(''); setAddForm({ name: '', description: '', price_currency: 'IDR', price_value: 0 }); }}>
+              <Plus className="w-4 h-4" /> Tambah Produk Handling
+            </Button>
+          ) : undefined}
+        />
+        <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+          <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama produk handling..." fullWidth />
           <Autocomplete
             label="Tampilkan"
             value={filterIncludeInactive}
@@ -282,44 +281,20 @@ const HandlingPage: React.FC = () => {
               { value: 'true', label: 'Semua (termasuk nonaktif)' }
             ]}
           />
-          <Autocomplete
-            label="Urutkan berdasarkan"
-            value={filterSortBy}
-            onChange={(v) => setFilterSortBy(v)}
-            options={[
-              { value: 'code', label: 'Kode' },
-              { value: 'name', label: 'Nama' },
-              { value: 'is_active', label: 'Status' },
-              { value: 'created_at', label: 'Tanggal dibuat' }
-            ]}
-          />
-          <Autocomplete
-            label="Arah urutan"
-            value={filterSortOrder}
-            onChange={(v) => setFilterSortOrder(v as 'asc' | 'desc')}
-            options={[
-              { value: 'asc', label: 'Naik (A–Z / 0–9)' },
-              { value: 'desc', label: 'Turun (Z–A / 9–0)' }
-            ]}
-          />
         </div>
-      </PageFilter>
-
-      <Card>
-        <CardSectionHeader
-          icon={<HandHelping className="w-6 h-6" />}
-          title="Daftar Handling"
-          subtitle={`${total} produk handling · Set harga default per produk`}
-        />
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[120px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
           <Table
             columns={columns}
-            data={loading ? [] : list}
+            data={list}
             renderRow={(row) => (
               <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50 last:border-b-0">
                 <td className="py-3 px-4 font-mono text-slate-600">{row.code}</td>
                 <td className="py-3 px-4 font-medium text-slate-900">{row.name}</td>
                 <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate">{row.description || '–'}</td>
+                <td className="py-3 px-4 text-center text-sm text-slate-700">{(row as any).meta?.currency || row.currency || 'IDR'}</td>
                 <td className="py-3 px-4 text-right text-slate-800 align-top">
                   {(() => {
                     const t = getPriceTripleForTable(row.price_general_idr, row.price_general_sar, row.price_general_usd);
@@ -341,20 +316,54 @@ const HandlingPage: React.FC = () => {
                     {row.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </td>
-                {canConfig && (
+                {canShowProductActions && (
                   <td className="py-3 px-4">
-                    <ActionsMenu
-                      items={[
-                        { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => openEdit(row) },
-                        { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => setDeleteTarget(row), danger: true }
-                      ]}
-                    />
+                    {canConfig && (
+                      <ActionsMenu
+                        items={[
+                          { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => openEdit(row) },
+                          { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => { void handleDelete(row); }, danger: true }
+                        ]}
+                      />
+                    )}
+                  </td>
+                )}
+                {canAddToOrder && (
+                  <td className="py-3 px-4 text-center">
+                    {row.is_active && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => {
+                          const sar = currencyRates.SAR_TO_IDR ?? 4200;
+                          const usd = currencyRates.USD_TO_IDR ?? 15500;
+                          const cur = ((row as any).meta?.currency || row.currency || 'IDR').toUpperCase();
+                          let unitPriceIdr = Number(row.price_general_idr) || 0;
+                          if (unitPriceIdr <= 0 && cur === 'SAR' && (row as any).price_general_sar) unitPriceIdr = Number((row as any).price_general_sar) * sar;
+                          if (unitPriceIdr <= 0 && cur === 'USD' && (row as any).price_general_usd) unitPriceIdr = Number((row as any).price_general_usd) * usd;
+                          if (unitPriceIdr <= 0 && (row as any).price_general) unitPriceIdr = cur === 'IDR' ? Number((row as any).price_general) : cur === 'SAR' ? Number((row as any).price_general) * sar : Number((row as any).price_general) * usd;
+                          addDraftItem({
+                            type: 'handling',
+                            product_id: row.id,
+                            product_name: row.name,
+                            unit_price_idr: Math.round(unitPriceIdr),
+                            quantity: 1
+                          });
+                          showToast('Handling ditambahkan ke order. Buka menu Invoice / Buat order untuk melanjutkan.', 'success');
+                        }}
+                        title="Tambah ke order"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        Tambah ke order
+                      </Button>
+                    )}
                   </td>
                 )}
               </tr>
             )}
-            emptyMessage={loading ? 'Memuat...' : 'Belum ada produk handling'}
-            emptyDescription={loading ? '' : (canConfig ? 'Klik Tambah Produk Handling untuk menambah data.' : undefined)}
+            emptyMessage="Belum ada produk handling"
+            emptyDescription={canConfig ? 'Klik Tambah Produk Handling untuk menambah data.' : undefined}
             pagination={{
               total,
               page,
@@ -363,8 +372,9 @@ const HandlingPage: React.FC = () => {
               onPageChange: setPage,
               onLimitChange: (l) => { setLimit(l); setPage(1); }
             }}
-            stickyActionsColumn={canConfig}
+            stickyActionsColumn={canShowProductActions}
           />
+          )}
         </div>
       </Card>
 
@@ -492,21 +502,6 @@ const HandlingPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* Modal Konfirmasi Hapus */}
-      {deleteTarget && (
-        <Modal open onClose={() => !deleting && setDeleteTarget(null)}>
-          <ModalBox>
-            <ModalHeader title="Hapus Produk Handling" subtitle="Tindakan ini tidak dapat dibatalkan" icon={<Trash2 className="w-5 h-5" />} onClose={() => !deleting && setDeleteTarget(null)} />
-            <ModalBody className="space-y-4">
-              <p className="text-slate-600">Yakin ingin menghapus <strong>{deleteTarget.name}</strong> ({deleteTarget.code})? Produk akan dihapus permanen.</p>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Batal</Button>
-              <Button variant="danger" onClick={handleDelete} disabled={deleting}>{deleting ? 'Menghapus...' : 'Hapus'}</Button>
-            </ModalFooter>
-          </ModalBox>
-        </Modal>
-      )}
     </div>
   );
 };

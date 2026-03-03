@@ -7,7 +7,7 @@ import {
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import type { TableColumn } from '../../../types';
@@ -15,7 +15,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
-import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, type InvoicesSummaryData, type BankAccountItem } from '../../../services/api';
+import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem } from '../../../services/api';
 
 /** Konfigurasi icon untuk card Per Status Invoice (StatCard pakai satu warna) */
 const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
@@ -36,6 +36,9 @@ const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
 const PER_STATUS_ORDER = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled', 'overdue', 'draft', 'refunded', 'order_updated', 'overpaid', 'overpaid_transferred', 'overpaid_received', 'refund_canceled', 'overpaid_refund_pending'];
 /** Status yang selalu ditampilkan di card (meskipun count 0): Tagihan DP, Pembayaran DP, Lunas, Processing, Completed, Dibatalkan */
 const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled'];
+
+/** Label trip type bus: pergi saja / pulang saja / pulang pergi */
+const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
 
 /** Base URL untuk file uploads (supaya foto bukti bayar tampil; pakai origin saat proxy) */
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -70,7 +73,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const canOrderAction = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canOrderAction = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const [branchId, setBranchId] = useState<string>('');
   const [wilayahId, setWilayahId] = useState<string>('');
   const [provinsiId, setProvinsiId] = useState<string>('');
@@ -112,16 +115,22 @@ const OrdersInvoicesPage: React.FC = () => {
   const [payBankIndex, setPayBankIndex] = useState<number>(0);
   const [payFile, setPayFile] = useState<File | null>(null);
   const [paySubmitting, setPaySubmitting] = useState(false);
-  const [payCurrencySaudi, setPayCurrencySaudi] = useState<'SAR' | 'USD'>('SAR');
+  const [payCurrencySaudi, setPayCurrencySaudi] = useState<'SAR' | 'USD' | 'IDR'>('SAR');
   const [payAmountSaudi, setPayAmountSaudi] = useState<string>('');
   const [uploadingJamaahItemId, setUploadingJamaahItemId] = useState<string | null>(null);
   const [jamaahLinkInput, setJamaahLinkInput] = useState<Record<string, string>>({});
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelTargetInv, setCancelTargetInv] = useState<any | null>(null);
-  const [cancelAction, setCancelAction] = useState<'to_balance' | 'refund'>('to_balance');
+  const [cancelAction, setCancelAction] = useState<'to_balance' | 'refund' | 'allocate_to_order'>('to_balance');
   const [cancelReason, setCancelReason] = useState('');
   const [cancelBankName, setCancelBankName] = useState('');
   const [cancelAccountNumber, setCancelAccountNumber] = useState('');
+  const [cancelAccountHolderName, setCancelAccountHolderName] = useState('');
+  const [cancelRefundAmount, setCancelRefundAmount] = useState<string>('');
+  const [cancelRemainderAction, setCancelRemainderAction] = useState<'to_balance' | 'allocate_to_order'>('to_balance');
+  const [cancelRemainderTargetInvoiceId, setCancelRemainderTargetInvoiceId] = useState('');
+  const [cancelTargetInvoiceId, setCancelTargetInvoiceId] = useState('');
+  const [cancelTargetInvoiceOptions, setCancelTargetInvoiceOptions] = useState<any[]>([]);
   const [ownerBalance, setOwnerBalance] = useState<number | null>(null);
   const [ownerBalanceLoading, setOwnerBalanceLoading] = useState(false);
   const [allocateAmount, setAllocateAmount] = useState('');
@@ -141,13 +150,13 @@ const OrdersInvoicesPage: React.FC = () => {
   const [uploadDocLoading, setUploadDocLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
-  const canReallocate = ['owner', 'invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'admin_koordinator', 'super_admin'].includes(user?.role || '');
+  const canReallocate = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   const isAccounting = user?.role === 'role_accounting';
-  const isInvoiceSaudi = user?.role === 'role_invoice_saudi';
+  const isInvoiceSaudi = user?.role === 'invoice_saudi';
   const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
   const canPayInvoice = (inv: any) => {
     if (!inv || isDraftRow(inv) || parseFloat(inv.remaining_amount || 0) <= 0) return false;
-    return inv.owner_id === user?.id || ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
+    return inv.owner_id === user?.id || ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   };
 
   const fetchBranches = async () => {
@@ -300,7 +309,22 @@ const OrdersInvoicesPage: React.FC = () => {
     setCancelReason('');
     setCancelBankName('');
     setCancelAccountNumber('');
+    setCancelAccountHolderName('');
+    setCancelRefundAmount('');
+    setCancelRemainderAction('to_balance');
+    setCancelRemainderTargetInvoiceId('');
+    setCancelTargetInvoiceId('');
     setShowCancelModal(true);
+    const paid = parseFloat(inv.paid_amount || 0);
+    if (paid > 0 && inv.owner_id) {
+      invoicesApi.list({ owner_id: inv.owner_id, limit: 200 })
+        .then((r: any) => {
+          const list = (r.data?.data ?? []) as any[];
+          const options = list.filter((i: any) => i.id !== inv.id && !['canceled', 'cancelled'].includes((i.status || '').toLowerCase()));
+          setCancelTargetInvoiceOptions(options);
+        })
+        .catch(() => setCancelTargetInvoiceOptions([]));
+    } else setCancelTargetInvoiceOptions([]);
   };
 
   const fetchOwnerBalance = useCallback(() => {
@@ -349,19 +373,43 @@ const OrdersInvoicesPage: React.FC = () => {
   const submitCancelModal = async () => {
     if (!cancelTargetInv?.order_id) return;
     const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
-    if (paid > 0 && cancelAction === 'refund' && (!cancelBankName.trim() || !cancelAccountNumber.trim())) {
-      showToast('Untuk refund wajib isi Nama Bank dan Nomor Rekening', 'error');
+    if (paid > 0 && cancelAction === 'refund') {
+      if (!cancelBankName.trim() || !cancelAccountNumber.trim()) {
+        showToast('Untuk refund wajib isi Nama Bank dan Nomor Rekening', 'error');
+        return;
+      }
+      const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
+      if (!Number.isFinite(refundAmt) || refundAmt <= 0) {
+        showToast('Jumlah refund tidak valid', 'error');
+        return;
+      }
+      if (refundAmt < paid && cancelRemainderAction === 'allocate_to_order' && !cancelRemainderTargetInvoiceId.trim()) {
+        showToast('Pilih invoice tujuan untuk sisa dana', 'error');
+        return;
+      }
+    }
+    if (paid > 0 && cancelAction === 'allocate_to_order' && !cancelTargetInvoiceId.trim()) {
+      showToast('Pilih invoice tujuan untuk mengalihkan dana', 'error');
       return;
     }
     setDeletingOrderId(cancelTargetInv.order_id);
     try {
-      const body: { action?: 'to_balance' | 'refund'; reason?: string; bank_name?: string; account_number?: string } = {};
+      const body: Record<string, any> = {};
       if (paid > 0) {
         body.action = cancelAction;
         if (cancelReason.trim()) body.reason = cancelReason.trim();
         if (cancelAction === 'refund') {
           body.bank_name = cancelBankName.trim();
           body.account_number = cancelAccountNumber.trim();
+          if (cancelAccountHolderName.trim()) body.account_holder_name = cancelAccountHolderName.trim();
+          const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
+          if (refundAmt < paid) {
+            body.refund_amount = refundAmt;
+            body.remainder_action = cancelRemainderAction;
+            if (cancelRemainderAction === 'allocate_to_order' && cancelRemainderTargetInvoiceId.trim()) body.remainder_target_invoice_id = cancelRemainderTargetInvoiceId.trim();
+          }
+        } else if (cancelAction === 'allocate_to_order' && cancelTargetInvoiceId.trim()) {
+          body.target_invoice_id = cancelTargetInvoiceId.trim();
         }
       }
       const res = await ordersApi.delete(cancelTargetInv.order_id, body);
@@ -372,6 +420,10 @@ const OrdersInvoicesPage: React.FC = () => {
       setCancelReason('');
       setCancelBankName('');
       setCancelAccountNumber('');
+      setCancelAccountHolderName('');
+      setCancelRefundAmount('');
+      setCancelRemainderTargetInvoiceId('');
+      setCancelTargetInvoiceId('');
       fetchInvoices();
       if (viewInvoice?.id === cancelTargetInv.id) setViewInvoice(null);
       if (user?.role === 'owner') fetchOwnerBalance();
@@ -428,6 +480,22 @@ const OrdersInvoicesPage: React.FC = () => {
     })();
     return () => { cancelled = true; };
   }, [location.state]);
+
+  const invoiceIdFromUrl = searchParams.get('invoice_id');
+  useEffect(() => {
+    if (!invoiceIdFromUrl) return;
+    let cancelled = false;
+    invoicesApi.getById(invoiceIdFromUrl)
+      .then((res: any) => {
+        if (cancelled) return;
+        if (res.data?.success && res.data?.data) {
+          setViewInvoice(res.data.data);
+          setDetailTab('invoice');
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [invoiceIdFromUrl]);
 
   useEffect(() => {
     fetchSummary();
@@ -605,10 +673,10 @@ const OrdersInvoicesPage: React.FC = () => {
   };
 
   const canUnblock = (inv: any) =>
-    inv?.is_blocked && ['invoice_koordinator', 'role_invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'].includes(user?.role || '');
+    inv?.is_blocked && ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'].includes(user?.role || '');
 
   // Hanya karyawan (bukan owner) yang boleh konfirmasi/tolak bukti bayar
-  const canVerify = ['admin_pusat', 'admin_koordinator', 'invoice_koordinator', 'role_invoice_saudi', 'role_accounting', 'super_admin'].includes(user?.role || '');
+  const canVerify = ['admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting', 'super_admin'].includes(user?.role || '');
 
   const rates = viewInvoice?.currency_rates || currencyRates;
   const sarToIdr = rates.SAR_TO_IDR || 4200;
@@ -616,7 +684,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const paymentProofs = viewInvoice?.PaymentProofs || [];
 
-  /** Status bukti bayar: rejected > verified > pending. Pembayaran KES (Saudi) selalu dianggap terverifikasi. */
+  /** Status bukti bayar: rejected > verified > pending. Pembayaran KES (Saudi) selalu terverifikasi otomatis, tidak perlu konfirmasi admin. */
   const getProofStatus = (p: any) => {
     if (p.verified_status === 'rejected') return { status: 'rejected', label: 'Tidak valid', variant: 'error' as const };
     if (p.payment_location === 'saudi') return { status: 'verified', label: 'Diverifikasi', variant: 'success' as const };
@@ -701,7 +769,7 @@ const OrdersInvoicesPage: React.FC = () => {
     }
     return (
       <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
-        Memuat...
+        {CONTENT_LOADING_MESSAGE}
       </div>
     );
   };
@@ -736,7 +804,11 @@ const OrdersInvoicesPage: React.FC = () => {
     if (paymentMethod === 'saudi' && isInvoiceSaudi) {
       const amountS = parseFloat(payAmountSaudi.replace(/,/g, '').trim());
       if (isNaN(amountS) || amountS <= 0) {
-        showToast('Masukkan jumlah pembayaran (SAR/USD) yang valid.', 'warning');
+        showToast('Masukkan jumlah pembayaran yang valid.', 'warning');
+        return;
+      }
+      if (!payFile) {
+        showToast('Upload bukti bayar wajib.', 'warning');
         return;
       }
       const paymentType = parseFloat(viewInvoice.paid_amount || 0) === 0 ? 'dp' : (amountS >= 1e9 ? 'full' : 'partial');
@@ -746,20 +818,23 @@ const OrdersInvoicesPage: React.FC = () => {
       form.append('amount', String(amountS));
       form.append('payment_type', paymentType);
       form.append('transfer_date', payTransferDate);
-      if (payFile) form.append('proof_file', payFile);
+      form.append('proof_file', payFile);
       setPaySubmitting(true);
       try {
         const res = await invoicesApi.uploadPaymentProof(viewInvoice.id, form);
-        showToast('Pembayaran KES dicatat dan otomatis terverifikasi. Invoice dan order telah diupdate.', 'success');
+        const updatedInv = res.data?.invoice;
+        const proofCount = updatedInv?.PaymentProofs?.length ?? (viewInvoice?.PaymentProofs?.length ?? 0) + 1;
+        const remaining = updatedInv ? parseFloat(updatedInv.remaining_amount || 0) : 0;
+        showToast(`Pembayaran ke-${proofCount} dicatat. Sisa tagihan: ${formatIDR(remaining)}. Invoice terupdate.`, 'success');
         setShowPaymentModal(false);
-        if (res.data?.invoice) setViewInvoice(res.data.invoice);
+        if (updatedInv) setViewInvoice(updatedInv);
         else {
           const detailRes = await invoicesApi.getById(viewInvoice.id);
           if (detailRes.data?.success && detailRes.data?.data) setViewInvoice(detailRes.data.data);
         }
         fetchInvoices();
       } catch (e: any) {
-        showToast(e.response?.data?.message || 'Gagal input pembayaran Saudi', 'error');
+        showToast(e.response?.data?.message || 'Gagal input pembayaran', 'error');
       } finally {
         setPaySubmitting(false);
       }
@@ -864,7 +939,7 @@ const OrdersInvoicesPage: React.FC = () => {
   };
 
   const isHotelOrBus = user?.role === 'role_hotel' || user?.role === 'role_bus';
-  const isKoordinator = ['admin_koordinator', 'invoice_koordinator', 'visa_koordinator', 'tiket_koordinator'].includes(user?.role || '');
+  const isKoordinator = ['invoice_koordinator', 'visa_koordinator', 'tiket_koordinator'].includes(user?.role || '');
   const scopeHint = isHotelOrBus ? ' Data: semua wilayah.' : isKoordinator ? ' Data: wilayah Anda.' : '';
   const invoiceSubtitle = `Daftar invoice. Buka untuk detail, pembayaran, dan update status produk (Visa, Tiket, Hotel, Bus).${scopeHint}`;
 
@@ -913,30 +988,6 @@ const OrdersInvoicesPage: React.FC = () => {
             >
               <FileSpreadsheet className="w-5 h-5 mr-2" />
               {exportingInvoicesExcel ? 'Mengunduh...' : 'Export Excel'}
-            </Button>
-          )}
-          {canReallocate && (
-            <Button variant="outline" onClick={() => {
-              setShowReallocateModal(true);
-              setReallocateRows([{ source_invoice_id: '', target_invoice_id: '', amount: '' }]);
-              setReallocateNotes('');
-              setReallocateListLoading(true);
-              const params = { ...buildListParams(), limit: 300, page: 1 };
-              invoicesApi.list(params)
-                .then((r) => {
-                  const raw = r?.data;
-                  const arr = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
-                  setReallocateInvoiceList(arr);
-                })
-                .catch(() => setReallocateInvoiceList([]))
-                .finally(() => setReallocateListLoading(false));
-            }} className="shrink-0">
-              <ArrowRightLeft className="w-5 h-5 mr-2" /> Pemindahan Dana
-            </Button>
-          )}
-          {canOrderAction && (
-            <Button variant="primary" onClick={() => navigate('/dashboard/orders/new')} className="shrink-0">
-              <Plus className="w-5 h-5 mr-2" /> Tambah Invoice
             </Button>
           )}
         </>
@@ -1059,7 +1110,7 @@ const OrdersInvoicesPage: React.FC = () => {
           <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
         </h3>
         {loadingSummary ? (
-          <p className="text-slate-500 text-sm">Memuat...</p>
+          <p className="text-slate-500 text-sm">{CONTENT_LOADING_MESSAGE}</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
             {(() => {
@@ -1091,17 +1142,45 @@ const OrdersInvoicesPage: React.FC = () => {
         )}
       </div>
 
-      {loading ? (
-        <div className="py-12 text-center text-slate-500">Memuat...</div>
-      ) : (
-        <Card className="travel-card rounded-2xl border-slate-200/80 shadow-sm">
-          <CardSectionHeader
-            icon={<Receipt className="w-6 h-6" />}
-            title={`Daftar Invoice (${(pagination?.total ?? invoices.length) + draftOrders.length})`}
-            subtitle="Geser horizontal jika tabel tidak muat"
-            className="mb-5 px-1"
-          />
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <Card className="travel-card rounded-2xl border-slate-200/80 shadow-sm">
+        <CardSectionHeader
+          icon={<Receipt className="w-6 h-6" />}
+          title={`Daftar Invoice (${(pagination?.total ?? invoices.length) + draftOrders.length})`}
+          subtitle="Geser horizontal jika tabel tidak muat"
+          className="mb-5 px-1"
+          right={
+            <div className="flex items-center gap-2 shrink-0">
+              {canReallocate && (
+                <Button variant="outline" size="sm" onClick={() => {
+                  setShowReallocateModal(true);
+                  setReallocateRows([{ source_invoice_id: '', target_invoice_id: '', amount: '' }]);
+                  setReallocateNotes('');
+                  setReallocateListLoading(true);
+                  const params = { ...buildListParams(), limit: 300, page: 1 };
+                  invoicesApi.list(params)
+                    .then((r) => {
+                      const raw = r?.data;
+                      const arr = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+                      setReallocateInvoiceList(arr);
+                    })
+                    .catch(() => setReallocateInvoiceList([]))
+                    .finally(() => setReallocateListLoading(false));
+                }}>
+                  <ArrowRightLeft className="w-5 h-5 mr-2" /> Pemindahan Dana
+                </Button>
+              )}
+              {canOrderAction && (
+                <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders/new')}>
+                  <Plus className="w-5 h-5 mr-2" /> Tambah Invoice
+                </Button>
+              )}
+            </div>
+          }
+        />
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
             <Table
               columns={invoiceTableColumns}
               data={page === 1 ? [...draftOrders, ...invoices] : invoices}
@@ -1278,8 +1357,9 @@ const OrdersInvoicesPage: React.FC = () => {
                               const statusLabel = labels[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
                               const travelDate = formatDate(item.meta?.travel_date ?? null);
                               const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
-                              const tripType = item.meta?.trip_type ? String(item.meta.trip_type) : '';
-                              const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripType ? `Trip ${tripType}` : null].filter(Boolean).join(' · ');
+                              const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
+                              const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
+                              const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel ? tripTypeLabel : null].filter(Boolean).join(' · ');
                               return (
                                 <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                                   <div className="flex flex-wrap items-baseline gap-1">
@@ -1423,9 +1503,9 @@ const OrdersInvoicesPage: React.FC = () => {
                   </tr>
               )}
             />
-          </div>
-        </Card>
-      )}
+          )}
+        </div>
+      </Card>
 
       {/* Modal Upload Dokumen – Tabs: Hotel / Visa / Tiket */}
       {uploadDocInvoice && (
@@ -1440,7 +1520,7 @@ const OrdersInvoicesPage: React.FC = () => {
             <ModalBody className="flex-1 overflow-y-auto">
             {uploadDocLoading ? (
               <div className="p-8 flex items-center justify-center">
-                <p className="text-slate-500">Memuat data order…</p>
+                <ContentLoading minHeight={120} />
               </div>
             ) : (() => {
               const order = uploadDocInvoice.Order;
@@ -1871,7 +1951,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   <Wallet className="w-4 h-4" /> Saldo Akun Anda
                                 </h4>
                                 {ownerBalanceLoading ? (
-                                  <p className="text-sm text-slate-500">Memuat saldo...</p>
+                                  <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                                 ) : (
                                   <>
                                     <p className="text-2xl font-bold text-emerald-700">{formatIDR(ownerBalance ?? 0)}</p>
@@ -1912,6 +1992,82 @@ const OrdersInvoicesPage: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Rincian item order sesuai tipe produk (workflow masing-masing) */}
+                        {(() => {
+                          const orderItems = viewInvoice?.Order?.OrderItems || [];
+                          if (orderItems.length === 0) return null;
+                          const getItemDesc = (item: any) => {
+                            const t = (item.type || item.product_type || '').toLowerCase();
+                            const meta = item.meta || {};
+                            if (t === 'hotel') {
+                              const ci = meta.check_in ? formatDate(meta.check_in) : '';
+                              const co = meta.check_out ? formatDate(meta.check_out) : '';
+                              const nights = meta.nights != null ? meta.nights : 0;
+                              const meal = meta.meal || meta.with_meal ? 'Ya' : 'Tidak';
+                              return [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`].filter(Boolean).join(' · ');
+                            }
+                            if (t === 'visa') {
+                              return meta.travel_date ? `Keberangkatan: ${formatDate(meta.travel_date)}` : '';
+                            }
+                            if (t === 'ticket') {
+                              const bandara = meta.bandara ? `Bandara ${meta.bandara}` : '';
+                              const trip = meta.trip_type ? BUS_TRIP_LABELS[meta.trip_type] || meta.trip_type : '';
+                              const dep = meta.departure_date ? formatDate(meta.departure_date) : '';
+                              const ret = meta.return_date ? formatDate(meta.return_date) : '';
+                              return [bandara, trip, dep && `Berangkat ${dep}`, ret && `Pulang ${ret}`].filter(Boolean).join(' · ');
+                            }
+                            if (t === 'bus') {
+                              const trip = meta.trip_type ? BUS_TRIP_LABELS[meta.trip_type] || meta.trip_type : '';
+                              const tgl = meta.travel_date ? formatDate(meta.travel_date) : '';
+                              const route = meta.route_type ? String(meta.route_type) : '';
+                              return [trip, tgl && `Tgl ${tgl}`, route && `Rute ${route}`].filter(Boolean).join(' · ');
+                            }
+                            return '';
+                          };
+                          return (
+                            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                              <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                                <span className="w-1 h-5 rounded-full bg-primary-500" /> Rincian Item Order
+                              </h4>
+                              <p className="text-xs text-slate-500 mb-3">Deskripsi per item sesuai data dan tipe produk (sama seperti di PDF invoice).</p>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-slate-200">
+                                      <th className="text-left py-2 px-2 font-medium text-slate-600">No</th>
+                                      <th className="text-left py-2 px-2 font-medium text-slate-600">Tipe</th>
+                                      <th className="text-left py-2 px-2 font-medium text-slate-600">Produk</th>
+                                      <th className="text-left py-2 px-2 font-medium text-slate-600">Deskripsi / Workflow</th>
+                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Qty</th>
+                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Subtotal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {orderItems.map((item: any, idx: number) => {
+                                      const name = item.Product?.name || item.product_name || `${item.type || 'Item'} ${idx + 1}`;
+                                      const typeKey = (item.type || item.product_type) as string;
+                                      const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
+                                      const desc = getItemDesc(item);
+                                      const qty = item.quantity != null ? item.quantity : 1;
+                                      const subtotal = item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * qty;
+                                      return (
+                                        <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50">
+                                          <td className="py-2 px-2 text-slate-600">{idx + 1}</td>
+                                          <td className="py-2 px-2 font-medium text-slate-700">{typeLabel}</td>
+                                          <td className="py-2 px-2 text-slate-900">{name}</td>
+                                          <td className="py-2 px-2 text-slate-600 text-xs">{desc || '–'}</td>
+                                          <td className="py-2 px-2 text-right tabular-nums">{qty}</td>
+                                          <td className="py-2 px-2 text-right font-medium tabular-nums">{formatIDR(subtotal)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* Hint tagihan DP (jika bisa bayar, tombol sudah di atas) */}
                         {canPayInvoice(viewInvoice) && (
                           <p className="text-sm text-slate-500 px-1">Tagihan DP minimal {viewInvoice.dp_percentage || 30}% atau input sendiri. Bayar via Transfer Bank, VA, atau QRIS.</p>
@@ -1927,7 +2083,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         <span className="w-1 h-5 rounded-full bg-primary-500" /> Riwayat Status
                       </h4>
                       {auditLoading ? (
-                        <div className="text-sm text-slate-500">Memuat...</div>
+                        <div className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</div>
                       ) : statusHistory.length === 0 ? (
                         <div className="text-sm text-slate-500">Belum ada riwayat.</div>
                       ) : (
@@ -1958,7 +2114,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         <span className="w-1 h-5 rounded-full bg-primary-500" /> Perubahan Order
                       </h4>
                       {auditLoading ? (
-                        <div className="text-sm text-slate-500">Memuat...</div>
+                        <div className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</div>
                       ) : orderRevisions.length === 0 ? (
                         <div className="text-sm text-slate-500">Belum ada revisi.</div>
                       ) : (() => {
@@ -2037,16 +2193,40 @@ const OrdersInvoicesPage: React.FC = () => {
                       <h4 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
                         <Receipt className="w-4 h-4" /> Permintaan Refund
                       </h4>
-                      <p className="text-xs text-slate-500">Pembatalan invoice dengan pembayaran akan membuat permintaan refund. Status berikut menunggu proses oleh tim keuangan.</p>
+                      <p className="text-xs text-slate-500">Status refund diproses oleh role accounting. Setelah proses selesai, bukti refund dikirim ke email pemesan (pengorder).</p>
                       <ul className="space-y-2">
                         {(viewInvoice.Refunds as any[]).map((r: any) => (
                           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm p-3 bg-white rounded-lg border border-slate-200">
-                            <span className="font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</span>
-                            <Badge variant={r.status === 'refunded' ? 'success' : r.status === 'rejected' ? 'error' : 'warning'}>
-                              {r.status === 'requested' ? 'Menunggu proses' : r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Sudah direfund'}
-                            </Badge>
+                            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                              <span className="font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</span>
+                              <Badge variant={r.status === 'refunded' ? 'success' : r.status === 'rejected' ? 'error' : 'warning'}>
+                                {r.status === 'requested' ? 'Menunggu proses' : r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Sudah direfund'}
+                              </Badge>
+                              {r.proof_file_url && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    refundsApi.getProofFile(r.id)
+                                      .then((res) => {
+                                        const blob = res.data as Blob;
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `bukti-refund-${viewInvoice?.invoice_number || r.id}.pdf`;
+                                        a.click();
+                                        window.URL.revokeObjectURL(url);
+                                      })
+                                      .catch(() => showToast('Gagal unduh bukti refund', 'error'));
+                                  }}
+                                  className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 text-xs font-medium"
+                                >
+                                  <Download className="w-3.5 h-3.5" /> Unduh bukti refund
+                                </button>
+                              )}
+                            </div>
                             {(r.bank_name || r.account_number) && <span className="text-slate-600 text-xs w-full mt-1">Rekening: {r.bank_name} {r.account_number}</span>}
                             {r.reason && <span className="text-slate-600 text-xs w-full mt-1">Alasan: {r.reason}</span>}
+                            {r.status === 'refunded' && r.proof_file_url && <span className="text-emerald-700 text-xs w-full mt-1">Bukti refund telah dikirim ke email pemesan.</span>}
                           </li>
                         ))}
                       </ul>
@@ -2065,8 +2245,8 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                     <div className="h-[420px] min-h-[320px] bg-slate-50">
                       {loadingPdf && (
-                        <div className="flex items-center justify-center h-full text-slate-500">
-                          <div className="animate-pulse">Memuat PDF...</div>
+                        <div className="flex items-center justify-center h-full">
+                          <ContentLoading minHeight={320} />
                         </div>
                       )}
                       {!loadingPdf && invoicePdfUrl && (
@@ -2093,7 +2273,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {paymentProofs.map((p: any) => {
+                      {paymentProofs.map((p: any, idx: number) => {
                         const fileUrl = getFileUrl(p.proof_file_url);
                         const ps = getProofStatus(p);
                         const isPending = ps.status === 'pending';
@@ -2101,6 +2281,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           <div key={p.id} className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-slate-50/80 border-b border-slate-100">
                               <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-semibold text-[#0D1A63]">Pembayaran ke-{idx + 1}</span>
                                 <span className="font-semibold text-slate-800">{getProofDisplayLabel(p)}</span>
                                 <span className="text-slate-600 text-sm">
                                   {p.payment_location === 'saudi'
@@ -2144,7 +2325,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </>
                                 )}
                                 {p.payment_location === 'saudi' && (
-                                  <span className="text-xs text-[#0D1A63] font-medium">Pembayaran KES — otomatis terverifikasi</span>
+                                  <span className="text-xs text-[#0D1A63] font-medium">Pembayaran KES — otomatis terverifikasi (tidak perlu konfirmasi admin)</span>
                                 )}
                               </div>
                             </div>
@@ -2279,49 +2460,64 @@ const OrdersInvoicesPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* Modal Batalkan Invoice: pilih Jadikan saldo atau Minta refund (isi bank & rekening) */}
+      {/* Modal Batalkan Invoice: pilih Jadikan saldo / Refund / Pindah ke order lain */}
       {showCancelModal && cancelTargetInv && (
         <Modal open onClose={() => !deletingOrderId && setShowCancelModal(false)} zIndex={60}>
-          <ModalBox>
-            <ModalHeader title="Batalkan Invoice" subtitle="Konfirmasi pembatalan invoice dan pengembalian dana jika ada pembayaran" icon={<X className="w-5 h-5" />} onClose={() => !deletingOrderId && setShowCancelModal(false)} />
+          <ModalBox className="max-w-lg">
+            <ModalHeader title="Batalkan Order / Invoice" subtitle="Konfirmasi pembatalan. Jika ada pembayaran, pilih pengembalian dana." icon={<X className="w-5 h-5" />} onClose={() => !deletingOrderId && setShowCancelModal(false)} />
             <ModalBody className="space-y-4">
             {(() => {
               const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
               if (paid > 0) {
+                const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
+                const isPartialRefund = Number.isFinite(refundAmt) && refundAmt > 0 && refundAmt < paid;
+                const remainder = isPartialRefund ? paid - refundAmt : 0;
                 return (
                   <>
                     <p className="text-sm text-slate-600">
                       Invoice <strong>{cancelTargetInv.invoice_number}</strong> memiliki pembayaran <strong className="text-[#0D1A63]">{formatIDR(paid)}</strong>. Pilih salah satu:
                     </p>
                     <div className="space-y-3">
-                      <Button
-                        type="button"
-                        variant={cancelAction === 'to_balance' ? 'primary' : 'outline'}
-                        fullWidth
-                        onClick={() => setCancelAction('to_balance')}
-                        className="flex flex-col items-start text-left h-auto py-3"
-                      >
-                        <span className="font-medium">Jadikan saldo</span>
-                        <span className="text-xs opacity-90 mt-0.5">Dana masuk ke saldo akun Anda. Bisa dipakai untuk order baru atau alokasi ke tagihan lain.</span>
+                      <Button type="button" variant={cancelAction === 'to_balance' ? 'primary' : 'outline'} fullWidth onClick={() => setCancelAction('to_balance')} className="flex flex-col items-start text-left h-auto py-3">
+                        <span className="font-medium">Jadikan saldo akun</span>
+                        <span className="text-xs opacity-90 mt-0.5">Dana masuk ke saldo. Bisa dipakai untuk order baru atau alokasi ke tagihan lain.</span>
                       </Button>
-                      <Button
-                        type="button"
-                        variant={cancelAction === 'refund' ? 'primary' : 'outline'}
-                        fullWidth
-                        onClick={() => setCancelAction('refund')}
-                        className="flex flex-col items-start text-left h-auto py-3"
-                      >
-                        <span className="font-medium">Minta refund ke rekening</span>
-                        <span className="text-xs opacity-90 mt-0.5">Admin/accounting akan memproses pengembalian ke rekening Anda.</span>
+                      <Button type="button" variant={cancelAction === 'refund' ? 'primary' : 'outline'} fullWidth onClick={() => setCancelAction('refund')} className="flex flex-col items-start text-left h-auto py-3">
+                        <span className="font-medium">Refund ke rekening</span>
+                        <span className="text-xs opacity-90 mt-0.5">Masukkan data bank & rekening. Role accounting akan memproses pengembalian dana.</span>
+                      </Button>
+                      <Button type="button" variant={cancelAction === 'allocate_to_order' ? 'primary' : 'outline'} fullWidth onClick={() => setCancelAction('allocate_to_order')} className="flex flex-col items-start text-left h-auto py-3">
+                        <span className="font-medium">Pindah / alokasikan ke order lain</span>
+                        <span className="text-xs opacity-90 mt-0.5">Seluruh pembayaran dialihkan ke invoice lain (milik owner yang sama).</span>
                       </Button>
                     </div>
                     {cancelAction === 'refund' && (
-                      <div className="space-y-2 pt-2 border-t border-slate-200">
+                      <div className="space-y-3 pt-3 border-t border-slate-200">
+                        <Input label="Jumlah yang ingin di-refund (kosong = full)" type="text" value={cancelRefundAmount} onChange={(e) => setCancelRefundAmount(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))} placeholder={formatIDR(paid)} disabled={!!deletingOrderId} />
+                        {isPartialRefund && remainder > 0 && (
+                          <>
+                            <p className="text-xs text-slate-600">Sisa <strong>{formatIDR(remainder)}</strong> mau dialokasikan ke mana?</p>
+                            <div className="flex gap-2">
+                              <Button type="button" size="sm" variant={cancelRemainderAction === 'to_balance' ? 'primary' : 'outline'} onClick={() => setCancelRemainderAction('to_balance')}>Jadikan saldo</Button>
+                              <Button type="button" size="sm" variant={cancelRemainderAction === 'allocate_to_order' ? 'primary' : 'outline'} onClick={() => setCancelRemainderAction('allocate_to_order')}>Alokasi ke invoice lain</Button>
+                            </div>
+                            {cancelRemainderAction === 'allocate_to_order' && (
+                              <Autocomplete label="Invoice tujuan (sisa dana)" value={cancelRemainderTargetInvoiceId} onChange={(v) => setCancelRemainderTargetInvoiceId(v || '')} options={cancelTargetInvoiceOptions.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(parseFloat(i.remaining_amount) || 0)} sisa` }))} placeholder="Pilih invoice" emptyLabel="Pilih invoice" />
+                            )}
+                          </>
+                        )}
                         <Input label="Nama Bank (wajib)" type="text" value={cancelBankName} onChange={(e) => setCancelBankName(e.target.value)} placeholder="Contoh: BCA, Mandiri" disabled={!!deletingOrderId} />
                         <Input label="Nomor Rekening (wajib)" type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" disabled={!!deletingOrderId} />
+                        <Input label="Nama pemilik rekening (opsional)" type="text" value={cancelAccountHolderName} onChange={(e) => setCancelAccountHolderName(e.target.value)} placeholder="A.n. nama pemilik" disabled={!!deletingOrderId} />
                       </div>
                     )}
-                    <Textarea label="Alasan pembatalan (opsional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." rows={3} disabled={!!deletingOrderId} />
+                    {cancelAction === 'allocate_to_order' && (
+                      <div className="pt-3 border-t border-slate-200">
+                        <Autocomplete label="Invoice tujuan (seluruh dana)" value={cancelTargetInvoiceId} onChange={(v) => setCancelTargetInvoiceId(v || '')} options={cancelTargetInvoiceOptions.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(parseFloat(i.remaining_amount) || 0)} sisa` }))} placeholder="Pilih invoice" emptyLabel="Pilih invoice" />
+                      </div>
+                    )}
+                    <Textarea label="Alasan pembatalan (opsional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." rows={2} disabled={!!deletingOrderId} />
+                    <p className="text-xs text-slate-500 pt-1">Seluruh proses transaksi (pembatalan, refund, saldo, alokasi) tersimpan di sistem dan dapat dilihat di riwayat invoice serta oleh role accounting untuk proses refund.</p>
                   </>
                 );
               }
@@ -2329,9 +2525,9 @@ const OrdersInvoicesPage: React.FC = () => {
             })()}
             </ModalBody>
             <ModalFooter>
-              <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancelTargetInv(null); setCancelReason(''); setCancelBankName(''); setCancelAccountNumber(''); }} disabled={!!deletingOrderId}>Batal</Button>
+              <Button variant="outline" onClick={() => { setShowCancelModal(false); setCancelTargetInv(null); setCancelReason(''); setCancelBankName(''); setCancelAccountNumber(''); setCancelAccountHolderName(''); setCancelRefundAmount(''); setCancelRemainderTargetInvoiceId(''); setCancelTargetInvoiceId(''); }} disabled={!!deletingOrderId}>Batal</Button>
               <Button variant="primary" onClick={submitCancelModal} disabled={!!deletingOrderId} className="bg-red-600 hover:bg-red-700">
-                {deletingOrderId ? 'Memproses...' : (parseFloat(cancelTargetInv.paid_amount) || 0) > 0 ? (cancelAction === 'to_balance' ? 'Ya, batalkan & jadikan saldo' : 'Ya, batalkan & minta refund') : 'Ya, batalkan'}
+                {deletingOrderId ? 'Memproses...' : (parseFloat(cancelTargetInv.paid_amount) || 0) > 0 ? (cancelAction === 'to_balance' ? 'Ya, batalkan & jadikan saldo' : cancelAction === 'refund' ? 'Ya, batalkan & minta refund' : 'Ya, batalkan & pindah ke invoice lain') : 'Ya, batalkan'}
               </Button>
             </ModalFooter>
           </ModalBox>
@@ -2402,18 +2598,16 @@ const OrdersInvoicesPage: React.FC = () => {
             onClose={() => !reallocateSubmitting && setShowReallocateModal(false)}
             zIndex={60}
           >
-            <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto flex flex-col">
-              <div className="px-6 py-4 border-b border-slate-200 shrink-0">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <ArrowRightLeft className="w-5 h-5" /> Pemindahan Dana Antar Invoice
-                </h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Bisa satu atau lebih sumber dan satu atau lebih penerima.
-                </p>
-              </div>
-              <div className="p-6 flex-1 space-y-4 min-h-0">
+            <ModalBox className="max-w-4xl w-full">
+              <ModalHeader
+                title="Pemindahan Dana Antar Invoice"
+                subtitle="Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Bisa satu atau lebih sumber dan satu atau lebih penerima."
+                icon={<ArrowRightLeft className="w-5 h-5" />}
+                onClose={() => !reallocateSubmitting && setShowReallocateModal(false)}
+              />
+              <ModalBody className="flex-1 space-y-4 min-h-0">
                 {reallocateListLoading ? (
-                  <p className="text-slate-500">Memuat daftar invoice...</p>
+                  <p className="text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                 ) : (
                   <>
                     {(sourceCandidates.length === 0 || targetCandidates.length === 0) && (
@@ -2521,14 +2715,14 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   </>
                 )}
-              </div>
-              <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
+              </ModalBody>
+              <ModalFooter>
                 <Button variant="outline" onClick={() => setShowReallocateModal(false)} disabled={reallocateSubmitting}>Batal</Button>
                 <Button variant="primary" onClick={submitReallocate} disabled={reallocateSubmitting || !canSubmit}>
                   {reallocateSubmitting ? 'Memproses...' : 'Proses Pemindahan'}
                 </Button>
-              </div>
-            </div>
+              </ModalFooter>
+            </ModalBox>
           </Modal>
         );
       })()}
@@ -2568,14 +2762,15 @@ const OrdersInvoicesPage: React.FC = () => {
             <div className="p-6 overflow-y-auto flex-1 space-y-4">
               {paymentMethod === 'saudi' && isInvoiceSaudi && (
                 <>
-                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl">Input pembayaran KES (Saudi) dalam SAR atau USD. Jumlah dikonversi ke IDR sesuai kurs cabang. Pembayaran otomatis terverifikasi (tanpa konfirmasi). Bisa upload bukti KES opsional.</p>
+                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl">Pilih mata uang yang dibayarkan (SAR, USD, atau IDR). Jumlah sesuai mata uang; sistem mencatat dan mengupdate sisa tagihan otomatis. Upload bukti bayar wajib.</p>
                   <Autocomplete
-                    label="Mata uang"
+                    label="Mata uang pembayaran *"
                     value={payCurrencySaudi}
-                    onChange={(v) => setPayCurrencySaudi((v as 'SAR' | 'USD') || 'SAR')}
+                    onChange={(v) => setPayCurrencySaudi((v as 'SAR' | 'USD' | 'IDR') || 'SAR')}
                     options={[
                       { value: 'SAR', label: 'SAR (Riyal Saudi)' },
-                      { value: 'USD', label: 'USD' }
+                      { value: 'USD', label: 'USD' },
+                      { value: 'IDR', label: 'IDR (Rupiah)' }
                     ]}
                     placeholder="Pilih mata uang"
                   />
@@ -2584,30 +2779,39 @@ const OrdersInvoicesPage: React.FC = () => {
                     type="text"
                     value={payAmountSaudi}
                     onChange={(e) => setPayAmountSaudi(e.target.value.replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
-                    placeholder={payCurrencySaudi === 'SAR' ? 'Contoh: 5000' : 'Contoh: 1500'}
+                    placeholder={payCurrencySaudi === 'IDR' ? 'Contoh: 5000000' : payCurrencySaudi === 'SAR' ? 'Contoh: 5000' : 'Contoh: 1500'}
                   />
                   {payAmountSaudi && !isNaN(parseFloat(payAmountSaudi.replace(/,/g, ''))) && (() => {
                     const amt = parseFloat(payAmountSaudi.replace(/,/g, ''));
-                    const idr = payCurrencySaudi === 'SAR' ? amt * sarToIdr : amt * usdToIdr;
+                    const idr = payCurrencySaudi === 'IDR' ? amt : payCurrencySaudi === 'SAR' ? amt * sarToIdr : amt * usdToIdr;
+                    const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
+                    const totalInv = parseFloat(viewInvoice.total_amount || 0);
+                    const newPaid = currentPaid + Math.round(idr);
+                    const newRemain = Math.max(0, totalInv - newPaid);
                     return (
-                      <p className="text-xs text-slate-500 mt-1">≈ {formatIDR(Math.round(idr))} IDR</p>
+                      <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
+                        {payCurrencySaudi !== 'IDR' && <p className="text-xs text-slate-600">≈ {formatIDR(Math.round(idr))} IDR (konversi untuk tagihan)</p>}
+                        <p className="font-semibold text-slate-800">Setelah pembayaran ini</p>
+                        <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]">{formatIDR(newPaid)}</strong></p>
+                        <p><span className="text-slate-600">Sisa tagihan:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>{formatIDR(newRemain)}</strong></p>
+                      </div>
                     );
                   })()}
                   <Input
-                    label="Tanggal transfer"
+                    label="Tanggal transfer *"
                     type="date"
                     value={payTransferDate}
                     onChange={(e) => setPayTransferDate(e.target.value)}
                   />
                   <div>
                     <Input
-                      label="Upload bukti KES"
+                      label="Upload bukti bayar *"
                       type="file"
                       accept="image/*,.pdf"
                       onChange={(e) => setPayFile(e.target.files?.[0] || null)}
                       className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Opsional. Bukti transfer KES (foto/screenshot/PDF). Pembayaran otomatis terverifikasi tanpa konfirmasi.</p>
+                    <p className="text-xs text-slate-500 mt-1">Bukti transfer (foto/screenshot/PDF). Pembayaran otomatis terverifikasi.</p>
                   </div>
                 </>
               )}
@@ -2616,7 +2820,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Transfer ke rekening</label>
                     {!bankAccountsForPayment.length && paymentBankAccountsLoading ? (
-                      <p className="text-sm text-slate-500 py-2">Memuat data rekening bank...</p>
+                      <p className="text-sm text-slate-500 py-2">{CONTENT_LOADING_MESSAGE}</p>
                     ) : bankAccountsForPayment.length === 0 ? (
                       <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Belum ada rekening bank. Konfigurasi di menu <strong>Data Rekening Bank</strong> (Accounting).</p>
                     ) : (

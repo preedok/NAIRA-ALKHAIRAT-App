@@ -4,7 +4,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
-import { FilterIconButton } from '../../../components/common';
 import VisaPage from './VisaPage';
 import VisaCalendarView from './VisaCalendarView';
 import type { VisaProduct } from './VisaCalendarView';
@@ -22,8 +21,6 @@ const ProductVisaPage: React.FC = () => {
   const [visaProducts, setVisaProducts] = useState<VisaProduct[]>([]);
   const [visaLoading, setVisaLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filterActive, setFilterActive] = useState(false);
 
   const fetchVisaProducts = useCallback(() => {
     setVisaLoading(true);
@@ -57,14 +54,7 @@ const ProductVisaPage: React.FC = () => {
       <PageHeader
         title="Visa"
         subtitle="Produk visa umroh: kelola harga, kuota, dan periode. Admin pusat dapat edit dan hapus."
-        right={
-          <div className="flex items-center gap-2">
-            <AutoRefreshControl onRefresh={handleRefresh} disabled={visaLoading} />
-            {activeTab === 'list' && (
-              <FilterIconButton open={filterOpen} onToggle={() => setFilterOpen((v) => !v)} hasActiveFilters={filterActive} />
-            )}
-          </div>
-        }
+        right={<AutoRefreshControl onRefresh={handleRefresh} disabled={visaLoading} />}
       />
 
       <nav
@@ -90,16 +80,13 @@ const ProductVisaPage: React.FC = () => {
 
       <div className="flex-1 min-h-[420px]">
         {activeTab === 'list' && (
-          <VisaPage
-            embedInProducts
-            refreshTrigger={refreshTrigger}
-            embedFilterOpen={filterOpen}
-            embedFilterOnToggle={() => setFilterOpen((v) => !v)}
-            onFilterActiveChange={setFilterActive}
-          />
+          <VisaPage embedInProducts refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'calendar' && (
-          <VisaCalendarView visaProducts={visaLoading ? [] : visaProducts} />
+          <VisaCalendarView
+            visaProducts={visaLoading ? [] : visaProducts}
+            onAddQuotaClick={() => setActiveTab('list')}
+          />
         )}
       </div>
     </div>

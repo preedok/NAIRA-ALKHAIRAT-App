@@ -49,16 +49,17 @@ function attachJamaahStatus(item) {
 
 /**
  * Hotel controller: scope cabang via getHotelBranchIds (sama seperti bus/tiket).
- * branch_id user TIDAK wajib: super_admin = semua cabang, admin_koordinator = wilayah,
+ * branch_id user TIDAK wajib: super_admin = semua cabang, koordinator (invoice/tiket/visa) = wilayah,
  * role_hotel tanpa cabang/wilayah = fallback semua cabang. Tidak ada pesan "Role hotel harus terikat cabang".
  */
-/** Scope cabang: super_admin = semua cabang, admin_koordinator = wilayah, role hotel = cabang/wilayah. Fallback semua cabang agar tidak 403. */
+const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
+/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role hotel = cabang/wilayah. Fallback semua cabang agar tidak 403. */
 async function getHotelBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
     const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
     return branches.map(b => b.id);
   }
-  if (user.role === ROLES.ADMIN_KOORDINATOR && user.wilayah_id) {
+  if (KOORDINATOR_ROLES.includes(user.role) && user.wilayah_id) {
     const ids = await getBranchIdsForWilayah(user.wilayah_id);
     if (ids.length > 0) return ids;
   }

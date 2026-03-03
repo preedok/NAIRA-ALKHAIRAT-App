@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Receipt, Wallet, Clock, CheckCircle, XCircle, Banknote } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Receipt, Wallet, Clock, CheckCircle, XCircle, Banknote, Upload, Download } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Autocomplete, StatCard } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -36,6 +36,8 @@ const RefundsPage: React.FC = () => {
   const [owners, setOwners] = useState<{ id: string; name?: string }[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
 
@@ -115,6 +117,35 @@ const RefundsPage: React.FC = () => {
       .finally(() => setUpdatingId(null));
   };
 
+  const handleUploadProof = (id: string, file: File) => {
+    if (!file) return;
+    setUploadingProofId(id);
+    const form = new FormData();
+    form.append('proof_file', file);
+    refundsApi.uploadProof(id, form)
+      .then((res: any) => {
+        showToast(res.data?.message || 'Bukti refund berhasil diupload. Email bukti telah dikirim ke pemesan.', 'success');
+        fetchStats();
+        fetchRefunds();
+      })
+      .catch((e: any) => showToast(e.response?.data?.message || 'Gagal upload bukti refund', 'error'))
+      .finally(() => setUploadingProofId(null));
+  };
+
+  const handleDownloadProof = (id: string) => {
+    refundsApi.getProofFile(id)
+      .then((res) => {
+        const blob = res.data as Blob;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bukti-refund-${id.slice(-6)}.pdf`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => showToast('Gagal unduh bukti refund', 'error'));
+  };
+
   const onRefresh = () => {
     fetchStats();
     fetchRefunds();
@@ -124,7 +155,7 @@ const RefundsPage: React.FC = () => {
     <div className="space-y-6 w-full">
       <PageHeader
         title="Refund"
-        subtitle={canUpdateStatus ? 'Daftar permintaan refund. Ubah status (Disetujui / Ditolak / Sudah direfund) untuk memproses.' : 'Daftar permintaan refund Anda.'}
+        subtitle={canUpdateStatus ? 'Daftar permintaan refund. Beri status (Setujui / Tolak) lalu upload bukti bayar refund; setelah upload, status otomatis Sudah direfund dan bukti dikirim ke email pemesan.' : 'Daftar permintaan refund Anda.'}
         right={
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={onRefresh} disabled={loading} />
@@ -215,12 +246,21 @@ const RefundsPage: React.FC = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <CardSectionHeader
+          icon={<Receipt className="w-6 h-6" />}
+          title="Daftar Permintaan Refund"
+          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Upload bukti bayar refund untuk menandai selesai; bukti otomatis dikirim ke email pemesan.' : 'Lihat daftar permintaan refund Anda.'}`}
+          className="mb-4"
+        />
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {loading ? (
+            <ContentLoading />
+          ) : (
           <Table
             columns={refundColumns}
-            data={loading ? [] : pagedList}
-            emptyMessage={loading ? 'Memuat...' : 'Belum ada permintaan refund'}
-            emptyDescription={loading ? '' : 'Ubah filter atau tunggu ada permintaan refund.'}
+            data={pagedList}
+            emptyMessage="Belum ada permintaan refund"
+            emptyDescription="Ubah filter atau tunggu ada permintaan refund."
             stickyActionsColumn={canUpdateStatus}
             pagination={
               totalRefunds > 0
@@ -250,21 +290,47 @@ const RefundsPage: React.FC = () => {
                 </td>
                 {canUpdateStatus && (
                   <td className="py-3 px-4">
-                    {r.status === 'requested' && (
-                      <div className="flex flex-wrap gap-1">
-                        <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'approved')}>Setujui</Button>
-                        <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
-                        <Button size="sm" variant="primary" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'refunded')}>{updatingId === r.id ? '...' : 'Tandai sudah direfund'}</Button>
-                      </div>
-                    )}
-                    {r.status === 'approved' && (
-                      <Button size="sm" variant="primary" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'refunded')}>{updatingId === r.id ? '...' : 'Tandai sudah direfund'}</Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {r.proof_file_url && (
+                        <Button size="sm" variant="outline" onClick={() => handleDownloadProof(r.id)} className="inline-flex items-center gap-1">
+                          <Download className="w-3.5 h-3.5" /> Unduh bukti
+                        </Button>
+                      )}
+                      {(r.status === 'requested' || r.status === 'approved') && (
+                        <>
+                          <input
+                            type="file"
+                            ref={(el) => { fileInputRefs.current[r.id] = el; }}
+                            className="hidden"
+                            accept="image/*,.pdf"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleUploadProof(r.id, f);
+                              e.target.value = '';
+                            }}
+                          />
+                          <Button size="sm" variant="primary" disabled={uploadingProofId === r.id} onClick={() => fileInputRefs.current[r.id]?.click()} className="inline-flex items-center gap-1">
+                            <Upload className="w-3.5 h-3.5" /> {uploadingProofId === r.id ? 'Uploading...' : 'Upload bukti refund'}
+                          </Button>
+                        </>
+                      )}
+                      {r.status === 'requested' && (
+                        <>
+                          <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'approved')}>Setujui</Button>
+                          <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
+                          <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'refunded')}>{updatingId === r.id ? '...' : 'Tandai sudah direfund'}</Button>
+                        </>
+                      )}
+                      {r.status === 'approved' && !r.proof_file_url && (
+                        <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'refunded')}>{updatingId === r.id ? '...' : 'Tandai sudah direfund'}</Button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
             )}
           />
+          )}
         </div>
       </Card>
     </div>

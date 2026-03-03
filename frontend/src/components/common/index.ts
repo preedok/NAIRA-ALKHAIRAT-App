@@ -5,6 +5,7 @@ export { default as Badge } from './Badge';
 export { default as Button } from './Button';
 export { default as Card } from './Card';
 export { default as CardSectionHeader } from './CardSectionHeader';
+export { default as ContentLoading, CONTENT_LOADING_MESSAGE } from './ContentLoading';
 export { default as Checkbox } from './Checkbox';
 export { default as DashboardFilterBar } from './DashboardFilterBar';
 export { default as Dropdown } from './Dropdown';
@@ -13,6 +14,8 @@ export { default as Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalB
 export { default as PageFilter, FilterIconButton } from './PageFilter';
 export { default as PageHeader } from './PageHeader';
 export { default as PriceInput } from './PriceInput';
+export { default as ProductCalendar } from './ProductCalendar';
+export type { ProductCalendarMonth, ProductCalendarDayInfo, ProductCalendarProps } from './ProductCalendar';
 export { default as StatCard } from './StatCard';
 export { default as Table } from './Table';
 export { default as Textarea } from './Textarea';

@@ -69,6 +69,11 @@ const OrderItem = sequelize.define('OrderItem', {
     defaultValue: {},
     comment: 'room_type, check_in, check_out, flight_number, dll'
   },
+  currency_rates_override: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    comment: 'Kurs untuk item ini (jika ditambah setelah DP). Kosong = pakai kurs order.'
+  },
   notes: {
     type: DataTypes.TEXT
   }

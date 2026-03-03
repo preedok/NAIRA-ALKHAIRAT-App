@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Hotel as HotelIcon,
   Plus,
@@ -20,8 +20,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import PageHeader from '../../../components/common/PageHeader';
-import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg } from '../../../components/common';
+import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -34,6 +33,7 @@ import { fillFromSource } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable } from '../../../utils';
 
 const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
+const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
 
 const CURRENCIES = [
@@ -161,8 +161,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
   const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat';
   /** Owner tidak boleh edit/hapus product; hanya role yang diizinkan backend */
-  const canEditProduct = ['super_admin', 'admin_pusat', 'admin_koordinator'].includes(user?.role ?? '');
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'role_invoice_saudi';
+  const canEditProduct = ['super_admin', 'admin_pusat'].includes(user?.role ?? '');
+  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role ?? '');
 
   useEffect(() => {
     if (openSeasonsForHotelId && hotels.length > 0) {
@@ -275,23 +276,26 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [sortBy, setSortBy] = useState('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const lastFilterKeyRef = useRef<string>('');
 
-  const hasActiveFilters = filterIncludeInactive === 'true';
-
-  /** Saat embed: kontrol filter dari parent (header); beri tahu parent jika filter aktif */
-  const filterOpen = embedInProducts && embedFilterOpen !== undefined ? embedFilterOpen : showFilters;
-  const filterOnToggle = embedInProducts && embedFilterOnToggle ? embedFilterOnToggle : () => setShowFilters((v) => !v);
   useEffect(() => {
-    if (embedInProducts && onFilterActiveChange) onFilterActiveChange(hasActiveFilters);
-  }, [embedInProducts, hasActiveFilters, onFilterActiveChange]);
-  const resetFilters = () => setFilterIncludeInactive('false');
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 350);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   const fetchProducts = useCallback(() => {
+    const filterKey = `${debouncedSearchTerm}|${filterIncludeInactive}`;
+    let pageToUse = page;
+    if (lastFilterKeyRef.current !== filterKey) {
+      lastFilterKeyRef.current = filterKey;
+      setPage(1);
+      pageToUse = 1;
+    }
     setLoading(true);
     setError(null);
-    const params = { type: 'hotel' as const, with_prices: 'true' as const, include_inactive: filterIncludeInactive, limit, page, sort_by: sortBy, sort_order: sortOrder, ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}) };
+    const params = { type: 'hotel' as const, with_prices: 'true' as const, include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchTerm.trim() ? { name: debouncedSearchTerm.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}) };
     productsApi
       .list(params)
       .then((res) => {
@@ -304,7 +308,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive]);
+  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive, debouncedSearchTerm]);
 
   useEffect(() => {
     fetchProducts();
@@ -315,13 +319,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   }, [embedInProducts, refreshTrigger]);
 
   const filteredHotels = hotels.filter((hotel: HotelProduct) => {
-    const matchesSearch =
-      hotel.name.toLowerCase().includes(searchTerm.toLowerCase());
     const loc = hotel.meta?.location?.toLowerCase();
     const matchesLocation =
       locationFilter === 'all' ||
       (loc && (loc === 'makkah' || loc === 'madinah') && loc === locationFilter);
-    return matchesSearch && (locationFilter === 'all' || matchesLocation);
+    return locationFilter === 'all' || matchesLocation;
   });
 
   /** Fetch availability realtime untuk setiap hotel di halaman (rentang 30 hari), + refresh tiap 60s */
@@ -443,7 +445,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     { id: 'room_price_type', label: 'Harga Kamar (IDR · SAR · USD)', align: 'left' },
     { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
     { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
-    { id: 'actions', label: 'Aksi', align: 'center' }
+    ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
   ];
 
   const handleOpenAdd = () => {
@@ -554,6 +556,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       await adminPusatApi.setHotelAvailabilityConfig(hotel.id, { availability_mode: 'global' });
       showToast('Jumlah kamar, harga, dan pengaturan (semua bulan) disimpan', 'success');
       fetchProducts();
+      setSeasonsModalHotel(null);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       showToast(err.response?.data?.message || 'Gagal menyimpan', 'error');
@@ -640,22 +643,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     return '-';
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-slate-600">Memuat data hotel...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg bg-red-50 p-4 text-red-700">
-        {error}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {!embedInProducts && (
@@ -663,40 +650,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           title="Hotel"
           subtitle="Harga & ketersediaan dikelola Admin Pusat"
           right={
-            <div className="flex items-center gap-2">
-              <AutoRefreshControl onRefresh={fetchProducts} disabled={loading} />
-              <FilterIconButton open={filterOpen} onToggle={filterOnToggle} hasActiveFilters={hasActiveFilters} />
-            </div>
+            <AutoRefreshControl onRefresh={fetchProducts} disabled={loading} />
           }
         />
       )}
-
-      <PageFilter
-        open={filterOpen}
-        onToggle={filterOnToggle}
-        onReset={resetFilters}
-        hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchProducts(); }}
-        loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
-        cardTitle="Pengaturan Filter"
-        cardDescription="Tampilkan hotel aktif saja atau termasuk nonaktif."
-        hideToggleRow
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Autocomplete
-            label="Tampilkan"
-            value={filterIncludeInactive}
-            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
-            options={[
-              { value: 'false', label: 'Aktif saja' },
-              { value: 'true', label: 'Semua (termasuk nonaktif)' }
-            ]}
-          />
-        </div>
-      </PageFilter>
 
       {/* Stat cards - ringkas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -725,8 +682,19 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
       {/* Cari & filter + tabel dalam satu card */}
       <Card>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
-          <div className="flex-1 max-w-md">
+        <CardSectionHeader
+          icon={<HotelIcon className="w-6 h-6" />}
+          title="Daftar Hotel"
+          subtitle={`${filteredHotels.length} dari ${pagination?.total ?? hotels.length} hotel. Ketersediaan (realtime) mengikuti pilihan di Jumlah Kamar & Musim. Saat order dibooking, kamar berkurang. Klik kolom Ketersediaan untuk detail per tanggal.`}
+          right={canAddHotel ? (
+            <Button variant="primary" size="sm" className="flex items-center gap-2 shrink-0" onClick={handleOpenAdd}>
+              <Plus className="w-4 h-4" />
+              Tambah Hotel
+            </Button>
+          ) : undefined}
+        />
+        <div className="pb-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
             <Input
               label="Cari nama hotel"
               type="text"
@@ -736,8 +704,17 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
               icon={<Search className="w-4 h-4" />}
               fullWidth
             />
+            <Autocomplete
+              label="Tampilkan"
+              value={filterIncludeInactive}
+              onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+              options={[
+                { value: 'false', label: 'Aktif saja' },
+                { value: 'true', label: 'Semua (termasuk nonaktif)' }
+              ]}
+            />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setLocationFilter('all')}
@@ -761,20 +738,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             </button>
           </div>
         </div>
-        <CardSectionHeader
-          icon={<HotelIcon className="w-6 h-6" />}
-          title="Daftar Hotel"
-          subtitle={`${filteredHotels.length} dari ${pagination?.total ?? hotels.length} hotel. Ketersediaan (realtime) mengikuti pilihan di Jumlah Kamar & Musim. Saat order dibooking, kamar berkurang. Klik kolom Ketersediaan untuk detail per tanggal.`}
-          right={canAddHotel ? (
-            <Button variant="primary" size="sm" className="flex items-center gap-2 shrink-0" onClick={handleOpenAdd}>
-              <Plus className="w-4 h-4" />
-              Tambah Hotel
-            </Button>
-          ) : undefined}
-          className="mb-5"
-        />
-
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
+          {error ? (
+            <div className="rounded-lg bg-red-50 p-4 text-red-700 text-sm m-4">
+              {error}
+            </div>
+          ) : loading ? (
+            <ContentLoading />
+          ) : (
           <Table
           columns={tableColumns}
           data={filteredHotels}
@@ -869,7 +840,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 </td>
                 <td className="px-4 py-3.5 align-middle">
                   {avail === 'loading' && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-700 text-xs">Memuat…</div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-700 text-xs">{CONTENT_LOADING_MESSAGE}</div>
                   )}
                   {avail === null && <span className="text-slate-400 text-sm">—</span>}
                   {avail && typeof avail === 'object' && avail.byRoomType && (
@@ -903,6 +874,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     {hotel.is_active ? 'Aktif' : 'Nonaktif'}
                   </Badge>
                 </td>
+                {canShowProductActions && (
                 <td className="px-4 py-3.5 align-middle">
                   <div className="flex justify-center gap-1 flex-wrap">
                     {canAddToOrder && (
@@ -944,10 +916,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     ) : null}
                   </div>
                 </td>
+                )}
               </tr>
             );
           }}
         />
+          )}
         </div>
       </Card>
 
@@ -1267,7 +1241,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             />
 
             {editFormLoading ? (
-              <ModalBody><div className="p-12 text-center text-slate-500">Memuat data hotel...</div></ModalBody>
+              <ModalBody><div className="p-12 text-center text-slate-500"><ContentLoading /></div></ModalBody>
             ) : (
             <ModalBody className="p-6 space-y-6">
               {editingHotel && (
@@ -1399,7 +1373,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             <ModalBody className="p-6 overflow-y-auto flex-1">
               {/* Pilihan: Semua jumlah kamar (satu set tiap bulan) vs Per musim */}
               {hotelAvailabilityConfigLoading ? (
-                <p className="text-sm text-slate-500 mb-5">Memuat pengaturan…</p>
+                <p className="text-sm text-slate-500 mb-5">{CONTENT_LOADING_MESSAGE}</p>
               ) : (
                 <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 mb-6">
                   <h3 className="text-sm font-semibold text-slate-800 mb-3">Cara atur kuota kamar</h3>
@@ -1463,6 +1437,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                             {ROOM_TYPES.map((rt) => (
                               <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">
+                                  {ROOM_TYPE_LABELS[rt] ?? rt}
+                                </label>
                                 <Input
                                   type="number"
                                   min={0}
@@ -1641,7 +1618,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                       {ROOM_TYPES.map((rt) => (
                         <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide capitalize mb-1.5">{rt}</label>
+                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">{ROOM_TYPE_LABELS[rt] ?? rt}</label>
                           <input
                             type="number"
                             min={0}
@@ -1673,6 +1650,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         const res = await adminPusatApi.listSeasons(seasonsModalHotel.id);
                         setSeasonsList((res.data as { data?: HotelSeason[] })?.data ?? []);
                         setInventoryForSeason(null);
+                        setSeasonsModalHotel(null);
                       } catch (err: unknown) {
                         const e = err as { response?: { data?: { message?: string } } };
                         showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');

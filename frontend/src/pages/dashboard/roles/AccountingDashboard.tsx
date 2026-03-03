@@ -5,7 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
@@ -143,7 +143,7 @@ const InvoiceListModal: React.FC<{
               { id: 'status', label: 'Status', align: 'left' }
             ] as TableColumn[]}
             data={loading ? [] : invoices}
-            emptyMessage={loading ? 'Memuat...' : 'Tidak ada data'}
+            emptyMessage={loading ? 'Memuat data...' : 'Tidak ada data'}
             pagination={
               pagination && pagination.total > 0
                 ? {
@@ -256,7 +256,7 @@ const AccountingDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title={user?.name ? `Selamat datang, ${user.name}` : 'Accounting'}
         subtitle="Rekapitulasi piutang, pembayaran, dan laporan keuangan"
@@ -313,10 +313,12 @@ const AccountingDashboard: React.FC = () => {
         <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3">{error}</div>
       )}
 
-      {loading && !data && <div className="text-center py-12 text-slate-500">Memuat data...</div>}
-
-      {data && (
-        <>
+      <Card className="travel-card min-h-[200px]">
+        <CardSectionHeader icon={<Activity className="w-6 h-6" />} title="Ringkasan Accounting" subtitle="Total invoice, terbayar, dan piutang per status, cabang, wilayah." className="mb-4" />
+        {loading && !data ? (
+          <ContentLoading />
+        ) : data ? (
+        <div className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard
               icon={<Receipt className="w-5 h-5" />}
@@ -341,7 +343,7 @@ const AccountingDashboard: React.FC = () => {
             />
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-8">
             <Card className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -384,7 +386,7 @@ const AccountingDashboard: React.FC = () => {
             </Card>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-8">
             <Card className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -510,8 +512,9 @@ const AccountingDashboard: React.FC = () => {
               </Button>
             </div>
           </Card>
-        </>
-      )}
+        </div>
+      ) : null}
+      </Card>
 
       <InvoiceListModal
         open={!!modalType}
