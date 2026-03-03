@@ -665,7 +665,7 @@ export const accountingApi = {
     api.delete<{ success: boolean; message: string }>(`/accounting/chart-of-accounts/${id}`),
   getBanks: (params?: { is_active?: string }) =>
     api.get<{ success: boolean; data: BankItem[] }>('/accounting/banks', { params }),
-  getBankAccounts: (params?: { is_active?: string }) =>
+  getBankAccounts: (params?: { is_active?: string; bank_name?: string; currency?: string; search?: string }) =>
     api.get<{ success: boolean; data: BankAccountItem[] }>('/accounting/bank-accounts', { params }),
   getBankAccountById: (id: string) =>
     api.get<{ success: boolean; data: BankAccountItem }>(`/accounting/bank-accounts/${id}`),

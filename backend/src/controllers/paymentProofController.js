@@ -179,9 +179,13 @@ const getFile = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
   }
   const invoice = await Invoice.findByPk(proof.invoice_id, { attributes: ['owner_id'] });
+  const allowedRoles = [
+    'super_admin', 'admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting',
+    'role_hotel', 'role_bus', 'handling', 'tiket_koordinator', 'visa_koordinator'
+  ];
   const canAccess = invoice && (
     invoice.owner_id === req.user.id ||
-    ['super_admin', 'admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting'].includes(req.user.role)
+    (req.user.role && allowedRoles.includes(req.user.role))
   );
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
   // Ekstrak nama file: terima /uploads/payment-proofs/xxx, uploads/payment-proofs/xxx, atau URL penuh

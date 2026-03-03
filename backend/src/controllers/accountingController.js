@@ -1504,12 +1504,27 @@ const getBanks = asyncHandler(async (req, res) => {
 /**
  * GET /api/v1/accounting/bank-accounts
  * Daftar rekening bank untuk pembayaran invoice (transfer/tunai).
+ * Filter: is_active, bank_name (iLike), currency, search (iLike pada bank_name, account_number, name).
  */
 const getBankAccounts = asyncHandler(async (req, res) => {
-  const { is_active } = req.query;
+  const { is_active, bank_name, currency, search } = req.query;
   const where = {};
   if (is_active === 'true') where.is_active = true;
   else if (is_active === 'false') where.is_active = false;
+  if (bank_name && String(bank_name).trim()) {
+    where.bank_name = { [Op.iLike]: `%${String(bank_name).trim()}%` };
+  }
+  if (currency && String(currency).trim()) {
+    where.currency = String(currency).trim().toUpperCase();
+  }
+  if (search && String(search).trim()) {
+    const q = `%${String(search).trim()}%`;
+    where[Op.or] = [
+      { bank_name: { [Op.iLike]: q } },
+      { account_number: { [Op.iLike]: q } },
+      { name: { [Op.iLike]: q } }
+    ];
+  }
   const list = await AccountingBankAccount.findAll({
     where,
     order: [['bank_name', 'ASC'], ['account_number', 'ASC']]

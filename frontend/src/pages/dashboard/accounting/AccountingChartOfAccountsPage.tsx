@@ -35,6 +35,7 @@ const AccountingChartOfAccountsPage: React.FC = () => {
   const [filterBankName, setFilterBankName] = useState('');
   const [filterCurrency, setFilterCurrency] = useState('');
   const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [tablePage, setTablePage] = useState(1);
   const [tableLimit, setTableLimit] = useState(DEFAULT_PAGE_SIZE);
   const [modalOpen, setModalOpen] = useState<'create' | 'edit' | null>(null);
@@ -51,9 +52,12 @@ const AccountingChartOfAccountsPage: React.FC = () => {
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const params: { is_active?: string } = {};
+      const params: { is_active?: string; bank_name?: string; currency?: string; search?: string } = {};
       if (filterStatus === 'active') params.is_active = 'true';
       else if (filterStatus === 'inactive') params.is_active = 'false';
+      if (filterBankName?.trim()) params.bank_name = filterBankName.trim();
+      if (filterCurrency?.trim()) params.currency = filterCurrency.trim();
+      if (searchDebounced?.trim()) params.search = searchDebounced.trim();
       const res = await accountingApi.getBankAccounts(params);
       if (res.data.success) setAccounts(res.data.data || []);
       else setAccounts([]);
@@ -62,7 +66,7 @@ const AccountingChartOfAccountsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus]);
+  }, [filterStatus, filterBankName, filterCurrency, searchDebounced]);
 
   const fetchBanks = useCallback(async () => {
     try {
@@ -78,6 +82,11 @@ const AccountingChartOfAccountsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
 
@@ -85,26 +94,13 @@ const AccountingChartOfAccountsPage: React.FC = () => {
     fetchBanks();
   }, [fetchBanks]);
 
-  const searchLower = search.trim().toLowerCase();
-  let filteredAccounts = accounts;
-  if (searchLower) {
-    filteredAccounts = filteredAccounts.filter(
-      (a) =>
-        (a.bank_name || '').toLowerCase().includes(searchLower) ||
-        (a.account_number || '').toLowerCase().includes(searchLower) ||
-        (a.name || '').toLowerCase().includes(searchLower)
-    );
-  }
-  if (filterBankName) {
-    filteredAccounts = filteredAccounts.filter((a) => (a.bank_name || '').trim() === filterBankName.trim());
-  }
-  if (filterCurrency) {
-    filteredAccounts = filteredAccounts.filter((a) => (a.currency || 'IDR') === filterCurrency);
-  }
+  useEffect(() => {
+    setTablePage(1);
+  }, [filterStatus, filterBankName, filterCurrency, searchDebounced]);
 
-  const totalFiltered = filteredAccounts.length;
+  const totalFiltered = accounts.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / tableLimit));
-  const paginatedRows = filteredAccounts.slice((tablePage - 1) * tableLimit, tablePage * tableLimit);
+  const paginatedRows = accounts.slice((tablePage - 1) * tableLimit, tablePage * tableLimit);
 
   const hasActiveFilters = filterStatus !== 'all' || search.trim() !== '' || filterBankName !== '' || filterCurrency !== '';
   const resetFilters = () => {
@@ -112,6 +108,7 @@ const AccountingChartOfAccountsPage: React.FC = () => {
     setFilterBankName('');
     setFilterCurrency('');
     setSearch('');
+    setSearchDebounced('');
     setTablePage(1);
   };
 

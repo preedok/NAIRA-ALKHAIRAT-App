@@ -190,7 +190,7 @@ const AccountingDashboard: React.FC = () => {
   const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -207,11 +207,11 @@ const AccountingDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId, provinsiId, wilayahId, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchDashboard();
-  }, [branchId, provinsiId, wilayahId, dateFrom, dateTo]);
+  }, [fetchDashboard]);
   useEffect(() => {
     branchesApi.listWilayah().then((r) => { if (r.data.success) setWilayahList(r.data.data || []); }).catch(() => {});
     branchesApi.listProvinces().then((r) => { if (r.data.success) setProvinces(r.data.data || []); }).catch(() => {});

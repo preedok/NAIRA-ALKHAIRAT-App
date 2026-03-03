@@ -126,16 +126,21 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
 /**
  * Update order.dp_payment_status dan order.dp_percentage_paid dari invoice.
  * tagihan_dp = belum ada DP terverifikasi; pembayaran_dp = sudah ada bukti bayar DP.
+ * Jangan turunkan ke tagihan_dp jika sudah pernah ada pembayaran (mis. setelah edit order total naik).
  */
 async function updateOrderDpStatusFromInvoice(invoice, order = null) {
-  if (!order) order = await Order.findByPk(invoice.order_id, { attributes: ['id', 'total_amount', 'currency'] });
+  if (!order) order = await Order.findByPk(invoice.order_id, { attributes: ['id', 'total_amount', 'currency', 'dp_payment_status'] });
   if (!order) return;
   const total = parseFloat(invoice.total_amount) || 0;
   const paid = parseFloat(invoice.paid_amount) || 0;
   const dpAmount = parseFloat(invoice.dp_amount) || 0;
   const pct = total > 0 ? Math.round((paid / total) * 10000) / 100 : null;
-  const hasDpPaid = dpAmount > 0 && paid >= dpAmount;
   const isIssued = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status);
+  const dpMetByPayment = dpAmount > 0 && paid >= dpAmount;
+  const hadAnyPayment = paid > 0;
+  const alreadyPembayaranDp = isIssued && [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status);
+  const orderWasPembayaranDp = order.dp_payment_status === DP_PAYMENT_STATUS.PEMBAYARAN_DP;
+  const hasDpPaid = dpMetByPayment || (hadAnyPayment && (alreadyPembayaranDp || orderWasPembayaranDp));
   const dpPaymentStatus = !isIssued ? null : (hasDpPaid ? DP_PAYMENT_STATUS.PEMBAYARAN_DP : DP_PAYMENT_STATUS.TAGIHAN_DP);
   const orderCurrency = (order.currency || 'IDR').toUpperCase();
   const orderTotal = parseFloat(order.total_amount) || 0;
@@ -1190,16 +1195,15 @@ async function syncInvoiceFromOrder(order, opts = {}) {
     overpaidAmount = Math.abs(remainingAmount);
     remainingAmount = 0;
   }
-  // Jangan turunkan ke Tagihan DP jika sudah ada pembayaran (tetap Pembayaran DP)
+  // Jangan turunkan ke Tagihan DP jika sudah ada pembayaran (tetap Pembayaran DP setelah edit order)
   const hadPayment = paidAmount > 0;
-  const alreadyPartialOrPaid = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status);
   let newStatus = invoice.status;
   if (remainingAmount <= 0) {
     newStatus = INVOICE_STATUS.PAID;
   } else if (paidAmount >= dpAmount) {
     newStatus = INVOICE_STATUS.PARTIAL_PAID;
-  } else if (hadPayment && alreadyPartialOrPaid) {
-    newStatus = INVOICE_STATUS.PARTIAL_PAID; // tetap Pembayaran DP setelah update order
+  } else if (hadPayment) {
+    newStatus = INVOICE_STATUS.PARTIAL_PAID; // sudah ada pembayaran (termasuk setelah edit/tambah item), tetap Pembayaran DP
   } else {
     newStatus = INVOICE_STATUS.TENTATIVE;
   }
