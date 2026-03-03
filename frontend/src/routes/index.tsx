@@ -37,6 +37,11 @@ import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
 import AccountingAgingPage from '../pages/dashboard/accounting/AccountingAgingPage';
 import AccountingChartOfAccountsPage from '../pages/dashboard/accounting/AccountingChartOfAccountsPage';
+import AccountingPurchasingPage from '../pages/dashboard/accounting/AccountingPurchasingPage';
+import AccountingPurchasingSuppliersPage from '../pages/dashboard/accounting/AccountingPurchasingSuppliersPage';
+import AccountingPurchasingOrdersPage from '../pages/dashboard/accounting/AccountingPurchasingOrdersPage';
+import AccountingPurchasingInvoicesPage from '../pages/dashboard/accounting/AccountingPurchasingInvoicesPage';
+import AccountingPurchasingPaymentsPage from '../pages/dashboard/accounting/AccountingPurchasingPaymentsPage';
 
 const router = createBrowserRouter([
   {
@@ -226,6 +231,26 @@ const router = createBrowserRouter([
           {
             path: 'accounting/aging',
             element: <AccountingAgingPage />
+          },
+          {
+            path: 'accounting/purchasing',
+            element: <AccountingPurchasingPage />
+          },
+          {
+            path: 'accounting/purchasing/suppliers',
+            element: <AccountingPurchasingSuppliersPage />
+          },
+          {
+            path: 'accounting/purchasing/orders',
+            element: <AccountingPurchasingOrdersPage />
+          },
+          {
+            path: 'accounting/purchasing/invoices',
+            element: <AccountingPurchasingInvoicesPage />
+          },
+          {
+            path: 'accounting/purchasing/payments',
+            element: <AccountingPurchasingPaymentsPage />
           },
           {
             path: '*',

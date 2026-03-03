@@ -41,6 +41,12 @@ const JournalEntry = require('./JournalEntry');
 const JournalEntryLine = require('./JournalEntryLine');
 const PaymentReallocation = require('./PaymentReallocation');
 const AccountingBankAccount = require('./AccountingBankAccount');
+const AccountingSupplier = require('./AccountingSupplier');
+const PurchaseOrder = require('./PurchaseOrder');
+const PurchaseOrderLine = require('./PurchaseOrderLine');
+const PurchaseInvoice = require('./PurchaseInvoice');
+const PurchaseInvoiceLine = require('./PurchaseInvoiceLine');
+const PurchasePayment = require('./PurchasePayment');
 const Bank = require('./Bank');
 const InvoiceStatusHistory = require('./InvoiceStatusHistory');
 const OrderRevision = require('./OrderRevision');
@@ -218,6 +224,33 @@ AccountingBankAccount.belongsTo(ChartOfAccount, { foreignKey: 'gl_account_id', a
 AccountingBankAccount.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
 Branch.hasMany(AccountingBankAccount, { foreignKey: 'branch_id', as: 'BankAccounts' });
 
+AccountingSupplier.belongsTo(ChartOfAccount, { foreignKey: 'payable_account_id', as: 'PayableAccount' });
+PurchaseOrder.belongsTo(AccountingSupplier, { foreignKey: 'supplier_id', as: 'Supplier' });
+PurchaseOrder.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+PurchaseOrder.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+PurchaseOrder.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+PurchaseOrder.hasMany(PurchaseOrderLine, { foreignKey: 'purchase_order_id', as: 'Lines' });
+PurchaseOrderLine.belongsTo(PurchaseOrder, { foreignKey: 'purchase_order_id', as: 'PurchaseOrder' });
+PurchaseOrderLine.belongsTo(ChartOfAccount, { foreignKey: 'account_id', as: 'Account' });
+
+PurchaseInvoice.belongsTo(AccountingSupplier, { foreignKey: 'supplier_id', as: 'Supplier' });
+PurchaseInvoice.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+PurchaseInvoice.belongsTo(PurchaseOrder, { foreignKey: 'purchase_order_id', as: 'PurchaseOrder' });
+PurchaseInvoice.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+PurchaseInvoice.belongsTo(JournalEntry, { foreignKey: 'journal_entry_id', as: 'JournalEntry' });
+PurchaseInvoice.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+PurchaseInvoice.hasMany(PurchaseInvoiceLine, { foreignKey: 'purchase_invoice_id', as: 'Lines' });
+PurchaseInvoice.hasMany(PurchasePayment, { foreignKey: 'purchase_invoice_id', as: 'Payments' });
+PurchaseInvoiceLine.belongsTo(PurchaseInvoice, { foreignKey: 'purchase_invoice_id', as: 'PurchaseInvoice' });
+PurchaseInvoiceLine.belongsTo(PurchaseOrderLine, { foreignKey: 'purchase_order_line_id', as: 'PurchaseOrderLine' });
+PurchaseInvoiceLine.belongsTo(ChartOfAccount, { foreignKey: 'account_id', as: 'Account' });
+
+PurchasePayment.belongsTo(PurchaseInvoice, { foreignKey: 'purchase_invoice_id', as: 'PurchaseInvoice' });
+PurchasePayment.belongsTo(AccountingSupplier, { foreignKey: 'supplier_id', as: 'Supplier' });
+PurchasePayment.belongsTo(AccountingBankAccount, { foreignKey: 'bank_account_id', as: 'BankAccount' });
+PurchasePayment.belongsTo(JournalEntry, { foreignKey: 'journal_entry_id', as: 'JournalEntry' });
+PurchasePayment.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' });
+
 // Payment reallocation (pemindahan dana antar invoice)
 PaymentReallocation.belongsTo(Invoice, { foreignKey: 'source_invoice_id', as: 'SourceInvoice' });
 PaymentReallocation.belongsTo(Invoice, { foreignKey: 'target_invoice_id', as: 'TargetInvoice' });
@@ -271,6 +304,12 @@ const db = {
   JournalEntryLine,
   PaymentReallocation,
   AccountingBankAccount,
+  AccountingSupplier,
+  PurchaseOrder,
+  PurchaseOrderLine,
+  PurchaseInvoice,
+  PurchaseInvoiceLine,
+  PurchasePayment,
   Bank,
   InvoiceStatusHistory,
   OrderRevision

@@ -24,7 +24,8 @@ import {
   Rocket,
   Calendar,
   DollarSign,
-  Wallet
+  Wallet,
+  ShoppingCart
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { OrderDraftProvider } from '../contexts/OrderDraftContext';
@@ -137,6 +138,19 @@ const menuItems: MenuItem[] = [
     icon: <BarChart3 className="w-5 h-5" />,
     path: '/dashboard/accounting/aging',
     roles: ['role_accounting']
+  },
+  {
+    title: 'Pembelian',
+    icon: <ShoppingCart className="w-5 h-5" />,
+    path: '/dashboard/accounting/purchasing',
+    roles: ['role_accounting'],
+    children: [
+      { title: 'Ringkasan', icon: <LayoutDashboard className="w-4 h-4" />, path: '/dashboard/accounting/purchasing', roles: ['role_accounting'] },
+      { title: 'Master Supplier', icon: <Users className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/suppliers', roles: ['role_accounting'] },
+      { title: 'PO Pembelian', icon: <FileText className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/orders', roles: ['role_accounting'] },
+      { title: 'Faktur Pembelian', icon: <Receipt className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/invoices', roles: ['role_accounting'] },
+      { title: 'Pembayaran Pembelian', icon: <DollarSign className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/payments', roles: ['role_accounting'] },
+    ]
   },
   {
     title: 'Settings',
@@ -278,10 +292,12 @@ const DashboardLayout: React.FC = () => {
   const currentPage = filteredMenuItems.find(item => item.path === location.pathname)
     || filteredMenuItems.flatMap(item => item.children || []).find(c => c.path === location.pathname);
 
-  // Auto-expand Products when on a product sub-path
+  // Auto-expand menu when on a sub-path
   useEffect(() => {
     if (location.pathname.startsWith('/dashboard/products')) {
       setExpandedMenuPath('/dashboard/products');
+    } else if (location.pathname.startsWith('/dashboard/accounting/purchasing')) {
+      setExpandedMenuPath('/dashboard/accounting/purchasing');
     }
   }, [location.pathname]);
 

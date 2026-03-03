@@ -716,8 +716,68 @@ export const accountingApi = {
   exportFinancialPdf: (params?: { period?: string; year?: string; month?: string; date_from?: string; date_to?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; order_status?: string; product_type?: string; search?: string; min_amount?: number; max_amount?: number }) =>
     api.get('/accounting/export-financial-pdf', { params, responseType: 'blob' }),
   reconcilePayment: (id: string) =>
-    api.post<{ success: boolean; data: any }>(`/accounting/payments/${id}/reconcile`)
+    api.post<{ success: boolean; data: any }>(`/accounting/payments/${id}/reconcile`),
+
+  // Modul Pembelian (per product)
+  getPurchasingSummary: () =>
+    api.get<{ success: boolean; data: { products: Array<{ id: string; code: string; name: string; type: string }>; by_product: PurchasingByProduct[]; suppliers_count: number } }>('/accounting/purchasing/summary'),
+  listSuppliers: (params?: { search?: string; is_active?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: any[]; total: number }>('/accounting/suppliers', { params }),
+  getSupplier: (id: string) =>
+    api.get<{ success: boolean; data: any }>(`/accounting/suppliers/${id}`),
+  createSupplier: (body: { code?: string; name: string; supplier_type?: string; currency?: string; term_of_payment_days?: number; payable_account_id?: string | null; is_active?: boolean; meta?: Record<string, unknown> }) =>
+    api.post<{ success: boolean; data: any }>('/accounting/suppliers', body),
+  updateSupplier: (id: string, body: { name?: string; supplier_type?: string; currency?: string; term_of_payment_days?: number; payable_account_id?: string | null; is_active?: boolean; meta?: Record<string, unknown> }) =>
+    api.patch<{ success: boolean; data: any }>(`/accounting/suppliers/${id}`, body),
+  deleteSupplier: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/accounting/suppliers/${id}`),
+  listPurchaseOrders: (params?: { supplier_id?: string; product_id?: string; status?: string; branch_id?: string; date_from?: string; date_to?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: any[]; total: number }>('/accounting/purchase-orders', { params }),
+  getPurchaseOrder: (id: string) =>
+    api.get<{ success: boolean; data: any }>(`/accounting/purchase-orders/${id}`),
+  createPurchaseOrder: (body: { supplier_id: string; product_id?: string; branch_id?: string; order_date?: string; expected_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; account_id?: string; tax_rate?: number }> }) =>
+    api.post<{ success: boolean; data: any }>('/accounting/purchase-orders', body),
+  updatePurchaseOrder: (id: string, body: { product_id?: string; branch_id?: string; order_date?: string; expected_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; account_id?: string; tax_rate?: number }> }) =>
+    api.patch<{ success: boolean; data: any }>(`/accounting/purchase-orders/${id}`, body),
+  deletePurchaseOrder: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/accounting/purchase-orders/${id}`),
+  submitPurchaseOrder: (id: string) =>
+    api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-orders/${id}/submit`),
+  approvePurchaseOrder: (id: string) =>
+    api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-orders/${id}/approve`),
+  listPurchaseInvoices: (params?: { supplier_id?: string; product_id?: string; status?: string; branch_id?: string; date_from?: string; date_to?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: any[]; total: number }>('/accounting/purchase-invoices', { params }),
+  getPurchaseInvoice: (id: string) =>
+    api.get<{ success: boolean; data: any }>(`/accounting/purchase-invoices/${id}`),
+  createPurchaseInvoice: (body: { supplier_id: string; product_id?: string; purchase_order_id?: string; branch_id?: string; invoice_date?: string; due_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; purchase_order_line_id?: string; account_id?: string }> }) =>
+    api.post<{ success: boolean; data: any }>('/accounting/purchase-invoices', body),
+  updatePurchaseInvoice: (id: string, body: { product_id?: string; branch_id?: string; invoice_date?: string; due_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; purchase_order_line_id?: string; account_id?: string }> }) =>
+    api.patch<{ success: boolean; data: any }>(`/accounting/purchase-invoices/${id}`, body),
+  deletePurchaseInvoice: (id: string) =>
+    api.delete<{ success: boolean; message: string }>(`/accounting/purchase-invoices/${id}`),
+  postPurchaseInvoice: (id: string) =>
+    api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-invoices/${id}/post`),
+  listPurchasePayments: (params?: { purchase_invoice_id?: string; supplier_id?: string; status?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: any[]; total: number }>('/accounting/purchase-payments', { params }),
+  getPurchasePayment: (id: string) =>
+    api.get<{ success: boolean; data: any }>(`/accounting/purchase-payments/${id}`),
+  createPurchasePayment: (body: { purchase_invoice_id: string; payment_date?: string; amount: number; currency?: string; payment_method?: string; bank_account_id?: string; reference_number?: string; notes?: string }) =>
+    api.post<{ success: boolean; data: any }>('/accounting/purchase-payments', body),
+  postPurchasePayment: (id: string) =>
+    api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-payments/${id}/post`)
 };
+
+export interface PurchasingByProduct {
+  product_id: string;
+  product_code: string;
+  product_name: string;
+  product_type: string;
+  po_count: number;
+  invoice_count: number;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+}
 
 export interface AccountingFinancialReportData {
   period: { start: string; end: string };

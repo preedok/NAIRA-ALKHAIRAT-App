@@ -431,7 +431,7 @@ const AccountingAgingPage: React.FC = () => {
           <ContentLoading />
         ) : data ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={formatIDR(data.total_outstanding)} />
             <StatCard icon={<CreditCard className="w-5 h-5" />} label="Belum Jatuh Tempo" value={formatIDR(totals.current)} subtitle={`${bucketCounts.current} invoice`} />
             <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 1–30" value={formatIDR(totals.days_1_30)} subtitle={`${bucketCounts.days_1_30} invoice`} />
