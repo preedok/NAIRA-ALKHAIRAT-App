@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HandHelping, CheckCircle, Clock, RefreshCw, Eye, Loader2 } from 'lucide-react';
+import { HandHelping, CheckCircle, Clock, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
+import { AutoRefreshControl } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
@@ -58,12 +59,7 @@ const HandlingDashboard: React.FC = () => {
       <PageHeader
         title="Dashboard Handling"
         subtitle="Rekapitulasi pekerjaan handling. Update status item handling (menunggu → dalam proses → selesai)."
-        right={
-          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} className="rounded-xl">
-            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh
-          </Button>
-        }
+        right={<AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />}
       />
 
       {/* Statistik card hanya tampil jika sudah ada pembayaran DP dan data invoice muncul di table */}

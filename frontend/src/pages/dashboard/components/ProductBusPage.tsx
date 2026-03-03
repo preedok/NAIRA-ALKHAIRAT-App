@@ -3,7 +3,7 @@ import { List, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import BusPage from './BusPage';
 import BusCalendarView from './BusCalendarView';
 import type { BusProduct } from './BusCalendarView';

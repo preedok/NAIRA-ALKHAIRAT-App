@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShoppingCart, 
@@ -17,6 +17,7 @@ import Button from '../../../components/common/Button';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
+import { AutoRefreshControl } from '../../../components/common';
 import { formatIDR } from '../../../utils';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
@@ -30,31 +31,29 @@ const OwnerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [ownerProfile, setOwnerProfile] = useState<{ mou_generated_url?: string } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [summaryRes, listRes, meRes] = await Promise.all([
-          invoicesApi.getSummary({}),
-          invoicesApi.list({ limit: 10, sort_by: 'created_at', sort_order: 'desc' }),
-          ownersApi.getMe().catch(() => ({ data: { success: false, data: undefined } }))
-        ]);
-        if (cancelled) return;
-        if (summaryRes.data.success && summaryRes.data.data) setSummary(summaryRes.data.data);
-        if (listRes.data.success && Array.isArray(listRes.data.data)) setRecentInvoices(listRes.data.data);
-        const meData = (meRes.data as { success?: boolean; data?: { mou_generated_url?: string } } | undefined)?.data;
-        if (meData) setOwnerProfile(meData);
-      } catch {
-        if (!cancelled) setSummary(null);
-        if (!cancelled) setRecentInvoices([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
+  const fetchDashboard = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [summaryRes, listRes, meRes] = await Promise.all([
+        invoicesApi.getSummary({}),
+        invoicesApi.list({ limit: 10, sort_by: 'created_at', sort_order: 'desc' }),
+        ownersApi.getMe().catch(() => ({ data: { success: false, data: undefined } }))
+      ]);
+      if (summaryRes.data.success && summaryRes.data.data) setSummary(summaryRes.data.data);
+      if (listRes.data.success && Array.isArray(listRes.data.data)) setRecentInvoices(listRes.data.data);
+      const meData = (meRes.data as { success?: boolean; data?: { mou_generated_url?: string } } | undefined)?.data;
+      if (meData) setOwnerProfile(meData);
+    } catch {
+      setSummary(null);
+      setRecentInvoices([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
 
   const pendingCount = summary ? (summary.by_invoice_status?.tentative || 0) + (summary.by_invoice_status?.partial_paid || 0) : 0;
   const stats = [
@@ -120,6 +119,9 @@ const OwnerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 w-full">
+      <div className="flex justify-end">
+        <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
+      </div>
       {/* Notifikasi: Akun telah diaktivasi, MoU tersedia */}
       {ownerProfile?.mou_generated_url && (
         <Card className="bg-primary-50 border-primary-200">

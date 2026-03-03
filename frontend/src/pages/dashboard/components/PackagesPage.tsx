@@ -5,7 +5,7 @@ import Table from '../../../components/common/Table';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatCard, Autocomplete, Input, PriceInput, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
@@ -170,9 +170,9 @@ const PackagesPage: React.FC = () => {
   const [handlingProducts, setHandlingProducts] = useState<ProductOption[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
-  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
 
   useEffect(() => {
     if (canCreatePackage) {

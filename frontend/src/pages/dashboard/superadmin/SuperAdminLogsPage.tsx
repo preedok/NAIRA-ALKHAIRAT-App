@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, RefreshCw, Circle, FileDown, FileSpreadsheet, Search } from 'lucide-react';
+import { FileText, Circle, FileDown, FileSpreadsheet, Search } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { Input, Autocomplete } from '../../../components/common';
+import { Input, Autocomplete, AutoRefreshControl } from '../../../components/common';
 import ContentLoading from '../../../components/common/ContentLoading';
 import { superAdminApi } from '../../../services/api';
 
@@ -99,6 +99,7 @@ export const SuperAdminLogsPage: React.FC = () => {
         subtitle="Log sistem backend, frontend, dan database"
         right={
           <div className="flex gap-2 items-center flex-wrap">
+            <AutoRefreshControl onRefresh={() => fetchLogs()} disabled={loading} size="sm" />
             <button
               type="button"
               onClick={() => setLive(!live)}
@@ -114,7 +115,6 @@ export const SuperAdminLogsPage: React.FC = () => {
             <Input type="text" placeholder="Cari pesan..." value={search} onChange={(e) => setSearch(e.target.value)} icon={<Search className="w-4 h-4" />} className="w-40" />
             <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}><FileSpreadsheet className="w-4 h-4 mr-1" />{exporting === 'excel' ? '...' : 'Excel'}</Button>
             <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}><FileDown className="w-4 h-4 mr-1" />{exporting === 'pdf' ? '...' : 'PDF'}</Button>
-            <Button variant="outline" size="sm" onClick={() => fetchLogs()} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh</Button>
           </div>
         }
       />

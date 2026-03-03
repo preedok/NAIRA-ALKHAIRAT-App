@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { PaymentProof, Invoice, Order, Notification, Bank } = require('../models');
+const { PaymentProof, Invoice, Order, Notification, Bank, AccountingBankAccount } = require('../models');
 const { ROLES } = require('../constants');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, DP_PAYMENT_STATUS } = require('../constants');
 const { sendPaymentReceivedNotificationEmail } = require('./invoiceController');
@@ -44,7 +44,7 @@ const create = [
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
 
-    const { payment_type, amount, bank_id, bank_name, account_number, transfer_date, notes, payment_currency } = req.body;
+    const { payment_type, amount, bank_id, bank_name, account_number, transfer_date, notes, payment_currency, sender_account_name, sender_account_number, recipient_bank_account_id } = req.body;
     const payment_location = (req.body.payment_location != null ? String(req.body.payment_location) : '').trim().toLowerCase();
     let amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return res.status(400).json({ success: false, message: 'amount wajib dan harus > 0' });
@@ -91,6 +91,12 @@ const create = [
       }
     }
 
+    let recipientBankAccountId = (recipient_bank_account_id && String(recipient_bank_account_id).trim()) || null;
+    if (recipientBankAccountId) {
+      const acc = await AccountingBankAccount.findByPk(recipientBankAccountId);
+      if (!acc) recipientBankAccountId = null;
+    }
+
     const proof = await PaymentProof.create({
       invoice_id: invoice.id,
       payment_type: type,
@@ -102,6 +108,9 @@ const create = [
       bank_id: resolvedBankId,
       bank_name: resolvedBankName,
       account_number: account_number || null,
+      sender_account_name: (sender_account_name && String(sender_account_name).trim()) || null,
+      sender_account_number: (sender_account_number && String(sender_account_number).trim()) || null,
+      recipient_bank_account_id: recipientBankAccountId,
       transfer_date: transfer_date || null,
       proof_file_url: fileUrl,
       uploaded_by: isIssueByInvoice ? null : req.user.id,

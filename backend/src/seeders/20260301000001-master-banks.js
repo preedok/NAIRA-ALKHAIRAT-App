@@ -3,14 +3,17 @@
 const crypto = require('crypto');
 const uuidv4 = () => crypto.randomUUID();
 
-/** Master data bank: Indonesia (umum + syariah) + Saudi (untuk transfer/pembayaran) */
+/**
+ * Data master semua bank: Indonesia (BUMN, swasta, syariah, BPD, digital) + Saudi + lainnya.
+ * Digunakan untuk dropdown pembayaran invoice (transfer) dan rekening bank.
+ */
 const BANKS = [
-  // Bank Umum Persero
+  // === Bank Umum Persero (BUMN) ===
   { code: 'BRI', name: 'Bank Rakyat Indonesia (BRI)' },
   { code: 'BNI', name: 'Bank Negara Indonesia (BNI)' },
   { code: 'MANDIRI', name: 'Bank Mandiri' },
   { code: 'BTN', name: 'Bank Tabungan Negara (BTN)' },
-  // Bank Swasta Nasional
+  // === Bank Swasta Nasional ===
   { code: 'BCA', name: 'Bank Central Asia (BCA)' },
   { code: 'CIMB', name: 'CIMB Niaga' },
   { code: 'PERMATA', name: 'Bank Permata' },
@@ -39,7 +42,26 @@ const BANKS = [
   { code: 'ICBC', name: 'Bank ICBC Indonesia' },
   { code: 'BANK_CHINA', name: 'Bank of China' },
   { code: 'MUAMALAT', name: 'Bank Muamalat' },
-  // Bank Syariah
+  { code: 'AMAR', name: 'Bank Amar Indonesia' },
+  { code: 'ANGLOMAS', name: 'Bank Anglomas Internasional' },
+  { code: 'ANTARDAERAH', name: 'Bank Antar Daerah' },
+  { code: 'ARTHA', name: 'Bank Artha Graha Internasional' },
+  { code: 'BISNIS', name: 'Bank Bisnis Internasional' },
+  { code: 'CENTURY', name: 'Bank Century' },
+  { code: 'CHINA_CONST', name: 'Bank China Construction Bank Indonesia' },
+  { code: 'DINAR', name: 'Bank Dinar Indonesia' },
+  { code: 'GANESHA', name: 'Bank Ganesha' },
+  { code: 'INDEX', name: 'Bank Index Selindo' },
+  { code: 'MESTIKA', name: 'Bank Mestika Dharma' },
+  { code: 'MITRA', name: 'Bank Mitraniaga' },
+  { code: 'MULTIARTA', name: 'Bank Multi Arta Sentosa' },
+  { code: 'NUSANTARA', name: 'Bank Nusantara Parahyangan' },
+  { code: 'RESONA', name: 'Bank Resona Perdania' },
+  { code: 'SBI', name: 'Bank SBI Indonesia' },
+  { code: 'SINARMAS', name: 'Bank Sinarmas' },
+  { code: 'VICTORIA', name: 'Bank Victoria Internasional' },
+  { code: 'YUDHA', name: 'Bank Yudha Bhakti' },
+  // === Bank Syariah ===
   { code: 'BSI', name: 'Bank Syariah Indonesia (BSI)' },
   { code: 'BRI_SYARIAH', name: 'BRIsyariah' },
   { code: 'BNI_SYARIAH', name: 'BNI Syariah' },
@@ -49,9 +71,9 @@ const BANKS = [
   { code: 'PANIN_SYARIAH', name: 'Bank Panin Dubai Syariah' },
   { code: 'MEGA_SYARIAH', name: 'Bank Mega Syariah' },
   { code: 'BJB_SYARIAH', name: 'Bank BJB Syariah' },
-  // BPD / Bank Daerah
-  { code: 'BJB', name: 'Bank BJB' },
-  { code: 'BPD_JABAR', name: 'Bank BJB' },
+  { code: 'BTN_SYARIAH', name: 'Bank BTN Syariah' },
+  // === Bank Pembangunan Daerah (BPD) ===
+  { code: 'BJB', name: 'Bank BJB (Jabar Banten)' },
   { code: 'BPD_DKI', name: 'Bank DKI' },
   { code: 'BPD_JATIM', name: 'Bank Jatim' },
   { code: 'BPD_JATENG', name: 'Bank Jateng' },
@@ -59,14 +81,14 @@ const BANKS = [
   { code: 'BPD_SUMATERA', name: 'Bank Sumut' },
   { code: 'BPD_KALBAR', name: 'Bank Kalbar' },
   { code: 'BPD_KALSEL', name: 'Bank Kalsel' },
-  { code: 'BPD_KALTIM', name: 'Bank Kaltim' },
+  { code: 'BPD_KALTIM', name: 'Bank Kaltimtara' },
   { code: 'BPD_SULTENG', name: 'Bank Sulteng' },
   { code: 'BPD_SULTRA', name: 'Bank Sultra' },
   { code: 'BPD_NTB', name: 'Bank NTB' },
   { code: 'BPD_BALI', name: 'Bank Bali' },
   { code: 'BPD_ACEH', name: 'Bank Aceh' },
   { code: 'BPD_RIAU', name: 'Bank Riau Kepri' },
-  { code: 'BPD_SUMBAR', name: 'Bank Nagari' },
+  { code: 'BPD_SUMBAR', name: 'Bank Nagari (Sumatera Barat)' },
   { code: 'BPD_LAMPUNG', name: 'Bank Lampung' },
   { code: 'BPD_BABEL', name: 'Bank Babel' },
   { code: 'BPD_BENGKULU', name: 'Bank Bengkulu' },
@@ -75,7 +97,21 @@ const BANKS = [
   { code: 'BPD_GORONTALO', name: 'Bank Gorontalo' },
   { code: 'BPD_MALUKU', name: 'Bank Maluku' },
   { code: 'BPD_PAPUA', name: 'Bank Papua' },
-  // Saudi Arabia (untuk pembayaran/transfer dari Saudi)
+  { code: 'BPD_NTT', name: 'Bank NTT' },
+  { code: 'BPD_KALTARA', name: 'Bank Kaltara' },
+  // === Bank Digital / Neobank ===
+  { code: 'JAGO', name: 'Bank Jago' },
+  { code: 'BLU', name: 'Blu by BCA Digital' },
+  { code: 'SEABANK', name: 'SeaBank Indonesia' },
+  { code: 'DIGIBANK', name: 'Digibank by DBS' },
+  { code: 'LINE_BANK', name: 'LINE Bank Indonesia' },
+  { code: 'TMRW', name: 'TMRW by UOB' },
+  { code: 'JENIUS', name: 'Jenius (BTPN)' },
+  { code: 'NEO', name: 'Bank Neo Commerce' },
+  { code: 'ALLO', name: 'Bank Allo Indonesia' },
+  { code: 'ROYAL', name: 'Royal Bank Indonesia' },
+  { code: 'SUPER', name: 'Super Bank Indonesia' },
+  // === Saudi Arabia (pembayaran/transfer dari Saudi) ===
   { code: 'ALRAJHI', name: 'Al Rajhi Bank' },
   { code: 'SNB', name: 'Saudi National Bank (SNB)' },
   { code: 'RIYAD', name: 'Riyad Bank' },
@@ -84,7 +120,7 @@ const BANKS = [
   { code: 'ARAB_NATIONAL', name: 'Arab National Bank' },
   { code: 'SAAB', name: 'Saudi Awwal Bank' },
   { code: 'BANQUE_SAUDI', name: 'Banque Saudi Fransi' },
-  // Lainnya
+  // === Lainnya ===
   { code: 'OTHER', name: 'Lainnya' }
 ];
 

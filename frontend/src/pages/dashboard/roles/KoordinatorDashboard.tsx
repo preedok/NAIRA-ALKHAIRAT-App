@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Receipt, Users, FileText, Hotel, Plane, Bus, RefreshCw, Settings } from 'lucide-react';
+import { Receipt, Users, FileText, Hotel, Plane, Bus, Settings } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
+import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
@@ -61,11 +62,7 @@ const KoordinatorDashboard: React.FC = () => {
       <PageHeader
         title="Dashboard Koordinator Wilayah"
         subtitle="Rekapitulasi wilayah Anda: order, owner, dan pekerjaan. Hanya data wilayah Anda."
-        right={
-          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
-        }
+        right={<AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

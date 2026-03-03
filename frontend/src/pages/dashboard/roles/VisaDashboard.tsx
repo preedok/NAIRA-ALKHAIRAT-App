@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, RefreshCw, ClipboardList, Inbox, Send, Loader2, CheckCircle, Check } from 'lucide-react';
+import { FileText, ClipboardList, Inbox, Send, Loader2, CheckCircle, Check } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { visaApi } from '../../../services/api';
@@ -72,9 +73,7 @@ const VisaDashboard: React.FC = () => {
             <p className="text-slate-600 text-sm mt-1">Rekap statistik pekerjaan visa (penerbitan & dokumen Nusuk) cabang Anda.</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} className="rounded-xl">
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
       </div>
 
       <div className="space-y-5">

@@ -4,7 +4,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import Badge from '../../../components/common/Badge';
@@ -68,10 +68,10 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const { showToast } = useToast();
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
 
-  const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
-  /** Kolom Aksi hanya untuk owner, invoice, admin pusat */
-  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
+  /** Kolom Aksi hanya untuk owner, invoice, admin pusat, accounting */
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
   const [visaProducts, setVisaProducts] = useState<VisaProduct[]>([]);
   const [loadingVisaProducts, setLoadingVisaProducts] = useState(false);
   const [visaPage, setVisaPage] = useState(1);

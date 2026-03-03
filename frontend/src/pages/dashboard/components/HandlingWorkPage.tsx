@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { HandHelping, Eye, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
+import { HandHelping, Eye, ChevronRight, Loader2 } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ContentLoading from '../../../components/common/ContentLoading';
+import { AutoRefreshControl } from '../../../components/common';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
 
@@ -63,12 +64,7 @@ const HandlingWorkPage: React.FC = () => {
       <PageHeader
         title="Progress Handling"
         subtitle="Daftar item handling yang perlu diproses. Ubah status lalu buka invoice untuk detail."
-        right={
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-2">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Refresh
-          </Button>
-        }
+        right={<AutoRefreshControl onRefresh={fetchData} disabled={loading} size="sm" />}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Save, FileText, Download, ExternalLink, Shield, Building2, User, CheckCircle, Clock, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { authApi, ownersApi, type OwnerProfile } from '../../../services/api';
 import { API_BASE_URL } from '../../../utils/constants';
-import { CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { CONTENT_LOADING_MESSAGE, AutoRefreshControl } from '../../../components/common';
 
 const UPLOAD_BASE = (API_BASE_URL || '').replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -27,7 +27,7 @@ const ProfilePage: React.FC = () => {
 
   const isOwner = user?.role === 'owner';
 
-  useEffect(() => {
+  const fetchProfile = useCallback(() => {
     if (!isOwner) return;
     setOwnerLoading(true);
     ownersApi
@@ -38,6 +38,10 @@ const ProfilePage: React.FC = () => {
       .catch(() => setOwnerProfile(null))
       .finally(() => setOwnerLoading(false));
   }, [isOwner]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +77,9 @@ const ProfilePage: React.FC = () => {
 
   return (
     <div style={styles.page}>
+      <div className="flex justify-end mb-4">
+        <AutoRefreshControl onRefresh={fetchProfile} disabled={ownerLoading} size="sm" />
+      </div>
       {/* Hero header */}
       <div style={styles.heroSection}>
         <div style={styles.heroBg} />

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hotel, CheckCircle, Clock, RefreshCw, Eye } from 'lucide-react';
+import { Hotel, CheckCircle, Clock, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
+import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { hotelApi } from '../../../services/api';
@@ -52,11 +53,7 @@ const HotelDashboard: React.FC = () => {
       <PageHeader
         title="Dashboard Hotel"
         subtitle="Rekapitulasi pekerjaan hotel cabang Anda."
-        right={
-          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} className="rounded-xl">
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
-        }
+        right={<AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />}
       />
 
       {/* Statistik card hanya tampil jika sudah ada pembayaran DP dan data invoice muncul di table */}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import ActionsMenu from '../../../components/common/ActionsMenu';
-import { Input, Checkbox, Textarea, ContentLoading } from '../../../components/common';
+import { Input, Checkbox, Textarea, ContentLoading, AutoRefreshControl } from '../../../components/common';
+import PageHeader from '../../../components/common/PageHeader';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { superAdminApi } from '../../../services/api';
 
@@ -122,15 +123,20 @@ export const SuperAdminMaintenancePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-900">Maintenance & Notices</h1>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Add Notice
-        </Button>
-      </div>
+      <PageHeader
+        title="Maintenance & Notices"
+        subtitle="Pemberitahuan pemeliharaan atau bug akan ditampilkan ke semua pengguna aplikasi."
+        right={
+          <div className="flex items-center gap-2">
+            <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
+            <Button onClick={openCreate}>
+              <Plus className="w-4 h-4 mr-2" /> Add Notice
+            </Button>
+          </div>
+        }
+      />
 
       <Card>
-        <p className="text-sm text-slate-600 mb-4">Pemberitahuan pemeliharaan atau bug akan ditampilkan ke semua pengguna aplikasi.</p>
         {loading ? (
           <ContentLoading minHeight={120} />
         ) : list.length === 0 ? (

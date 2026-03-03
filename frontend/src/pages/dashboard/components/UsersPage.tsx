@@ -8,7 +8,7 @@ import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBox } from '../../../components/common/Modal';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';

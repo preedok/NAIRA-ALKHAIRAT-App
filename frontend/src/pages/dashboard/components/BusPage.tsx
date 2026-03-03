@@ -5,7 +5,7 @@ import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import { StatCard, CardSectionHeader, Input, PriceInput, Autocomplete, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -81,12 +81,12 @@ const BusPage: React.FC<BusPageProps> = ({
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
-  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [loadingBusProducts, setLoadingBusProducts] = useState(false);
 
-  const canConfig = user?.role === 'super_admin' || user?.role === 'admin_pusat';
-  const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const canConfig = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
+  const isPusat = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
 
   type PriceCurrency = 'IDR' | 'SAR' | 'USD';
 

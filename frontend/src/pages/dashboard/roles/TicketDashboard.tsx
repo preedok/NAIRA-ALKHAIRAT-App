@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plane, RefreshCw, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, AlertCircle, ChevronRight, Eye } from 'lucide-react';
+import { Plane, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, AlertCircle, ChevronRight, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { ticketApi } from '../../../services/api';
@@ -79,9 +80,7 @@ const TicketDashboard: React.FC = () => {
             <p className="text-slate-600 text-sm mt-1">Rekap statistik pekerjaan tiket (penerbitan) cabang Anda.</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} className="rounded-xl">
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
       </div>
 
       {/* Stat cards - 2 utama + status breakdown */}

@@ -4,7 +4,7 @@ import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Pac
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
@@ -376,10 +376,7 @@ const AccountingFinancialReportPage: React.FC = () => {
         subtitle="Pendapatan per wilayah, provinsi, cabang, owner, dan jenis produk"
         right={
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="primary" size="sm" onClick={fetchReport} disabled={loading} aria-label="Refresh">
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <AutoRefreshControl onRefresh={fetchReport} disabled={loading} size="sm" />
             <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={loading || !!exporting}>
               <Download className={`w-4 h-4 mr-2 ${exporting === 'excel' ? 'animate-pulse' : ''}`} />
               {exporting === 'excel' ? 'Exporting...' : 'Excel'}

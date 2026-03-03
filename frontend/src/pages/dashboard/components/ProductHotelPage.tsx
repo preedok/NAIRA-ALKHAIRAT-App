@@ -3,7 +3,7 @@ import { List, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import HotelsPage from './HotelsPage';
 import HotelCalendarView from './HotelCalendarView';
 import type { HotelProduct } from './HotelsPage';
@@ -23,7 +23,7 @@ const ProductHotelPage: React.FC = () => {
   const [openSeasonsForHotelId, setOpenSeasonsForHotelId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const canAddRoom = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const canAddRoom = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
 
   const fetchHotels = useCallback(() => {
     setHotelsLoading(true);

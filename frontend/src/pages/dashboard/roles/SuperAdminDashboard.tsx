@@ -8,13 +8,12 @@ import {
   Activity,
   FileText,
   Bell,
-  RefreshCw,
   FileCheck,
   FileDown,
   FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { Card, Button, PageHeader, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
+import { Card, Button, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import { formatIDR, DONUT_COLORS } from '../../../utils';
 import { superAdminApi, branchesApi } from '../../../services/api';
 import { ROLE_NAMES } from '../../../types';
@@ -184,10 +183,7 @@ const SuperAdminDashboard: React.FC = () => {
             <FileDown className="w-4 h-4 mr-2" />
             {exporting === 'pdf' ? '...' : 'Export PDF'}
           </Button>
-          <Button variant="outline" size="sm" onClick={fetchMonitoring} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <AutoRefreshControl onRefresh={fetchMonitoring} disabled={loading} size="sm" />
           </div>
         }
       />

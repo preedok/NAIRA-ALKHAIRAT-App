@@ -8,7 +8,7 @@ import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/c
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { Input, Autocomplete, CardSectionHeader, ContentLoading } from '../../../components/common';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import { ticketApi } from '../../../services/api';

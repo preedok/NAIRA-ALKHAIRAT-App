@@ -4,7 +4,7 @@ import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageFilter from '../../../components/common/PageFilter';
 import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';

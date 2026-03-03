@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bus, RefreshCw, ClipboardList, Ticket, MapPin, Plane, RotateCcw, AlertCircle, ChevronRight } from 'lucide-react';
+import { Bus, ClipboardList, Ticket, MapPin, Plane, RotateCcw, AlertCircle, ChevronRight } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { busApi } from '../../../services/api';
@@ -52,9 +53,7 @@ const BusDashboard: React.FC = () => {
             <p className="text-slate-600 text-sm mt-1">Rekap statistik pekerjaan bus (tiket bis, kedatangan, keberangkatan, kepulangan) cabang Anda.</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} className="rounded-xl">
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </Button>
+        <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
       </div>
 
       {/* Statistik card hanya tampil jika sudah ada pembayaran DP dan data invoice muncul di table */}

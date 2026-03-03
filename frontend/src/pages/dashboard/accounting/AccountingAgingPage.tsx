@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Filter, RefreshCw, Download, ExternalLink, Eye, Receipt, FileText, X, FileSpreadsheet, CreditCard, ChevronLeft, ChevronRight, Check, LayoutGrid, Unlock } from 'lucide-react';
+import { Filter, Download, ExternalLink, Eye, Receipt, FileText, X, FileSpreadsheet, CreditCard, ChevronLeft, ChevronRight, Check, LayoutGrid, Unlock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -9,7 +9,7 @@ import PageFilter from '../../../components/common/PageFilter';
 import Table from '../../../components/common/Table';
 import TablePagination from '../../../components/common/TablePagination';
 import type { TableColumn } from '../../../types';
-import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import { AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
@@ -379,10 +379,7 @@ const AccountingAgingPage: React.FC = () => {
         subtitle="Aging piutang: belum jatuh tempo, 1–30 hari, 31–60 hari, 61+ hari"
         right={
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="primary" size="sm" onClick={fetchAging} disabled={loading} aria-label="Refresh">
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <AutoRefreshControl onRefresh={fetchAging} disabled={loading} size="sm" />
             <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
             <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
               <Download className="w-4 h-4 mr-2" /> Excel

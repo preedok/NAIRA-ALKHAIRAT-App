@@ -704,7 +704,7 @@ const listPrices = asyncHandler(async (req, res) => {
   const { product_id, branch_id, owner_id } = req.query;
   const where = {};
   if (product_id) where.product_id = product_id;
-  const branchId = branch_id || (req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.ADMIN_PUSAT ? req.user.branch_id : null);
+  const branchId = branch_id || (req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.ADMIN_PUSAT && req.user.role !== ROLES.ROLE_ACCOUNTING ? req.user.branch_id : null);
   if (branchId) where[Op.or] = [{ branch_id: branchId }, { branch_id: null }];
   else where.branch_id = null;
 
@@ -730,8 +730,8 @@ const createPrice = asyncHandler(async (req, res) => {
   const { product_id, branch_id, owner_id, currency, amount, amount_idr, amount_sar, amount_usd, meta, effective_from, effective_until } = req.body;
   if (!product_id) return res.status(400).json({ success: false, message: 'product_id wajib' });
 
-  const canSetBranch = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT].includes(req.user.role);
-  const canSetOwner = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI].includes(req.user.role);
+  const canSetBranch = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING].includes(req.user.role);
+  const canSetOwner = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI].includes(req.user.role);
 
   let finalBranchId = branch_id || null;
   let finalOwnerId = owner_id || null;

@@ -46,10 +46,29 @@ const PaymentProof = sequelize.define('PaymentProof', {
   },
   bank_name: {
     type: DataTypes.STRING(100),
-    comment: 'Nama bank (dari master atau isian manual)'
+    comment: 'Nama bank pengirim (dari master atau isian manual)'
   },
   account_number: {
-    type: DataTypes.STRING(50)
+    type: DataTypes.STRING(50),
+    comment: 'Nomor rekening pengirim (legacy; prefer sender_account_number)'
+  },
+  sender_account_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Nama rekening pengirim (transfer dari)'
+  },
+  sender_account_number: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Nomor rekening pengirim'
+  },
+  recipient_bank_account_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'accounting_bank_accounts', key: 'id' },
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL',
+    comment: 'Rekening penerima (Data Rekening Bank)'
   },
   transfer_date: {
     type: DataTypes.DATEONLY

@@ -4,7 +4,7 @@ import { RefreshCw, Eye, ClipboardList, Building2, Filter, Search, Hotel, CheckC
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';

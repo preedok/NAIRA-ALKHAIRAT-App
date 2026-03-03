@@ -5,7 +5,6 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  RefreshCw,
   Eye,
   Unlock,
   Search,
@@ -19,6 +18,7 @@ import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
+import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
@@ -133,10 +133,7 @@ const InvoiceDashboard: React.FC = () => {
         subtitle={invoiceSubtitle}
         right={
           <>
-            <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <AutoRefreshControl onRefresh={fetchData} disabled={loading} size="sm" />
             <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')}>
               <Receipt className="w-4 h-4 mr-2" />
               Semua Invoice

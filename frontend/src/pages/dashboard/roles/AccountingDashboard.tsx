@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, Wallet, Landmark, RefreshCw } from 'lucide-react';
+import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, Wallet, Landmark } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
 import { formatIDR } from '../../../utils';
@@ -262,9 +262,7 @@ const AccountingDashboard: React.FC = () => {
         subtitle="Rekapitulasi piutang, pembayaran, dan laporan keuangan"
         right={
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading} aria-label="Refresh">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
             <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
           </div>
         }

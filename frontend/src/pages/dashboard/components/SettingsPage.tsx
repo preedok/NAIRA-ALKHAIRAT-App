@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Settings as SettingsIcon, DollarSign, Bell, Save } from 'lucide-react';
 import Card from '../../../components/common/Card';
@@ -9,6 +9,7 @@ import ContentLoading from '../../../components/common/ContentLoading';
 import Input from '../../../components/common/Input';
 import Textarea from '../../../components/common/Textarea';
 import Checkbox from '../../../components/common/Checkbox';
+import { AutoRefreshControl } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { businessRulesApi } from '../../../services/api';
@@ -40,12 +41,12 @@ const SettingsPage: React.FC = () => {
 
   const canEdit = user?.role === 'super_admin' || user?.role === 'admin_pusat';
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchSettings = useCallback(() => {
+    setLoading(true);
     businessRulesApi
       .get({})
       .then((res) => {
-        if (!cancelled && res.data?.data) {
+        if (res.data?.data) {
           const data = res.data.data as Record<string, any>;
           setRules(data);
           let currency: Record<string, number> = {};
@@ -65,9 +66,12 @@ const SettingsPage: React.FC = () => {
         }
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [user?.role, user?.branch_id]);
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings, user?.role, user?.branch_id]);
 
   if (user?.role === 'owner') return <Navigate to="/dashboard" replace />;
 
@@ -144,6 +148,7 @@ const SettingsPage: React.FC = () => {
       <PageHeader
         title="Settings"
         subtitle="Konfigurasi umum, kurs, dan notifikasi"
+        right={<AutoRefreshControl onRefresh={fetchSettings} disabled={loading} size="sm" />}
       />
 
       <div className="grid lg:grid-cols-4 gap-6">

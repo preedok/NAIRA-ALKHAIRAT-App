@@ -6,7 +6,7 @@ import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import Table from '../../../components/common/Table';

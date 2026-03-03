@@ -19,7 +19,7 @@ import Table from '../../../components/common/Table';
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import PageHeader from '../../../components/common/PageHeader';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import { FilterIconButton } from '../../../components/common/PageFilter';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { TableColumn } from '../../../types';

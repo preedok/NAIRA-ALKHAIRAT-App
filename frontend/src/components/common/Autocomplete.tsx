@@ -16,6 +16,8 @@ export interface AutocompleteProps {
   className?: string;
   /** Optional empty option label (e.g. "Semua") when value is '' */
   emptyLabel?: string;
+  /** Ukuran tampilan: md (default) atau sm (compact, untuk pagination dll) */
+  size?: 'sm' | 'md';
 }
 
 const Autocomplete: React.FC<AutocompleteProps> = ({
@@ -27,7 +29,8 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
   disabled = false,
   fullWidth = true,
   className = '',
-  emptyLabel
+  emptyLabel,
+  size = 'md'
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -96,6 +99,9 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
 
   const inputBorder = inputBorderClass;
   const widthStyles = fullWidth ? 'w-full' : '';
+  const triggerSizeClass = size === 'sm'
+    ? 'py-1.5 px-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#0D1A63] focus:border-[#0D1A63] disabled:bg-slate-100 disabled:cursor-not-allowed transition-all'
+    : '';
 
   const dropdownContent = open && dropdownReady && (
     <div
@@ -155,7 +161,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
           type="button"
           onClick={() => !disabled && setOpen((o) => !o)}
           disabled={disabled}
-          className={`${inputBaseClass} ${inputBorder} ${widthStyles} w-full text-left flex items-center justify-between gap-2 bg-white`}
+          className={`${size === 'md' ? inputBaseClass : triggerSizeClass} ${size === 'md' ? inputBorder : ''} ${widthStyles} w-full text-left flex items-center justify-between gap-2 bg-white`}
         >
           <span className={selectedOption || value ? 'text-slate-800' : 'text-slate-500'}>{displayLabel || placeholder}</span>
           <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />

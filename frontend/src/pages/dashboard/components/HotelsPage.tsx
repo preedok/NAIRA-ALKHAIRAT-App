@@ -18,7 +18,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
-import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
@@ -159,11 +159,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [availabilityAddQuantityInputs, setAvailabilityAddQuantityInputs] = useState<Record<string, string>>({});
   const [availabilityAddQuantitySaving, setAvailabilityAddQuantitySaving] = useState(false);
 
-  const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
   /** Owner tidak boleh edit/hapus product; hanya role yang diizinkan backend */
-  const canEditProduct = ['super_admin', 'admin_pusat'].includes(user?.role ?? '');
+  const canEditProduct = ['super_admin', 'admin_pusat', 'role_accounting'].includes(user?.role ?? '');
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
-  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role ?? '');
+  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role ?? '');
 
   useEffect(() => {
     if (openSeasonsForHotelId && hotels.length > 0) {

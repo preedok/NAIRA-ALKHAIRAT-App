@@ -36,15 +36,15 @@ import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
-// Semua submenu Products tampil untuk setiap role yang punya akses Products.
-const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling', 'owner'];
+// Semua submenu Products tampil untuk setiap role yang punya akses Products. Accounting hak akses sama seperti admin_pusat.
+const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling', 'owner'];
 
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner', 'handling']
   },
   {
     title: 'Owners Wilayah',

@@ -214,11 +214,13 @@ function renderInvoicePdf(doc, data, logoBuffer) {
 
   const tableTop = y;
   // Kolom: No, Tipe, Deskripsi, Qty, Harga Satuan, Subtotal — lebar cukup agar header & isi tidak terpotong
-  const colW = [0.04, 0.07, 0.28, 0.08, 0.265, 0.265];
+  const colW = [0.04, 0.07, 0.30, 0.07, 0.26, 0.26];
   const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 6;
-  const w = (i) => pageWidth * colW[i] - 10;
+  const w = (i) => pageWidth * colW[i] - 12;
   const headerRowH = 36;
-  const dataRowHMin = 42;
+  const dataRowHMin = 48;
+  const descLineGap = 5;
+  const descBlockGap = 6;
   const rates = getRates(data);
   doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke('#0D1A63', '#1e3a8a');
   doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
@@ -313,24 +315,30 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       doc.fontSize(9);
       const descStr = desc.slice(0, 55);
       const descHeight = doc.heightOfString(descStr, { width: w(2) });
-      const lineH = 11;
-      const extraLines = (dateLine ? 1 : 0) + (mealLine ? 1 : 0);
-      const rowH = Math.max(dataRowHMin, Math.ceil(descHeight) + 6 + extraLines * lineH + 20);
+      doc.fontSize(7);
+      const dateHeight = dateLine ? doc.heightOfString(dateLine, { width: w(2) }) : 0;
+      const mealHeight = mealLine ? doc.heightOfString(mealLine, { width: w(2) }) : 0;
+      doc.fontSize(9);
+      const priceBlockH = 22;
+      const rowH = Math.max(
+        dataRowHMin,
+        Math.ceil(descHeight) + descBlockGap + Math.ceil(dateHeight) + (dateLine && mealLine ? descBlockGap : 0) + Math.ceil(mealHeight) + descBlockGap + priceBlockH
+      );
       y = checkNewPage(doc, y, margin, rowH + 6);
       doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
-      doc.fillColor('#334155');
+      doc.fillColor('#334155').fontSize(9);
       doc.text(String(i + 1), x(0), y + 6, { width: w(0) });
       doc.text(typeLabel(item.type), x(1), y + 6, { width: w(1) });
       doc.text(descStr, x(2), y + 4, { width: w(2) });
-      let descY = y + 6 + Math.ceil(descHeight);
+      let blockY = y + 4 + Math.ceil(descHeight) + descBlockGap;
       if (dateLine) {
         doc.fontSize(7).fillColor('#64748b');
-        doc.text(dateLine, x(2), descY, { width: w(2) });
-        descY += lineH;
+        doc.text(dateLine, x(2), blockY, { width: w(2) });
+        blockY += Math.ceil(dateHeight) + descBlockGap;
       }
       if (mealLine) {
         doc.fontSize(7).fillColor('#64748b');
-        doc.text(mealLine, x(2), descY, { width: w(2) });
+        doc.text(mealLine, x(2), blockY, { width: w(2) });
       }
       doc.fontSize(9).fillColor('#334155');
       const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);

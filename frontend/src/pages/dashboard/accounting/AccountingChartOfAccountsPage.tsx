@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Landmark, Plus, Pencil, Trash2, Power, PowerOff, RefreshCw, Search, Filter } from 'lucide-react';
+import { Landmark, Plus, Pencil, Trash2, Power, PowerOff, Search, Filter } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -7,7 +7,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu, ContentLoading, CONTENT_LOADING_MESSAGE, AutoRefreshControl } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, type BankAccountItem } from '../../../services/api';
 
@@ -64,9 +64,26 @@ const AccountingChartOfAccountsPage: React.FC = () => {
     }
   }, [filterStatus]);
 
+  const fetchBanks = useCallback(async () => {
+    try {
+      const res = await accountingApi.getBanks({ is_active: 'true' });
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setBanks(res.data.data);
+      } else {
+        setBanks([]);
+      }
+    } catch {
+      setBanks([]);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  useEffect(() => {
+    fetchBanks();
+  }, [fetchBanks]);
 
   const searchLower = search.trim().toLowerCase();
   let filteredAccounts = accounts;
@@ -228,10 +245,7 @@ const AccountingChartOfAccountsPage: React.FC = () => {
         subtitle="Pendataan rekening untuk pembayaran invoice melalui transfer atau tunai"
         right={
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={fetchAccounts} disabled={loading} aria-label="Refresh">
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? CONTENT_LOADING_MESSAGE : 'Refresh'}
-            </Button>
+            <AutoRefreshControl onRefresh={fetchAccounts} disabled={loading} size="sm" />
             <Button variant="primary" size="sm" onClick={openCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Tambah Rekening
@@ -248,12 +262,18 @@ const AccountingChartOfAccountsPage: React.FC = () => {
           right={hasActiveFilters ? <Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button> : null}
           className="mb-2"
         />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-3 mb-2 pb-2 border-b border-slate-200 items-end">
-          <Autocomplete label="Status" value={filterStatus} onChange={(v) => { setFilterStatus((v as 'all' | 'active' | 'inactive') || 'all'); setTablePage(1); }} options={STATUS_OPTIONS} />
-          <Autocomplete label="Nama Bank" value={filterBankName} onChange={(v) => { setFilterBankName(v || ''); setTablePage(1); }} options={bankOptions} emptyLabel="Semua bank" />
-          <Autocomplete label="Mata Uang" value={filterCurrency} onChange={(v) => { setFilterCurrency(v || ''); setTablePage(1); }} options={CURRENCY_FILTER_OPTIONS} emptyLabel="Semua mata uang" />
-          <div className="col-span-2">
-            <Input label="Cari" type="text" value={search} onChange={(e) => { setSearch(e.target.value); setTablePage(1); }} placeholder="Nama bank, no. rekening, atau nama rekening..." icon={<Search className="w-4 h-4" />} />
+        <div className="flex flex-wrap items-end gap-4 py-2 mb-2 border-b border-slate-200">
+          <div className="w-full sm:w-[200px] min-w-0">
+            <Autocomplete label="Status" value={filterStatus} onChange={(v) => { setFilterStatus((v as 'all' | 'active' | 'inactive') || 'all'); setTablePage(1); }} options={STATUS_OPTIONS} />
+          </div>
+          <div className="w-full sm:w-[260px] min-w-0">
+            <Autocomplete label="Nama Bank" value={filterBankName} onChange={(v) => { setFilterBankName(v || ''); setTablePage(1); }} options={bankOptions} emptyLabel="Semua bank" placeholder="Semua bank" />
+          </div>
+          <div className="w-full sm:w-[180px] min-w-0">
+            <Autocomplete label="Mata Uang" value={filterCurrency} onChange={(v) => { setFilterCurrency(v || ''); setTablePage(1); }} options={CURRENCY_FILTER_OPTIONS} emptyLabel="Semua mata uang" placeholder="Semua" />
+          </div>
+          <div className="w-full sm:flex-1 sm:min-w-[320px] min-w-0">
+            <Input label="Cari" type="text" value={search} onChange={(e) => { setSearch(e.target.value); setTablePage(1); }} placeholder="Nama bank, no. rekening, atau nama rekening" icon={<Search className="w-4 h-4" />} />
           </div>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[120px]">

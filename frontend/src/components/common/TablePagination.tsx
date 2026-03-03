@@ -42,7 +42,8 @@ const TablePagination: React.FC<TablePaginationProps> = ({
             onChange={(v) => onLimitChange(Number(v))}
             options={limitOptions.map((n) => ({ value: String(n), label: `${n} per halaman` }))}
             fullWidth={false}
-            className="w-36"
+            className="w-28 min-w-0"
+            size="sm"
           />
         )}
       </div>

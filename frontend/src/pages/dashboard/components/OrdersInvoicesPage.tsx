@@ -145,6 +145,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [paymentBankAccountsLoading, setPaymentBankAccountsLoading] = useState(false);
   const [paymentBanks, setPaymentBanks] = useState<BankItem[]>([]);
   const [payBankId, setPayBankId] = useState<string>('');
+  const [paySenderAccountName, setPaySenderAccountName] = useState<string>('');
+  const [paySenderAccountNumber, setPaySenderAccountNumber] = useState<string>('');
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
@@ -791,6 +793,9 @@ const OrdersInvoicesPage: React.FC = () => {
     setPayAmountSaudi('');
     setPayTransferDate(new Date().toISOString().slice(0, 10));
     setPayBankIndex(0);
+    setPayBankId('');
+    setPaySenderAccountName('');
+    setPaySenderAccountNumber('');
     setPayFile(null);
     setPaymentMethod(isInvoiceSaudi ? 'saudi' : 'bank');
     setShowPaymentModal(true);
@@ -860,8 +865,20 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast('Upload bukti transfer wajib untuk metode Transfer Bank.', 'warning');
         return;
       }
+      if (!payBankId?.trim()) {
+        showToast('Pilih bank pengirim.', 'warning');
+        return;
+      }
+      if (!paySenderAccountName?.trim()) {
+        showToast('Isi nama rekening pengirim.', 'warning');
+        return;
+      }
+      if (!paySenderAccountNumber?.trim()) {
+        showToast('Isi nomor rekening pengirim.', 'warning');
+        return;
+      }
       if (!bankAccountsForPayment.length || payBankIndex < 0 || payBankIndex >= bankAccountsForPayment.length) {
-        showToast('Pilih rekening tujuan transfer.', 'warning');
+        showToast('Pilih rekening tujuan transfer (bank penerima).', 'warning');
         return;
       }
       const bank = bankAccountsForPayment[payBankIndex];
@@ -870,9 +887,10 @@ const OrdersInvoicesPage: React.FC = () => {
       form.append('amount', String(Math.round(amount)));
       form.append('payment_type', paymentType);
       form.append('transfer_date', payTransferDate);
-      if (bank?.bank_name) form.append('bank_name', bank.bank_name);
-      if (bank?.account_number) form.append('account_number', bank.account_number);
-      if (bank?.name) form.append('account_name', bank.name);
+      if (payBankId) form.append('bank_id', payBankId);
+      if (paySenderAccountName?.trim()) form.append('sender_account_name', paySenderAccountName.trim());
+      if (paySenderAccountNumber?.trim()) form.append('sender_account_number', paySenderAccountNumber.trim());
+      if (bank?.id) form.append('recipient_bank_account_id', bank.id);
       form.append('proof_file', payFile);
       setPaySubmitting(true);
       try {
@@ -1459,11 +1477,31 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <><span className="text-slate-500">IDR:</span> {formatIDR(amt)} · <span className="text-slate-500">SAR:</span> {formatSAR(sar, false)} · <span className="text-slate-500">USD:</span> {formatUSD(usd, false)}</>
                                   )}
                                 </div>
-                                {(p.bank_name || p.account_number) && p.payment_location !== 'saudi' && (
-                                  <div className="text-slate-600 mt-0.5 truncate">
-                                    <span className="text-slate-500">Bank:</span> {[p.bank_name, p.account_number].filter(Boolean).join(' · ')}
-                                  </div>
-                                )}
+                                {p.payment_location !== 'saudi' && (() => {
+                                  const senderBank = (p as any).Bank?.name || p.bank_name;
+                                  const senderName = (p as any).sender_account_name;
+                                  const senderNo = (p as any).sender_account_number;
+                                  const rec = (p as any).RecipientAccount;
+                                  const hasSender = senderBank || senderName || senderNo;
+                                  const hasRec = rec?.bank_name || rec?.account_number || rec?.name || (!rec && (p.bank_name || p.account_number));
+                                  if (!hasSender && !hasRec) return null;
+                                  return (
+                                    <>
+                                      {hasSender && (
+                                        <div className="text-slate-600 mt-0.5 space-y-0.5">
+                                          <span className="text-slate-500 font-medium">Pengirim:</span> {[senderBank, senderName, senderNo].filter(Boolean).join(' · ')}
+                                        </div>
+                                      )}
+                                      {hasRec && (
+                                        <div className="text-slate-600 mt-0.5 space-y-0.5">
+                                          <span className="text-slate-500 font-medium">Penerima:</span> {rec
+                                            ? [rec.bank_name, rec.account_number, rec.name ? `A.n. ${rec.name}` : ''].filter(Boolean).join(' · ')
+                                            : [p.bank_name, p.account_number].filter(Boolean).join(' · ')}
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 {p.created_at && (
                                   <div className="text-slate-600 mt-0.5 truncate">
                                     <span className="text-slate-500">Tanggal upload bukti:</span> {formatDate(p.created_at)}
@@ -2021,7 +2059,8 @@ const OrdersInvoicesPage: React.FC = () => {
                               const co = meta.check_out ? formatDate(meta.check_out) : '';
                               const nights = meta.nights != null ? meta.nights : 0;
                               const meal = meta.meal || meta.with_meal ? 'Ya' : 'Tidak';
-                              return [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`].filter(Boolean).join(' · ');
+                              const roomType = meta.room_type ? `Tipe kamar: ${meta.room_type}` : null;
+                              return [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, roomType].filter(Boolean).join(' · ');
                             }
                             if (t === 'visa') {
                               return meta.travel_date ? `Keberangkatan: ${formatDate(meta.travel_date)}` : '';
@@ -2048,7 +2087,15 @@ const OrdersInvoicesPage: React.FC = () => {
                               </h4>
                               <p className="text-xs text-slate-500 mb-3">Deskripsi per item sesuai data dan tipe produk (sama seperti di PDF invoice).</p>
                               <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm table-fixed">
+                                  <colgroup>
+                                    <col className="w-10" />
+                                    <col className="w-16" />
+                                    <col className="w-[20%]" />
+                                    <col className="w-[32%]" />
+                                    <col className="w-14" />
+                                    <col className="w-[22%]" />
+                                  </colgroup>
                                   <thead>
                                     <tr className="border-b border-slate-200">
                                       <th className="text-left py-2 px-2 font-medium text-slate-600">No</th>
@@ -2068,13 +2115,13 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const qty = item.quantity != null ? item.quantity : 1;
                                       const subtotal = item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * qty;
                                       return (
-                                        <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50">
-                                          <td className="py-2 px-2 text-slate-600">{idx + 1}</td>
-                                          <td className="py-2 px-2 font-medium text-slate-700">{typeLabel}</td>
-                                          <td className="py-2 px-2 text-slate-900">{name}</td>
-                                          <td className="py-2 px-2 text-slate-600 text-xs">{desc || '–'}</td>
-                                          <td className="py-2 px-2 text-right tabular-nums">{qty}</td>
-                                          <td className="py-2 px-2 text-right font-medium tabular-nums">{formatIDR(subtotal)}</td>
+                                        <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50 align-top">
+                                          <td className="py-2 px-2 text-slate-600 align-top">{idx + 1}</td>
+                                          <td className="py-2 px-2 font-medium text-slate-700 align-top">{typeLabel}</td>
+                                          <td className="py-2 px-2 text-slate-900 align-top">{name}</td>
+                                          <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
+                                          <td className="py-2 px-2 text-right tabular-nums align-top">{qty}</td>
+                                          <td className="py-2 px-2 text-right font-medium tabular-nums align-top">{formatIDR(subtotal)}</td>
                                         </tr>
                                       );
                                     })}
@@ -2303,8 +2350,23 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <span className="text-slate-600 text-sm">
                                   {p.payment_location === 'saudi'
                                     ? `Pembayaran KES${p.payment_currency && p.payment_currency !== 'IDR' ? ` (${p.payment_currency})` : ''}`
-                                    : p.bank_name ? `Transfer Bank (${p.bank_name}${p.account_number ? ` ${p.account_number}` : ''})` : 'Transfer'}
+                                    : 'Transfer Bank'}
                                 </span>
+                                {p.payment_location !== 'saudi' && (() => {
+                                  const senderBank = (p as any).Bank?.name || p.bank_name;
+                                  const senderName = (p as any).sender_account_name;
+                                  const senderNo = (p as any).sender_account_number;
+                                  const rec = (p as any).RecipientAccount;
+                                  const hasSender = senderBank || senderName || senderNo;
+                                  const hasRec = rec ? (rec.bank_name || rec.account_number || rec.name) : (p.bank_name || p.account_number);
+                                  if (!hasSender && !hasRec) return null;
+                                  return (
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 mt-1">
+                                      {hasSender && <span><strong className="text-slate-500">Pengirim:</strong> {[senderBank, senderName, senderNo].filter(Boolean).join(' · ')}</span>}
+                                      {hasRec && <span><strong className="text-slate-500">Penerima:</strong> {rec ? [rec.bank_name, rec.account_number, rec.name ? `A.n. ${rec.name}` : ''].filter(Boolean).join(' · ') : [p.bank_name, p.account_number].filter(Boolean).join(' · ')}</span>}
+                                    </div>
+                                  );
+                                })()}
                                 {p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR' ? (
                                   <span className="text-[#0D1A63] font-semibold">
                                     Nominal diinput: {p.payment_currency === 'SAR' ? formatSAR(Number(p.amount_original)) : formatUSD(Number(p.amount_original))} = {formatIDR(parseFloat(p.amount))}
@@ -2834,8 +2896,33 @@ const OrdersInvoicesPage: React.FC = () => {
               )}
               {paymentMethod === 'bank' && (
                 <>
+                  <div className="space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                    <p className="text-sm font-medium text-slate-700">Bank pengirim (asal transfer)</p>
+                    <Autocomplete
+                      label="Nama bank pengirim *"
+                      value={payBankId}
+                      onChange={(v) => setPayBankId(v || '')}
+                      options={paymentBanks.map((b) => ({ value: b.id, label: b.name }))}
+                      placeholder="Pilih bank pengirim..."
+                      emptyLabel="Pilih bank"
+                    />
+                    <Input
+                      label="Nama rekening pengirim *"
+                      type="text"
+                      value={paySenderAccountName}
+                      onChange={(e) => setPaySenderAccountName(e.target.value)}
+                      placeholder="Nama pemilik rekening pengirim"
+                    />
+                    <Input
+                      label="Nomor rekening pengirim *"
+                      type="text"
+                      value={paySenderAccountNumber}
+                      onChange={(e) => setPaySenderAccountNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Nomor rekening pengirim"
+                    />
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Transfer ke rekening</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Bank penerima (rekening tujuan — dari Data Rekening Bank)</label>
                     {!bankAccountsForPayment.length && paymentBankAccountsLoading ? (
                       <p className="text-sm text-slate-500 py-2">{CONTENT_LOADING_MESSAGE}</p>
                     ) : bankAccountsForPayment.length === 0 ? (
@@ -2960,7 +3047,12 @@ const OrdersInvoicesPage: React.FC = () => {
                 onClick={handleSubmitPayment}
                 disabled={
                   paySubmitting ||
-                  (paymentMethod === 'bank' && bankAccountsForPayment.length === 0)
+                  (paymentMethod === 'bank' && (
+                    bankAccountsForPayment.length === 0 ||
+                    !payBankId?.trim() ||
+                    !paySenderAccountName?.trim() ||
+                    !paySenderAccountNumber?.trim()
+                  ))
                 }
               >
                 {paySubmitting ? 'Menyimpan...' : paymentMethod === 'saudi' ? 'Simpan Pembayaran Saudi' : paymentMethod === 'bank' ? 'Upload Bukti Bayar' : 'Lanjut'}
