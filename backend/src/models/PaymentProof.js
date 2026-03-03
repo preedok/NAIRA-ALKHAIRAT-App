@@ -36,8 +36,17 @@ const PaymentProof = sequelize.define('PaymentProof', {
   },
   amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true, comment: 'Nominal transaksi dalam IDR' },
   amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true, comment: 'Nominal transaksi dalam SAR jika ada' },
+  bank_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'banks', key: 'id' },
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL',
+    comment: 'Bank (master) untuk transfer — asal transfer'
+  },
   bank_name: {
-    type: DataTypes.STRING(100)
+    type: DataTypes.STRING(100),
+    comment: 'Nama bank (dari master atau isian manual)'
   },
   account_number: {
     type: DataTypes.STRING(50)

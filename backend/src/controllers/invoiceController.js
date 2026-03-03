@@ -214,8 +214,8 @@ const ALLOWED_SORT = ['invoice_number', 'created_at', 'total_amount', 'status'];
 
 async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user) {
   if (!user) return branch_id ? { branch_id } : {};
-  // Role hotel & bus: lihat semua wilayah (tidak batasi by branch/wilayah)
-  if (user.role === 'role_hotel' || user.role === 'role_bus') return {};
+  // Role hotel, bus, handling: lihat semua wilayah (tidak batasi by branch/wilayah)
+  if (user.role === 'role_hotel' || user.role === 'role_bus' || user.role === 'handling') return {};
   // Role invoice Saudi: lihat semua invoice seluruh wilayah (filter branch hanya jika dikirim eksplisit)
   if (user.role === 'invoice_saudi') return branch_id ? { branch_id } : {};
   // Koordinator / invoice koordinator: scope ke semua cabang di wilayah mereka
@@ -298,8 +298,8 @@ const list = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
-  // Role hotel/bus/visa_koordinator/tiket_koordinator: hanya tampilkan invoice dengan status pembayaran_dp (sudah ada bukti bayar DP), agar tampil di menu Invoice dan Progress.
-  const divisiProgressRoles = ['role_hotel', 'role_bus', 'visa_koordinator', 'tiket_koordinator'];
+  // Role hotel/bus/handling/visa_koordinator/tiket_koordinator: hanya tampilkan invoice dengan status pembayaran_dp (sudah ada bukti bayar DP), agar tampil di menu Invoice dan Progress.
+  const divisiProgressRoles = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
   if (divisiProgressRoles.includes(req.user.role)) {
     let orderIdsByType = [];
     if (req.user.role === 'role_hotel') {
@@ -308,6 +308,9 @@ const list = asyncHandler(async (req, res) => {
     } else if (req.user.role === 'role_bus') {
       const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((busRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'handling') {
+      const handlingRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HANDLING }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((handlingRows || []).map((r) => r.order_id))];
     } else if (req.user.role === 'visa_koordinator') {
       const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((visaRows || []).map((r) => r.order_id))];
@@ -321,8 +324,8 @@ const list = asyncHandler(async (req, res) => {
     where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
   }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
-  // role_accounting, invoice_saudi, role_hotel, role_bus: lihat invoice sesuai scope.
-  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  // role_accounting, invoice_saudi, role_hotel, role_bus, handling: lihat invoice sesuai scope (tidak paksa branch_id user).
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && req.user.role !== 'handling' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
 
@@ -600,7 +603,7 @@ const getSummary = asyncHandler(async (req, res) => {
     }
   }
   if (req.user.role === 'owner') where.owner_id = req.user.id;
-  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  if (req.user.branch_id && req.user.role !== 'owner' && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && req.user.role !== 'handling' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
   if (req.user.wilayah_id && isKoordinatorRole(req.user.role)) {
@@ -608,25 +611,30 @@ const getSummary = asyncHandler(async (req, res) => {
     if (branchIds.length) where.branch_id = { [Op.in]: branchIds };
     else where.branch_id = { [Op.in]: [] };
   }
-  if (req.user.role === 'role_hotel') {
-    const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
-    const hotelOrderIds = [...new Set((hotelRows || []).map((r) => r.order_id))];
-    where.order_id = hotelOrderIds.length ? { [Op.in]: hotelOrderIds } : { [Op.in]: [] };
-  }
-  if (req.user.role === 'role_bus') {
-    const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
-    const busOrderIds = [...new Set((busRows || []).map((r) => r.order_id))];
-    where.order_id = busOrderIds.length ? { [Op.in]: busOrderIds } : { [Op.in]: [] };
-  }
-  if (req.user.role === 'visa_koordinator') {
-    const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
-    const visaOrderIds = [...new Set((visaRows || []).map((r) => r.order_id))];
-    where.order_id = visaOrderIds.length ? { [Op.in]: visaOrderIds } : { [Op.in]: [] };
-  }
-  if (req.user.role === 'tiket_koordinator') {
-    const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
-    const ticketOrderIds = [...new Set((ticketRows || []).map((r) => r.order_id))];
-    where.order_id = ticketOrderIds.length ? { [Op.in]: ticketOrderIds } : { [Op.in]: [] };
+  // Role hotel/bus/handling/visa_koordinator/tiket_koordinator: summary hanya invoice yang order-nya sudah ada pembayaran DP (sama seperti list)
+  const divisiProgressRolesSummary = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
+  if (divisiProgressRolesSummary.includes(req.user.role)) {
+    let orderIdsByType = [];
+    if (req.user.role === 'role_hotel') {
+      const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((hotelRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'role_bus') {
+      const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((busRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'handling') {
+      const handlingRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HANDLING }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((handlingRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'visa_koordinator') {
+      const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((visaRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'tiket_koordinator') {
+      const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((ticketRows || []).map((r) => r.order_id))];
+    }
+    const orderIdsWithDpPaid = orderIdsByType.length
+      ? (await Order.findAll({ where: { id: { [Op.in]: orderIdsByType }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP }, attributes: ['id'], raw: true })).map((o) => o.id)
+      : [];
+    where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
   }
 
   const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'status'] };

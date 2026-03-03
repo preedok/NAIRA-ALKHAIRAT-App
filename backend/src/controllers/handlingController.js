@@ -31,10 +31,12 @@ const getDashboard = asyncHandler(async (req, res) => {
   let totalHandlingItems = 0;
   const byStatus = { pending: 0, in_progress: 0, completed: 0 };
   const pendingList = [];
+  const orderIdsWithDpPaid = new Set();
 
   orderItemRows.forEach((item) => {
     const inv = item.Order?.Invoice;
     if (!inv || !statusWithDpPaidList.includes(inv.status)) return;
+    orderIdsWithDpPaid.add(item.Order?.id);
     totalHandlingItems += 1;
     const status = (item.meta && item.meta.handling_status) || HANDLING_PROGRESS_STATUS.PENDING;
     const norm = status === HANDLING_PROGRESS_STATUS.COMPLETED ? 'completed' : status === HANDLING_PROGRESS_STATUS.IN_PROGRESS ? 'in_progress' : 'pending';
@@ -54,12 +56,10 @@ const getDashboard = asyncHandler(async (req, res) => {
     }
   });
 
-  const uniqueOrders = [...new Set(orderItemRows.map((r) => r.Order?.id).filter(Boolean))];
-
   res.json({
     success: true,
     data: {
-      total_orders: uniqueOrders.length,
+      total_orders: orderIdsWithDpPaid.size,
       total_handling_items: totalHandlingItems,
       by_status: byStatus,
       pending_list: pendingList.slice(0, 50)

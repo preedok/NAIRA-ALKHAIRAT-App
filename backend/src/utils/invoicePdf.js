@@ -2,7 +2,46 @@
  * Invoice PDF generator - layout modern, user-friendly, informasi lengkap
  * Termasuk: qty per item, harga satuan, subtotal, rincian pembayaran, jumlah pembayaran, dll.
  */
+const path = require('path');
+const fs = require('fs');
 const PDFDocument = require('pdfkit');
+
+/** Path logo dari assets */
+function getLogoPath() {
+  const candidates = [
+    path.join(__dirname, '../../..', 'frontend', 'src', 'assets', 'logo.png'),
+    path.join(process.cwd(), 'frontend', 'src', 'assets', 'logo.png')
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+/** Buffer logo dengan background putih dijadikan transparan (menggunakan sharp); untuk embed di PDF */
+async function getLogoBufferTransparent(logoPath) {
+  if (!logoPath || !fs.existsSync(logoPath)) return null;
+  try {
+    const sharp = require('sharp');
+    const { data, info } = await sharp(logoPath)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const channels = info.channels || 4;
+    const len = data.length;
+    for (let i = 0; i < len; i += channels) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      if (r >= 248 && g >= 248 && b >= 248 && i + 3 < len) data[i + 3] = 0;
+    }
+    return await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+      .png()
+      .toBuffer();
+  } catch (_) {
+    return null;
+  }
+}
 
 const formatIDR = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
@@ -78,16 +117,38 @@ function getRates(data) {
 /**
  * @param {PDFDocument} doc
  * @param {object} data - invoice data (dari DB)
+ * @param {Buffer} [logoBuffer] - optional logo buffer (background putih sudah dijadikan transparan)
  */
-function renderInvoicePdf(doc, data) {
+function renderInvoicePdf(doc, data, logoBuffer) {
   const margin = 48;
   const pageWidth = doc.page.width - margin * 2;
   let y = margin;
 
-  // ---- Header modern: strip warna biru dongker + judul ----
-  doc.rect(0, 0, doc.page.width, 72).fill('#0D1A63');
-  doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('BINTANG GLOBAL GROUP', margin, 22);
-  doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.9)').text('Travel & Umroh | Invoice Resmi', margin, 48);
+  // ---- Header modern: strip warna biru dongker + logo + judul ----
+  const headerH = 72;
+  doc.rect(0, 0, doc.page.width, headerH).fill('#0D1A63');
+  const logoSize = 44;
+  const logoX = margin;
+  const logoY = (headerH - logoSize) / 2;
+  let logoDrawn = false;
+  if (logoBuffer && Buffer.isBuffer(logoBuffer)) {
+    try {
+      doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
+      logoDrawn = true;
+    } catch (_) {}
+  }
+  if (!logoDrawn) {
+    const logoPath = getLogoPath();
+    if (logoPath) {
+      try {
+        doc.image(logoPath, logoX, logoY, { width: logoSize, height: logoSize });
+        logoDrawn = true;
+      } catch (_) {}
+    }
+  }
+  const titleX = margin + (logoDrawn ? logoSize + 12 : 0);
+  doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('BINTANG GLOBAL GROUP', titleX, 22);
+  doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.9)').text('Travel & Umroh | Invoice Resmi', titleX, 48);
   doc.fillColor('#0D1A63').fontSize(14).font('Helvetica-Bold').text('INVOICE', doc.page.width - margin - 80, 28);
   doc.fillColor('#334155');
   y = 88;
@@ -152,12 +213,12 @@ function renderInvoicePdf(doc, data) {
   y += 20;
 
   const tableTop = y;
-  // Kolom: No, Tipe, Deskripsi (lebih lebar), Qty, Harga Satuan, Subtotal — hindari tumpang tindih
-  const colW = [0.035, 0.08, 0.32, 0.055, 0.24, 0.24];
+  // Kolom: No, Tipe, Deskripsi, Qty, Harga Satuan, Subtotal — lebar cukup agar header & isi tidak terpotong
+  const colW = [0.04, 0.07, 0.28, 0.08, 0.265, 0.265];
   const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 6;
   const w = (i) => pageWidth * colW[i] - 10;
-  const headerRowH = 24;
-  const dataRowHMin = 38; // tinggi minimum per baris agar tidak tertumpuk
+  const headerRowH = 36;
+  const dataRowHMin = 42;
   const rates = getRates(data);
   doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke('#0D1A63', '#1e3a8a');
   doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
@@ -165,8 +226,12 @@ function renderInvoicePdf(doc, data) {
   doc.text('Tipe', x(1), tableTop + 8, { width: w(1) });
   doc.text('Deskripsi', x(2), tableTop + 8, { width: w(2) });
   doc.text('Qty', x(3), tableTop + 8, { width: w(3) });
-  doc.text('Harga Satuan (IDR · SAR · USD)', x(4), tableTop + 8, { width: w(4) });
-  doc.text('Subtotal (IDR · SAR · USD)', x(5), tableTop + 8, { width: w(5) });
+  doc.text('Harga Satuan', x(4), tableTop + 6, { width: w(4) });
+  doc.fontSize(7).font('Helvetica').text('(IDR · SAR · USD)', x(4), tableTop + 18, { width: w(4) });
+  doc.fontSize(9).font('Helvetica-Bold');
+  doc.text('Subtotal', x(5), tableTop + 6, { width: w(5) });
+  doc.fontSize(7).font('Helvetica').text('(IDR · SAR · USD)', x(5), tableTop + 18, { width: w(5) });
+  doc.fontSize(9).font('Helvetica-Bold');
   y = tableTop + headerRowH;
 
   const items = data.Order?.OrderItems || [];
@@ -268,7 +333,7 @@ function renderInvoicePdf(doc, data) {
         doc.text(mealLine, x(2), descY, { width: w(2) });
       }
       doc.fontSize(9).fillColor('#334155');
-      const qtyY = y + (rowH >= 44 ? 14 : 8);
+      const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);
       doc.text(qtyLabel, x(3), qtyY, { width: w(3) });
       doc.text(formatIDR(unitPrice), x(4), y + 4, { width: w(4) });
       doc.fontSize(7).fillColor('#64748b');
@@ -424,14 +489,15 @@ function renderInvoicePdf(doc, data) {
   doc.text(`Dokumen ini dicetak pada ${new Date().toLocaleString('id-ID')} | Bintang Global Group - Travel & Umroh`, margin, doc.page.height - 36, { align: 'center', width: pageWidth });
 }
 
-function buildInvoicePdfBuffer(data) {
+async function buildInvoicePdfBuffer(data) {
+  const logoBuffer = await getLogoBufferTransparent(getLogoPath());
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 48, size: 'A4' });
     const chunks = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    renderInvoicePdf(doc, data);
+    renderInvoicePdf(doc, data, logoBuffer);
     doc.end();
   });
 }

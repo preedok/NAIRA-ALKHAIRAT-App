@@ -84,6 +84,8 @@ Order.hasOne(Invoice, { foreignKey: 'order_id' });
 PaymentProof.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 PaymentProof.belongsTo(User, { foreignKey: 'uploaded_by' });
 PaymentProof.belongsTo(User, { foreignKey: 'verified_by', as: 'VerifiedBy' });
+PaymentProof.belongsTo(Bank, { foreignKey: 'bank_id', as: 'Bank' });
+Bank.hasMany(PaymentProof, { foreignKey: 'bank_id' });
 Invoice.hasMany(PaymentProof, { foreignKey: 'invoice_id', as: 'PaymentProofs' });
 Invoice.hasMany(Refund, { foreignKey: 'invoice_id', as: 'Refunds' });
 Invoice.hasOne(InvoiceFile, { foreignKey: 'invoice_id', as: 'InvoiceFile' });

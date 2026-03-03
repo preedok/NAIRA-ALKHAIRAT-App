@@ -15,7 +15,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
-import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem } from '../../../services/api';
+import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem, type BankItem } from '../../../services/api';
 
 /** Konfigurasi icon untuk card Per Status Invoice (StatCard pakai satu warna) */
 const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
@@ -143,6 +143,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [reallocateListLoading, setReallocateListLoading] = useState(false);
   const [paymentBankAccounts, setPaymentBankAccounts] = useState<BankAccountItem[]>([]);
   const [paymentBankAccountsLoading, setPaymentBankAccountsLoading] = useState(false);
+  const [paymentBanks, setPaymentBanks] = useState<BankItem[]>([]);
+  const [payBankId, setPayBankId] = useState<string>('');
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
@@ -567,6 +569,9 @@ const OrdersInvoicesPage: React.FC = () => {
         .then((r) => { if (r.data?.success && Array.isArray(r.data.data)) setPaymentBankAccounts(r.data.data); else setPaymentBankAccounts([]); })
         .catch(() => setPaymentBankAccounts([]))
         .finally(() => setPaymentBankAccountsLoading(false));
+      accountingApi.getBanks({ is_active: 'true' })
+        .then((r) => { if (r.data?.success && Array.isArray(r.data.data)) setPaymentBanks(r.data.data); else setPaymentBanks([]); })
+        .catch(() => setPaymentBanks([]));
     }
   }, [showPaymentModal]);
 
@@ -941,6 +946,9 @@ const OrdersInvoicesPage: React.FC = () => {
   const isHotelOrBus = user?.role === 'role_hotel' || user?.role === 'role_bus';
   const isKoordinator = ['invoice_koordinator', 'visa_koordinator', 'tiket_koordinator'].includes(user?.role || '');
   const scopeHint = isHotelOrBus ? ' Data: semua wilayah.' : isKoordinator ? ' Data: wilayah Anda.' : '';
+  // Role hotel/bus/handling/tiket_koordinator/visa_koordinator: card statistik & Per Status hanya tampil jika sudah ada pembayaran DP (data invoice muncul di table)
+  const divisiRolesHideStatsWhenEmpty = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
+  const showInvoiceStatCards = !divisiRolesHideStatsWhenEmpty.includes(user?.role || '') || (s.total_invoices > 0 || s.total_orders > 0);
   const invoiceSubtitle = `Daftar invoice. Buka untuk detail, pembayaran, dan update status produk (Visa, Tiket, Hotel, Bus).${scopeHint}`;
 
   return (
@@ -1067,80 +1075,83 @@ const OrdersInvoicesPage: React.FC = () => {
           />
       </PageFilter>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard
-          icon={<Receipt className="w-5 h-5" />}
-          label="Total Invoice"
-          value={loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}
-          iconClassName="bg-sky-100 text-sky-600"
-        />
-        <StatCard
-          icon={<Package className="w-5 h-5" />}
-          label="Total Trip"
-          value={loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}
-          iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
-        />
-        <StatCard
-          icon={<DollarSign className="w-5 h-5" />}
-          label="Total Tagihan"
-          value={loadingSummary ? '...' : formatIDR(s.total_amount)}
-          iconClassName="bg-slate-100 text-slate-600"
-          subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
-        />
-        <StatCard
-          icon={<CreditCard className="w-5 h-5" />}
-          label="Dibayar"
-          value={loadingSummary ? '...' : formatIDR(s.total_paid)}
-          iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
-          subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_paid / sarToIdrList)} · ≈ ${formatUSD(s.total_paid / usdToIdrList)}` : undefined}
-        />
-        <StatCard
-          icon={<Wallet className="w-5 h-5" />}
-          label="Sisa"
-          value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
-          iconClassName="bg-amber-100 text-amber-600"
-          subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
-        />
-      </div>
-
-      {/* Per Status Invoice - card statistic (Tagihan DP, Pembayaran DP, Dibatalkan, dll.) */}
-      <div>
-        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-          <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
-        </h3>
-        {loadingSummary ? (
-          <p className="text-slate-500 text-sm">{CONTENT_LOADING_MESSAGE}</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {(() => {
-              const keys: string[] = [...PER_STATUS_ALWAYS_SHOW];
-              Object.keys(s.by_invoice_status).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
-              return keys
-                .sort((a, b) => {
-                  const ia = PER_STATUS_ORDER.indexOf(a);
-                  const ib = PER_STATUS_ORDER.indexOf(b);
-                  if (ia === -1 && ib === -1) return a.localeCompare(b);
-                  if (ia === -1) return 1;
-                  if (ib === -1) return -1;
-                  return ia - ib;
-                })
-                .map((status) => {
-                  const count = s.by_invoice_status[status] ?? 0;
-                  const cfg = INVOICE_STATUS_CARD_CONFIG[status] || { icon: <Receipt className="w-5 h-5" /> };
-                  return (
-                    <StatCard
-                      key={status}
-                      icon={cfg.icon}
-                      label={INVOICE_STATUS_LABELS[status] || status}
-                      value={Number(count).toLocaleString('id-ID')}
-                    />
-                  );
-                });
-            })()}
+      {/* Summary cards & Per Status: untuk role hotel/bus/handling hanya tampil jika sudah ada pembayaran DP */}
+      {showInvoiceStatCards && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StatCard
+              icon={<Receipt className="w-5 h-5" />}
+              label="Total Invoice"
+              value={loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}
+              iconClassName="bg-sky-100 text-sky-600"
+            />
+            <StatCard
+              icon={<Package className="w-5 h-5" />}
+              label="Total Trip"
+              value={loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}
+              iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
+            />
+            <StatCard
+              icon={<DollarSign className="w-5 h-5" />}
+              label="Total Tagihan"
+              value={loadingSummary ? '...' : formatIDR(s.total_amount)}
+              iconClassName="bg-slate-100 text-slate-600"
+              subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
+            />
+            <StatCard
+              icon={<CreditCard className="w-5 h-5" />}
+              label="Dibayar"
+              value={loadingSummary ? '...' : formatIDR(s.total_paid)}
+              iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
+              subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_paid / sarToIdrList)} · ≈ ${formatUSD(s.total_paid / usdToIdrList)}` : undefined}
+            />
+            <StatCard
+              icon={<Wallet className="w-5 h-5" />}
+              label="Sisa"
+              value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
+              iconClassName="bg-amber-100 text-amber-600"
+              subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
+            />
           </div>
-        )}
-      </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
+            </h3>
+            {loadingSummary ? (
+              <p className="text-slate-500 text-sm">{CONTENT_LOADING_MESSAGE}</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                {(() => {
+                  const keys: string[] = [...PER_STATUS_ALWAYS_SHOW];
+                  Object.keys(s.by_invoice_status).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
+                  return keys
+                    .sort((a, b) => {
+                      const ia = PER_STATUS_ORDER.indexOf(a);
+                      const ib = PER_STATUS_ORDER.indexOf(b);
+                      if (ia === -1 && ib === -1) return a.localeCompare(b);
+                      if (ia === -1) return 1;
+                      if (ib === -1) return -1;
+                      return ia - ib;
+                    })
+                    .map((status) => {
+                      const count = s.by_invoice_status[status] ?? 0;
+                      const cfg = INVOICE_STATUS_CARD_CONFIG[status] || { icon: <Receipt className="w-5 h-5" /> };
+                      return (
+                        <StatCard
+                          key={status}
+                          icon={cfg.icon}
+                          label={INVOICE_STATUS_LABELS[status] || status}
+                          value={Number(count).toLocaleString('id-ID')}
+                        />
+                      );
+                    });
+                })()}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <Card className="travel-card rounded-2xl border-slate-200/80 shadow-sm">
         <CardSectionHeader

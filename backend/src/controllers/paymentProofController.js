@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { PaymentProof, Invoice, Order, Notification } = require('../models');
+const { PaymentProof, Invoice, Order, Notification, Bank } = require('../models');
 const { ROLES } = require('../constants');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, DP_PAYMENT_STATUS } = require('../constants');
 const { sendPaymentReceivedNotificationEmail } = require('./invoiceController');
@@ -44,7 +44,7 @@ const create = [
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
 
-    const { payment_type, amount, bank_name, account_number, transfer_date, notes, payment_currency } = req.body;
+    const { payment_type, amount, bank_id, bank_name, account_number, transfer_date, notes, payment_currency } = req.body;
     const payment_location = (req.body.payment_location != null ? String(req.body.payment_location) : '').trim().toLowerCase();
     let amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return res.status(400).json({ success: false, message: 'amount wajib dan harus > 0' });
@@ -81,6 +81,16 @@ const create = [
     }
     if (!fileUrl) return res.status(400).json({ success: false, message: 'Upload bukti bayar wajib.' });
 
+    let resolvedBankName = (bank_name && String(bank_name).trim()) || null;
+    let resolvedBankId = null;
+    if (bank_id) {
+      const bank = await Bank.findByPk(bank_id);
+      if (bank) {
+        resolvedBankId = bank.id;
+        resolvedBankName = bank.name;
+      }
+    }
+
     const proof = await PaymentProof.create({
       invoice_id: invoice.id,
       payment_type: type,
@@ -89,7 +99,8 @@ const create = [
       amount_sar: paymentCurrency === 'SAR' && amountOriginal != null ? amountOriginal : null,
       payment_currency: paymentCurrency,
       amount_original: amountOriginal,
-      bank_name: bank_name || null,
+      bank_id: resolvedBankId,
+      bank_name: resolvedBankName,
       account_number: account_number || null,
       transfer_date: transfer_date || null,
       proof_file_url: fileUrl,

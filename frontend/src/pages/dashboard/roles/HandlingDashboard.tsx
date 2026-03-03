@@ -66,11 +66,14 @@ const HandlingDashboard: React.FC = () => {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
-          <StatCard key={i} icon={stat.icon} label={stat.label} value={stat.value} subtitle={stat.subtitle} iconClassName={stat.iconClassName} />
-        ))}
-      </div>
+      {/* Statistik card hanya tampil jika sudah ada pembayaran DP dan data invoice muncul di table */}
+      {((d.total_orders ?? 0) > 0 || (d.total_handling_items ?? 0) > 0) && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {stats.map((stat, i) => (
+            <StatCard key={i} icon={stat.icon} label={stat.label} value={stat.value} subtitle={stat.subtitle} iconClassName={stat.iconClassName} />
+          ))}
+        </div>
+      )}
 
       {pending.length > 0 && (
         <Card className="p-6 rounded-2xl border border-amber-200/80 shadow-sm bg-amber-50/40">

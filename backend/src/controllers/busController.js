@@ -12,7 +12,7 @@ const {
   BusProgress,
   Invoice
 } = require('../models');
-const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS } = require('../constants');
+const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
@@ -49,8 +49,9 @@ const getDashboard = asyncHandler(async (req, res) => {
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
+  // Hanya order yang sudah ada pembayaran DP (sama seperti list Invoice/Progress bus)
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: { [Op.in]: branchIds } },
+    where: { id: orderIds, branch_id: { [Op.in]: branchIds }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
     include: [
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
