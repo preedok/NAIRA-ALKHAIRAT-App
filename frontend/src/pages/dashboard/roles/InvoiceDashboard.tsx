@@ -98,7 +98,7 @@ const InvoiceDashboard: React.FC = () => {
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
     { id: 'status', label: 'Status', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total', align: 'right' },
     { id: 'paid', label: 'Terbayar', align: 'right' },
     { id: 'remaining', label: 'Sisa', align: 'right' },
@@ -216,8 +216,11 @@ const InvoiceDashboard: React.FC = () => {
                     {INVOICE_STATUS_LABELS[inv.status] || inv.status}
                   </Badge>
                 </td>
-                <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? inv.Order?.User?.name ?? '–'}</td>
-                <td className="py-3 px-4 text-slate-600">{inv.Branch?.name ?? inv.Branch?.code ?? '–'}</td>
+                <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name ?? inv.Order?.User?.name ?? '–'}</td>
+                <td className="py-3 px-4 align-top text-sm">
+                  <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                  <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                </td>
                 <td className="py-3 px-4 text-right font-medium tabular-nums">{formatIDR(total)}</td>
                 <td className="py-3 px-4 text-right tabular-nums text-emerald-700">{formatIDR(paid)}</td>
                 <td className="py-3 px-4 text-right tabular-nums text-slate-700">{formatIDR(remaining)}</td>

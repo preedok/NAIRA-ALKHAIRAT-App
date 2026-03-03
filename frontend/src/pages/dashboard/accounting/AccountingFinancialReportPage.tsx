@@ -892,7 +892,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4 align-top">{inv.owner_name || '-'}</td>
                     <td className="py-3 px-4 align-top text-sm">
                       <div>{row.company_name || inv.owner_name || inv.branch_name || '–'}</div>
-                      {perusahaanLine2 !== '–' && <div className="text-xs text-slate-600 mt-0.5">{perusahaanLine2}</div>}
+                      <div className="text-xs text-slate-600 mt-0.5">{perusahaanLine2}</div>
                     </td>
                     <td className="py-3 px-4 text-right align-top">
                       <div>{formatIDR(inv.total_amount)}</div>

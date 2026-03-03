@@ -251,7 +251,7 @@ const InvoiceListModalAdmin: React.FC<{
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
               { id: 'order_number', label: 'No. Order', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
-              { id: 'branch', label: 'Cabang', align: 'left' },
+              { id: 'company', label: 'Perusahaan', align: 'left' },
               { id: 'total', label: 'Total', align: 'left' },
               { id: 'paid', label: 'Terbayar', align: 'left' },
               { id: 'remaining', label: 'Sisa', align: 'left' },
@@ -273,14 +273,17 @@ const InvoiceListModalAdmin: React.FC<{
             }
             renderRow={(inv) => (
               <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono">{inv.invoice_number}</td>
-                <td className="px-4 py-3 font-mono">{inv.Order?.order_number ?? '-'}</td>
-                <td className="px-4 py-3">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
-                <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                <td className="px-4 py-3">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                <td className="px-4 py-3 text-emerald-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                <td className="px-4 py-3">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                <td className="px-4 py-3"><Badge variant="info">{inv.status}</Badge></td>
+                <td className="px-4 py-3 font-mono align-top">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-mono align-top">{inv.Order?.order_number ?? '-'}</td>
+                <td className="px-4 py-3 align-top">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
+                <td className="px-4 py-3 align-top text-sm">
+                  <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
+                  <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                </td>
+                <td className="px-4 py-3 align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                <td className="px-4 py-3 text-emerald-600 align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
+                <td className="px-4 py-3 align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                <td className="px-4 py-3 align-top"><Badge variant="info">{inv.status}</Badge></td>
               </tr>
             )}
           />

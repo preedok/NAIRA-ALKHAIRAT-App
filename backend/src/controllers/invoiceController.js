@@ -156,7 +156,8 @@ async function updateOrderDpStatusFromInvoice(invoice, order = null) {
 
 async function updateInvoiceWithAudit(invoice, updates, { changedBy, reason, meta, transaction } = {}) {
   const nextStatus = updates && Object.prototype.hasOwnProperty.call(updates, 'status') ? updates.status : undefined;
-  const willLog = nextStatus != null && (String(nextStatus) !== String(invoice.status) || !!reason);
+  // Hanya catat riwayat status bila status benar-benar berubah (jangan setiap sync form order → duplicate "Pembayaran DP")
+  const willLog = nextStatus != null && String(nextStatus) !== String(invoice.status);
   if (willLog) {
     await logInvoiceStatusChange({
       invoice_id: invoice.id,
@@ -1515,6 +1516,8 @@ const getReleasable = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/invoices/:id/status-history
+ * Hanya kembalikan entri di mana status benar-benar berubah (from_status !== to_status).
+ * Entri duplikat seperti "Pembayaran DP → Pembayaran DP" dari sync form order tidak ditampilkan.
  */
 const getStatusHistory = asyncHandler(async (req, res) => {
   const access = await canAccessInvoiceForReallocation(req.params.id, req.user);
@@ -1524,7 +1527,8 @@ const getStatusHistory = asyncHandler(async (req, res) => {
     order: [['changed_at', 'ASC']],
     include: [{ model: User, as: 'ChangedBy', attributes: ['id', 'name', 'email'], required: false }]
   });
-  res.json({ success: true, data: rows });
+  const filtered = rows.filter((r) => String(r.from_status || '') !== String(r.to_status || ''));
+  res.json({ success: true, data: filtered });
 });
 
 /**
