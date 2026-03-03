@@ -117,7 +117,6 @@ const OrderListModal: React.FC<{
               showDateRange
               showSearch
               searchPlaceholder="No. Order..."
-              showReset
               wilayahId={fWilayah}
               provinsiId={fProvinsi}
               branchId={fBranch}
@@ -133,7 +132,6 @@ const OrderListModal: React.FC<{
               onDateToChange={setFDateTo}
               onSearchChange={setFOrderNumber}
               onApply={() => { setPage(1); fetchOrders(); }}
-              onReset={() => { setFStatus(''); setFBranch(''); setFWilayah(''); setFProvinsi(''); setFDateFrom(''); setFDateTo(''); setFOrderNumber(''); setPage(1); }}
               wilayahList={wilayahList}
               provinces={provinces}
               branches={branches}
@@ -400,12 +398,8 @@ const AdminPusatDashboard: React.FC = () => {
       <PageFilter
         open={showFilters}
         onToggle={() => setShowFilters((v: boolean) => !v)}
-        onReset={resetFilters}
         hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchDashboard(); }}
         loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
         hideToggleRow
         className="w-full"
       >
@@ -418,7 +412,6 @@ const AdminPusatDashboard: React.FC = () => {
           showStatus
           statusType="order"
           showDateRange
-          showReset={false}
           hideActions
           wilayahId={wilayahId}
           provinsiId={provinsiId}
@@ -433,7 +426,6 @@ const AdminPusatDashboard: React.FC = () => {
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
           onApply={fetchDashboard}
-          onReset={resetFilters}
           wilayahList={wilayahList}
           provinces={provinces}
           branches={branches}

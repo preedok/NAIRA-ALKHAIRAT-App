@@ -394,9 +394,7 @@ const AccountingAgingPage: React.FC = () => {
       <PageFilter
         open={showFilters}
         onToggle={() => setShowFilters((v: boolean) => !v)}
-        onReset={resetFilters}
         hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchAging(); }}
         loading={loading}
         hideToggleRow
       >

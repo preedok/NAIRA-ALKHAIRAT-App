@@ -52,7 +52,7 @@ interface PageFilterProps {
  * Filter tidak tampil langsung — user klik tombol untuk membuka.
  */
 const DEFAULT_CARD_TITLE = 'Pengaturan Filter';
-const DEFAULT_CARD_DESCRIPTION = 'Atur kriteria lalu klik Terapkan. Reset untuk kosongkan.';
+const DEFAULT_CARD_DESCRIPTION = 'Filter berlaku otomatis saat kriteria diubah.';
 
 const PageFilter: React.FC<PageFilterProps> = ({
   open,
@@ -84,18 +84,6 @@ const PageFilter: React.FC<PageFilterProps> = ({
           <div className="w-full space-y-5">
             {children}
           </div>
-          <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-slate-200/80">
-            {onApply && (
-              <Button variant="primary" size="sm" onClick={onApply} disabled={loading} className="bg-[#0D1A63] hover:bg-[#0a1449] focus:ring-[#0D1A63]">
-                {loading ? 'Memuat...' : applyLabel}
-              </Button>
-            )}
-            {onReset && (
-              <Button variant="outline" size="sm" onClick={onReset} className="border-slate-200 text-slate-700 hover:bg-slate-100">
-                {resetLabel}
-              </Button>
-            )}
-          </div>
         </Card>
   );
 
@@ -108,11 +96,6 @@ const PageFilter: React.FC<PageFilterProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 min-h-[40px]">
         <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
           <FilterIconButton open={open} onToggle={onToggle} hasActiveFilters={hasActiveFilters} />
-          {hasActiveFilters && onReset && (
-            <Button variant="ghost" size="sm" onClick={onReset} className="shrink-0 text-slate-600">
-              {resetLabel}
-            </Button>
-          )}
         </div>
         {toolbar && <div className="shrink-0">{toolbar}</div>}
       </div>

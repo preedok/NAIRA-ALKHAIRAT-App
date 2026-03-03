@@ -302,12 +302,8 @@ const KoordinatorOwnersPage: React.FC = () => {
       <PageFilter
         open={showFilters}
         onToggle={() => setShowFilters((v) => !v)}
-        onReset={resetFilters}
         hasActiveFilters={hasActiveFilters}
-        onApply={applyFilters}
         loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
         hideToggleRow
         className="w-full"
       >

@@ -103,7 +103,6 @@ const InvoiceListModal: React.FC<{
               showStatus
               statusType="invoice"
               showDateRange
-              showReset
               wilayahId={fWilayah}
               provinsiId={fProvinsi}
               branchId={fBranch}
@@ -117,7 +116,6 @@ const InvoiceListModal: React.FC<{
               onDateFromChange={setFDateFrom}
               onDateToChange={setFDateTo}
               onApply={() => { setPage(1); fetchInvoices(); }}
-              onReset={() => { setFBranch(''); setFProvinsi(''); setFWilayah(''); setFDateFrom(''); setFDateTo(''); setFStatus(''); setPage(1); }}
               wilayahList={wilayahList}
               provinces={provinces}
               branches={branches}
@@ -213,7 +211,7 @@ const AccountingDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [branchId, provinsiId, wilayahId, dateFrom, dateTo]);
   useEffect(() => {
     branchesApi.listWilayah().then((r) => { if (r.data.success) setWilayahList(r.data.data || []); }).catch(() => {});
     branchesApi.listProvinces().then((r) => { if (r.data.success) setProvinces(r.data.data || []); }).catch(() => {});
@@ -271,12 +269,8 @@ const AccountingDashboard: React.FC = () => {
       <PageFilter
         open={showFilters}
         onToggle={() => setShowFilters((v: boolean) => !v)}
-        onReset={resetFilters}
         hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchDashboard(); }}
         loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
         hideToggleRow
         className="w-full"
       >
@@ -287,7 +281,6 @@ const AccountingDashboard: React.FC = () => {
           showProvinsi
           showBranch
           showDateRange
-          showReset={false}
           hideActions
           wilayahId={wilayahId}
           provinsiId={provinsiId}
@@ -300,7 +293,6 @@ const AccountingDashboard: React.FC = () => {
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
           onApply={fetchDashboard}
-          onReset={resetFilters}
           wilayahList={wilayahList}
           provinces={provinces}
           branches={branches}

@@ -363,15 +363,6 @@ const BusWorkPage: React.FC = () => {
               fullWidth
             />
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => { setSearchQuery(''); setFilterStatus(''); setFilterTicketStatus(''); setFilterArrival(''); setFilterDeparture(''); setFilterReturn(''); }}
-            className="sm:shrink-0"
-          >
-            Reset filter
-          </Button>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
           {loading ? (

@@ -1030,12 +1030,8 @@ const OrdersInvoicesPage: React.FC = () => {
       <PageFilter
         open={showFilters}
         onToggle={() => setShowFilters((v) => !v)}
-        onReset={resetFilters}
         hasActiveFilters={hasActiveFilters}
-        onApply={() => { setPage(1); fetchInvoices(); }}
         loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
         hideToggleRow
         className="w-full"
       >
@@ -1055,7 +1051,6 @@ const OrdersInvoicesPage: React.FC = () => {
             showDateRange
             showDueStatus
             showSort
-            showReset
             hideActions
             wilayahId={wilayahId}
             provinsiId={provinsiId}
@@ -1084,7 +1079,6 @@ const OrdersInvoicesPage: React.FC = () => {
             onDateToChange={setFilterDateTo}
             onDueStatusChange={setFilterDueStatus}
             onApply={() => {}}
-            onReset={resetFilters}
             wilayahList={wilayahList}
             provinces={provinces}
             branches={branches}

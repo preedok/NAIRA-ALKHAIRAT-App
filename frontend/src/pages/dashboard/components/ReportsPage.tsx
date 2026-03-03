@@ -286,7 +286,7 @@ const ReportsPage: React.FC = () => {
           <CardSectionHeader
             icon={<Filter className="w-6 h-6" />}
             title="Pengaturan Filter"
-            subtitle="Pilih tipe, periode, cabang & wilayah — lalu klik Terapkan. Reset untuk kosongkan."
+            subtitle="Pilih tipe, periode, cabang & wilayah. Filter berlaku otomatis."
             className="mb-4 pb-3 border-b border-slate-200/80"
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -370,14 +370,6 @@ const ReportsPage: React.FC = () => {
                 />
               </>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-slate-200/80">
-            <Button variant="primary" size="sm" onClick={() => { setFiltersOpen(false); fetchAnalytics(); }} disabled={loading} className="bg-[#0D1A63] hover:bg-[#0a1449] focus:ring-[#0D1A63]">
-              {loading ? 'Memuat data...' : 'Terapkan'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={resetFilters} className="border-slate-200 text-slate-700 hover:bg-slate-100">
-              Reset
-            </Button>
           </div>
         </Card>
       )}

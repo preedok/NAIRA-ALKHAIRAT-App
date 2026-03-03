@@ -259,7 +259,7 @@ const AccountingChartOfAccountsPage: React.FC = () => {
           icon={<Filter className="w-5 h-5" />}
           title="Filter"
           subtitle={hasActiveFilters ? 'Filter aktif' : 'Status, nama bank, mata uang & cari'}
-          right={hasActiveFilters ? <Button variant="outline" size="sm" onClick={resetFilters}>Reset</Button> : null}
+          right={null}
           className="mb-2"
         />
         <div className="flex flex-wrap items-end gap-4 py-2 mb-2 border-b border-slate-200">

@@ -167,14 +167,10 @@ const RefundsPage: React.FC = () => {
       <PageFilter
         open={showFilters}
         onToggle={() => setShowFilters((v) => !v)}
-        onReset={resetFilters}
         hasActiveFilters={hasActiveFilters}
-        onApply={() => { setShowFilters(false); fetchStats(); fetchRefunds(); }}
         loading={loading}
-        applyLabel="Terapkan"
-        resetLabel="Reset"
         cardTitle="Pengaturan Filter"
-        cardDescription="Filter berdasarkan status, owner, periode tanggal, dan sumber. Klik Terapkan untuk memuat data."
+        cardDescription="Filter berdasarkan status, owner, periode tanggal, dan sumber. Filter berlaku otomatis."
         hideToggleRow
         className="w-full"
       >

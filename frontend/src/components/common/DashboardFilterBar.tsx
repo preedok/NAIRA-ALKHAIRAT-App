@@ -1,6 +1,5 @@
 import React from 'react';
 import { Filter } from 'lucide-react';
-import Button from './Button';
 import Input from './Input';
 import Autocomplete from './Autocomplete';
 import { AUTOCOMPLETE_FILTER, AUTOCOMPLETE_PILIH } from '../../utils/constants';
@@ -240,18 +239,6 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
             ]}
           />
         </>
-      )}
-      {!hideActions && (
-        <div className={`flex flex-wrap items-end gap-2 ${isModal ? 'col-span-2' : 'col-span-full sm:col-span-1'}`}>
-          <Button variant="primary" size={isModal ? 'sm' : 'md'} onClick={onApply} disabled={loading} className="bg-[#0D1A63] hover:bg-[#0a1449] focus:ring-[#0D1A63]">
-            {loading ? 'Memuat...' : 'Terapkan'}
-          </Button>
-          {showReset && onReset && (
-            <Button variant="outline" size={isModal ? 'sm' : 'md'} onClick={onReset} className="border-slate-200 text-slate-700">
-              Reset
-            </Button>
-          )}
-        </div>
       )}
     </div>
   );

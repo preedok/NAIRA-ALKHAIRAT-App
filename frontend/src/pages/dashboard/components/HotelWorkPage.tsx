@@ -266,7 +266,6 @@ const HotelWorkPage: React.FC = () => {
           <div className="sm:w-44">
             <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
           </div>
-          <Button variant="outline" size="sm" onClick={() => { setFilterInvoiceStatus(''); setFilterProgressStatus(''); setFilterSearch(''); }} className="rounded-xl">Reset</Button>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
           {loading ? (
