@@ -29,6 +29,7 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
   const [products, setProducts] = useState<Array<{ id: string; code: string; name: string; type: string }>>([]);
   const [modalOpen, setModalOpen] = useState<'create' | null>(null);
   const [form, setForm] = useState({ supplier_id: '', product_id: '', order_date: new Date().toISOString().slice(0, 10), expected_date: '', notes: '', lines: [{ description: '', quantity: 1, unit: 'pcs', unit_price: 0 }] });
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [formError, setFormError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -73,23 +74,27 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
       notes: '',
       lines: [{ description: '', quantity: 1, unit: 'pcs', unit_price: 0 }]
     });
+    setProofFile(null);
     setFormError('');
     setModalOpen('create');
   };
 
   const handleCreate = async () => {
     if (!form.supplier_id) { setFormError('Pilih supplier'); return; }
+    if (!proofFile) { setFormError('Bukti pembelian (file) wajib diunggah'); return; }
     setFormError('');
     setActionLoading(true);
     try {
-      await accountingApi.createPurchaseOrder({
-        supplier_id: form.supplier_id,
-        product_id: form.product_id || undefined,
-        order_date: form.order_date,
-        expected_date: form.expected_date || undefined,
-        notes: form.notes || undefined,
-        lines: form.lines.filter((l) => l.description || l.unit_price > 0).map((l) => ({ description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price }))
-      });
+      const formData = new FormData();
+      formData.append('proof_file', proofFile);
+      formData.append('supplier_id', form.supplier_id);
+      if (form.product_id) formData.append('product_id', form.product_id);
+      formData.append('order_date', form.order_date);
+      if (form.expected_date) formData.append('expected_date', form.expected_date);
+      if (form.notes) formData.append('notes', form.notes);
+      const lines = form.lines.filter((l) => l.description || l.unit_price > 0).map((l) => ({ description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price }));
+      formData.append('lines', JSON.stringify(lines));
+      await accountingApi.createPurchaseOrder(formData);
       setModalOpen(null);
       fetchList();
     } catch (e: any) {
@@ -249,6 +254,17 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
                   <Input type="date" label="Tanggal expected" value={form.expected_date} onChange={(e) => setForm((f) => ({ ...f, expected_date: e.target.value }))} />
                 </div>
                 <Input label="Catatan" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Opsional" />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Bukti pembelian *</label>
+                  <p className="text-xs text-slate-500 mb-2">Setiap PO wajib dilampiri bukti (PDF/gambar)</p>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
+                  />
+                  {proofFile && <span className="text-xs text-slate-600 mt-1 block">{proofFile.name}</span>}
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Baris (min 1)</label>
                   {form.lines.map((line, idx) => (

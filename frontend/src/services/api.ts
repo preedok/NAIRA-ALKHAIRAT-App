@@ -735,8 +735,8 @@ export const accountingApi = {
     api.get<{ success: boolean; data: any[]; total: number }>('/accounting/purchase-orders', { params }),
   getPurchaseOrder: (id: string) =>
     api.get<{ success: boolean; data: any }>(`/accounting/purchase-orders/${id}`),
-  createPurchaseOrder: (body: { supplier_id: string; product_id?: string; branch_id?: string; order_date?: string; expected_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; account_id?: string; tax_rate?: number }> }) =>
-    api.post<{ success: boolean; data: any }>('/accounting/purchase-orders', body),
+  createPurchaseOrder: (formData: FormData) =>
+    api.post<{ success: boolean; data: any }>('/accounting/purchase-orders', formData),
   updatePurchaseOrder: (id: string, body: { product_id?: string; branch_id?: string; order_date?: string; expected_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; account_id?: string; tax_rate?: number }> }) =>
     api.patch<{ success: boolean; data: any }>(`/accounting/purchase-orders/${id}`, body),
   deletePurchaseOrder: (id: string) =>
@@ -745,19 +745,21 @@ export const accountingApi = {
     api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-orders/${id}/submit`),
   approvePurchaseOrder: (id: string) =>
     api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-orders/${id}/approve`),
+  getPurchaseOrderProofUrl: (id: string) => `${api.defaults.baseURL || ''}/accounting/purchase-orders/${id}/proof`,
   listPurchaseInvoices: (params?: { supplier_id?: string; product_id?: string; status?: string; branch_id?: string; date_from?: string; date_to?: string; page?: number; limit?: number }) =>
     api.get<{ success: boolean; data: any[]; total: number }>('/accounting/purchase-invoices', { params }),
   getPurchaseInvoice: (id: string) =>
     api.get<{ success: boolean; data: any }>(`/accounting/purchase-invoices/${id}`),
-  createPurchaseInvoice: (body: { supplier_id: string; product_id?: string; purchase_order_id?: string; branch_id?: string; invoice_date?: string; due_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; purchase_order_line_id?: string; account_id?: string }> }) =>
-    api.post<{ success: boolean; data: any }>('/accounting/purchase-invoices', body),
+  createPurchaseInvoice: (formData: FormData) =>
+    api.post<{ success: boolean; data: any }>('/accounting/purchase-invoices', formData),
   updatePurchaseInvoice: (id: string, body: { product_id?: string; branch_id?: string; invoice_date?: string; due_date?: string; currency?: string; notes?: string; lines?: Array<{ description?: string; quantity?: number; unit?: string; unit_price?: number; purchase_order_line_id?: string; account_id?: string }> }) =>
     api.patch<{ success: boolean; data: any }>(`/accounting/purchase-invoices/${id}`, body),
   deletePurchaseInvoice: (id: string) =>
     api.delete<{ success: boolean; message: string }>(`/accounting/purchase-invoices/${id}`),
   postPurchaseInvoice: (id: string) =>
     api.post<{ success: boolean; data: any; message: string }>(`/accounting/purchase-invoices/${id}/post`),
-  listPurchasePayments: (params?: { purchase_invoice_id?: string; supplier_id?: string; status?: string; page?: number; limit?: number }) =>
+  getPurchaseInvoiceProofUrl: (id: string) => `${api.defaults.baseURL || ''}/accounting/purchase-invoices/${id}/proof`,
+  listPurchasePayments: (params?: { purchase_invoice_id?: string; supplier_id?: string; product_id?: string; status?: string; page?: number; limit?: number }) =>
     api.get<{ success: boolean; data: any[]; total: number }>('/accounting/purchase-payments', { params }),
   getPurchasePayment: (id: string) =>
     api.get<{ success: boolean; data: any }>(`/accounting/purchase-payments/${id}`),

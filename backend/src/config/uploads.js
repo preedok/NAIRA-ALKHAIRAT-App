@@ -39,7 +39,8 @@ const SUBDIRS = {
   TICKET_DOCS: 'ticket-docs',
   JAMAAH_DATA: 'jamaah-data',
   INVOICES: 'invoices',
-  REFUND_PROOFS: 'refund-proofs'
+  REFUND_PROOFS: 'refund-proofs',
+  PURCHASE_PROOFS: 'purchase-proofs'
 };
 
 function getDir(subdir) {
@@ -141,6 +142,22 @@ function invoiceFilename(invoiceNumber, status) {
   return `INV_${safeNum}_${safeStatus}_${date}_${time}.pdf`;
 }
 
+/** Nama file bukti pembelian (faktur pembelian): BUKTI_PURCHASE_{invoiceNumber}_YYYYMMDD_HHmmss.{ext} */
+function purchaseProofFilename(invoiceNumber, originalName) {
+  const { date, time } = dateTimeForFilename();
+  const inv = (invoiceNumber || 'INVP').replace(/[^a-zA-Z0-9-]/g, '_');
+  const ext = safeExt(originalName);
+  return `BUKTI_PURCHASE_${inv}_${date}_${time}${ext}`;
+}
+
+/** Nama file bukti PO: BUKTI_PO_{poNumber}_YYYYMMDD_HHmmss.{ext} */
+function purchaseOrderProofFilename(poNumber, originalName) {
+  const { date, time } = dateTimeForFilename();
+  const po = (poNumber || 'PO').replace(/[^a-zA-Z0-9-]/g, '_');
+  const ext = safeExt(originalName);
+  return `BUKTI_PO_${po}_${date}_${time}${ext}`;
+}
+
 /** Nama file bukti refund: REFUND_{refundId6}_{invoiceNumber}_YYYYMMDD_HHmmss.{ext} */
 function refundProofFilename(refundId, invoiceNumber, originalName) {
   const { date, time } = dateTimeForFilename();
@@ -172,6 +189,8 @@ module.exports = {
   jamaahDataFilename,
   invoiceFilename,
   refundProofFilename,
+  purchaseProofFilename,
+  purchaseOrderProofFilename,
   registrationPaymentFilename,
   registrationPaymentFilenameAtRegister,
   toUrlPath

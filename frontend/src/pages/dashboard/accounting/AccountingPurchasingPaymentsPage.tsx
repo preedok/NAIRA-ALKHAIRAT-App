@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Plus, BookOpen } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Plus, BookOpen } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -15,11 +16,14 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = { draft: 'Draft', posted: 
 const DEFAULT_LIMIT = 20;
 
 const AccountingPurchasingPaymentsPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [productId, setProductId] = useState(productIdFromUrl);
   const [statusFilter, setStatusFilter] = useState('');
   const [invoices, setInvoices] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
@@ -32,6 +36,7 @@ const AccountingPurchasingPaymentsPage: React.FC = () => {
     setLoading(true);
     try {
       const params: Record<string, string | number> = { page, limit };
+      if (productId) params.product_id = productId;
       if (statusFilter) params.status = statusFilter;
       const res = await accountingApi.listPurchasePayments(params);
       if (res.data.success) {
@@ -43,18 +48,21 @@ const AccountingPurchasingPaymentsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, statusFilter]);
+  }, [page, limit, productId, statusFilter]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
+  useEffect(() => { setProductId(productIdFromUrl || productId); }, [productIdFromUrl]);
 
   useEffect(() => {
-    accountingApi.listPurchaseInvoices({ status: 'posted', limit: 500 }).then((r) => {
+    const invParams: Record<string, string | number> = { status: 'posted', limit: 500 };
+    if (productId) invParams.product_id = productId;
+    accountingApi.listPurchaseInvoices(invParams).then((r) => {
       if (r.data.success) setInvoices((r.data.data || []).filter((inv: any) => parseFloat(inv.remaining_amount) > 0));
     }).catch(() => {});
     accountingApi.getBankAccounts({ is_active: 'true' }).then((r) => {
       if (r.data.success) setBankAccounts(r.data.data || []);
     }).catch(() => {});
-  }, []);
+  }, [productId]);
 
   const openCreate = () => {
     setForm({

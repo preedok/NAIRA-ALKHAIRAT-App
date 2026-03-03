@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, Receipt, DollarSign, ChevronRight, Package } from 'lucide-react';
+import { Users, FileText, Receipt, DollarSign, ChevronRight, Package, Hotel, Plane, Bus, HandHelping } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import StatCard from '../../../components/common/StatCard';
-import Table from '../../../components/common/Table';
-import type { TableColumn } from '../../../types';
 import ContentLoading from '../../../components/common/ContentLoading';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { accountingApi, type PurchasingByProduct } from '../../../services/api';
@@ -20,6 +18,15 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
   bus: 'Bus',
   handling: 'Handling',
   package: 'Paket'
+};
+
+const PRODUCT_ICONS: Record<string, React.ReactNode> = {
+  hotel: <Hotel className="w-5 h-5" />,
+  visa: <FileText className="w-5 h-5" />,
+  ticket: <Plane className="w-5 h-5" />,
+  bus: <Bus className="w-5 h-5" />,
+  handling: <HandHelping className="w-5 h-5" />,
+  package: <Package className="w-5 h-5" />
 };
 
 const AccountingPurchasingPage: React.FC = () => {
@@ -49,12 +56,15 @@ const AccountingPurchasingPage: React.FC = () => {
 
   const byProduct = data?.by_product ?? [];
   const suppliersCount = data?.suppliers_count ?? 0;
+  const totalPo = byProduct.reduce((s, r) => s + r.po_count, 0);
+  const totalInv = byProduct.reduce((s, r) => s + r.invoice_count, 0);
+  const totalRemaining = byProduct.reduce((s, r) => s + r.remaining_amount, 0);
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Modul Pembelian"
-        subtitle="Pembelian product baru ke supplier sesuai product yang ada di aplikasi (Hotel, Visa, Tiket, Bus, Handling)"
+        subtitle="Pembelian product baru ke supplier per product. Setiap pembelian wajib dilampiri bukti."
         right={
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={fetchSummary} disabled={loading} size="sm" />
@@ -66,106 +76,97 @@ const AccountingPurchasingPage: React.FC = () => {
         <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3">{error}</div>
       )}
 
+      {/* Ringkasan global */}
       <Card className="travel-card">
         {loading && !data ? (
           <ContentLoading />
         ) : (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard
-                icon={<Users className="w-5 h-5" />}
-                label="Total Supplier"
-                value={suppliersCount}
-                iconClassName="bg-slate-600 text-white"
-              />
-              <StatCard
-                icon={<FileText className="w-5 h-5" />}
-                label="Total PO"
-                value={byProduct.reduce((s, r) => s + r.po_count, 0)}
-                iconClassName="bg-blue-600 text-white"
-              />
-              <StatCard
-                icon={<Receipt className="w-5 h-5" />}
-                label="Total Faktur"
-                value={byProduct.reduce((s, r) => s + r.invoice_count, 0)}
-                iconClassName="bg-amber-600 text-white"
-              />
-              <StatCard
-                icon={<DollarSign className="w-5 h-5" />}
-                label="Total Hutang (Sisa)"
-                value={formatIDR(byProduct.reduce((s, r) => s + r.remaining_amount, 0))}
-                iconClassName="bg-amber-100 text-amber-700"
-              />
+          <div className="space-y-6">
+            <CardSectionHeader
+              icon={<Package className="w-6 h-6" />}
+              title="Ringkasan"
+              subtitle="Total supplier dan agregat pembelian"
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard icon={<Users className="w-5 h-5" />} label="Total Supplier" value={suppliersCount} iconClassName="bg-slate-600 text-white" />
+              <StatCard icon={<FileText className="w-5 h-5" />} label="Total PO" value={totalPo} iconClassName="bg-blue-600 text-white" />
+              <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Faktur" value={totalInv} iconClassName="bg-amber-600 text-white" />
+              <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Hutang (Sisa)" value={formatIDR(totalRemaining)} iconClassName="bg-amber-100 text-amber-700" />
             </div>
-
-            <div>
-              <CardSectionHeader
-                icon={<Package className="w-6 h-6" />}
-                title="Pembelian per Product"
-                subtitle="Ringkasan per product: Hotel, Visa, Tiket, Bus, Handling"
-              />
-              <Table
-                columns={[
-                  { id: 'product', label: 'Product', align: 'left' },
-                  { id: 'po_count', label: 'PO', align: 'right' },
-                  { id: 'invoice_count', label: 'Faktur', align: 'right' },
-                  { id: 'total_amount', label: 'Total', align: 'right' },
-                  { id: 'paid_amount', label: 'Terbayar', align: 'right' },
-                  { id: 'remaining_amount', label: 'Sisa', align: 'right' },
-                  { id: 'actions', label: 'Aksi', align: 'right' }
-                ] as TableColumn[]}
-                data={byProduct}
-                emptyMessage="Belum ada data pembelian per product"
-                renderRow={(row) => (
-                  <tr key={row.product_id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4">
-                      <span className="font-medium text-slate-800">{row.product_name}</span>
-                      <span className="text-slate-500 ml-1">({PRODUCT_TYPE_LABELS[row.product_type] ?? row.product_type})</span>
-                    </td>
-                    <td className="py-3 px-4 text-right">{row.po_count}</td>
-                    <td className="py-3 px-4 text-right">{row.invoice_count}</td>
-                    <td className="py-3 px-4 text-right">{formatIDR(row.total_amount)}</td>
-                    <td className="py-3 px-4 text-right text-blue-600">{formatIDR(row.paid_amount)}</td>
-                    <td className="py-3 px-4 text-right text-amber-600">{formatIDR(row.remaining_amount)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        onClick={() => navigate(`/dashboard/accounting/purchasing/orders?product_id=${row.product_id}`)}
-                      >
-                        Lihat PO <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                )}
-              />
-            </div>
-
-            <div>
-              <CardSectionHeader title="Aksi Cepat" subtitle="Akses langsung ke modul pembelian" />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/purchasing/suppliers')}>
-                  <Users className="w-5 h-5 text-slate-600 shrink-0" />
-                  <span className="text-xs font-medium text-center leading-tight">Master Supplier</span>
-                </Button>
-                <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/purchasing/orders')}>
-                  <FileText className="w-5 h-5 text-blue-600 shrink-0" />
-                  <span className="text-xs font-medium text-center leading-tight">PO Pembelian</span>
-                </Button>
-                <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/purchasing/invoices')}>
-                  <Receipt className="w-5 h-5 text-amber-600 shrink-0" />
-                  <span className="text-xs font-medium text-center leading-tight">Faktur Pembelian</span>
-                </Button>
-                <Button variant="outline" className="flex flex-col h-20 gap-2 justify-center items-center hover:bg-slate-50" onClick={() => navigate('/dashboard/accounting/purchasing/payments')}>
-                  <DollarSign className="w-5 h-5 text-green-600 shrink-0" />
-                  <span className="text-xs font-medium text-center leading-tight">Pembayaran Pembelian</span>
-                </Button>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/purchasing/suppliers')}>
+                <Users className="w-4 h-4 mr-2" /> Master Supplier
+              </Button>
             </div>
           </div>
         )}
       </Card>
+
+      {/* Per product: card tiap product dengan stat + aksi */}
+      <CardSectionHeader
+        icon={<Package className="w-6 h-6" />}
+        title="Pembelian per Product"
+        subtitle="Pilih product untuk mengelola PO, Faktur, dan Pembayaran. Setiap pembelian baru wajib ada bukti."
+      />
+      {loading && !data ? null : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {byProduct.map((row) => {
+            const typeLabel = PRODUCT_TYPE_LABELS[row.product_type] ?? row.product_type;
+            const Icon = PRODUCT_ICONS[row.product_type] ?? <Package className="w-5 h-5" />;
+            return (
+              <Card key={row.product_id} className="p-5 border border-slate-200 hover:border-slate-300 transition-colors">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-lg bg-slate-100 text-slate-600">{Icon}</div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{row.product_name}</h3>
+                    <p className="text-sm text-slate-500">{typeLabel}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+                  <div className="text-slate-600">PO</div>
+                  <div className="text-right font-medium">{row.po_count}</div>
+                  <div className="text-slate-600">Faktur</div>
+                  <div className="text-right font-medium">{row.invoice_count}</div>
+                  <div className="text-slate-600">Sisa hutang</div>
+                  <div className="text-right font-medium text-amber-600">{formatIDR(row.remaining_amount)}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => navigate(`/dashboard/accounting/purchasing/orders?product_id=${row.product_id}`)}
+                  >
+                    PO <ChevronRight className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => navigate(`/dashboard/accounting/purchasing/invoices?product_id=${row.product_id}`)}
+                  >
+                    Faktur <ChevronRight className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => navigate(`/dashboard/accounting/purchasing/payments?product_id=${row.product_id}`)}
+                  >
+                    Pembayaran <ChevronRight className="w-3 h-3" />
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && byProduct.length === 0 && (
+        <Card className="p-8 text-center text-slate-500">
+          Belum ada data pembelian per product. Tambah PO dan Faktur per product dari menu di atas.
+        </Card>
+      )}
     </div>
   );
 };

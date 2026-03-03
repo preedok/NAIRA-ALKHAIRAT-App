@@ -20,6 +20,7 @@ const PurchaseInvoice = sequelize.define('PurchaseInvoice', {
   remaining_amount: { type: DataTypes.DECIMAL(18, 2), defaultValue: 0 },
   journal_entry_id: { type: DataTypes.UUID },
   notes: { type: DataTypes.TEXT },
+  proof_file_path: { type: DataTypes.STRING(500) },
   created_by: { type: DataTypes.UUID },
   approved_by: { type: DataTypes.UUID },
   posted_by: { type: DataTypes.UUID },

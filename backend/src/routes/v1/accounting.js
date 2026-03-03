@@ -65,16 +65,18 @@ router.patch('/suppliers/:id', purchaseController.updateSupplier);
 router.delete('/suppliers/:id', purchaseController.deleteSupplier);
 
 router.get('/purchase-orders', purchaseController.listPurchaseOrders);
+router.get('/purchase-orders/:id/proof', purchaseController.getPurchaseOrderProofFile);
 router.get('/purchase-orders/:id', purchaseController.getPurchaseOrder);
-router.post('/purchase-orders', purchaseController.createPurchaseOrder);
+router.post('/purchase-orders', purchaseController.uploadPurchaseOrderProof, purchaseController.createPurchaseOrder);
 router.patch('/purchase-orders/:id', purchaseController.updatePurchaseOrder);
 router.delete('/purchase-orders/:id', purchaseController.deletePurchaseOrder);
 router.post('/purchase-orders/:id/submit', purchaseController.submitPurchaseOrder);
 router.post('/purchase-orders/:id/approve', purchaseController.approvePurchaseOrder);
 
 router.get('/purchase-invoices', purchaseController.listPurchaseInvoices);
+router.get('/purchase-invoices/:id/proof', purchaseController.getPurchaseInvoiceProofFile);
 router.get('/purchase-invoices/:id', purchaseController.getPurchaseInvoice);
-router.post('/purchase-invoices', purchaseController.createPurchaseInvoice);
+router.post('/purchase-invoices', purchaseController.uploadPurchaseInvoiceProof, purchaseController.createPurchaseInvoice);
 router.patch('/purchase-invoices/:id', purchaseController.updatePurchaseInvoice);
 router.delete('/purchase-invoices/:id', purchaseController.deletePurchaseInvoice);
 router.post('/purchase-invoices/:id/post', purchaseController.postPurchaseInvoice);

@@ -16,6 +16,7 @@ const PurchaseOrder = sequelize.define('PurchaseOrder', {
   tax_amount: { type: DataTypes.DECIMAL(18, 2), defaultValue: 0 },
   total_amount: { type: DataTypes.DECIMAL(18, 2), defaultValue: 0 },
   notes: { type: DataTypes.TEXT },
+  proof_file_path: { type: DataTypes.STRING(500) },
   created_by: { type: DataTypes.UUID },
   approved_by: { type: DataTypes.UUID },
   sent_at: { type: DataTypes.DATE }

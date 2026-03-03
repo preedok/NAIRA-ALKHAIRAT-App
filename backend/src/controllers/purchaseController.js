@@ -1,7 +1,12 @@
 'use strict';
 
 const asyncHandler = require('express-async-handler');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const multer = require('multer');
 const { Op } = require('sequelize');
+const uploadConfig = require('../config/uploads');
 const {
   AccountingSupplier,
   PurchaseOrder,
@@ -19,6 +24,31 @@ const {
   JournalEntryLine,
   AccountingBankAccount
 } = require('../models');
+
+const proofDir = uploadConfig.getDir(uploadConfig.SUBDIRS.PURCHASE_PROOFS);
+const MIME_BY_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.pdf': 'application/pdf' };
+const storagePo = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, proofDir),
+  filename: (req, file, cb) => {
+    const { dateTimeForFilename, safeExt } = uploadConfig;
+    const { date, time } = dateTimeForFilename();
+    const ext = safeExt(file.originalname);
+    const id = crypto.randomBytes(4).toString('hex');
+    cb(null, `BUKTI_PO_${date}_${time}_${id}${ext}`);
+  }
+});
+const storageInvoice = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, proofDir),
+  filename: (req, file, cb) => {
+    const { dateTimeForFilename, safeExt } = uploadConfig;
+    const { date, time } = dateTimeForFilename();
+    const ext = safeExt(file.originalname);
+    const id = crypto.randomBytes(4).toString('hex');
+    cb(null, `BUKTI_PURCHASE_${date}_${time}_${id}${ext}`);
+  }
+});
+const uploadPurchaseOrderProof = multer({ storage: storagePo, limits: { fileSize: 10 * 1024 * 1024 } }).single('proof_file');
+const uploadPurchaseInvoiceProof = multer({ storage: storageInvoice, limits: { fileSize: 10 * 1024 * 1024 } }).single('proof_file');
 
 // ---------- Helpers ----------
 async function getPeriodByDate(dateStr) {
@@ -161,7 +191,16 @@ const getPurchaseOrder = asyncHandler(async (req, res) => {
 });
 
 const createPurchaseOrder = asyncHandler(async (req, res) => {
-  const { supplier_id, product_id, branch_id, order_date, expected_date, currency, notes, lines } = req.body;
+  if (!req.file) return res.status(400).json({ success: false, message: 'Bukti pembelian (file) wajib diunggah' });
+  const proofPath = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.PURCHASE_PROOFS, req.file.filename);
+
+  const { supplier_id, product_id, branch_id, order_date, expected_date, currency, notes, lines: linesRaw } = req.body;
+  let lines = [];
+  if (linesRaw) {
+    try {
+      lines = typeof linesRaw === 'string' ? JSON.parse(linesRaw) : linesRaw;
+    } catch (_) {}
+  }
   const supplier = await AccountingSupplier.findByPk(supplier_id);
   if (!supplier) return res.status(400).json({ success: false, message: 'Supplier tidak ditemukan' });
 
@@ -182,6 +221,7 @@ const createPurchaseOrder = asyncHandler(async (req, res) => {
     tax_amount: 0,
     total_amount: 0,
     notes: notes || null,
+    proof_file_path: proofPath,
     created_by: req.user?.id
   });
 
@@ -334,7 +374,16 @@ const getPurchaseInvoice = asyncHandler(async (req, res) => {
 });
 
 const createPurchaseInvoice = asyncHandler(async (req, res) => {
-  const { supplier_id, product_id, purchase_order_id, branch_id, invoice_date, due_date, currency, notes, lines } = req.body;
+  if (!req.file) return res.status(400).json({ success: false, message: 'Bukti faktur pembelian (file) wajib diunggah' });
+  const proofPath = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.PURCHASE_PROOFS, req.file.filename);
+
+  const { supplier_id, product_id, purchase_order_id, branch_id, invoice_date, due_date, currency, notes, lines: linesRaw } = req.body;
+  let lines = [];
+  if (linesRaw) {
+    try {
+      lines = typeof linesRaw === 'string' ? JSON.parse(linesRaw) : linesRaw;
+    } catch (_) {}
+  }
   const supplier = await AccountingSupplier.findByPk(supplier_id);
   if (!supplier) return res.status(400).json({ success: false, message: 'Supplier tidak ditemukan' });
 
@@ -358,6 +407,7 @@ const createPurchaseInvoice = asyncHandler(async (req, res) => {
     paid_amount: 0,
     remaining_amount: 0,
     notes: notes || null,
+    proof_file_path: proofPath,
     created_by: req.user?.id
   });
 
@@ -527,20 +577,22 @@ const postPurchaseInvoice = asyncHandler(async (req, res) => {
 
 // ---------- Purchase Payments ----------
 const listPurchasePayments = asyncHandler(async (req, res) => {
-  const { purchase_invoice_id, supplier_id, status, page = 1, limit = 20 } = req.query;
+  const { purchase_invoice_id, supplier_id, product_id, status, page = 1, limit = 20 } = req.query;
   const where = {};
   if (purchase_invoice_id) where.purchase_invoice_id = purchase_invoice_id;
   if (supplier_id) where.supplier_id = supplier_id;
   if (status) where.status = status;
+  const include = [
+    { model: PurchaseInvoice, as: 'PurchaseInvoice', attributes: ['id', 'invoice_number', 'product_id', 'total_amount', 'remaining_amount'], ...(product_id ? { where: { product_id } } : {}) },
+    { model: AccountingSupplier, as: 'Supplier', attributes: ['id', 'code', 'name'] }
+  ];
+  if (product_id) include[0].required = true;
   const { count, rows } = await PurchasePayment.findAndCountAll({
     where,
     limit: Math.min(parseInt(limit, 10) || 20, 100),
     offset: (Math.max(1, parseInt(page, 10)) - 1) * (parseInt(limit, 10) || 20),
     order: [['payment_date', 'DESC'], ['created_at', 'DESC']],
-    include: [
-      { model: PurchaseInvoice, as: 'PurchaseInvoice', attributes: ['id', 'invoice_number', 'total_amount', 'remaining_amount'] },
-      { model: AccountingSupplier, as: 'Supplier', attributes: ['id', 'code', 'name'] }
-    ]
+    include
   });
   res.json({ success: true, data: rows, total: count });
 });
@@ -736,7 +788,41 @@ const getPurchasingSummary = asyncHandler(async (req, res) => {
   });
 });
 
+function getProofFilePath(proofUrlOrPath) {
+  if (!proofUrlOrPath) return null;
+  const urlNorm = String(proofUrlOrPath).replace(/\\/g, '/').trim();
+  const match = urlNorm.match(/purchase-proofs\/?(.+)$/i);
+  const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : null;
+  return filename ? path.join(proofDir, filename) : null;
+}
+
+const getPurchaseOrderProofFile = asyncHandler(async (req, res) => {
+  const po = await PurchaseOrder.findByPk(req.params.id, { attributes: ['id', 'proof_file_path'] });
+  if (!po || !po.proof_file_path) return res.status(404).json({ success: false, message: 'Bukti tidak ditemukan' });
+  const filePath = getProofFilePath(po.proof_file_path);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+const getPurchaseInvoiceProofFile = asyncHandler(async (req, res) => {
+  const inv = await PurchaseInvoice.findByPk(req.params.id, { attributes: ['id', 'proof_file_path'] });
+  if (!inv || !inv.proof_file_path) return res.status(404).json({ success: false, message: 'Bukti tidak ditemukan' });
+  const filePath = getProofFilePath(inv.proof_file_path);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
 module.exports = {
+  uploadPurchaseOrderProof,
+  uploadPurchaseInvoiceProof,
   getPurchasingSummary,
   listSuppliers,
   getSupplier,
@@ -750,12 +836,14 @@ module.exports = {
   deletePurchaseOrder,
   submitPurchaseOrder,
   approvePurchaseOrder,
+  getPurchaseOrderProofFile,
   listPurchaseInvoices,
   getPurchaseInvoice,
   createPurchaseInvoice,
   updatePurchaseInvoice,
   deletePurchaseInvoice,
   postPurchaseInvoice,
+  getPurchaseInvoiceProofFile,
   listPurchasePayments,
   getPurchasePayment,
   createPurchasePayment,
