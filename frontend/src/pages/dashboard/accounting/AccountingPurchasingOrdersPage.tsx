@@ -14,13 +14,6 @@ import { formatIDR } from '../../../utils';
 
 const PO_STATUS_LABELS: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', approved: 'Approved' };
 const DEFAULT_LIMIT = 20;
-const PURCHASE_TYPE_TABS: Array<{ value: string; label: string }> = [
-  { value: 'hotel', label: 'Hotel' },
-  { value: 'visa', label: 'Visa' },
-  { value: 'ticket', label: 'Tiket' },
-  { value: 'bus', label: 'Bus Saudi' },
-  { value: 'handling', label: 'Handling' }
-];
 
 const AccountingPurchasingOrdersPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -35,9 +28,8 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<Array<{ id: string; code: string; name: string; type: string }>>([]);
   const [modalOpen, setModalOpen] = useState<'create' | null>(null);
-  const [form, setForm] = useState({ supplier_id: '', product_id: '', order_date: new Date().toISOString().slice(0, 10), expected_date: '', notes: '', lines: [{ description: '', quantity: 1, unit: 'pcs', unit_price: 0 }] });
+  const [form, setForm] = useState({ supplier_id: '', product_description: '', order_date: new Date().toISOString().slice(0, 10), expected_date: '' });
   const [proofFile, setProofFile] = useState<File | null>(null);
-  const [purchaseType, setPurchaseType] = useState<string>('');
   const [formError, setFormError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -76,15 +68,10 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
   const openCreate = () => {
     setForm({
       supplier_id: '',
-      product_id: productId || '',
+      product_description: '',
       order_date: new Date().toISOString().slice(0, 10),
-      expected_date: '',
-      notes: '',
-      lines: [{ description: '', quantity: 1, unit: 'pcs', unit_price: 0 }]
+      expected_date: ''
     });
-    const current = (productId || '').trim();
-    const preType = current ? (products.find((p) => p.id === current)?.type || '') : '';
-    setPurchaseType(preType);
     setProofFile(null);
     setFormError('');
     setModalOpen('create');
@@ -99,11 +86,11 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
       const formData = new FormData();
       formData.append('proof_file', proofFile);
       formData.append('supplier_id', form.supplier_id);
-      if (form.product_id) formData.append('product_id', form.product_id);
       formData.append('order_date', form.order_date);
       if (form.expected_date) formData.append('expected_date', form.expected_date);
-      if (form.notes) formData.append('notes', form.notes);
-      const lines = form.lines.filter((l) => l.description || l.unit_price > 0).map((l) => ({ description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price }));
+      const lines = form.product_description.trim()
+        ? [{ description: form.product_description.trim(), quantity: 1, unit: 'pcs', unit_price: 0 }]
+        : [];
       formData.append('lines', JSON.stringify(lines));
       await accountingApi.createPurchaseOrder(formData);
       setModalOpen(null);
@@ -252,29 +239,11 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
                   emptyLabel="Pilih supplier"
                   options={suppliers.map((s) => ({ value: s.id, label: `${s.code} – ${s.name}` }))}
                 />
-                <Autocomplete
-                  label="Tipe Pembelian"
-                  value={purchaseType}
-                  onChange={(v) => { setPurchaseType(v || ''); setForm((f) => ({ ...f, product_id: '' })); }}
-                  placeholder="Pilih tipe"
-                  emptyLabel="Semua"
-                  options={PURCHASE_TYPE_TABS}
-                />
-                <Autocomplete
-                  label="Product"
-                  value={form.product_id}
-                  onChange={(v) => setForm((f) => ({ ...f, product_id: v || '' }))}
-                  placeholder="Pilih product"
-                  emptyLabel="Pilih product"
-                  options={products
-                    .filter((p) => !purchaseType || p.type === purchaseType)
-                    .map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }))}
-                />
+                <Input label="Product" value={form.product_description} onChange={(e) => setForm((f) => ({ ...f, product_description: e.target.value }))} placeholder="Nama/deskripsi product" />
                 <div className="grid grid-cols-2 gap-4">
-                  <Input type="date" label="Tanggal order" value={form.order_date} onChange={(e) => setForm((f) => ({ ...f, order_date: e.target.value }))} />
-                  <Input type="date" label="Tanggal expected" value={form.expected_date} onChange={(e) => setForm((f) => ({ ...f, expected_date: e.target.value }))} />
+                  <Input type="date" label="Tanggal pembelian" value={form.order_date} onChange={(e) => setForm((f) => ({ ...f, order_date: e.target.value }))} />
+                  <Input type="date" label="Tanggal berakhir pembelian" value={form.expected_date} onChange={(e) => setForm((f) => ({ ...f, expected_date: e.target.value }))} />
                 </div>
-                <Input label="Catatan" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Opsional" />
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Bukti pembelian *</label>
                   <p className="text-xs text-slate-500 mb-2">Setiap PO wajib dilampiri bukti (PDF/gambar)</p>
@@ -285,25 +254,6 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
                     className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
                   />
                   {proofFile && <span className="text-xs text-slate-600 mt-1 block">{proofFile.name}</span>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Baris (min 1)</label>
-                  {form.lines.map((line, idx) => (
-                    <div key={idx} className="flex gap-2 items-end mb-2">
-                      <Input placeholder="Deskripsi" value={line.description} onChange={(e) => setForm((f) => ({
-                        ...f,
-                        lines: f.lines.map((l, i) => i === idx ? { ...l, description: e.target.value } : l)
-                      }))} className="flex-1" />
-                      <Input type="number" placeholder="Qty" value={String(line.quantity)} onChange={(e) => setForm((f) => ({
-                        ...f,
-                        lines: f.lines.map((l, i) => i === idx ? { ...l, quantity: parseFloat(e.target.value) || 0 } : l)
-                      }))} className="w-20" />
-                      <Input type="number" placeholder="Harga" value={line.unit_price ? String(line.unit_price) : ''} onChange={(e) => setForm((f) => ({
-                        ...f,
-                        lines: f.lines.map((l, i) => i === idx ? { ...l, unit_price: parseFloat(e.target.value) || 0 } : l)
-                      }))} className="w-28" />
-                    </div>
-                  ))}
                 </div>
               </div>
             </ModalBody>
