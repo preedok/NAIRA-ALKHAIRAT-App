@@ -309,18 +309,19 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const openCancelModal = (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
+    const paid = parseFloat(inv.paid_amount || 0);
+    const formatNum = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     setCancelTargetInv(inv);
     setCancelAction('to_balance');
     setCancelReason('');
     setCancelBankName('');
     setCancelAccountNumber('');
     setCancelAccountHolderName('');
-    setCancelRefundAmount('');
+    setCancelRefundAmount(paid > 0 ? formatNum(paid) : '');
     setCancelRemainderAction('to_balance');
     setCancelRemainderTargetInvoiceId('');
     setCancelTargetInvoiceId('');
     setShowCancelModal(true);
-    const paid = parseFloat(inv.paid_amount || 0);
     if (paid > 0 && inv.owner_id) {
       invoicesApi.list({ owner_id: inv.owner_id, limit: 200 })
         .then((r: any) => {
@@ -1321,10 +1322,17 @@ const OrdersInvoicesPage: React.FC = () => {
                         const statusLabel = getInvoiceStatusLabel(inv);
                         const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
                         const isCancelledRefund = st === 'cancelled_refund';
+                        const refunds = (inv.Refunds || []) as { status: string }[];
+                        const latestRefund = refunds[0];
+                        const REFUND_STATUS_LABELS: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
+                        const refundProcessLabel = latestRefund ? (REFUND_STATUS_LABELS[latestRefund.status] || latestRefund.status) : null;
                         return (
                           <>
                             <div className="flex flex-col items-end gap-1">
                               <Badge variant={getStatusBadge(inv.status)} className="w-fit text-xs">{statusLabel}</Badge>
+                              {refundProcessLabel != null && (
+                                <span className="text-xs text-slate-600">Proses refund: <strong>{refundProcessLabel}</strong></span>
+                              )}
                               {isDraftRow(inv) ? (
                                 <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>
                               ) : isCancelNoPayment ? (
@@ -2005,9 +2013,14 @@ const OrdersInvoicesPage: React.FC = () => {
                               if (dpStatus === 'tagihan_dp') label = 'Tagihan DP';
                               else if (dpStatus === 'pembayaran_dp') label = 'Pembayaran DP';
                               else if (isDpUpdated) label = 'Pembayaran DP + Update Invoice';
+                              const refundsDetail = (viewInvoice.Refunds || []) as { status: string }[];
+                              const latestRefundDetail = refundsDetail[0];
+                              const REFUND_STATUS_LABELS_DETAIL: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
+                              const refundProcessLabelDetail = latestRefundDetail ? (REFUND_STATUS_LABELS_DETAIL[latestRefundDetail.status] || latestRefundDetail.status) : null;
                               return (
                                 <div className="flex flex-col">
                                   <Badge variant={getStatusBadge(viewInvoice.status)} className="text-sm px-3 py-1 w-fit">{label}</Badge>
+                                  {refundProcessLabelDetail != null && <span className="text-sm text-slate-600 mt-1">Proses refund: <strong>{refundProcessLabelDetail}</strong></span>}
                                   {pct != null && <span className="text-sm text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</span>}
                                   {updatedAt && <span className="text-xs text-slate-500 mt-0.5">Update order: {formatDate(updatedAt)}</span>}
                                 </div>
@@ -2646,7 +2659,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                     {cancelAction === 'refund' && (
                       <div className="space-y-3 pt-3 border-t border-slate-200">
-                        <Input label="Jumlah yang ingin di-refund (kosong = full)" type="text" value={cancelRefundAmount} onChange={(e) => setCancelRefundAmount(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))} placeholder={formatIDR(paid)} disabled={!!deletingOrderId} />
+                        <Input label="Jumlah yang ingin di-refund (default = sesuai yang dibayarkan, kosong = full)" type="text" value={cancelRefundAmount} onChange={(e) => setCancelRefundAmount(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))} placeholder={formatIDR(paid)} disabled={!!deletingOrderId} />
                         {isPartialRefund && remainder > 0 && (
                           <>
                             <p className="text-xs text-slate-600">Sisa <strong>{formatIDR(remainder)}</strong> mau dialokasikan ke mana?</p>

@@ -42,7 +42,7 @@ const RefundsPage: React.FC = () => {
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
 
   const refundColumns: TableColumn[] = [
-    { id: 'invoice_order', label: 'Invoice / Order', align: 'left' },
+    { id: 'invoice_order', label: 'Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'amount', label: 'Jumlah', align: 'right' },
     { id: 'bank', label: 'Rekening', align: 'left' },
@@ -274,7 +274,6 @@ const RefundsPage: React.FC = () => {
               <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                 <td className="py-3 px-4">
                   <span className="font-medium">{r.Invoice?.invoice_number || '-'}</span>
-                  <span className="text-slate-500 ml-1">{r.Order?.order_number}</span>
                 </td>
                 <td className="py-3 px-4">
                   {r.Owner ? <span>{r.Owner.name || r.Owner.company_name}</span> : '-'}

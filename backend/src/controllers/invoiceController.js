@@ -429,6 +429,24 @@ const list = asyncHandler(async (req, res) => {
     }
   }
 
+  const invoiceIds = data.map((d) => d.id).filter(Boolean);
+  if (invoiceIds.length > 0) {
+    const refundsList = await Refund.findAll({
+      where: { invoice_id: { [Op.in]: invoiceIds } },
+      attributes: ['invoice_id', 'status'],
+      order: [['created_at', 'DESC']],
+      raw: true
+    });
+    const refundsByInvId = refundsList.reduce((acc, r) => {
+      if (!acc[r.invoice_id]) acc[r.invoice_id] = [];
+      acc[r.invoice_id].push(r);
+      return acc;
+    }, {});
+    for (const d of data) {
+      d.Refunds = refundsByInvId[d.id] || [];
+    }
+  }
+
   const refundCanceledIds = data.filter((d) => (d.status || '').toLowerCase() === 'refund_canceled').map((d) => d.id);
   if (refundCanceledIds.length > 0) {
     const refunds = await Refund.findAll({
