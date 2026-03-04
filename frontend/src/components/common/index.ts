@@ -14,6 +14,8 @@ export { default as Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalB
 export { default as PageFilter, FilterIconButton } from './PageFilter';
 export { default as PageHeader } from './PageHeader';
 export { default as PriceInput } from './PriceInput';
+export { default as PriceCurrencyField } from './PriceCurrencyField';
+export type { PriceCurrencyFieldValue } from './PriceCurrencyField';
 export { default as ProductCalendar } from './ProductCalendar';
 export type { ProductCalendarMonth, ProductCalendarDayInfo, ProductCalendarProps } from './ProductCalendar';
 export { default as StatCard } from './StatCard';

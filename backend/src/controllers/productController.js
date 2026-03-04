@@ -181,10 +181,16 @@ const list = asyncHandler(async (req, res) => {
       const price_general_idr = byCur('IDR') ? parseFloat(byCur('IDR').amount) : null;
       const price_general_sar = byCur('SAR') ? parseFloat(byCur('SAR').amount) : null;
       const price_general_usd = byCur('USD') ? parseFloat(byCur('USD').amount) : null;
-      const refCurrencyFromPrice = (byCur('IDR')?.meta?.reference_currency || byCur('SAR')?.meta?.reference_currency || byCur('USD')?.meta?.reference_currency) || null;
+      let refCurrencyFromPrice = (byCur('IDR')?.meta?.reference_currency || byCur('SAR')?.meta?.reference_currency || byCur('USD')?.meta?.reference_currency) || null;
+      if (!refCurrencyFromPrice && generalPrices.length > 0) {
+        const withRef = generalPrices.find(pr => pr.meta && (pr.meta.reference_currency === 'IDR' || pr.meta.reference_currency === 'SAR' || pr.meta.reference_currency === 'USD'));
+        if (withRef) refCurrencyFromPrice = withRef.meta.reference_currency;
+      }
+      const refCur = refCurrencyFromPrice || (p.meta && typeof p.meta === 'object' && p.meta.currency) || general?.currency || 'IDR';
+      const generalInRefCur = generalPrices.find(pr => pr.currency === refCur) || general;
       const base = {
         ...p.toJSON(),
-        price_general: general ? parseFloat(general.amount) : null,
+        price_general: generalInRefCur ? parseFloat(generalInRefCur.amount) : (general ? parseFloat(general.amount) : null),
         price_branch: branch ? parseFloat(branch.amount) : null,
         price_special: special ? parseFloat(special.amount) : null,
         currency: (p.meta && typeof p.meta === 'object' && p.meta.currency) ? p.meta.currency : (refCurrencyFromPrice || general?.currency || branch?.currency || 'IDR'),
@@ -199,25 +205,26 @@ const list = asyncHandler(async (req, res) => {
         const roomTypesMeta = avMeta.room_types || {};
         const generalPricesHotel = prices.filter(pr => !pr.branch_id && !pr.owner_id);
         const rooms = {};
-        let mealPriceIdr = base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null;
+        const byRoomRefCur = (rt, withMeal) => generalPricesHotel.find(pr => pr.meta?.room_type === rt && (!!pr.meta?.with_meal) === withMeal && pr.currency === refCur);
+        let mealPriceInRef = base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null;
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
-          const priceRow = generalPricesHotel.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
-          const priceWithMeal = generalPricesHotel.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
-          if (mealPriceIdr == null && priceRow && priceWithMeal) {
-            mealPriceIdr = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
+          const priceRow = byRoomRefCur(rt, false);
+          const priceWithMeal = byRoomRefCur(rt, true);
+          if (mealPriceInRef == null && priceRow && priceWithMeal) {
+            mealPriceInRef = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
           }
         });
-        const mealToSubtract = mealPriceIdr ?? (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : 0);
+        const mealToSubtract = mealPriceInRef ?? (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : 0);
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
-          const priceRow = generalPricesHotel.find(pr => pr.meta?.room_type === rt && !pr.meta?.with_meal);
-          const priceWithMeal = generalPricesHotel.find(pr => pr.meta?.room_type === rt && pr.meta?.with_meal);
+          const priceRow = byRoomRefCur(rt, false);
+          const priceWithMeal = byRoomRefCur(rt, true);
           const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
           rooms[rt] = { quantity: qty, price: basePrice };
         });
         base.room_breakdown = rooms;
         base.prices_by_room = rooms;
-        base.meal_price_idr = mealPriceIdr;
+        base.meal_price_idr = mealPriceInRef;
       }
       if (productType === 'visa') {
         const av = p.ProductAvailability;
@@ -232,7 +239,7 @@ const list = asyncHandler(async (req, res) => {
         base.bandara_options = BANDARA_TIKET.map(({ code, name }) => {
           const s = bandaraSchedules[code] || {};
           const defaultSlot = s.default || {};
-          const priceRow = generalTicket.find(pr => pr.meta && pr.meta.bandara === code);
+          const priceRow = generalTicket.find(pr => pr.meta && pr.meta.bandara === code && pr.currency === refCur);
           if (priceRow && !defaultSlot.price_idr) defaultSlot.price_idr = parseFloat(priceRow.amount);
           if (bandaraSeats[code] != null && defaultSlot.seat_quota == null) defaultSlot.seat_quota = Number(bandaraSeats[code]) || 0;
           return {

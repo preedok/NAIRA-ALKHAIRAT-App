@@ -6,15 +6,15 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, PriceCurrencyField, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { businessRulesApi, productsApi, adminPusatApi, type VisaSeason } from '../../../services/api';
-import { fillFromSource, fromIDR, getEditPriceDisplay } from '../../../utils/currencyConversion';
+import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
-import { getPriceTripleForTable, PRICE_COLUMN_LABEL, parsePriceInput } from '../../../utils';
+import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
 import VisaWorkPage from './VisaWorkPage';
 
 const PAGE_SIZE = 25;
@@ -85,7 +85,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
     visa_kind: 'only' as VisaKind,
     quota: 0,
     require_hotel: false,
-    price_idr: 0,
+    price_value: 0,
     price_currency: 'IDR' as 'IDR' | 'SAR' | 'USD'
   });
   const [addVisaSaving, setAddVisaSaving] = useState(false);
@@ -96,7 +96,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
     visa_kind: 'only' as VisaKind,
     quota: 0,
     require_hotel: false,
-    price_idr: 0,
+    price_value: 0,
     price_currency: 'IDR' as 'IDR' | 'SAR' | 'USD'
   });
   const [editVisaSaving, setEditVisaSaving] = useState(false);
@@ -191,8 +191,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
   };
 
   const handleOpenEdit = (p: VisaProduct) => {
-    const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
-    const { currency } = getEditPriceDisplay(p, currencyRates);
+    const { currency, value } = getEditPriceDisplay(p, currencyRates);
     setEditingVisa(p);
     setEditVisaForm({
       name: p.name || '',
@@ -200,7 +199,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
       visa_kind: (p.meta?.visa_kind || 'only') as VisaKind,
       quota: p.quota ?? (p as { meta?: { default_quota?: number } }).meta?.default_quota ?? 0,
       require_hotel: p.meta?.require_hotel === true,
-      price_idr: Math.round(Number(priceIdr)) || 0,
+      price_value: value > 0 ? value : 0,
       price_currency: currency
     });
   };
@@ -220,8 +219,14 @@ const VisaPage: React.FC<VisaPageProps> = ({
       await adminPusatApi.setProductAvailability(editingVisa.id, {
         quantity: Math.max(0, Math.floor(Number(editVisaForm.quota) || 0))
       });
-      if (editVisaForm.price_idr > 0) {
-        const triple = fillFromSource('IDR', editVisaForm.price_idr || 0, currencyRates);
+      const pricesRes = await productsApi.listPrices({ product_id: editingVisa.id });
+      const prices = (pricesRes.data as { data?: Array<{ id: string; branch_id: string | null; owner_id: string | null }> })?.data ?? [];
+      const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
+      for (const gp of generalPrices) {
+        await productsApi.deletePrice(gp.id);
+      }
+      if (editVisaForm.price_value > 0) {
+        const triple = fillFromSource(editVisaForm.price_currency, editVisaForm.price_value, currencyRates);
         await productsApi.createPrice({
           product_id: editingVisa.id,
           branch_id: null,
@@ -229,7 +234,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
           amount_idr: Math.round(triple.idr || 0),
           amount_sar: triple.sar,
           amount_usd: triple.usd,
-          reference_currency: 'IDR'
+          reference_currency: editVisaForm.price_currency
         });
       }
       showToast('Produk visa berhasil diperbarui', 'success');
@@ -261,8 +266,8 @@ const VisaPage: React.FC<VisaPageProps> = ({
       const product = (createRes.data as { data?: { id: string } })?.data;
       const productId = product?.id;
 
-      if (productId && addVisaForm.price_idr > 0) {
-        const triple = fillFromSource('IDR', addVisaForm.price_idr || 0, currencyRates);
+      if (productId && addVisaForm.price_value > 0) {
+        const triple = fillFromSource(addVisaForm.price_currency, addVisaForm.price_value, currencyRates);
         await productsApi.createPrice({
           product_id: productId,
           branch_id: null,
@@ -270,7 +275,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
           amount_idr: Math.round(triple.idr || 0),
           amount_sar: triple.sar,
           amount_usd: triple.usd,
-          reference_currency: 'IDR'
+          reference_currency: addVisaForm.price_currency
         });
       }
 
@@ -280,12 +285,12 @@ const VisaPage: React.FC<VisaPageProps> = ({
         });
       }
 
-      const hasPrice = productId && addVisaForm.price_idr > 0;
+      const hasPrice = productId && addVisaForm.price_value > 0;
       const hasQuota = productId && (addVisaForm.quota > 0 || addVisaForm.quota === 0);
       const msg = hasPrice && hasQuota ? 'Produk visa, harga default, dan kuota berhasil ditambahkan' : hasPrice ? 'Produk visa dan harga default berhasil ditambahkan' : hasQuota ? 'Produk visa dan kuota berhasil ditambahkan' : 'Produk visa berhasil ditambahkan';
       showToast(msg, 'success');
       setShowAddVisaModal(false);
-      setAddVisaForm({ name: '', description: '', visa_kind: 'only', quota: 0, require_hotel: false, price_idr: 0, price_currency: 'IDR' });
+      setAddVisaForm({ name: '', description: '', visa_kind: 'only', quota: 0, require_hotel: false, price_value: 0, price_currency: 'IDR' });
     fetchVisaProducts();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -416,7 +421,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
               data={visaProducts}
               renderRow={(p) => {
                 const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
-                const triple = fromIDR(Number(priceIdr), currencyRates);
+                const triple = fillFromSource('IDR', Number(priceIdr), currencyRates);
                 const visaKind = (p.meta?.visa_kind || 'only') as VisaKind;
                 const kindLabel = VISA_KIND_LABELS[visaKind] || visaKind;
                 const requireHotel = p.meta?.require_hotel === true;
@@ -602,43 +607,15 @@ const VisaPage: React.FC<VisaPageProps> = ({
                       <Coins className="w-4 h-4 text-[#0D1A63]" />
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Harga default</span>
                     </div>
-                    <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
-                      <p className="text-xs text-slate-500">Opsional. Pilih mata uang input, isi harga; lainnya konversi otomatis.</p>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                          <Button
-                            key={cur}
-                            type="button"
-                            variant={addVisaForm.price_currency === cur ? 'primary' : 'outline'}
-                            size="sm"
-                            onClick={() => setAddVisaForm((f) => ({ ...f, price_currency: cur }))}
-                          >
-                            {cur}
-                          </Button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource('IDR', addVisaForm.price_idr || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const priceLabel = curKey === 'IDR' ? 'Rp' : curKey === 'SAR' ? 'SAR' : '$';
-                          return (
-                            <PriceInput
-                              key={curKey}
-                              label={`${priceLabel}${addVisaForm.price_currency !== curKey ? ' (konversi)' : ''}`}
-                              value={val ?? 0}
-                              currency={curKey}
-                              onChange={(n) => {
-                                const next = fillFromSource(curKey, n, currencyRates);
-                                setAddVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
-                              }}
-                              disabled={addVisaForm.price_currency !== curKey}
-                              placeholder="0"
-                              fullWidth
-                            />
-                          );
-                        })}
-                      </div>
+                    <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4">
+                      <PriceCurrencyField
+                        label="Harga (opsional)"
+                        value={addVisaForm.price_value}
+                        currency={addVisaForm.price_currency}
+                        onChange={(value, currency) => setAddVisaForm((f) => ({ ...f, price_value: value, price_currency: currency }))}
+                        rates={currencyRates}
+                        showConversions
+                      />
                     </div>
                   </section>
                 </div>
@@ -760,42 +737,14 @@ const VisaPage: React.FC<VisaPageProps> = ({
                       <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Harga</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4">
-                      <p className="text-xs text-slate-500 mb-3">Edit satu mata uang; lainnya mengikuti kurs.</p>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                          <Button
-                            key={cur}
-                            type="button"
-                            variant={editVisaForm.price_currency === cur ? 'primary' : 'outline'}
-                            size="sm"
-                            onClick={() => setEditVisaForm((f) => ({ ...f, price_currency: cur }))}
-                          >
-                            {cur}
-                          </Button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                          const triple = fillFromSource('IDR', editVisaForm.price_idr || 0, currencyRates);
-                          const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                          const label = curKey === 'IDR' ? 'Rp' : curKey === 'SAR' ? 'SAR' : '$';
-                          return (
-                            <PriceInput
-                              key={curKey}
-                              label={`${label}${editVisaForm.price_currency !== curKey ? ' (konversi)' : ''}`}
-                              value={val ?? 0}
-                              currency={curKey}
-                              onChange={(n) => {
-                                const next = fillFromSource(curKey, n, currencyRates);
-                                setEditVisaForm((f) => ({ ...f, price_idr: Math.round(next.idr) }));
-                              }}
-                              disabled={editVisaForm.price_currency !== curKey}
-                              placeholder="0"
-                              fullWidth
-                            />
-                          );
-                        })}
-                      </div>
+                      <PriceCurrencyField
+                        label="Harga default"
+                        value={editVisaForm.price_value}
+                        currency={editVisaForm.price_currency}
+                        onChange={(value, currency) => setEditVisaForm((f) => ({ ...f, price_value: value, price_currency: currency }))}
+                        rates={currencyRates}
+                        showConversions
+                      />
                     </div>
                   </section>
                 </div>

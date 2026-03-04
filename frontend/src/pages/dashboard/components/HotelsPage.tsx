@@ -20,7 +20,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { StatCard, Autocomplete, Input, PriceInput, PriceCurrencyField, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -31,16 +31,11 @@ import { productsApi, adminPusatApi, businessRulesApi } from '../../../services/
 import type { HotelSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable } from '../../../utils';
+import { CURRENCY_OPTIONS } from '../../../utils/constants';
 
 const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
 const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
-
-const CURRENCIES = [
-  { id: 'IDR', label: 'Rupiah (IDR)', symbol: 'Rp', locale: 'id-ID' },
-  { id: 'SAR', label: 'Riyal Saudi (SAR)', symbol: 'SAR', locale: 'en-US' },
-  { id: 'USD', label: 'US Dollar (USD)', symbol: '$', locale: 'en-US' }
-] as const;
 
 /** Room breakdown: quantity & price per type */
 export type RoomBreakdown = Record<string, { quantity: number; price: number }>;
@@ -206,8 +201,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         setQuantityForm(initial);
         const prices = (data?.ProductPrices as ProductPriceItem[]) || [];
         const generalPrices = prices.filter((p) => !p.branch_id && !p.owner_id);
+        const refCur = (meta.currency as 'IDR' | 'SAR' | 'USD') || generalPrices.find((p) => (p.meta?.reference_currency === 'IDR' || p.meta?.reference_currency === 'SAR' || p.meta?.reference_currency === 'USD'))?.meta?.reference_currency as 'IDR' | 'SAR' | 'USD' | undefined || (generalPrices[0]?.currency as 'IDR' | 'SAR' | 'USD' | undefined) || 'IDR';
+        const pricesInRefCur = generalPrices.filter((p) => p.currency === refCur);
         const byRoomMeal: Record<string, number> = {};
-        generalPrices.forEach((p) => {
+        pricesInRefCur.forEach((p) => {
           const rt = (p.meta?.room_type as string) || 'single';
           const withMeal = p.meta?.with_meal === true;
           byRoomMeal[`${rt}_${withMeal}`] = Number(p.amount) || 0;
@@ -219,11 +216,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           const basePrice = byRoomMeal[`${rt}_false`] ?? (byRoomMeal[`${rt}_true`] != null ? byRoomMeal[`${rt}_true`] - mealPrice : 0);
           rooms[rt] = { quantity: qty, price: basePrice || 0 };
         });
-        const firstPrice = generalPrices[0];
+        const firstPrice = pricesInRefCur[0] || generalPrices[0];
         const pricingMode = (meta.pricing_mode as 'single' | 'per_type') || 'single';
         const singlePrice = pricingMode === 'single' && firstPrice ? Number(firstPrice.amount) || 0 : 0;
         setQuantityModalPriceForm({
-          currency: (meta.currency as 'IDR' | 'SAR' | 'USD') || (firstPrice?.currency as 'IDR' | 'SAR' | 'USD') || 'IDR',
+          currency: refCur,
           meal_price: mealPrice,
           meal_price_type: (meta.meal_price_type as 'per_day' | 'per_trip') || 'per_day',
           room_price_type: (meta.room_price_type as 'per_day' | 'per_lasten') || 'per_day',
@@ -490,7 +487,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     ProductPrices?: ProductPriceItem[];
     ProductAvailability?: { meta?: Record<string, number> };
   };
-  type ProductPriceItem = { id: string; amount: number; currency?: string; branch_id?: string; owner_id?: string; meta?: { room_type?: string; with_meal?: boolean } };
+  type ProductPriceItem = { id: string; amount: number; currency?: string; branch_id?: string; owner_id?: string; meta?: { room_type?: string; with_meal?: boolean; reference_currency?: string } };
 
   /** Simpan jumlah kamar + harga dari modal terpadu (mode Semua jumlah kamar); pakai seasonsModalHotel */
   const handleSaveQuantityFromUnifiedModal = async () => {
@@ -943,7 +940,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         };
         const roomTypeLabels: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
         const popupCurrency = (hotel?.currency || hotel?.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
-        const popupCurrInfo = CURRENCIES.find((c) => c.id === popupCurrency) || CURRENCIES[0];
+        const popupCurrInfo = CURRENCY_OPTIONS.find((c) => c.id === popupCurrency) || CURRENCY_OPTIONS[0];
         const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');
         const roomPriceTypeLabel = hotel?.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : 'Per hari';
         const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
@@ -1425,7 +1422,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     </label>
                   </div>
                   {hotelAvailabilityMode === 'global' && (() => {
-                    const qCurr = CURRENCIES.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCIES[0];
+                    const qCurr = CURRENCY_OPTIONS.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCY_OPTIONS[0];
                     const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
                     const pf = quantityModalPriceForm;
                     const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
@@ -1463,53 +1460,41 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                             <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan</h3>
-                            <div>
-                              <Autocomplete
-                                label="Mata uang input"
-                                value={pf.currency}
-                                onChange={(v) => {
-                                  const newCur = v as 'IDR' | 'SAR' | 'USD';
-                                  const tripleMeal = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
-                                  const tripleSingle = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
-                                  setQuantityModalPriceForm((f) => ({
+                            <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-2">
+                              <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
+                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
+                              <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
+                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
+                            </div>
+                            <PriceCurrencyField
+                              label="Harga Makan per Kamar"
+                              value={pf.meal_price || 0}
+                              currency={pf.currency}
+                              onChange={(value, newCur) => {
+                                setQuantityModalPriceForm((f) => {
+                                  if (newCur === f.currency) return { ...f, meal_price: value };
+                                  const conv = (x: number) => {
+                                    const t = fillFromSource(f.currency, x, currencyRates);
+                                    return newCur === 'IDR' ? t.idr : newCur === 'SAR' ? t.sar : t.usd;
+                                  };
+                                  return {
                                     ...f,
                                     currency: newCur,
-                                    meal_price: newCur === 'IDR' ? tripleMeal.idr : newCur === 'SAR' ? tripleMeal.sar : tripleMeal.usd,
-                                    single_price: newCur === 'IDR' ? tripleSingle.idr : newCur === 'SAR' ? tripleSingle.sar : tripleSingle.usd
-                                  }));
-                                }}
-                                options={CURRENCIES.map((c) => ({ value: c.id, label: c.label }))}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-2">Harga Makan per Kamar</label>
-                              <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
-                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
-                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
-                              </div>
-                              <div className="flex gap-3">
-                                {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                                  const triple = fillFromSource(pf.currency, pf.meal_price || 0, currencyRates);
-                                  const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                                  const isEditable = pf.currency === curKey;
-                                  return (
-                                    <div key={curKey} className="flex-1 min-w-0">
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        step={curKey === 'IDR' ? 1 : 0.01}
-                                        value={val != null ? String(val) : ''}
-                                        readOnly={!isEditable}
-                                        onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, meal_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                        className={!isEditable ? 'bg-slate-100 cursor-not-allowed' : ''}
-                                      />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                                    meal_price: value,
+                                    single_price: conv(f.single_price || 0),
+                                    rooms: {
+                                      single: { ...f.rooms.single, price: conv(f.rooms.single?.price ?? 0) },
+                                      double: { ...f.rooms.double, price: conv(f.rooms.double?.price ?? 0) },
+                                      triple: { ...f.rooms.triple, price: conv(f.rooms.triple?.price ?? 0) },
+                                      quad: { ...f.rooms.quad, price: conv(f.rooms.quad?.price ?? 0) },
+                                      quint: { ...f.rooms.quint, price: conv(f.rooms.quint?.price ?? 0) }
+                                    }
+                                  };
+                                });
+                              }}
+                              rates={currencyRates}
+                              showConversions
+                            />
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                             <h3 className="text-sm font-semibold text-slate-800">Harga Kamar</h3>
@@ -1531,27 +1516,13 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             </div>
                             {pf.pricing_mode === 'single' && (
                               <div>
-                                <label className="block text-xs font-medium text-slate-500 mb-2">Satu harga untuk semua tipe</label>
-                                <div className="flex gap-3">
-                                  {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                                    const triple = fillFromSource(pf.currency, pf.single_price || 0, currencyRates);
-                                    const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                                    const isEditable = pf.currency === curKey;
-                                    return (
-                                      <div key={curKey} className="flex-1 min-w-0">
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          step={curKey === 'IDR' ? 1 : 0.01}
-                                          value={val != null ? String(val) : ''}
-                                          readOnly={!isEditable}
-                                          onChange={isEditable ? (e) => setQuantityModalPriceForm((f) => ({ ...f, single_price: parseFloat(e.target.value) || 0 })) : undefined}
-                                          className={!isEditable ? 'bg-slate-100 cursor-not-allowed' : ''}
-                                        />
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                <PriceInput
+                                  label="Satu harga untuk semua tipe"
+                                  value={pf.single_price || 0}
+                                  currency={pf.currency}
+                                  onChange={(n) => setQuantityModalPriceForm((f) => ({ ...f, single_price: n }))}
+                                  placeholder="0"
+                                />
                               </div>
                             )}
                           </div>

@@ -48,6 +48,15 @@ export const CURRENCIES = {
   USD: 'USD'
 } as const;
 
+/** Satu sumber untuk opsi mata uang (dropdown + format). Dipakai di seluruh app (product, order, invoice). */
+export const CURRENCY_OPTIONS = [
+  { id: 'IDR' as const, label: 'Rupiah (IDR)', symbol: 'Rp', locale: 'id-ID' },
+  { id: 'SAR' as const, label: 'Riyal Saudi (SAR)', symbol: 'SAR', locale: 'en-US' },
+  { id: 'USD' as const, label: 'US Dollar (USD)', symbol: '$', locale: 'en-US' }
+] as const;
+
+export type CurrencyId = typeof CURRENCY_OPTIONS[number]['id'];
+
 export const EXCHANGE_RATES = {
   SAR_TO_IDR: 4200, // 1 SAR = 4,200 IDR (example rate)
   USD_TO_IDR: 15800, // 1 USD = 15,800 IDR (example rate)

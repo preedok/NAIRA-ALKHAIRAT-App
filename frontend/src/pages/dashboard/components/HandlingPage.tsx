@@ -8,14 +8,14 @@ import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
+import { Input, Autocomplete, PriceCurrencyField, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
-import { getPriceTripleForTable, PRICE_COLUMN_LABEL, parsePriceInput } from '../../../utils';
+import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
 
 interface HandlingProduct {
   id: string;
@@ -277,7 +277,7 @@ const HandlingPage: React.FC = () => {
           <Autocomplete
             label="Tampilkan"
             value={filterIncludeInactive}
-            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
+            onChange={(v: string) => setFilterIncludeInactive(v as 'false' | 'true')}
             options={[
               { value: 'false', label: 'Aktif saja' },
               { value: 'true', label: 'Semua (termasuk nonaktif)' }
@@ -391,47 +391,14 @@ const HandlingPage: React.FC = () => {
                 <Input label="Kode" type="text" value={nextCode()} readOnly fullWidth />
                 <Input label="Nama *" type="text" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} placeholder="Contoh: Jasa Handling Bandara" required fullWidth />
                 <Textarea label="Deskripsi" value={addForm.description} onChange={(e) => setAddForm((f) => ({ ...f, description: e.target.value }))} rows={2} fullWidth />
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Harga default — pilih mata uang input</label>
-                  <p className="text-xs text-slate-500 mb-2">Mata uang lain mengikuti kurs aplikasi (read-only).</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <Button
-                        key={cur}
-                        type="button"
-                        variant={addForm.price_currency === cur ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => {
-                          if (addForm.price_value === 0) { setAddForm((f) => ({ ...f, price_currency: cur })); return; }
-                          const triple = fillFromSource(addForm.price_currency, addForm.price_value, currencyRates);
-                          const newVal = cur === 'IDR' ? triple.idr : cur === 'SAR' ? triple.sar : triple.usd;
-                          setAddForm((f) => ({ ...f, price_currency: cur, price_value: cur === 'IDR' ? Math.round(newVal) : newVal }));
-                        }}
-                      >
-                        {cur}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {(() => {
-                      const triple = fillFromSource(addForm.price_currency, addForm.price_value, currencyRates);
-                      return (['IDR', 'SAR', 'USD'] as const).map((cur) => {
-                        const val = cur === 'IDR' ? triple.idr : cur === 'SAR' ? triple.sar : triple.usd;
-                        return (
-                          <PriceInput
-                            key={cur}
-                            label={cur === 'IDR' ? 'Rp (IDR)' : cur}
-                            value={val}
-                            currency={cur}
-                            onChange={(n) => setAddForm((f) => ({ ...f, price_currency: cur, price_value: n }))}
-                            placeholder="0"
-                            fullWidth
-                          />
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
+                <PriceCurrencyField
+                  label="Harga default"
+                  value={addForm.price_value}
+                  currency={addForm.price_currency}
+                  onChange={(value, currency) => setAddForm((f) => ({ ...f, price_value: value, price_currency: currency }))}
+                  rates={currencyRates}
+                  showConversions
+                />
               </form>
             </ModalBody>
             <ModalFooter>
@@ -453,47 +420,14 @@ const HandlingPage: React.FC = () => {
                 <Input label="Kode" type="text" value={editing.code} readOnly fullWidth />
                 <Input label="Nama *" type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} required fullWidth />
                 <Textarea label="Deskripsi" value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} rows={2} fullWidth />
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Harga default — pilih mata uang input</label>
-                  <p className="text-xs text-slate-500 mb-2">Mata uang lain mengikuti kurs aplikasi (read-only).</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                      <Button
-                        key={cur}
-                        type="button"
-                        variant={editForm.price_currency === cur ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => {
-                          if (editForm.price_value === 0) { setEditForm((f) => ({ ...f, price_currency: cur })); return; }
-                          const triple = fillFromSource(editForm.price_currency, editForm.price_value, currencyRates);
-                          const newVal = cur === 'IDR' ? triple.idr : cur === 'SAR' ? triple.sar : triple.usd;
-                          setEditForm((f) => ({ ...f, price_currency: cur, price_value: cur === 'IDR' ? Math.round(newVal) : newVal }));
-                        }}
-                      >
-                        {cur}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {(() => {
-                      const triple = fillFromSource(editForm.price_currency, editForm.price_value, currencyRates);
-                      return (['IDR', 'SAR', 'USD'] as const).map((cur) => {
-                        const val = cur === 'IDR' ? triple.idr : cur === 'SAR' ? triple.sar : triple.usd;
-                        return (
-                          <PriceInput
-                            key={cur}
-                            label={cur === 'IDR' ? 'Rp (IDR)' : cur}
-                            value={val}
-                            currency={cur}
-                            onChange={(n) => setEditForm((f) => ({ ...f, price_currency: cur, price_value: n }))}
-                            placeholder="0"
-                            fullWidth
-                          />
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
+                <PriceCurrencyField
+                  label="Harga default"
+                  value={editForm.price_value}
+                  currency={editForm.price_currency}
+                  onChange={(value, currency) => setEditForm((f) => ({ ...f, price_value: value, price_currency: currency }))}
+                  rates={currencyRates}
+                  showConversions
+                />
               </form>
             </ModalBody>
             <ModalFooter>

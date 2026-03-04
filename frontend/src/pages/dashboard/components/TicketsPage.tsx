@@ -6,7 +6,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
-import { StatCard, CardSectionHeader, Input, PriceInput, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, PriceCurrencyField, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
@@ -96,9 +96,9 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
     bandaraName: string;
     period_type: PeriodType;
     period_key?: string;
-    price_idr: number;
-    seat_quota: number;
+    price_value: number;
     price_currency: 'IDR' | 'SAR' | 'USD';
+    seat_quota: number;
   } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
@@ -221,9 +221,9 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       bandaraName,
       period_type,
       period_key,
-      price_idr: slot?.price_idr ?? 0,
-      seat_quota: slot?.seat_quota ?? 0,
-      price_currency: 'IDR'
+      price_value: slot?.price_idr ?? 0,
+      price_currency: 'IDR',
+      seat_quota: slot?.seat_quota ?? 0
     });
   };
 
@@ -231,11 +231,12 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
     if (!editModal) return;
     setEditSaving(true);
     try {
+      const priceIdr = Math.round(fillFromSource(editModal.price_currency, editModal.price_value, currencyRates).idr) || 0;
       await productsApi.setTicketBandara(editModal.product.id, {
         bandara: editModal.bandaraCode,
         period_type: editModal.period_type === 'default' ? undefined : editModal.period_type,
         period_key: editModal.period_key,
-        price_idr: Math.round(editModal.price_idr) || 0,
+        price_idr: priceIdr,
         seat_quota: Math.max(0, Math.floor(editModal.seat_quota) || 0)
       });
       showToast('Harga dan kuota disimpan', 'success');
@@ -500,42 +501,14 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
             )}
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Harga — pilih mata uang input</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {(['IDR', 'SAR', 'USD'] as const).map((curKey) => (
-                    <Button
-                      key={curKey}
-                      type="button"
-                      variant={editModal.price_currency === curKey ? 'primary' : 'outline'}
-                      size="sm"
-                      onClick={() => setEditModal((m) => m ? { ...m, price_currency: curKey } : null)}
-                    >
-                      {curKey}
-                    </Button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {(['IDR', 'SAR', 'USD'] as const).map((curKey) => {
-                    const triple = fillFromSource('IDR', editModal.price_idr || 0, currencyRates);
-                    const val = curKey === 'IDR' ? triple.idr : curKey === 'SAR' ? triple.sar : triple.usd;
-                    return (
-                      <PriceInput
-                        key={curKey}
-                        label={`${curKey}${editModal.price_currency !== curKey ? ' (konversi)' : ''}`}
-                        value={val ?? 0}
-                        currency={curKey}
-                        onChange={(n) => {
-                          const next = fillFromSource(curKey, n, currencyRates);
-                          setEditModal((m) => m ? { ...m, price_idr: Math.round(next.idr) } : null);
-                        }}
-                        disabled={editModal.price_currency !== curKey}
-                        fullWidth
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+              <PriceCurrencyField
+                label="Harga"
+                value={editModal.price_value}
+                currency={editModal.price_currency}
+                onChange={(value, currency) => setEditModal((m) => m ? { ...m, price_value: value, price_currency: currency } : null)}
+                rates={currencyRates}
+                showConversions
+              />
               <Input
                 label="Kuota seat"
                 type="number"

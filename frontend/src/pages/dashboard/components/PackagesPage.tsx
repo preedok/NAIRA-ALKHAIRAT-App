@@ -16,6 +16,7 @@ import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getRatesFromRates, fromIDR } from '../../../utils/currencyConversion';
 import { PRICE_COLUMN_LABEL, getPriceTripleForTable } from '../../../utils';
+import { CURRENCY_OPTIONS } from '../../../utils/constants';
 
 const INCLUDE_OPTIONS = [
   { id: 'hotel', label: 'Hotel' },
@@ -49,12 +50,6 @@ const TICKET_TRIP_OPTIONS = [
   { value: 'one_way', label: 'Pergi saja' },
   { value: 'return_only', label: 'Pulang saja' },
   { value: 'round_trip', label: 'Pulang pergi' }
-] as const;
-
-const CURRENCIES = [
-  { id: 'IDR', label: 'Rupiah (IDR)', symbol: 'Rp', locale: 'id-ID' },
-  { id: 'SAR', label: 'Riyal Saudi (SAR)', symbol: 'SAR', locale: 'en-US' },
-  { id: 'USD', label: 'US Dollar (USD)', symbol: '$', locale: 'en-US' }
 ] as const;
 
 /** Produk paket dari API (products is_package=true) */
@@ -289,7 +284,7 @@ const PackagesPage: React.FC = () => {
 
   const formatPrice = (amount: number | null | undefined, currencyId?: string) => {
     if (amount == null || amount <= 0) return '-';
-    const cur = CURRENCIES.find((c) => c.id === (currencyId || 'IDR')) || CURRENCIES[0];
+    const cur = CURRENCY_OPTIONS.find((c) => c.id === (currencyId || 'IDR')) || CURRENCY_OPTIONS[0];
     return `${cur.symbol} ${Number(amount).toLocaleString(cur.locale)}`;
   };
 
@@ -940,7 +935,7 @@ const PackagesPage: React.FC = () => {
                         <span className="font-semibold text-amber-800">
                           {(() => {
                             const amount = Math.round((form.price_total_idr || 0) * (form.discountPercent / 100));
-                            const cur = CURRENCIES.find((c) => c.id === 'IDR') || CURRENCIES[0];
+                            const cur = CURRENCY_OPTIONS.find((c) => c.id === 'IDR') || CURRENCY_OPTIONS[0];
                             return `${cur.symbol} ${amount.toLocaleString(cur.locale)}`;
                           })()}
                         </span>
