@@ -654,7 +654,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const VISA_STATUS_LABELS: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
   const TICKET_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
-  const HOTEL_STATUS_LABELS: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
+  const HOTEL_STATUS_LABELS: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Penetapan room', room_assigned: 'Pemberian nomor room', completed: 'Selesai' };
   const BUS_TICKET_LABELS: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
   const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
 
@@ -1409,12 +1409,15 @@ const OrdersInvoicesPage: React.FC = () => {
                       {(() => {
                         const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
                         if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Dikonfirmasi', room_assigned: 'Kamar ditetapkan', completed: 'Selesai' };
+                        const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Penetapan room', room_assigned: 'Pemberian nomor room', completed: 'Selesai' };
+                        const mealLabels: Record<string, string> = { pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' };
                         return (
                           <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                             {hotelItems.map((item: any, idx: number) => {
                               const name = item.Product?.name || item.product_name || 'Hotel';
                               const status = labels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
+                              const mealStatus = item.HotelProgress?.meal_status;
+                              const mealLabel = mealStatus ? (mealLabels[mealStatus] || mealStatus) : null;
                               const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
                               const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
                               return (
@@ -1423,6 +1426,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
                                     <span className={status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
                                   </div>
+                                  {mealLabel != null && (
+                                    <div className="text-slate-600 pl-0.5 text-xs">Status makan: {mealLabel}</div>
+                                  )}
                                   <div className="text-slate-500 pl-0.5">
                                     <span>CI {checkIn}</span>
                                     <span className="mx-1">·</span>

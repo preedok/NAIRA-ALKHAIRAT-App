@@ -51,6 +51,13 @@ const paymentTypeLabel = (t) => (t === 'dp' ? 'DP' : t === 'partial' ? 'Cicilan'
 const verifiedStatusLabel = (s) => (s === 'verified' ? 'Diverifikasi' : s === 'rejected' ? 'Ditolak' : 'Menunggu');
 const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[String(t).toLowerCase()] || t);
 const mealStatusLabel = (s) => ({ pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' }[String(s).toLowerCase()] || s || '-');
+/** Label status progress hotel (sesuai pilihan divisi hotel: Progress → Penetapan room → Pemberian nomor room → Selesai) */
+const hotelProgressStatusLabel = (s) => ({
+  waiting_confirmation: 'Menunggu konfirmasi',
+  confirmed: 'Penetapan room',
+  room_assigned: 'Pemberian nomor room',
+  completed: 'Selesai'
+}[String(s).toLowerCase()] || s || '-');
 const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '-');
 const tripTypeLabel = (tt) => ({ one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' }[String(tt || '')] || tt || '');
 const busRouteLabel = (r) => ({ full_route: 'Full rute (Mekkah–Madinah)', bandara_makkah: 'Bandara–Mekkah', bandara_madinah: 'Bandara–Madinah', bandara_madinah_only: 'Bandara–Madinah saja', hotel_makkah_madinah: 'Hotel Mekkah–Madinah', hotel_madinah_makkah: 'Hotel Madinah–Mekkah' }[String(r || '')] || r || '');
@@ -160,12 +167,10 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.fontSize(9).fillColor('#64748b');
   doc.text('No. Invoice', infoX(0), y);
   doc.text('Status', infoX(1), y);
-  doc.text('No. Order', infoX(2), y);
   y += 12;
   doc.fontSize(10).fillColor('#0f172a');
   doc.text(data.invoice_number || '-', infoX(0), y, { width: infoColW - 20 });
   doc.font('Helvetica-Bold').fillColor('#0D1A63').text(statusLabel, infoX(1), y, { width: infoColW - 20 }).font('Helvetica').fillColor('#0f172a');
-  doc.text(data.Order?.order_number || '-', infoX(2), y, { width: infoColW - 20 });
   y += 18;
   doc.fontSize(9).fillColor('#64748b');
   doc.text('Tanggal Terbit', infoX(0), y);
@@ -267,10 +272,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         if (ci || co) dateLine = `Check-in: ${ci || '-'}, Check-out: ${co || '-'}`;
         const withMeal = meta.meal === true || meta.with_meal === true;
         const mealStatus = item.HotelProgress?.meal_status;
+        const hotelStatus = item.HotelProgress?.status;
         const roomType = meta.room_type;
         const nights = meta.nights != null ? Number(meta.nights) : 0;
         const qtyRooms = item.quantity != null ? Number(item.quantity) : 1;
         const parts = [];
+        if (hotelStatus) parts.push(`Status hotel: ${hotelProgressStatusLabel(hotelStatus)}`);
         if (nights > 0) parts.push(`${qtyRooms} kamar × ${nights} malam`);
         parts.push(`Paket makan: ${withMeal ? 'Ya' : 'Tidak'}`);
         if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);

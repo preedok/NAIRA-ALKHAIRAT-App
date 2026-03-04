@@ -10,9 +10,9 @@ import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { hotelApi } from '../../../services/api';
 
 const STATUS_LABELS: Record<string, string> = {
-  waiting_confirmation: 'Menunggu Konfirmasi',
-  confirmed: 'Dikonfirmasi',
-  room_assigned: 'Kamar Ditetapkan',
+  waiting_confirmation: 'Menunggu konfirmasi',
+  confirmed: 'Penetapan room',
+  room_assigned: 'Pemberian nomor room',
   completed: 'Selesai'
 };
 
