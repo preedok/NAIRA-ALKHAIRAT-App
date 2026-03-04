@@ -293,7 +293,6 @@ const HotelWorkPage: React.FC = () => {
           className="mb-4"
         />
         <div className="mb-4 flex flex-wrap gap-2">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide self-center mr-1">Lokasi hotel:</span>
           <button
             type="button"
             onClick={() => setFilterHotelLocation('')}
