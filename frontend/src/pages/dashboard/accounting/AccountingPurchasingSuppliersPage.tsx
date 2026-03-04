@@ -13,7 +13,11 @@ import { accountingApi } from '../../../services/api';
 
 const DEFAULT_LIMIT = 20;
 
-const AccountingPurchasingSuppliersPage: React.FC = () => {
+interface AccountingPurchasingSuppliersPageProps {
+  embedded?: boolean;
+}
+
+const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersPageProps> = ({ embedded = false }) => {
   const [searchParams] = useSearchParams();
   const [list, setList] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -118,19 +122,31 @@ const AccountingPurchasingSuppliersPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Master Supplier"
-        subtitle="Data supplier untuk modul pembelian"
-        right={
+      {!embedded && (
+        <PageHeader
+          title="Master Supplier"
+          subtitle="Data supplier untuk modul pembelian"
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
+              <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
+                <Plus className="w-4 h-4" /> Tambah Supplier
+              </Button>
+            </div>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-lg font-semibold text-slate-800">Master Supplier</h2>
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
             <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
               <Plus className="w-4 h-4" /> Tambah Supplier
             </Button>
           </div>
-        }
-      />
-
+        </div>
+      )}
       <Card>
         <div className="flex flex-wrap gap-4 mb-4">
           <div className="relative flex-1 min-w-[200px]">

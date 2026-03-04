@@ -24,7 +24,11 @@ const JENIS_PEMBELIAN_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'handling', label: 'Handling' }
 ];
 
-const AccountingPurchasingOrdersPage: React.FC = () => {
+interface AccountingPurchasingOrdersPageProps {
+  embedded?: boolean;
+}
+
+const AccountingPurchasingOrdersPage: React.FC<AccountingPurchasingOrdersPageProps> = ({ embedded = false }) => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
@@ -157,19 +161,31 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="PO Pembelian"
-        subtitle="Pembelian product baru ke supplier sesuai product di aplikasi: buat PO, submit, approve"
-        right={
+      {!embedded && (
+        <PageHeader
+          title="PO Pembelian"
+          subtitle="Pembelian product baru ke supplier sesuai product di aplikasi: buat PO, submit, approve"
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
+              <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
+                <Plus className="w-4 h-4" /> Buat PO
+              </Button>
+            </div>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-lg font-semibold text-slate-800">PO Pembelian</h2>
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
             <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
               <Plus className="w-4 h-4" /> Buat PO
             </Button>
           </div>
-        }
-      />
-
+        </div>
+      )}
       <Card>
         <div className="flex flex-wrap gap-4 mb-4">
           <Autocomplete

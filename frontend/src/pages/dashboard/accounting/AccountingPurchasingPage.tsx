@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Users, FileText, Receipt, DollarSign, Package, Trash2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Users, FileText, Receipt, DollarSign, Package, Trash2, LayoutDashboard } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -14,6 +14,10 @@ import ContentLoading from '../../../components/common/ContentLoading';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { accountingApi, type PurchasingByProduct } from '../../../services/api';
 import { formatIDR } from '../../../utils';
+import AccountingPurchasingSuppliersPage from './AccountingPurchasingSuppliersPage';
+import AccountingPurchasingOrdersPage from './AccountingPurchasingOrdersPage';
+import AccountingPurchasingInvoicesPage from './AccountingPurchasingInvoicesPage';
+import AccountingPurchasingPaymentsPage from './AccountingPurchasingPaymentsPage';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
   hotel: 'Hotel',
@@ -34,8 +38,21 @@ const PURCHASING_PRODUCT_TABS: { id: string; label: string }[] = [
   { id: 'handling', label: 'Handling' }
 ];
 
+const TABS = [
+  { id: 'ringkasan', label: 'Ringkasan', icon: LayoutDashboard },
+  { id: 'suppliers', label: 'Master Supplier', icon: Users },
+  { id: 'orders', label: 'PO Pembelian', icon: FileText },
+  { id: 'invoices', label: 'Faktur Pembelian', icon: Receipt },
+  { id: 'payments', label: 'Pembayaran Pembelian', icon: DollarSign }
+] as const;
+type TabId = typeof TABS[number]['id'];
+
 const AccountingPurchasingPage: React.FC = () => {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = (searchParams.get('tab') || 'ringkasan') as TabId;
+  const effectiveTab = TABS.some((t) => t.id === tab) ? tab : 'ringkasan';
+  const setTab = (t: TabId) => setSearchParams((p) => { p.set('tab', t); p.delete('product_id'); return p; });
+  const setTabWithProduct = (t: TabId, productId: string) => setSearchParams({ tab: t, product_id: productId });
   const [data, setData] = useState<{ products: Array<{ id: string; code: string; name: string; type: string }>; by_product: PurchasingByProduct[]; suppliers_count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,17 +114,49 @@ const AccountingPurchasingPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Modul Pembelian"
         subtitle="Pembelian product baru ke supplier per product. Setiap pembelian wajib dilampiri bukti."
         right={
-          <div className="flex items-center gap-2">
-            <AutoRefreshControl onRefresh={fetchSummary} disabled={loading} size="sm" />
-          </div>
+          effectiveTab === 'ringkasan' ? (
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={fetchSummary} disabled={loading} size="sm" />
+            </div>
+          ) : undefined
         }
       />
 
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                effectiveTab === t.id ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {effectiveTab !== 'ringkasan' && (
+        <div className="min-h-[200px]">
+          {effectiveTab === 'suppliers' && <AccountingPurchasingSuppliersPage embedded />}
+          {effectiveTab === 'orders' && <AccountingPurchasingOrdersPage embedded />}
+          {effectiveTab === 'invoices' && <AccountingPurchasingInvoicesPage embedded />}
+          {effectiveTab === 'payments' && <AccountingPurchasingPaymentsPage embedded />}
+        </div>
+      )}
+
+      {effectiveTab === 'ringkasan' && (
+        <>
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3">{error}</div>
       )}
@@ -130,7 +179,7 @@ const AccountingPurchasingPage: React.FC = () => {
               <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Hutang (Sisa)" value={formatIDR(totalRemaining)} iconClassName="bg-amber-100 text-amber-700" />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/accounting/purchasing/suppliers')}>
+              <Button variant="outline" size="sm" onClick={() => setTab('suppliers')}>
                 <Users className="w-4 h-4 mr-2" /> Master Supplier
               </Button>
             </div>
@@ -191,9 +240,9 @@ const AccountingPurchasingPage: React.FC = () => {
                   <td className="py-3 px-4 text-right">
                     <ActionsMenu
                       items={[
-                        { id: 'po', label: 'PO', icon: <FileText className="w-4 h-4" />, onClick: () => navigate(`/dashboard/accounting/purchasing/orders?product_id=${row.product_id}`) },
-                        { id: 'faktur', label: 'Faktur', icon: <Receipt className="w-4 h-4" />, onClick: () => navigate(`/dashboard/accounting/purchasing/invoices?product_id=${row.product_id}`) },
-                        { id: 'pembayaran', label: 'Pembayaran', icon: <DollarSign className="w-4 h-4" />, onClick: () => navigate(`/dashboard/accounting/purchasing/payments?product_id=${row.product_id}`) },
+                        { id: 'po', label: 'PO', icon: <FileText className="w-4 h-4" />, onClick: () => setTabWithProduct('orders', row.product_id) },
+                        { id: 'faktur', label: 'Faktur', icon: <Receipt className="w-4 h-4" />, onClick: () => setTabWithProduct('invoices', row.product_id) },
+                        { id: 'pembayaran', label: 'Pembayaran', icon: <DollarSign className="w-4 h-4" />, onClick: () => setTabWithProduct('payments', row.product_id) },
                         { id: 'hapus', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteByProduct(row), danger: true }
                       ] as ActionsMenuItem[]}
                     />
@@ -204,6 +253,8 @@ const AccountingPurchasingPage: React.FC = () => {
           />
         )}
       </Card>
+        </>
+      )}
     </div>
   );
 };

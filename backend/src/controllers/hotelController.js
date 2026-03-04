@@ -127,7 +127,7 @@ const listInvoices = asyncHandler(async (req, res) => {
             required: true,
             include: [
               { model: HotelProgress, as: 'HotelProgress', required: false },
-              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type', 'meta'], required: false }
             ]
           }
         ]
@@ -164,7 +164,7 @@ const getInvoice = asyncHandler(async (req, res) => {
             model: OrderItem,
             as: 'OrderItems',
             include: [
-              { model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false },
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'meta'], required: false },
               { model: HotelProgress, as: 'HotelProgress', required: false }
             ]
           }

@@ -22,7 +22,11 @@ const PURCHASE_TYPE_TABS: Array<{ value: string; label: string }> = [
   { value: 'handling', label: 'Handling' }
 ];
 
-const AccountingPurchasingInvoicesPage: React.FC = () => {
+interface AccountingPurchasingInvoicesPageProps {
+  embedded?: boolean;
+}
+
+const AccountingPurchasingInvoicesPage: React.FC<AccountingPurchasingInvoicesPageProps> = ({ embedded = false }) => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
@@ -141,18 +145,31 @@ const AccountingPurchasingInvoicesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Faktur Pembelian"
-        subtitle="Faktur pembelian product ke supplier. Setiap faktur baru wajib dilampiri bukti."
-        right={
+      {!embedded && (
+        <PageHeader
+          title="Faktur Pembelian"
+          subtitle="Faktur pembelian product ke supplier. Setiap faktur baru wajib dilampiri bukti."
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
+              <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
+                <Plus className="w-4 h-4" /> Buat Faktur
+              </Button>
+            </div>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-lg font-semibold text-slate-800">Faktur Pembelian</h2>
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
             <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
               <Plus className="w-4 h-4" /> Buat Faktur
             </Button>
           </div>
-        }
-      />
+        </div>
+      )}
       <Card>
         <div className="flex flex-wrap gap-4 mb-4">
           <Autocomplete

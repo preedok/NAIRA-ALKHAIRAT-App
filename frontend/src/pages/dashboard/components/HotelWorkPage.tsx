@@ -74,6 +74,8 @@ const HotelWorkPage: React.FC = () => {
 
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
+  /** Tab filter lokasi hotel: '' = Semua, 'makkah' = Hotel Mekkah, 'madinah' = Hotel Madinah */
+  const [filterHotelLocation, setFilterHotelLocation] = useState<string>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -123,7 +125,7 @@ const HotelWorkPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [filterInvoiceStatus]);
+  }, [filterInvoiceStatus, filterHotelLocation]);
 
   useEffect(() => {
     fetchInvoices();
@@ -183,6 +185,12 @@ const HotelWorkPage: React.FC = () => {
   const totalInvoices = dashboard?.total_orders ?? 0;
   const totalItems = dashboard?.total_hotel_items ?? 0;
 
+  /** Lokasi hotel dari item: Product.meta.location atau item.meta?.location */
+  const getHotelItemLocation = (item: any) => {
+    const loc = item?.Product?.meta?.location ?? item?.meta?.location;
+    return (loc && String(loc).toLowerCase().trim()) || '';
+  };
+
   const filteredInvoices = useMemo(() => {
     let list = invoices;
     const q = (filterSearch || '').trim().toLowerCase();
@@ -195,6 +203,12 @@ const HotelWorkPage: React.FC = () => {
         return invNum.includes(q) || orderNum.includes(q) || owner.includes(q) || branch.includes(q);
       });
     }
+    if (filterHotelLocation) {
+      list = list.filter((inv: any) => {
+        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'hotel');
+        return hotelItems.some((i: any) => getHotelItemLocation(i) === filterHotelLocation);
+      });
+    }
     if (filterProgressStatus) {
       list = list.filter((inv: any) => {
         const orderItems = inv.Order?.OrderItems || [];
@@ -202,7 +216,7 @@ const HotelWorkPage: React.FC = () => {
       });
     }
     return list;
-  }, [invoices, filterSearch, filterProgressStatus]);
+  }, [invoices, filterSearch, filterProgressStatus, filterHotelLocation]);
 
   const isNewInvoice = (inv: any) => {
     if (!inv) return false;
@@ -264,9 +278,33 @@ const HotelWorkPage: React.FC = () => {
         <CardSectionHeader
           icon={<Building2 className="w-6 h-6" />}
           title="Daftar Invoice Hotel"
-          subtitle={`${filteredInvoices.length} invoice. Filter menurut status invoice & progress.`}
+          subtitle={`${filteredInvoices.length} invoice. Filter menurut lokasi hotel, status invoice & progress.`}
           className="mb-4"
         />
+        <div className="mb-4 flex flex-wrap gap-2">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide self-center mr-1">Lokasi hotel:</span>
+          <button
+            type="button"
+            onClick={() => setFilterHotelLocation('')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === '' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            Semua
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterHotelLocation('makkah')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === 'makkah' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            Hotel Mekkah
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterHotelLocation('madinah')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === 'madinah' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            Hotel Madinah
+          </button>
+        </div>
         <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />

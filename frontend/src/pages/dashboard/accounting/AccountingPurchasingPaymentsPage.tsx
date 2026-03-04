@@ -15,7 +15,11 @@ import { formatIDR } from '../../../utils';
 const PAYMENT_STATUS_LABELS: Record<string, string> = { draft: 'Draft', posted: 'Posted' };
 const DEFAULT_LIMIT = 20;
 
-const AccountingPurchasingPaymentsPage: React.FC = () => {
+interface AccountingPurchasingPaymentsPageProps {
+  embedded?: boolean;
+}
+
+const AccountingPurchasingPaymentsPage: React.FC<AccountingPurchasingPaymentsPageProps> = ({ embedded = false }) => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
@@ -120,19 +124,31 @@ const AccountingPurchasingPaymentsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Pembayaran Pembelian"
-        subtitle="Pembayaran faktur pembelian ke supplier: buat pembayaran, post ke jurnal"
-        right={
+      {!embedded && (
+        <PageHeader
+          title="Pembayaran Pembelian"
+          subtitle="Pembayaran faktur pembelian ke supplier: buat pembayaran, post ke jurnal"
+          right={
+            <div className="flex items-center gap-2">
+              <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
+              <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
+                <Plus className="w-4 h-4" /> Buat Pembayaran
+              </Button>
+            </div>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-lg font-semibold text-slate-800">Pembayaran Pembelian</h2>
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={fetchList} disabled={loading} size="sm" />
             <Button variant="primary" size="sm" className="gap-1" onClick={openCreate}>
               <Plus className="w-4 h-4" /> Buat Pembayaran
             </Button>
           </div>
-        }
-      />
-
+        </div>
+      )}
       <Card>
         <div className="flex flex-wrap gap-4 mb-4">
           <Autocomplete

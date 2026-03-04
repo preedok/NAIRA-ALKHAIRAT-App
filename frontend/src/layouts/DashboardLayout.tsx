@@ -143,14 +143,7 @@ const menuItems: MenuItem[] = [
     title: 'Pembelian',
     icon: <ShoppingCart className="w-5 h-5" />,
     path: '/dashboard/accounting/purchasing',
-    roles: ['role_accounting'],
-    children: [
-      { title: 'Ringkasan', icon: <LayoutDashboard className="w-4 h-4" />, path: '/dashboard/accounting/purchasing', roles: ['role_accounting'] },
-      { title: 'Master Supplier', icon: <Users className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/suppliers', roles: ['role_accounting'] },
-      { title: 'PO Pembelian', icon: <FileText className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/orders', roles: ['role_accounting'] },
-      { title: 'Faktur Pembelian', icon: <Receipt className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/invoices', roles: ['role_accounting'] },
-      { title: 'Pembayaran Pembelian', icon: <DollarSign className="w-4 h-4" />, path: '/dashboard/accounting/purchasing/payments', roles: ['role_accounting'] },
-    ]
+    roles: ['role_accounting']
   },
   {
     title: 'Settings',
