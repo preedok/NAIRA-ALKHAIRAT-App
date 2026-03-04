@@ -23,7 +23,7 @@ import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
 import Table from '../../../components/common/Table';
-import { formatIDR } from '../../../utils';
+import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import type { TableColumn } from '../../../types';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { invoicesApi } from '../../../services/api';
@@ -260,7 +260,7 @@ const InvoiceDashboard: React.FC = () => {
                 <div key={inv.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
                   <div>
                     <p className="font-semibold text-slate-900">
-                      {inv.invoice_number || '–'}
+                      {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
                       <span className="text-slate-500 font-normal ml-2">Order: {inv.Order?.order_number ?? '–'}</span>
                     </p>
                     <p className="text-sm text-slate-600 mt-0.5">
@@ -295,7 +295,7 @@ const InvoiceDashboard: React.FC = () => {
               <div key={inv.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-red-50 rounded-xl">
                 <div>
                   <p className="font-semibold text-slate-900">
-                    {inv.invoice_number || '–'}
+                    {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
                     <span className="text-slate-500 font-normal ml-2">Order: {inv.Order?.order_number ?? '–'}</span>
                   </p>
                   <p className="text-sm text-slate-600 mt-0.5">

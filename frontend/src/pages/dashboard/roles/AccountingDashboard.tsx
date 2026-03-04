@@ -8,7 +8,7 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
-import { formatIDR, formatInvoiceDisplay } from '../../../utils';
+import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import type { TableColumn } from '../../../types';
 
@@ -171,7 +171,7 @@ const InvoiceListModal: React.FC<{
                 <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 align-top">
                     <div className="flex flex-col gap-1">
-                      <span className="font-mono font-semibold">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                      <span className="font-mono font-semibold">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
                       <div className="flex flex-wrap items-center gap-1.5">
                         {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
                         {getOrderChangeDate(inv) && (
@@ -485,7 +485,7 @@ const AccountingDashboard: React.FC = () => {
                 }
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 pr-4 font-mono">{inv.invoice_number}</td>
+                    <td className="py-3 pr-4 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
                     <td className="py-3 pr-4">{inv.User?.name ?? '-'}</td>
                     <td className="py-3 pr-4">{inv.Branch?.name ?? '-'}</td>
                     <td className="py-3 pr-4">{formatIDR(parseFloat(inv.total_amount || 0))}</td>

@@ -21,7 +21,7 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import type { TableColumn } from '../../../types';
 import { ORDER_STATUS_LABELS, INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
@@ -273,7 +273,7 @@ const InvoiceListModalAdmin: React.FC<{
             }
             renderRow={(inv) => (
               <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono align-top">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-mono align-top">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
                 <td className="px-4 py-3 font-mono align-top">{inv.Order?.order_number ?? '-'}</td>
                 <td className="px-4 py-3 align-top">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
                 <td className="px-4 py-3 align-top text-sm">
@@ -618,7 +618,7 @@ const AdminPusatDashboard: React.FC = () => {
                 }
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono">{inv.invoice_number ?? inv.Order?.order_number ?? '-'}</td>
+                    <td className="px-4 py-3 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
                     <td className="px-4 py-3">{inv.User?.name ?? '-'}</td>
                     <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
                     <td className="px-4 py-3"><Badge variant="info">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge></td>

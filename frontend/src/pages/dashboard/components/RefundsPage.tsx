@@ -11,6 +11,8 @@ import Table from '../../../components/common/Table';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR } from '../../../utils';
+import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
+import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { refundsApi, accountingApi, type RefundStats } from '../../../services/api';
 import type { TableColumn } from '../../../types';
 
@@ -273,7 +275,7 @@ const RefundsPage: React.FC = () => {
             renderRow={(r) => (
               <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                 <td className="py-3 px-4">
-                  <span className="font-medium">{r.Invoice?.invoice_number || '-'}</span>
+                  <span className="font-medium">{formatInvoiceNumberDisplay(r.Invoice, INVOICE_STATUS_LABELS)}</span>
                 </td>
                 <td className="py-3 px-4">
                   {r.Owner ? <span>{r.Owner.name || r.Owner.company_name}</span> : '-'}

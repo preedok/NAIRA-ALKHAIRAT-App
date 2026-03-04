@@ -8,8 +8,7 @@ import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoR
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
-import { formatIDR, formatSAR, formatUSD } from '../../../utils';
-import { formatInvoiceDisplay } from '../../../utils';
+import { formatIDR, formatSAR, formatUSD, formatInvoiceNumberDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
 type ReportTab = 'ringkasan' | 'wilayah' | 'provinsi' | 'cabang' | 'owner' | 'produk' | 'periode' | 'detail';
@@ -879,7 +878,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4 align-top">
                       <div className="flex flex-col gap-1">
-                        <span className="font-medium">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</span>
+                        <span className="font-medium">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {isNewInvoice(row) && <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">Baru</span>}
                           {getOrderChangeDate(row) && (

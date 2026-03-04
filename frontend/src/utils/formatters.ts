@@ -371,5 +371,28 @@ export const formatInvoiceDisplay = (
   statusLabels?: Record<string, string>
 ): string => {
   const label = statusLabels?.[status] || status;
+  if (!label) return invoiceNumber || '–';
   return `${label}_${invoiceNumber}`;
+};
+
+/** Invoice object minimal untuk format display (sama seperti menu Invoice). */
+type InvoiceDisplayInv = {
+  status?: string;
+  invoice_number?: string;
+  is_draft_order?: boolean;
+  Order?: { order_number?: string } | null;
+} | null | undefined;
+
+/**
+ * Format nomor invoice seragam di semua halaman (sama dengan menu Invoice).
+ * Draft: "Draft (order_number)". Non-draft: "StatusLabel_InvoiceNumber".
+ */
+export const formatInvoiceNumberDisplay = (
+  inv: InvoiceDisplayInv,
+  statusLabels?: Record<string, string>
+): string => {
+  if (!inv) return '–';
+  const isDraft = inv.status === 'draft' || inv.is_draft_order;
+  if (isDraft) return `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}`;
+  return formatInvoiceDisplay(inv.status || '', inv.invoice_number || '', statusLabels);
 };

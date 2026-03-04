@@ -31,7 +31,7 @@ import {
   type ReportPeriod,
   type ReportsAnalyticsData
 } from '../../../services/api';
-import { formatIDR, formatInvoiceDisplay } from '../../../utils';
+import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -515,7 +515,7 @@ const ReportsPage: React.FC = () => {
           <Card className="travel-card">
             <CardSectionHeader
               icon={<FileText className="w-6 h-6" />}
-              title={reportType === 'logs' ? 'Log Entri' : reportType === 'financial' ? 'Detail Invoice' : 'Detail Order'}
+              title={reportType === 'logs' ? 'Log Entri' : reportType === 'financial' || reportType === 'revenue' ? 'Detail Invoice' : 'Detail Order'}
               subtitle="Detail data sesuai tipe laporan dan filter."
               className="mb-4"
             />
@@ -555,7 +555,7 @@ const ReportsPage: React.FC = () => {
                 pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-mono font-semibold text-slate-900">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 px-4 font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
                     <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '–'}</td>
                     <td className="py-3 px-4 text-slate-700 text-sm">
                       <div>{inv.company_name ?? '–'}</div>
@@ -582,7 +582,7 @@ const ReportsPage: React.FC = () => {
             ) : (
               <Table
                 columns={[
-                  { id: 'order_number', label: 'No. Order', align: 'left' },
+                  { id: reportType === 'revenue' ? 'invoice_number' : 'order_number', label: reportType === 'revenue' ? 'No. Invoice' : 'No. Order', align: 'left' },
                   { id: 'owner_name', label: 'Owner', align: 'left' },
                   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
                   { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
@@ -595,16 +595,23 @@ const ReportsPage: React.FC = () => {
                 renderRow={(o: any) => {
                   const companyLine = o.owner_company || o.branch_name || '–';
                   const wilayahLine = [o.wilayah_name, o.provinsi_name].filter(Boolean).join(' · ') || '–';
+                  const displayInv = reportType === 'revenue' && (o.invoice_number != null || o.invoice_status != null)
+                    ? { status: o.invoice_status, invoice_number: o.invoice_number, Order: { order_number: o.order_number } }
+                    : null;
+                  const cellLabel = reportType === 'revenue' && displayInv
+                    ? formatInvoiceNumberDisplay(displayInv, INVOICE_STATUS_LABELS)
+                    : (o.order_number ?? '–');
+                  const statusLabel = reportType === 'revenue' && o.invoice_status != null ? (INVOICE_STATUS_LABELS[o.invoice_status] ?? o.invoice_status) : (o.status ?? '–');
                   return (
                     <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-900">{o.order_number}</td>
+                      <td className="py-3 px-4 font-mono font-semibold text-slate-900">{cellLabel}</td>
                       <td className="py-3 px-4 text-slate-700">{o.owner_name ?? '–'}</td>
                       <td className="py-3 px-4 text-slate-700 text-sm">
                         <div>{companyLine}</div>
                         <div className="text-xs text-slate-600 mt-0.5">{wilayahLine}</div>
                       </td>
                       <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(o.total_amount ?? 0)}</td>
-                      <td className="py-3 px-4"><Badge variant="info">{o.status ?? '–'}</Badge></td>
+                      <td className="py-3 px-4"><Badge variant="info">{statusLabel}</Badge></td>
                       <td className="py-3 px-4 whitespace-nowrap text-slate-700">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '–'}</td>
                     </tr>
                   );

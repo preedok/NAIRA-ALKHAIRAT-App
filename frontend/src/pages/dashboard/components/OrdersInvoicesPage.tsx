@@ -14,6 +14,7 @@ import type { TableColumn } from '../../../types';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
+import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
 import { INVOICE_STATUS_LABELS, API_BASE_URL } from '../../../utils/constants';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem, type BankItem } from '../../../services/api';
 
@@ -1274,7 +1275,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
                       <div className="flex flex-col gap-1">
                         <span>
-                          {isDraftRow(inv) ? `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}` : formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}
+                          {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
                           {((inv.Refunds as { status: string }[] | undefined)?.length ?? 0) > 0 && (() => {
                             const REFUND_STATUS_LABELS_INV: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
                             const latest = (inv.Refunds as { status: string }[])[0];
@@ -1937,7 +1938,7 @@ const OrdersInvoicesPage: React.FC = () => {
           <ModalBoxLg>
             <ModalHeader
               title="Detail Invoice"
-              subtitle={formatInvoiceDisplay(viewInvoice.status, viewInvoice.invoice_number, INVOICE_STATUS_LABELS)}
+              subtitle={formatInvoiceNumberDisplay(viewInvoice, INVOICE_STATUS_LABELS)}
               icon={<Receipt className="w-5 h-5" />}
               onClose={closeModal}
             />

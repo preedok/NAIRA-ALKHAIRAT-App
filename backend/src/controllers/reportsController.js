@@ -258,7 +258,7 @@ const getAnalytics = asyncHandler(async (req, res) => {
     { model: OrderItem, as: 'OrderItems', attributes: ['id', 'type', 'quantity', 'unit_price', 'subtotal'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }
   ];
   if (report_type === 'revenue') {
-    orderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
+    orderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true });
   }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
@@ -365,6 +365,8 @@ const getAnalytics = asyncHandler(async (req, res) => {
     return {
       id: j.id,
       order_number: j.order_number,
+      invoice_number: j.Invoice?.invoice_number,
+      invoice_status: j.Invoice?.status,
       status: j.status,
       subtotal: parseFloat(j.subtotal || 0),
       discount: parseFloat(j.discount || 0),

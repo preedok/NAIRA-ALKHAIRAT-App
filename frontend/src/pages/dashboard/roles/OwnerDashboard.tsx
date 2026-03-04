@@ -18,7 +18,8 @@ import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
 import { AutoRefreshControl } from '../../../components/common';
-import { formatIDR } from '../../../utils';
+import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
+import { INVOICE_STATUS_LABELS as INVOICE_STATUS_LABELS_GLOBAL } from '../../../utils/constants';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
@@ -270,7 +271,7 @@ const OwnerDashboard: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <p className="font-semibold text-stone-900 font-mono">{inv.invoice_number || inv.id}</p>
+                    <p className="font-semibold text-stone-900 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS_GLOBAL)}</p>
                     <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
                   </div>
                   <p className="text-sm text-stone-600">{inv.Order?.order_number ? `Trip ${inv.Order.order_number}` : 'Invoice'}</p>
@@ -304,7 +305,7 @@ const OwnerDashboard: React.FC = () => {
                   <div key={inv.id} className={`p-4 rounded-travel border-2 ${urgent ? 'bg-red-50 border-red-200' : 'bg-stone-50 border-stone-200'}`}>
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <p className="font-semibold text-stone-900 font-mono">{inv.invoice_number || inv.id}</p>
+                        <p className="font-semibold text-stone-900 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS_GLOBAL)}</p>
                         <p className="text-sm text-stone-600">{inv.Order?.order_number ? `Trip ${inv.Order.order_number}` : ''}</p>
                       </div>
                       <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>

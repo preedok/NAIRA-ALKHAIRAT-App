@@ -15,7 +15,7 @@ import { ticketApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
-import { formatInvoiceDisplay, formatIDR } from '../../../utils';
+import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
 import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -291,7 +291,7 @@ const TicketWorkPage: React.FC = () => {
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-4 align-top">
                       <div className="flex flex-col gap-1">
-                        <span className="font-mono font-semibold text-slate-800">{formatInvoiceDisplay(inv.status, inv.invoice_number ?? '', INVOICE_STATUS_LABELS)}</span>
+                        <span className="font-mono font-semibold text-slate-800">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
                           {getOrderChangeDate(inv) && (
@@ -346,7 +346,7 @@ const TicketWorkPage: React.FC = () => {
         {detailInvoice && (
           <ModalBoxLg>
             <ModalHeader
-              title={formatInvoiceDisplay(detailInvoice.status, detailInvoice.invoice_number ?? '', INVOICE_STATUS_LABELS)}
+              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS)}
               subtitle={`Owner: ${detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}`}
               icon={<Ticket className="w-5 h-5" />}
               onClose={() => setSearchParams({})}
