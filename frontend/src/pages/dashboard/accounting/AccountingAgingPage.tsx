@@ -15,6 +15,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, branchesApi, invoicesApi, businessRulesApi, type AccountingAgingData } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { useToast } from '../../../contexts/ToastContext';
@@ -474,6 +475,7 @@ const AccountingAgingPage: React.FC = () => {
                   <td className="py-3 px-4 align-top">
                     <div className="flex flex-col gap-1">
                       <span className="font-mono font-semibold">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                      <InvoiceRefundStatusLabel inv={inv} />
                       <div className="flex flex-wrap items-center gap-1.5">
                         {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
                         {getOrderChangeDate(inv) && (
@@ -489,22 +491,7 @@ const AccountingAgingPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-right font-medium align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
                   <td className="py-3 px-4 text-right align-top">
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant={getStatusBadgeVariant(inv.status)} className="w-fit text-xs">{getInvoiceStatusLabel(inv)}</Badge>
-                      {(() => {
-                        const st = (inv.status || '').toLowerCase();
-                        const totalInv = parseFloat(inv.total_amount || 0);
-                        const paid = parseFloat(inv.paid_amount || 0);
-                        const refundAmt = parseFloat(inv.cancelled_refund_amount || 0) || 0;
-                        const pctPaid = totalInv > 0 ? Math.round((paid / totalInv) * 100) : null;
-                        const pctRefund = totalInv > 0 && refundAmt > 0 ? Math.round((refundAmt / totalInv) * 100) : null;
-                        const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
-                        if (st === 'draft') return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <span className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</span>}</>;
-                        if (isCancelNoPayment) return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <span className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</span>}</>;
-                        if (st === 'cancelled_refund' && refundAmt > 0) return <><span className="text-amber-700 font-medium text-sm">Refund: {formatIDR(refundAmt)}</span>{pctRefund != null && <span className="text-xs text-slate-600 mt-0.5">{pctRefund}% dari total tagihan</span>}</>;
-                        return <><span className="text-emerald-600 font-medium">{formatIDR(paid)}</span>{pctPaid != null && <span className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</span>}</>;
-                      })()}
-                    </div>
+                    <InvoiceStatusRefundCell inv={inv} align="right" />
                   </td>
                   <td className="py-3 px-4 text-right text-red-600 font-medium align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
                   <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>

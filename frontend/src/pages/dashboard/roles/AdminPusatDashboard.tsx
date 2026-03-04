@@ -21,6 +21,7 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
+import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import type { TableColumn } from '../../../types';
 import { ORDER_STATUS_LABELS, INVOICE_STATUS_LABELS } from '../../../utils/constants';
@@ -249,6 +250,7 @@ const InvoiceListModalAdmin: React.FC<{
           <Table
             columns={[
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+              { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
               { id: 'owner', label: 'Owner', align: 'left' },
               { id: 'company', label: 'Perusahaan', align: 'left' },
               { id: 'total', label: 'Total', align: 'left' },
@@ -272,7 +274,15 @@ const InvoiceListModalAdmin: React.FC<{
             }
             renderRow={(inv) => (
               <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono align-top">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
+                <td className="px-4 py-3 align-top">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                    <InvoiceRefundStatusLabel inv={inv} />
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-right align-top">
+                  <InvoiceStatusRefundCell inv={inv} align="right" />
+                </td>
                 <td className="px-4 py-3 align-top">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
                 <td className="px-4 py-3 align-top text-sm">
                   <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
@@ -591,9 +601,9 @@ const AdminPusatDashboard: React.FC = () => {
               <Table
                 columns={[
                   { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+                  { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
                   { id: 'owner', label: 'Owner', align: 'left' },
                   { id: 'branch', label: 'Cabang', align: 'left' },
-                  { id: 'status', label: 'Status', align: 'left' },
                   { id: 'total', label: 'Total', align: 'left' },
                   { id: 'date', label: 'Tanggal', align: 'left' },
                   { id: 'actions', label: 'Aksi', align: 'left' }
@@ -616,10 +626,17 @@ const AdminPusatDashboard: React.FC = () => {
                 }
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                        <InvoiceRefundStatusLabel inv={inv} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right align-top">
+                      <InvoiceStatusRefundCell inv={inv} align="right" />
+                    </td>
                     <td className="px-4 py-3">{inv.User?.name ?? '-'}</td>
                     <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                    <td className="px-4 py-3"><Badge variant="info">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge></td>
                     <td className="px-4 py-3">{formatIDR(inv.total_amount || 0)}</td>
                     <td className="px-4 py-3">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('id-ID') : '-'}</td>
                     <td className="px-4 py-3">

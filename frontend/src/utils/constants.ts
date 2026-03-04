@@ -156,6 +156,14 @@ export const INVOICE_STATUS_COLORS: Record<string, string> = {
   overpaid_refund_pending: 'warning'
 };
 
+/** Label status proses refund (sama di seluruh app: menu Invoice, Report, Accounting, dll). */
+export const REFUND_STATUS_LABELS: Record<string, string> = {
+  requested: 'Menunggu',
+  approved: 'Disetujui',
+  rejected: 'Ditolak',
+  refunded: 'Sudah direfund'
+};
+
 // ============================================
 // PAYMENT METHODS
 // ============================================

@@ -16,6 +16,7 @@ import { busApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
+import { InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 
 const TICKET_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -415,6 +416,7 @@ const BusWorkPage: React.FC = () => {
                   <td className="px-6 py-4 align-top">
                     <div className="flex flex-col gap-1">
                       <span className="font-mono font-semibold text-slate-800">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                      <InvoiceRefundStatusLabel inv={inv} />
                       <div className="flex flex-wrap items-center gap-1.5">
                         {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
                         {getOrderChangeDate(inv) && (

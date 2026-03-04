@@ -31,6 +31,7 @@ import {
   type ReportPeriod,
   type ReportsAnalyticsData
 } from '../../../services/api';
+import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
@@ -555,7 +556,12 @@ const ReportsPage: React.FC = () => {
                 pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                        <InvoiceRefundStatusLabel inv={inv} />
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '–'}</td>
                     <td className="py-3 px-4 text-slate-700 text-sm">
                       <div>{inv.company_name ?? '–'}</div>
@@ -563,16 +569,7 @@ const ReportsPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(inv.total_amount ?? 0)}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div className="flex flex-col items-end gap-1">
-                        <Badge variant={inv.status === 'paid' ? 'success' : inv.status === 'partial_paid' ? 'warning' : inv.status === 'canceled' || inv.status === 'cancelled' || inv.status === 'cancelled_refund' ? 'error' : 'info'} className="w-fit text-xs">{INVOICE_STATUS_LABELS[inv.status] ?? inv.status ?? '–'}</Badge>
-                        {(inv.status === 'cancelled_refund' && (inv.cancelled_refund_amount ?? 0) > 0) ? (
-                          <><span className="text-amber-700 font-medium text-sm">Refund: {formatIDR(Number(inv.cancelled_refund_amount ?? 0))}</span>{(() => { const tot = Number(inv.total_amount ?? 0); const pct = tot > 0 ? Math.round((Number(inv.cancelled_refund_amount ?? 0) / tot) * 100) : null; return pct != null ? <span className="text-xs text-slate-600 mt-0.5">{pct}% dari total tagihan</span> : null; })()}</>
-                        ) : (inv.status === 'canceled' || inv.status === 'cancelled') && !(inv.paid_amount > 0) ? (
-                          (() => { const tot = Number(inv.total_amount ?? 0); const pct = tot > 0 ? 0 : null; return <><span className="text-slate-400 text-sm">–</span>{pct != null ? <span className="text-xs text-slate-500 mt-0.5">{pct}% dari total tagihan</span> : null}</>; })()
-                        ) : (
-                          (() => { const tot = Number(inv.total_amount ?? 0); const paid = Number(inv.paid_amount ?? 0); const pct = tot > 0 ? Math.round((paid / tot) * 100) : null; return <><span className="text-primary-600 font-medium">{formatIDR(paid)}</span>{pct != null ? <span className="text-xs text-slate-600 mt-0.5">{pct}% dari total tagihan</span> : null}</>; })()
-                        )}
-                      </div>
+                      <InvoiceStatusRefundCell inv={inv} align="right" />
                     </td>
                     <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.remaining_amount ?? 0)}</td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at ? new Date(inv.issued_at).toLocaleDateString('id-ID') : '–'}</td>
@@ -583,10 +580,10 @@ const ReportsPage: React.FC = () => {
               <Table
                 columns={[
                   { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+                  { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
                   { id: 'owner_name', label: 'Owner', align: 'left' },
                   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
                   { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
-                  { id: 'status', label: 'Status', align: 'left' },
                   { id: 'created_at', label: 'Tgl', align: 'left' }
                 ] as TableColumn[]}
                 data={rows}
@@ -601,17 +598,31 @@ const ReportsPage: React.FC = () => {
                   const cellLabel = displayInv
                     ? formatInvoiceNumberDisplay(displayInv, INVOICE_STATUS_LABELS)
                     : (o.invoice_number ?? '–');
-                  const statusLabel = o.invoice_status != null ? (INVOICE_STATUS_LABELS[o.invoice_status] ?? o.invoice_status) : (o.status ?? '–');
+                  const invForCell = {
+                    status: o.invoice_status ?? o.status,
+                    invoice_number: o.invoice_number,
+                    paid_amount: o.paid_amount,
+                    total_amount: o.invoice_total_amount ?? o.total_amount,
+                    cancelled_refund_amount: o.cancelled_refund_amount,
+                    Refunds: o.Refunds ?? []
+                  };
                   return (
                     <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-900">{cellLabel}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-mono font-semibold text-slate-900">{cellLabel}</span>
+                          <InvoiceRefundStatusLabel inv={invForCell} />
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right align-top">
+                        <InvoiceStatusRefundCell inv={invForCell} align="right" />
+                      </td>
                       <td className="py-3 px-4 text-slate-700">{o.owner_name ?? '–'}</td>
                       <td className="py-3 px-4 text-slate-700 text-sm">
                         <div>{companyLine}</div>
                         <div className="text-xs text-slate-600 mt-0.5">{wilayahLine}</div>
                       </td>
                       <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(o.total_amount ?? 0)}</td>
-                      <td className="py-3 px-4"><Badge variant="info">{statusLabel}</Badge></td>
                       <td className="py-3 px-4 whitespace-nowrap text-slate-700">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '–'}</td>
                     </tr>
                   );

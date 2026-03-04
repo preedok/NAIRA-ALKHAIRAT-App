@@ -15,6 +15,7 @@ import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
+import { InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 
 const STATUS_OPTIONS = [
@@ -380,6 +381,7 @@ const HotelWorkPage: React.FC = () => {
                   <td className="px-6 py-4 align-top">
                     <div className="flex flex-col gap-1">
                       <span className="font-mono font-semibold text-slate-800 text-sm">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                      <InvoiceRefundStatusLabel inv={inv} />
                       <div className="flex flex-wrap items-center gap-1.5">
                         {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
                         {getOrderChangeDate(inv) && (

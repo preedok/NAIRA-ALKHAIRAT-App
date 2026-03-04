@@ -12,6 +12,7 @@ const {
   Wilayah,
   OwnerProfile,
   Invoice,
+  Refund,
   HotelProgress,
   VisaProgress,
   TicketProgress,
@@ -139,11 +140,12 @@ const getDashboard = asyncHandler(async (req, res) => {
 
   const invoicesRecent = await Invoice.findAll({
     where: whereInvoice,
-    attributes: ['id', 'invoice_number', 'status', 'total_amount', 'branch_id', 'created_at'],
+    attributes: ['id', 'invoice_number', 'status', 'total_amount', 'paid_amount', 'cancelled_refund_amount', 'branch_id', 'created_at'],
     include: [
-      { model: Order, as: 'Order', attributes: ['id'] },
+      { model: Order, as: 'Order', attributes: ['id', 'currency_rates_override'] },
       { model: User, as: 'User', attributes: ['id', 'name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] }
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] }
     ],
     order: [['created_at', 'DESC']],
     limit: 15

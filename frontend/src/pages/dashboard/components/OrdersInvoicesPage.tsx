@@ -9,6 +9,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import Table from '../../../components/common/Table';
+import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import type { TableColumn } from '../../../types';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -1276,12 +1277,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       <div className="flex flex-col gap-1">
                         <span>
                           {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
-                          {((inv.Refunds as { status: string }[] | undefined)?.length ?? 0) > 0 && (() => {
-                            const REFUND_STATUS_LABELS_INV: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
-                            const latest = (inv.Refunds as { status: string }[])[0];
-                            const label = latest ? (REFUND_STATUS_LABELS_INV[latest.status] || latest.status) : null;
-                            return label ? <span className="block text-xs text-amber-700 font-medium mt-0.5">Status refund: {label}</span> : null;
-                          })()}
+                          <InvoiceRefundStatusLabel inv={inv} />
                           {((inv.status === 'canceled' || inv.status === 'cancelled' || inv.status === 'cancelled_refund') && (inv as any).cancellation_handling_note) && (() => {
                             const note = String((inv as any).cancellation_handling_note || '').replace(/Refund\.\s*Jumlah:\s*Rp\s*[\d.,]+\.?\s*/gi, '').replace(/Diproses di menu Refund\.?\s*/gi, '').trim();
                             return note ? <span className="block text-xs text-slate-600 mt-1 max-w-md">{note}</span> : null;
@@ -1313,48 +1309,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right align-top">
-                      {(() => {
-                        const st = (inv.status || '').toLowerCase();
-                        const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
-                        const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                        const totalInv = parseFloat(inv.total_amount || 0);
-                        const pctPaid = totalInv > 0 ? Math.round((paid / totalInv) * 100) : null;
-                        const refundAmt = parseFloat(inv.cancelled_refund_amount || 0) || 0;
-                        const pctRefund = totalInv > 0 && refundAmt > 0 ? Math.round((refundAmt / totalInv) * 100) : null;
-                        const statusLabel = getInvoiceStatusLabel(inv);
-                        const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
-                        const isCancelledRefund = st === 'cancelled_refund';
-                        const refunds = (inv.Refunds || []) as { status: string; amount?: number }[];
-                        const completedRefund = refunds.find((r: any) => r.status === 'refunded');
-                        const latestRefund = refunds[0];
-                        const REFUND_STATUS_LABELS: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
-                        const refundProcessLabel = latestRefund ? (REFUND_STATUS_LABELS[latestRefund.status] || latestRefund.status) : null;
-                        const isRefunded = !!completedRefund;
-                        const displayRefundAmount = refundAmt > 0 ? refundAmt : (isRefunded && completedRefund && Number((completedRefund as any).amount)) || 0;
-                        const showRefundBlock = isRefunded || (isCancelledRefund && displayRefundAmount > 0);
-                        const effectiveStatusLabel = isRefunded ? 'Sudah direfund' : statusLabel;
-                        return (
-                          <>
-                            <div className="flex flex-col items-end gap-1">
-                              <Badge variant={isRefunded ? 'success' : getStatusBadge(inv.status)} className="w-fit text-xs">{effectiveStatusLabel}</Badge>
-                              {refundProcessLabel != null && !isRefunded && (
-                                <span className="text-xs text-slate-600">Proses refund: <strong>{refundProcessLabel}</strong></span>
-                              )}
-                              {isDraftRow(inv) ? (
-                                <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>
-                              ) : isCancelNoPayment ? (
-                                <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>
-                              ) : showRefundBlock ? (
-                                displayRefundAmount > 0
-                                  ? (() => { const t = amountTriple(displayRefundAmount); const pctR = totalInv > 0 ? Math.round((displayRefundAmount / totalInv) * 100) : null; return <><div className="text-amber-700 font-medium text-sm">Refund: {formatIDR(displayRefundAmount)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctR != null && <div className="text-xs text-slate-600 mt-0.5">{pctR}% dari total tagihan</div>}</>; })()
-                                  : <span className="text-emerald-700 font-medium text-sm">Sudah direfund</span>
-                              ) : (
-                                (() => { const t = amountTriple(paid); return <><div className="text-[#0D1A63] font-medium">{formatIDR(paid)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}</>; })()
-                              )}
-                            </div>
-                          </>
-                        );
-                      })()}
+                      <InvoiceStatusRefundCell inv={inv} currencyRates={currencyRates} align="right" />
                     </td>
                     <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
                       {(() => {

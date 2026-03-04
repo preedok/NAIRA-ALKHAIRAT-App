@@ -10,6 +10,7 @@ const {
   User,
   OwnerProfile,
   Invoice,
+  Refund,
   HotelProgress,
   VisaProgress,
   TicketProgress,
@@ -146,7 +147,13 @@ async function getDashboardData(branchIds) {
     Order.findAll({
       where: { branch_id: branchIdFilter },
       include: [
-        { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true },
+        {
+          model: Invoice,
+          as: 'Invoice',
+          attributes: ['id', 'invoice_number', 'status', 'paid_amount', 'total_amount', 'cancelled_refund_amount'],
+          required: true,
+          include: [{ model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] }]
+        },
         { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
       ],
       order: [['created_at', 'DESC']],

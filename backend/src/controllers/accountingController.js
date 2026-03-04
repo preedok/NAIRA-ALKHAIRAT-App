@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
-const { Invoice, Order, OrderItem, User, Branch, PaymentProof, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
+const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
 const { INVOICE_STATUS } = require('../constants');
 
 // Role accounting bekerja di pusat: filter cabang untuk lihat order/invoice per cabang atau seluruh cabang.
@@ -240,7 +240,8 @@ const getAgingReport = asyncHandler(async (req, res) => {
       orderInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
-      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_type', 'verified_at', 'verified_status', 'proof_file_url'] }
+      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_type', 'verified_at', 'verified_status', 'proof_file_url'] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] }
     ],
     order: [['due_date_dp', 'ASC'], ['created_at', 'ASC']]
   });
@@ -379,7 +380,8 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
     include: [
       orderIncludeExp,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] }
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] }
     ],
     order: [['due_date_dp', 'ASC'], ['created_at', 'ASC']]
   });
@@ -514,7 +516,8 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
     include: [
       orderIncludePdf,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] }
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] }
     ],
     order: [['due_date_dp', 'ASC'], ['created_at', 'ASC']]
   });
@@ -679,7 +682,8 @@ const exportInvoicesExcel = asyncHandler(async (req, res) => {
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       branchIncludeExport,
       { model: Order, as: 'Order', attributes: ['id', 'status', 'total_amount'], required: false, include: [{ model: OrderItem, as: 'OrderItems', required: false }] },
-      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_currency', 'verified_status', 'payment_location', 'amount_original'] }
+      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_currency', 'verified_status', 'payment_location', 'amount_original'] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] }
     ],
     order: [['issued_at', 'DESC'], ['created_at', 'DESC']]
   });

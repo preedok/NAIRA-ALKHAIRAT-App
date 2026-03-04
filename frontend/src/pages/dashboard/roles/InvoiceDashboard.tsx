@@ -23,6 +23,7 @@ import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
 import Table from '../../../components/common/Table';
+import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
 import type { TableColumn } from '../../../types';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
@@ -95,11 +96,10 @@ const InvoiceDashboard: React.FC = () => {
 
   const invoiceTableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-    { id: 'status', label: 'Status', align: 'left' },
+    { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total', align: 'right' },
-    { id: 'paid', label: 'Terbayar', align: 'right' },
     { id: 'remaining', label: 'Sisa', align: 'right' },
     { id: 'due_date_dp', label: 'Jatuh Tempo DP', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'left' }
@@ -207,12 +207,13 @@ const InvoiceDashboard: React.FC = () => {
             return (
               <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                 <td className="py-3 px-4">
-                  <span className="font-mono font-semibold text-slate-900">{inv.invoice_number || '–'}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
+                    <InvoiceRefundStatusLabel inv={inv} />
+                  </div>
                 </td>
-                <td className="py-3 px-4">
-                  <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'overdue' ? 'error' : 'warning'}>
-                    {INVOICE_STATUS_LABELS[inv.status] || inv.status}
-                  </Badge>
+                <td className="py-3 px-4 text-right align-top">
+                  <InvoiceStatusRefundCell inv={inv} align="right" />
                 </td>
                 <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name ?? inv.Order?.User?.name ?? '–'}</td>
                 <td className="py-3 px-4 align-top text-sm">
@@ -220,7 +221,6 @@ const InvoiceDashboard: React.FC = () => {
                   <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                 </td>
                 <td className="py-3 px-4 text-right font-medium tabular-nums">{formatIDR(total)}</td>
-                <td className="py-3 px-4 text-right tabular-nums text-emerald-700">{formatIDR(paid)}</td>
                 <td className="py-3 px-4 text-right tabular-nums text-slate-700">{formatIDR(remaining)}</td>
                 <td className="py-3 px-4 text-slate-600">{formatDate(inv.due_date_dp)}</td>
                 <td className="py-3 px-4">
