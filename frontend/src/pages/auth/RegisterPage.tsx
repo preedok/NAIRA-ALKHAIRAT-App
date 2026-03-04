@@ -10,7 +10,6 @@ import { validateEmail } from '../../utils';
 import { AUTOCOMPLETE_PILIH } from '../../utils/constants';
 import Input from '../../components/common/Input';
 import Autocomplete from '../../components/common/Autocomplete';
-import Textarea from '../../components/common/Textarea';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -431,7 +430,7 @@ const RegisterPage: React.FC = () => {
     <div className="grid-bg" style={PAGE_STYLE}>
       {BG}
 
-      <div className="rg-card" style={{ position:'relative', width:'100%', maxWidth:720, zIndex:10 }}>
+      <div className="rg-card" style={{ position:'relative', width:'100%', maxWidth:960, zIndex:10 }}>
         {/* Glow border */}
         <div style={{
           position:'absolute', inset:-1, borderRadius:22, pointerEvents:'none',
@@ -528,10 +527,7 @@ const RegisterPage: React.FC = () => {
                 <div className="rg-section-title">Informasi Perusahaan</div>
                 <div className="rg-form-row-3">
                   <Input label="Nama Perusahaan / Travel" name="company_name" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" icon={<Building2 size={16} style={{ color:'#64748b' }} />} />
-                  <div>
-                    <label style={{ display:'block', marginBottom:6 }}>Alamat Kantor</label>
-                    <Textarea name="address" value={form.address} onChange={handleChange} rows={2} placeholder="Alamat kantor" />
-                  </div>
+                  <Input label="Alamat Kantor" name="address" value={form.address} onChange={handleChange} placeholder="Alamat kantor" icon={<MapPin size={16} style={{ color:'#64748b' }} />} />
                   <div className="rg-autocomplete-wrap">
                     <Autocomplete
                       label="Kota Operasional"

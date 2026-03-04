@@ -7,7 +7,6 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { validateEmail } from '../../utils';
 import Input from '../../components/common/Input';
-import Checkbox from '../../components/common/Checkbox';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -114,6 +113,23 @@ const STYLES = `
     border:2px solid rgba(255,255,255,0.3); border-top-color:white;
     animation:spin .75s linear infinite;
   }
+
+  /* Dark form inputs (sama dengan Register) */
+  .lg-form-dark label {
+    color:#64748b !important; font-size:11px !important; font-weight:700 !important;
+    letter-spacing:.08em !important; text-transform:uppercase !important;
+  }
+  .lg-form-dark input:not([type=file]):not([type=submit]):not([type=button]):not([type=checkbox]) {
+    background:rgba(255,255,255,0.04) !important; border:1.5px solid rgba(255,255,255,0.1) !important;
+    color:#fff !important; border-radius:12px !important; caret-color:#38bdf8 !important;
+  }
+  .lg-form-dark input::placeholder { color:#475569 !important; }
+  .lg-form-dark input:focus {
+    border-color:#38bdf8 !important; box-shadow:0 0 0 3px rgba(56,189,248,0.15) !important;
+    background:rgba(56,189,248,0.06) !important;
+  }
+  .lg-form-dark .relative input { padding-left:42px !important; padding-right:14px !important; }
+  .lg-form-dark .absolute.left-4 { color:#64748b !important; }
 `;
 
 const SKY  = '#38bdf8';
@@ -263,7 +279,7 @@ const LoginPage: React.FC = () => {
           )}
 
           {/* ── Form ── */}
-          <form onSubmit={handleSubmit} noValidate>
+          <form onSubmit={handleSubmit} noValidate className="lg-form-dark">
             <div className="fu fu-2" style={{ display:'flex', flexDirection:'column', gap:14, marginBottom:14 }}>
               <Input
                 name="email"
@@ -271,7 +287,7 @@ const LoginPage: React.FC = () => {
                 label="Alamat Email"
                 value={formData.email}
                 onChange={handleChange}
-                icon={<Mail size={15} />}
+                icon={<Mail size={16} style={{ color:'#64748b' }} />}
                 placeholder="nama@perusahaan.com"
                 autoComplete="email"
                 error={error || undefined}
@@ -282,12 +298,12 @@ const LoginPage: React.FC = () => {
                 label="Kata Sandi"
                 value={formData.password}
                 onChange={handleChange}
-                icon={<Lock size={15} />}
+                icon={<Lock size={16} style={{ color:'#64748b' }} />}
                 placeholder="Minimal 8 karakter"
                 autoComplete="current-password"
                 error={error || undefined}
                 rightLabel={
-                  <Link to="/forgot-password" className="text-xs font-semibold text-[#38bdf8] hover:opacity-80 no-underline">
+                  <Link to="/forgot-password" style={{ fontSize:12, fontWeight:600, color:SKY, textDecoration:'none' }}>
                     Lupa kata sandi?
                   </Link>
                 }
@@ -296,21 +312,11 @@ const LoginPage: React.FC = () => {
                     type="button"
                     onClick={() => setShowPass(p => !p)}
                     aria-label={showPass ? 'Sembunyikan' : 'Tampilkan'}
-                    className="p-0 border-0 bg-transparent cursor-pointer text-slate-400 hover:text-slate-600 flex"
+                    style={{ padding:0, border:'none', background:'transparent', cursor:'pointer', color:'#64748b', display:'flex', alignItems:'center' }}
                   >
                     {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 }
-              />
-            </div>
-
-            {/* Remember */}
-            <div className="fu fu-2" style={{ marginBottom:18 }}>
-              <Checkbox
-                id="rem"
-                label="Ingat saya selama 30 hari"
-                checked={false}
-                onChange={() => {}}
               />
             </div>
 
