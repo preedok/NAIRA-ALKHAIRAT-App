@@ -116,6 +116,16 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.UUID,
     allowNull: true,
     comment: 'Pointer ke order_revisions terakhir (untuk tampilkan diff di UI)'
+  },
+  cancelled_refund_amount: {
+    type: DataTypes.DECIMAL(18, 2),
+    allowNull: true,
+    comment: 'Jumlah pembayaran yang akan/direfund saat invoice dibatalkan (status cancelled_refund)'
+  },
+  cancellation_handling_note: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Keterangan workflow pembatalan: dipindah ke saldo, refund, atau alihkan ke invoice lain'
   }
 }, {
   tableName: 'invoices',

@@ -53,6 +53,7 @@ const INVOICE_STATUS = {
   COMPLETED: 'completed',
   OVERDUE: 'overdue',
   CANCELED: 'canceled',
+  CANCELLED_REFUND: 'cancelled_refund',  // Invoice dibatalkan dan ada pembayaran (jumlah refund disimpan di cancelled_refund_amount)
   REFUNDED: 'refunded',
   ORDER_UPDATED: 'order_updated',   // Order diupdate, invoice perlu penyesuaian
   OVERPAID: 'overpaid',             // Kelebihan bayar

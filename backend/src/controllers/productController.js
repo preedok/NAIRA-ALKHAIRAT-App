@@ -175,17 +175,19 @@ const list = asyncHandler(async (req, res) => {
       const branch = bid ? prices.find(pr => pr.branch_id === bid && !pr.owner_id) : null;
       const special = oid ? prices.find(pr => pr.owner_id === oid) : null;
       const emptyMeta = (pr) => !pr.meta || (typeof pr.meta === 'object' && Object.keys(pr.meta).length === 0);
-      const simpleGeneral = generalPrices.filter(emptyMeta);
+      const onlyRefCurrencyMeta = (pr) => pr.meta && typeof pr.meta === 'object' && Object.keys(pr.meta).length === 1 && (pr.meta.reference_currency === 'IDR' || pr.meta.reference_currency === 'SAR' || pr.meta.reference_currency === 'USD');
+      const simpleGeneral = generalPrices.filter(pr => emptyMeta(pr) || onlyRefCurrencyMeta(pr));
       const byCur = (c) => simpleGeneral.find(pr => pr.currency === c);
       const price_general_idr = byCur('IDR') ? parseFloat(byCur('IDR').amount) : null;
       const price_general_sar = byCur('SAR') ? parseFloat(byCur('SAR').amount) : null;
       const price_general_usd = byCur('USD') ? parseFloat(byCur('USD').amount) : null;
+      const refCurrencyFromPrice = (byCur('IDR')?.meta?.reference_currency || byCur('SAR')?.meta?.reference_currency || byCur('USD')?.meta?.reference_currency) || null;
       const base = {
         ...p.toJSON(),
         price_general: general ? parseFloat(general.amount) : null,
         price_branch: branch ? parseFloat(branch.amount) : null,
         price_special: special ? parseFloat(special.amount) : null,
-        currency: (p.meta && typeof p.meta === 'object' && p.meta.currency) ? p.meta.currency : (general?.currency || branch?.currency || 'IDR'),
+        currency: (p.meta && typeof p.meta === 'object' && p.meta.currency) ? p.meta.currency : (refCurrencyFromPrice || general?.currency || branch?.currency || 'IDR'),
         price_general_idr: price_general_idr ?? null,
         price_general_sar: price_general_sar ?? null,
         price_general_usd: price_general_usd ?? null

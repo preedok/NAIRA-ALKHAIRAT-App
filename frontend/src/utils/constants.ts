@@ -99,6 +99,7 @@ export const INVOICE_STATUSES = {
   COMPLETED: 'completed',
   OVERDUE: 'overdue',
   CANCELED: 'canceled',
+  CANCELLED_REFUND: 'cancelled_refund',
   REFUNDED: 'refunded',
   ORDER_UPDATED: 'order_updated',
   OVERPAID: 'overpaid',
@@ -117,12 +118,13 @@ export const INVOICE_STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
   overdue: 'Overdue',
   canceled: 'Dibatalkan',
+  cancelled_refund: 'Dibatalkan Refund',
   refunded: 'Refund Dana',
   order_updated: 'Order Diupdate',
   overpaid: 'Kelebihan Bayar',
   overpaid_transferred: 'Pindahan (Sumber)',
   overpaid_received: 'Pindahan (Penerima)',
-  refund_canceled: 'Refund Dibatalkan',
+  refund_canceled: 'Dibatalkan refund',
   overpaid_refund_pending: 'Sisa Pengembalian'
 };
 
@@ -135,6 +137,7 @@ export const INVOICE_STATUS_COLORS: Record<string, string> = {
   completed: 'success',
   overdue: 'error',
   canceled: 'error',
+  cancelled_refund: 'error',
   refunded: 'default',
   order_updated: 'warning',
   overpaid: 'warning',

@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, Bank, InvoiceStatusHistory, OrderRevision } = require('../models');
-const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS } = require('../constants');
+const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
@@ -426,6 +426,19 @@ const list = asyncHandler(async (req, res) => {
     if (d.order_id) {
       if (!d.Order) d.Order = {};
       d.Order.OrderItems = orderItemsByOrderId[d.order_id] || [];
+    }
+  }
+
+  const refundCanceledIds = data.filter((d) => (d.status || '').toLowerCase() === 'refund_canceled').map((d) => d.id);
+  if (refundCanceledIds.length > 0) {
+    const refunds = await Refund.findAll({
+      where: { invoice_id: { [Op.in]: refundCanceledIds }, source: REFUND_SOURCE.CANCEL },
+      attributes: ['invoice_id', 'amount'],
+      raw: true
+    });
+    const amountByInvId = refunds.reduce((acc, r) => { acc[r.invoice_id] = parseFloat(r.amount) || 0; return acc; }, {});
+    for (const d of data) {
+      if ((d.status || '').toLowerCase() === 'refund_canceled') d.cancel_refund_amount = amountByInvId[d.id] ?? null;
     }
   }
 
@@ -936,6 +949,10 @@ const getById = asyncHandler(async (req, res) => {
   const rules = await getRulesForBranch(invoice.branch_id);
   const data = invoice.toJSON();
   data.currency_rates = rules.currency_rates || {};
+  if ((data.status || '').toLowerCase() === 'refund_canceled' && Array.isArray(data.Refunds)) {
+    const cancelRefund = data.Refunds.find((r) => r.source === REFUND_SOURCE.CANCEL);
+    data.cancel_refund_amount = cancelRefund != null ? parseFloat(cancelRefund.amount) || null : null;
+  }
   // Rekening bank untuk pembayaran: dari Data Rekening Bank (accounting), agar owner/role lain dapat daftar tanpa akses API accounting
   const accountingBankAccounts = await AccountingBankAccount.findAll({
     where: { is_active: true },
@@ -1285,7 +1302,7 @@ function getReleasableAmount(invoice) {
   const status = (invoice.status || '').toLowerCase();
   const paid = parseFloat(invoice.paid_amount) || 0;
   const overpaid = parseFloat(invoice.overpaid_amount) || 0;
-  if (status === 'canceled' || status === 'cancelled') return Math.max(0, paid);
+  if (status === 'canceled' || status === 'cancelled' || status === INVOICE_STATUS.CANCELLED_REFUND) return Math.max(0, paid);
   return Math.max(0, overpaid);
 }
 
@@ -1364,7 +1381,7 @@ const reallocatePayments = asyncHandler(async (req, res) => {
     const target = invoiceMap.get(p.target_invoice_id);
     if (!target) return res.status(404).json({ success: false, message: 'Invoice penerima tidak ditemukan' });
     const status = (target.status || '').toLowerCase();
-    if (status === 'canceled' || status === 'cancelled') {
+    if (status === 'canceled' || status === 'cancelled' || status === INVOICE_STATUS.CANCELLED_REFUND) {
       return res.status(400).json({ success: false, message: `Invoice penerima ${target.invoice_number} dalam status dibatalkan` });
     }
   }
@@ -1381,7 +1398,7 @@ const reallocatePayments = asyncHandler(async (req, res) => {
       const paid = parseFloat(inv.paid_amount) || 0;
       const overpaid = parseFloat(inv.overpaid_amount) || 0;
       const totalAmount = parseFloat(inv.total_amount) || 0;
-      const isCanceled = (inv.status || '').toLowerCase() === 'canceled' || (inv.status || '').toLowerCase() === 'cancelled';
+      const isCanceled = (inv.status || '').toLowerCase() === 'canceled' || (inv.status || '').toLowerCase() === 'cancelled' || inv.status === INVOICE_STATUS.CANCELLED_REFUND;
       let newPaid = paid - deduct;
       let newOverpaid = overpaid;
       if (isCanceled) {

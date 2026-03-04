@@ -5,7 +5,7 @@ const multer = require('multer');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof, PaymentReallocation } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
-const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS } = require('../constants');
+const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS } = require('../constants');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
@@ -817,7 +817,7 @@ const destroy = asyncHandler(async (req, res) => {
     if (!targetInv) return res.status(404).json({ success: false, message: 'Invoice tujuan tidak ditemukan' });
     if (targetInv.owner_id !== order.owner_id) return res.status(400).json({ success: false, message: 'Invoice tujuan harus milik owner yang sama' });
     const targetStatus = (targetInv.status || '').toLowerCase();
-    if (targetStatus === 'canceled' || targetStatus === 'cancelled') return res.status(400).json({ success: false, message: 'Invoice tujuan tidak boleh yang sudah dibatalkan' });
+    if (targetStatus === 'canceled' || targetStatus === 'cancelled' || targetStatus === 'cancelled_refund') return res.status(400).json({ success: false, message: 'Invoice tujuan tidak boleh yang sudah dibatalkan' });
   }
 
   let refund = null;
@@ -860,15 +860,24 @@ const destroy = asyncHandler(async (req, res) => {
       }
     } else if (remainder > 0 && remainderAction === 'allocate_to_order' && remainderTargetInvoiceId) {
       const targetInv = await Invoice.findByPk(remainderTargetInvoiceId);
-      if (targetInv && targetInv.owner_id === order.owner_id) {
+      const remainderTargetStatus = (targetInv?.status || '').toLowerCase();
+      if (targetInv && targetInv.owner_id === order.owner_id && remainderTargetStatus !== 'canceled' && remainderTargetStatus !== 'cancelled' && remainderTargetStatus !== 'cancelled_refund') {
         const targetPaid = parseFloat(targetInv.paid_amount) || 0;
         const targetTotal = parseFloat(targetInv.total_amount) || 0;
         const newTargetPaid = targetPaid + remainder;
         const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
         let newTargetStatus = targetInv.status;
-        if (newTargetRemaining <= 0) newTargetStatus = 'paid';
-        else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = 'partial_paid';
-        await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus });
+        if (newTargetRemaining <= 0) newTargetStatus = INVOICE_STATUS.PAID;
+        else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = INVOICE_STATUS.PARTIAL_PAID;
+        const receivedNote = `Menerima pemindahan Rp ${Number(remainder).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan order).`;
+        const targetNotes = [receivedNote, (targetInv.notes || '').trim()].filter(Boolean).join('\n');
+        await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus, notes: targetNotes });
+        if (newTargetStatus === INVOICE_STATUS.PAID) {
+          const targetOrder = await Order.findByPk(targetInv.order_id, { attributes: ['id', 'status'] });
+          if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
+            await targetOrder.update({ status: ORDER_STATUS.PROCESSING });
+          }
+        }
         await PaymentReallocation.create({
           source_invoice_id: inv.id,
           target_invoice_id: remainderTargetInvoiceId,
@@ -876,10 +885,10 @@ const destroy = asyncHandler(async (req, res) => {
           performed_by: req.user.id,
           notes: `Pembatalan order ${order.order_number}; sisa setelah refund dialokasikan ke invoice ${targetInv.invoice_number}`
         });
-        reallocationAdded = { target_invoice_id: remainderTargetInvoiceId, amount: remainder };
+        reallocationAdded = { target_invoice_id: remainderTargetInvoiceId, target_invoice_number: targetInv.invoice_number, amount: remainder };
       }
     }
-    await inv.update({ paid_amount: refundAmount, remaining_amount: 0 });
+    await inv.update({ paid_amount: 0, remaining_amount: 0 });
     refund = await Refund.create({
       invoice_id: inv.id,
       order_id: order.id,
@@ -901,9 +910,17 @@ const destroy = asyncHandler(async (req, res) => {
       const newTargetPaid = targetPaid + paidAmount;
       const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
       let newTargetStatus = targetInv.status;
-      if (newTargetRemaining <= 0) newTargetStatus = 'paid';
-      else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = 'partial_paid';
-      await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus });
+      if (newTargetRemaining <= 0) newTargetStatus = INVOICE_STATUS.PAID;
+      else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = INVOICE_STATUS.PARTIAL_PAID;
+      const receivedNote = `Menerima pemindahan Rp ${Number(paidAmount).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan order).`;
+      const targetNotes = [receivedNote, (targetInv.notes || '').trim()].filter(Boolean).join('\n');
+      await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus, notes: targetNotes });
+      if (newTargetStatus === INVOICE_STATUS.PAID) {
+        const targetOrder = await Order.findByPk(targetInv.order_id, { attributes: ['id', 'status'] });
+        if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
+          await targetOrder.update({ status: ORDER_STATUS.PROCESSING });
+        }
+      }
       await PaymentReallocation.create({
         source_invoice_id: inv.id,
         target_invoice_id: targetInvoiceId,
@@ -911,28 +928,58 @@ const destroy = asyncHandler(async (req, res) => {
         performed_by: req.user.id,
         notes: `Pembatalan order ${order.order_number}; dana dialihkan ke invoice ${targetInv.invoice_number}`
       });
-      reallocationAdded = { target_invoice_id: targetInvoiceId, amount: paidAmount };
+      reallocationAdded = { target_invoice_id: targetInvoiceId, target_invoice_number: targetInv.invoice_number, amount: paidAmount };
     }
     await inv.update({ paid_amount: 0, remaining_amount: 0 });
   }
 
-  await order.update({ status: 'cancelled' });
+  let cancellationHandlingNote = null;
+  if (inv && paidAmount > 0 && action) {
+    const fmt = (n) => Number(n).toLocaleString('id-ID');
+    if (action === 'to_balance') {
+      cancellationHandlingNote = `Dipindahkan ke saldo akun. Jumlah: Rp ${fmt(paidAmount)}`;
+    } else if (action === 'refund') {
+      cancellationHandlingNote = `Refund. Jumlah: Rp ${fmt(refundAmount)}. Diproses di menu Refund.`;
+      if (reallocationAdded && reallocationAdded.target_invoice_number) {
+        cancellationHandlingNote += ` Sisa Rp ${fmt(reallocationAdded.amount)} dialihkan ke invoice ${reallocationAdded.target_invoice_number}.`;
+      } else if (balanceAdded != null && balanceAdded.amount != null) {
+        cancellationHandlingNote += ` Sisa Rp ${fmt(balanceAdded.amount)} dipindahkan ke saldo akun.`;
+      }
+    } else if (action === 'allocate_to_order' && reallocationAdded) {
+      cancellationHandlingNote = `Dipindahkan ke invoice ${reallocationAdded.target_invoice_number || 'lain'}. Jumlah: Rp ${fmt(reallocationAdded.amount)}`;
+    }
+  }
+
+  await order.update({ status: ORDER_STATUS.CANCELLED });
   if (inv) {
-    await inv.update({ status: 'canceled' });
+    const newInvoiceStatus = paidAmount > 0 ? INVOICE_STATUS.CANCELLED_REFUND : INVOICE_STATUS.CANCELED;
+    const invoiceUpdates = {
+      status: newInvoiceStatus,
+      ...(paidAmount > 0 ? { cancelled_refund_amount: paidAmount } : { cancelled_refund_amount: null }),
+      ...(action === 'to_balance' ? { paid_amount: 0, remaining_amount: 0 } : {}),
+      ...(action === 'refund' ? { paid_amount: 0, remaining_amount: 0 } : {}),
+      ...(cancellationHandlingNote ? { cancellation_handling_note: cancellationHandlingNote } : {})
+    };
+    await inv.update(invoiceUpdates);
     await logInvoiceStatusChange({
       invoice_id: inv.id,
       from_status: inv.status,
-      to_status: 'canceled',
+      to_status: newInvoiceStatus,
       changed_by: req.user.id,
-      reason: 'canceled',
-      meta: { action: action || null, refund_id: refund?.id || null, order_id: order.id, reallocation: reallocationAdded || null }
+      reason: paidAmount > 0 ? 'canceled_with_payment' : 'canceled',
+      meta: {
+        action: action || null,
+        refund_id: refund?.id || null,
+        order_id: order.id,
+        reallocation: reallocationAdded || null,
+        ...(paidAmount > 0 ? { cancelled_refund_amount: paidAmount } : {})
+      }
     });
-    await inv.update({ status: 'canceled' });
     if (refund) {
       await logInvoiceStatusChange({
         invoice_id: inv.id,
-        from_status: 'canceled',
-        to_status: 'canceled',
+        from_status: newInvoiceStatus,
+        to_status: newInvoiceStatus,
         changed_by: req.user.id,
         reason: 'refund_requested',
         meta: { refund_id: refund.id, amount: refundAmount, bank_name: bankName, account_number: accountNumber }
@@ -940,8 +987,8 @@ const destroy = asyncHandler(async (req, res) => {
     } else if (balanceAdded != null) {
       await logInvoiceStatusChange({
         invoice_id: inv.id,
-        from_status: 'canceled',
-        to_status: 'canceled',
+        from_status: newInvoiceStatus,
+        to_status: newInvoiceStatus,
         changed_by: req.user.id,
         reason: 'to_balance',
         meta: { amount: balanceAdded.amount != null ? balanceAdded.amount : paidAmount }
@@ -949,8 +996,8 @@ const destroy = asyncHandler(async (req, res) => {
     } else if (reallocationAdded) {
       await logInvoiceStatusChange({
         invoice_id: inv.id,
-        from_status: 'canceled',
-        to_status: 'canceled',
+        from_status: newInvoiceStatus,
+        to_status: newInvoiceStatus,
         changed_by: req.user.id,
         reason: 'allocate_to_order',
         meta: reallocationAdded

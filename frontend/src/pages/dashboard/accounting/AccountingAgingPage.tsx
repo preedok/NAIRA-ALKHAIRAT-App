@@ -357,7 +357,7 @@ const AccountingAgingPage: React.FC = () => {
 
   const getStatusBadgeVariant = (s: string) => {
     if (['paid', 'completed', 'confirmed'].includes(s)) return 'success';
-    if (['overdue', 'canceled', 'cancelled'].includes(s)) return 'error';
+    if (['overdue', 'canceled', 'cancelled', 'cancelled_refund'].includes(s)) return 'error';
     if (['partial_paid', 'tentative', 'processing'].includes(s)) return 'warning';
     return 'default';
   };
@@ -365,7 +365,7 @@ const AccountingAgingPage: React.FC = () => {
   const getStatusBadge = (status: string) => {
     const map: Record<string, 'success' | 'warning' | 'info' | 'error' | 'default'> = {
       paid: 'success', partial_paid: 'warning', tentative: 'default', draft: 'info', confirmed: 'info',
-      processing: 'info', completed: 'success', overdue: 'error', canceled: 'error', cancelled: 'error',
+      processing: 'info', completed: 'success',       overdue: 'error', canceled: 'error', cancelled: 'error', cancelled_refund: 'error',
       refunded: 'default', order_updated: 'warning', overpaid: 'warning', overpaid_transferred: 'info',
       overpaid_received: 'info', refund_canceled: 'error', overpaid_refund_pending: 'warning'
     };

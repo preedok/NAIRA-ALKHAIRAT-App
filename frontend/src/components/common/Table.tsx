@@ -57,7 +57,7 @@ function Table<T>({
 
   return (
     <div className={className}>
-      <div className="overflow-x-auto overflow-y-visible">
+      <div className="table-scroll-wrap overflow-x-auto overflow-y-visible">
         <table className="text-sm min-w-max w-full">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/95">

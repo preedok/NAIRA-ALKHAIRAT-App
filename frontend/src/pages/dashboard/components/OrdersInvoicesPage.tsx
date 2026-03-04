@@ -26,16 +26,17 @@ const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
   processing: { icon: <Send className="w-5 h-5" /> },
   completed: { icon: <CheckCircle className="w-5 h-5" /> },
   canceled: { icon: <X className="w-5 h-5" /> },
-  cancelled: { icon: <X className="w-5 h-5" /> }, 
+  cancelled: { icon: <X className="w-5 h-5" /> },
+  cancelled_refund: { icon: <X className="w-5 h-5" /> }, 
   overdue: { icon: <Clock className="w-5 h-5" /> },
   refunded: { icon: <Receipt className="w-5 h-5" /> },
   overpaid: { icon: <DollarSign className="w-5 h-5" /> }
 };
 
 /** Urutan tampilan card Per Status Invoice (status utama dulu). Status utama selalu ditampilkan sebagai card. */
-const PER_STATUS_ORDER = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled', 'overdue', 'draft', 'refunded', 'order_updated', 'overpaid', 'overpaid_transferred', 'overpaid_received', 'refund_canceled', 'overpaid_refund_pending'];
+const PER_STATUS_ORDER = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled', 'cancelled_refund', 'overdue', 'draft', 'refunded', 'order_updated', 'overpaid', 'overpaid_transferred', 'overpaid_received', 'refund_canceled', 'overpaid_refund_pending'];
 /** Status yang selalu ditampilkan di card (meskipun count 0): Tagihan DP, Pembayaran DP, Lunas, Processing, Completed, Dibatalkan */
-const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled'];
+const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled_refund'];
 
 /** Label trip type bus: pergi saja / pulang saja / pulang pergi */
 const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
@@ -324,7 +325,7 @@ const OrdersInvoicesPage: React.FC = () => {
       invoicesApi.list({ owner_id: inv.owner_id, limit: 200 })
         .then((r: any) => {
           const list = (r.data?.data ?? []) as any[];
-          const options = list.filter((i: any) => i.id !== inv.id && !['canceled', 'cancelled'].includes((i.status || '').toLowerCase()));
+          const options = list.filter((i: any) => i.id !== inv.id && !['canceled', 'cancelled', 'cancelled_refund'].includes((i.status || '').toLowerCase()));
           setCancelTargetInvoiceOptions(options);
         })
         .catch(() => setCancelTargetInvoiceOptions([]));
@@ -636,7 +637,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const getStatusBadge = (status: string) => {
     const map: Record<string, 'success' | 'warning' | 'info' | 'error' | 'default'> = {
       paid: 'success', partial_paid: 'warning', tentative: 'default', draft: 'info', confirmed: 'info',
-      processing: 'info', completed: 'success', overdue: 'error', canceled: 'error', cancelled: 'error',
+      processing: 'info', completed: 'success', overdue: 'error', canceled: 'error', cancelled: 'error', cancelled_refund: 'error',
       refunded: 'default', order_updated: 'warning', overpaid: 'warning', overpaid_transferred: 'info',
       overpaid_received: 'info', refund_canceled: 'error', overpaid_refund_pending: 'warning'
     };
@@ -954,6 +955,18 @@ const OrdersInvoicesPage: React.FC = () => {
     return at ? new Date(at) : null;
   };
 
+  /** Label status invoice: jika dibatalkan dengan refund tampilkan "Dibatalkan refund [jumlah]". */
+  const getInvoiceStatusLabel = (inv: any) => {
+    const st = (inv?.status || '').toLowerCase();
+    if (st === 'cancelled_refund' && (inv?.cancelled_refund_amount != null && Number(inv.cancelled_refund_amount) > 0)) {
+      return `Dibatalkan Refund ${formatIDR(Number(inv.cancelled_refund_amount))}`;
+    }
+    if (st === 'refund_canceled' && inv?.cancel_refund_amount != null) {
+      return `Dibatalkan refund ${formatIDR(Number(inv.cancel_refund_amount))}`;
+    }
+    return INVOICE_STATUS_LABELS[inv?.status] || inv?.status || '';
+  };
+
   const invoiceTableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
@@ -992,7 +1005,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const hasCancelledInvoiceWithPayment = invoices.some((inv: any) => {
     const st = (inv.status || '').toLowerCase();
     const paid = parseFloat(inv.paid_amount || 0);
-    return (st === 'canceled' || st === 'cancelled') && paid > 0;
+    const cancelledRefundAmt = parseFloat(inv.cancelled_refund_amount || 0);
+    return (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') && (paid > 0 || cancelledRefundAmt > 0);
   });
   const showReallocateButton = canReallocate && hasCancelledInvoiceWithPayment;
   const invoiceSubtitle = `Daftar invoice. Buka untuk detail, pembayaran, dan update status produk (Visa, Tiket, Hotel, Bus).${scopeHint}`;
@@ -1256,6 +1270,12 @@ const OrdersInvoicesPage: React.FC = () => {
                       <div className="flex flex-col gap-1">
                         <span>
                           {isDraftRow(inv) ? `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}` : formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}
+                          {inv.status === 'cancelled_refund' && (inv.cancelled_refund_amount != null && Number(inv.cancelled_refund_amount) > 0) && (
+                            <span className="block text-xs text-amber-700 font-medium mt-0.5">Refund: {formatIDR(Number(inv.cancelled_refund_amount))}</span>
+                          )}
+                          {((inv.status === 'canceled' || inv.status === 'cancelled' || inv.status === 'cancelled_refund') && (inv as any).cancellation_handling_note) && (
+                            <span className="block text-xs text-slate-600 mt-1 max-w-md">{(inv as any).cancellation_handling_note}</span>
+                          )}
                         </span>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {isNewInvoice(inv) && (
@@ -1306,7 +1326,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         const pct = inv.Order?.dp_percentage_paid != null ? Number(inv.Order.dp_percentage_paid) : null;
                         const updatedAt = inv.Order?.order_updated_at || inv.order_updated_at || inv.orderUpdatedAt || null;
                         const isDpUpdated = (inv.status === 'partial_paid' || dpStatus === 'pembayaran_dp') && !!updatedAt;
-                        let label = INVOICE_STATUS_LABELS[inv.status] || inv.status;
+                        let label = getInvoiceStatusLabel(inv);
                         if (dpStatus === 'tagihan_dp') label = 'Tagihan DP';
                         else if (dpStatus === 'pembayaran_dp') label = 'Pembayaran DP';
                         else if (isDpUpdated) label = 'Pembayaran DP + Update Invoice';
@@ -1969,7 +1989,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               const pct = viewInvoice.Order?.dp_percentage_paid != null ? Number(viewInvoice.Order.dp_percentage_paid) : null;
                               const updatedAt = viewInvoice.Order?.order_updated_at || viewInvoice.order_updated_at || viewInvoice.orderUpdatedAt || null;
                               const isDpUpdated = (viewInvoice.status === 'partial_paid' || dpStatus === 'pembayaran_dp') && !!updatedAt;
-                              let label = INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status;
+                              let label = getInvoiceStatusLabel(viewInvoice);
                               if (dpStatus === 'tagihan_dp') label = 'Tagihan DP';
                               else if (dpStatus === 'pembayaran_dp') label = 'Pembayaran DP';
                               else if (isDpUpdated) label = 'Pembayaran DP + Update Invoice';
@@ -2282,13 +2302,24 @@ const OrdersInvoicesPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Informasi Pembatalan (workflow: jadikan saldo / refund / alihkan ke invoice lain) */}
+                  {(viewInvoice?.status === 'canceled' || viewInvoice?.status === 'cancelled' || viewInvoice?.status === 'cancelled_refund') && (viewInvoice as any)?.cancellation_handling_note && (
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                      <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        <X className="w-4 h-4 text-slate-500" /> Informasi Pembatalan
+                      </h4>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{(viewInvoice as any).cancellation_handling_note}</p>
+                      <p className="text-xs text-slate-500">Pembayaran pada invoice ini telah menjadi Rp 0 (nol) sesuai tindakan di atas.</p>
+                    </div>
+                  )}
+
                   {/* Info Refund (jika invoice dibatalkan dengan pembayaran) */}
                   {(viewInvoice?.Refunds?.length ?? 0) > 0 && (
                     <div className="p-5 bg-amber-50/80 rounded-2xl border border-amber-200 shadow-sm space-y-3">
                       <h4 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
                         <Receipt className="w-4 h-4" /> Permintaan Refund
                       </h4>
-                      <p className="text-xs text-slate-500">Status refund diproses oleh role accounting. Setelah proses selesai, bukti refund dikirim ke email pemesan (pengorder).</p>
+                      <p className="text-xs text-slate-500">Data ini muncul di menu Refund dan akan diproses oleh accounting. Setelah proses selesai, bukti refund dikirim ke email pemesan (pengorder).</p>
                       <ul className="space-y-2">
                         {(viewInvoice.Refunds as any[]).map((r: any) => (
                           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm p-3 bg-white rounded-lg border border-slate-200">
@@ -2651,16 +2682,22 @@ const OrdersInvoicesPage: React.FC = () => {
           const st = (i.status || '').toLowerCase();
           const paid = parseFloat(i.paid_amount || 0);
           const overpaid = parseFloat(i.overpaid_amount || 0);
-          return (st === 'canceled' || st === 'cancelled') ? paid > 0 : overpaid > 0;
+          const cancelledRefundAmt = parseFloat(i.cancelled_refund_amount || 0);
+          if (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') return paid > 0 || cancelledRefundAmt > 0;
+          return overpaid > 0;
         });
         const targetCandidates = list.filter((i: any) => {
           const st = (i.status || '').toLowerCase();
           const remain = parseFloat(i.remaining_amount || 0);
-          return st !== 'canceled' && st !== 'cancelled' && remain > 0;
+          return st !== 'canceled' && st !== 'cancelled' && st !== 'cancelled_refund' && remain > 0;
         });
         const getReleasable = (inv: any) => {
           const st = (inv?.status || '').toLowerCase();
-          if (st === 'canceled' || st === 'cancelled') return parseFloat(inv?.paid_amount || 0);
+          if (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') {
+            const paid = parseFloat(inv?.paid_amount || 0);
+            const cancelledRefundAmt = parseFloat(inv?.cancelled_refund_amount || 0);
+            return paid > 0 ? paid : cancelledRefundAmt;
+          }
           return parseFloat(inv?.overpaid_amount || 0);
         };
         const addRow = () => setReallocateRows((prev) => [...prev, { source_invoice_id: '', target_invoice_id: '', amount: '' }]);
