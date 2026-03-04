@@ -92,7 +92,7 @@ const AccountingPurchasingProductPage: React.FC = () => {
       <div className="space-y-6">
         <PageHeader title={`Pembelian – ${label}`} subtitle="Product tidak ditemukan." />
         <Card className="p-6">
-          <p className="text-slate-600">Product untuk tipe ini belum ada. Kembali ke <Button variant="link" onClick={() => navigate('/dashboard/accounting/purchasing')}>Ringkasan Pembelian</Button>.</p>
+          <p className="text-slate-600">Product untuk tipe ini belum ada. Kembali ke <Button variant="ghost" size="sm" className="inline p-0 h-auto font-medium text-[#0D1A63] hover:underline" onClick={() => navigate('/dashboard/accounting/purchasing')}>Ringkasan Pembelian</Button>.</p>
         </Card>
       </div>
     );

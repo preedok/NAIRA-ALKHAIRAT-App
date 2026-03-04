@@ -15,10 +15,20 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
   hotel: 'Hotel',
   visa: 'Visa',
   ticket: 'Tiket',
-  bus: 'Bus',
+  bus: 'Bus Saudi',
   handling: 'Handling',
   package: 'Paket'
 };
+
+/** Tab filter per tipe product (tetap: Hotel, Visa, Tiket, Bus Saudi, Handling) */
+const PURCHASING_PRODUCT_TABS: { id: string; label: string }[] = [
+  { id: '', label: 'Semua' },
+  { id: 'hotel', label: 'Hotel' },
+  { id: 'visa', label: 'Visa' },
+  { id: 'ticket', label: 'Tiket' },
+  { id: 'bus', label: 'Bus Saudi' },
+  { id: 'handling', label: 'Handling' }
+];
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
   hotel: <Hotel className="w-5 h-5" />,
@@ -34,6 +44,8 @@ const AccountingPurchasingPage: React.FC = () => {
   const [data, setData] = useState<{ products: Array<{ id: string; code: string; name: string; type: string }>; by_product: PurchasingByProduct[]; suppliers_count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Tab filter: '' = Semua, atau product type (hotel, visa, ticket, bus, handling) */
+  const [selectedProductType, setSelectedProductType] = useState<string>('');
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
@@ -59,6 +71,11 @@ const AccountingPurchasingPage: React.FC = () => {
   const totalPo = byProduct.reduce((s, r) => s + r.po_count, 0);
   const totalInv = byProduct.reduce((s, r) => s + r.invoice_count, 0);
   const totalRemaining = byProduct.reduce((s, r) => s + r.remaining_amount, 0);
+
+  /** Data yang tampil sesuai tab: Semua = byProduct, atau filter by product_type */
+  const filteredByProduct = selectedProductType
+    ? byProduct.filter((r) => r.product_type === selectedProductType)
+    : byProduct;
 
   return (
     <div className="space-y-8">
@@ -102,15 +119,33 @@ const AccountingPurchasingPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Per product: card tiap product dengan stat + aksi */}
-      <CardSectionHeader
-        icon={<Package className="w-6 h-6" />}
-        title="Pembelian per Product"
-        subtitle="Pilih product untuk mengelola PO, Faktur, dan Pembayaran. Setiap pembelian baru wajib ada bukti."
-      />
-      {loading && !data ? null : (
+      {/* Tab filter per product */}
+      <Card>
+        <CardSectionHeader
+          icon={<Package className="w-6 h-6" />}
+          title="Pembelian per Product"
+          subtitle="Pilih tab product untuk memfilter. Setiap pembelian baru wajib ada bukti."
+        />
+        <div className="flex flex-wrap gap-2 mb-4">
+          {PURCHASING_PRODUCT_TABS.map((tab) => (
+            <Button
+              key={tab.id || 'all'}
+              type="button"
+              variant={selectedProductType === tab.id ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedProductType(tab.id)}
+              className={selectedProductType === tab.id ? '' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'}
+            >
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+
+        {loading && !data ? (
+          <ContentLoading />
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {byProduct.map((row) => {
+          {filteredByProduct.map((row) => {
             const typeLabel = PRODUCT_TYPE_LABELS[row.product_type] ?? row.product_type;
             const Icon = PRODUCT_ICONS[row.product_type] ?? <Package className="w-5 h-5" />;
             return (
@@ -160,13 +195,14 @@ const AccountingPurchasingPage: React.FC = () => {
             );
           })}
         </div>
-      )}
+        )}
 
-      {!loading && byProduct.length === 0 && (
-        <Card className="p-8 text-center text-slate-500">
-          Belum ada data pembelian per product. Tambah PO dan Faktur per product dari menu di atas.
-        </Card>
-      )}
+        {!loading && filteredByProduct.length === 0 && (
+          <p className="text-slate-500 text-sm py-4">
+            {selectedProductType ? 'Tidak ada data pembelian untuk tipe product ini.' : 'Belum ada data pembelian per product. Tambah PO dan Faktur dari menu Pembelian.'}
+          </p>
+        )}
+      </Card>
     </div>
   );
 };

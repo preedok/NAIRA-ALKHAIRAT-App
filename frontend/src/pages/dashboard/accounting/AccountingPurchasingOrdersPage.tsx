@@ -14,6 +14,13 @@ import { formatIDR } from '../../../utils';
 
 const PO_STATUS_LABELS: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', approved: 'Approved' };
 const DEFAULT_LIMIT = 20;
+const PURCHASE_TYPE_TABS: Array<{ value: string; label: string }> = [
+  { value: 'hotel', label: 'Hotel' },
+  { value: 'visa', label: 'Visa' },
+  { value: 'ticket', label: 'Tiket' },
+  { value: 'bus', label: 'Bus Saudi' },
+  { value: 'handling', label: 'Handling' }
+];
 
 const AccountingPurchasingOrdersPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -30,6 +37,7 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState<'create' | null>(null);
   const [form, setForm] = useState({ supplier_id: '', product_id: '', order_date: new Date().toISOString().slice(0, 10), expected_date: '', notes: '', lines: [{ description: '', quantity: 1, unit: 'pcs', unit_price: 0 }] });
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [purchaseType, setPurchaseType] = useState<string>('');
   const [formError, setFormError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -74,6 +82,9 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
       notes: '',
       lines: [{ description: '', quantity: 1, unit: 'pcs', unit_price: 0 }]
     });
+    const current = (productId || '').trim();
+    const preType = current ? (products.find((p) => p.id === current)?.type || '') : '';
+    setPurchaseType(preType);
     setProofFile(null);
     setFormError('');
     setModalOpen('create');
@@ -242,12 +253,22 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
                   options={suppliers.map((s) => ({ value: s.id, label: `${s.code} – ${s.name}` }))}
                 />
                 <Autocomplete
+                  label="Tipe Pembelian"
+                  value={purchaseType}
+                  onChange={(v) => { setPurchaseType(v || ''); setForm((f) => ({ ...f, product_id: '' })); }}
+                  placeholder="Pilih tipe"
+                  emptyLabel="Semua"
+                  options={PURCHASE_TYPE_TABS}
+                />
+                <Autocomplete
                   label="Product"
                   value={form.product_id}
                   onChange={(v) => setForm((f) => ({ ...f, product_id: v || '' }))}
                   placeholder="Pilih product"
                   emptyLabel="Pilih product"
-                  options={products.map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }))}
+                  options={products
+                    .filter((p) => !purchaseType || p.type === purchaseType)
+                    .map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }))}
                 />
                 <div className="grid grid-cols-2 gap-4">
                   <Input type="date" label="Tanggal order" value={form.order_date} onChange={(e) => setForm((f) => ({ ...f, order_date: e.target.value }))} />
