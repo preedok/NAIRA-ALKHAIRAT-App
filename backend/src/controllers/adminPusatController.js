@@ -139,8 +139,9 @@ const getDashboard = asyncHandler(async (req, res) => {
 
   const invoicesRecent = await Invoice.findAll({
     where: whereInvoice,
+    attributes: ['id', 'invoice_number', 'status', 'total_amount', 'branch_id', 'created_at'],
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'order_number'] },
+      { model: Order, as: 'Order', attributes: ['id'] },
       { model: User, as: 'User', attributes: ['id', 'name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] }
     ],

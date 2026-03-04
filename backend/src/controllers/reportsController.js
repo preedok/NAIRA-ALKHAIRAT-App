@@ -160,7 +160,7 @@ const getAnalytics = asyncHandler(async (req, res) => {
     const [invoices, branchList] = await Promise.all([
       Invoice.findAll({
         where: invWhere,
-        attributes: ['id', 'invoice_number', 'total_amount', 'paid_amount', 'remaining_amount', 'status', 'branch_id', 'owner_id', 'issued_at'],
+        attributes: ['id', 'invoice_number', 'total_amount', 'paid_amount', 'remaining_amount', 'status', 'branch_id', 'owner_id', 'issued_at', 'cancelled_refund_amount'],
         include: [
           { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'provinsi_id', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
           { model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }
@@ -221,12 +221,13 @@ const getAnalytics = asyncHandler(async (req, res) => {
         paid_amount: parseFloat(j.paid_amount || 0),
         remaining_amount: parseFloat(j.remaining_amount || 0),
         status: j.status,
+        cancelled_refund_amount: j.cancelled_refund_amount != null ? parseFloat(j.cancelled_refund_amount) : null,
         branch_name: j.Branch?.name,
         owner_name: j.User?.name,
         company_name: companyName,
+        company_wilayah_line: companyWilayahLine,
         wilayah_name: wilayahName,
         provinsi_name: provinsiName,
-        company_wilayah_line: companyWilayahLine,
         issued_at: j.issued_at
       };
     });
@@ -257,9 +258,9 @@ const getAnalytics = asyncHandler(async (req, res) => {
     { model: User, as: 'User', attributes: ['id', 'name', 'role', 'email', 'company_name'] },
     { model: OrderItem, as: 'OrderItems', attributes: ['id', 'type', 'quantity', 'unit_price', 'subtotal'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }
   ];
-  if (report_type === 'revenue') {
-    orderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true });
-  }
+  // Selalu sertakan Invoice agar nomor invoice & status tampil di detail (revenue = wajib punya invoice, lainnya opsional)
+  const invoiceInclude = { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: report_type === 'revenue' };
+  orderInclude.push(invoiceInclude);
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
     attributes: ['id', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at', 'notes'],
@@ -688,7 +689,7 @@ const exportReportPdf = asyncHandler(async (req, res) => {
     { model: User, as: 'User', attributes: ['name'] }
   ];
   if (report_type === 'revenue') {
-    pdfOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true });
+    pdfOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
   }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,

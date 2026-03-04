@@ -117,7 +117,6 @@ const getDashboard = asyncHandler(async (req, res) => {
           invoice_id: inv?.id,
           invoice_number: inv?.invoice_number,
           order_id: o.id,
-          order_number: o.order_number,
           order_item_id: item.id,
           owner_name: o.User?.name,
           product_ref_id: item.product_ref_id,

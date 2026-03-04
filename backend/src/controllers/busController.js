@@ -55,6 +55,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   const orders = await Order.findAll({
     where: { id: orderIds, branch_id: { [Op.in]: branchIds }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
     include: [
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false },
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
         model: OrderItem,
@@ -89,9 +90,11 @@ const getDashboard = asyncHandler(async (req, res) => {
       returnCounts[ret] = (returnCounts[ret] || 0) + 1;
       const allDone = ticketStatus === BUS_TICKET_STATUS.ISSUED && arr === BUS_TRIP_STATUS.COMPLETED && dep === BUS_TRIP_STATUS.COMPLETED && ret === BUS_TRIP_STATUS.COMPLETED;
       if (!allDone) {
+        const inv = o.Invoice;
         pendingList.push({
           order_id: o.id,
-          order_number: o.order_number,
+          invoice_id: inv?.id,
+          invoice_number: inv?.invoice_number || null,
           order_item_id: item.id,
           owner_name: o.User?.name,
           quantity: item.quantity,

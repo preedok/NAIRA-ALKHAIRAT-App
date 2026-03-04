@@ -515,7 +515,7 @@ const ReportsPage: React.FC = () => {
           <Card className="travel-card">
             <CardSectionHeader
               icon={<FileText className="w-6 h-6" />}
-              title={reportType === 'logs' ? 'Log Entri' : reportType === 'financial' || reportType === 'revenue' ? 'Detail Invoice' : 'Detail Order'}
+              title={reportType === 'logs' ? 'Log Entri' : 'Detail Invoice'}
               subtitle="Detail data sesuai tipe laporan dan filter."
               className="mb-4"
             />

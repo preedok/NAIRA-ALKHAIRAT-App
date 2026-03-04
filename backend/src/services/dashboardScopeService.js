@@ -146,7 +146,7 @@ async function getDashboardData(branchIds) {
     Order.findAll({
       where: { branch_id: branchIdFilter },
       include: [
-        { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true },
         { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
       ],
       order: [['created_at', 'DESC']],

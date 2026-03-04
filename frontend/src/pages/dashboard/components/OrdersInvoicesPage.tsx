@@ -1325,11 +1325,12 @@ const OrdersInvoicesPage: React.FC = () => {
                         const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
                         const isCancelledRefund = st === 'cancelled_refund';
                         const refunds = (inv.Refunds || []) as { status: string; amount?: number }[];
+                        const completedRefund = refunds.find((r: any) => r.status === 'refunded');
                         const latestRefund = refunds[0];
                         const REFUND_STATUS_LABELS: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
                         const refundProcessLabel = latestRefund ? (REFUND_STATUS_LABELS[latestRefund.status] || latestRefund.status) : null;
-                        const isRefunded = latestRefund?.status === 'refunded';
-                        const displayRefundAmount = refundAmt > 0 ? refundAmt : (isRefunded && latestRefund && Number((latestRefund as any).amount)) || 0;
+                        const isRefunded = !!completedRefund;
+                        const displayRefundAmount = refundAmt > 0 ? refundAmt : (isRefunded && completedRefund && Number((completedRefund as any).amount)) || 0;
                         const showRefundBlock = isRefunded || (isCancelledRefund && displayRefundAmount > 0);
                         const effectiveStatusLabel = isRefunded ? 'Sudah direfund' : statusLabel;
                         return (
@@ -2015,7 +2016,7 @@ const OrdersInvoicesPage: React.FC = () => {
                             {(() => {
                               const refundsDetail = (viewInvoice.Refunds || []) as { status: string }[];
                               const latestRefundDetail = refundsDetail[0];
-                              const isRefundCompleted = latestRefundDetail?.status === 'refunded';
+                              const isRefundCompleted = refundsDetail.some((r: any) => r.status === 'refunded');
                               const dpStatus = viewInvoice.Order?.dp_payment_status;
                               const pct = viewInvoice.Order?.dp_percentage_paid != null ? Number(viewInvoice.Order.dp_percentage_paid) : null;
                               const updatedAt = viewInvoice.Order?.order_updated_at || viewInvoice.order_updated_at || viewInvoice.orderUpdatedAt || null;
@@ -2239,29 +2240,41 @@ const OrdersInvoicesPage: React.FC = () => {
                       </h4>
                       {auditLoading ? (
                         <div className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</div>
-                      ) : statusHistory.length === 0 ? (
-                        <div className="text-sm text-slate-500">Belum ada riwayat.</div>
-                      ) : (
-                        <div className="space-y-2">
-                          {statusHistory.slice().reverse().map((h: any) => (
-                            <div key={h.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/40">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant={getStatusBadge(h.to_status)} className="text-xs">{INVOICE_STATUS_LABELS[h.to_status] || h.to_status}</Badge>
-                                  <span className="text-xs text-slate-600">
-                                    {h.from_status ? `${INVOICE_STATUS_LABELS[h.from_status] || h.from_status} → ` : ''}{INVOICE_STATUS_LABELS[h.to_status] || h.to_status}
-                                  </span>
+                      ) : (() => {
+                        const hasRefundCompleted = (viewInvoice?.Refunds || []).some((r: any) => r.status === 'refunded');
+                        const completedRefundRecord = hasRefundCompleted ? (viewInvoice?.Refunds as any[]).find((r: any) => r.status === 'refunded') : null;
+                        const refundedDate = completedRefundRecord?.updated_at || completedRefundRecord?.created_at;
+                        const syntheticRefundEntry = hasRefundCompleted ? { id: 'refund-completed', to_status: 'refunded', from_status: null, changed_at: refundedDate, _synthetic: true } : null;
+                        const combinedHistory = syntheticRefundEntry ? [syntheticRefundEntry, ...statusHistory] : statusHistory;
+                        const toShow = combinedHistory.slice().reverse();
+                        if (toShow.length === 0) return <div className="text-sm text-slate-500">Belum ada riwayat.</div>;
+                        return (
+                          <div className="space-y-2">
+                            {toShow.map((h: any) => (
+                              <div key={h._synthetic ? 'refund-completed' : h.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/40">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge variant={h._synthetic || h.to_status === 'refunded' ? 'success' : getStatusBadge(h.to_status)} className="text-xs">
+                                      {h._synthetic ? 'Sudah direfund' : (INVOICE_STATUS_LABELS[h.to_status] || h.to_status)}
+                                    </Badge>
+                                    <span className="text-xs text-slate-600">
+                                      {h._synthetic ? 'Status terbaru: Sudah direfund' : (h.from_status ? `${INVOICE_STATUS_LABELS[h.from_status] || h.from_status} → ` : '') + (INVOICE_STATUS_LABELS[h.to_status] || h.to_status)}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-slate-500">{h.changed_at ? new Date(h.changed_at).toLocaleString('id-ID') : '–'}</span>
                                 </div>
-                                <span className="text-xs text-slate-500">{h.changed_at ? new Date(h.changed_at).toLocaleString('id-ID') : '–'}</span>
+                                {!h._synthetic && (
+                                  <div className="text-xs text-slate-600 mt-1">
+                                    {(h.ChangedBy?.name || h.ChangedBy?.email) ? <>oleh <strong className="text-slate-800">{h.ChangedBy?.name || h.ChangedBy?.email}</strong></> : <span className="text-slate-500">oleh sistem</span>}
+                                    {h.reason ? <span className="text-slate-500"> · {String(h.reason).replace(/_/g, ' ')}</span> : null}
+                                  </div>
+                                )}
+                                {h._synthetic && <div className="text-xs text-slate-600 mt-1"><span className="text-slate-500">Refund selesai (bukti diupload)</span></div>}
                               </div>
-                              <div className="text-xs text-slate-600 mt-1">
-                                {(h.ChangedBy?.name || h.ChangedBy?.email) ? <>oleh <strong className="text-slate-800">{h.ChangedBy?.name || h.ChangedBy?.email}</strong></> : <span className="text-slate-500">oleh sistem</span>}
-                                {h.reason ? <span className="text-slate-500"> · {String(h.reason).replace(/_/g, ' ')}</span> : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="lg:col-span-7 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
