@@ -304,13 +304,17 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       const nightsForDisplay = metaForQty.nights != null ? Number(metaForQty.nights) : 0;
       const effectiveQty = (itemType === 'hotel' && nightsForDisplay > 0) ? qty * nightsForDisplay : qty;
       let unitPrice = parseFloat(String(item.unit_price || 0));
-      let subtotalVal = parseFloat(String(item.subtotal || 0));
       if (!Number.isFinite(unitPrice)) unitPrice = 0;
+      const cur = (item.unit_price_currency || 'IDR').toUpperCase();
+      const s2i = (rates && rates.SAR_TO_IDR != null) ? rates.SAR_TO_IDR : 4200;
+      const u2i = (rates && rates.USD_TO_IDR != null) ? rates.USD_TO_IDR : 15500;
+      const unitPriceIdr = cur === 'SAR' ? unitPrice * s2i : cur === 'USD' ? unitPrice * u2i : unitPrice;
+      let subtotalVal = parseFloat(String(item.subtotal || 0));
       if (!Number.isFinite(subtotalVal) || subtotalVal <= 0) {
-        subtotalVal = unitPrice * effectiveQty;
+        subtotalVal = unitPriceIdr * effectiveQty;
       }
       const qtyLabel = (itemType === 'hotel' && nightsForDisplay > 0) ? `${qty} × ${nightsForDisplay}` : String(qty);
-      const unitSarUsd = idrToSarUsd(unitPrice, rates);
+      const unitSarUsd = idrToSarUsd(unitPriceIdr, rates);
       const subSarUsd = idrToSarUsd(subtotalVal, rates);
       doc.fontSize(9);
       const descStr = desc.slice(0, 55);
@@ -343,7 +347,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       doc.fontSize(9).fillColor('#334155');
       const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);
       doc.text(qtyLabel, x(3), qtyY, { width: w(3) });
-      doc.text(formatIDR(unitPrice), x(4), y + 4, { width: w(4) });
+      doc.text(formatIDR(unitPriceIdr), x(4), y + 4, { width: w(4) });
       doc.fontSize(7).fillColor('#64748b');
       doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 16, { width: w(4) });
       doc.fontSize(9).fillColor('#334155');

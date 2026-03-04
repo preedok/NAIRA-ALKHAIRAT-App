@@ -76,6 +76,17 @@ function orderItemDiffKey(it) {
   return `${type}:${pid}`;
 }
 
+/** Konversi unit_price ke IDR untuk hitung total order. Harga asli (unit_price + unit_price_currency) disimpan tidak berubah. */
+function unitPriceToIdr(amount, currency, rates) {
+  const amt = parseFloat(amount) || 0;
+  const cur = (currency || 'IDR').toUpperCase();
+  const s2i = (rates && rates.SAR_TO_IDR != null) ? rates.SAR_TO_IDR : 4200;
+  const u2i = (rates && rates.USD_TO_IDR != null) ? rates.USD_TO_IDR : 15500;
+  if (cur === 'SAR') return amt * s2i;
+  if (cur === 'USD') return amt * u2i;
+  return amt;
+}
+
 function groupForDiff(items) {
   const map = new Map();
   for (const raw of items || []) {
@@ -323,6 +334,28 @@ const create = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Visa wajib bersama hotel' });
   }
 
+  const canSetRatesCreate = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
+  let ratesForCreate = null;
+  if (canSetRatesCreate && currency_rates_override && typeof currency_rates_override === 'object') {
+    if (typeof currency_rates_override.SAR_TO_IDR === 'number' || typeof currency_rates_override.USD_TO_IDR === 'number') {
+      ratesForCreate = {
+        SAR_TO_IDR: typeof currency_rates_override.SAR_TO_IDR === 'number' ? currency_rates_override.SAR_TO_IDR : 4200,
+        USD_TO_IDR: typeof currency_rates_override.USD_TO_IDR === 'number' ? currency_rates_override.USD_TO_IDR : 15500
+      };
+    }
+  }
+  if (!ratesForCreate) {
+    const cr = rules.currency_rates;
+    const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
+    if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
+      ratesForCreate = {
+        SAR_TO_IDR: typeof crObj.SAR_TO_IDR === 'number' ? crObj.SAR_TO_IDR : 4200,
+        USD_TO_IDR: typeof crObj.USD_TO_IDR === 'number' ? crObj.USD_TO_IDR : 15500
+      };
+    }
+  }
+  if (!ratesForCreate) ratesForCreate = { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+
   let subtotal = 0;
   let totalJamaah = 0;
   const orderItems = [];
@@ -353,13 +386,15 @@ const create = asyncHandler(async (req, res) => {
       }
     }
     const qty = parseInt(it.quantity, 10) || 1;
+    const itemCurrency = (it.currency && ['IDR', 'SAR', 'USD'].includes(String(it.currency).toUpperCase())) ? String(it.currency).toUpperCase() : 'IDR';
     let unitPrice = parseFloat(it.unit_price);
-    if (unitPrice == null || isNaN(unitPrice)) {
+    if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
       const productId = it.product_id;
       if (!productId) return res.status(400).json({ success: false, message: 'product_id atau unit_price wajib per item' });
-      unitPrice = await getEffectivePrice(productId, finalBranchId, effectiveOwnerId, it.meta || {}, it.currency || 'IDR');
+      unitPrice = await getEffectivePrice(productId, finalBranchId, effectiveOwnerId, it.meta || {}, itemCurrency);
       if (unitPrice == null) return res.status(400).json({ success: false, message: `Harga tidak ditemukan untuk product ${productId}` });
     }
+    const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
     const checkIn = it.check_in || it.meta?.check_in;
     const checkOut = it.check_out || it.meta?.check_out;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
@@ -368,14 +403,14 @@ const create = asyncHandler(async (req, res) => {
         if (!avail.ok) return res.status(400).json({ success: false, message: avail.message || 'Kamar tidak tersedia untuk tanggal yang dipilih' });
       }
     }
-    // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out)
+    // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out). Subtotal dalam IDR untuk total order.
     let st;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
       const nights = getNights(checkIn, checkOut);
       const multiplier = nights > 0 ? nights : 1;
-      st = qty * unitPrice * multiplier;
+      st = qty * unitPriceIdr * multiplier;
     } else {
-      st = qty * unitPrice;
+      st = qty * unitPriceIdr;
     }
     subtotal += st;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.room_type && ROOM_CAPACITY[it.room_type] != null) {
@@ -402,6 +437,7 @@ const create = asyncHandler(async (req, res) => {
       product_ref_type: 'product',
       quantity: qty,
       unit_price: unitPrice,
+      unit_price_currency: itemCurrency,
       subtotal: st,
       manifest_file_url: it.manifest_file_url || null,
       meta
@@ -600,6 +636,21 @@ const update = asyncHandler(async (req, res) => {
     const beforeMap = groupForDiff(beforeItemsRaw);
     const afterItemsRaw = [];
 
+    let ratesForUpdate = null;
+    const ov = order.currency_rates_override && typeof order.currency_rates_override === 'object' ? order.currency_rates_override : null;
+    if (ov && (ov.SAR_TO_IDR != null || ov.USD_TO_IDR != null)) {
+      ratesForUpdate = { SAR_TO_IDR: ov.SAR_TO_IDR ?? 4200, USD_TO_IDR: ov.USD_TO_IDR ?? 15500 };
+    }
+    if (!ratesForUpdate && order.branch_id) {
+      const rulesUp = await getRulesForBranch(order.branch_id);
+      const cr = rulesUp.currency_rates;
+      const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
+      if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
+        ratesForUpdate = { SAR_TO_IDR: crObj.SAR_TO_IDR ?? 4200, USD_TO_IDR: crObj.USD_TO_IDR ?? 15500 };
+      }
+    }
+    if (!ratesForUpdate) ratesForUpdate = { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+
     await OrderItem.destroy({ where: { order_id: order.id } });
     let subtotal = 0, totalJamaah = 0;
     for (const it of items) {
@@ -628,10 +679,12 @@ const update = asyncHandler(async (req, res) => {
         }
       }
       const qty = parseInt(it.quantity, 10) || 1;
+      const itemCurrency = (it.currency && ['IDR', 'SAR', 'USD'].includes(String(it.currency).toUpperCase())) ? String(it.currency).toUpperCase() : 'IDR';
       let unitPrice = parseFloat(it.unit_price);
       if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
-        unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, it.currency || 'IDR') || 0;
+        unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, itemCurrency) || 0;
       }
+      const unitPriceIdr = unitPriceToIdr(unitPrice || 0, itemCurrency, ratesForUpdate);
       const checkIn = it.check_in || it.meta?.check_in;
       const checkOut = it.check_out || it.meta?.check_out;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
@@ -640,14 +693,14 @@ const update = asyncHandler(async (req, res) => {
           if (!avail.ok) return res.status(400).json({ success: false, message: avail.message || 'Kamar tidak tersedia untuk tanggal yang dipilih' });
         }
       }
-      // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out)
+      // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out). Subtotal dalam IDR.
       let st;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
         const nights = getNights(checkIn, checkOut);
         const multiplier = nights > 0 ? nights : 1;
-        st = qty * (unitPrice || 0) * multiplier;
+        st = qty * unitPriceIdr * multiplier;
       } else {
-        st = qty * (unitPrice || 0);
+        st = qty * unitPriceIdr;
       }
       subtotal += st;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.room_type && ROOM_CAPACITY[it.room_type] != null) {
@@ -669,6 +722,7 @@ const update = asyncHandler(async (req, res) => {
         product_id: it.product_id,
         quantity: qty,
         unit_price: unitPrice || 0,
+        currency: itemCurrency,
         meta
       });
       const itemRates = hasDpPayment && it.currency_rates_override && typeof it.currency_rates_override === 'object'
@@ -685,6 +739,7 @@ const update = asyncHandler(async (req, res) => {
         product_ref_type: it.product_ref_type || 'product',
         quantity: qty,
         unit_price: unitPrice || 0,
+        unit_price_currency: itemCurrency,
         subtotal: st,
         manifest_file_url: it.manifest_file_url || null,
         meta,

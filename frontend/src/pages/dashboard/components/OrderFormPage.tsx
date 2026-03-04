@@ -240,15 +240,17 @@ const OrderFormPage: React.FC = () => {
     const u2i = (ov?.USD_TO_IDR != null ? ov.USD_TO_IDR : rates.USD_TO_IDR) || 15500;
     const getVal=(o:any,k:string)=>o[k]??o[k.replace(/([A-Z])/g,'_$1').toLowerCase().replace(/^_/,'')];
     const qty=(o:any)=>Math.max(0,Number(getVal(o,'quantity'))||0);
-    /** Konversi unit_price dari backend (IDR) ke mata uang tampilan produk */
-    const disp=(idr:number,pid:string,itemType:ItemType)=>{ const pr=products.find(x=>x.id===pid); const cur=getDisplayCurrency(itemType,pr); if(cur==='SAR') return (idr||0)/s2i; if(cur==='USD') return (idr||0)/u2i; return idr||0; };
+    /** Jika backend mengembalikan unit_price_currency, pakai unit_price as-is (sudah dalam mata uang tersebut). Else konversi dari IDR ke mata uang tampilan (legacy). */
+    const disp=(idr:number,pid:string,itemType:ItemType,itemCurrency?:string)=>{ if(itemCurrency&&(itemCurrency==='SAR'||itemCurrency==='USD'||itemCurrency==='IDR')) return idr||0; const pr=products.find(x=>x.id===pid); const cur=getDisplayCurrency(itemType,pr); if(cur==='SAR') return (idr||0)/s2i; if(cur==='USD') return (idr||0)/u2i; return idr||0; };
+    const itemCur=(o:any)=>{ const c=getVal(o,'unit_price_currency'); return (c==='SAR'||c==='USD'||c==='IDR')?c:undefined; };
     const seen=new Set<string>(); const rows:OrderItemRow[]=[];
     for(const oi of ois){
       const meta=typeof oi.meta==='object'?oi.meta:{};
       const typeVal=getVal(oi,'type');
       const t=(typeVal||'hotel') as ItemType;
       const productRefId=getVal(oi,'product_ref_id')||'';
-      const unitPrice=disp(parseFloat(getVal(oi,'unit_price'))||0,productRefId,t);
+      const currencyFromBackend=itemCur(oi);
+      const unitPrice=disp(parseFloat(getVal(oi,'unit_price'))||0,productRefId,t,currencyFromBackend);
       const productName=oi.Product?.name??getVal(oi,'Product')?.name??'';
       if(t==='hotel'&&productRefId){
         if(!seen.has(productRefId)){
@@ -257,17 +259,18 @@ const OrderFormPage: React.FC = () => {
           const firstMeta=typeof grp[0]?.meta==='object'?grp[0].meta:{};
           const checkIn=(firstMeta.check_in??getVal(grp[0],'check_in')) as string|undefined;
           const checkOut=(firstMeta.check_out??getVal(grp[0],'check_out')) as string|undefined;
-          // Jam check-in/check-out otomatis sistem (16:00 / 12:00), tidak perlu pilih di form
+          const hotelCur=currencyFromBackend||itemCur(grp[0]);
           rows.push({ id:oi.id||`row-${uid()}`, type:'hotel', product_id:productRefId, product_name:productName,
             quantity:grp.reduce((s:number,o:any)=>s+qty(o),0),
             unit_price:unitPrice,
+            price_currency:hotelCur as DisplayCurrency|undefined,
             check_in:checkIn||undefined,
             check_out:checkOut||undefined,
-            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId,'hotel'), with_meal:!!(m.with_meal??m.meal) }; })
+            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; const lineCur=itemCur(o); return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId,'hotel',lineCur), with_meal:!!(m.with_meal??m.meal) }; })
           });
         }
       } else {
-        rows.push({ id:oi.id||`row-${uid()}`, type:t, product_id:productRefId, product_name:productName, quantity:Math.max(0,qty(oi)), room_type:(meta.room_type??getVal(oi,'room_type')) as RoomTypeId|undefined, unit_price:unitPrice, meta:Object.keys(meta).length?meta:undefined });
+        rows.push({ id:oi.id||`row-${uid()}`, type:t, product_id:productRefId, product_name:productName, quantity:Math.max(0,qty(oi)), room_type:(meta.room_type??getVal(oi,'room_type')) as RoomTypeId|undefined, unit_price:unitPrice, price_currency:currencyFromBackend as DisplayCurrency|undefined, meta:Object.keys(meta).length?meta:undefined });
       }
     }
     const keys = new Set<string>();
@@ -545,9 +548,11 @@ const OrderFormPage: React.FC = () => {
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
+  /** Kirim unit_price dalam mata uang yang dipilih (currency). Backend menyimpan as-is dan konversi ke IDR hanya untuk total. */
   const buildPayloadWithRates=(valid:OrderItemRow[])=>{
     const out:Record<string,any>[]=[];
     for(const r of valid){
+      const cur=rowCur(r);
       if(r.type==='hotel'&&r.room_breakdown?.length){
         for(const l of r.room_breakdown){
           if(l.quantity<=0||!l.room_type) continue;
@@ -556,8 +561,7 @@ const OrderFormPage: React.FC = () => {
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
-          const unitPriceIdr=useLatestRates?toIDRWithRates(l.unit_price,r,latestRates):toIDR(l.unit_price,r);
-          const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:unitPriceIdr,room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta};
+          const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:l.unit_price??0,currency:cur,room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta};
           if(useLatestRates) item.currency_rates_override=latestRates;
           out.push(item);
         }
@@ -566,8 +570,7 @@ const OrderFormPage: React.FC = () => {
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
-        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
-        const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:unitPriceIdr,room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta};
+        const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:r.unit_price??0,currency:cur,room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta};
         if(useLatestRates) item.currency_rates_override=latestRates;
         out.push(item);
       } else{
@@ -575,8 +578,7 @@ const OrderFormPage: React.FC = () => {
         const key=`${r.type}:${r.product_id}:${metaKey}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
-        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
-        const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:unitPriceIdr};
+        const item:Record<string,any>={product_id:r.product_id,type:r.type,product_ref_type:r.type==='package'?'package':'product',quantity:Math.max(1,r.quantity),unit_price:r.unit_price??0,currency:cur};
         if(r.meta&&Object.keys(r.meta).length) item.meta=r.meta;
         if(useLatestRates) item.currency_rates_override=latestRates;
         out.push(item);

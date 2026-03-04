@@ -33,7 +33,14 @@ const OrderItem = sequelize.define('OrderItem', {
   },
   unit_price: {
     type: DataTypes.DECIMAL(18, 2),
-    allowNull: false
+    allowNull: false,
+    comment: 'Nilai dalam unit_price_currency (mata uang yang dipilih). Tidak dikonversi saat simpan.'
+  },
+  unit_price_currency: {
+    type: DataTypes.STRING(3),
+    allowNull: false,
+    defaultValue: 'IDR',
+    comment: 'Mata uang dari unit_price. Konversi ke IDR hanya untuk total order.'
   },
   subtotal: {
     type: DataTypes.DECIMAL(18, 2),
