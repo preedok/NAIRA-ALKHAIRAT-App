@@ -571,11 +571,13 @@ const OrdersInvoicesPage: React.FC = () => {
         .then((r) => { if (r.data?.success && Array.isArray(r.data.data)) setPaymentBankAccounts(r.data.data); else setPaymentBankAccounts([]); })
         .catch(() => setPaymentBankAccounts([]))
         .finally(() => setPaymentBankAccountsLoading(false));
+    }
+    if (showPaymentModal || showCancelModal) {
       accountingApi.getBanks({ is_active: 'true' })
         .then((r) => { if (r.data?.success && Array.isArray(r.data.data)) setPaymentBanks(r.data.data); else setPaymentBanks([]); })
         .catch(() => setPaymentBanks([]));
     }
-  }, [showPaymentModal]);
+  }, [showPaymentModal, showCancelModal]);
 
   const closeModal = useCallback(() => {
     if (invoicePdfUrl) {
@@ -2614,7 +2616,7 @@ const OrdersInvoicesPage: React.FC = () => {
                             )}
                           </>
                         )}
-                        <Input label="Nama Bank (wajib)" type="text" value={cancelBankName} onChange={(e) => setCancelBankName(e.target.value)} placeholder="Contoh: BCA, Mandiri" disabled={!!deletingOrderId} />
+                        <Autocomplete label="Nama Bank (wajib)" value={cancelBankName} onChange={(v) => setCancelBankName(v || '')} options={paymentBanks.map((b) => ({ value: b.name, label: b.name }))} placeholder="Pilih bank" emptyLabel="Pilih bank" disabled={!!deletingOrderId} />
                         <Input label="Nomor Rekening (wajib)" type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" disabled={!!deletingOrderId} />
                         <Input label="Nama pemilik rekening (opsional)" type="text" value={cancelAccountHolderName} onChange={(e) => setCancelAccountHolderName(e.target.value)} placeholder="A.n. nama pemilik" disabled={!!deletingOrderId} />
                       </div>

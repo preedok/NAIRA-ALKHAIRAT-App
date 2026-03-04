@@ -228,7 +228,8 @@ const VisaPage: React.FC<VisaPageProps> = ({
           owner_id: null,
           amount_idr: Math.round(triple.idr || 0),
           amount_sar: triple.sar,
-          amount_usd: triple.usd
+          amount_usd: triple.usd,
+          reference_currency: 'IDR'
         });
       }
       showToast('Produk visa berhasil diperbarui', 'success');
@@ -268,7 +269,8 @@ const VisaPage: React.FC<VisaPageProps> = ({
           owner_id: null,
           amount_idr: Math.round(triple.idr || 0),
           amount_sar: triple.sar,
-          amount_usd: triple.usd
+          amount_usd: triple.usd,
+          reference_currency: 'IDR'
         });
       }
 

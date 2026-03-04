@@ -20,7 +20,8 @@ function normalizeMeta(meta) {
 }
 
 /**
- * Recalculate all product_prices so that IDR/SAR/USD amounts are consistent with the new rates.
+ * Recalculate product_prices when kurs (currency_rates) changes.
+ * Harga dalam mata uang yang dipilih (reference_currency) TETAP; yang berubah hanya konversi ke mata uang lain.
  * @param {object} rates - { SAR_TO_IDR: number, USD_TO_IDR: number }
  * @returns {Promise<{ updated: number, created: number }>}
  */
@@ -43,18 +44,26 @@ async function recalcProductPricesByRates(rates) {
     const byCur = {};
     for (const r of group.rows) byCur[r.currency] = r;
 
-    let idr = null;
-    if (byCur.IDR && byCur.IDR.amount != null) idr = parseFloat(byCur.IDR.amount);
-    else if (byCur.SAR && byCur.SAR.amount != null) idr = parseFloat(byCur.SAR.amount) * SAR_TO_IDR;
-    else if (byCur.USD && byCur.USD.amount != null) idr = parseFloat(byCur.USD.amount) * USD_TO_IDR;
+    const refCurrency = (group.meta && (group.meta.reference_currency === 'SAR' || group.meta.reference_currency === 'USD')) ? group.meta.reference_currency : 'IDR';
+    const refAmount = byCur[refCurrency] && byCur[refCurrency].amount != null ? parseFloat(byCur[refCurrency].amount) : null;
+    if (refAmount == null || Number.isNaN(refAmount)) continue;
 
-    if (idr == null || Number.isNaN(idr)) continue;
+    let idr, sar, usd;
+    if (refCurrency === 'IDR') {
+      idr = refAmount;
+      sar = idr / SAR_TO_IDR;
+      usd = idr / USD_TO_IDR;
+    } else if (refCurrency === 'SAR') {
+      sar = refAmount;
+      idr = sar * SAR_TO_IDR;
+      usd = idr / USD_TO_IDR;
+    } else {
+      usd = refAmount;
+      idr = usd * USD_TO_IDR;
+      sar = idr / SAR_TO_IDR;
+    }
 
-    const amounts = {
-      IDR: idr,
-      SAR: idr / SAR_TO_IDR,
-      USD: idr / USD_TO_IDR
-    };
+    const amounts = { IDR: idr, SAR: sar, USD: usd };
 
     for (const cur of CURRENCIES) {
       const amt = amounts[cur];

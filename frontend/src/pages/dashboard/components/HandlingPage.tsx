@@ -156,7 +156,8 @@ const HandlingPage: React.FC = () => {
           owner_id: null,
           amount_idr: triple.idr,
           amount_sar: triple.sar,
-          amount_usd: triple.usd
+          amount_usd: triple.usd,
+          reference_currency: addForm.price_currency
         });
       }
       showToast('Produk handling berhasil ditambah', 'success');
@@ -211,7 +212,8 @@ const HandlingPage: React.FC = () => {
           owner_id: null,
           amount_idr: triple.idr,
           amount_sar: triple.sar,
-          amount_usd: triple.usd
+          amount_usd: triple.usd,
+          reference_currency: editForm.price_currency
         });
       }
       showToast('Produk handling berhasil diubah', 'success');

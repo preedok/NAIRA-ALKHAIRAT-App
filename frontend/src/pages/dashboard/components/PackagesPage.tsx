@@ -434,7 +434,8 @@ const PackagesPage: React.FC = () => {
             owner_id: null,
             amount_idr: triplePrice.idr || undefined,
             amount_sar: triplePrice.sar || undefined,
-            amount_usd: triplePrice.usd || undefined
+            amount_usd: triplePrice.usd || undefined,
+            reference_currency: 'IDR'
           });
         }
         showToast('Paket berhasil diubah', 'success');
@@ -457,7 +458,8 @@ const PackagesPage: React.FC = () => {
             owner_id: null,
             amount_idr: triplePrice.idr || undefined,
             amount_sar: triplePrice.sar || undefined,
-            amount_usd: triplePrice.usd || undefined
+            amount_usd: triplePrice.usd || undefined,
+            reference_currency: 'IDR'
           });
         }
         showToast('Paket berhasil dibuat', 'success');

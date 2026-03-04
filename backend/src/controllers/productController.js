@@ -727,7 +727,7 @@ const listPrices = asyncHandler(async (req, res) => {
  * Jika amount_idr/sar/usd dipakai: kurs dari business rules, isi yang kosong, simpan 3 baris (IDR, SAR, USD).
  */
 const createPrice = asyncHandler(async (req, res) => {
-  const { product_id, branch_id, owner_id, currency, amount, amount_idr, amount_sar, amount_usd, meta, effective_from, effective_until } = req.body;
+  const { product_id, branch_id, owner_id, currency, amount, amount_idr, amount_sar, amount_usd, reference_currency, meta, effective_from, effective_until } = req.body;
   if (!product_id) return res.status(400).json({ success: false, message: 'product_id wajib' });
 
   const canSetBranch = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING].includes(req.user.role);
@@ -745,7 +745,7 @@ const createPrice = asyncHandler(async (req, res) => {
   const hasSimple = currency != null && amount != null;
   const isEmptyMeta = !metaObj || Object.keys(metaObj).length === 0;
 
-  if (hasMulti && isEmptyMeta) {
+  if (hasMulti) {
     const rates = await getCurrencyRates();
     let idr = amount_idr != null ? parseFloat(amount_idr) : null;
     let sar = amount_sar != null ? parseFloat(amount_sar) : null;
@@ -762,11 +762,22 @@ const createPrice = asyncHandler(async (req, res) => {
     }
     if (idr == null || Number.isNaN(idr)) return res.status(400).json({ success: false, message: 'Berikan minimal satu: amount_idr, amount_sar, atau amount_usd' });
 
+    let refCur = (reference_currency === 'SAR' || reference_currency === 'USD') ? reference_currency : null;
+    if (!refCur && amount_sar != null && amount_idr == null && amount_usd == null) refCur = 'SAR';
+    else if (!refCur && amount_usd != null && amount_idr == null && amount_sar == null) refCur = 'USD';
+    if (!refCur) refCur = 'IDR';
+    const mergedMeta = isEmptyMeta ? { reference_currency: refCur } : { ...metaObj, reference_currency: refCur };
+
     const existing = await ProductPrice.findAll({
       where: { product_id, branch_id: finalBranchId, owner_id: finalOwnerId }
     });
-    const withEmptyMeta = existing.filter(pr => !pr.meta || Object.keys(pr.meta || {}).length === 0);
-    for (const pr of withEmptyMeta) await pr.destroy();
+    const toDelete = isEmptyMeta
+      ? existing.filter(pr => !pr.meta || Object.keys(pr.meta || {}).length === 0)
+      : existing.filter(pr => {
+          const m = pr.meta && typeof pr.meta === 'object' ? pr.meta : {};
+          return Object.keys(metaObj).every(k => m[k] === metaObj[k]);
+        });
+    for (const pr of toDelete) await pr.destroy();
 
     for (const { cur, amt } of [
       { cur: 'IDR', amt: idr },
@@ -779,7 +790,7 @@ const createPrice = asyncHandler(async (req, res) => {
         owner_id: finalOwnerId,
         currency: cur,
         amount: amt,
-        meta: {},
+        meta: mergedMeta,
         effective_from: effective_from || null,
         effective_until: effective_until || null,
         created_by: req.user.id
@@ -792,7 +803,7 @@ const createPrice = asyncHandler(async (req, res) => {
     return res.status(201).json({ success: true, data: created, message: 'Harga IDR, SAR, USD tersimpan' });
   }
 
-  if (!hasSimple) return res.status(400).json({ success: false, message: 'Berikan currency + amount, atau amount_idr/amount_sar/amount_usd (dengan meta kosong)' });
+  if (!hasSimple) return res.status(400).json({ success: false, message: 'Berikan currency + amount, atau amount_idr/amount_sar/amount_usd' });
 
   const price = await ProductPrice.create({
     product_id,

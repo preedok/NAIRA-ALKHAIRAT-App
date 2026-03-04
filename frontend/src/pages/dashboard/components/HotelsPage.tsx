@@ -534,20 +534,26 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         });
       }
       for (const { roomType, price } of pricesToCreate) {
+        const tripleRoom = fillFromSource(pf.currency, price, currencyRates);
         await productsApi.createPrice({
           product_id: hotel.id,
           branch_id: null,
           owner_id: null,
-          currency: pf.currency,
-          amount: price,
+          amount_idr: tripleRoom.idr,
+          amount_sar: tripleRoom.sar,
+          amount_usd: tripleRoom.usd,
+          reference_currency: pf.currency,
           meta: { room_type: roomType, with_meal: false }
         });
+        const tripleWithMeal = fillFromSource(pf.currency, price + pf.meal_price, currencyRates);
         await productsApi.createPrice({
           product_id: hotel.id,
           branch_id: null,
           owner_id: null,
-          currency: pf.currency,
-          amount: price + pf.meal_price,
+          amount_idr: tripleWithMeal.idr,
+          amount_sar: tripleWithMeal.sar,
+          amount_usd: tripleWithMeal.usd,
+          reference_currency: pf.currency,
           meta: { room_type: roomType, with_meal: true }
         });
       }
