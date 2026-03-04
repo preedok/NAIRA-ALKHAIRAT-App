@@ -17,7 +17,7 @@ const getDashboard = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'order_number', 'owner_id'],
+        attributes: ['id', 'owner_id'],
         include: [
           { model: User, as: 'User', attributes: ['id', 'name'] },
           { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: false }
@@ -44,7 +44,6 @@ const getDashboard = asyncHandler(async (req, res) => {
     if (norm !== 'completed') {
       pendingList.push({
         order_id: item.Order?.id,
-        order_number: item.Order?.order_number,
         invoice_id: inv?.id,
         invoice_number: inv?.invoice_number,
         order_item_id: item.id,

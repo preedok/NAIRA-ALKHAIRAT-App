@@ -135,17 +135,14 @@ function diffGrouped(beforeMap, afterMap) {
 /**
  * GET /api/v1/orders
  */
-const ALLOWED_SORT = ['order_number', 'created_at', 'total_amount', 'status'];
+const ALLOWED_SORT = ['created_at', 'total_amount', 'status'];
 
 const list = asyncHandler(async (req, res) => {
-  const { status, branch_id, owner_id, limit = 25, page = 1, sort_by, sort_order, date_from, date_to, order_number, provinsi_id, wilayah_id } = req.query;
+  const { status, branch_id, owner_id, limit = 25, page = 1, sort_by, sort_order, date_from, date_to, invoice_number, provinsi_id, wilayah_id } = req.query;
   const where = {};
   if (status) where.status = status;
   if (branch_id) where.branch_id = branch_id;
   if (owner_id) where.owner_id = owner_id;
-  if (order_number && String(order_number).trim()) {
-    where.order_number = { [Op.iLike]: `%${String(order_number).trim()}%` };
-  }
   if (date_from || date_to) {
     where.created_at = {};
     if (date_from) where.created_at[Op.gte] = new Date(date_from);
@@ -211,11 +208,15 @@ const list = asyncHandler(async (req, res) => {
   const sortCol = ALLOWED_SORT.includes(sort_by) ? sort_by : 'created_at';
   const sortDir = (sort_order || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
+  // Acuan data: hanya order yang punya invoice; filter/tampil pakai nomor invoice saja
+  const invoiceInclude = { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true };
+  if (invoice_number && String(invoice_number).trim()) {
+    invoiceInclude.where = { invoice_number: { [Op.iLike]: `%${String(invoice_number).trim()}%` } };
+  }
   const { count, rows } = await Order.findAndCountAll({
     where,
     include: [
-      { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
+      invoiceInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       { model: OrderItem, as: 'OrderItems' }

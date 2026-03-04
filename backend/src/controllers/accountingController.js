@@ -40,7 +40,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   const invoices = await Invoice.findAll({
     where,
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'order_number', 'status'] },
+      { model: Order, as: 'Order', attributes: ['id', 'status'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
       branchInclude
     ],
@@ -202,11 +202,9 @@ const getAgingReport = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
+    const invoicesByNumber = await Invoice.findAll({
+      where: { invoice_number: { [Op.iLike]: q } },
+      attributes: ['id', 'order_id'],
       raw: true
     });
     const users = await User.findAll({
@@ -214,7 +212,7 @@ const getAgingReport = asyncHandler(async (req, res) => {
       attributes: ['id'],
       raw: true
     });
-    const orderIds = orders.map(o => o.id);
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
     const userIds = users.map(u => u.id);
     if (orderIds.length || userIds.length) {
       where[Op.or] = [];
@@ -228,7 +226,7 @@ const getAgingReport = asyncHandler(async (req, res) => {
   const orderInclude = {
     model: Order,
     as: 'Order',
-    attributes: ['id', 'order_number', 'status'],
+    attributes: ['id', 'status'],
     required: !!order_status
   };
   if (order_status) {
@@ -343,11 +341,10 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
+    // Pencarian mengacu nomor invoice saja
+    const invoicesByNumber = await Invoice.findAll({
+      where: { invoice_number: { [Op.iLike]: q } },
+      attributes: ['id', 'order_id'],
       raw: true
     });
     const users = await User.findAll({
@@ -355,7 +352,7 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
       attributes: ['id'],
       raw: true
     });
-    const orderIds = orders.map(o => o.id);
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
     const userIds = users.map(u => u.id);
     if (orderIds.length || userIds.length) {
       where[Op.or] = [];
@@ -369,7 +366,7 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
   const orderIncludeExp = {
     model: Order,
     as: 'Order',
-    attributes: ['id', 'order_number', 'status'],
+    attributes: ['id', 'status'],
     required: !!order_status
   };
   if (order_status) {
@@ -397,7 +394,7 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
     const j = inv.toJSON();
     allRows.push({
       invoice_number: j.invoice_number,
-      order_number: j.Order?.order_number,
+      invoice_number: j.invoice_number,
       partner: j.User?.name || j.User?.company_name,
       branch: j.Branch?.name,
       total_amount: parseFloat(j.total_amount || 0),
@@ -414,7 +411,6 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
   const sheet = workbook.addWorksheet('Piutang Usaha', { views: [{ state: 'frozen', ySplit: 1 }] });
   sheet.columns = [
     { header: 'No. Invoice', width: 18 },
-    { header: 'No. Order', width: 14 },
     { header: 'Partner', width: 22 },
     { header: 'Cabang', width: 14 },
     { header: 'Total', width: 14 },
@@ -429,7 +425,6 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
   allRows.forEach(r => {
     sheet.addRow([
       r.invoice_number,
-      r.order_number,
       r.partner,
       r.branch,
       r.total_amount,
@@ -481,11 +476,10 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
+    // Pencarian mengacu nomor invoice saja
+    const invoicesByNumber = await Invoice.findAll({
+      where: { invoice_number: { [Op.iLike]: q } },
+      attributes: ['id', 'order_id'],
       raw: true
     });
     const users = await User.findAll({
@@ -493,7 +487,7 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
       attributes: ['id'],
       raw: true
     });
-    const orderIds = orders.map(o => o.id);
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
     const userIds = users.map(u => u.id);
     if (orderIds.length || userIds.length) {
       where[Op.or] = [];
@@ -507,7 +501,7 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
   const orderIncludePdf = {
     model: Order,
     as: 'Order',
-    attributes: ['id', 'order_number', 'status'],
+    attributes: ['id', 'status'],
     required: !!order_status
   };
   if (order_status) {
@@ -535,7 +529,7 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
     if (remaining <= 0) return;
     totalOutstanding += remaining;
     const j = inv.toJSON();
-    const row = { order_number: j.Order?.order_number, partner: j.User?.name || j.User?.company_name, remaining_amount: remaining, days_overdue: daysOverdue };
+    const row = { invoice_number: j.invoice_number, partner: j.User?.name || j.User?.company_name, remaining_amount: remaining, days_overdue: daysOverdue };
     if (daysOverdue <= 0) buckets.current.push(row);
     else if (daysOverdue <= 30) buckets.days_1_30.push(row);
     else if (daysOverdue <= 60) buckets.days_31_60.push(row);
@@ -563,7 +557,7 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
     const sum = arr.reduce((s, r) => s + r.remaining_amount, 0);
     doc.fontSize(10).text(`${label}: ${arr.length} invoice, Rp ${sum.toLocaleString('id-ID')}`, { continued: false });
     arr.slice(0, 15).forEach((r, i) => {
-      doc.fontSize(8).text(`  ${i + 1}. ${r.order_number} - ${r.partner} - Rp ${r.remaining_amount.toLocaleString('id-ID')} (${r.days_overdue} hr)`, { continued: false });
+      doc.fontSize(8).text(`  ${i + 1}. ${r.invoice_number || '–'} - ${r.partner} - Rp ${r.remaining_amount.toLocaleString('id-ID')} (${r.days_overdue} hr)`, { continued: false });
     });
     if (arr.length > 15) doc.fontSize(8).text(`  ... dan ${arr.length - 15} lainnya`, { continued: false });
     doc.moveDown(0.3);
@@ -631,7 +625,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   const invoices = await Invoice.findAll({
     where,
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'order_number', 'total_amount', 'status'] },
+      { model: Order, as: 'Order', attributes: ['id', 'total_amount', 'status'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       { model: PaymentProof, as: 'PaymentProofs', required: false }
@@ -684,7 +678,7 @@ const exportInvoicesExcel = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       branchIncludeExport,
-      { model: Order, as: 'Order', attributes: ['id', 'order_number', 'status', 'total_amount'], required: false, include: [{ model: OrderItem, as: 'OrderItems', required: false }] },
+      { model: Order, as: 'Order', attributes: ['id', 'status', 'total_amount'], required: false, include: [{ model: OrderItem, as: 'OrderItems', required: false }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_currency', 'verified_status', 'payment_location', 'amount_original'] }
     ],
     order: [['issued_at', 'DESC'], ['created_at', 'DESC']]
@@ -733,7 +727,7 @@ const exportInvoicesExcel = asyncHandler(async (req, res) => {
 
     sheet.addRow([
       j.invoice_number || '-',
-      order.order_number || '-',
+      j.invoice_number || '-',
       fmtDate(j.issued_at || j.created_at),
       fmtDate(j.due_date_dp),
       j.User?.name || '-',
@@ -916,11 +910,10 @@ const getFinancialReport = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
+    // Pencarian mengacu nomor invoice saja
+    const invoicesByNumber = await Invoice.findAll({
+      where: { invoice_number: { [Op.iLike]: q } },
+      attributes: ['id', 'order_id'],
       raw: true
     });
     const users = await User.findAll({
@@ -928,7 +921,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
       attributes: ['id'],
       raw: true
     });
-    const orderIds = orders.map(o => o.id);
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
     const userIds = users.map(u => u.id);
     const searchOr = [];
     if (orderIds.length) searchOr.push({ order_id: { [Op.in]: orderIds } });
@@ -1045,7 +1038,6 @@ const getFinancialReport = asyncHandler(async (req, res) => {
     invoicesDetail.push({
       id: inv.id,
       invoice_number: inv.invoice_number,
-      order_number: inv.Order?.order_number,
       owner_name: inv.User?.company_name || inv.User?.name,
       company_name: inv.User?.company_name || inv.User?.name,
       branch_name: inv.Branch?.name || inv.Branch?.code,
@@ -1093,16 +1085,11 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
-      raw: true
-    });
+    const invoicesByNumber = await Invoice.findAll({ where: { invoice_number: { [Op.iLike]: q } }, attributes: ['id', 'order_id'], raw: true });
     const users = await User.findAll({ where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] }, attributes: ['id'], raw: true });
     const searchOr = [];
-    if (orders.length) searchOr.push({ order_id: { [Op.in]: orders.map(o => o.id) } });
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
+    if (orderIds.length) searchOr.push({ order_id: { [Op.in]: orderIds } });
     if (users.length) searchOr.push({ owner_id: { [Op.in]: users.map(u => u.id) } });
     searchOr.push({ invoice_number: { [Op.iLike]: q } });
     prevInvWhere[Op.and].push({ [Op.or]: searchOr });
@@ -1181,16 +1168,11 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
-      raw: true
-    });
+    const invoicesByNumber = await Invoice.findAll({ where: { invoice_number: { [Op.iLike]: q } }, attributes: ['id', 'order_id'], raw: true });
     const users = await User.findAll({ where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] }, attributes: ['id'], raw: true });
     const searchOr = [];
-    if (orders.length) searchOr.push({ order_id: { [Op.in]: orders.map(o => o.id) } });
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
+    if (orderIds.length) searchOr.push({ order_id: { [Op.in]: orderIds } });
     if (users.length) searchOr.push({ owner_id: { [Op.in]: users.map(u => u.id) } });
     searchOr.push({ invoice_number: { [Op.iLike]: q } });
     invWhere[Op.and].push({ [Op.or]: searchOr });
@@ -1308,16 +1290,11 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
-    const orders = await Order.findAll({
-      where: { order_number: { [Op.iLike]: q } },
-      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
-      attributes: ['id'],
-      raw: true
-    });
+    const invoicesByNumber = await Invoice.findAll({ where: { invoice_number: { [Op.iLike]: q } }, attributes: ['id', 'order_id'], raw: true });
     const users = await User.findAll({ where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] }, attributes: ['id'], raw: true });
     const searchOr = [];
-    if (orders.length) searchOr.push({ order_id: { [Op.in]: orders.map(o => o.id) } });
+    const orderIds = (invoicesByNumber || []).map((i) => i.order_id).filter(Boolean);
+    if (orderIds.length) searchOr.push({ order_id: { [Op.in]: orderIds } });
     if (users.length) searchOr.push({ owner_id: { [Op.in]: users.map(u => u.id) } });
     searchOr.push({ invoice_number: { [Op.iLike]: q } });
     invWhere[Op.and].push({ [Op.or]: searchOr });
@@ -1907,7 +1884,7 @@ const getDashboardKpi = asyncHandler(async (req, res) => {
     where: invWhere,
     include: [
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'] }] }] },
-      { model: Order, as: 'Order', attributes: ['id', 'order_number'] }
+      { model: Order, as: 'Order', attributes: ['id'] }
     ]
   });
 

@@ -384,8 +384,8 @@ type InvoiceDisplayInv = {
 } | null | undefined;
 
 /**
- * Format nomor invoice seragam di semua halaman (sama dengan menu Invoice).
- * Draft: "Draft (order_number)". Non-draft: "StatusLabel_InvoiceNumber".
+ * Format nomor invoice seragam di semua halaman (satu acuan: nomor invoice saja).
+ * Draft: "Draft". Non-draft: "StatusLabel_InvoiceNumber".
  */
 export const formatInvoiceNumberDisplay = (
   inv: InvoiceDisplayInv,
@@ -393,6 +393,6 @@ export const formatInvoiceNumberDisplay = (
 ): string => {
   if (!inv) return '–';
   const isDraft = inv.status === 'draft' || inv.is_draft_order;
-  if (isDraft) return `Draft${inv.Order?.order_number ? ` (${inv.Order.order_number})` : ''}`;
+  if (isDraft) return 'Draft';
   return formatInvoiceDisplay(inv.status || '', inv.invoice_number || '', statusLabels);
 };

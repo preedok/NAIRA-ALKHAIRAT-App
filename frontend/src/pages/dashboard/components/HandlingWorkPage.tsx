@@ -112,7 +112,6 @@ const HandlingWorkPage: React.FC = () => {
                   <tr key={row.order_item_id} className="border-b border-slate-100 hover:bg-slate-50/50 last:border-b-0">
                     <td className="py-3 px-4">
                       <p className="font-medium text-slate-900">{row.invoice_number || '–'}</p>
-                      <p className="text-xs text-slate-500">{row.order_number || '–'}</p>
                     </td>
                     <td className="py-3 px-4 text-slate-700">{row.owner_name || '–'}</td>
                     <td className="py-3 px-4 text-slate-700">

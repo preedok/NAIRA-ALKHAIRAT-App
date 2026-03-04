@@ -46,7 +46,7 @@ async function sendInvoiceCreatedNotificationEmail(invoiceId, notificationId, du
       invoice.User.email,
       invoice.User.name,
       invoice.invoice_number,
-      invoice.Order?.order_number,
+      invoice.invoice_number,
       pdfBuffer,
       dueInfo
     );
@@ -273,7 +273,7 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
 }
 
 const list = asyncHandler(async (req, res) => {
-  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, order_number, date_from, date_to, due_status, has_handling, limit = 25, page = 1, sort_by, sort_order } = req.query;
+  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, date_from, date_to, due_status, has_handling, limit = 25, page = 1, sort_by, sort_order } = req.query;
   const where = {};
   if (status) where.status = status;
   const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
@@ -342,7 +342,7 @@ const list = asyncHandler(async (req, res) => {
   const orderInclude = {
     model: Order,
     as: 'Order',
-    attributes: ['id', 'order_number', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar'],
+    attributes: ['id', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar'],
     include: [
       {
         model: OrderItem,
@@ -359,11 +359,9 @@ const list = asyncHandler(async (req, res) => {
       }
     ]
   };
-  if (order_status || order_number) {
+  if (order_status) {
     orderInclude.required = true;
-    orderInclude.where = {};
-    if (order_status) orderInclude.where.status = order_status;
-    if (order_number) orderInclude.where.order_number = { [Op.iLike]: `%${String(order_number).trim()}%` };
+    orderInclude.where = { status: order_status };
   }
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
@@ -467,7 +465,7 @@ const list = asyncHandler(async (req, res) => {
     Invoice.findAll({ where, include: [orderInclude], attributes: ['status', 'order_id'], raw: true }),
     Invoice.findAll({
       where,
-      include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!(order_status || order_number), where: order_status || order_number ? (orderInclude.where || {}) : undefined }],
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
       attributes: ['order_id'],
       raw: true
     })
@@ -616,7 +614,7 @@ const listDraftOrders = asyncHandler(async (req, res) => {
  * Same query params as list (no page/limit). Returns aggregates for Order & Invoice stats.
  */
 const getSummary = asyncHandler(async (req, res) => {
-  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, order_number, date_from, date_to, due_status } = req.query;
+  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, date_from, date_to, due_status } = req.query;
   const where = {};
   if (status) where.status = status;
   const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
@@ -679,11 +677,9 @@ const getSummary = asyncHandler(async (req, res) => {
   }
 
   const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'status'] };
-  if (order_status || order_number) {
+  if (order_status) {
     orderInclude.required = true;
-    orderInclude.where = {};
-    if (order_status) orderInclude.where.status = order_status;
-    if (order_number) orderInclude.where.order_number = { [Op.iLike]: `%${String(order_number).trim()}%` };
+    orderInclude.where = { status: order_status };
   }
 
   const [totalInvoices, totalAmount, totalPaid, totalRemaining, invoiceRows, orderRows] = await Promise.all([
@@ -699,7 +695,7 @@ const getSummary = asyncHandler(async (req, res) => {
     }),
     Invoice.findAll({
       where,
-      include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!(order_status || order_number), where: order_status || order_number ? (orderInclude.where || {}) : undefined }],
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
       attributes: ['order_id'],
       raw: true
     })
@@ -810,7 +806,7 @@ const create = asyncHandler(async (req, res) => {
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
     title: 'Invoice baru',
-    message: `Invoice ${invoice.invoice_number} untuk order ${order.order_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
+    message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
     data: { order_id: order.id, invoice_id: invoice.id },
     channel_in_app: true,
     channel_email: true
@@ -892,7 +888,7 @@ async function createInvoiceForOrder(order, opts = {}) {
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
     title: 'Invoice baru',
-    message: `Invoice ${invoice.invoice_number} untuk order ${order.order_number || orderId}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
+    message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
     data: { order_id: orderId, invoice_id: invoice.id },
     channel_in_app: true,
     channel_email: true
@@ -1154,7 +1150,7 @@ const allocateBalance = asyncHandler(async (req, res) => {
 
   const full = await Invoice.findByPk(invoice.id, {
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'order_number'] },
+      { model: Order, as: 'Order', attributes: ['id'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
     ]
   });

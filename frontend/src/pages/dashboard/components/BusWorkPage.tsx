@@ -94,8 +94,7 @@ const BusWorkPage: React.FC = () => {
       list = list.filter((inv: any) => {
         const invNum = (inv.invoice_number ?? '').toLowerCase();
         const ownerName = (inv.User?.name ?? inv.Order?.User?.name ?? '').toLowerCase();
-        const orderNum = (inv.Order?.order_number ?? '').toLowerCase();
-        return invNum.includes(q) || ownerName.includes(q) || orderNum.includes(q);
+        return invNum.includes(q) || ownerName.includes(q);
       });
     }
     if (filterTicketStatus) {
@@ -291,7 +290,7 @@ const BusWorkPage: React.FC = () => {
                 }}
                 className="inline-flex items-center gap-1.5 text-left border-amber-200 hover:bg-amber-50"
               >
-                <span className="font-mono text-stone-700">{p.order_number}</span>
+                <span className="font-mono text-stone-700">{p.invoice_number ?? '–'}</span>
                 <span className="text-stone-500">·</span>
                 <span className="text-stone-600">{p.owner_name || '–'}</span>
                 <span className="text-amber-600">Qty {p.quantity}</span>

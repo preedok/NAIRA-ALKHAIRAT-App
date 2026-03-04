@@ -118,7 +118,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
+        attributes: ['id', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
         include: [
           {
             model: OrderItem,
@@ -379,7 +379,6 @@ const getDashboard = asyncHandler(async (req, res) => {
       if (status !== HOTEL_PROGRESS_STATUS.COMPLETED && status !== HOTEL_PROGRESS_STATUS.ROOM_ASSIGNED) {
         pendingRoom.push({
           order_id: o.id,
-          order_number: o.order_number,
           invoice_id: inv?.id || null,
           invoice_number: inv?.invoice_number || null,
           order_item_id: item.id,

@@ -1645,7 +1645,7 @@ const OrdersInvoicesPage: React.FC = () => {
           <ModalBox className="max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <ModalHeader
               title="Upload dokumen"
-              subtitle={uploadDocInvoice?.invoice_number || uploadDocInvoice?.Order?.order_number || ''}
+              subtitle={uploadDocInvoice?.invoice_number || ''}
               icon={<Upload className="w-5 h-5" />}
               onClose={() => !uploadDocLoading && setUploadDocInvoice(null)}
             />

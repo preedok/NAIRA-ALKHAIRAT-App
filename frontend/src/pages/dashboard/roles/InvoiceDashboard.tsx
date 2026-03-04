@@ -84,10 +84,9 @@ const InvoiceDashboard: React.FC = () => {
     ? invoices.filter((inv) => {
         const q = searchQuery.trim().toLowerCase();
         const invNum = (inv.invoice_number ?? '').toLowerCase();
-        const orderNum = (inv.Order?.order_number ?? '').toLowerCase();
         const owner = (inv.User?.name ?? inv.Order?.User?.name ?? '').toLowerCase();
         const branch = (inv.Branch?.name ?? inv.Branch?.code ?? '').toLowerCase();
-        return invNum.includes(q) || orderNum.includes(q) || owner.includes(q) || branch.includes(q);
+        return invNum.includes(q) || owner.includes(q) || branch.includes(q);
       })
     : invoices;
   const totalFiltered = filteredRecent.length;
@@ -103,7 +102,6 @@ const InvoiceDashboard: React.FC = () => {
     { id: 'paid', label: 'Terbayar', align: 'right' },
     { id: 'remaining', label: 'Sisa', align: 'right' },
     { id: 'due_date_dp', label: 'Jatuh Tempo DP', align: 'left' },
-    { id: 'order_number', label: 'No. Order', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'left' }
   ];
 
@@ -225,7 +223,6 @@ const InvoiceDashboard: React.FC = () => {
                 <td className="py-3 px-4 text-right tabular-nums text-emerald-700">{formatIDR(paid)}</td>
                 <td className="py-3 px-4 text-right tabular-nums text-slate-700">{formatIDR(remaining)}</td>
                 <td className="py-3 px-4 text-slate-600">{formatDate(inv.due_date_dp)}</td>
-                <td className="py-3 px-4 text-slate-500 font-mono text-xs">{inv.Order?.order_number ?? '–'}</td>
                 <td className="py-3 px-4">
                   <Button size="sm" variant="outline" onClick={() => openInvoice(inv)}>
                     <Eye className="w-4 h-4 mr-1" /> Buka
@@ -261,7 +258,6 @@ const InvoiceDashboard: React.FC = () => {
                   <div>
                     <p className="font-semibold text-slate-900">
                       {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
-                      <span className="text-slate-500 font-normal ml-2">Order: {inv.Order?.order_number ?? '–'}</span>
                     </p>
                     <p className="text-sm text-slate-600 mt-0.5">
                       {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · Total {formatIDR(inv.total_amount)}
@@ -296,7 +292,6 @@ const InvoiceDashboard: React.FC = () => {
                 <div>
                   <p className="font-semibold text-slate-900">
                     {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
-                    <span className="text-slate-500 font-normal ml-2">Order: {inv.Order?.order_number ?? '–'}</span>
                   </p>
                   <p className="text-sm text-slate-600 mt-0.5">
                     {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · {formatIDR(inv.total_amount)}

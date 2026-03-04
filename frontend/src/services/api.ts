@@ -184,7 +184,7 @@ export const businessRulesApi = {
 };
 
 export const ordersApi = {
-  list: (params?: { status?: string; branch_id?: string; owner_id?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc'; date_from?: string; date_to?: string; order_number?: string; provinsi_id?: string; wilayah_id?: string }) => api.get('/orders', { params }),
+  list: (params?: { status?: string; branch_id?: string; owner_id?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc'; date_from?: string; date_to?: string; invoice_number?: string; provinsi_id?: string; wilayah_id?: string }) => api.get('/orders', { params }),
   getById: (id: string) => api.get(`/orders/${id}`),
   create: (body: object) => api.post('/orders', body),
   update: (id: string, body: object) => api.patch(`/orders/${id}`, body),
@@ -388,11 +388,11 @@ export interface InvoicesSummaryData {
 }
 
 export const invoicesApi = {
-  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; order_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/invoices', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   getDraftOrders: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: any[] }>('/invoices/draft-orders', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
-  getSummary: (params?: { status?: string; branch_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; order_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
+  getSummary: (params?: { status?: string; branch_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
     api.get<{ success: boolean; data: InvoicesSummaryData }>('/invoices/summary', { params }),
   getById: (id: string) => api.get(`/invoices/${id}`),
   getStatusHistory: (id: string) => api.get(`/invoices/${id}/status-history`),

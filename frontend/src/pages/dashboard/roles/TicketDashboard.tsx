@@ -127,7 +127,7 @@ const TicketDashboard: React.FC = () => {
                 {pendingList.slice(0, 10).map((p: any) => (
                   <div key={p.order_item_id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white rounded-xl border border-slate-100 shadow-sm">
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 truncate">{p.invoice_number || p.order_number}</p>
+                      <p className="font-semibold text-slate-900 truncate">{p.invoice_number || '–'}</p>
                       <p className="text-sm text-slate-600">{p.owner_name} · Qty: {p.quantity}</p>
                       <p className="text-xs text-slate-500 mt-0.5">Status: {RECAP_STATUS_LABELS[p.status] || p.status}</p>
                     </div>

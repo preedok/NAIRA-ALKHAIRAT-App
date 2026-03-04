@@ -274,7 +274,6 @@ const OwnerDashboard: React.FC = () => {
                     <p className="font-semibold text-stone-900 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS_GLOBAL)}</p>
                     <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
                   </div>
-                  <p className="text-sm text-stone-600">{inv.Order?.order_number ? `Trip ${inv.Order.order_number}` : 'Invoice'}</p>
                   <p className="text-xs text-stone-500 mt-1">{formatDate(inv.issued_at || inv.created_at)}</p>
                 </div>
                 <p className="text-lg font-bold text-primary-600">{formatIDR(parseFloat(inv.total_amount || 0))}</p>
@@ -306,7 +305,6 @@ const OwnerDashboard: React.FC = () => {
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <p className="font-semibold text-stone-900 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS_GLOBAL)}</p>
-                        <p className="text-sm text-stone-600">{inv.Order?.order_number ? `Trip ${inv.Order.order_number}` : ''}</p>
                       </div>
                       <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
                     </div>

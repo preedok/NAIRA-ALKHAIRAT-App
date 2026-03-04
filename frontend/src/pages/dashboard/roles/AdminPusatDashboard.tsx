@@ -61,7 +61,7 @@ const OrderListModal: React.FC<{
       if (fProvinsi) params.provinsi_id = fProvinsi;
       if (fDateFrom) params.date_from = fDateFrom;
       if (fDateTo) params.date_to = fDateTo;
-      if (fOrderNumber.trim()) params.order_number = fOrderNumber.trim();
+      if (fOrderNumber.trim()) params.invoice_number = fOrderNumber.trim();
       const res = await ordersApi.list(params);
       if (res.data.success) {
         setOrders(res.data.data || []);
@@ -116,7 +116,7 @@ const OrderListModal: React.FC<{
               statusType="order"
               showDateRange
               showSearch
-              searchPlaceholder="No. Order..."
+              searchPlaceholder="No. Invoice..."
               wilayahId={fWilayah}
               provinsiId={fProvinsi}
               branchId={fBranch}
@@ -140,7 +140,7 @@ const OrderListModal: React.FC<{
           </div>
           <Table
             columns={[
-              { id: 'order_number', label: 'No. Order', align: 'left' },
+              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
               { id: 'branch', label: 'Cabang', align: 'left' },
               { id: 'status', label: 'Status', align: 'left' },
@@ -164,7 +164,7 @@ const OrderListModal: React.FC<{
             }
             renderRow={(o) => (
               <tr key={o.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono">{o.order_number}</td>
+                <td className="px-4 py-3 font-mono">{o.Invoice?.invoice_number ?? o.invoice_number ?? '–'}</td>
                 <td className="px-4 py-3">{o.User?.name ?? '-'}</td>
                 <td className="px-4 py-3">{o.Branch?.name ?? '-'}</td>
                 <td className="px-4 py-3"><Badge variant="info">{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></td>
@@ -249,7 +249,6 @@ const InvoiceListModalAdmin: React.FC<{
           <Table
             columns={[
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-              { id: 'order_number', label: 'No. Order', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
               { id: 'company', label: 'Perusahaan', align: 'left' },
               { id: 'total', label: 'Total', align: 'left' },
@@ -274,7 +273,6 @@ const InvoiceListModalAdmin: React.FC<{
             renderRow={(inv) => (
               <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono align-top">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
-                <td className="px-4 py-3 font-mono align-top">{inv.Order?.order_number ?? '-'}</td>
                 <td className="px-4 py-3 align-top">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
                 <td className="px-4 py-3 align-top text-sm">
                   <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>

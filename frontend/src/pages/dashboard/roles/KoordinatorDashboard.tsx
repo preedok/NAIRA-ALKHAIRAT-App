@@ -183,7 +183,7 @@ const KoordinatorDashboard: React.FC = () => {
           <ul className="space-y-2">
             {d.orders_recent.slice(0, 5).map((o: any) => (
               <li key={o.id} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-                <span className="font-medium">{o.order_number}</span>
+                <span className="font-medium">{o.Invoice?.invoice_number ?? o.invoice_number ?? '–'}</span>
                 <span className="text-slate-600">{o.User?.name}</span>
                 <Button
                   size="sm"

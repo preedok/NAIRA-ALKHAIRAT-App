@@ -217,7 +217,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
         </>
       )}
       {showSearch && (
-        <Input label="No. Order" value={search} onChange={(e) => onSearchChange?.(e.target.value)} placeholder={searchPlaceholder} fullWidth />
+        <Input label="No. Invoice" value={search} onChange={(e) => onSearchChange?.(e.target.value)} placeholder={searchPlaceholder} fullWidth />
       )}
       {showSearch2 && (
         <Input label="No. Invoice" value={search2} onChange={(e) => onSearch2Change?.(e.target.value)} placeholder={search2Placeholder} fullWidth />

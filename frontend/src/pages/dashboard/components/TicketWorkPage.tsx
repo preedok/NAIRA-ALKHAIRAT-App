@@ -187,10 +187,9 @@ const TicketWorkPage: React.FC = () => {
     if (q) {
       list = list.filter((inv: any) => {
         const invNum = (inv.invoice_number || '').toLowerCase();
-        const orderNum = (inv.Order?.order_number || '').toLowerCase();
         const owner = (inv.User?.name || inv.User?.company_name || inv.Order?.User?.name || '').toLowerCase();
         const branch = (inv.Branch?.name || inv.Branch?.code || '').toLowerCase();
-        return invNum.includes(q) || orderNum.includes(q) || owner.includes(q) || branch.includes(q);
+        return invNum.includes(q) || owner.includes(q) || branch.includes(q);
       });
     }
     if (filterProgressStatus) {

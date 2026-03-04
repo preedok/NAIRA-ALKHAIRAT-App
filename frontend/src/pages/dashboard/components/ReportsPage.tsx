@@ -582,7 +582,7 @@ const ReportsPage: React.FC = () => {
             ) : (
               <Table
                 columns={[
-                  { id: reportType === 'revenue' ? 'invoice_number' : 'order_number', label: reportType === 'revenue' ? 'No. Invoice' : 'No. Order', align: 'left' },
+                  { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
                   { id: 'owner_name', label: 'Owner', align: 'left' },
                   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
                   { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
@@ -595,13 +595,13 @@ const ReportsPage: React.FC = () => {
                 renderRow={(o: any) => {
                   const companyLine = o.owner_company || o.branch_name || '–';
                   const wilayahLine = [o.wilayah_name, o.provinsi_name].filter(Boolean).join(' · ') || '–';
-                  const displayInv = reportType === 'revenue' && (o.invoice_number != null || o.invoice_status != null)
-                    ? { status: o.invoice_status, invoice_number: o.invoice_number, Order: { order_number: o.order_number } }
+                  const displayInv = (o.invoice_number != null || o.invoice_status != null)
+                    ? { status: o.invoice_status, invoice_number: o.invoice_number }
                     : null;
-                  const cellLabel = reportType === 'revenue' && displayInv
+                  const cellLabel = displayInv
                     ? formatInvoiceNumberDisplay(displayInv, INVOICE_STATUS_LABELS)
-                    : (o.order_number ?? '–');
-                  const statusLabel = reportType === 'revenue' && o.invoice_status != null ? (INVOICE_STATUS_LABELS[o.invoice_status] ?? o.invoice_status) : (o.status ?? '–');
+                    : (o.invoice_number ?? '–');
+                  const statusLabel = o.invoice_status != null ? (INVOICE_STATUS_LABELS[o.invoice_status] ?? o.invoice_status) : (o.status ?? '–');
                   return (
                     <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-4 font-mono font-semibold text-slate-900">{cellLabel}</td>

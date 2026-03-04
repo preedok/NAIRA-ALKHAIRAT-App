@@ -427,7 +427,7 @@ const AccountingAgingPage: React.FC = () => {
             <Input label="Jatuh Tempo (dari)" type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} fullWidth />
             <Input label="Jatuh Tempo (sampai)" type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} fullWidth />
             <div className="sm:col-span-2">
-              <Input label="Cari (No. Order / Partner)" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="No. order atau nama partner..." fullWidth />
+              <Input label="Cari (No. Invoice / Partner)" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="No. invoice atau nama partner..." fullWidth />
             </div>
           </div>
       </PageFilter>
@@ -533,7 +533,7 @@ const AccountingAgingPage: React.FC = () => {
                         items={[
                           { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
                           { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                          { id: 'order', label: 'Order & Invoice', icon: <ExternalLink className="w-4 h-4" />, onClick: () => { const q = inv.Order?.order_number ? '?order_number=' + encodeURIComponent(inv.Order.order_number) : ''; navigate('/dashboard/orders-invoices' + q); } },
+                          { id: 'order', label: 'Lihat Invoice', icon: <ExternalLink className="w-4 h-4" />, onClick: () => { const q = inv.invoice_number ? '?invoice_number=' + encodeURIComponent(inv.invoice_number) : ''; navigate('/dashboard/orders-invoices' + q); } },
                         ] as ActionsMenuItem[]}
                       />
                     </div>

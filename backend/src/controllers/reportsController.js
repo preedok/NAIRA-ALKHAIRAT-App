@@ -262,7 +262,7 @@ const getAnalytics = asyncHandler(async (req, res) => {
   }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
-    attributes: ['id', 'order_number', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at', 'notes'],
+    attributes: ['id', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at', 'notes'],
     include: orderInclude,
     order: [['created_at', 'DESC']],
     limit: 500
@@ -364,7 +364,6 @@ const getAnalytics = asyncHandler(async (req, res) => {
     const itemTypes = [...new Set(items.map((i) => i.type))];
     return {
       id: j.id,
-      order_number: j.order_number,
       invoice_number: j.Invoice?.invoice_number,
       invoice_status: j.Invoice?.status,
       status: j.status,
@@ -536,11 +535,11 @@ const exportReportExcel = asyncHandler(async (req, res) => {
     { model: OrderItem, as: 'OrderItems', attributes: ['type', 'quantity'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false }] }
   ];
   if (report_type === 'revenue') {
-    excelOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
+    excelOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true });
   }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
-    attributes: ['id', 'order_number', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at'],
+    attributes: ['id', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at'],
     include: excelOrderInclude,
     order: [['created_at', 'DESC']],
     limit: 2000
@@ -549,7 +548,7 @@ const exportReportExcel = asyncHandler(async (req, res) => {
 
   const sheet = workbook.addWorksheet('Orders', { views: [{ state: 'frozen', ySplit: 1 }] });
   sheet.columns = [
-    { header: 'No. Order', width: 22 },
+    { header: 'No. Invoice', width: 22 },
     { header: 'Wilayah', width: 16 },
     { header: 'Provinsi', width: 16 },
     { header: 'Cabang', width: 18 },
@@ -689,7 +688,7 @@ const exportReportPdf = asyncHandler(async (req, res) => {
     { model: User, as: 'User', attributes: ['name'] }
   ];
   if (report_type === 'revenue') {
-    pdfOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
+    pdfOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true });
   }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
@@ -708,7 +707,7 @@ const exportReportPdf = asyncHandler(async (req, res) => {
   doc.font('Helvetica').fontSize(8);
   filtered.slice(0, 30).forEach((o) => {
     const j = o.toJSON ? o.toJSON() : o;
-    doc.text(`${j.order_number} | ${j.Branch?.name || '-'} | ${j.User?.name || '-'} | ${parseFloat(j.total_amount || 0).toLocaleString('id-ID')} | ${j.status}`);
+    doc.text(`${j.Invoice?.invoice_number || '-'} | ${j.Branch?.name || '-'} | ${j.User?.name || '-'} | ${parseFloat(j.total_amount || 0).toLocaleString('id-ID')} | ${j.status}`);
   });
   doc.end();
 });
