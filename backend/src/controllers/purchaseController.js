@@ -498,9 +498,63 @@ const deletePurchaseInvoice = asyncHandler(async (req, res) => {
   const inv = await PurchaseInvoice.findByPk(req.params.id);
   if (!inv) return res.status(404).json({ success: false, message: 'Faktur pembelian tidak ditemukan' });
   if (inv.status !== 'draft') return res.status(400).json({ success: false, message: 'Hanya faktur draft yang dapat dihapus' });
+  await PurchasePayment.destroy({ where: { purchase_invoice_id: inv.id } });
   await PurchaseInvoiceLine.destroy({ where: { purchase_invoice_id: inv.id } });
+  if (inv.proof_file_path) {
+    const fp = getProofFilePath(inv.proof_file_path);
+    if (fp && fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+  }
   await inv.destroy();
   res.json({ success: true, message: 'Faktur pembelian dihapus' });
+});
+
+/** Hapus semua data pembelian draft untuk satu product (PO draft, Faktur draft, Pembayaran terkait). */
+const deletePurchasingByProduct = asyncHandler(async (req, res) => {
+  const { product_id } = req.params;
+  if (!product_id) return res.status(400).json({ success: false, message: 'product_id wajib' });
+  const product = await Product.findByPk(product_id, { attributes: ['id', 'name'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+
+  let deletedPayments = 0;
+  let deletedInvoices = 0;
+  let deletedOrders = 0;
+
+  const draftInvoices = await PurchaseInvoice.findAll({
+    where: { product_id, status: 'draft' },
+    attributes: ['id', 'proof_file_path']
+  });
+  for (const inv of draftInvoices) {
+    const payCount = await PurchasePayment.count({ where: { purchase_invoice_id: inv.id } });
+    await PurchasePayment.destroy({ where: { purchase_invoice_id: inv.id } });
+    deletedPayments += payCount;
+    await PurchaseInvoiceLine.destroy({ where: { purchase_invoice_id: inv.id } });
+    if (inv.proof_file_path) {
+      const fp = getProofFilePath(inv.proof_file_path);
+      if (fp && fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+    }
+    await inv.destroy();
+    deletedInvoices += 1;
+  }
+
+  const draftOrders = await PurchaseOrder.findAll({
+    where: { product_id, status: 'draft' },
+    attributes: ['id', 'proof_file_path']
+  });
+  for (const po of draftOrders) {
+    await PurchaseOrderLine.destroy({ where: { purchase_order_id: po.id } });
+    if (po.proof_file_path) {
+      const fp = getProofFilePath(po.proof_file_path);
+      if (fp && fs.existsSync(fp)) { try { fs.unlinkSync(fp); } catch (_) {} }
+    }
+    await po.destroy();
+    deletedOrders += 1;
+  }
+
+  res.json({
+    success: true,
+    message: `Data pembelian draft untuk product "${product.name}" dihapus`,
+    data: { deleted_orders: deletedOrders, deleted_invoices: deletedInvoices, deleted_payments: deletedPayments }
+  });
 });
 
 const postPurchaseInvoice = asyncHandler(async (req, res) => {
@@ -847,5 +901,6 @@ module.exports = {
   listPurchasePayments,
   getPurchasePayment,
   createPurchasePayment,
-  postPurchasePayment
+  postPurchasePayment,
+  deletePurchasingByProduct
 };

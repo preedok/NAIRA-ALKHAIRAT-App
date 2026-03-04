@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, Receipt, DollarSign, ChevronRight, Package, Hotel, Plane, Bus, HandHelping } from 'lucide-react';
+import { Users, FileText, Receipt, DollarSign, Package, Trash2 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
+import ActionsMenu from '../../../components/common/ActionsMenu';
+import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import StatCard from '../../../components/common/StatCard';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
 import ContentLoading from '../../../components/common/ContentLoading';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
 import { accountingApi, type PurchasingByProduct } from '../../../services/api';
@@ -30,20 +34,12 @@ const PURCHASING_PRODUCT_TABS: { id: string; label: string }[] = [
   { id: 'handling', label: 'Handling' }
 ];
 
-const PRODUCT_ICONS: Record<string, React.ReactNode> = {
-  hotel: <Hotel className="w-5 h-5" />,
-  visa: <FileText className="w-5 h-5" />,
-  ticket: <Plane className="w-5 h-5" />,
-  bus: <Bus className="w-5 h-5" />,
-  handling: <HandHelping className="w-5 h-5" />,
-  package: <Package className="w-5 h-5" />
-};
-
 const AccountingPurchasingPage: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<{ products: Array<{ id: string; code: string; name: string; type: string }>; by_product: PurchasingByProduct[]; suppliers_count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   /** Tab filter: '' = Semua, atau product type (hotel, visa, ticket, bus, handling) */
   const [selectedProductType, setSelectedProductType] = useState<string>('');
 
@@ -76,6 +72,29 @@ const AccountingPurchasingPage: React.FC = () => {
   const filteredByProduct = selectedProductType
     ? byProduct.filter((r) => r.product_type === selectedProductType)
     : byProduct;
+
+  const handleDeleteByProduct = useCallback(
+    async (row: PurchasingByProduct) => {
+      if (!window.confirm(`Hapus semua data pembelian draft (PO, Faktur, Pembayaran) untuk product "${row.product_name}"? Data yang sudah disetujui/diposting tidak dihapus.`)) return;
+      setError(null);
+      setDeletingProductId(row.product_id);
+      try {
+        const res = await accountingApi.deletePurchasingByProduct(row.product_id);
+        const d = res.data?.data;
+        if (res.data?.success) {
+          const msg = d ? `Dihapus: ${d.deleted_orders} PO, ${d.deleted_invoices} faktur, ${d.deleted_payments} pembayaran.` : res.data?.message;
+          window.alert(msg || 'Data pembelian draft dihapus.');
+          fetchSummary();
+        }
+      } catch (e: unknown) {
+        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal menghapus data pembelian';
+        setError(msg);
+      } finally {
+        setDeletingProductId(null);
+      }
+    },
+    [fetchSummary]
+  );
 
   return (
     <div className="space-y-8">
@@ -144,63 +163,45 @@ const AccountingPurchasingPage: React.FC = () => {
         {loading && !data ? (
           <ContentLoading />
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredByProduct.map((row) => {
-            const typeLabel = PRODUCT_TYPE_LABELS[row.product_type] ?? row.product_type;
-            const Icon = PRODUCT_ICONS[row.product_type] ?? <Package className="w-5 h-5" />;
-            return (
-              <Card key={row.product_id} className="p-5 border border-slate-200 hover:border-slate-300 transition-colors">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 rounded-lg bg-slate-100 text-slate-600">{Icon}</div>
-                  <div>
-                    <h3 className="font-semibold text-slate-900">{row.product_name}</h3>
-                    <p className="text-sm text-slate-500">{typeLabel}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm mb-4">
-                  <div className="text-slate-600">PO</div>
-                  <div className="text-right font-medium">{row.po_count}</div>
-                  <div className="text-slate-600">Faktur</div>
-                  <div className="text-right font-medium">{row.invoice_count}</div>
-                  <div className="text-slate-600">Sisa hutang</div>
-                  <div className="text-right font-medium text-amber-600">{formatIDR(row.remaining_amount)}</div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => navigate(`/dashboard/accounting/purchasing/orders?product_id=${row.product_id}`)}
-                  >
-                    PO <ChevronRight className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => navigate(`/dashboard/accounting/purchasing/invoices?product_id=${row.product_id}`)}
-                  >
-                    Faktur <ChevronRight className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => navigate(`/dashboard/accounting/purchasing/payments?product_id=${row.product_id}`)}
-                  >
-                    Pembayaran <ChevronRight className="w-3 h-3" />
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-        )}
-
-        {!loading && filteredByProduct.length === 0 && (
-          <p className="text-slate-500 text-sm py-4">
-            {selectedProductType ? 'Tidak ada data pembelian untuk tipe product ini.' : 'Belum ada data pembelian per product. Tambah PO dan Faktur dari menu Pembelian.'}
-          </p>
+          <Table
+            columns={[
+              { id: 'product', label: 'Product', align: 'left' },
+              { id: 'po_count', label: 'PO', align: 'right' },
+              { id: 'invoice_count', label: 'Faktur', align: 'right' },
+              { id: 'total_amount', label: 'Total', align: 'right' },
+              { id: 'paid_amount', label: 'Terbayar', align: 'right' },
+              { id: 'remaining_amount', label: 'Sisa', align: 'right' },
+              { id: 'actions', label: 'Aksi', align: 'right' }
+            ] as TableColumn[]}
+            data={filteredByProduct}
+            emptyMessage={selectedProductType ? 'Tidak ada data pembelian untuk tipe product ini.' : 'Belum ada data pembelian per product.'}
+            renderRow={(row) => {
+              const typeLabel = PRODUCT_TYPE_LABELS[row.product_type] ?? row.product_type;
+              return (
+                <tr key={row.product_id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="py-3 px-4">
+                    <span className="font-medium text-slate-900">{row.product_name}</span>
+                    <span className="text-slate-500 ml-1 text-sm">({typeLabel})</span>
+                  </td>
+                  <td className="py-3 px-4 text-right">{row.po_count}</td>
+                  <td className="py-3 px-4 text-right">{row.invoice_count}</td>
+                  <td className="py-3 px-4 text-right">{formatIDR(row.total_amount)}</td>
+                  <td className="py-3 px-4 text-right text-blue-600">{formatIDR(row.paid_amount)}</td>
+                  <td className="py-3 px-4 text-right text-amber-600">{formatIDR(row.remaining_amount)}</td>
+                  <td className="py-3 px-4 text-right">
+                    <ActionsMenu
+                      items={[
+                        { id: 'po', label: 'PO', icon: <FileText className="w-4 h-4" />, onClick: () => navigate(`/dashboard/accounting/purchasing/orders?product_id=${row.product_id}`) },
+                        { id: 'faktur', label: 'Faktur', icon: <Receipt className="w-4 h-4" />, onClick: () => navigate(`/dashboard/accounting/purchasing/invoices?product_id=${row.product_id}`) },
+                        { id: 'pembayaran', label: 'Pembayaran', icon: <DollarSign className="w-4 h-4" />, onClick: () => navigate(`/dashboard/accounting/purchasing/payments?product_id=${row.product_id}`) },
+                        { id: 'hapus', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteByProduct(row), danger: true }
+                      ] as ActionsMenuItem[]}
+                    />
+                  </td>
+                </tr>
+              );
+            }}
+          />
         )}
       </Card>
     </div>

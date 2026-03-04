@@ -721,6 +721,8 @@ export const accountingApi = {
   // Modul Pembelian (per product)
   getPurchasingSummary: () =>
     api.get<{ success: boolean; data: { products: Array<{ id: string; code: string; name: string; type: string }>; by_product: PurchasingByProduct[]; suppliers_count: number } }>('/accounting/purchasing/summary'),
+  deletePurchasingByProduct: (productId: string) =>
+    api.delete<{ success: boolean; message: string; data: { deleted_orders: number; deleted_invoices: number; deleted_payments: number } }>(`/accounting/purchasing/by-product/${productId}`),
   listSuppliers: (params?: { search?: string; is_active?: string; page?: number; limit?: number }) =>
     api.get<{ success: boolean; data: any[]; total: number }>('/accounting/suppliers', { params }),
   getSupplier: (id: string) =>

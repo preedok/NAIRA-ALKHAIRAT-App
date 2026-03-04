@@ -15,6 +15,15 @@ import { formatIDR } from '../../../utils';
 const PO_STATUS_LABELS: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', approved: 'Approved' };
 const DEFAULT_LIMIT = 20;
 
+/** Opsi jenis pembelian product (untuk filter dan kategorisasi PO) */
+const JENIS_PEMBELIAN_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'hotel', label: 'Hotel' },
+  { value: 'visa', label: 'Visa' },
+  { value: 'ticket', label: 'Tiket' },
+  { value: 'bus', label: 'Bus Saudi' },
+  { value: 'handling', label: 'Handling' }
+];
+
 const AccountingPurchasingOrdersPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
@@ -28,7 +37,7 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<Array<{ id: string; code: string; name: string; type: string }>>([]);
   const [modalOpen, setModalOpen] = useState<'create' | null>(null);
-  const [form, setForm] = useState({ supplier_id: '', product_description: '', order_date: new Date().toISOString().slice(0, 10), expected_date: '' });
+  const [form, setForm] = useState({ supplier_id: '', jenis_pembelian: '', product_description: '', order_date: new Date().toISOString().slice(0, 10), expected_date: '' });
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [formError, setFormError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -68,6 +77,7 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
   const openCreate = () => {
     setForm({
       supplier_id: '',
+      jenis_pembelian: '',
       product_description: '',
       order_date: new Date().toISOString().slice(0, 10),
       expected_date: ''
@@ -86,6 +96,10 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
       const formData = new FormData();
       formData.append('proof_file', proofFile);
       formData.append('supplier_id', form.supplier_id);
+      if (form.jenis_pembelian) {
+        const productByType = products.find((p) => p.type === form.jenis_pembelian);
+        if (productByType) formData.append('product_id', productByType.id);
+      }
       formData.append('order_date', form.order_date);
       if (form.expected_date) formData.append('expected_date', form.expected_date);
       const lines = form.product_description.trim()
@@ -238,6 +252,14 @@ const AccountingPurchasingOrdersPage: React.FC = () => {
                   placeholder="Pilih supplier"
                   emptyLabel="Pilih supplier"
                   options={suppliers.map((s) => ({ value: s.id, label: `${s.code} – ${s.name}` }))}
+                />
+                <Autocomplete
+                  label="Jenis Pembelian Product"
+                  value={form.jenis_pembelian}
+                  onChange={(v) => setForm((f) => ({ ...f, jenis_pembelian: v || '' }))}
+                  placeholder="Pilih jenis"
+                  emptyLabel="Pilih jenis pembelian"
+                  options={JENIS_PEMBELIAN_OPTIONS}
                 />
                 <Input label="Product" value={form.product_description} onChange={(e) => setForm((f) => ({ ...f, product_description: e.target.value }))} placeholder="Nama/deskripsi product" />
                 <div className="grid grid-cols-2 gap-4">

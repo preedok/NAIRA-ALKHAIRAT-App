@@ -58,6 +58,7 @@ router.post('/payments/:id/reconcile', accountingController.reconcilePayment);
 
 // Modul Pembelian (Purchasing) - ringkasan per product
 router.get('/purchasing/summary', purchaseController.getPurchasingSummary);
+router.delete('/purchasing/by-product/:product_id', purchaseController.deletePurchasingByProduct);
 router.get('/suppliers', purchaseController.listSuppliers);
 router.get('/suppliers/:id', purchaseController.getSupplier);
 router.post('/suppliers', purchaseController.createSupplier);
