@@ -15,9 +15,11 @@ const DEFAULT_LIMIT = 20;
 
 interface AccountingPurchasingSuppliersPageProps {
   embedded?: boolean;
+  triggerCreate?: boolean;
+  onClearCreateTrigger?: () => void;
 }
 
-const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersPageProps> = ({ embedded = false }) => {
+const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersPageProps> = ({ embedded = false, triggerCreate, onClearCreateTrigger }) => {
   const [searchParams] = useSearchParams();
   const [list, setList] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -51,6 +53,13 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
   }, [page, limit, search, activeOnly]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
+
+  useEffect(() => {
+    if (triggerCreate) {
+      openCreate();
+      onClearCreateTrigger?.();
+    }
+  }, [triggerCreate]);
 
   const openCreate = () => {
     setForm({ code: '', name: '', supplier_type: 'vendor', currency: 'IDR', term_of_payment_days: 0, is_active: true });

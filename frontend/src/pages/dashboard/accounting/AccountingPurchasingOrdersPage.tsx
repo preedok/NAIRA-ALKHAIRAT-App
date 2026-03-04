@@ -26,9 +26,11 @@ const JENIS_PEMBELIAN_OPTIONS: Array<{ value: string; label: string }> = [
 
 interface AccountingPurchasingOrdersPageProps {
   embedded?: boolean;
+  triggerCreate?: boolean;
+  onClearCreateTrigger?: () => void;
 }
 
-const AccountingPurchasingOrdersPage: React.FC<AccountingPurchasingOrdersPageProps> = ({ embedded = false }) => {
+const AccountingPurchasingOrdersPage: React.FC<AccountingPurchasingOrdersPageProps> = ({ embedded = false, triggerCreate, onClearCreateTrigger }) => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
@@ -66,6 +68,13 @@ const AccountingPurchasingOrdersPage: React.FC<AccountingPurchasingOrdersPagePro
 
   useEffect(() => { fetchList(); }, [fetchList]);
   useEffect(() => { setProductId(productIdFromUrl || productId); }, [productIdFromUrl]);
+
+  useEffect(() => {
+    if (triggerCreate) {
+      openCreate();
+      onClearCreateTrigger?.();
+    }
+  }, [triggerCreate]);
 
   useEffect(() => {
     accountingApi.getPurchasingSummary().then((r) => {

@@ -24,9 +24,11 @@ const PURCHASE_TYPE_TABS: Array<{ value: string; label: string }> = [
 
 interface AccountingPurchasingInvoicesPageProps {
   embedded?: boolean;
+  triggerCreate?: boolean;
+  onClearCreateTrigger?: () => void;
 }
 
-const AccountingPurchasingInvoicesPage: React.FC<AccountingPurchasingInvoicesPageProps> = ({ embedded = false }) => {
+const AccountingPurchasingInvoicesPage: React.FC<AccountingPurchasingInvoicesPageProps> = ({ embedded = false, triggerCreate, onClearCreateTrigger }) => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
@@ -82,6 +84,13 @@ const AccountingPurchasingInvoicesPage: React.FC<AccountingPurchasingInvoicesPag
       if (r.data.success) setPurchaseOrders(r.data.data || []);
     }).catch(() => {});
   }, [modalOpen]);
+
+  useEffect(() => {
+    if (triggerCreate) {
+      openCreate();
+      onClearCreateTrigger?.();
+    }
+  }, [triggerCreate]);
 
   const openCreate = () => {
     setForm({

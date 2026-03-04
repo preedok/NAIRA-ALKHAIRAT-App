@@ -138,12 +138,20 @@ const listInvoices = asyncHandler(async (req, res) => {
     offset
   });
 
-  // Attach hotel_location to each hotel order item (dari Product.meta.location) agar filter tab Mekkah/Madinah jalan
+  // Attach hotel_location ke tiap item hotel (dari Product.meta.location atau infer dari nama) agar filter tab Mekkah/Madinah jalan
+  const inferLocationFromName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    const n = name.toLowerCase().trim();
+    if (/madinah/.test(n)) return 'madinah';
+    if (/mekkah|makkah/.test(n)) return 'makkah';
+    return '';
+  };
   const data = invoices.map((inv) => {
     const plain = inv.get ? inv.get({ plain: true }) : inv;
     (plain.Order?.OrderItems || []).forEach((oi) => {
-      const loc = oi.Product?.meta?.location;
-      oi.hotel_location = (loc != null && String(loc).trim() !== '') ? String(loc).toLowerCase().trim() : '';
+      let loc = (oi.Product?.meta && oi.Product.meta.location != null) ? String(oi.Product.meta.location).trim() : '';
+      if (!loc) loc = inferLocationFromName(oi.Product?.name);
+      oi.hotel_location = loc ? loc.toLowerCase() : '';
     });
     return plain;
   });
@@ -193,12 +201,20 @@ const getInvoice = asyncHandler(async (req, res) => {
   hotelItems.forEach(attachJamaahStatus);
 
   const data = invoice.get ? invoice.get({ plain: true }) : invoice;
+  const inferLocFromName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    const n = String(name).toLowerCase().trim();
+    if (/madinah/.test(n)) return 'madinah';
+    if (/mekkah|makkah/.test(n)) return 'makkah';
+    return '';
+  };
   (data?.Order?.OrderItems || []).forEach((oi) => {
     if (oi.type === ORDER_ITEM_TYPE.HOTEL && (oi.Product || oi.product)) {
       const p = oi.Product || oi.product;
       oi.product_name = p.name || p.code || null;
-      const loc = p.meta?.location;
-      oi.hotel_location = (loc != null && String(loc).trim() !== '') ? String(loc).toLowerCase().trim() : '';
+      let loc = (p.meta && p.meta.location != null) ? String(p.meta.location).trim() : '';
+      if (!loc) loc = inferLocFromName(p.name);
+      oi.hotel_location = loc ? loc.toLowerCase() : '';
     }
   });
 

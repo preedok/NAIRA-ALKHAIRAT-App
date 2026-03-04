@@ -169,7 +169,24 @@ const HotelWorkPage: React.FC = () => {
     }
   };
 
-  const hotelItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'hotel') || [];
+  /** Lokasi hotel: backend hotel_location, atau Product.meta.location / item.meta, atau infer dari nama product */
+  const getHotelItemLocation = useCallback((item: any) => {
+    const fromBackend = item?.hotel_location;
+    if (fromBackend && String(fromBackend).trim()) return String(fromBackend).toLowerCase().trim();
+    const loc = item?.Product?.meta?.location ?? item?.meta?.location;
+    if (loc && String(loc).trim()) return String(loc).toLowerCase().trim();
+    const name = (item?.Product?.name ?? item?.product_name ?? item?.meta?.product_name ?? '').toString();
+    if (/madinah/i.test(name)) return 'madinah';
+    if (/mekkah|makkah/i.test(name)) return 'makkah';
+    return '';
+  }, []);
+
+  const hotelItemsAll = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'hotel') || [];
+  /** Di modal detail: jika tab Mekkah/Madinah dipilih, hanya tampilkan item hotel yang lokasinya sesuai */
+  const hotelItems = useMemo(() => {
+    if (!filterHotelLocation) return hotelItemsAll;
+    return hotelItemsAll.filter((item: any) => getHotelItemLocation(item) === filterHotelLocation);
+  }, [hotelItemsAll, filterHotelLocation, getHotelItemLocation]);
   type HotelGroup = { key: string; productName: string; items: any[] };
   const hotelByProduct = useMemo<HotelGroup[]>(() => {
     return hotelItems.reduce((acc: HotelGroup[], item: any) => {
@@ -184,18 +201,6 @@ const HotelWorkPage: React.FC = () => {
   const byStatus = dashboard?.by_status ?? { waiting_confirmation: 0, confirmed: 0, room_assigned: 0, completed: 0 };
   const totalInvoices = dashboard?.total_orders ?? 0;
   const totalItems = dashboard?.total_hotel_items ?? 0;
-
-  /** Lokasi hotel: backend hotel_location, atau Product.meta.location / item.meta, atau infer dari nama product */
-  const getHotelItemLocation = (item: any) => {
-    const fromBackend = item?.hotel_location;
-    if (fromBackend && String(fromBackend).trim()) return String(fromBackend).toLowerCase().trim();
-    const loc = item?.Product?.meta?.location ?? item?.meta?.location;
-    if (loc && String(loc).trim()) return String(loc).toLowerCase().trim();
-    const name = (item?.Product?.name ?? item?.product_name ?? item?.meta?.product_name ?? '').toString();
-    if (/madinah/i.test(name)) return 'madinah';
-    if (/mekkah|makkah/i.test(name)) return 'makkah';
-    return '';
-  };
 
   const filteredInvoices = useMemo(() => {
     let list = invoices;
@@ -350,7 +355,11 @@ const HotelWorkPage: React.FC = () => {
             renderRow={(inv: any) => {
               const o = inv.Order;
               const orderItems = o?.OrderItems || [];
-              const hotelItemsList = orderItems.filter((i: any) => i.type === 'hotel');
+              const allHotelItems = orderItems.filter((i: any) => i.type === 'hotel');
+              /** Sesuai tab: hanya item Mekkah, hanya Madinah, atau semuanya */
+              const hotelItemsList = filterHotelLocation
+                ? allHotelItems.filter((i: any) => getHotelItemLocation(i) === filterHotelLocation)
+                : allHotelItems;
               const hotelCount = hotelItemsList.length;
               const statusCounts: Record<string, number> = {};
               hotelItemsList.forEach((i: any) => {
@@ -433,6 +442,15 @@ const HotelWorkPage: React.FC = () => {
             />
             <ModalBody className="space-y-6 bg-slate-50/30">
               {(() => {
+                if (filterHotelLocation && hotelItems.length === 0) {
+                  const label = filterHotelLocation === 'makkah' ? 'Hotel Mekkah' : 'Hotel Madinah';
+                  return (
+                    <div className="rounded-xl border border-slate-200 bg-amber-50/50 p-6 text-center">
+                      <p className="text-slate-700 font-medium">Tidak ada item {label} pada invoice ini.</p>
+                      <p className="text-sm text-slate-500 mt-1">Pilih tab &quot;Semua&quot; untuk melihat semua item hotel.</p>
+                    </div>
+                  );
+                }
                 type HotelGroup = { key: string; productName: string; items: any[] };
                 const hotelByProduct: HotelGroup[] = hotelItems.reduce((acc: HotelGroup[], item: any) => {
                   const pid = String(item.product_ref_id || item.product_id || '');

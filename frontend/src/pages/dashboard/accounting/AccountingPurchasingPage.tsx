@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Users, FileText, Receipt, DollarSign, Package, Trash2, LayoutDashboard } from 'lucide-react';
+import { Users, FileText, Receipt, DollarSign, Package, Trash2, LayoutDashboard, Plus, ChevronDown } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -49,10 +49,19 @@ type TabId = typeof TABS[number]['id'];
 
 const AccountingPurchasingPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const tab = (searchParams.get('tab') || 'ringkasan') as TabId;
   const effectiveTab = TABS.some((t) => t.id === tab) ? tab : 'ringkasan';
-  const setTab = (t: TabId) => setSearchParams((p) => { p.set('tab', t); p.delete('product_id'); return p; });
+  const setTab = (t: TabId) => setSearchParams((p) => { p.set('tab', t); p.delete('product_id'); p.delete('action'); return p; });
   const setTabWithProduct = (t: TabId, productId: string) => setSearchParams({ tab: t, product_id: productId });
+  const actionCreate = searchParams.get('action') === 'create';
+  const clearAction = useCallback(() => {
+    setSearchParams((p) => { p.delete('action'); return p; });
+  }, [setSearchParams]);
+  const goToAdd = (targetTab: TabId) => {
+    setAddMenuOpen(false);
+    setSearchParams((p) => { p.set('tab', targetTab); p.set('action', 'create'); p.delete('product_id'); return p; });
+  };
   const [data, setData] = useState<{ products: Array<{ id: string; code: string; name: string; type: string }>; by_product: PurchasingByProduct[]; suppliers_count: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,11 +128,35 @@ const AccountingPurchasingPage: React.FC = () => {
         title="Modul Pembelian"
         subtitle="Pembelian product baru ke supplier per product. Setiap pembelian wajib dilampiri bukti."
         right={
-          effectiveTab === 'ringkasan' ? (
-            <div className="flex items-center gap-2">
-              <AutoRefreshControl onRefresh={fetchSummary} disabled={loading} size="sm" />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Button variant="primary" size="sm" className="gap-1.5" onClick={() => setAddMenuOpen((o) => !o)}>
+                <Plus className="w-4 h-4" /> Tambah Pembelian <ChevronDown className="w-4 h-4 opacity-80" />
+              </Button>
+              {addMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" aria-hidden onClick={() => setAddMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[200px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                    <button type="button" className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => goToAdd('orders')}>
+                      <FileText className="w-4 h-4 text-slate-500" /> Buat PO Pembelian
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => goToAdd('invoices')}>
+                      <Receipt className="w-4 h-4 text-slate-500" /> Buat Faktur Pembelian
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => goToAdd('payments')}>
+                      <DollarSign className="w-4 h-4 text-slate-500" /> Buat Pembayaran
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => goToAdd('suppliers')}>
+                      <Users className="w-4 h-4 text-slate-500" /> Tambah Supplier
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          ) : undefined
+            {effectiveTab === 'ringkasan' && (
+              <AutoRefreshControl onRefresh={fetchSummary} disabled={loading} size="sm" />
+            )}
+          </div>
         }
       />
 
@@ -148,10 +181,10 @@ const AccountingPurchasingPage: React.FC = () => {
 
       {effectiveTab !== 'ringkasan' && (
         <div className="min-h-[200px]">
-          {effectiveTab === 'suppliers' && <AccountingPurchasingSuppliersPage embedded />}
-          {effectiveTab === 'orders' && <AccountingPurchasingOrdersPage embedded />}
-          {effectiveTab === 'invoices' && <AccountingPurchasingInvoicesPage embedded />}
-          {effectiveTab === 'payments' && <AccountingPurchasingPaymentsPage embedded />}
+          {effectiveTab === 'suppliers' && <AccountingPurchasingSuppliersPage embedded triggerCreate={actionCreate && effectiveTab === 'suppliers'} onClearCreateTrigger={clearAction} />}
+          {effectiveTab === 'orders' && <AccountingPurchasingOrdersPage embedded triggerCreate={actionCreate && effectiveTab === 'orders'} onClearCreateTrigger={clearAction} />}
+          {effectiveTab === 'invoices' && <AccountingPurchasingInvoicesPage embedded triggerCreate={actionCreate && effectiveTab === 'invoices'} onClearCreateTrigger={clearAction} />}
+          {effectiveTab === 'payments' && <AccountingPurchasingPaymentsPage embedded triggerCreate={actionCreate && effectiveTab === 'payments'} onClearCreateTrigger={clearAction} />}
         </div>
       )}
 

@@ -17,9 +17,11 @@ const DEFAULT_LIMIT = 20;
 
 interface AccountingPurchasingPaymentsPageProps {
   embedded?: boolean;
+  triggerCreate?: boolean;
+  onClearCreateTrigger?: () => void;
 }
 
-const AccountingPurchasingPaymentsPage: React.FC<AccountingPurchasingPaymentsPageProps> = ({ embedded = false }) => {
+const AccountingPurchasingPaymentsPage: React.FC<AccountingPurchasingPaymentsPageProps> = ({ embedded = false, triggerCreate, onClearCreateTrigger }) => {
   const [searchParams] = useSearchParams();
   const productIdFromUrl = searchParams.get('product_id') || '';
   const [list, setList] = useState<any[]>([]);
@@ -56,6 +58,13 @@ const AccountingPurchasingPaymentsPage: React.FC<AccountingPurchasingPaymentsPag
 
   useEffect(() => { fetchList(); }, [fetchList]);
   useEffect(() => { setProductId(productIdFromUrl || productId); }, [productIdFromUrl]);
+
+  useEffect(() => {
+    if (triggerCreate) {
+      openCreate();
+      onClearCreateTrigger?.();
+    }
+  }, [triggerCreate]);
 
   useEffect(() => {
     const invParams: Record<string, string | number> = { status: 'posted', limit: 500 };
