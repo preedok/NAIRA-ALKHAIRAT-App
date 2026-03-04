@@ -6,14 +6,14 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
-import { StatCard, CardSectionHeader, Input, PriceInput, Autocomplete, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, PriceCurrencyField, Autocomplete, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi, adminPusatApi, type BusSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
-import { getPriceTripleForTable, parsePriceInput, PRICE_COLUMN_LABEL, formatIDR } from '../../../utils';
+import { getPriceTripleForTable, PRICE_COLUMN_LABEL, formatIDR } from '../../../utils';
 import BusWorkPage from './BusWorkPage';
 
 const PAGE_SIZE = 25;
@@ -556,28 +556,22 @@ const BusPage: React.FC<BusPageProps> = ({
                     ))}
                   </div>
                   <div className="pt-2">
-                    <p className="text-xs text-slate-500 mb-2">Harga per mobil untuk tipe &quot;{BUS_TRIP_LABELS[addBusForm.product_trip_type]}&quot;</p>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                        <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
-                          {cur}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {(() => {
+                    <PriceCurrencyField
+                      label={`Harga per mobil – ${BUS_TRIP_LABELS[addBusForm.product_trip_type]}`}
+                      value={(() => {
                         const idr = addBusForm.price_per_vehicle_idr ?? 0;
-                        const triple = fillFromSource('IDR', idr, currencyRates);
-                        const cur = addBusForm.price_currency;
-                        return (
-                          <>
-                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: n }))} disabled={cur !== 'IDR'} placeholder="0" />
-                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr }))} disabled={cur !== 'SAR'} placeholder="0" />
-                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setAddBusForm((f) => ({ ...f, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr }))} disabled={cur !== 'USD'} placeholder="0" />
-                          </>
-                        );
+                        const t = fillFromSource('IDR', idr, currencyRates);
+                        return addBusForm.price_currency === 'IDR' ? t.idr : addBusForm.price_currency === 'SAR' ? t.sar : t.usd;
                       })()}
-                    </div>
+                      currency={addBusForm.price_currency}
+                      onChange={(val, cur) => setAddBusForm((f) => ({
+                        ...f,
+                        price_currency: cur,
+                        price_per_vehicle_idr: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0
+                      }))}
+                      rates={currencyRates}
+                      showConversions
+                    />
                   </div>
                 </section>
               )}
@@ -600,32 +594,22 @@ const BusPage: React.FC<BusPageProps> = ({
                     ))}
                   </div>
                   <div className="pt-2">
-                    <p className="text-xs text-slate-500 mb-2">Harga untuk tipe &quot;{BUS_TRIP_LABELS[addBusForm.product_trip_type]}&quot;</p>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                        <Button key={cur} type="button" variant={addBusForm.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setAddBusForm((f) => ({ ...f, price_currency: cur }))}>
-                          {cur}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {(() => {
+                    <PriceCurrencyField
+                      label={`Harga – ${BUS_TRIP_LABELS[addBusForm.product_trip_type]}`}
+                      value={(() => {
                         const idr = addBusForm.route_prices_by_trip[addBusForm.product_trip_type] ?? 0;
-                        const triple = fillFromSource('IDR', idr, currencyRates);
-                        const cur = addBusForm.price_currency;
-                        const setPrice = (valueIdr: number) => setAddBusForm((f) => ({
-                          ...f,
-                          route_prices_by_trip: { ...f.route_prices_by_trip, [f.product_trip_type]: valueIdr }
-                        }));
-                        return (
-                          <>
-                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
-                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
-                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
-                          </>
-                        );
+                        const t = fillFromSource('IDR', idr, currencyRates);
+                        return addBusForm.price_currency === 'IDR' ? t.idr : addBusForm.price_currency === 'SAR' ? t.sar : t.usd;
                       })()}
-                    </div>
+                      currency={addBusForm.price_currency}
+                      onChange={(val, cur) => setAddBusForm((f) => ({
+                        ...f,
+                        price_currency: cur,
+                        route_prices_by_trip: { ...f.route_prices_by_trip, [f.product_trip_type]: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0 }
+                      }))}
+                      rates={currencyRates}
+                      showConversions
+                    />
                   </div>
                 </section>
               )}
@@ -695,28 +679,22 @@ const BusPage: React.FC<BusPageProps> = ({
                     ))}
                   </div>
                   <div className="pt-2">
-                    <p className="text-xs text-slate-500 mb-2">Harga per mobil untuk tipe &quot;{BUS_TRIP_LABELS[editProductModal.product_trip_type]}&quot;</p>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                        <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
-                          {cur}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {(() => {
+                    <PriceCurrencyField
+                      label={`Harga per mobil – ${BUS_TRIP_LABELS[editProductModal.product_trip_type]}`}
+                      value={(() => {
                         const idr = editProductModal.price_per_vehicle_idr ?? 0;
-                        const triple = fillFromSource('IDR', idr, currencyRates);
-                        const cur = editProductModal.price_currency;
-                        return (
-                          <>
-                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: n } : null)} disabled={cur !== 'IDR'} placeholder="0" />
-                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('SAR', n, currencyRates).idr } : null)} disabled={cur !== 'SAR'} placeholder="0" />
-                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setEditProductModal((m) => m ? { ...m, price_per_vehicle_idr: fillFromSource('USD', n, currencyRates).idr } : null)} disabled={cur !== 'USD'} placeholder="0" />
-                          </>
-                        );
+                        const t = fillFromSource('IDR', idr, currencyRates);
+                        return editProductModal.price_currency === 'IDR' ? t.idr : editProductModal.price_currency === 'SAR' ? t.sar : t.usd;
                       })()}
-                    </div>
+                      currency={editProductModal.price_currency}
+                      onChange={(val, cur) => setEditProductModal((m) => m ? {
+                        ...m,
+                        price_currency: cur,
+                        price_per_vehicle_idr: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0
+                      } : null)}
+                      rates={currencyRates}
+                      showConversions
+                    />
                   </div>
                 </section>
               )}
@@ -739,32 +717,22 @@ const BusPage: React.FC<BusPageProps> = ({
                     ))}
                   </div>
                   <div className="pt-2">
-                    <p className="text-xs text-slate-500 mb-2">Harga untuk tipe &quot;{BUS_TRIP_LABELS[editProductModal.product_trip_type]}&quot;</p>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {(['IDR', 'SAR', 'USD'] as const).map((cur) => (
-                        <Button key={cur} type="button" variant={editProductModal.price_currency === cur ? 'primary' : 'outline'} size="sm" onClick={() => setEditProductModal((m) => m ? { ...m, price_currency: cur } : null)}>
-                          {cur}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {(() => {
+                    <PriceCurrencyField
+                      label={`Harga – ${BUS_TRIP_LABELS[editProductModal.product_trip_type]}`}
+                      value={(() => {
                         const idr = editProductModal.route_prices_by_trip[editProductModal.product_trip_type] ?? 0;
-                        const triple = fillFromSource('IDR', idr, currencyRates);
-                        const cur = editProductModal.price_currency;
-                        const setPrice = (valueIdr: number) => setEditProductModal((m) => m ? {
-                          ...m,
-                          route_prices_by_trip: { ...m.route_prices_by_trip, [m.product_trip_type]: valueIdr }
-                        } : null);
-                        return (
-                          <>
-                            <PriceInput label="IDR" value={idr} currency="IDR" onChange={(n) => setPrice(n)} disabled={cur !== 'IDR'} placeholder="0" />
-                            <PriceInput label="SAR" value={triple.sar} currency="SAR" onChange={(n) => setPrice(fillFromSource('SAR', n, currencyRates).idr)} disabled={cur !== 'SAR'} placeholder="0" />
-                            <PriceInput label="USD" value={triple.usd} currency="USD" onChange={(n) => setPrice(fillFromSource('USD', n, currencyRates).idr)} disabled={cur !== 'USD'} placeholder="0" />
-                          </>
-                        );
+                        const t = fillFromSource('IDR', idr, currencyRates);
+                        return editProductModal.price_currency === 'IDR' ? t.idr : editProductModal.price_currency === 'SAR' ? t.sar : t.usd;
                       })()}
-                    </div>
+                      currency={editProductModal.price_currency}
+                      onChange={(val, cur) => setEditProductModal((m) => m ? {
+                        ...m,
+                        price_currency: cur,
+                        route_prices_by_trip: { ...m.route_prices_by_trip, [m.product_trip_type]: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0 }
+                      } : null)}
+                      rates={currencyRates}
+                      showConversions
+                    />
                   </div>
                 </section>
               )}

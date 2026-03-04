@@ -7,7 +7,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, Autocomplete, Input, PriceInput, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { StatCard, Autocomplete, Input, PriceCurrencyField, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -110,6 +110,7 @@ interface ProductOption {
 type FormState = {
   name: string;
   price_total_idr: number;
+  price_currency: 'IDR' | 'SAR' | 'USD';
   days: number;
   discountPercent: number;
   includes: string[];
@@ -128,6 +129,7 @@ type FormState = {
 const emptyForm: FormState = {
   name: '',
   price_total_idr: 0,
+  price_currency: 'IDR',
   days: 1,
   discountPercent: 0,
   includes: [],
@@ -352,6 +354,7 @@ const PackagesPage: React.FC = () => {
     setForm({
       name: pkg.name,
       price_total_idr: priceTotal,
+      price_currency: (meta?.currency as 'IDR' | 'SAR' | 'USD') || 'IDR',
       days,
       discountPercent: Number(meta?.discount_percent ?? 0),
       includes: meta?.includes ?? [],
@@ -399,6 +402,7 @@ const PackagesPage: React.FC = () => {
         includes: form.includes,
         days,
         price_total_idr: form.price_total_idr || 0,
+        currency: form.price_currency,
         ...(editingPackage ? { discount_percent: form.discountPercent } : {}),
         ...(form.hotel_makkah_id ? { hotel_makkah_id: form.hotel_makkah_id } : {}),
         ...(form.hotel_madinah_id ? { hotel_madinah_id: form.hotel_madinah_id } : {}),
@@ -901,13 +905,21 @@ const PackagesPage: React.FC = () => {
                       required
                       fullWidth
                     />
-                    <PriceInput
-                      label="Harga (IDR) – total full per jamaah"
-                      value={form.price_total_idr ?? 0}
-                      currency="IDR"
-                      onChange={(n) => setForm((f) => ({ ...f, price_total_idr: n }))}
-                      placeholder="Contoh: 45000000"
-                      fullWidth
+                    <PriceCurrencyField
+                      label="Harga total full per jamaah"
+                      value={(() => {
+                        const idr = form.price_total_idr ?? 0;
+                        const t = fillFromSource('IDR', idr, currencyRates);
+                        return form.price_currency === 'IDR' ? t.idr : form.price_currency === 'SAR' ? t.sar : t.usd;
+                      })()}
+                      currency={form.price_currency}
+                      onChange={(val, cur) => setForm((f) => ({
+                        ...f,
+                        price_currency: cur,
+                        price_total_idr: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0
+                      }))}
+                      rates={currencyRates}
+                      showConversions
                     />
                     {editingPackage && (
                       <Input
