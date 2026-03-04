@@ -252,14 +252,18 @@ const getAnalytics = asyncHandler(async (req, res) => {
 
   const OrderItem = require('../models/OrderItem');
   const Product = require('../models/Product');
+  const orderInclude = [
+    { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'provinsi_id'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+    { model: User, as: 'User', attributes: ['id', 'name', 'role', 'email', 'company_name'] },
+    { model: OrderItem, as: 'OrderItems', attributes: ['id', 'type', 'quantity', 'unit_price', 'subtotal'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }
+  ];
+  if (report_type === 'revenue') {
+    orderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
+  }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
     attributes: ['id', 'order_number', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at', 'notes'],
-    include: [
-      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'provinsi_id'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
-      { model: User, as: 'User', attributes: ['id', 'name', 'role', 'email', 'company_name'] },
-      { model: OrderItem, as: 'OrderItems', attributes: ['id', 'type', 'quantity', 'unit_price', 'subtotal'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }
-    ],
+    include: orderInclude,
     order: [['created_at', 'DESC']],
     limit: 500
   });
@@ -524,14 +528,18 @@ const exportReportExcel = asyncHandler(async (req, res) => {
   }
   const OrderItem = require('../models/OrderItem');
   const Product = require('../models/Product');
+  const excelOrderInclude = [
+    { model: Branch, as: 'Branch', attributes: ['code', 'name', 'provinsi_id'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+    { model: User, as: 'User', attributes: ['name', 'role', 'email', 'company_name'] },
+    { model: OrderItem, as: 'OrderItems', attributes: ['type', 'quantity'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false }] }
+  ];
+  if (report_type === 'revenue') {
+    excelOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
+  }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
     attributes: ['id', 'order_number', 'status', 'subtotal', 'discount', 'penalty_amount', 'total_amount', 'currency', 'total_jamaah', 'branch_id', 'owner_id', 'created_at'],
-    include: [
-      { model: Branch, as: 'Branch', attributes: ['code', 'name', 'provinsi_id'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
-      { model: User, as: 'User', attributes: ['name', 'role', 'email', 'company_name'] },
-      { model: OrderItem, as: 'OrderItems', attributes: ['type', 'quantity'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false }] }
-    ],
+    include: excelOrderInclude,
     order: [['created_at', 'DESC']],
     limit: 2000
   });
@@ -674,9 +682,16 @@ const exportReportPdf = asyncHandler(async (req, res) => {
     const usersWithRole = await User.findAll({ where: { role }, attributes: ['id'], raw: true });
     ownerFilter = usersWithRole.map((u) => u.id);
   }
+  const pdfOrderInclude = [
+    { model: Branch, as: 'Branch', attributes: ['name'] },
+    { model: User, as: 'User', attributes: ['name'] }
+  ];
+  if (report_type === 'revenue') {
+    pdfOrderInclude.push({ model: Invoice, as: 'Invoice', attributes: ['id'], required: true });
+  }
   const orders = await Order.findAll({
     where: Object.keys(orderWhere).length ? orderWhere : undefined,
-    include: [{ model: Branch, as: 'Branch', attributes: ['name'] }, { model: User, as: 'User', attributes: ['name'] }],
+    include: pdfOrderInclude,
     order: [['created_at', 'DESC']],
     limit: 500
   });

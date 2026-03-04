@@ -36,32 +36,6 @@ const { getHotelAvailabilityConfig } = require('../services/hotelAvailabilitySer
  */
 const getDashboard = asyncHandler(async (req, res) => {
   const { branch_id, date_from, date_to, status, provinsi_id, wilayah_id } = req.query;
-  const whereOrder = {};
-  if (branch_id) whereOrder.branch_id = branch_id;
-  if (status) whereOrder.status = status;
-  if (date_from || date_to) {
-    whereOrder.created_at = {};
-    if (date_from) whereOrder.created_at[Op.gte] = new Date(date_from);
-    if (date_to) {
-      const d = new Date(date_to);
-      d.setHours(23, 59, 59, 999);
-      whereOrder.created_at[Op.lte] = d;
-    }
-  }
-  if (provinsi_id || wilayah_id) {
-    const branchWhere = { is_active: true };
-    if (provinsi_id) branchWhere.provinsi_id = provinsi_id;
-    const branchOpts = { where: branchWhere, attributes: ['id'] };
-    if (wilayah_id) {
-      branchOpts.include = [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }];
-    }
-    const branchIds = (await Branch.findAll(branchOpts)).map(r => r.id);
-    if (branchIds.length > 0) {
-      whereOrder.branch_id = branch_id ? (branchIds.includes(branch_id) ? branch_id : 'none') : { [Op.in]: branchIds };
-    } else {
-      whereOrder.branch_id = 'none';
-    }
-  }
 
   const branches = await Branch.findAll({ where: { is_active: true }, order: [['code', 'ASC']] });
   const branchWithProvinsi = await Branch.findAll({
@@ -78,54 +52,7 @@ const getDashboard = asyncHandler(async (req, res) => {
     return acc;
   }, {});
 
-  const orderCounts = await Order.findAndCountAll({
-    where: whereOrder,
-    attributes: ['id', 'status', 'total_amount', 'branch_id', 'created_at'],
-    include: [{ model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'provinsi_id'], required: false,
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false,
-        include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
-    { model: User, as: 'User', attributes: ['id', 'name'] }]
-  });
-
-  const byStatus = {};
-  const byBranch = {};
-  const byWilayah = {};
-  const byProvinsi = {};
-  let totalRevenue = 0;
-  (orderCounts.rows || []).forEach(o => {
-    const j = o.toJSON();
-    byStatus[j.status] = (byStatus[j.status] || 0) + 1;
-    const bid = j.branch_id;
-    if (bid) {
-      byBranch[bid] = byBranch[bid] || { branch_name: j.Branch?.name, code: j.Branch?.code, count: 0, revenue: 0 };
-      byBranch[bid].count += 1;
-      byBranch[bid].revenue += parseFloat(j.total_amount || 0);
-      const provinsiId = j.Branch?.Provinsi?.id || j.Branch?.provinsi_id || branchMap[bid]?.provinsi_id;
-      const wilayahId = j.Branch?.Provinsi?.Wilayah?.id || branchMap[bid]?.wilayah_id;
-      const provinsiName = j.Branch?.Provinsi?.name || branchMap[bid]?.provinsi_name || 'Tanpa Provinsi';
-      const wilayahName = j.Branch?.Provinsi?.Wilayah?.name || branchMap[bid]?.wilayah_name || 'Tanpa Wilayah';
-      if (wilayahId) {
-        byWilayah[wilayahId] = byWilayah[wilayahId] || { wilayah_name: wilayahName, count: 0, revenue: 0 };
-        byWilayah[wilayahId].count += 1;
-        byWilayah[wilayahId].revenue += parseFloat(j.total_amount || 0);
-      } else {
-        byWilayah['_none'] = byWilayah['_none'] || { wilayah_name: 'Tanpa Wilayah', count: 0, revenue: 0 };
-        byWilayah['_none'].count += 1;
-        byWilayah['_none'].revenue += parseFloat(j.total_amount || 0);
-      }
-      if (provinsiId) {
-        byProvinsi[provinsiId] = byProvinsi[provinsiId] || { provinsi_name: provinsiName, count: 0, revenue: 0 };
-        byProvinsi[provinsiId].count += 1;
-        byProvinsi[provinsiId].revenue += parseFloat(j.total_amount || 0);
-      } else {
-        byProvinsi['_none'] = byProvinsi['_none'] || { provinsi_name: 'Tanpa Provinsi', count: 0, revenue: 0 };
-        byProvinsi['_none'].count += 1;
-        byProvinsi['_none'].revenue += parseFloat(j.total_amount || 0);
-      }
-    }
-    if (!['draft', 'cancelled'].includes(j.status)) totalRevenue += parseFloat(j.total_amount || 0);
-  });
-
+  // Dashboard hanya pakai data invoice (orders & invoices section = invoice-based), konsisten dengan reports/analytics
   const whereInvoice = {};
   if (branch_id) whereInvoice.branch_id = branch_id;
   if (status) whereInvoice.status = status;

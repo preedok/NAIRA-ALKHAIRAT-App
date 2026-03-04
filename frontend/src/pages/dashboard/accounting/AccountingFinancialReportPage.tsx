@@ -121,9 +121,8 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total (IDR · SAR · USD)', align: 'right' },
-    { id: 'dibayar', label: 'Dibayar (IDR · SAR · USD)', align: 'right' },
+    { id: 'dibayar', label: 'Status · Dibayar (IDR · SAR · USD)', align: 'right' },
     { id: 'sisa', label: 'Sisa (IDR · SAR · USD)', align: 'right' },
-    { id: 'status', label: 'Status Invoice', align: 'left' },
     { id: 'tanggal', label: 'Tanggal', align: 'left' },
     { id: 'aksi', label: '', align: 'center' }
   ]
@@ -898,15 +897,32 @@ const AccountingFinancialReportPage: React.FC = () => {
                       <div>{formatIDR(inv.total_amount)}</div>
                       {(() => { const t = amountTriple(Number(inv.total_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
                     </td>
-                    <td className="py-3 px-4 text-right text-emerald-600 align-top">
-                      <div>{formatIDR(inv.paid_amount)}</div>
-                      {(() => { const t = amountTriple(Number(inv.paid_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                    <td className="py-3 px-4 text-right align-top">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span>
+                        {(() => {
+                          const st = (inv.status || '').toLowerCase();
+                          const totalInv = Number(inv.total_amount) || 0;
+                          const paid = Number(inv.paid_amount) || 0;
+                          const refundAmt = Number((inv as any).cancelled_refund_amount) || 0;
+                          const pctPaid = totalInv > 0 ? Math.round((paid / totalInv) * 100) : null;
+                          const pctRefund = totalInv > 0 && refundAmt > 0 ? Math.round((refundAmt / totalInv) * 100) : null;
+                          const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
+                          if (st === 'draft') return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>;
+                          if (isCancelNoPayment) return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>;
+                          if (st === 'cancelled_refund' && refundAmt > 0) {
+                            const t = amountTriple(refundAmt);
+                            return <><div className="text-amber-700 font-medium text-sm">Refund: {formatIDR(refundAmt)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctRefund != null && <div className="text-xs text-slate-600 mt-0.5">{pctRefund}% dari total tagihan</div>}</>;
+                          }
+                          const t = amountTriple(paid);
+                          return <><div className="text-emerald-600 font-medium">{formatIDR(paid)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}</>;
+                        })()}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right align-top">
                       <div>{formatIDR(inv.remaining_amount)}</div>
                       {(() => { const t = amountTriple(Number(inv.remaining_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
                     </td>
-                    <td className="py-3 px-4 align-top"><span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
                     <td className="py-3 px-4 align-top">{formatDate(inv.issued_at ?? null)}</td>
                     <td className="py-3 px-4 align-top">
                       <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/orders-invoices' + (inv.invoice_number ? '?invoice_number=' + encodeURIComponent(inv.invoice_number) : ''))}>

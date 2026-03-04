@@ -64,11 +64,12 @@ export interface DashboardFilterBarProps {
 
 const DEFAULT_INVOICE_STATUS_OPTIONS = [
   { value: '', label: AUTOCOMPLETE_FILTER.SEMUA },
-  { value: 'tentative', label: 'Tentative' },
-  { value: 'partial_paid', label: 'Partial Paid' },
-  { value: 'paid', label: 'Paid' },
+  { value: 'tentative', label: 'Tagihan DP' },
+  { value: 'partial_paid', label: 'Pembayaran DP' },
+  { value: 'paid', label: 'Lunas' },
   { value: 'overdue', label: 'Overdue' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'canceled', label: 'Dibatalkan' },
+  { value: 'cancelled_refund', label: 'Dibatalkan Refund' },
 ];
 
 const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({

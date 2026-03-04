@@ -202,7 +202,13 @@ const getAgingReport = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({
       where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] },
       attributes: ['id'],
@@ -337,7 +343,13 @@ const exportAgingExcel = asyncHandler(async (req, res) => {
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({
       where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] },
       attributes: ['id'],
@@ -469,7 +481,13 @@ const exportAgingPdf = asyncHandler(async (req, res) => {
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({
       where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] },
       attributes: ['id'],
@@ -790,9 +808,11 @@ const listOrders = asyncHandler(async (req, res) => {
   if (branch_id) where.branch_id = branch_id;
   if (status) where.status = status;
 
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
   const orders = await Order.findAll({
     where,
     include: [
+      { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       { model: OrderItem, as: 'OrderItems' }
@@ -896,7 +916,13 @@ const getFinancialReport = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({
       where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] },
       attributes: ['id'],
@@ -1067,7 +1093,13 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({ where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] }, attributes: ['id'], raw: true });
     const searchOr = [];
     if (orders.length) searchOr.push({ order_id: { [Op.in]: orders.map(o => o.id) } });
@@ -1149,7 +1181,13 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({ where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] }, attributes: ['id'], raw: true });
     const searchOr = [];
     if (orders.length) searchOr.push({ order_id: { [Op.in]: orders.map(o => o.id) } });
@@ -1270,7 +1308,13 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
 
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
-    const orders = await Order.findAll({ where: { order_number: { [Op.iLike]: q } }, attributes: ['id'], raw: true });
+    // Acuan data order: hanya order yang punya invoice (pencarian mengacu data invoice)
+    const orders = await Order.findAll({
+      where: { order_number: { [Op.iLike]: q } },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
+      attributes: ['id'],
+      raw: true
+    });
     const users = await User.findAll({ where: { [Op.or]: [{ name: { [Op.iLike]: q } }, { company_name: { [Op.iLike]: q } }] }, attributes: ['id'], raw: true });
     const searchOr = [];
     if (orders.length) searchOr.push({ order_id: { [Op.in]: orders.map(o => o.id) } });

@@ -242,11 +242,22 @@ const listOrders = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const orderIds = await OrderItem.findAll({
+  const orderIdsFromBus = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
     attributes: ['order_id'],
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
+
+  if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [] });
+
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
+  const invoices = await Invoice.findAll({
+    where: { order_id: { [Op.in]: orderIdsFromBus }, branch_id: { [Op.in]: branchIds } },
+    attributes: ['order_id'],
+    raw: true
+  });
+  const orderIds = [...new Set(invoices.map(i => i.order_id))];
+  if (orderIds.length === 0) return res.json({ success: true, data: [] });
 
   const where = { id: orderIds, branch_id: { [Op.in]: branchIds } };
   if (status) where.status = status;
@@ -278,8 +289,11 @@ const getOrder = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const order = await Order.findByPk(req.params.id, {
+  // Acuan data order: hanya order yang punya invoice (GET mengacu data invoice)
+  const order = await Order.findOne({
+    where: { id: req.params.id },
     include: [
+      { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch' },
       {

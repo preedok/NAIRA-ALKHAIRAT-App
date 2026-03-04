@@ -792,8 +792,16 @@ const OrdersInvoicesPage: React.FC = () => {
       : paymentBankAccounts;
 
   const openPaymentModal = async () => {
-    setPayAmountIdr('');
-    setPayAmountSaudi('');
+    const remaining = parseFloat(viewInvoice?.remaining_amount || 0);
+    const formatNum = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (remaining > 0) {
+      setPayAmountIdr(formatNum(remaining));
+      const sarRate = viewInvoice?.currency_rates?.SAR_TO_IDR || currencyRates?.SAR_TO_IDR || 4200;
+      setPayAmountSaudi(formatNum(Math.round(remaining / sarRate)));
+    } else {
+      setPayAmountIdr('');
+      setPayAmountSaudi('');
+    }
     setPayTransferDate(new Date().toISOString().slice(0, 10));
     setPayBankIndex(0);
     setPayBankId('');
@@ -972,9 +980,8 @@ const OrdersInvoicesPage: React.FC = () => {
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
-    { id: 'paid', label: 'Dibayar (IDR·SAR·USD)', align: 'right' },
+    { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
     { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
-    { id: 'status', label: 'Status Invoice', align: 'left' },
     { id: 'status_visa', label: 'Status Visa', align: 'left' },
     { id: 'status_ticket', label: 'Status Tiket', align: 'left' },
     { id: 'status_hotel', label: 'Status Hotel', align: 'left' },
@@ -1302,12 +1309,34 @@ const OrdersInvoicesPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right text-[#0D1A63] font-medium align-top">
+                    <td className="py-3 px-4 text-right align-top">
                       {(() => {
+                        const st = (inv.status || '').toLowerCase();
                         const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                        const t = amountTriple(paid);
-                        return <><div>{formatIDR(paid)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>;
+                        const totalInv = parseFloat(inv.total_amount || 0);
+                        const pctPaid = totalInv > 0 ? Math.round((paid / totalInv) * 100) : null;
+                        const refundAmt = parseFloat(inv.cancelled_refund_amount || 0) || 0;
+                        const pctRefund = totalInv > 0 && refundAmt > 0 ? Math.round((refundAmt / totalInv) * 100) : null;
+                        const statusLabel = getInvoiceStatusLabel(inv);
+                        const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
+                        const isCancelledRefund = st === 'cancelled_refund';
+                        return (
+                          <>
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge variant={getStatusBadge(inv.status)} className="w-fit text-xs">{statusLabel}</Badge>
+                              {isDraftRow(inv) ? (
+                                <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>
+                              ) : isCancelNoPayment ? (
+                                <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>
+                              ) : isCancelledRefund && refundAmt > 0 ? (
+                                (() => { const t = amountTriple(refundAmt); return <><div className="text-amber-700 font-medium text-sm">Refund: {formatIDR(refundAmt)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctRefund != null && <div className="text-xs text-slate-600 mt-0.5">{pctRefund}% dari total tagihan</div>}</>; })()
+                              ) : (
+                                (() => { const t = amountTriple(paid); return <><div className="text-[#0D1A63] font-medium">{formatIDR(paid)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}</>; })()
+                              )}
+                            </div>
+                          </>
+                        );
                       })()}
                     </td>
                     <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
@@ -1319,29 +1348,6 @@ const OrdersInvoicesPage: React.FC = () => {
                         const t = amountTriple(remaining);
                         return <><div>{formatIDR(remaining)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>;
                       })()}
-                    </td>
-                    <td className="py-3 px-4 align-top">
-                      {(() => {
-                        const dpStatus = inv.Order?.dp_payment_status;
-                        const pct = inv.Order?.dp_percentage_paid != null ? Number(inv.Order.dp_percentage_paid) : null;
-                        const updatedAt = inv.Order?.order_updated_at || inv.order_updated_at || inv.orderUpdatedAt || null;
-                        const isDpUpdated = (inv.status === 'partial_paid' || dpStatus === 'pembayaran_dp') && !!updatedAt;
-                        let label = getInvoiceStatusLabel(inv);
-                        if (dpStatus === 'tagihan_dp') label = 'Tagihan DP';
-                        else if (dpStatus === 'pembayaran_dp') label = 'Pembayaran DP';
-                        else if (isDpUpdated) label = 'Pembayaran DP + Update Invoice';
-                        return (
-                          <>
-                            <Badge variant={getStatusBadge(inv.status)}>{label}</Badge>
-                            {(pct != null && !isDraftRow(inv)) && <div className="text-xs text-slate-600 mt-1">Dibayar <strong>{pct}%</strong> dari total tagihan</div>}
-                            {updatedAt && <div className="text-xs text-slate-500 mt-0.5">Update order: {formatDate(updatedAt)}</div>}
-                          </>
-                        );
-                      })()}
-                      {inv.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}
-                      {isDraftRow(inv) ? (
-                        <div className="text-xs text-slate-500 mt-1">Belum diterbitkan — pembayaran belum tersedia</div>
-                      ) : null}
                     </td>
                     <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       {(() => {
@@ -2921,6 +2927,9 @@ const OrdersInvoicesPage: React.FC = () => {
                     ]}
                     placeholder="Pilih mata uang"
                   />
+                  {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
+                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong>{formatIDR(parseFloat(viewInvoice.remaining_amount || 0))}</strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
+                  )}
                   <Input
                     label={`Jumlah bayar (${payCurrencySaudi}) *`}
                     type="text"
@@ -3018,6 +3027,9 @@ const OrdersInvoicesPage: React.FC = () => {
                       </>
                     )}
                   </div>
+                  {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
+                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong>{formatIDR(parseFloat(viewInvoice.remaining_amount || 0))}</strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
+                  )}
                   <Input
                     label="Jumlah bayar (IDR) *"
                     type="text"

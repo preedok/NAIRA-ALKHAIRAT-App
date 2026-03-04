@@ -332,14 +332,21 @@ const AccountingAgingPage: React.FC = () => {
     return at ? new Date(at) : null;
   };
 
+  const getInvoiceStatusLabel = (inv: any) => {
+    const st = (inv?.status || '').toLowerCase();
+    if (st === 'cancelled_refund' && (inv?.cancelled_refund_amount != null && Number(inv.cancelled_refund_amount) > 0)) {
+      return `Dibatalkan Refund ${formatIDR(Number(inv.cancelled_refund_amount))}`;
+    }
+    return INVOICE_STATUS_LABELS[inv?.status] || inv?.status || '';
+  };
+
   const agingColumns: TableColumn[] = [
     { id: 'invoice', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'company', label: 'Perusahaan', align: 'left' },
     { id: 'total', label: 'Total', align: 'right' },
-    { id: 'paid', label: 'Dibayar', align: 'right' },
+    { id: 'paid', label: 'Status · Dibayar', align: 'right' },
     { id: 'remaining', label: 'Sisa', align: 'right' },
-    { id: 'status', label: 'Status Invoice', align: 'left' },
     { id: 'due', label: 'Jatuh Tempo', align: 'left' },
     { id: 'overdue', label: 'Terlambat', align: 'center' },
     { id: 'proof', label: 'Bukti Bayar', align: 'left' },
@@ -481,11 +488,25 @@ const AccountingAgingPage: React.FC = () => {
                     <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                   </td>
                   <td className="py-3 px-4 text-right font-medium align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                  <td className="py-3 px-4 text-right text-emerald-600 font-medium align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                  <td className="py-3 px-4 align-top">
-                    <Badge variant={getStatusBadgeVariant(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
+                  <td className="py-3 px-4 text-right align-top">
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant={getStatusBadgeVariant(inv.status)} className="w-fit text-xs">{getInvoiceStatusLabel(inv)}</Badge>
+                      {(() => {
+                        const st = (inv.status || '').toLowerCase();
+                        const totalInv = parseFloat(inv.total_amount || 0);
+                        const paid = parseFloat(inv.paid_amount || 0);
+                        const refundAmt = parseFloat(inv.cancelled_refund_amount || 0) || 0;
+                        const pctPaid = totalInv > 0 ? Math.round((paid / totalInv) * 100) : null;
+                        const pctRefund = totalInv > 0 && refundAmt > 0 ? Math.round((refundAmt / totalInv) * 100) : null;
+                        const isCancelNoPayment = (st === 'canceled' || st === 'cancelled') && paid <= 0;
+                        if (st === 'draft') return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <span className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</span>}</>;
+                        if (isCancelNoPayment) return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <span className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</span>}</>;
+                        if (st === 'cancelled_refund' && refundAmt > 0) return <><span className="text-amber-700 font-medium text-sm">Refund: {formatIDR(refundAmt)}</span>{pctRefund != null && <span className="text-xs text-slate-600 mt-0.5">{pctRefund}% dari total tagihan</span>}</>;
+                        return <><span className="text-emerald-600 font-medium">{formatIDR(paid)}</span>{pctPaid != null && <span className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</span>}</>;
+                      })()}
+                    </div>
                   </td>
+                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
                   <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>
                   <td className="py-3 px-4 text-center align-top">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
                   <td className="py-3 px-4 align-top">

@@ -546,9 +546,8 @@ const ReportsPage: React.FC = () => {
                   { id: 'owner_name', label: 'Owner', align: 'left' },
                   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
                   { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
-                  { id: 'paid_amount', label: 'Dibayar (IDR·SAR·USD)', align: 'right' },
+                  { id: 'paid_amount', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
                   { id: 'remaining_amount', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
-                  { id: 'status', label: 'Status Invoice', align: 'left' },
                   { id: 'issued_at', label: 'Tgl', align: 'left' }
                 ] as TableColumn[]}
                 data={rows}
@@ -563,9 +562,19 @@ const ReportsPage: React.FC = () => {
                       <div className="text-xs text-slate-600 mt-0.5">{inv.company_wilayah_line ?? '–'}</div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(inv.total_amount ?? 0)}</td>
-                    <td className="py-3 px-4 text-right text-primary-600">{formatIDR(inv.paid_amount ?? 0)}</td>
+                    <td className="py-3 px-4 text-right align-top">
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={inv.status === 'paid' ? 'success' : inv.status === 'partial_paid' ? 'warning' : inv.status === 'canceled' || inv.status === 'cancelled' || inv.status === 'cancelled_refund' ? 'error' : 'info'} className="w-fit text-xs">{INVOICE_STATUS_LABELS[inv.status] ?? inv.status ?? '–'}</Badge>
+                        {(inv.status === 'cancelled_refund' && (inv.cancelled_refund_amount ?? 0) > 0) ? (
+                          <><span className="text-amber-700 font-medium text-sm">Refund: {formatIDR(Number(inv.cancelled_refund_amount ?? 0))}</span>{(() => { const tot = Number(inv.total_amount ?? 0); const pct = tot > 0 ? Math.round((Number(inv.cancelled_refund_amount ?? 0) / tot) * 100) : null; return pct != null ? <span className="text-xs text-slate-600 mt-0.5">{pct}% dari total tagihan</span> : null; })()}</>
+                        ) : (inv.status === 'canceled' || inv.status === 'cancelled') && !(inv.paid_amount > 0) ? (
+                          (() => { const tot = Number(inv.total_amount ?? 0); const pct = tot > 0 ? 0 : null; return <><span className="text-slate-400 text-sm">–</span>{pct != null ? <span className="text-xs text-slate-500 mt-0.5">{pct}% dari total tagihan</span> : null}</>; })()
+                        ) : (
+                          (() => { const tot = Number(inv.total_amount ?? 0); const paid = Number(inv.paid_amount ?? 0); const pct = tot > 0 ? Math.round((paid / tot) * 100) : null; return <><span className="text-primary-600 font-medium">{formatIDR(paid)}</span>{pct != null ? <span className="text-xs text-slate-600 mt-0.5">{pct}% dari total tagihan</span> : null}</>; })()
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.remaining_amount ?? 0)}</td>
-                    <td className="py-3 px-4"><Badge variant="info">{INVOICE_STATUS_LABELS[inv.status] ?? inv.status ?? '–'}</Badge></td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at ? new Date(inv.issued_at).toLocaleDateString('id-ID') : '–'}</td>
                   </tr>
                 )}

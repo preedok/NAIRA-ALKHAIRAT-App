@@ -32,11 +32,30 @@ async function getRoleRecap(branchIds, itemType, ProgressModel, statusField) {
   }
 
   const asName = ProgressModel.name;
-  const orderIds = await OrderItem.findAll({
+  const orderIdsFromItem = await OrderItem.findAll({
     where: { type: itemType },
     attributes: ['order_id'],
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
+
+  if (orderIdsFromItem.length === 0) {
+    return itemType === ORDER_ITEM_TYPE.BUS
+      ? { total: 0, ticket_pending: 0, ticket_issued: 0, trip_pending: 0 }
+      : { total: 0, by_status: {} };
+  }
+
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
+  const invoices = await Invoice.findAll({
+    where: { order_id: { [Op.in]: orderIdsFromItem }, branch_id: branchIds.length === 1 ? branchIds[0] : { [Op.in]: branchIds } },
+    attributes: ['order_id'],
+    raw: true
+  });
+  const orderIds = [...new Set(invoices.map(i => i.order_id))];
+  if (orderIds.length === 0) {
+    return itemType === ORDER_ITEM_TYPE.BUS
+      ? { total: 0, ticket_pending: 0, ticket_issued: 0, trip_pending: 0 }
+      : { total: 0, by_status: {} };
+  }
 
   const orderWhere = branchIds.length === 1
     ? { id: orderIds, branch_id: branchIds[0] }
@@ -103,6 +122,7 @@ async function getDashboardData(branchIds) {
     ? branchIds[0]
     : { [Op.in]: branchIds };
 
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
   const [
     orderCounts,
     ordersRecent,
@@ -115,6 +135,7 @@ async function getDashboardData(branchIds) {
   ] = await Promise.all([
     Order.findAndCountAll({
       where: { branch_id: branchIdFilter },
+      include: [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }],
       attributes: ['status'],
       raw: true
     }).then(r => {
@@ -124,7 +145,10 @@ async function getDashboardData(branchIds) {
     }),
     Order.findAll({
       where: { branch_id: branchIdFilter },
-      include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }],
+      include: [
+        { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
+        { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
+      ],
       order: [['created_at', 'DESC']],
       limit: 10
     }),

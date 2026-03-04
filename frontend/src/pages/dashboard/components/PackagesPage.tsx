@@ -887,52 +887,56 @@ const PackagesPage: React.FC = () => {
               {canCreatePackage && (
                 <section className="space-y-4 pt-2 border-t border-slate-200">
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Lama & Harga</h3>
-                  <p className="text-xs text-slate-500">Contoh: 9 hari = paket 9 hari full. Harga total untuk seluruh hari per jamaah. Isi dalam Rupiah; sistem pakai kurs untuk SAR & USD.</p>
-                  <div className={`grid gap-4 ${editingPackage ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                    <Input
-                      label="Lama (hari)"
-                      type="number"
-                      min={1}
-                      value={daysInput}
-                      onChange={(e) => setDaysInput(e.target.value)}
-                      onBlur={() => {
-                        const v = parseInt(daysInput.trim(), 10);
-                        const norm = (Number.isNaN(v) || v < 1) ? 1 : v;
-                        setForm((f) => ({ ...f, days: norm }));
-                        setDaysInput(String(norm));
-                      }}
-                      placeholder="9"
-                      required
-                      fullWidth
-                    />
-                    <PriceCurrencyField
-                      label="Harga total full per jamaah"
-                      value={(() => {
-                        const idr = form.price_total_idr ?? 0;
-                        const t = fillFromSource('IDR', idr, currencyRates);
-                        return form.price_currency === 'IDR' ? t.idr : form.price_currency === 'SAR' ? t.sar : t.usd;
-                      })()}
-                      currency={form.price_currency}
-                      onChange={(val, cur) => setForm((f) => ({
-                        ...f,
-                        price_currency: cur,
-                        price_total_idr: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0
-                      }))}
-                      rates={currencyRates}
-                      showConversions
-                    />
-                    {editingPackage && (
+                  <p className="text-xs text-slate-500">Contoh: 9 hari = paket 9 hari full. Harga total untuk seluruh hari per jamaah. Pilih mata uang dan isi nominal; konversi IDR · SAR · USD mengikuti kurs.</p>
+                  <div className="flex flex-col gap-4">
+                    <div className={`grid gap-4 ${editingPackage ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                       <Input
-                        label="Diskon (%)"
+                        label="Lama (hari)"
                         type="number"
-                        min={0}
-                        max={100}
-                        value={form.discountPercent != null ? String(form.discountPercent) : ''}
-                        onChange={(e) => setForm((f) => ({ ...f, discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
-                        placeholder="0"
+                        min={1}
+                        value={daysInput}
+                        onChange={(e) => setDaysInput(e.target.value)}
+                        onBlur={() => {
+                          const v = parseInt(daysInput.trim(), 10);
+                          const norm = (Number.isNaN(v) || v < 1) ? 1 : v;
+                          setForm((f) => ({ ...f, days: norm }));
+                          setDaysInput(String(norm));
+                        }}
+                        placeholder="9"
+                        required
                         fullWidth
                       />
-                    )}
+                      {editingPackage && (
+                        <Input
+                          label="Diskon (%)"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={form.discountPercent != null ? String(form.discountPercent) : ''}
+                          onChange={(e) => setForm((f) => ({ ...f, discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                          placeholder="0"
+                          fullWidth
+                        />
+                      )}
+                    </div>
+                    <div className="w-full">
+                      <PriceCurrencyField
+                        label="Harga total full per jamaah"
+                        value={(() => {
+                          const idr = form.price_total_idr ?? 0;
+                          const t = fillFromSource('IDR', idr, currencyRates);
+                          return form.price_currency === 'IDR' ? t.idr : form.price_currency === 'SAR' ? t.sar : t.usd;
+                        })()}
+                        currency={form.price_currency}
+                        onChange={(val, cur) => setForm((f) => ({
+                          ...f,
+                          price_currency: cur,
+                          price_total_idr: Math.round(fillFromSource(cur, val, currencyRates).idr) || 0
+                        }))}
+                        rates={currencyRates}
+                        showConversions
+                      />
+                    </div>
                   </div>
                   {editingPackage && form.discountPercent > 0 && (
                     <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm space-y-1">
@@ -954,15 +958,6 @@ const PackagesPage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  {(form.price_total_idr > 0) && (() => {
-                    const triple = fillFromSource('IDR', form.price_total_idr, currencyRates);
-                    return (
-                      <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
-                        <p className="text-slate-600 font-medium mb-1">Konversi (kurs):</p>
-                        <p className="text-slate-700">IDR: {formatPrice(form.price_total_idr, 'IDR')} · SAR: {formatPrice(triple.sar, 'SAR')} · USD: {formatPrice(triple.usd, 'USD')}</p>
-                      </div>
-                    );
-                  })()}
                   {(() => {
                 const sar = currencyRates.SAR_TO_IDR ?? 4200;
                 const usd = currencyRates.USD_TO_IDR ?? 15500;

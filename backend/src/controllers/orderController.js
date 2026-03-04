@@ -211,9 +211,11 @@ const list = asyncHandler(async (req, res) => {
   const sortCol = ALLOWED_SORT.includes(sort_by) ? sort_by : 'created_at';
   const sortDir = (sort_order || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
   const { count, rows } = await Order.findAndCountAll({
     where,
     include: [
+      { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       { model: OrderItem, as: 'OrderItems' }

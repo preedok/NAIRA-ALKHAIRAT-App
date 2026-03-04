@@ -28,6 +28,8 @@ const getMonitoring = asyncHandler(async (req, res) => {
 
   const revenueWhere = { ...orderWhere, status: { [Op.notIn]: ['draft', 'cancelled'] } };
 
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
+  const orderIncludeInvoice = [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }];
   const [
     totalOrders,
     ordersToday,
@@ -39,18 +41,20 @@ const getMonitoring = asyncHandler(async (req, res) => {
     totalUsers,
     ordersByStatus
   ] = await Promise.all([
-    Order.count({ where: orderWhere }),
-    Order.count({ where: { ...orderWhere, created_at: { [Op.gte]: todayStart } } }),
+    Order.count({ where: orderWhere, include: orderIncludeInvoice }),
+    Order.count({ where: { ...orderWhere, created_at: { [Op.gte]: todayStart } }, include: orderIncludeInvoice }),
     Invoice.count({ where: invoiceWhere }),
     Invoice.count({ where: { ...invoiceWhere, created_at: { [Op.gte]: todayStart } } }),
-    Order.sum('total_amount', { where: revenueWhere }),
+    Order.sum('total_amount', { where: revenueWhere, include: orderIncludeInvoice }),
     Order.sum('total_amount', {
-      where: { ...revenueWhere, created_at: { [Op.gte]: todayStart } }
+      where: { ...revenueWhere, created_at: { [Op.gte]: todayStart } },
+      include: orderIncludeInvoice
     }),
     User.count({ where: { ...userWhere, last_login_at: { [Op.gte]: last24h } } }),
     User.count({ where: userWhere }),
     Order.findAll({
       where: orderWhere,
+      include: orderIncludeInvoice,
       attributes: ['status'],
       raw: true
     })
@@ -514,6 +518,8 @@ const exportMonitoringExcel = asyncHandler(async (req, res) => {
   const invoiceDateWhere = dateRange ? { created_at: { [Op.gte]: dateRange.start, [Op.lte]: dateRange.end } } : {};
   const revenueWhere = { ...orderWhere, status: { [Op.notIn]: ['draft', 'cancelled'] }, ...orderDateWhere };
 
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
+  const orderIncludeInvoice = [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }];
   const [
     totalOrders,
     totalInvoices,
@@ -522,13 +528,14 @@ const exportMonitoringExcel = asyncHandler(async (req, res) => {
     totalUsers,
     ordersByStatus
   ] = await Promise.all([
-    Order.count({ where: { ...orderWhere, ...orderDateWhere } }),
+    Order.count({ where: { ...orderWhere, ...orderDateWhere }, include: orderIncludeInvoice }),
     Invoice.count({ where: { ...invoiceWhere, ...invoiceDateWhere } }),
-    Order.sum('total_amount', { where: revenueWhere }),
+    Order.sum('total_amount', { where: revenueWhere, include: orderIncludeInvoice }),
     User.count({ where: { ...userWhere, last_login_at: { [Op.gte]: last24h } } }),
     User.count({ where: userWhere }),
     Order.findAll({
       where: { ...orderWhere, ...orderDateWhere },
+      include: orderIncludeInvoice,
       attributes: ['status'],
       raw: true
     })
@@ -601,6 +608,8 @@ const exportMonitoringPdf = asyncHandler(async (req, res) => {
   const invoiceDateWhere = dateRange ? { created_at: { [Op.gte]: dateRange.start, [Op.lte]: dateRange.end } } : {};
   const revenueWhere = { ...orderWhere, status: { [Op.notIn]: ['draft', 'cancelled'] }, ...orderDateWhere };
 
+  // Acuan data order/transaksi: hanya order yang punya invoice (GET mengacu data invoice)
+  const orderIncludeInvoice = [{ model: Invoice, as: 'Invoice', attributes: ['id'], required: true }];
   const [
     totalOrders,
     totalInvoices,
@@ -609,12 +618,12 @@ const exportMonitoringPdf = asyncHandler(async (req, res) => {
     totalUsers,
     ordersByStatus
   ] = await Promise.all([
-    Order.count({ where: { ...orderWhere, ...orderDateWhere } }),
+    Order.count({ where: { ...orderWhere, ...orderDateWhere }, include: orderIncludeInvoice }),
     Invoice.count({ where: { ...invoiceWhere, ...invoiceDateWhere } }),
-    Order.sum('total_amount', { where: revenueWhere }),
+    Order.sum('total_amount', { where: revenueWhere, include: orderIncludeInvoice }),
     User.count({ where: { ...userWhere, last_login_at: { [Op.gte]: last24h } } }),
     User.count({ where: userWhere }),
-    Order.findAll({ where: { ...orderWhere, ...orderDateWhere }, attributes: ['status'], raw: true })
+    Order.findAll({ where: { ...orderWhere, ...orderDateWhere }, include: orderIncludeInvoice, attributes: ['status'], raw: true })
   ]);
 
   const statusCounts = (ordersByStatus || []).reduce((acc, o) => {
