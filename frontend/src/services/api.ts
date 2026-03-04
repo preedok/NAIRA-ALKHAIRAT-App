@@ -60,7 +60,18 @@ export const superAdminApi = {
 export const publicApi = {
   getActiveMaintenance: () => api.get('/super-admin/maintenance/active'),
   getPublicSettings: () => api.get('/super-admin/settings/public'),
-  getI18n: (locale: string) => api.get(`/i18n/${locale}`)
+  getI18n: (locale: string) => api.get(`/i18n/${locale}`),
+  /** Landing page search: product types, products list, bandara (no auth). */
+  getProductsForSearch: (params?: { type?: string; q?: string; limit?: number }) =>
+    api.get<{
+      success: boolean;
+      data: {
+        productTypes: string[];
+        products: { id: string; name: string; code: string; type: string; meta: Record<string, unknown> }[];
+        byType: Record<string, { id: string; name: string; code: string; type: string; meta: Record<string, unknown> }[]>;
+        bandara: { code: string; name: string }[];
+      };
+    }>('/public/products-for-search', { params })
 };
 
 export interface NotificationItem {

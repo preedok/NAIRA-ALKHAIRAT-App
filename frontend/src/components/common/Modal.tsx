@@ -146,13 +146,6 @@ export const ModalBox: React.FC<ModalBoxProps> = ({ children, className = '' }) 
   </div>
 );
 
-/** ModalBoxMd: sama dengan default, alias untuk form */
-export const ModalBoxMd: React.FC<ModalBoxProps> = ({ children, className = '' }) => (
-  <div className={`${MODAL_BOX_BASE} max-w-6xl ${className}`}>
-    {children}
-  </div>
-);
-
 /** ModalBoxLg: untuk detail/list yang butuh lebar lebih (invoice, tabel, dll) */
 export const ModalBoxLg: React.FC<ModalBoxProps> = ({ children, className = '' }) => (
   <div className={`${MODAL_BOX_BASE} max-w-6xl ${className}`}>

@@ -70,11 +70,11 @@ const STYLES = `
 
   /* ─ standard field ─ */
   .rg-field {
-    background:rgba(255,255,255,0.03);
-    border:1.5px solid rgba(255,255,255,0.08);
-    border-radius:11px;
-    display:flex; align-items:center; gap:9px;
-    padding:9px 12px;
+    background:rgba(255,255,255,0.04);
+    border:1.5px solid rgba(255,255,255,0.1);
+    border-radius:12px;
+    display:flex; align-items:center; gap:10px;
+    padding:12px 14px;
     transition:border-color .2s, background .2s, box-shadow .2s;
   }
   .rg-field:focus-within {
@@ -104,11 +104,11 @@ const STYLES = `
 
   /* ─ custom dropdown ─ */
   .dd-trigger {
-    background:rgba(255,255,255,0.03);
-    border:1.5px solid rgba(255,255,255,0.08);
-    border-radius:11px;
-    display:flex; align-items:center; gap:9px;
-    padding:9px 12px;
+    background:rgba(255,255,255,0.04);
+    border:1.5px solid rgba(255,255,255,0.1);
+    border-radius:12px;
+    display:flex; align-items:center; gap:10px;
+    padding:12px 14px;
     cursor:pointer; user-select:none;
     transition:border-color .2s, background .2s, box-shadow .2s;
   }
@@ -216,6 +216,68 @@ const STYLES = `
     display:flex; align-items:center; gap:8px;
   }
   .sec-label::after { content:''; flex:1; height:1px; background:rgba(56,189,248,0.1); }
+
+  /* Section cards — modern grouped blocks */
+  .rg-section {
+    background:rgba(255,255,255,0.02);
+    border:1px solid rgba(56,189,248,0.1);
+    border-radius:16px;
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .rg-section-title {
+    font-size:11px; font-weight:700; letter-spacing:.12em;
+    text-transform:uppercase; color:#38bdf8; margin-bottom:18px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .rg-section-title::before {
+    content:''; width:4px; height:16px; border-radius:2px;
+    background:linear-gradient(180deg,#38bdf8,#2563eb);
+  }
+
+  /* Dark form overrides (register page only) */
+  .rg-form-dark label {
+    color:#64748b !important; font-size:11px !important; font-weight:700 !important;
+    letter-spacing:.08em !important; text-transform:uppercase !important;
+  }
+  .rg-form-dark input:not([type=file]):not([type=submit]):not([type=button]),
+  .rg-form-dark textarea {
+    background:rgba(255,255,255,0.04) !important; border:1.5px solid rgba(255,255,255,0.1) !important;
+    color:#fff !important; border-radius:12px !important; caret-color:#38bdf8 !important;
+  }
+  .rg-form-dark input::placeholder, .rg-form-dark textarea::placeholder { color:#475569 !important; }
+  .rg-form-dark input:focus, .rg-form-dark textarea:focus {
+    border-color:#38bdf8 !important; box-shadow:0 0 0 3px rgba(56,189,248,0.15) !important;
+    background:rgba(56,189,248,0.06) !important;
+  }
+  .rg-form-dark .relative input { padding-left:42px !important; padding-right:14px !important; }
+  .rg-form-dark .absolute.left-4 { color:#64748b !important; }
+  .rg-form-dark textarea { padding:12px 14px !important; min-height:72px !important; }
+  .rg-autocomplete-wrap button[type=button] {
+    background:rgba(255,255,255,0.04) !important; border:1.5px solid rgba(255,255,255,0.1) !important;
+    color:#fff !important; border-radius:12px !important;
+  }
+  .rg-autocomplete-wrap button[type=button]:hover {
+    border-color:rgba(56,189,248,0.35) !important; background:rgba(56,189,248,0.06) !important;
+  }
+  .rg-autocomplete-wrap button[type=button] span { color:inherit !important; }
+  .rg-autocomplete-wrap button[type=button] span:empty + span, .rg-autocomplete-wrap button[type=button] .text-slate-500 { color:#64748b !important; }
+
+  /* Responsive form grids */
+  .rg-form-row-3 {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:14px 16px;
+  }
+  .rg-form-row-2 {
+    display:grid; grid-template-columns:repeat(2,1fr); gap:14px 16px;
+  }
+  .rg-form-row-1 { display:flex; flex-direction:column; gap:14px; }
+  @media (max-width:768px) {
+    .rg-form-row-3 { grid-template-columns:repeat(2,1fr); }
+    .rg-form-row-2 { grid-template-columns:1fr; }
+  }
+  @media (max-width:520px) {
+    .rg-form-row-3 { grid-template-columns:1fr; }
+  }
 `;
 
 const SKY   = '#38bdf8';
@@ -369,7 +431,7 @@ const RegisterPage: React.FC = () => {
     <div className="grid-bg" style={PAGE_STYLE}>
       {BG}
 
-      <div className="rg-card" style={{ position:'relative', width:'100%', maxWidth:680, zIndex:10 }}>
+      <div className="rg-card" style={{ position:'relative', width:'100%', maxWidth:720, zIndex:10 }}>
         {/* Glow border */}
         <div style={{
           position:'absolute', inset:-1, borderRadius:22, pointerEvents:'none',
@@ -387,168 +449,181 @@ const RegisterPage: React.FC = () => {
 
           {/* ── Header ── */}
           <div className="fu" style={{
-            padding:'20px 26px 16px',
+            padding:'28px 28px 24px',
             borderBottom:'1px solid rgba(255,255,255,0.06)',
-            display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0,
+            display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, flexWrap:'wrap', gap:16,
           }}>
-            <div style={{ display:'flex', alignItems:'center', gap:13 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:16 }}>
               <div style={{
-                width:40, height:40, borderRadius:12, flexShrink:0,
-                background:'linear-gradient(135deg,#38bdf8 0%,#2563eb 60%,#4f46e5 100%)',
-                boxShadow:'0 4px 16px rgba(56,189,248,0.4)',
+                width:48, height:48, borderRadius:14, flexShrink:0,
+                background:'linear-gradient(145deg,#38bdf8 0%,#2563eb 50%,#4f46e5 100%)',
+                boxShadow:'0 8px 24px rgba(56,189,248,0.35)',
                 display:'flex', alignItems:'center', justifyContent:'center',
               }}>
-                <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
                   <path d="M22 16C22 21.523 17.523 26 12 26C9.387 26 7.02 24.98 5.27 23.3C5.78 23.43 6.315 23.5 6.87 23.5C11.843 23.5 15.87 19.473 15.87 14.5C15.87 11.03 13.973 7.997 11.15 6.387C11.756 6.297 12.374 6.25 13 6.25C18.108 6.25 22 10.692 22 16Z" fill="white"/>
                   <circle cx="21" cy="8" r="1.8" fill="white" opacity=".75"/>
                   <circle cx="25" cy="13" r="1.1" fill="white" opacity=".5"/>
                 </svg>
               </div>
               <div>
-                <h1 style={{ fontSize:16, fontWeight:800, color:'white', margin:0 }}>Daftar Partner Owner</h1>
-                <p style={{ fontSize:11, color:MUTED, margin:'2px 0 0' }}>Untuk travel yang belum terdaftar di Bintang Global Group</p>
+                <h1 style={{ fontSize:20, fontWeight:800, color:'white', margin:0, letterSpacing:'-0.02em' }}>Daftar Partner Owner</h1>
+                <p style={{ fontSize:12, color:MUTED, margin:'4px 0 0', lineHeight:1.4 }}>Untuk travel yang belum terdaftar di Bintang Global Group</p>
               </div>
             </div>
             <Link
               to="/login"
-              style={{ fontSize:12, color:MUTED, textDecoration:'none', flexShrink:0, transition:'color .2s' }}
-              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = SKY)}
-              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = MUTED)}
+              style={{
+                fontSize:13, color:MUTED, textDecoration:'none', flexShrink:0, transition:'color .2s',
+                padding:'10px 18px', borderRadius:10, border:'1px solid rgba(255,255,255,0.1)',
+                fontWeight:600,
+              }}
+              onMouseEnter={e => { const t = e.currentTarget as HTMLElement; t.style.color = SKY; t.style.borderColor = 'rgba(56,189,248,0.3)'; t.style.background = 'rgba(56,189,248,0.08)'; }}
+              onMouseLeave={e => { const t = e.currentTarget as HTMLElement; t.style.color = MUTED; t.style.borderColor = 'rgba(255,255,255,0.1)'; t.style.background = 'transparent'; }}
             >
               ← Masuk
             </Link>
           </div>
 
           {/* ── Scrollable form ── */}
-          <div className="rg-scroll fu fu-1" style={{ flex:1, overflowY:'auto', padding:'20px 26px 24px' }}>
+          <div className="rg-scroll fu fu-1" style={{ flex:1, overflowY:'auto', padding:'24px 28px 28px' }}>
 
             {/* Error */}
             {error && (
               <div className="err-msg" style={{
-                display:'flex', alignItems:'center', gap:8,
-                padding:'10px 12px', borderRadius:10, marginBottom:16,
-                background:'rgba(239,68,68,0.09)', border:'1px solid rgba(239,68,68,0.3)',
-                color:'#fca5a5', fontSize:12,
+                display:'flex', alignItems:'center', gap:10,
+                padding:'12px 16px', borderRadius:12, marginBottom:20,
+                background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.35)',
+                color:'#fca5a5', fontSize:13,
               }}>
-                <AlertCircle size={13} style={{ flexShrink:0 }} />
+                <AlertCircle size={16} style={{ flexShrink:0 }} />
                 <span>{error}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="rg-form-dark">
 
               {/* Section: Akun */}
-              <div className="sec-label">Informasi Akun</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'11px 13px', marginBottom:18 }}>
-                <Input label="Nama Lengkap" name="name" value={form.name} onChange={handleChange} placeholder="Nama lengkap" icon={<User size={14} className="text-slate-400" />} required />
-                <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@travel.com" icon={<Mail size={14} className="text-slate-400" />} required />
-                <Input label="Password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min. 6 karakter" icon={<Lock size={14} className="text-slate-400" />} required />
+              <div className="rg-section">
+                <div className="rg-section-title">Informasi Akun</div>
+                <div className="rg-form-row-3">
+                  <Input label="Nama Lengkap" name="name" value={form.name} onChange={handleChange} placeholder="Nama lengkap" icon={<User size={16} style={{ color:'#64748b' }} />} required />
+                  <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@travel.com" icon={<Mail size={16} style={{ color:'#64748b' }} />} required />
+                  <Input label="Password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min. 6 karakter" icon={<Lock size={16} style={{ color:'#64748b' }} />} required />
+                </div>
               </div>
 
               {/* Section: Kontak */}
-              <div className="sec-label">Informasi Kontak</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'11px 13px', marginBottom:18 }}>
-                <Input label="Telepon" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+62 812 ..." icon={<Phone size={14} className="text-slate-400" />} />
-                <Input label="WhatsApp" name="whatsapp" type="tel" value={form.whatsapp} onChange={handleChange} placeholder="Nomor WhatsApp" icon={<Phone size={14} className="text-slate-400" />} />
-                <Input label="NPWP" name="npwp" value={form.npwp} onChange={handleChange} placeholder="Opsional" icon={<FileText size={14} className="text-slate-400" />} />
+              <div className="rg-section">
+                <div className="rg-section-title">Informasi Kontak</div>
+                <div className="rg-form-row-3">
+                  <Input label="Telepon" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+62 812 ..." icon={<Phone size={16} style={{ color:'#64748b' }} />} />
+                  <Input label="WhatsApp" name="whatsapp" type="tel" value={form.whatsapp} onChange={handleChange} placeholder="Nomor WhatsApp" icon={<Phone size={16} style={{ color:'#64748b' }} />} />
+                  <Input label="NPWP" name="npwp" value={form.npwp} onChange={handleChange} placeholder="Opsional" icon={<FileText size={16} style={{ color:'#64748b' }} />} />
+                </div>
               </div>
 
               {/* Section: Perusahaan */}
-              <div className="sec-label">Informasi Perusahaan</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'11px 13px', marginBottom:20 }}>
-                <Input label="Nama Perusahaan / Travel" name="company_name" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" icon={<Building2 size={14} className="text-slate-400" />} />
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Alamat Kantor</label>
-                  <Textarea name="address" label="Alamat Kantor" value={form.address} onChange={handleChange} rows={2} placeholder="Alamat kantor" />
-                </div>
-                <div>
-                  <Autocomplete
-                    label="Kota Operasional"
-                    value={form.preferred_branch_id}
-                    onChange={handleBranchChange}
-                    options={branchOptions.map(b => ({ value: b.value, label: b.label }))}
-                    placeholder={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
-                    emptyLabel={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
-                  />
-                  {selectedBranch && (
-                    <div className="branch-info mt-1.5 text-xs text-slate-600">
-                      <span>Provinsi: </span>
-                      <span>{selectedBranch.region}</span>
-                      {selectedBranch.koordinator_provinsi && (
-                        <>
-                          {' · '}
-                          <span>Koord: </span>
-                          <span>{selectedBranch.koordinator_provinsi}</span>
-                          {selectedBranch.koordinator_provinsi_phone && (
-                            <span> · {selectedBranch.koordinator_provinsi_phone}</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Section: Pembayaran MoU (di awal daftar) */}
-              <div className="sec-label">Pembayaran MoU (wajib di awal pendaftaran)</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'11px 13px', marginBottom:20 }}>
-                <div>
-                  <span className="rg-label req">Jumlah pembayaran (Rp)</span>
-                  <div className="rg-field">
-                    <FileText size={14} color={MUTED} style={{ flexShrink:0 }} />
-                    <input
-                      name="registration_payment_amount"
-                      type="text"
-                      inputMode="numeric"
-                      value={form.registration_payment_amount}
-                      onChange={handleChange}
-                      placeholder="Contoh: 25000000"
-                    />
+              <div className="rg-section">
+                <div className="rg-section-title">Informasi Perusahaan</div>
+                <div className="rg-form-row-3">
+                  <Input label="Nama Perusahaan / Travel" name="company_name" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" icon={<Building2 size={16} style={{ color:'#64748b' }} />} />
+                  <div>
+                    <label style={{ display:'block', marginBottom:6 }}>Alamat Kantor</label>
+                    <Textarea name="address" value={form.address} onChange={handleChange} rows={2} placeholder="Alamat kantor" />
                   </div>
-                  <p style={{ fontSize:11, color:MUTED, marginTop:4 }}>Biaya MoU pendaftaran: Rp 25.000.000</p>
-                </div>
-                <div>
-                  <span className="rg-label req">Bukti bayar MoU</span>
-                  <input
-                    ref={paymentFileInputRef}
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="hidden"
-                    onChange={(e) => setRegistrationPaymentFile(e.target.files?.[0] || null)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => paymentFileInputRef.current?.click()}
-                    className="dd-trigger"
-                    style={{ width:'100%', justifyContent:'flex-start' }}
-                  >
-                    <Upload size={14} color={MUTED} style={{ flexShrink:0 }} />
-                    <span className="dd-value" style={{ color: registrationPaymentFile ? '#e2e8f0' : MUTED }}>
-                      {registrationPaymentFile ? registrationPaymentFile.name : 'Pilih file (PDF / gambar)'}
-                    </span>
-                  </button>
+                  <div className="rg-autocomplete-wrap">
+                    <Autocomplete
+                      label="Kota Operasional"
+                      value={form.preferred_branch_id}
+                      onChange={handleBranchChange}
+                      options={branchOptions.map(b => ({ value: b.value, label: b.label }))}
+                      placeholder={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                      emptyLabel={AUTOCOMPLETE_PILIH.PILIH_KABUPATEN}
+                    />
+                    {selectedBranch && (
+                      <div className="branch-info" style={{ marginTop:8 }}>
+                        <span>Provinsi: </span>
+                        <span>{selectedBranch.region}</span>
+                        {selectedBranch.koordinator_provinsi && (
+                          <>
+                            {' · '}
+                            <span>Koord: </span>
+                            <span>{selectedBranch.koordinator_provinsi}</span>
+                            {selectedBranch.koordinator_provinsi_phone && (
+                              <span> · {selectedBranch.koordinator_provinsi_phone}</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
+              {/* Section: Pembayaran MoU */}
+              <div className="rg-section">
+                <div className="rg-section-title">Pembayaran MoU (wajib di awal pendaftaran)</div>
+                <div className="rg-form-row-2">
+                  <div>
+                    <span className="rg-label req">Jumlah pembayaran (Rp)</span>
+                    <div className="rg-field">
+                      <FileText size={16} color={MUTED} style={{ flexShrink:0 }} />
+                      <input
+                        name="registration_payment_amount"
+                        type="text"
+                        inputMode="numeric"
+                        value={form.registration_payment_amount}
+                        onChange={handleChange}
+                        placeholder="Contoh: 25000000"
+                      />
+                    </div>
+                    <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Biaya MoU pendaftaran: Rp 25.000.000</p>
+                  </div>
+                  <div>
+                    <span className="rg-label req">Bukti bayar MoU</span>
+                    <input
+                      ref={paymentFileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => setRegistrationPaymentFile(e.target.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => paymentFileInputRef.current?.click()}
+                      className="dd-trigger"
+                      style={{ width:'100%', justifyContent:'flex-start', padding:'12px 14px' }}
+                    >
+                      <Upload size={16} color={MUTED} style={{ flexShrink:0 }} />
+                      <span className="dd-value" style={{ color: registrationPaymentFile ? '#e2e8f0' : MUTED }}>
+                        {registrationPaymentFile ? registrationPaymentFile.name : 'Pilih file (PDF / gambar)'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info: Alur aktivasi */}
               <div className="fu fu-2" style={{
-                padding:'14px 16px', borderRadius:12, marginBottom:20,
-                background:'rgba(56,189,248,0.08)', border:'1px solid rgba(56,189,248,0.2)',
+                padding:'18px 20px', borderRadius:14, marginBottom:24,
+                background:'rgba(56,189,248,0.06)', border:'1px solid rgba(56,189,248,0.18)',
               }}>
-                <p style={{ fontSize:12, color:'#94a3b8', lineHeight:1.6, margin:0 }}>
+                <p style={{ fontSize:13, color:'#94a3b8', lineHeight:1.65, margin:0, maxWidth:'100%' }}>
                   <strong style={{ color:'#e2e8f0' }}>Alur aktivasi:</strong> Pembayaran MoU dilakukan di awal pendaftaran (upload bukti + isi jumlah). Setelah Anda daftar, Admin Pusat akan memverifikasi bukti bayar dan mengaktifkan akun. Setelah akun aktif, Anda dapat login dan mengakses seluruh fitur aplikasi.
                 </p>
               </div>
 
               {/* Submit */}
-              <div className="fu fu-2">
-                <button type="submit" disabled={loading} className="btn-submit">
+              <div className="fu fu-2" style={{ marginTop:8 }}>
+                <button type="submit" disabled={loading} className="btn-submit" style={{ padding:'14px' }}>
                   <span className="shine" />
                   {loading
                     ? <><span className="spinner" />Memproses...</>
-                    : <>Daftar Sekarang<ArrowRight size={14} /></>
+                    : <>Daftar Sekarang<ArrowRight size={16} /></>
                   }
                 </button>
-                <p style={{ fontSize:11, color:'#1e3a5f', textAlign:'center', marginTop:12 }}>
+                <p style={{ fontSize:12, color:'#64748b', textAlign:'center', marginTop:16 }}>
                   Sudah punya akun?{' '}
                   <Link to="/login" style={{ color:SKY, fontWeight:600, textDecoration:'none' }}>Masuk di sini</Link>
                 </p>

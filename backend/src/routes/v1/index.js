@@ -24,6 +24,7 @@ router.get('/i18n/:locale', (req, res, next) => {
   ctrl.getI18n(req, res).catch(next);
 });
 router.use('/auth', require('./auth'));
+router.use('/public', require('./public'));
 router.use('/notifications', require('./notifications'));
 router.use('/owners', require('./owners'));
 router.use('/branches', require('./branches'));

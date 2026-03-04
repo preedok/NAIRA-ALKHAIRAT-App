@@ -6,9 +6,11 @@ import {
   Menu, X, ArrowRight, Star, MapPin, Building2, Users,
   CheckCircle, Clock, Award, TrendingUp, MessageCircle,
   Phone, Mail, Instagram, Twitter, Youtube, Sparkles,
-  BarChart3, Lock, Layers, Navigation,
+  BarChart3, Lock, Layers, Navigation, Search, Calendar,
+  UtensilsCrossed, PlaneTakeoff,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { publicApi } from '../../services/api';
 import logo from '../../assets/logo.png';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -418,13 +420,139 @@ const STYLES = `
     .l-form-grid { grid-template-columns:1fr; }
   }
 
+  /* ─ Search widget (landing header) ────────────────── */
+  @keyframes l-search-float {
+    0%, 100% { transform:translateY(0); }
+    50% { transform:translateY(-10px); }
+  }
+  .l-search-box-wrap {
+    animation:l-search-float 4s ease-in-out infinite;
+    transition:transform .3s ease-out;
+  }
+  .l-search-box-wrap.paused {
+    animation-play-state:paused;
+  }
+  .l-search-box {
+    background:linear-gradient(180deg,rgba(13,21,38,0.98),rgba(10,15,28,0.97));
+    border:1px solid rgba(56,189,248,0.18);
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow:0 24px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03);
+    backdrop-filter:blur(24px);
+  }
+  .l-search-tabs {
+    display:flex; gap:4px; padding:16px 20px 0; flex-wrap:wrap;
+  }
+  .l-search-tab {
+    display:flex; align-items:center; gap:8px;
+    padding:10px 18px; border-radius:12px; border:none; cursor:pointer;
+    font-size:13px; font-weight:600; font-family:'Manrope',system-ui,sans-serif;
+    background:rgba(255,255,255,0.04); color:#94a3b8;
+    transition:background .2s, color .2s, transform .15s;
+  }
+  .l-search-tab:hover { background:rgba(56,189,248,0.1); color:#e2e8f0; }
+  .l-search-tab.active { background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.35); }
+  .l-search-form { padding:24px 24px 28px; }
+  .l-search-row {
+    display:grid; gap:16px; align-items:end;
+    grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  }
+  .l-search-row.span-all { grid-column:1 / -1; }
+  .l-search-field { display:flex; flex-direction:column; gap:6px; }
+  .l-search-label {
+    font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    color:#64748b;
+  }
+  .l-search-input {
+    width:100%; height:44px; padding:0 14px 0 40px; border-radius:12px;
+    border:1px solid rgba(56,189,248,0.2); background:rgba(255,255,255,0.05);
+    color:#fff; font-size:14px; outline:none; transition:border-color .2s, box-shadow .2s;
+  }
+  .l-search-input::placeholder { color:#64748b; }
+  .l-search-input:focus { border-color:rgba(56,189,248,0.5); box-shadow:0 0 0 3px rgba(56,189,248,0.15); }
+  .l-search-input.with-icon { padding-left:40px; }
+  .l-search-input.no-icon { padding-left:14px; }
+  select.l-search-input { cursor:pointer; appearance:auto; }
+  .l-search-field-wrap { position:relative; }
+  .l-search-field-wrap .l-search-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#64748b; pointer-events:none; }
+  .l-search-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .l-search-chip {
+    display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px;
+    font-size:12px; font-weight:500; cursor:pointer; border:1px solid transparent;
+    background:rgba(255,255,255,0.06); color:#94a3b8;
+    transition:background .2s, border-color .2s, color .2s;
+  }
+  .l-search-chip:hover { background:rgba(56,189,248,0.1); color:#e2e8f0; }
+  .l-search-chip.active { background:rgba(56,189,248,0.15); border-color:rgba(56,189,248,0.3); color:#38bdf8; }
+  .l-search-submit {
+    margin-top:20px; display:flex; justify-content:stretch;
+  }
+  .l-search-submit .l-btn-p { width:100%; min-width:0; padding:14px 32px; font-size:15px; justify-content:center; }
+  @media (max-width:768px) {
+    .l-search-tabs { padding:12px 16px 0; }
+    .l-search-tab { padding:8px 14px; font-size:12px; }
+    .l-search-form { padding:20px 16px 24px; }
+    .l-search-row { grid-template-columns:1fr; }
+  }
+
   /* Mobile responsive */
   @media (max-width:768px) {
     .l-hide-mob { display:none !important; }
+    .l-show-mob { display:flex !important; }
     .l-col-mob  { flex-direction:column !important; }
     .l-center-mob { text-align:center !important; align-items:center !important; }
     .l-step-line { display:none; }
   }
+  @media (min-width:769px) {
+    .l-show-mob { display:none !important; }
+  }
+
+  /* ─ Responsive: hero, sections, footer ─────────────── */
+  .l-hero-grid {
+    display:grid; grid-template-columns:1fr 1.15fr; gap:36px; align-items:center;
+  }
+  .l-section { padding:100px 24px; }
+  .l-section-sm { padding:80px 24px; }
+  .l-tentang-grid { display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; }
+  .l-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:40px; }
+  .l-packages-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:22px; }
+  .l-stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:16px; }
+  .l-services-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(290px, 1fr)); gap:18px; }
+
+  @media (max-width:992px) {
+    .l-hero-grid { grid-template-columns:1fr; gap:28px; }
+    .l-hero-left { align-items:center; text-align:center; }
+    .l-tentang-grid { grid-template-columns:1fr; gap:40px; }
+  }
+  @media (max-width:768px) {
+    .l-section { padding:60px 16px; }
+    section.l-section { padding-top:80px; padding-bottom:48px; }
+    .l-section-sm { padding:48px 16px; }
+    .l-footer-grid { grid-template-columns:1fr; gap:28px; }
+    .l-packages-grid { grid-template-columns:1fr; gap:18px; }
+    .l-stats-grid { grid-template-columns:repeat(2, 1fr); gap:12px; }
+    .l-services-grid { grid-template-columns:1fr; }
+  }
+  @media (max-width:480px) {
+    .l-section { padding:48px 12px; }
+    .l-section-sm { padding:40px 12px; }
+    .l-stats-grid { grid-template-columns:1fr; }
+  }
+
+  /* Container: responsive horizontal padding */
+  .l-container { padding-left:16px; padding-right:16px; }
+  @media (max-width:480px) {
+    .l-container { padding-left:12px; padding-right:12px; }
+  }
+
+  /* CTA & footer inner responsive */
+  .l-cta-inner { padding:72px 48px; }
+  @media (max-width:768px) { .l-cta-inner { padding:48px 24px; } }
+  @media (max-width:480px) { .l-cta-inner { padding:40px 16px; } }
+
+  .l-footer { padding:30px 24px 32px; }
+  @media (max-width:768px) { .l-footer { padding:24px 16px 28px; } }
+  @media (max-width:480px) { .l-footer { padding:20px 12px 24px; } }
 `;
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -499,6 +627,228 @@ const SectionHeader: React.FC<{ tag: string; tagIcon?: React.ReactNode; title: R
   </div>
 );
 
+/* ─── Landing search widget (Agoda-style) ───────────────────────── */
+const PRODUCT_TABS = [
+  { id: 'hotel', label: 'Hotel', icon: Hotel },
+  { id: 'ticket', label: 'Tiket', icon: PlaneTakeoff },
+  { id: 'visa', label: 'Visa', icon: FileCheck },
+  { id: 'bus', label: 'Bus', icon: Bus },
+  { id: 'package', label: 'Paket', icon: Package },
+] as const;
+
+type ProductTabId = typeof PRODUCT_TABS[number]['id'];
+
+const BANDARA_FALLBACK = [
+  { code: 'CGK', name: 'Jakarta' },
+  { code: 'SBY', name: 'Surabaya' },
+  { code: 'BTH', name: 'Batam' },
+  { code: 'UPG', name: 'Makassar' },
+];
+
+interface SearchWidgetProps {
+  searchData: {
+    products: { id: string; name: string; type: string; meta?: Record<string, unknown> }[];
+    byType: Record<string, { id: string; name: string; type: string }[]>;
+    bandara: { code: string; name: string }[];
+  } | null;
+  onSearch: (params: Record<string, string>) => void;
+}
+
+const LandingSearchWidget: React.FC<SearchWidgetProps> = ({ searchData, onSearch }) => {
+  const [activeTab, setActiveTab] = useState<ProductTabId>('hotel');
+  const [floatPaused, setFloatPaused] = useState(false);
+  const [hotel, setHotel] = useState({ destination: '', checkIn: '', checkOut: '', guests: '2', rooms: '1', freeBreakfast: false, freeCancel: false, star4: false, score8: false });
+  const [ticket, setTicket] = useState({ from: '', to: '', date: '' });
+  const [visa, setVisa] = useState({ destination: 'Visa Saudi', date: '' });
+  const [bus, setBus] = useState({ route: '', date: '' });
+  const [pkg, setPkg] = useState({ destination: '', date: '' });
+
+  const bandara = searchData?.bandara?.length ? searchData.bandara : BANDARA_FALLBACK;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const params: Record<string, string> = { product: activeTab };
+    if (activeTab === 'hotel') {
+      if (hotel.destination) params.destination = hotel.destination;
+      if (hotel.checkIn) params.checkin = hotel.checkIn;
+      if (hotel.checkOut) params.checkout = hotel.checkOut;
+      if (hotel.guests) params.guests = hotel.guests;
+      if (hotel.rooms) params.rooms = hotel.rooms;
+    } else if (activeTab === 'ticket') {
+      if (ticket.from) params.from = ticket.from;
+      if (ticket.to) params.to = ticket.to;
+      if (ticket.date) params.date = ticket.date;
+    } else if (activeTab === 'visa') {
+      if (visa.destination) params.destination = visa.destination;
+      if (visa.date) params.date = visa.date;
+    } else if (activeTab === 'bus') {
+      if (bus.route) params.route = bus.route;
+      if (bus.date) params.date = bus.date;
+    } else if (activeTab === 'package') {
+      if (pkg.destination) params.destination = pkg.destination;
+      if (pkg.date) params.date = pkg.date;
+    }
+    onSearch(params);
+  };
+
+  const Field = ({ label, children, fullWidth }: { label: string; children: React.ReactNode; fullWidth?: boolean }) => (
+    <div className="l-search-field" style={fullWidth ? { gridColumn: '1 / -1' } : undefined}>
+      <span className="l-search-label">{label}</span>
+      {children}
+    </div>
+  );
+
+  const InputWithIcon = ({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { icon?: React.ComponentType<Record<string, unknown>> }) => (
+    <div className="l-search-field-wrap">
+      {Icon && <Icon size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: T.dim, pointerEvents: 'none' }} />}
+      <input className={`l-search-input ${Icon ? 'with-icon' : 'no-icon'}`} style={{ height: 44 }} {...props} />
+    </div>
+  );
+
+  return (
+    <div
+      className={`l-search-box-wrap ${floatPaused ? 'paused' : ''}`}
+      onTouchStart={() => setFloatPaused(true)}
+      onMouseEnter={() => setFloatPaused(true)}
+    >
+      <div className="l-search-box">
+      <div className="l-search-tabs">
+        {PRODUCT_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`l-search-tab ${activeTab === id ? 'active' : ''}`}
+          >
+            <Icon size={18} /> {label}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit} className="l-search-form">
+        {activeTab === 'hotel' && (
+          <>
+            <div className="l-search-row" style={{ marginBottom: 16 }}>
+              <Field label="Destinasi" fullWidth>
+                <InputWithIcon
+                  icon={Search}
+                  type="text"
+                  placeholder="Kota, landmark, atau nama properti — Mekkah, Madinah..."
+                  value={hotel.destination}
+                  onChange={(e) => setHotel((h) => ({ ...h, destination: e.target.value }))}
+                />
+              </Field>
+            </div>
+            <div className="l-search-row" style={{ marginBottom: 16 }}>
+              <Field label="Check-in">
+                <InputWithIcon icon={Calendar} type="date" value={hotel.checkIn} onChange={(e) => setHotel((h) => ({ ...h, checkIn: e.target.value }))} />
+              </Field>
+              <Field label="Check-out">
+                <input className="l-search-input no-icon" type="date" value={hotel.checkOut} onChange={(e) => setHotel((h) => ({ ...h, checkOut: e.target.value }))} style={{ height: 44 }} />
+              </Field>
+              <Field label="Tamu & kamar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <input className="l-search-input no-icon" type="number" min={1} max={20} value={hotel.guests} onChange={(e) => setHotel((h) => ({ ...h, guests: e.target.value }))} style={{ height: 44, flex: 1, minWidth: 0 }} />
+                    <span style={{ fontSize: 13, color: T.dim, flexShrink: 0 }}>dewasa</span>
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <input className="l-search-input no-icon" type="number" min={1} max={10} value={hotel.rooms} onChange={(e) => setHotel((h) => ({ ...h, rooms: e.target.value }))} style={{ height: 44, flex: 1, minWidth: 0 }} />
+                    <span style={{ fontSize: 13, color: T.dim, flexShrink: 0 }}>kamar</span>
+                  </div>
+                </div>
+              </Field>
+            </div>
+            <div className="l-search-chips" style={{ marginBottom: 4 }}>
+              {[
+                { key: 'freeBreakfast', label: 'Sarapan gratis', icon: UtensilsCrossed },
+                { key: 'freeCancel', label: 'Bebas pembatalan' },
+                { key: 'star4', label: 'Bintang 4+', icon: Star },
+                { key: 'score8', label: 'Skor 8+' },
+              ].map(({ key, label, icon: ChipIcon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setHotel((h) => ({ ...h, [key]: !(h as Record<string, unknown>)[key] }))}
+                  className={`l-search-chip ${(hotel as Record<string, unknown>)[key] ? 'active' : ''}`}
+                >
+                  {ChipIcon && <ChipIcon size={14} />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'ticket' && (
+          <div className="l-search-row">
+            <Field label="Bandara asal">
+              <select className="l-search-input no-icon" value={ticket.from} onChange={(e) => setTicket((t) => ({ ...t, from: e.target.value }))} style={{ height: 44, paddingLeft: 14 }}>
+                <option value="">Pilih bandara</option>
+                {bandara.map((b) => (
+                  <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Bandara tujuan">
+              <select className="l-search-input no-icon" value={ticket.to} onChange={(e) => setTicket((t) => ({ ...t, to: e.target.value }))} style={{ height: 44, paddingLeft: 14 }}>
+                <option value="">Pilih bandara</option>
+                {bandara.map((b) => (
+                  <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tanggal">
+              <input className="l-search-input no-icon" type="date" value={ticket.date} onChange={(e) => setTicket((t) => ({ ...t, date: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+          </div>
+        )}
+
+        {activeTab === 'visa' && (
+          <div className="l-search-row">
+            <Field label="Tujuan / jenis visa">
+              <input className="l-search-input no-icon" type="text" placeholder="Visa Saudi, Visa Schengen..." value={visa.destination} onChange={(e) => setVisa((v) => ({ ...v, destination: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+            <Field label="Tanggal perjalanan">
+              <input className="l-search-input no-icon" type="date" value={visa.date} onChange={(e) => setVisa((v) => ({ ...v, date: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+          </div>
+        )}
+
+        {activeTab === 'bus' && (
+          <div className="l-search-row">
+            <Field label="Rute" fullWidth>
+              <input className="l-search-input no-icon" type="text" placeholder="Contoh: Jeddah – Mekkah, Bandara – Hotel..." value={bus.route} onChange={(e) => setBus((b) => ({ ...b, route: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+            <Field label="Tanggal">
+              <input className="l-search-input no-icon" type="date" value={bus.date} onChange={(e) => setBus((b) => ({ ...b, date: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+          </div>
+        )}
+
+        {activeTab === 'package' && (
+          <div className="l-search-row">
+            <Field label="Paket / destinasi">
+              <input className="l-search-input no-icon" type="text" placeholder="Paket Umrah, Wisata Halal..." value={pkg.destination} onChange={(e) => setPkg((p) => ({ ...p, destination: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+            <Field label="Tanggal">
+              <input className="l-search-input no-icon" type="date" value={pkg.date} onChange={(e) => setPkg((p) => ({ ...p, date: e.target.value }))} style={{ height: 44 }} />
+            </Field>
+          </div>
+        )}
+
+        <div className="l-search-submit">
+          <button type="submit" className="l-btn-p">
+            <span className="shine" />
+            <Search size={18} style={{ marginRight: 8 }} /> Cari
+          </button>
+        </div>
+      </form>
+      </div>
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════════════ */
@@ -510,7 +860,19 @@ const LandingPage: React.FC = () => {
   const [testiIdx, setTestiIdx]       = useState(0);
   const [contactForm, setContactForm] = useState({ nama: '', email: '', telepon: '', pesan: '' });
   const [contactSent, setContactSent]  = useState(false);
+  const [searchData, setSearchData]   = useState<SearchWidgetProps['searchData']>(null);
   const injected = useRef(false);
+
+  // Fetch products/bandara for landing search widget (public API)
+  useEffect(() => {
+    publicApi.getProductsForSearch()
+      .then((res) => res.data?.data && setSearchData({
+        products: res.data.data.products,
+        byType: res.data.data.byType || {},
+        bandara: res.data.data.bandara || [],
+      }))
+      .catch(() => setSearchData({ products: [], byType: {}, bandara: BANDARA_FALLBACK }));
+  }, []);
 
   // Inject styles once
   useEffect(() => {
@@ -561,9 +923,14 @@ const LandingPage: React.FC = () => {
     setContactForm({ nama: '', email: '', telepon: '', pesan: '' });
   };
 
+  const handleSearchSubmit = (params: Record<string, string>) => {
+    const qs = new URLSearchParams(params).toString();
+    navigate(`/register?${qs}`);
+  };
+
   if (!isLoading && isAuthenticated) return null;
 
-  const S = { maxWidth: 1280, margin: '0 auto', padding: '0 16px' };
+  const S = { maxWidth: 1280, margin: '0 auto' };
 
   return (
     <div className="sidebar-login-bg" style={{
@@ -607,7 +974,7 @@ const LandingPage: React.FC = () => {
         backdropFilter: scrolled ? 'blur(28px)' : 'none',
         transition:'all .3s ease',
       }}>
-        <div style={{ ...S, display:'flex', alignItems:'center', justifyContent:'space-between', height:68 }}>
+        <div className="l-container" style={{ ...S, display:'flex', alignItems:'center', justifyContent:'space-between', height:68 }}>
 
           {/* Brand */}
           <div style={{ display:'flex', alignItems:'center', gap:11, flexShrink:0 }}>
@@ -631,10 +998,10 @@ const LandingPage: React.FC = () => {
             <Link to="/register" className="l-btn-p" style={{ padding:'9px 20px', fontSize:13 }}>
               <span className="shine"/>
               <span className="l-hide-mob">Daftar Partner</span>
-              <span style={{ display:'none' }} className="l-show-mob">Daftar</span>
+              <span className="l-show-mob">Daftar</span>
               <ArrowRight size={13}/>
             </Link>
-            <button onClick={() => setMobileOpen(v=>!v)} className="l-hide-mob" style={{display:'none',background:'none',border:'none',cursor:'pointer',color:'white',padding:4}}>
+            <button type="button" onClick={() => setMobileOpen(v=>!v)} className="l-show-mob" style={{ background:'none', border:'none', cursor:'pointer', color:'white', padding:4, alignItems:'center', justifyContent:'center' }} aria-label="Menu">
               {mobileOpen ? <X size={22}/> : <Menu size={22}/>}
             </button>
           </div>
@@ -659,13 +1026,13 @@ const LandingPage: React.FC = () => {
       </nav>
 
       {/* ══════════════════════════════════════
-          HERO  —  Split Layout (Left text | Right dashboard)
+          HERO  —  Split Layout (Left text + search | Right dashboard)
       ══════════════════════════════════════ */}
-      <section style={{ position:'relative', zIndex:1, paddingTop:100, paddingBottom:60 }}>
-        <div style={{ ...S, display:'grid', gridTemplateColumns:'1fr 1.15fr', gap:36, alignItems:'center', minHeight:'calc(100vh - 100px)' }}>
+      <section className="l-section" style={{ position:'relative', zIndex:1, paddingTop:100, paddingBottom:60, minHeight:0 }}>
+        <div className="l-container l-hero-grid" style={{ ...S, minHeight:'calc(100vh - 100px)' }}>
 
           {/* ─── LEFT: Text ─────────────────────────── */}
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
+          <div className="l-hero-left" style={{ display:'flex', flexDirection:'column', alignItems:'flex-start' }}>
 
             {/* Announcement pill */}
             <div className="l-fu l-fu-0" style={{
@@ -706,7 +1073,7 @@ const LandingPage: React.FC = () => {
             </p>
 
             {/* Feature pills */}
-            <div className="l-fu l-fu-2" style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:34 }}>
+            <div className="l-fu l-fu-2" style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:24 }}>
               {[
                 { icon:Hotel,     label:'Hotel',  color:'#f59e0b' },
                 { icon:FileCheck, label:'Visa',   color:'#10b981' },
@@ -765,214 +1132,10 @@ const LandingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* ─── RIGHT: Dashboard UI ─────────────────── */}
-          <div className="l-fu l-fu-2" style={{ position:'relative' }}>
-
-            {/* Glow behind dashboard */}
-            <div style={{
-              position:'absolute', top:'20%', left:'10%', width:'80%', height:'60%',
-              background:'radial-gradient(ellipse,rgba(56,189,248,0.12) 0%,transparent 70%)',
-              pointerEvents:'none', zIndex:0,
-            }}/>
-
-            {/* Floating notification — top left */}
-            <div className="l-float" style={{
-              position:'absolute', top:-18, left:-20, zIndex:10,
-              background:'rgba(13,21,38,0.95)', border:'1px solid rgba(245,158,11,0.3)',
-              borderRadius:14, padding:'10px 14px',
-              boxShadow:'0 16px 44px rgba(0,0,0,0.55)',
-              minWidth:152,
-            }}>
-              <div style={{ fontSize:9, color:T.dim, marginBottom:3, letterSpacing:'.06em', textTransform:'uppercase' }}>Order Baru</div>
-              <div style={{ fontSize:14, fontWeight:800, color:T.gold }}>+Rp 2.400.000</div>
-              <div style={{ fontSize:10, color:'#34d399', marginTop:2, display:'flex', alignItems:'center', gap:4 }}>
-                <TrendingUp size={9}/> ↑ 12% vs kemarin
-              </div>
-            </div>
-
-            {/* Floating notification — top right */}
-            <div className="l-float l-float-2" style={{
-              position:'absolute', top:-14, right:-16, zIndex:10,
-              background:'rgba(13,21,38,0.95)', border:'1px solid rgba(56,189,248,0.28)',
-              borderRadius:14, padding:'10px 14px',
-              boxShadow:'0 16px 44px rgba(0,0,0,0.55)',
-              minWidth:148,
-            }}>
-              <div style={{ fontSize:9, color:T.dim, marginBottom:4, letterSpacing:'.06em', textTransform:'uppercase' }}>Visa Disetujui</div>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <CheckCircle size={15} color="#34d399"/>
-                <span style={{ fontSize:13, fontWeight:700 }}>3 Jamaah</span>
-              </div>
-              <div style={{ fontSize:10, color:T.dim, marginTop:2 }}>Proses 1×24 jam ✓</div>
-            </div>
-
-            {/* ── Main Dashboard Card ── */}
-            <div style={{
-              position:'relative', zIndex:1,
-              background:'rgba(10,17,32,0.92)',
-              border:'1px solid rgba(56,189,248,0.14)',
-              borderRadius:22,
-              backdropFilter:'blur(24px)',
-              boxShadow:'0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(56,189,248,0.06)',
-              overflow:'hidden',
-            }}>
-              {/* Titlebar */}
-              <div style={{
-                display:'flex', alignItems:'center', gap:7, padding:'13px 18px 11px',
-                borderBottom:'1px solid rgba(255,255,255,0.05)',
-                background:'rgba(255,255,255,0.015)',
-              }}>
-                {['#f87171','#fbbf24','#34d399'].map(c => (
-                  <div key={c} style={{ width:9, height:9, borderRadius:'50%', background:c }}/>
-                ))}
-                <div style={{ flex:1, height:6, background:'rgba(255,255,255,0.04)', borderRadius:3, marginLeft:10 }}/>
-                <div style={{ fontSize:9, color:T.dim, letterSpacing:'.08em', fontWeight:600 }}>DASHBOARD v3.0</div>
-              </div>
-
-              {/* Sidebar + Main */}
-              <div style={{ display:'flex', height:380 }}>
-
-                {/* Sidebar */}
-                <div style={{
-                  width:48, flexShrink:0,
-                  borderRight:'1px solid rgba(255,255,255,0.04)',
-                  display:'flex', flexDirection:'column', alignItems:'center',
-                  padding:'14px 0', gap:14,
-                }}>
-                  {[
-                    { Icon:BarChart3, active:true  },
-                    { Icon:Package,   active:false },
-                    { Icon:Users,     active:false },
-                    { Icon:FileCheck, active:false },
-                    { Icon:Globe,     active:false },
-                  ].map(({ Icon, active }, i) => (
-                    <div key={i} style={{
-                      width:32, height:32, borderRadius:9,
-                      background: active ? 'rgba(56,189,248,0.18)' : 'transparent',
-                      border: active ? '1px solid rgba(56,189,248,0.3)' : '1px solid transparent',
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                    }}>
-                      <Icon size={14} color={active ? T.sky : T.muted}/>
-                    </div>
-                  ))}
-                  <div style={{ flex:1 }}/>
-                  <div style={{ width:28, height:28, borderRadius:'50%', background:'linear-gradient(135deg,#38bdf8,#2563eb)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:800, color:'white' }}>
-                    AG
-                  </div>
-                </div>
-
-                {/* Main content */}
-                <div style={{ flex:1, padding:'16px 18px', overflow:'hidden' }}>
-
-                  {/* Header row */}
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                    <div>
-                      <div style={{ fontSize:11, fontWeight:700, color:'white' }}>Selamat datang, Agen 👋</div>
-                      <div style={{ fontSize:9, color:T.dim }}>Rabu, 19 Feb 2025</div>
-                    </div>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <div style={{ padding:'4px 8px', borderRadius:6, background:'rgba(56,189,248,0.1)', border:'1px solid rgba(56,189,248,0.2)', fontSize:9, color:T.sky, fontWeight:600 }}>Live</div>
-                      <div style={{ width:24, height:24, borderRadius:7, background:'rgba(255,255,255,0.04)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                        <Headphones size={11} color={T.dim}/>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* KPI row */}
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:14 }}>
-                    {[
-                      { v:'Rp 1.2M', l:'Revenue',  c:T.sky,      arrow:'↑ 18%' },
-                      { v:'48',      l:'Order',    c:T.gold,     arrow:'↑ 6%'  },
-                      { v:'98%',     l:'Rating',   c:'#34d399',  arrow:'↑ 2%'  },
-                      { v:'12',      l:'Produk',   c:T.purple,   arrow:'Aktif' },
-                    ].map(({ v, l, c, arrow }) => (
-                      <div key={l} style={{
-                        background:'rgba(255,255,255,0.025)', borderRadius:10,
-                        border:'1px solid rgba(255,255,255,0.04)',
-                        padding:'10px 8px',
-                      }}>
-                        <div style={{ fontSize:15, fontWeight:800, color:c, lineHeight:1 }}>{v}</div>
-                        <div style={{ fontSize:8, color:T.dim, marginTop:3 }}>{l}</div>
-                        <div style={{ fontSize:8, color:c, marginTop:2, opacity:.8 }}>{arrow}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Chart area */}
-                  <div style={{ marginBottom:12 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:T.sub }}>Revenue 7 Hari Terakhir</div>
-                      <div style={{ fontSize:8, color:T.sky, fontWeight:600 }}>↑ 22% bulan ini</div>
-                    </div>
-                    {/* Bar chart */}
-                    <div style={{ display:'flex', gap:5, alignItems:'flex-end', height:62, background:'rgba(255,255,255,0.015)', borderRadius:10, padding:'8px 10px' }}>
-                      {[55,72,48,88,63,95,80].map((h,i) => (
-                        <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', gap:2, alignItems:'center' }}>
-                          <div style={{
-                            width:'100%', borderRadius:3,
-                            height:`${h * 0.45}px`,
-                            background: i===5
-                              ? 'linear-gradient(180deg,#38bdf8,#2563eb)'
-                              : `rgba(56,189,248,${h/100 * 0.35})`,
-                            transition:'height .3s',
-                          }}/>
-                          <div style={{ fontSize:7, color:T.muted }}>
-                            {['S','M','S','R','K','J','S'][i]}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Recent orders */}
-                  <div>
-                    <div style={{ fontSize:9, fontWeight:700, color:T.sub, marginBottom:7 }}>Order Terkini</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                      {[
-                        { name:'Paket Umrah Reguler', client:'Bpk. Ahmad', status:'Confirmed', color:'#34d399', amount:'Rp 32jt' },
-                        { name:'Hotel Makkah Grand', client:'Ibu Siti',    status:'Pending',   color:T.gold,    amount:'Rp 8.5jt' },
-                        { name:'Visa Saudi 3 Orang',  client:'Bpk. Hendra',status:'Processing',color:T.sky,    amount:'Rp 4.2jt' },
-                      ].map((o, i) => (
-                        <div key={i} style={{
-                          display:'flex', alignItems:'center', gap:8,
-                          padding:'7px 8px', borderRadius:8,
-                          background:'rgba(255,255,255,0.02)',
-                          border:'1px solid rgba(255,255,255,0.035)',
-                        }}>
-                          <div style={{ width:26, height:26, borderRadius:7, background:`${o.color}16`, border:`1px solid ${o.color}28`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                            <Package size={11} color={o.color}/>
-                          </div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontSize:9, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.name}</div>
-                            <div style={{ fontSize:8, color:T.dim }}>{o.client}</div>
-                          </div>
-                          <div style={{ textAlign:'right', flexShrink:0 }}>
-                            <div style={{ fontSize:9, fontWeight:700, color:'white' }}>{o.amount}</div>
-                            <div style={{ fontSize:7, color:o.color, fontWeight:600 }}>{o.status}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom floating status card */}
-            <div className="l-float" style={{
-              position:'absolute', bottom:-18, right:20, zIndex:10,
-              background:'rgba(13,21,38,0.95)', border:'1px solid rgba(52,211,153,0.28)',
-              borderRadius:14, padding:'10px 16px',
-              boxShadow:'0 16px 44px rgba(0,0,0,0.55)',
-              display:'flex', alignItems:'center', gap:10,
-            }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background:'#34d399', boxShadow:'0 0 8px #34d399' }}/>
-              <div>
-                <div style={{ fontSize:9, color:T.dim }}>System Status</div>
-                <div style={{ fontSize:11, fontWeight:700, color:'#34d399' }}>Semua Layanan Normal</div>
-              </div>
-              <div style={{ fontSize:9, color:T.dim, marginLeft:6 }}>99.9% uptime</div>
+          {/* ─── RIGHT: Filter form ─────────────────── */}
+          <div className="l-fu l-fu-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
+            <div style={{ width: '100%', maxWidth: 520 }}>
+              <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
             </div>
           </div>
         </div>
@@ -1005,7 +1168,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           SERVICES
       ══════════════════════════════════════ */}
-      <section id="layanan" style={{ position:'relative', zIndex:1, padding:'100px 24px' }}>
+      <section id="layanan" className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
           <div data-reveal style={{ opacity:0 }}>
             <SectionHeader
@@ -1045,7 +1208,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           PACKAGES
       ══════════════════════════════════════ */}
-      <section id="paket" style={{ position:'relative', zIndex:1, padding:'100px 24px' }}>
+      <section id="paket" className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
           <div data-reveal style={{ opacity:0, display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:20, marginBottom:52 }}>
             <div style={{ textAlign:'left' }}>
@@ -1061,7 +1224,7 @@ const LandingPage: React.FC = () => {
             </button>
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:22 }}>
+          <div className="l-packages-grid">
             {PACKAGES.map((pkg,i) => (
               <div key={i} data-reveal className={`l-card ${pkg.hot ? 'l-pkg-hot' : ''}`}
                 style={{ opacity:0, animationDelay:`${i*0.1}s`, overflow:'hidden' }}>
@@ -1129,7 +1292,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           HOW IT WORKS
       ══════════════════════════════════════ */}
-      <section id="proses" style={{ position:'relative', zIndex:1, padding:'100px 24px' }}>
+      <section id="proses" className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
           <div data-reveal style={{ opacity:0 }}>
             <SectionHeader
@@ -1180,9 +1343,9 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           STATS
       ══════════════════════════════════════ */}
-      <section style={{ position:'relative', zIndex:1, padding:'80px 24px', background:'rgba(6,11,24,0.5)', backdropFilter:'blur(10px)' }}>
+      <section className="l-section-sm" style={{ position:'relative', zIndex:1, background:'rgba(6,11,24,0.5)', backdropFilter:'blur(10px)' }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:16 }}>
+          <div className="l-stats-grid">
             {STATS.map((stat, i) => {
               const Icon = stat.icon;
               return (
@@ -1217,10 +1380,9 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           TENTANG / WHY
       ══════════════════════════════════════ */}
-      <section id="tentang" style={{ position:'relative', zIndex:1, padding:'100px 24px' }}>
+      <section id="tentang" className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
-          {/* Split layout */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:64, alignItems:'center' }}>
+          <div className="l-tentang-grid">
             {/* Left */}
             <div data-reveal style={{ opacity:0 }}>
               <div className="l-tag" style={{ marginBottom:18, display:'inline-flex' }}>
@@ -1319,7 +1481,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           TESTIMONIALS
       ══════════════════════════════════════ */}
-      <section style={{ position:'relative', zIndex:1, padding:'100px 24px', overflow:'hidden' }}>
+      <section className="l-section" style={{ position:'relative', zIndex:1, overflow:'hidden' }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
           <div data-reveal style={{ opacity:0 }}>
             <SectionHeader
@@ -1369,7 +1531,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           FAQ
       ══════════════════════════════════════ */}
-      <section id="faq" style={{ position:'relative', zIndex:1, padding:'100px 24px' }}>
+      <section id="faq" className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:760, margin:'0 auto' }}>
           <div data-reveal style={{ opacity:0 }}>
             <SectionHeader
@@ -1389,7 +1551,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           HUBUNGI KAMI
       ══════════════════════════════════════ */}
-      <section id="kontak" style={{ position:'relative', zIndex:1, padding:'80px 24px 100px' }}>
+      <section id="kontak" className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:940, margin:'0 auto' }}>
           <div data-reveal style={{ opacity:0 }}>
             <SectionHeader
@@ -1480,9 +1642,9 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           DIPERCAYA OLEH
       ══════════════════════════════════════ */}
-      <section style={{ position:'relative', zIndex:1, padding:'0 24px 80px' }}>
+      <section style={{ position:'relative', zIndex:1, padding:'0 16px 60px' }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
-          <div data-reveal style={{ opacity:0, padding:'32px 40px', borderRadius:20, border:'1px solid rgba(56,189,248,0.1)', background:'rgba(56,189,248,0.03)', display:'flex', flexWrap:'wrap', justifyContent:'center', gap:40, alignItems:'center' }}>
+          <div data-reveal style={{ opacity:0, padding:'24px 20px', borderRadius:20, border:'1px solid rgba(56,189,248,0.1)', background:'rgba(56,189,248,0.03)', display:'flex', flexWrap:'wrap', justifyContent:'center', gap:24, alignItems:'center' }}>
             <div style={{ fontSize:12, fontWeight:700, letterSpacing:'0.15em', color:T.dim, textTransform:'uppercase' }}>Dipercaya oleh</div>
             {[
               { num: '50+', text: 'Cabang' },
@@ -1502,10 +1664,10 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           CTA
       ══════════════════════════════════════ */}
-      <section style={{ position:'relative', zIndex:1, padding:'40px 24px 100px' }}>
+      <section className="l-section" style={{ position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:940, margin:'0 auto' }}>
-          <div data-reveal className="l-cta-bg" style={{
-            opacity:0, borderRadius:28, padding:'72px 48px', textAlign:'center',
+          <div data-reveal className="l-cta-bg l-cta-inner" style={{
+            opacity:0, borderRadius:28, textAlign:'center',
             border:'1px solid rgba(56,189,248,0.15)',
             boxShadow:'0 0 80px rgba(37,99,235,0.2), inset 0 0 80px rgba(37,99,235,0.05)',
             position:'relative', overflow:'hidden',
@@ -1547,14 +1709,13 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           FOOTER
       ══════════════════════════════════════ */}
-      <footer style={{
+      <footer className="l-footer" style={{
         position:'relative', zIndex:1,
         borderTop:'1px solid rgba(56,189,248,0.08)',
         background:'rgba(6,11,24,0.8)', backdropFilter:'blur(20px)',
-        padding:'30px 24px 32px',
       }}>
         <div style={{ maxWidth:1140, margin:'0 auto' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:40, marginBottom:52, flexWrap:'wrap' }}>
+          <div className="l-footer-grid" style={{ marginBottom:52 }}>
 
             {/* Brand */}
             <div>
