@@ -185,10 +185,16 @@ const HotelWorkPage: React.FC = () => {
   const totalInvoices = dashboard?.total_orders ?? 0;
   const totalItems = dashboard?.total_hotel_items ?? 0;
 
-  /** Lokasi hotel dari item: Product.meta.location atau item.meta?.location */
+  /** Lokasi hotel: backend hotel_location, atau Product.meta.location / item.meta, atau infer dari nama product */
   const getHotelItemLocation = (item: any) => {
+    const fromBackend = item?.hotel_location;
+    if (fromBackend && String(fromBackend).trim()) return String(fromBackend).toLowerCase().trim();
     const loc = item?.Product?.meta?.location ?? item?.meta?.location;
-    return (loc && String(loc).toLowerCase().trim()) || '';
+    if (loc && String(loc).trim()) return String(loc).toLowerCase().trim();
+    const name = (item?.Product?.name ?? item?.product_name ?? item?.meta?.product_name ?? '').toString();
+    if (/madinah/i.test(name)) return 'madinah';
+    if (/mekkah|makkah/i.test(name)) return 'makkah';
+    return '';
   };
 
   const filteredInvoices = useMemo(() => {

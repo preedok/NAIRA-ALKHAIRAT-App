@@ -138,8 +138,18 @@ const listInvoices = asyncHandler(async (req, res) => {
     offset
   });
 
+  // Attach hotel_location to each hotel order item (dari Product.meta.location) agar filter tab Mekkah/Madinah jalan
+  const data = invoices.map((inv) => {
+    const plain = inv.get ? inv.get({ plain: true }) : inv;
+    (plain.Order?.OrderItems || []).forEach((oi) => {
+      const loc = oi.Product?.meta?.location;
+      oi.hotel_location = (loc != null && String(loc).trim() !== '') ? String(loc).toLowerCase().trim() : '';
+    });
+    return plain;
+  });
+
   const totalPages = Math.ceil((count || 0) / lim) || 1;
-  res.json({ success: true, data: invoices, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
+  res.json({ success: true, data, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
 });
 
 /**
@@ -187,6 +197,8 @@ const getInvoice = asyncHandler(async (req, res) => {
     if (oi.type === ORDER_ITEM_TYPE.HOTEL && (oi.Product || oi.product)) {
       const p = oi.Product || oi.product;
       oi.product_name = p.name || p.code || null;
+      const loc = p.meta?.location;
+      oi.hotel_location = (loc != null && String(loc).trim() !== '') ? String(loc).toLowerCase().trim() : '';
     }
   });
 
