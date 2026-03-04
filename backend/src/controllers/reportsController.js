@@ -162,8 +162,8 @@ const getAnalytics = asyncHandler(async (req, res) => {
         where: invWhere,
         attributes: ['id', 'invoice_number', 'total_amount', 'paid_amount', 'remaining_amount', 'status', 'branch_id', 'owner_id', 'issued_at'],
         include: [
-          { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'provinsi_id'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
-          { model: User, as: 'User', attributes: ['id', 'name'], required: false }
+          { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'provinsi_id', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+          { model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }
         ],
         raw: false
       }),
@@ -209,6 +209,11 @@ const getAnalytics = asyncHandler(async (req, res) => {
     const start = (pag.page - 1) * pag.limit;
     const rows = (invoices || []).slice(start, start + pag.limit).map((inv) => {
       const j = inv.toJSON ? inv.toJSON() : inv;
+      const wilayahName = j.Branch?.Provinsi?.Wilayah?.name;
+      const provinsiName = j.Branch?.Provinsi?.name;
+      const city = j.Branch?.city;
+      const companyName = j.User?.company_name || j.User?.name || j.Branch?.name || null;
+      const companyWilayahLine = [wilayahName, provinsiName, city].filter(Boolean).join(' · ') || null;
       return {
         id: j.id,
         invoice_number: j.invoice_number,
@@ -218,6 +223,10 @@ const getAnalytics = asyncHandler(async (req, res) => {
         status: j.status,
         branch_name: j.Branch?.name,
         owner_name: j.User?.name,
+        company_name: companyName,
+        wilayah_name: wilayahName,
+        provinsi_name: provinsiName,
+        company_wilayah_line: companyWilayahLine,
         issued_at: j.issued_at
       };
     });

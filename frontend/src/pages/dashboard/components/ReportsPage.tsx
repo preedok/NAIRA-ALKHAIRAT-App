@@ -31,7 +31,8 @@ import {
   type ReportPeriod,
   type ReportsAnalyticsData
 } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { formatIDR, formatInvoiceDisplay } from '../../../utils';
+import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -510,7 +511,7 @@ const ReportsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Detail table */}
+          {/* Detail table — struktur sama seperti tabel Invoice (OrdersInvoicesPage) */}
           <Card className="travel-card">
             <CardSectionHeader
               icon={<FileText className="w-6 h-6" />}
@@ -542,25 +543,30 @@ const ReportsPage: React.FC = () => {
               <Table
                 columns={[
                   { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-                  { id: 'branch_name', label: 'Cabang', align: 'left' },
                   { id: 'owner_name', label: 'Owner', align: 'left' },
-                  { id: 'total_amount', label: 'Total', align: 'right' },
-                  { id: 'paid_amount', label: 'Terbayar', align: 'right' },
-                  { id: 'remaining_amount', label: 'Sisa', align: 'right' },
-                  { id: 'status', label: 'Status', align: 'left' }
+                  { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
+                  { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
+                  { id: 'paid_amount', label: 'Dibayar (IDR·SAR·USD)', align: 'right' },
+                  { id: 'remaining_amount', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
+                  { id: 'status', label: 'Status Invoice', align: 'left' },
+                  { id: 'issued_at', label: 'Tgl', align: 'left' }
                 ] as TableColumn[]}
                 data={rows}
                 emptyMessage="Tidak ada data"
                 pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-mono text-slate-900">{inv.invoice_number}</td>
-                    <td className="py-3 px-4 text-slate-700">{inv.branch_name ?? '-'}</td>
-                    <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '-'}</td>
-                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.total_amount ?? 0)}</td>
+                    <td className="py-3 px-4 font-mono font-semibold text-slate-900">{formatInvoiceDisplay(inv.status, inv.invoice_number, INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '–'}</td>
+                    <td className="py-3 px-4 text-slate-700 text-sm">
+                      <div>{inv.company_name ?? '–'}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">{inv.company_wilayah_line ?? '–'}</div>
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(inv.total_amount ?? 0)}</td>
                     <td className="py-3 px-4 text-right text-primary-600">{formatIDR(inv.paid_amount ?? 0)}</td>
                     <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.remaining_amount ?? 0)}</td>
-                    <td className="py-3 px-4"><Badge variant="info">{inv.status ?? '-'}</Badge></td>
+                    <td className="py-3 px-4"><Badge variant="info">{INVOICE_STATUS_LABELS[inv.status] ?? inv.status ?? '–'}</Badge></td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at ? new Date(inv.issued_at).toLocaleDateString('id-ID') : '–'}</td>
                   </tr>
                 )}
               />
@@ -568,51 +574,32 @@ const ReportsPage: React.FC = () => {
               <Table
                 columns={[
                   { id: 'order_number', label: 'No. Order', align: 'left' },
-                  { id: 'wilayah_name', label: 'Wilayah', align: 'left' },
-                  { id: 'provinsi_name', label: 'Provinsi', align: 'left' },
-                  { id: 'branch_name', label: 'Cabang', align: 'left' },
                   { id: 'owner_name', label: 'Owner', align: 'left' },
-                  { id: 'role', label: 'Role', align: 'left' },
-                  { id: 'subtotal', label: 'Subtotal', align: 'right' },
-                  { id: 'discount', label: 'Diskon', align: 'right' },
-                  { id: 'penalty_amount', label: 'Penalty', align: 'right' },
-                  { id: 'total_amount', label: 'Total', align: 'right' },
-                  { id: 'currency', label: 'Currency', align: 'left' },
-                  { id: 'total_jamaah', label: 'Jamaah', align: 'right' },
-                  { id: 'item_types', label: 'Item Types', align: 'left' },
-                  { id: 'created_at', label: 'Tanggal', align: 'left' },
-                  { id: 'status', label: 'Status', align: 'left' }
+                  { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
+                  { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
+                  { id: 'status', label: 'Status', align: 'left' },
+                  { id: 'created_at', label: 'Tgl', align: 'left' }
                 ] as TableColumn[]}
                 data={rows}
                 emptyMessage="Tidak ada data"
                 pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
-                renderRow={(o: any) => (
-                  <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-mono text-slate-900">{o.order_number}</td>
-                    <td className="py-3 px-4 text-slate-700">{o.wilayah_name ?? '-'}</td>
-                    <td className="py-3 px-4 text-slate-700">{o.provinsi_name ?? '-'}</td>
-                    <td className="py-3 px-4 text-slate-700">{o.branch_name ?? '-'}</td>
-                    <td className="py-3 px-4 text-slate-700">{o.owner_name ?? '-'}</td>
-                    <td className="py-3 px-4 text-slate-700">{o.role ?? '-'}</td>
-                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(o.subtotal ?? 0)}</td>
-                    <td className="py-3 px-4 text-right text-slate-700">{o.discount ? formatIDR(o.discount) : '-'}</td>
-                    <td className="py-3 px-4 text-right text-slate-700">{o.penalty_amount ? formatIDR(o.penalty_amount) : '-'}</td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(o.total_amount ?? 0)}</td>
-                    <td className="py-3 px-4 text-slate-700">{o.currency ?? 'IDR'}</td>
-                    <td className="py-3 px-4 text-right text-slate-700">{o.total_jamaah ?? 0}</td>
-                    <td className="py-3 px-4">
-                      {o.item_types && o.item_types.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {o.item_types.map((t: string, i: number) => (
-                            <Badge key={i} variant="info" className="text-xs">{t}</Badge>
-                          ))}
-                        </div>
-                      ) : <span className="text-slate-400">-</span>}
-                    </td>
-                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID') : '-'}</td>
-                    <td className="py-3 px-4"><Badge variant="info">{o.status ?? '-'}</Badge></td>
-                  </tr>
-                )}
+                renderRow={(o: any) => {
+                  const companyLine = o.owner_company || o.branch_name || '–';
+                  const wilayahLine = [o.wilayah_name, o.provinsi_name].filter(Boolean).join(' · ') || '–';
+                  return (
+                    <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 font-mono font-semibold text-slate-900">{o.order_number}</td>
+                      <td className="py-3 px-4 text-slate-700">{o.owner_name ?? '–'}</td>
+                      <td className="py-3 px-4 text-slate-700 text-sm">
+                        <div>{companyLine}</div>
+                        <div className="text-xs text-slate-600 mt-0.5">{wilayahLine}</div>
+                      </td>
+                      <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(o.total_amount ?? 0)}</td>
+                      <td className="py-3 px-4"><Badge variant="info">{o.status ?? '–'}</Badge></td>
+                      <td className="py-3 px-4 whitespace-nowrap text-slate-700">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '–'}</td>
+                    </tr>
+                  );
+                }}
               />
             )}
             </div>
