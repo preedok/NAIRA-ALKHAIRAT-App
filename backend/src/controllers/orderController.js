@@ -996,11 +996,10 @@ const destroy = asyncHandler(async (req, res) => {
     if (action === 'to_balance') {
       cancellationHandlingNote = `Dipindahkan ke saldo akun. Jumlah: Rp ${fmt(paidAmount)}`;
     } else if (action === 'refund') {
-      cancellationHandlingNote = `Refund. Jumlah: Rp ${fmt(refundAmount)}. Diproses di menu Refund.`;
       if (reallocationAdded && reallocationAdded.target_invoice_number) {
-        cancellationHandlingNote += ` Sisa Rp ${fmt(reallocationAdded.amount)} dialihkan ke invoice ${reallocationAdded.target_invoice_number}.`;
+        cancellationHandlingNote = `Sisa Rp ${fmt(reallocationAdded.amount)} dialihkan ke invoice ${reallocationAdded.target_invoice_number}.`;
       } else if (balanceAdded != null && balanceAdded.amount != null) {
-        cancellationHandlingNote += ` Sisa Rp ${fmt(balanceAdded.amount)} dipindahkan ke saldo akun.`;
+        cancellationHandlingNote = `Sisa Rp ${fmt(balanceAdded.amount)} dipindahkan ke saldo akun.`;
       }
     } else if (action === 'allocate_to_order' && reallocationAdded) {
       cancellationHandlingNote = `Dipindahkan ke invoice ${reallocationAdded.target_invoice_number || 'lain'}. Jumlah: Rp ${fmt(reallocationAdded.amount)}`;

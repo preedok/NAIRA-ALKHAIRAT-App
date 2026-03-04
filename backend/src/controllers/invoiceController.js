@@ -433,7 +433,7 @@ const list = asyncHandler(async (req, res) => {
   if (invoiceIds.length > 0) {
     const refundsList = await Refund.findAll({
       where: { invoice_id: { [Op.in]: invoiceIds } },
-      attributes: ['invoice_id', 'status'],
+      attributes: ['invoice_id', 'status', 'amount'],
       order: [['created_at', 'DESC']],
       raw: true
     });
