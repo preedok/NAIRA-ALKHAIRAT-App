@@ -26,6 +26,8 @@ import type { TableColumn } from '../../../types';
 import { AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import {
   reportsApi,
+  invoicesApi,
+  businessRulesApi,
   type ReportType,
   type ReportGroupBy,
   type ReportPeriod,
@@ -110,6 +112,10 @@ const ReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invoiceList, setInvoiceList] = useState<any[]>([]);
+  const [invoicePagination, setInvoicePagination] = useState<{ page: number; limit: number; total: number; totalPages: number }>({ page: 1, limit: 20, total: 0, totalPages: 1 });
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
 
   const isSuperAdmin = user?.role === 'super_admin';
 
@@ -131,6 +137,41 @@ const ReportsPage: React.FC = () => {
   useEffect(() => {
     loadFilters();
   }, [loadFilters]);
+
+  useEffect(() => {
+    businessRulesApi.get({}).then((r) => {
+      const d = (r.data as any)?.data;
+      if (d && (d.SAR_TO_IDR != null || d.USD_TO_IDR != null)) setCurrencyRates({ SAR_TO_IDR: d.SAR_TO_IDR, USD_TO_IDR: d.USD_TO_IDR });
+    }).catch(() => {});
+  }, []);
+
+  const fetchInvoiceList = useCallback(async () => {
+    if (reportType === 'logs') return;
+    setLoadingInvoices(true);
+    try {
+      const params: Record<string, string | number | undefined> = { page, limit, sort_by: 'created_at', sort_order: 'desc' };
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      if (branchId) params.branch_id = branchId;
+      if (wilayahId) params.wilayah_id = wilayahId;
+      if (provinsiId) params.provinsi_id = provinsiId;
+      const res = await invoicesApi.list(params);
+      const payload = res.data as { success?: boolean; data?: any[]; pagination?: { page: number; limit: number; total: number; totalPages: number } };
+      if (payload.success && Array.isArray(payload.data)) {
+        setInvoiceList(payload.data);
+        if (payload.pagination) setInvoicePagination(payload.pagination);
+      } else setInvoiceList([]);
+    } catch {
+      setInvoiceList([]);
+    } finally {
+      setLoadingInvoices(false);
+    }
+  }, [reportType, dateFrom, dateTo, branchId, wilayahId, provinsiId, page, limit]);
+
+  useEffect(() => {
+    if (reportType && reportType !== 'logs') fetchInvoiceList();
+    else setInvoiceList([]);
+  }, [reportType, fetchInvoiceList]);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number | undefined> = {
@@ -255,6 +296,8 @@ const ReportsPage: React.FC = () => {
   const rows = data?.rows ?? [];
   const pagination = data?.pagination ?? { page: 1, limit: 20, total: 0, totalPages: 1 };
   const series = data?.series ?? [];
+  const detailInvoiceRows = reportType === 'logs' ? [] : invoiceList;
+  const detailInvoicePagination = reportType === 'logs' ? null : invoicePagination;
 
   return (
     <div className="flex flex-col min-h-0 w-full max-w-full space-y-6">
@@ -541,81 +584,38 @@ const ReportsPage: React.FC = () => {
                   </tr>
                 )}
               />
-            ) : reportType === 'financial' ? (
+            ) : (
               <Table
                 columns={[
                   { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-                  { id: 'owner_name', label: 'Owner', align: 'left' },
+                  { id: 'owner', label: 'Owner', align: 'left' },
                   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
-                  { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
-                  { id: 'paid_amount', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
-                  { id: 'remaining_amount', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
-                  { id: 'issued_at', label: 'Tgl', align: 'left' }
+                  { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
+                  { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
+                  { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
+                  { id: 'date', label: 'Tgl', align: 'left' }
                 ] as TableColumn[]}
-                data={rows}
-                emptyMessage="Tidak ada data"
-                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
+                data={loadingInvoices ? [] : detailInvoiceRows}
+                emptyMessage={loadingInvoices ? 'Memuat...' : 'Tidak ada data'}
+                pagination={detailInvoicePagination && detailInvoicePagination.total > 0 ? { total: detailInvoicePagination.total, page: detailInvoicePagination.page, limit: detailInvoicePagination.limit, totalPages: detailInvoicePagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">
                       <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                     </td>
-                    <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '–'}</td>
+                    <td className="py-3 px-4 text-slate-700">{inv.User?.name ?? inv.User?.company_name ?? '–'}</td>
                     <td className="py-3 px-4 text-slate-700 text-sm">
-                      <div>{inv.company_name ?? '–'}</div>
-                      <div className="text-xs text-slate-600 mt-0.5">{inv.company_wilayah_line ?? '–'}</div>
+                      <div>{inv.User?.company_name ?? inv.User?.name ?? '–'}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">{inv.Branch?.Provinsi?.Wilayah?.name && inv.Branch?.Provinsi?.name ? `${inv.Branch.Provinsi.Wilayah.name} · ${inv.Branch.Provinsi.name}` : (inv.Branch?.name ?? '–')}</div>
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(inv.total_amount ?? 0)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(parseFloat(inv.total_amount) || 0)}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <InvoiceStatusRefundCell inv={inv} align="right" />
+                      <InvoiceStatusRefundCell inv={inv} currencyRates={currencyRates} align="right" />
                     </td>
-                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(inv.remaining_amount ?? 0)}</td>
-                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at ? new Date(inv.issued_at).toLocaleDateString('id-ID') : '–'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(parseFloat(inv.remaining_amount) || 0)}</td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at || inv.created_at ? new Date(inv.issued_at || inv.created_at).toLocaleDateString('id-ID') : '–'}</td>
                   </tr>
                 )}
-              />
-            ) : (
-              <Table
-                columns={[
-                  { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-                  { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
-                  { id: 'owner_name', label: 'Owner', align: 'left' },
-                  { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
-                  { id: 'total_amount', label: 'Total (IDR·SAR·USD)', align: 'right' },
-                  { id: 'created_at', label: 'Tgl', align: 'left' }
-                ] as TableColumn[]}
-                data={rows}
-                emptyMessage="Tidak ada data"
-                pagination={pagination.total > 0 ? { total: pagination.total, page: pagination.page, limit: pagination.limit, totalPages: pagination.totalPages, onPageChange: setPage, onLimitChange: (l) => { setLimit(l); setPage(1); } } : undefined}
-                renderRow={(o: any) => {
-                  const companyLine = o.owner_company || o.branch_name || '–';
-                  const wilayahLine = [o.wilayah_name, o.provinsi_name].filter(Boolean).join(' · ') || '–';
-                  const invForCell = {
-                    status: o.invoice_status ?? o.status,
-                    invoice_number: o.invoice_number,
-                    paid_amount: o.paid_amount,
-                    total_amount: o.invoice_total_amount ?? o.total_amount,
-                    cancelled_refund_amount: o.cancelled_refund_amount,
-                    Refunds: o.Refunds ?? []
-                  };
-                  return (
-                    <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4">
-                        <InvoiceNumberCell inv={invForCell} statusLabels={INVOICE_STATUS_LABELS} compact />
-                      </td>
-                      <td className="py-3 px-4 text-right align-top">
-                        <InvoiceStatusRefundCell inv={invForCell} align="right" />
-                      </td>
-                      <td className="py-3 px-4 text-slate-700">{o.owner_name ?? '–'}</td>
-                      <td className="py-3 px-4 text-slate-700 text-sm">
-                        <div>{companyLine}</div>
-                        <div className="text-xs text-slate-600 mt-0.5">{wilayahLine}</div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(o.total_amount ?? 0)}</td>
-                      <td className="py-3 px-4 whitespace-nowrap text-slate-700">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '–'}</td>
-                    </tr>
-                  );
-                }}
               />
             )}
             </div>

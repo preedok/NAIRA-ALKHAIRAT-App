@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
-const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
+const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, PaymentReallocation, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
 const { INVOICE_STATUS } = require('../constants');
 
 // Role accounting bekerja di pusat: filter cabang untuk lihat order/invoice per cabang atau seluruh cabang.
@@ -1202,7 +1202,10 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
     include: [
       branchIncludeExport,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
-      { model: Order, as: 'Order', required: true, where: orderWhere, include: [orderItemInclude] }
+      { model: Order, as: 'Order', required: true, where: orderWhere, attributes: ['id', 'order_number', 'status', 'currency', 'total_amount'], include: [orderItemInclude] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] },
+      { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }] },
+      { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }] }
     ]
   });
 
@@ -1258,6 +1261,59 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
   Object.values(byOwner).forEach(b => sheet.addRow([b.owner_name, b.revenue]));
   sheet.addRows(['', '', ['Per Jenis Produk', '']]);
   Object.entries(byProductType).forEach(([k, v]) => sheet.addRow([k.charAt(0).toUpperCase() + k.slice(1), v]));
+
+  // Tab "Detail Invoice": semua kolom data invoice sesuai GET invoice (filter sama: semua atau sesuai filter yang dipilih)
+  const INVOICE_STATUS_LABELS = { draft: 'Draft', tentative: 'Tagihan DP', partial_paid: 'Pembayaran DP', paid: 'Lunas', processing: 'Processing', completed: 'Completed', overdue: 'Overdue', canceled: 'Dibatalkan', cancelled: 'Dibatalkan', cancelled_refund: 'Dibatalkan Refund', refunded: 'Refund Dana', order_updated: 'Order Diupdate', overpaid: 'Kelebihan Bayar', overpaid_transferred: 'Pindahan (Sumber)', overpaid_received: 'Pindahan (Penerima)', refund_canceled: 'Dibatalkan refund', overpaid_refund_pending: 'Sisa Pengembalian' };
+  const REFUND_STATUS_LABELS = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
+  const detailSheet = workbook.addWorksheet('Detail Invoice', { views: [{ state: 'frozen', ySplit: 1 }] });
+  const detailHeaders = [
+    'No. Invoice', 'Status Invoice', 'Total (IDR)', 'Dibayar (IDR)', 'Sisa (IDR)', 'DP %', 'DP Amount', 'Jatuh Tempo DP', 'Tgl Invoice', 'Tgl Buat',
+    'Owner', 'Perusahaan', 'Cabang', 'Wilayah', 'Provinsi', 'No. Order', 'Status Order', 'Mata Uang', 'Total Order',
+    'Catatan Pembatalan', 'Jumlah Refund Dibatalkan', 'Status Refund', 'Jumlah Refund', 'Dana Dipindahkan Ke', 'Dana Diterima Dari', 'Catatan', 'Blocked'
+  ];
+  detailSheet.columns = detailHeaders.map((h, i) => ({ header: h, key: `col${i}`, width: i === 0 ? 18 : i >= 19 && i <= 24 ? 28 : 14 }));
+  detailSheet.getRow(1).font = { bold: true };
+
+  invoices.forEach((inv) => {
+    const j = inv.get ? inv.get({ plain: true }) : inv;
+    const refunds = (j.Refunds || []).slice(0, 10);
+    const completedRefund = refunds.find((r) => r.status === 'refunded');
+    const statusRefundLabel = completedRefund ? 'Sudah direfund' : (refunds[0] ? (REFUND_STATUS_LABELS[refunds[0].status] || refunds[0].status) : '');
+    const refundAmountStr = completedRefund && completedRefund.amount != null ? String(completedRefund.amount) : (refunds[0] && refunds[0].amount != null ? String(refunds[0].amount) : '');
+    const reallocOut = (j.ReallocationsOut || []).map((r) => `${r.TargetInvoice?.invoice_number || '-'}: ${r.amount || 0}`).join('; ');
+    const reallocIn = (j.ReallocationsIn || []).map((r) => `${r.SourceInvoice?.invoice_number || '-'}: ${r.amount || 0}`).join('; ');
+    const statusLabel = INVOICE_STATUS_LABELS[j.status] || j.status || '';
+
+    detailSheet.addRow([
+      j.invoice_number || '',
+      statusLabel,
+      parseFloat(j.total_amount) || 0,
+      parseFloat(j.paid_amount) || 0,
+      parseFloat(j.remaining_amount) || 0,
+      j.dp_percentage != null ? j.dp_percentage : '',
+      j.dp_amount != null ? parseFloat(j.dp_amount) : '',
+      j.due_date_dp ? new Date(j.due_date_dp).toLocaleDateString('id-ID') : '',
+      j.issued_at ? new Date(j.issued_at).toLocaleDateString('id-ID') : '',
+      j.created_at ? new Date(j.created_at).toLocaleDateString('id-ID') : '',
+      j.User?.name || '',
+      j.User?.company_name || '',
+      j.Branch?.name || '',
+      j.Branch?.Provinsi?.Wilayah?.name || '',
+      j.Branch?.Provinsi?.name || '',
+      j.Order?.order_number || '',
+      j.Order?.status || '',
+      j.Order?.currency || 'IDR',
+      j.Order?.total_amount != null ? parseFloat(j.Order.total_amount) : '',
+      j.cancellation_handling_note || '',
+      j.cancelled_refund_amount != null ? parseFloat(j.cancelled_refund_amount) : '',
+      statusRefundLabel,
+      refundAmountStr,
+      reallocOut || '',
+      reallocIn || '',
+      j.notes || '',
+      j.is_blocked ? 'Ya' : 'Tidak'
+    ]);
+  });
 
   const buf = await workbook.xlsx.writeBuffer();
   const now = new Date();
