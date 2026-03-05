@@ -89,15 +89,8 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
 
-  const where = { order_id: orderIdsFromHotel, branch_id: { [Op.in]: branchIds } };
-  // Hanya tampilkan invoice dengan status pembayaran_dp (sudah ada bukti bayar DP) di menu Progress hotel
-  const { DP_PAYMENT_STATUS } = require('../constants');
-  const ordersWithDpPaid = await Order.findAll({
-    where: { id: orderIdsFromHotel, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
-    attributes: ['id'],
-    raw: true
-  }).then(rows => rows.map(r => r.id));
-  where.order_id = ordersWithDpPaid.length ? { [Op.in]: ordersWithDpPaid } : { [Op.in]: [] };
+  const where = { order_id: { [Op.in]: orderIdsFromHotel }, branch_id: { [Op.in]: branchIds } };
+  // Tampilkan invoice yang sudah ada pembayaran DP (status partial_paid ke atas) — pakai status invoice sebagai sumber kebenaran
   const statusesForProgress = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
   if (status && statusesForProgress.includes(status)) {
     where.status = status;
@@ -107,6 +100,8 @@ const listInvoices = asyncHandler(async (req, res) => {
   // Progress: jangan tampilkan invoice yang sudah dibatalkan atau sudah direfund
   const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
   if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
+  where[Op.and] = where[Op.and] || [];
+  where[Op.and].push({ status: { [Op.notIn]: ['canceled', 'cancelled', 'cancelled_refund'] } });
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);

@@ -39,9 +39,11 @@ const getDashboard = asyncHandler(async (req, res) => {
   const pendingList = [];
   const orderIdsWithDpPaid = new Set();
 
+  const cancelledStatuses = ['canceled', 'cancelled', 'cancelled_refund'];
   orderItemRows.forEach((item) => {
     const inv = item.Order?.Invoice;
     if (!inv || !statusWithDpPaidList.includes(inv.status)) return;
+    if (cancelledStatuses.includes((inv.status || '').toLowerCase())) return;
     if (refundedInvoiceIds.has(inv.id)) return;
     orderIdsWithDpPaid.add(item.Order?.id);
     totalHandlingItems += 1;

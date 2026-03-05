@@ -1504,7 +1504,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 ? [{ id: 'view-refund', label: 'Lihat Invoice Refund', icon: <Receipt className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice_refund'); fetchInvoiceDetail(inv.id); } }]
                                 : []),
                               { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                              ...(canOrderAction && inv.order_id
+                              ...(canOrderAction && inv.order_id && !['canceled', 'cancelled', 'cancelled_refund'].includes((inv.status || '').toLowerCase())
                                 ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
                                 : []),
                             ].filter(Boolean) as ActionsMenuItem[]}

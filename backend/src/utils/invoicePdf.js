@@ -72,6 +72,8 @@ const STATUS_LABELS = {
   completed: 'Completed',
   overdue: 'Overdue',
   canceled: 'Dibatalkan',
+  cancelled: 'Dibatalkan',
+  cancelled_refund: 'Dibatalkan Refund',
   refunded: 'Refund Dana',
   order_updated: 'Order Diupdate',
   overpaid: 'Kelebihan Bayar',
@@ -80,6 +82,31 @@ const STATUS_LABELS = {
   refund_canceled: 'Refund Dibatalkan',
   overpaid_refund_pending: 'Sisa Pengembalian'
 };
+
+const CANCELLATION_TO_BALANCE_LABEL = 'Direfund ke saldo akun';
+const REALLOCATION_OUT_LABEL = 'Dana dipindahkan ke invoice lain';
+const REFUNDED_LABEL = 'Sudah direfund';
+
+/**
+ * Status efektif untuk tampilan (PDF/list): prioritaskan refund/saldo/realloc seperti di frontend.
+ * @param {object} data - invoice data dengan Refunds, cancellation_handling_note, ReallocationsOut
+ * @returns {string}
+ */
+function getEffectiveStatusLabel(data) {
+  const status = (data.status || '').toLowerCase();
+  const note = (data.cancellation_handling_note || '').toLowerCase();
+  const refunds = data.Refunds || [];
+  const reallocOut = data.ReallocationsOut || [];
+
+  const hasRefundCompleted = refunds.some((r) => (r.status || '').toLowerCase() === 'refunded');
+  const isRefundToBalance = note.includes('saldo akun') || note.includes('dipindahkan ke saldo');
+  const isReallocationOut = reallocOut.length > 0 && (['canceled', 'cancelled', 'cancelled_refund'].includes(status) || note.includes('invoice lain'));
+
+  if (hasRefundCompleted) return REFUNDED_LABEL;
+  if (isRefundToBalance) return CANCELLATION_TO_BALANCE_LABEL;
+  if (isReallocationOut) return REALLOCATION_OUT_LABEL;
+  return STATUS_LABELS[data.status] || data.status || status;
+}
 
 function formatAmount(amount, currency) {
   const n = parseFloat(amount || 0);
@@ -161,7 +188,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   y = 88;
 
   // ---- Info utama: grid 2 baris x 3 kolom (rapi, tidak tumpang tindih) ----
-  const statusLabel = STATUS_LABELS[data.status] || data.status;
+  const statusLabel = getEffectiveStatusLabel(data);
   const infoColW = pageWidth / 3;
   const infoX = (col) => margin + col * infoColW + 10;
   doc.fontSize(9).fillColor('#64748b');
