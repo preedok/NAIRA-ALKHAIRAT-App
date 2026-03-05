@@ -219,6 +219,8 @@ async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, met
 
 /**
  * GET /api/v1/invoices
+ * Sumber utama daftar transaksi: semua GET yang menampilkan order/invoice terintegrasi dengan data invoice ini.
+ * Dashboard, report, accounting, dan divisi (hotel/visa/ticket/bus) mengacu data dari invoice.
  */
 const ALLOWED_SORT = ['invoice_number', 'created_at', 'total_amount', 'status'];
 

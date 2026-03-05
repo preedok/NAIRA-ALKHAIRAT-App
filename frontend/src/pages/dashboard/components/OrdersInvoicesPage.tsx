@@ -1155,9 +1155,9 @@ const OrdersInvoicesPage: React.FC = () => {
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
               label="Total Tagihan"
-              value={loadingSummary ? '...' : formatIDR(s.total_amount)}
+              value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
               iconClassName="bg-slate-100 text-slate-600"
-              subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
+              subtitle={!loadingSummary ? `Hanya yang belum dibayar · ≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
             />
             <StatCard
               icon={<CreditCard className="w-5 h-5" />}
@@ -2342,11 +2342,22 @@ const OrdersInvoicesPage: React.FC = () => {
                                   onClick={() => {
                                     refundsApi.getProofFile(r.id)
                                       .then((res) => {
+                                        const contentType = (res.headers?.['content-type'] || '').toLowerCase();
+                                        if (res.status !== 200 || !(res.data instanceof Blob) || contentType.includes('application/json')) {
+                                          showToast('Gagal unduh bukti refund', 'error');
+                                          return;
+                                        }
                                         const blob = res.data as Blob;
+                                        const disp = res.headers?.['content-disposition'];
+                                        let name = `bukti-refund-${viewInvoice?.invoice_number || r.id}.pdf`;
+                                        if (typeof disp === 'string' && /filename[*]?=(?:UTF-8'')?["']?([^"'\s;]+)/i.test(disp)) {
+                                          const m = disp.match(/filename[*]?=(?:UTF-8'')?["']?([^"'\s;]+)/i);
+                                          if (m?.[1]) name = m[1].replace(/^["']|["']$/g, '');
+                                        }
                                         const url = window.URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;
-                                        a.download = `bukti-refund-${viewInvoice?.invoice_number || r.id}.pdf`;
+                                        a.download = name;
                                         a.click();
                                         window.URL.revokeObjectURL(url);
                                       })

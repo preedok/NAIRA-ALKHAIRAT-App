@@ -253,6 +253,7 @@ const listOrders = asyncHandler(async (req, res) => {
   const orders = await Order.findAll({
     where,
     include: [
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       {
@@ -281,7 +282,7 @@ const getOrder = asyncHandler(async (req, res) => {
   const order = await Order.findOne({
     where: { id: req.params.id },
     include: [
-      { model: Invoice, as: 'Invoice', attributes: ['id'], required: true },
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: true },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch' },
       {

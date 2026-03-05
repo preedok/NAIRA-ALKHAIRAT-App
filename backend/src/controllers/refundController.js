@@ -379,15 +379,18 @@ const getProofFile = asyncHandler(async (req, res) => {
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
 
   const urlNorm = (r.proof_file_url || '').replace(/\\/g, '/').trim();
+  let filename = null;
   const match = urlNorm.match(/refund-proofs\/?(.+)$/i);
-  const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : null;
-  if (!filename) return res.status(404).json({ success: false, message: 'Path tidak valid' });
+  if (match) filename = match[1].replace(/^\/+/, '').split('/').pop();
+  if (!filename) filename = path.basename(urlNorm);
+  if (!filename || filename === '.' || filename === '..') return res.status(404).json({ success: false, message: 'Path tidak valid' });
   const filePath = path.join(refundProofDir, filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada di server' });
   const ext = path.extname(filePath).toLowerCase();
   const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  const safeName = filename.replace(/[^\w.\-]/g, '_');
   res.setHeader('Content-Type', mime);
-  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');
   fs.createReadStream(filePath).pipe(res);
 });

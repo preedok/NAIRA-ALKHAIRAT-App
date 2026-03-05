@@ -137,11 +137,22 @@ const RefundsPage: React.FC = () => {
   const handleDownloadProof = (id: string) => {
     refundsApi.getProofFile(id)
       .then((res) => {
+        const contentType = (res.headers?.['content-type'] || '').toLowerCase();
+        if (res.status !== 200 || !(res.data instanceof Blob) || contentType.includes('application/json')) {
+          showToast('Gagal unduh bukti refund. File tidak ditemukan.', 'error');
+          return;
+        }
         const blob = res.data as Blob;
+        const disp = res.headers?.['content-disposition'];
+        let name = `bukti-refund-${id.slice(-6)}.pdf`;
+        if (typeof disp === 'string' && /filename/i.test(disp)) {
+          const m = disp.match(/filename[*]?=(?:UTF-8'')?["']?([^"'\s;]+)/i);
+          if (m?.[1]) name = m[1].replace(/^["']|["']$/g, '');
+        }
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `bukti-refund-${id.slice(-6)}.pdf`;
+        a.download = name;
         a.click();
         window.URL.revokeObjectURL(url);
       })

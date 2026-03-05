@@ -149,10 +149,10 @@ const InvoiceDashboard: React.FC = () => {
       </div>
 
       {/* Ringkasan nominal (summary) — pakai StatCard agar seragam */}
-      {summary && (summary.total_amount > 0 || summary.total_paid > 0) && (
+      {summary && (summary.total_remaining > 0 || summary.total_paid > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Tagihan" value={formatIDR(summary.total_amount)} />
-          <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Total Terbayar" value={formatIDR(summary.total_paid)} />
+          <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Tagihan" value={formatIDR(summary.total_remaining)} subtitle="Hanya yang belum dibayar" />
+          <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Dibayar" value={formatIDR(summary.total_paid)} />
           <StatCard icon={<Wallet className="w-5 h-5" />} label="Sisa" value={formatIDR(summary.total_remaining)} />
         </div>
       )}

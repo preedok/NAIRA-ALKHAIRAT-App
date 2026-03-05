@@ -134,6 +134,8 @@ function diffGrouped(beforeMap, afterMap) {
 
 /**
  * GET /api/v1/orders
+ * Acuan data: hanya order yang punya invoice (semua GET order/transaksi terintegrasi dengan data invoice).
+ * Filter/tampil pakai nomor invoice; response selalu sertakan Invoice.invoice_number & status.
  */
 const ALLOWED_SORT = ['created_at', 'total_amount', 'status'];
 

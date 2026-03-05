@@ -261,12 +261,13 @@ const getAnalytics = asyncHandler(async (req, res) => {
     { model: User, as: 'User', attributes: ['id', 'name', 'role', 'email', 'company_name'] },
     { model: OrderItem, as: 'OrderItems', attributes: ['id', 'type', 'quantity', 'unit_price', 'subtotal'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }] }
   ];
-  // Selalu sertakan Invoice + Refunds agar nomor invoice, status & status refund tampil sama seperti menu Invoice
+  // Acuan data: hanya order yang punya invoice (semua GET terintegrasi dengan data invoice)
+  const orderBasedTypes = ['revenue', 'orders', 'partners', 'jamaah'];
   const invoiceInclude = {
     model: Invoice,
     as: 'Invoice',
     attributes: ['id', 'invoice_number', 'status', 'paid_amount', 'total_amount', 'cancelled_refund_amount'],
-    required: report_type === 'revenue',
+    required: orderBasedTypes.includes(report_type),
     include: [{ model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] }]
   };
   orderInclude.push(invoiceInclude);
@@ -548,7 +549,8 @@ const exportReportExcel = asyncHandler(async (req, res) => {
     { model: User, as: 'User', attributes: ['name', 'role', 'email', 'company_name'] },
     { model: OrderItem, as: 'OrderItems', attributes: ['type', 'quantity'], required: false, include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false }] }
   ];
-  if (report_type === 'revenue') {
+  const orderBasedTypesExport = ['revenue', 'orders', 'partners', 'jamaah'];
+  if (orderBasedTypesExport.includes(report_type)) {
     excelOrderInclude.push({
       model: Invoice,
       as: 'Invoice',
@@ -590,7 +592,7 @@ const exportReportExcel = asyncHandler(async (req, res) => {
     const items = (j.OrderItems || []);
     const itemTypes = [...new Set(items.map((i) => i.type))].join(', ');
     sheet.addRow([
-      j.order_number,
+      j.Invoice?.invoice_number || '',
       j.Branch?.Provinsi?.Wilayah?.name || '',
       j.Branch?.Provinsi?.name || '',
       j.Branch?.name || '',
@@ -707,7 +709,8 @@ const exportReportPdf = asyncHandler(async (req, res) => {
     { model: Branch, as: 'Branch', attributes: ['name'] },
     { model: User, as: 'User', attributes: ['name'] }
   ];
-  if (report_type === 'revenue') {
+  const orderBasedTypesPdf = ['revenue', 'orders', 'partners', 'jamaah'];
+  if (orderBasedTypesPdf.includes(report_type)) {
     pdfOrderInclude.push({
       model: Invoice,
       as: 'Invoice',
