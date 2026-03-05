@@ -106,12 +106,26 @@ const getSupplier = asyncHandler(async (req, res) => {
   res.json({ success: true, data: s });
 });
 
+function generateSupplierCodeFromName(name) {
+  if (!name || !String(name).trim()) return 'SUP';
+  const s = String(name).trim().toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9-]/g, '');
+  return (s || 'SUP').slice(0, 30);
+}
+
 const createSupplier = asyncHandler(async (req, res) => {
   const { code, name, supplier_type, currency, term_of_payment_days, payable_account_id, is_active, meta } = req.body;
-  const existing = await AccountingSupplier.findOne({ where: { code } });
-  if (existing) return res.status(400).json({ success: false, message: 'Kode supplier sudah ada' });
+  const baseCode = (code && String(code).trim()) || generateSupplierCodeFromName(name);
+  let finalCode = baseCode.slice(0, 30);
+  let suffix = 1;
+  let existing = await AccountingSupplier.findOne({ where: { code: finalCode } });
+  while (existing) {
+    const base = baseCode.replace(/-+$/, '').slice(0, 26);
+    finalCode = `${base}-${suffix}`.slice(0, 30);
+    suffix += 1;
+    existing = await AccountingSupplier.findOne({ where: { code: finalCode } });
+  }
   const s = await AccountingSupplier.create({
-    code: code || name?.slice(0, 20),
+    code: finalCode,
     name,
     supplier_type: supplier_type || 'vendor',
     currency: currency || 'IDR',

@@ -23,7 +23,7 @@ const ProductHotelPage: React.FC = () => {
   const [openSeasonsForHotelId, setOpenSeasonsForHotelId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const canAddRoom = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
+  const canAddRoom = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'invoice_koordinator';
 
   const fetchHotels = useCallback(() => {
     setHotelsLoading(true);

@@ -155,7 +155,7 @@ const list = asyncHandler(async (req, res) => {
   const { rows, count } = await Refund.findAndCountAll({
     where,
     include: [
-      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'order_id', 'total_amount', 'paid_amount'], required: false },
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status', 'order_id', 'total_amount', 'paid_amount'], required: false },
       { model: Order, as: 'Order', attributes: ['id', 'order_number'], required: false },
       { model: User, as: 'Owner', attributes: ['id', 'name', 'email', 'company_name'], required: false },
       { model: User, as: 'RequestedBy', attributes: ['id', 'name'], required: false },

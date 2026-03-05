@@ -7,10 +7,20 @@ import React from 'react';
 import Badge from './Badge';
 import {
   INVOICE_STATUS_LABELS,
-  REFUND_STATUS_LABELS
+  REFUND_STATUS_LABELS,
+  CANCELLATION_TO_BALANCE_LABEL,
+  REALLOCATION_OUT_LABEL,
+  REALLOCATION_IN_LABEL,
+  REALLOCATION_OUT_STATUS_LABEL
 } from '../../utils/constants';
 import { formatIDR, formatSAR, formatUSD } from '../../utils/formatters';
 import { fromIDR, getRatesFromRates } from '../../utils/currencyConversion';
+
+export type ReallocationItem = {
+  amount: number | string;
+  TargetInvoice?: { invoice_number?: string };
+  SourceInvoice?: { invoice_number?: string };
+};
 
 export type InvoiceForStatusRefund = {
   status?: string;
@@ -19,10 +29,13 @@ export type InvoiceForStatusRefund = {
   total_amount_idr?: number | string | null;
   total_amount_sar?: number | string | null;
   cancelled_refund_amount?: number | string | null;
+  cancellation_handling_note?: string | null;
   is_draft_order?: boolean;
   Order?: { currency_rates_override?: { SAR_TO_IDR?: number; USD_TO_IDR?: number } };
   PaymentProofs?: Array<{ amount?: number | string; payment_location?: string; verified_status?: string; verified_at?: unknown }>;
   Refunds?: Array<{ status: string; amount?: number }>;
+  ReallocationsOut?: ReallocationItem[];
+  ReallocationsIn?: ReallocationItem[];
 };
 
 const getStatusBadge = (status: string): 'success' | 'warning' | 'info' | 'error' | 'default' => {
@@ -34,6 +47,39 @@ const getStatusBadge = (status: string): 'success' | 'warning' | 'info' | 'error
   };
   return (map[status] || 'default') as 'success' | 'warning' | 'info' | 'error' | 'default';
 };
+
+/** Label status dari data GET invoice (satu sumber kebenaran: refund ke saldo, pemindahan ke invoice lain, sudah direfund, atau status biasa). */
+export function getEffectiveInvoiceStatusLabel(inv: InvoiceForStatusRefund): string {
+  const st = (inv?.status || '').toLowerCase();
+  const refunds = (inv.Refunds || []) as { status: string }[];
+  const completedRefund = refunds.find((r: { status: string }) => r.status === 'refunded');
+  const isRefunded = !!completedRefund;
+  const note = (inv.cancellation_handling_note || '').toLowerCase();
+  const reallocOut = (inv.ReallocationsOut || []) as ReallocationItem[];
+  const hasNoteRefundToBalance = (note.includes('saldo akun') || note.includes('dipindahkan ke saldo')) && !isRefunded;
+  const isRefundToBalance = hasNoteRefundToBalance;
+  const hasNoteReallocOut = note.includes('dipindahkan ke invoice') || note.includes('dialihkan ke invoice') || note.includes('dialihkan ke ');
+  const isReallocationOut =
+    reallocOut.length > 0 &&
+    (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund' || hasNoteReallocOut) &&
+    !isRefunded;
+  const statusLabel =
+    st === 'cancelled_refund' || st === 'refund_canceled'
+      ? (INVOICE_STATUS_LABELS[inv?.status || ''] || 'Dibatalkan Refund')
+      : (INVOICE_STATUS_LABELS[inv?.status || ''] || inv?.status || '');
+  if (isRefunded) return 'Sudah direfund';
+  if (isRefundToBalance) return CANCELLATION_TO_BALANCE_LABEL;
+  if (isReallocationOut) return REALLOCATION_OUT_STATUS_LABEL;
+  return statusLabel;
+}
+
+/** Variant badge untuk status efektif (success jika sudah direfund, else dari status invoice). */
+export function getEffectiveInvoiceStatusBadgeVariant(inv: InvoiceForStatusRefund): 'success' | 'warning' | 'info' | 'error' | 'default' {
+  const refunds = (inv.Refunds || []) as { status: string }[];
+  const isRefunded = refunds.some((r: { status: string }) => r.status === 'refunded');
+  if (isRefunded) return 'success';
+  return getStatusBadge(inv?.status || '');
+}
 
 const getInvoiceStatusLabel = (inv: InvoiceForStatusRefund): string => {
   const st = (inv?.status || '').toLowerCase();
@@ -77,9 +123,31 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
   const latestRefund = refunds[0];
   const refundProcessLabel = latestRefund ? (REFUND_STATUS_LABELS[latestRefund.status] || latestRefund.status) : null;
   const isRefunded = !!completedRefund;
+  const note = (inv.cancellation_handling_note || '').toLowerCase();
+  const reallocOut = (inv.ReallocationsOut || []) as ReallocationItem[];
+  const reallocIn = (inv.ReallocationsIn || []) as ReallocationItem[];
+
+  // Refund ke saldo: pakai note sebagai sumber utama agar tidak tampil "Tagihan DP" saat sudah jadikan saldo (meski status belum di-update)
+  const hasNoteRefundToBalance = (note.includes('saldo akun') || note.includes('dipindahkan ke saldo')) && !isRefunded;
+  const isRefundToBalance = hasNoteRefundToBalance;
+
+  // Pemindahan ke invoice lain: ada ReallocationsOut dan invoice dibatalkan / note menyebut dialihkan
+  const hasNoteReallocOut = note.includes('dipindahkan ke invoice') || note.includes('dialihkan ke invoice') || note.includes('dialihkan ke ');
+  const isReallocationOut =
+    reallocOut.length > 0 &&
+    (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund' || hasNoteReallocOut) &&
+    !isRefunded;
+
   const displayRefundAmount = refundAmt > 0 ? refundAmt : (isRefunded && completedRefund && Number((completedRefund as any).amount)) || 0;
-  const showRefundBlock = isRefunded || (isCancelledRefund && displayRefundAmount > 0);
-  const effectiveStatusLabel = isRefunded ? 'Sudah direfund' : statusLabel;
+  const showRefundBlock = isRefunded || (isCancelledRefund && displayRefundAmount > 0 && !isRefundToBalance);
+  // Prioritas badge: Sudah direfund > Direfund ke saldo akun > Dana dipindahkan ke invoice lain > status biasa (jangan tampilkan Tagihan DP)
+  const effectiveStatusLabel = isRefunded
+    ? 'Sudah direfund'
+    : isRefundToBalance
+      ? CANCELLATION_TO_BALANCE_LABEL
+      : isReallocationOut
+        ? REALLOCATION_OUT_STATUS_LABEL
+        : statusLabel;
 
   const alignClass = align === 'right' ? 'items-end' : 'items-start';
   const textAlign = align === 'right' ? 'text-right' : 'text-left';
@@ -102,6 +170,34 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
           <span className="text-slate-400 text-sm">–</span>
           {pctPaid != null && <div className="text-xs text-slate-500">{pctPaid}% dari total tagihan</div>}
         </>
+      ) : isRefundToBalance ? (
+        (() => {
+          const amt = refundAmt || displayRefundAmount || 0;
+          const t = amountTriple(amt);
+          return (
+            <>
+              <div className="text-violet-700 font-medium text-sm">{formatIDR(amt)}</div>
+              <div className="text-xs text-slate-500">
+                <span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}
+              </div>
+              <div className="text-xs text-violet-600 mt-0.5">Dana masuk ke saldo akun owner</div>
+            </>
+          );
+        })()
+      ) : isReallocationOut && reallocOut.length > 0 ? (
+        (() => {
+          const totalMoved = reallocOut.reduce((s, r) => s + (parseFloat(String(r.amount || 0)) || 0), 0);
+          const t = amountTriple(totalMoved);
+          return (
+            <>
+              <div className="text-amber-700 font-medium text-sm">{formatIDR(totalMoved)}</div>
+              <div className="text-xs text-slate-500">
+                <span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}
+              </div>
+              <div className="text-xs text-amber-600 mt-0.5">Dana dipindahkan ke invoice lain</div>
+            </>
+          );
+        })()
       ) : showRefundBlock ? (
         displayRefundAmount > 0 ? (
           (() => {
@@ -133,6 +229,32 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
             </>
           );
         })()
+      )}
+      {reallocOut.length > 0 && (
+        <div className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5">
+          {reallocOut.map((r, i) => {
+            const amt = parseFloat(String(r.amount || 0)) || 0;
+            const targetNum = r.TargetInvoice?.invoice_number || '–';
+            return (
+              <div key={`out-${i}`} className="text-xs text-amber-700">
+                {REALLOCATION_OUT_LABEL} <strong>{targetNum}</strong>: {formatIDR(amt)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {reallocIn.length > 0 && (
+        <div className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5">
+          {reallocIn.map((r, i) => {
+            const amt = parseFloat(String(r.amount || 0)) || 0;
+            const sourceNum = r.SourceInvoice?.invoice_number || '–';
+            return (
+              <div key={`in-${i}`} className="text-xs text-emerald-700">
+                {REALLOCATION_IN_LABEL} <strong>{sourceNum}</strong>: {formatIDR(amt)}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

@@ -8,8 +8,9 @@ import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoR
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
-import { formatIDR, formatSAR, formatUSD, formatInvoiceNumberDisplay } from '../../../utils';
+import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 
 type ReportTab = 'ringkasan' | 'wilayah' | 'provinsi' | 'cabang' | 'owner' | 'produk' | 'periode' | 'detail';
 
@@ -866,26 +867,12 @@ const AccountingFinancialReportPage: React.FC = () => {
                 } : undefined}
                 renderRow={(inv) => {
                   const row = inv as typeof inv & { company_name?: string; wilayah_name?: string; provinsi_name?: string; city?: string; created_at?: string; order_updated_at?: string };
-                  const isNewInvoice = (i: typeof row) => {
-                    if (!i) return false;
-                    const at = i.issued_at || i.created_at;
-                    if (!at) return false;
-                    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
-                  };
-                  const getOrderChangeDate = (i: typeof row) => (i?.order_updated_at ? new Date(i.order_updated_at) : null);
+                  const invWithOrderUpdated = { ...inv, order_updated_at: row.order_updated_at };
                   const perusahaanLine2 = [row.wilayah_name, row.provinsi_name, row.city].filter(Boolean).join(' · ') || '–';
                   return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4 align-top">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {isNewInvoice(row) && <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">Baru</span>}
-                          {getOrderChangeDate(row) && (
-                            <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(row)!)}</span>
-                          )}
-                        </div>
-                      </div>
+                      <InvoiceNumberCell inv={invWithOrderUpdated} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                     </td>
                     <td className="py-3 px-4 align-top">{inv.owner_name || '-'}</td>
                     <td className="py-3 px-4 align-top text-sm">

@@ -15,7 +15,7 @@ import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
-import { InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import Badge from '../../../components/common/Badge';
 
 const STATUS_OPTIONS = [
@@ -229,16 +229,6 @@ const HotelWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus, filterHotelLocation]);
 
-  const isNewInvoice = (inv: any) => {
-    if (!inv) return false;
-    const at = inv.issued_at || inv.created_at;
-    if (!at) return false;
-    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
-  };
-  const getOrderChangeDate = (inv: any) => {
-    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
-    return at ? new Date(at) : null;
-  };
 
   const tableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
@@ -367,7 +357,8 @@ const HotelWorkPage: React.FC = () => {
               });
               const summaryParts = STATUS_OPTIONS.filter(s => (statusCounts[s.value] || 0) > 0).map(s => `${statusCounts[s.value]} ${s.label}`);
               const progressSummary = summaryParts.length ? summaryParts.join(', ') : '–';
-              const invStatusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
+              const hasRefundCompleted = (inv.Refunds || []).some((r: any) => r.status === 'refunded');
+              const invStatusLabel = hasRefundCompleted ? 'Sudah direfund' : (INVOICE_STATUS_LABELS[inv.status] || inv.status);
               const firstHotel = hotelItemsList[0];
               const checkInDate = firstHotel?.HotelProgress?.check_in_date ?? firstHotel?.meta?.check_in;
               const checkOutDate = firstHotel?.HotelProgress?.check_out_date ?? firstHotel?.meta?.check_out;
@@ -379,16 +370,7 @@ const HotelWorkPage: React.FC = () => {
               return (
                 <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4 align-top">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-mono font-semibold text-slate-800 text-sm">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                      <InvoiceRefundStatusLabel inv={inv} />
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
-                        {getOrderChangeDate(inv) && (
-                          <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
-                        )}
-                      </div>
-                    </div>
+                    <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showDpPayment order={inv.Order} />
                   </td>
                   <td className="px-6 py-4 text-slate-700 text-sm align-top">{inv.User?.name ?? inv.User?.company_name ?? o?.User?.name ?? '–'}</td>
                   <td className="px-6 py-4 text-slate-700 align-top text-sm">
@@ -397,7 +379,7 @@ const HotelWorkPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
                   <td className="px-6 py-4 align-top">
-                    <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>
+                    <Badge variant={hasRefundCompleted ? 'success' : (inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning')}>
                       {invStatusLabel}
                     </Badge>
                   </td>

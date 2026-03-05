@@ -13,6 +13,13 @@ import { accountingApi } from '../../../services/api';
 
 const DEFAULT_LIMIT = 20;
 
+/** Generate kode supplier dari nama (uppercase, spasi jadi strip, hanya alfanumerik, max 30 char). */
+function generateSupplierCodeFromName(name: string): string {
+  if (!name || !name.trim()) return '';
+  const s = name.trim().toUpperCase().replace(/\s+/g, '-').replace(/[^A-Z0-9-]/g, '');
+  return s.slice(0, 30) || 'SUP';
+}
+
 interface AccountingPurchasingSuppliersPageProps {
   embedded?: boolean;
   triggerCreate?: boolean;
@@ -30,7 +37,7 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
   const [activeOnly, setActiveOnly] = useState(true);
   const [modalOpen, setModalOpen] = useState<'create' | 'edit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ code: '', name: '', supplier_type: 'vendor', currency: 'IDR', term_of_payment_days: 0, is_active: true });
+  const [form, setForm] = useState({ code: '', name: '', supplier_type: 'vendor', currency: 'IDR', is_active: true });
   const [formError, setFormError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -62,7 +69,7 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
   }, [triggerCreate]);
 
   const openCreate = () => {
-    setForm({ code: '', name: '', supplier_type: 'vendor', currency: 'IDR', term_of_payment_days: 0, is_active: true });
+    setForm({ code: '', name: '', supplier_type: 'vendor', currency: 'IDR', is_active: true });
     setFormError('');
     setEditingId(null);
     setModalOpen('create');
@@ -74,7 +81,6 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
       name: row.name ?? '',
       supplier_type: row.supplier_type ?? 'vendor',
       currency: row.currency ?? 'IDR',
-      term_of_payment_days: row.term_of_payment_days ?? 0,
       is_active: row.is_active !== false
     });
     setFormError('');
@@ -88,12 +94,12 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
     setActionLoading(true);
     try {
       if (modalOpen === 'create') {
+        const codeToSend = form.code.trim() || generateSupplierCodeFromName(form.name.trim());
         await accountingApi.createSupplier({
-          code: form.code.trim() || form.name.trim().slice(0, 20),
+          code: codeToSend,
           name: form.name.trim(),
           supplier_type: form.supplier_type,
           currency: form.currency,
-          term_of_payment_days: form.term_of_payment_days,
           is_active: form.is_active
         });
       } else if (editingId) {
@@ -101,7 +107,6 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
           name: form.name.trim(),
           supplier_type: form.supplier_type,
           currency: form.currency,
-          term_of_payment_days: form.term_of_payment_days,
           is_active: form.is_active
         });
       }
@@ -175,7 +180,6 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
             { id: 'name', label: 'Nama', align: 'left' },
             { id: 'type', label: 'Tipe', align: 'left' },
             { id: 'currency', label: 'Mata Uang', align: 'left' },
-            { id: 'term', label: 'Term (hari)', align: 'right' },
             { id: 'status', label: 'Status', align: 'left' },
             { id: 'actions', label: '', align: 'right' }
           ] as TableColumn[]}
@@ -197,7 +201,6 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
                 <td className="px-4 py-3 font-medium">{row.name}</td>
                 <td className="px-4 py-3 text-sm">{row.supplier_type || 'vendor'}</td>
                 <td className="px-4 py-3 text-sm">{row.currency || 'IDR'}</td>
-                <td className="px-4 py-3 text-right text-sm">{row.term_of_payment_days ?? 0}</td>
                 <td className="px-4 py-3">
                   <Badge variant={row.is_active !== false ? 'success' : 'default'}>{row.is_active !== false ? 'Aktif' : 'Nonaktif'}</Badge>
                 </td>
@@ -217,10 +220,23 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
             <ModalBody>
               {formError && <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</div>}
               <div className="space-y-4">
+                <Input
+                  label="Nama *"
+                  value={form.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      name,
+                      ...(modalOpen === 'create' ? { code: generateSupplierCodeFromName(name) } : {})
+                    }));
+                  }}
+                  placeholder="Nama supplier"
+                  required
+                />
                 {modalOpen === 'create' && (
-                  <Input label="Kode" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="Opsional, default dari nama" />
+                  <Input label="Kode" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="Otomatis dari nama (bisa diedit)" />
                 )}
-                <Input label="Nama *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Nama supplier" required />
                 <div className="grid grid-cols-2 gap-4">
                   <Autocomplete
                     label="Tipe"
@@ -244,12 +260,6 @@ const AccountingPurchasingSuppliersPage: React.FC<AccountingPurchasingSuppliersP
                     placeholder="Pilih mata uang"
                   />
                 </div>
-                <Input
-                  type="number"
-                  label="Term of payment (hari)"
-                  value={String(form.term_of_payment_days)}
-                  onChange={(e) => setForm((f) => ({ ...f, term_of_payment_days: parseInt(e.target.value, 10) || 0 }))}
-                />
                 {modalOpen === 'edit' && (
                   <Checkbox label="Aktif" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
                 )}

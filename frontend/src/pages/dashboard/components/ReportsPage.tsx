@@ -31,8 +31,9 @@ import {
   type ReportPeriod,
   type ReportsAnalyticsData
 } from '../../../services/api';
-import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
-import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
+import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { formatIDR } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -557,10 +558,7 @@ const ReportsPage: React.FC = () => {
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                        <InvoiceRefundStatusLabel inv={inv} />
-                      </div>
+                      <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                     </td>
                     <td className="py-3 px-4 text-slate-700">{inv.owner_name ?? '–'}</td>
                     <td className="py-3 px-4 text-slate-700 text-sm">
@@ -592,12 +590,6 @@ const ReportsPage: React.FC = () => {
                 renderRow={(o: any) => {
                   const companyLine = o.owner_company || o.branch_name || '–';
                   const wilayahLine = [o.wilayah_name, o.provinsi_name].filter(Boolean).join(' · ') || '–';
-                  const displayInv = (o.invoice_number != null || o.invoice_status != null)
-                    ? { status: o.invoice_status, invoice_number: o.invoice_number }
-                    : null;
-                  const cellLabel = displayInv
-                    ? formatInvoiceNumberDisplay(displayInv, INVOICE_STATUS_LABELS)
-                    : (o.invoice_number ?? '–');
                   const invForCell = {
                     status: o.invoice_status ?? o.status,
                     invoice_number: o.invoice_number,
@@ -609,10 +601,7 @@ const ReportsPage: React.FC = () => {
                   return (
                     <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-4">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-mono font-semibold text-slate-900">{cellLabel}</span>
-                          <InvoiceRefundStatusLabel inv={invForCell} />
-                        </div>
+                        <InvoiceNumberCell inv={invForCell} statusLabels={INVOICE_STATUS_LABELS} compact />
                       </td>
                       <td className="py-3 px-4 text-right align-top">
                         <InvoiceStatusRefundCell inv={invForCell} align="right" />

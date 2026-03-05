@@ -23,11 +23,13 @@ import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
 import Table from '../../../components/common/Table';
-import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
-import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
+import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { PaymentProofCell } from '../../../components/common/PaymentProofCell';
+import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import type { TableColumn } from '../../../types';
-import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
-import { invoicesApi } from '../../../services/api';
+import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
+import { invoicesApi, businessRulesApi } from '../../../services/api';
 import type { InvoicesSummaryData } from '../../../services/api';
 
 const formatDate = (d: string | null | undefined) => {
@@ -40,6 +42,17 @@ const formatDate = (d: string | null | undefined) => {
   }
 };
 
+const formatDateWithTime = (d: string | null | undefined, time: string | null | undefined) => {
+  const dateStr = formatDate(d ?? null);
+  if (dateStr === '–') return '–';
+  const t = (time || '').trim();
+  return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
+};
+
+const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
+
+const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
+
 const InvoiceDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -49,6 +62,7 @@ const InvoiceDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -65,6 +79,15 @@ const InvoiceDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    businessRulesApi.get({}).then((res) => {
+      if (res.data?.data?.currency_rates) {
+        const cr = res.data.data.currency_rates;
+        setCurrencyRates(typeof cr === 'string' ? JSON.parse(cr) : cr);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -94,15 +117,29 @@ const InvoiceDashboard: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(totalFiltered / limit));
   const pagedInvoices = filteredRecent.slice((page - 1) * limit, page * limit);
 
+  const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
+  const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
+  const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList });
+  const invoiceTotalTriple = (inv: any) => {
+    const idr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
+    return { idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList };
+  };
   const invoiceTableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-    { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'company', label: 'Perusahaan', align: 'left' },
-    { id: 'total', label: 'Total', align: 'right' },
-    { id: 'remaining', label: 'Sisa', align: 'right' },
-    { id: 'due_date_dp', label: 'Jatuh Tempo DP', align: 'left' },
-    { id: 'actions', label: 'Aksi', align: 'left' }
+    { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
+    { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
+    { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
+    { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
+    { id: 'status_visa', label: 'Status Visa', align: 'left' },
+    { id: 'status_ticket', label: 'Status Tiket', align: 'left' },
+    { id: 'status_hotel', label: 'Status Hotel', align: 'left' },
+    { id: 'status_bus', label: 'Status Bus', align: 'left' },
+    { id: 'status_handling', label: 'Status Handling', align: 'left' },
+    { id: 'status_package', label: 'Status Paket', align: 'left' },
+    INVOICE_TABLE_COLUMN_PROOF,
+    { id: 'date', label: 'Tgl', align: 'left' },
+    { id: 'actions', label: 'Aksi', align: 'center' }
   ];
 
   const handleUnblock = async (invoiceId: string) => {
@@ -151,7 +188,7 @@ const InvoiceDashboard: React.FC = () => {
       {/* Ringkasan nominal (summary) — pakai StatCard agar seragam */}
       {summary && (summary.total_remaining > 0 || summary.total_paid > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Tagihan" value={formatIDR(summary.total_remaining)} subtitle="Hanya yang belum dibayar" />
+          <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Tagihan" value={formatIDR(summary.total_remaining)} subtitle="Total belum dibayar (sisa tagihan)" />
           <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Dibayar" value={formatIDR(summary.total_paid)} />
           <StatCard icon={<Wallet className="w-5 h-5" />} label="Sisa" value={formatIDR(summary.total_remaining)} />
         </div>
@@ -201,29 +238,186 @@ const InvoiceDashboard: React.FC = () => {
               : undefined
           }
           renderRow={(inv) => {
-            const total = parseFloat(inv.total_amount || 0);
-            const paid = parseFloat(inv.paid_amount || 0);
-            const remaining = total - paid;
+            const totalInv = parseFloat(inv.total_amount || 0);
+            const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+            const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
+            const remaining = Math.max(0, totalInv - paid);
+            const t = amountTriple(remaining);
+            const totalTriple = invoiceTotalTriple(inv);
+            const labelsVisa: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
+            const labelsTicket: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
+            const labelsHotel: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Penetapan room', room_assigned: 'Pemberian nomor room', completed: 'Selesai' };
+            const mealLabels: Record<string, string> = { pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' };
+            const labelsBus: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
             return (
               <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                <td className="py-3 px-4">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                    <InvoiceRefundStatusLabel inv={inv} />
-                  </div>
+                <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
+                  <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showCancellationNote />
                 </td>
-                <td className="py-3 px-4 text-right align-top">
-                  <InvoiceStatusRefundCell inv={inv} align="right" />
-                </td>
-                <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name ?? inv.Order?.User?.name ?? '–'}</td>
-                <td className="py-3 px-4 align-top text-sm">
+                <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name || inv.User?.company_name || '–'}</td>
+                <td className="py-3 px-4 text-slate-700 align-top text-sm">
                   <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
                   <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                 </td>
-                <td className="py-3 px-4 text-right font-medium tabular-nums">{formatIDR(total)}</td>
-                <td className="py-3 px-4 text-right tabular-nums text-slate-700">{formatIDR(remaining)}</td>
-                <td className="py-3 px-4 text-slate-600">{formatDate(inv.due_date_dp)}</td>
-                <td className="py-3 px-4">
+                <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
+                  <div>{formatIDR(totalTriple.idr)}</div>
+                  <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(totalTriple.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(totalTriple.usd, false)}</div>
+                </td>
+                <td className="py-3 px-4 text-right align-top">
+                  <InvoiceStatusRefundCell inv={inv} currencyRates={currencyRates} align="right" />
+                </td>
+                <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
+                  <div>{formatIDR(remaining)}</div>
+                  <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  {(() => {
+                    const visaItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa');
+                    if (visaItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    return (
+                      <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                        {visaItems.map((item: any, idx: number) => {
+                          const name = item.Product?.name || item.product_name || 'Visa';
+                          const statusLabel = labelsVisa[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+                          return (
+                            <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                              <div className="flex flex-wrap items-baseline gap-1">
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  {(() => {
+                    const ticketItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'ticket');
+                    if (ticketItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    return (
+                      <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                        {ticketItems.map((item: any, idx: number) => {
+                          const name = item.Product?.name || item.product_name || 'Tiket';
+                          const statusLabel = labelsTicket[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+                          return (
+                            <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                              <div className="flex flex-wrap items-baseline gap-1">
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  {(() => {
+                    const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
+                    if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    return (
+                      <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                        {hotelItems.map((item: any, idx: number) => {
+                          const name = item.Product?.name || item.product_name || 'Hotel';
+                          const status = labelsHotel[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
+                          const mealStatus = item.HotelProgress?.meal_status;
+                          const mealLabel = mealStatus ? (mealLabels[mealStatus] || mealStatus) : null;
+                          const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
+                          const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
+                          return (
+                            <div key={item.id || idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                              <div className="flex flex-wrap items-baseline gap-1">
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className={status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
+                              </div>
+                              {mealLabel != null && <div className="text-slate-600 pl-0.5 text-xs">Status makan: {mealLabel}</div>}
+                              <div className="text-slate-500 pl-0.5"><span>CI {checkIn}</span><span className="mx-1">·</span><span>CO {checkOut}</span></div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  {(() => {
+                    const busItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'bus');
+                    if (busItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    return (
+                      <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                        {busItems.map((item: any, idx: number) => {
+                          const name = item.Product?.name || item.product_name || 'Bus';
+                          const statusLabel = labelsBus[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
+                          const travelDate = formatDate(item.meta?.travel_date ?? null);
+                          const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
+                          const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
+                          const metaLine = [travelDate ? `Tgl ${travelDate}` : null, tripTypeLabel ? tripTypeLabel : null].filter(Boolean).join(' · ');
+                          return (
+                            <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                              <div className="flex flex-wrap items-baseline gap-1">
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                              </div>
+                              {metaLine ? <div className="text-slate-500 pl-0.5">{metaLine}</div> : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  {(() => {
+                    const handlingItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'handling');
+                    if (handlingItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    return (
+                      <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                        {handlingItems.map((item: any, idx: number) => {
+                          const name = item.Product?.name || item.product_name || 'Handling';
+                          const qty = Math.max(0, item.quantity ?? 1);
+                          return (
+                            <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                              <div className="flex flex-wrap items-baseline gap-1">
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className="text-slate-600">Qty {qty}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  {(() => {
+                    const packageItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'package');
+                    if (packageItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    return (
+                      <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
+                        {packageItems.map((item: any, idx: number) => {
+                          const name = item.Product?.name || item.product_name || 'Paket';
+                          const qty = Math.max(0, item.quantity ?? 1);
+                          return (
+                            <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                              <div className="flex flex-wrap items-baseline gap-1">
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className="text-slate-600">Qty {qty}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                  <PaymentProofCell paymentProofs={inv.PaymentProofs} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
+                </td>
+                <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
+                <td className="py-3 px-4 sticky right-0 bg-white hover:bg-slate-50/80 border-l border-slate-100">
                   <Button size="sm" variant="outline" onClick={() => openInvoice(inv)}>
                     <Eye className="w-4 h-4 mr-1" /> Buka
                   </Button>
@@ -256,9 +450,9 @@ const InvoiceDashboard: React.FC = () => {
               return (
                 <div key={inv.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
                   <div>
-                    <p className="font-semibold text-slate-900">
-                      {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
-                    </p>
+                    <div className="font-semibold text-slate-900">
+                      <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact />
+                    </div>
                     <p className="text-sm text-slate-600 mt-0.5">
                       {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · Total {formatIDR(inv.total_amount)}
                     </p>
@@ -290,9 +484,9 @@ const InvoiceDashboard: React.FC = () => {
             {blockedInvoices.map((inv) => (
               <div key={inv.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-red-50 rounded-xl">
                 <div>
-                  <p className="font-semibold text-slate-900">
-                    {formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}
-                  </p>
+                  <div className="font-semibold text-slate-900">
+                    <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact />
+                  </div>
                   <p className="text-sm text-slate-600 mt-0.5">
                     {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · {formatIDR(inv.total_amount)}
                   </p>

@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice, HotelProgress, Invoice } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice, HotelProgress, Invoice, Refund, PaymentReallocation } = require('../models');
 const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -104,6 +104,9 @@ const listInvoices = asyncHandler(async (req, res) => {
   } else {
     where.status = { [Op.in]: statusesForProgress };
   }
+  // Progress: jangan tampilkan invoice yang sudah dibatalkan atau sudah direfund
+  const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
+  if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
@@ -113,6 +116,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   const invoices = await Invoice.findAll({
     where,
     include: [
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       {
@@ -146,7 +150,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     if (/mekkah|makkah/.test(n)) return 'makkah';
     return '';
   };
-  const data = invoices.map((inv) => {
+  let data = invoices.map((inv) => {
     const plain = inv.get ? inv.get({ plain: true }) : inv;
     (plain.Order?.OrderItems || []).forEach((oi) => {
       let loc = (oi.Product?.meta && oi.Product.meta.location != null) ? String(oi.Product.meta.location).trim() : '';
@@ -155,6 +159,37 @@ const listInvoices = asyncHandler(async (req, res) => {
     });
     return plain;
   });
+
+  const invoiceIds = data.map((d) => d.id).filter(Boolean);
+  if (invoiceIds.length > 0) {
+    const [reallocOut, reallocIn] = await Promise.all([
+      PaymentReallocation.findAll({
+        where: { source_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      }),
+      PaymentReallocation.findAll({
+        where: { target_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      })
+    ]);
+    const outByInvId = (reallocOut || []).reduce((acc, r) => {
+      const sid = r.source_invoice_id;
+      if (!acc[sid]) acc[sid] = [];
+      acc[sid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, TargetInvoice: r.TargetInvoice ? { id: r.TargetInvoice.id, invoice_number: r.TargetInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    const inByInvId = (reallocIn || []).reduce((acc, r) => {
+      const tid = r.target_invoice_id;
+      if (!acc[tid]) acc[tid] = [];
+      acc[tid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, SourceInvoice: r.SourceInvoice ? { id: r.SourceInvoice.id, invoice_number: r.SourceInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    data = data.map((d) => ({ ...d, ReallocationsOut: outByInvId[d.id] || [], ReallocationsIn: inByInvId[d.id] || [] }));
+  }
 
   const totalPages = Math.ceil((count || 0) / lim) || 1;
   res.json({ success: true, data, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
@@ -172,6 +207,8 @@ const getInvoice = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
+      { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
       {
         model: Order,
         as: 'Order',

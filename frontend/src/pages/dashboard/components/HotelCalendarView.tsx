@@ -105,7 +105,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
       roomTypes: day.roomTypes
     });
     const initial: Record<string, string> = {};
-    ROOM_TYPES.forEach((rt) => { initial[rt] = ''; });
+    Object.keys(day.roomTypes).forEach((rt) => { initial[rt] = ''; });
     setAddQuantityInputs(initial);
   }, []);
 
@@ -364,7 +364,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                     Tanggal <strong>{new Date(addQuantityPopup.dateStr + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
                     {addQuantityPopup.seasonName && <> · Musim: <strong>{addQuantityPopup.seasonName}</strong></>}
                   </p>
-                  <p className="text-xs text-slate-500">Isi jumlah tambahan per tipe. Total baru = total saat ini + tambahan.</p>
+                  <p className="text-xs text-slate-500">Isi jumlah tambahan per tipe. Tabel hanya menampilkan tipe kamar yang ada di musim ini; tipe yang penuh tetap tampil agar bisa ditambah.</p>
                   <div className="rounded-xl border border-slate-200 overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 border-b border-slate-200">
@@ -378,34 +378,45 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {ROOM_TYPES.map((rt) => {
-                          const r = addQuantityPopup.roomTypes[rt];
-                          const total = r?.total ?? 0;
-                          const booked = r?.booked ?? 0;
-                          const available = r?.available ?? 0;
-                          const add = Math.max(0, parseInt(addQuantityInputs[rt] ?? '', 10) || 0);
-                          const newTotal = total + add;
-                          return (
-                            <tr key={rt} className="border-b border-slate-100 last:border-0">
-                              <td className="py-2 px-3 font-medium text-slate-800 capitalize">{ROOM_LABELS[rt] || rt}</td>
-                              <td className="py-2 px-2 text-center tabular-nums text-slate-700">{total}</td>
-                              <td className="py-2 px-2 text-center tabular-nums text-slate-600">{booked}</td>
-                              <td className={`py-2 px-2 text-center tabular-nums font-medium ${available <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{available}</td>
-                              <td className="py-2 px-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={addQuantityInputs[rt] ?? ''}
-                                  onChange={(e) => setAddQuantityInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
-                                  placeholder="0"
-                                  fullWidth={false}
-                                  className="w-20 min-w-[5rem]"
-                                />
-                              </td>
-                              <td className="py-2 px-2 text-center font-semibold tabular-nums text-slate-800">{newTotal}</td>
-                            </tr>
-                          );
-                        })}
+                        {(() => {
+                          const roomTypeKeys = Object.keys(addQuantityPopup.roomTypes).sort((a, b) => {
+                            const ia = ROOM_TYPES.indexOf(a as typeof ROOM_TYPES[number]);
+                            const ib = ROOM_TYPES.indexOf(b as typeof ROOM_TYPES[number]);
+                            if (ia >= 0 && ib >= 0) return ia - ib;
+                            if (ia >= 0) return -1;
+                            if (ib >= 0) return 1;
+                            return a.localeCompare(b);
+                          });
+                          return roomTypeKeys.map((rt) => {
+                            const r = addQuantityPopup.roomTypes[rt];
+                            const total = r?.total ?? 0;
+                            const booked = r?.booked ?? 0;
+                            const available = r?.available ?? 0;
+                            const isFull = total > 0 && available <= 0;
+                            const add = Math.max(0, parseInt(addQuantityInputs[rt] ?? '', 10) || 0);
+                            const newTotal = total + add;
+                            return (
+                              <tr key={rt} className={`border-b border-slate-100 last:border-0 ${isFull ? 'bg-rose-50/60' : ''}`}>
+                                <td className="py-2 px-3 font-medium text-slate-800 capitalize">{ROOM_LABELS[rt] || rt}{isFull ? ' (penuh)' : ''}</td>
+                                <td className="py-2 px-2 text-center tabular-nums text-slate-700">{total}</td>
+                                <td className="py-2 px-2 text-center tabular-nums text-slate-600">{booked}</td>
+                                <td className={`py-2 px-2 text-center tabular-nums font-medium ${available <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{available}</td>
+                                <td className="py-2 px-2">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={addQuantityInputs[rt] ?? ''}
+                                    onChange={(e) => setAddQuantityInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
+                                    placeholder="0"
+                                    fullWidth={false}
+                                    className="w-20 min-w-[5rem]"
+                                  />
+                                </td>
+                                <td className="py-2 px-2 text-center font-semibold tabular-nums text-slate-800">{newTotal}</td>
+                              </tr>
+                            );
+                          });
+                        })()}
                       </tbody>
                     </table>
                   </div>

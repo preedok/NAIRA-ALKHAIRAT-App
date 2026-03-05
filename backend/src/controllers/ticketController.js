@@ -13,8 +13,10 @@ const {
   Wilayah,
   Product,
   Invoice,
+  Refund,
   TicketProgress,
-  Notification
+  Notification,
+  PaymentReallocation
 } = require('../models');
 const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const uploadConfig = require('../config/uploads');
@@ -82,14 +84,17 @@ const getDashboard = asyncHandler(async (req, res) => {
   const invoices = await Invoice.findAll({
     where: { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } },
     attributes: ['id', 'invoice_number', 'order_id'],
-    raw: true
+    include: [{ model: User, as: 'User', attributes: ['id', 'name'] }]
   });
   const orderIdsWithInvoice = [...new Set(invoices.map(i => i.order_id))];
+  const ownerNameByOrderId = invoices.reduce((acc, inv) => {
+    if (inv.order_id && inv.User?.name) acc[inv.order_id] = inv.User.name;
+    return acc;
+  }, {});
 
   const orders = await Order.findAll({
     where: { id: orderIdsWithInvoice },
     include: [
-      { model: User, as: 'User', attributes: ['id', 'name'] },
       {
         model: OrderItem,
         as: 'OrderItems',
@@ -118,7 +123,7 @@ const getDashboard = asyncHandler(async (req, res) => {
           invoice_number: inv?.invoice_number,
           order_id: o.id,
           order_item_id: item.id,
-          owner_name: o.User?.name,
+          owner_name: ownerNameByOrderId[o.id] ?? inv?.User?.name ?? null,
           product_ref_id: item.product_ref_id,
           quantity: item.quantity,
           meta: item.meta,
@@ -161,26 +166,36 @@ const listInvoices = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
   }
 
+  // Order yang sudah pembayaran DP: invoice status tentative pun tampil di Daftar Invoice Tiket
   const ordersWithDpPaid = await Order.findAll({
     where: { id: orderIdsFromTicket, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
     attributes: ['id'],
     raw: true
   }).then(rows => rows.map(r => r.id));
-  const where = { order_id: ordersWithDpPaid.length ? { [Op.in]: ordersWithDpPaid } : { [Op.in]: [] }, branch_id: { [Op.in]: branchIds } };
+
   const statusesForProgress = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  const where = { order_id: { [Op.in]: orderIdsFromTicket }, branch_id: { [Op.in]: branchIds } };
   if (status && statusesForProgress.includes(status)) {
     where.status = status;
   } else {
-    where.status = { [Op.in]: statusesForProgress };
+    where[Op.or] = [
+      { status: { [Op.in]: statusesForProgress } },
+      ...(ordersWithDpPaid.length > 0 ? [{ status: INVOICE_STATUS.TENTATIVE, order_id: { [Op.in]: ordersWithDpPaid } }] : [])
+    ];
   }
+  // Progress: jangan tampilkan invoice yang sudah dibatalkan atau sudah direfund
+  const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
+  if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
   const offset = (pg - 1) * lim;
 
+  // Data acuan dari invoice: tidak include Order.User (owner) agar tidak pakai Order.owner_id; owner dari Invoice.User.
   const { count, rows: invoices } = await Invoice.findAndCountAll({
     where,
     include: [
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       {
@@ -188,7 +203,6 @@ const listInvoices = asyncHandler(async (req, res) => {
         as: 'Order',
         attributes: ['id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
         include: [
-          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {
             model: OrderItem,
             as: 'OrderItems',
@@ -208,6 +222,40 @@ const listInvoices = asyncHandler(async (req, res) => {
     distinct: true
   });
 
+  const invoiceIds = (invoices || []).map((i) => i.id).filter(Boolean);
+  if (invoiceIds.length > 0) {
+    const [reallocOut, reallocIn] = await Promise.all([
+      PaymentReallocation.findAll({
+        where: { source_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      }),
+      PaymentReallocation.findAll({
+        where: { target_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      })
+    ]);
+    const outByInvId = (reallocOut || []).reduce((acc, r) => {
+      const sid = r.source_invoice_id;
+      if (!acc[sid]) acc[sid] = [];
+      acc[sid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, TargetInvoice: r.TargetInvoice ? { id: r.TargetInvoice.id, invoice_number: r.TargetInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    const inByInvId = (reallocIn || []).reduce((acc, r) => {
+      const tid = r.target_invoice_id;
+      if (!acc[tid]) acc[tid] = [];
+      acc[tid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, SourceInvoice: r.SourceInvoice ? { id: r.SourceInvoice.id, invoice_number: r.SourceInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    for (const inv of invoices) {
+      inv.setDataValue('ReallocationsOut', outByInvId[inv.id] || []);
+      inv.setDataValue('ReallocationsIn', inByInvId[inv.id] || []);
+    }
+  }
+
   const totalPages = Math.ceil((count || 0) / lim) || 1;
   res.json({ success: true, data: invoices, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
 });
@@ -224,11 +272,12 @@ const getInvoice = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
+      { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
       {
         model: Order,
         as: 'Order',
         include: [
-          { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           { model: Branch, as: 'Branch' },
           {
             model: OrderItem,
@@ -349,22 +398,27 @@ const uploadTicket = [
       });
     }
 
-    const order = await Order.findByPk(item.order_id, { include: [{ model: User, as: 'User', attributes: ['id', 'name'] }] });
+    const order = await Order.findByPk(item.order_id, { attributes: ['id', 'order_number', 'branch_id'] });
     await progress.reload();
     const shouldNotify = progress.status === TICKET_PROGRESS_STATUS.TICKET_ISSUED;
+
+    const invoiceForOwner = order ? await Invoice.findOne({ where: { order_id: order.id }, attributes: ['owner_id'] }) : null;
+    const ownerId = invoiceForOwner ? invoiceForOwner.owner_id : null;
 
     if (shouldNotify && order) {
       const title = 'Tiket terbit';
       const message = `Tiket untuk order ${order.order_number} telah terbit dan dokumen tiket dapat diunduh.`;
       const data = { order_id: order.id, order_item_id: item.id, ticket_file_url: fileUrl };
 
-      await Notification.create({
-        user_id: order.owner_id,
-        trigger: NOTIFICATION_TRIGGER.TICKET_ISSUED,
-        title,
-        message,
-        data
-      });
+      if (ownerId) {
+        await Notification.create({
+          user_id: ownerId,
+          trigger: NOTIFICATION_TRIGGER.TICKET_ISSUED,
+          title,
+          message,
+          data
+        });
+      }
 
       const invoiceUsers = await User.findAll({
         where: {
@@ -375,7 +429,7 @@ const uploadTicket = [
         attributes: ['id']
       });
       for (const u of invoiceUsers) {
-        if (u.id !== order.owner_id) {
+        if (u.id !== ownerId) {
           await Notification.create({
             user_id: u.id,
             trigger: NOTIFICATION_TRIGGER.TICKET_ISSUED,
@@ -418,14 +472,17 @@ const exportExcel = asyncHandler(async (req, res) => {
   const invoicesForExport = await Invoice.findAll({
     where: { order_id: orderIdsFromTicket, branch_id: { [Op.in]: branchIds } },
     attributes: ['order_id', 'invoice_number'],
-    raw: true
+    include: [{ model: User, as: 'User', attributes: ['name'] }]
   });
   const orderIdsWithInvoice = [...new Set(invoicesForExport.map(i => i.order_id))];
+  const ownerNameByOrderIdExport = invoicesForExport.reduce((acc, inv) => {
+    if (inv.order_id && inv.User?.name) acc[inv.order_id] = inv.User.name;
+    return acc;
+  }, {});
 
   const orders = await Order.findAll({
     where: { id: orderIdsWithInvoice },
     include: [
-      { model: User, as: 'User', attributes: ['id', 'name'] },
       {
         model: OrderItem,
         as: 'OrderItems',
@@ -466,7 +523,7 @@ const exportExcel = asyncHandler(async (req, res) => {
         no: no++,
         invoice_number: invRow?.invoice_number || '',
         order_number: o.order_number,
-        owner_name: o.User?.name || '',
+        owner_name: ownerNameByOrderIdExport[o.id] || '',
         product_ref_id: item.product_ref_id || '',
         quantity: item.quantity,
         status,

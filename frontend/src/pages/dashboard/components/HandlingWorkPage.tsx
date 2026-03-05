@@ -6,7 +6,8 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ContentLoading from '../../../components/common/ContentLoading';
 import { AutoRefreshControl } from '../../../components/common';
-import { InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
 
@@ -112,8 +113,7 @@ const HandlingWorkPage: React.FC = () => {
                 {pendingList.map((row) => (
                   <tr key={row.order_item_id} className="border-b border-slate-100 hover:bg-slate-50/50 last:border-b-0">
                     <td className="py-3 px-4">
-                      <p className="font-medium text-slate-900">{row.invoice_number || '–'}</p>
-                      <InvoiceRefundStatusLabel inv={{ Refunds: [] }} />
+                      <InvoiceNumberCell inv={{ invoice_number: row.invoice_number, status: row.status, Refunds: [] }} statusLabels={INVOICE_STATUS_LABELS} compact />
                     </td>
                     <td className="py-3 px-4 text-slate-700">{row.owner_name || '–'}</td>
                     <td className="py-3 px-4 text-slate-700">

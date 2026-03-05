@@ -460,11 +460,44 @@ const list = asyncHandler(async (req, res) => {
     }
   }
 
+  if (invoiceIds.length > 0) {
+    const [reallocOut, reallocIn] = await Promise.all([
+      PaymentReallocation.findAll({
+        where: { source_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      }),
+      PaymentReallocation.findAll({
+        where: { target_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      })
+    ]);
+    const outByInvId = (reallocOut || []).reduce((acc, r) => {
+      const sid = r.source_invoice_id;
+      if (!acc[sid]) acc[sid] = [];
+      acc[sid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, TargetInvoice: r.TargetInvoice ? { id: r.TargetInvoice.id, invoice_number: r.TargetInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    const inByInvId = (reallocIn || []).reduce((acc, r) => {
+      const tid = r.target_invoice_id;
+      if (!acc[tid]) acc[tid] = [];
+      acc[tid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, SourceInvoice: r.SourceInvoice ? { id: r.SourceInvoice.id, invoice_number: r.SourceInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    for (const d of data) {
+      d.ReallocationsOut = outByInvId[d.id] || [];
+      d.ReallocationsIn = inByInvId[d.id] || [];
+    }
+  }
+
   const [totalAmount, totalPaid, totalRemaining, invoiceRows, orderRows] = await Promise.all([
     Invoice.sum('total_amount', { where }),
     Invoice.sum('paid_amount', { where }),
     Invoice.sum('remaining_amount', { where }),
-    Invoice.findAll({ where, include: [orderInclude], attributes: ['status', 'order_id'], raw: true }),
+    Invoice.findAll({ where, include: [orderInclude], attributes: ['id', 'status', 'order_id'], raw: true }),
     Invoice.findAll({
       where,
       include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
@@ -487,6 +520,14 @@ const list = asyncHandler(async (req, res) => {
     }, {});
   }
 
+  // Card Dibayar: jangan gabungkan dana yang sudah di-refund
+  const summaryInvoiceIds = [...new Set((invoiceRows || []).map((r) => r.id).filter(Boolean))];
+  let totalPaidFinal = parseFloat(totalPaid || 0);
+  if (summaryInvoiceIds.length > 0) {
+    const refundedSum = await Refund.sum('amount', { where: { status: 'refunded', invoice_id: { [Op.in]: summaryInvoiceIds } } }) || 0;
+    totalPaidFinal = Math.max(0, totalPaidFinal - parseFloat(refundedSum));
+  }
+
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.json({
     success: true,
@@ -496,7 +537,7 @@ const list = asyncHandler(async (req, res) => {
       total_invoices: count,
       total_orders: orderIds.length,
       total_amount: parseFloat(totalAmount || 0),
-      total_paid: parseFloat(totalPaid || 0),
+      total_paid: totalPaidFinal,
       total_remaining: parseFloat(totalRemaining || 0),
       by_invoice_status: byInvoiceStatus,
       by_order_status: byOrderStatus
@@ -684,6 +725,7 @@ const getSummary = asyncHandler(async (req, res) => {
     orderInclude.where = { status: order_status };
   }
 
+  // total_remaining = total yang belum dibayar (sisa tagihan). Total Tagihan di stat card = ini, bukan total_amount.
   const [totalInvoices, totalAmount, totalPaid, totalRemaining, invoiceRows, orderRows] = await Promise.all([
     Invoice.count({ where, include: [orderInclude], distinct: true }),
     Invoice.sum('total_amount', { where }),
@@ -692,7 +734,7 @@ const getSummary = asyncHandler(async (req, res) => {
     Invoice.findAll({
       where,
       include: [orderInclude],
-      attributes: ['status', 'order_id'],
+      attributes: ['id', 'status', 'order_id'],
       raw: true
     }),
     Invoice.findAll({
@@ -722,13 +764,21 @@ const getSummary = asyncHandler(async (req, res) => {
     }, {});
   }
 
+  // Card Dibayar: jangan gabungkan dana yang sudah di-refund (total_paid dikurangi jumlah refund selesai)
+  const invoiceIds = [...new Set((invoiceRows || []).map((r) => r.id).filter(Boolean))];
+  let totalPaidFinal = parseFloat(totalPaid || 0);
+  if (invoiceIds.length > 0) {
+    const refundedSum = await Refund.sum('amount', { where: { status: 'refunded', invoice_id: { [Op.in]: invoiceIds } } }) || 0;
+    totalPaidFinal = Math.max(0, totalPaidFinal - parseFloat(refundedSum));
+  }
+
   res.json({
     success: true,
     data: {
       total_invoices: totalInvoices || 0,
       total_orders: totalOrders,
       total_amount: parseFloat(totalAmount || 0),
-      total_paid: parseFloat(totalPaid || 0),
+      total_paid: totalPaidFinal,
       total_remaining: parseFloat(totalRemaining || 0),
       by_invoice_status: byStatus,
       by_order_status: byOrderStatus
@@ -916,7 +966,9 @@ const getById = asyncHandler(async (req, res) => {
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], required: false },
       { model: PaymentProof, as: 'PaymentProofs', include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
-      { model: Refund, as: 'Refunds', required: false, order: [['created_at', 'DESC']] }
+      { model: Refund, as: 'Refunds', required: false, order: [['created_at', 'DESC']] },
+      { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
+      { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] }
     ]
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });

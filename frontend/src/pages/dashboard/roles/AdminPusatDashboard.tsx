@@ -21,8 +21,9 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
-import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
-import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
+import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { formatIDR } from '../../../utils';
 import type { TableColumn } from '../../../types';
 import { ORDER_STATUS_LABELS, INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
@@ -165,7 +166,7 @@ const OrderListModal: React.FC<{
             }
             renderRow={(o) => (
               <tr key={o.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono">{o.Invoice?.invoice_number ?? o.invoice_number ?? '–'}</td>
+                <td className="px-4 py-3 font-mono">{o.Invoice ? <InvoiceNumberCell inv={o.Invoice} compact /> : (o.invoice_number ?? '–')}</td>
                 <td className="px-4 py-3">{o.User?.name ?? '-'}</td>
                 <td className="px-4 py-3">{o.Branch?.name ?? '-'}</td>
                 <td className="px-4 py-3"><Badge variant="info">{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></td>
@@ -275,10 +276,7 @@ const InvoiceListModalAdmin: React.FC<{
             renderRow={(inv) => (
               <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 align-top">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                    <InvoiceRefundStatusLabel inv={inv} />
-                  </div>
+                  <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                 </td>
                 <td className="px-4 py-3 text-right align-top">
                   <InvoiceStatusRefundCell inv={inv} align="right" />
@@ -627,10 +625,7 @@ const AdminPusatDashboard: React.FC = () => {
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3 align-top">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono font-semibold text-slate-900">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                        <InvoiceRefundStatusLabel inv={inv} />
-                      </div>
+                      <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                     </td>
                     <td className="px-4 py-3 text-right align-top">
                       <InvoiceStatusRefundCell inv={inv} align="right" />

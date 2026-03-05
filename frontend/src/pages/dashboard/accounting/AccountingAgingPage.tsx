@@ -15,9 +15,11 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi, branchesApi, invoicesApi, businessRulesApi, type AccountingAgingData } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
-import { InvoiceStatusRefundCell, InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
-import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
-import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { PaymentProofCell, getProofStatus, getProofTypeLabel } from '../../../components/common/PaymentProofCell';
+import { formatIDR } from '../../../utils';
+import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
 import { useToast } from '../../../contexts/ToastContext';
 
 const API_BASE = process.env.REACT_APP_API_URL?.replace(/\/api\/v1\/?$/, '') || '';
@@ -33,14 +35,6 @@ const INVOICE_STATUS_OPTIONS = Object.keys(INVOICE_STATUS_LABELS).sort();
 type BucketTab = 'all' | 'current' | 'days_1_30' | 'days_31_60' | 'days_61_plus';
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
-
-const getProofStatus = (p: any) => {
-  if (p.verified_status === 'rejected') return { status: 'rejected', label: 'Tidak valid', variant: 'error' as const };
-  if (p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')) return { status: 'verified', label: 'Diverifikasi', variant: 'success' as const };
-  return { status: 'pending', label: 'Menunggu verifikasi', variant: 'warning' as const };
-};
-
-const getProofTypeLabel = (type: string) => (type === 'dp' ? 'DP' : type === 'partial' ? 'Cicilan' : 'Lunas');
 
 const AccountingAgingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -322,25 +316,6 @@ const AccountingAgingPage: React.FC = () => {
     { key: 'days_61_plus', label: 'Terlambat 61+' }
   ];
 
-  const isNewInvoice = (inv: any) => {
-    if (!inv) return false;
-    const at = inv.issued_at || inv.created_at;
-    if (!at) return false;
-    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
-  };
-  const getOrderChangeDate = (inv: any) => {
-    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
-    return at ? new Date(at) : null;
-  };
-
-  const getInvoiceStatusLabel = (inv: any) => {
-    const st = (inv?.status || '').toLowerCase();
-    if (st === 'cancelled_refund' && (inv?.cancelled_refund_amount != null && Number(inv.cancelled_refund_amount) > 0)) {
-      return `Dibatalkan Refund ${formatIDR(Number(inv.cancelled_refund_amount))}`;
-    }
-    return INVOICE_STATUS_LABELS[inv?.status] || inv?.status || '';
-  };
-
   const agingColumns: TableColumn[] = [
     { id: 'invoice', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
@@ -350,7 +325,7 @@ const AccountingAgingPage: React.FC = () => {
     { id: 'remaining', label: 'Sisa', align: 'right' },
     { id: 'due', label: 'Jatuh Tempo', align: 'left' },
     { id: 'overdue', label: 'Terlambat', align: 'center' },
-    { id: 'proof', label: 'Bukti Bayar', align: 'left' },
+    INVOICE_TABLE_COLUMN_PROOF,
     { id: 'issued', label: 'Tgl Invoice', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'center' }
   ];
@@ -473,16 +448,7 @@ const AccountingAgingPage: React.FC = () => {
               renderRow={(inv: any) => (
                 <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="py-3 px-4 align-top">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-mono font-semibold">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                      <InvoiceRefundStatusLabel inv={inv} />
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
-                        {getOrderChangeDate(inv) && (
-                          <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
-                        )}
-                      </div>
-                    </div>
+                    <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                   </td>
                   <td className="py-3 px-4 align-top">{inv.User?.name || inv.User?.company_name || '-'}</td>
                   <td className="py-3 px-4 align-top text-sm">
@@ -497,20 +463,7 @@ const AccountingAgingPage: React.FC = () => {
                   <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>
                   <td className="py-3 px-4 text-center align-top">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
                   <td className="py-3 px-4 align-top">
-                    {(inv.PaymentProofs?.length ?? 0) === 0 ? (
-                      <span className="text-slate-400 text-xs">-</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {inv.PaymentProofs?.map((p: any) => {
-                          const ps = getProofStatus(p);
-                          return (
-                            <Badge key={p.id} variant={ps.variant} className="text-xs">
-                              {getProofTypeLabel(p.payment_type)} {ps.status === 'verified' ? '✓' : ps.status === 'rejected' ? '✗' : '...'}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    )}
+                    <PaymentProofCell paymentProofs={inv.PaymentProofs} compact />
                   </td>
                   <td className="py-3 px-4 align-top">{formatDate(inv.issued_at || inv.created_at)}</td>
                   <td className="py-3 px-4 align-top">
@@ -551,7 +504,7 @@ const AccountingAgingPage: React.FC = () => {
           <ModalBoxLg>
             <ModalHeader
               title="Detail Invoice"
-              subtitle={formatInvoiceNumberDisplay(viewInvoice, INVOICE_STATUS_LABELS)}
+              subtitle={<InvoiceNumberCell inv={viewInvoice} statusLabels={INVOICE_STATUS_LABELS} compact />}
               icon={<Receipt className="w-5 h-5" />}
               onClose={closeModal}
             />
@@ -604,7 +557,7 @@ const AccountingAgingPage: React.FC = () => {
                     <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                       <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data Invoice</h4>
                       <dl className="space-y-1.5 text-sm">
-                        <div className="flex justify-between"><dt className="text-slate-600">Status</dt><dd><Badge variant={getStatusBadge(viewInvoice.status)}>{INVOICE_STATUS_LABELS[viewInvoice.status] || viewInvoice.status}</Badge>{viewInvoice.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}</dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">Status</dt><dd><Badge variant={getEffectiveInvoiceStatusBadgeVariant(viewInvoice)}>{getEffectiveInvoiceStatusLabel(viewInvoice)}</Badge>{viewInvoice.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}</dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Total</dt><dd className="font-semibold">{formatIDR(parseFloat(viewInvoice.total_amount || 0))}</dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">DP ({viewInvoice.dp_percentage || 0}%)</dt><dd className="font-semibold">{formatIDR(parseFloat(viewInvoice.dp_amount || 0))}</dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Dibayar</dt><dd className="font-semibold text-emerald-600">{formatIDR(parseFloat(viewInvoice.paid_amount || 0))}</dd></div>

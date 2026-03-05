@@ -17,7 +17,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatIDR } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
-import { InvoiceRefundStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -203,18 +203,6 @@ const VisaWorkPage: React.FC = () => {
     return list;
   }, [invoices, filterSearch, filterProgressStatus]);
 
-  const formatDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
-  const isNewInvoice = (inv: any) => {
-    if (!inv) return false;
-    const at = inv.issued_at || inv.created_at;
-    if (!at) return false;
-    return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
-  };
-  const getOrderChangeDate = (inv: any) => {
-    const at = inv?.order_updated_at ?? inv?.Order?.order_updated_at ?? null;
-    return at ? new Date(at) : null;
-  };
-
   const tableColumns: TableColumn[] = [
     { id: 'invoice', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
@@ -287,20 +275,12 @@ const VisaWorkPage: React.FC = () => {
                 const visaCount = orderItems.filter((i: any) => i.type === 'visa').length;
                 const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
                 const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
-                const statusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
+                const hasRefundCompleted = (inv.Refunds || []).some((r: any) => r.status === 'refunded');
+                const statusLabel = hasRefundCompleted ? 'Sudah direfund' : (INVOICE_STATUS_LABELS[inv.status] || inv.status);
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-4 align-top">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-mono font-semibold text-slate-800">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                        <InvoiceRefundStatusLabel inv={inv} />
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
-                          {getOrderChangeDate(inv) && (
-                            <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
-                          )}
-                        </div>
-                      </div>
+                      <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showDpPayment order={o} />
                     </td>
                     <td className="px-6 py-4 text-slate-700 align-top">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
                     <td className="px-6 py-4 text-slate-700 align-top text-sm">
@@ -309,7 +289,7 @@ const VisaWorkPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
                     <td className="px-6 py-4 align-top">
-                      <Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>
+                      <Badge variant={hasRefundCompleted ? 'success' : (inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning')}>
                         {statusLabel}
                       </Badge>
                     </td>

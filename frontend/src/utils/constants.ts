@@ -137,6 +137,12 @@ export const INVOICE_STATUS_LABELS: Record<string, string> = {
   overpaid_refund_pending: 'Sisa Pengembalian'
 };
 
+/** Definisi kolom "No. Invoice" untuk tabel – satu acuan di semua halaman (Invoice, Report, Accounting, Dashboard, Work). */
+export const INVOICE_TABLE_COLUMN_INVOICE = { id: 'invoice_number', label: 'No. Invoice', align: 'left' as const };
+
+/** Definisi kolom "Bukti Bayar" untuk tabel – seragam di semua halaman yang menampilkan daftar invoice. */
+export const INVOICE_TABLE_COLUMN_PROOF = { id: 'proof', label: 'Bukti Bayar', align: 'left' as const };
+
 export const INVOICE_STATUS_COLORS: Record<string, string> = {
   draft: 'default',
   tentative: 'default',
@@ -163,6 +169,16 @@ export const REFUND_STATUS_LABELS: Record<string, string> = {
   rejected: 'Ditolak',
   refunded: 'Sudah direfund'
 };
+
+/** Status pembatalan: jadikan saldo akun (tampil di Status · Dibayar). */
+export const CANCELLATION_TO_BALANCE_LABEL = 'Direfund ke saldo akun';
+
+/** Label pemindahan dana: invoice pengirim / penerima (tampil di Status · Dibayar). */
+export const REALLOCATION_OUT_LABEL = 'Dana dipindahkan ke';
+export const REALLOCATION_IN_LABEL = 'Dana diterima dari';
+
+/** Badge status saat invoice dibatalkan dan dana dipindahkan ke invoice lain (bukan Tagihan DP). */
+export const REALLOCATION_OUT_STATUS_LABEL = 'Dana dipindahkan ke invoice lain';
 
 // ============================================
 // PAYMENT METHODS

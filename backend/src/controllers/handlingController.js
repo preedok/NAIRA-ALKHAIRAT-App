@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Invoice, Product } = require('../models');
+const { Order, OrderItem, User, Invoice, Product, Refund } = require('../models');
 const { ORDER_ITEM_TYPE, INVOICE_STATUS, HANDLING_PROGRESS_STATUS } = require('../constants');
 
 const statusWithDpPaidList = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
@@ -10,6 +10,12 @@ const statusWithDpPaidList = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, 
  * Rekapitulasi pekerjaan role handling: total item handling, per status (pending, in_progress, completed), list pending.
  */
 const getDashboard = asyncHandler(async (req, res) => {
+  const refundedInvoiceIds = new Set(
+    (await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }))
+      .map(r => r.invoice_id)
+      .filter(Boolean)
+  );
+
   const orderItemRows = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.HANDLING },
     attributes: ['id', 'order_id', 'product_ref_id', 'quantity', 'meta'],
@@ -36,6 +42,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   orderItemRows.forEach((item) => {
     const inv = item.Order?.Invoice;
     if (!inv || !statusWithDpPaidList.includes(inv.status)) return;
+    if (refundedInvoiceIds.has(inv.id)) return;
     orderIdsWithDpPaid.add(item.Order?.id);
     totalHandlingItems += 1;
     const status = (item.meta && item.meta.handling_status) || HANDLING_PROGRESS_STATUS.PENDING;

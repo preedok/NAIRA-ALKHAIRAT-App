@@ -8,8 +8,9 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
-import { formatIDR, formatInvoiceNumberDisplay } from '../../../utils';
+import { formatIDR } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import type { TableColumn } from '../../../types';
 
 /** Modal daftar invoice lengkap dengan filter dan pagination */
@@ -155,30 +156,11 @@ const InvoiceListModal: React.FC<{
                 : undefined
             }
             renderRow={(inv) => {
-              const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–');
-              const isNewInvoice = (i: any) => {
-                if (!i) return false;
-                const at = i.issued_at || i.created_at;
-                if (!at) return false;
-                return Date.now() - new Date(at).getTime() < 24 * 60 * 60 * 1000;
-              };
-              const getOrderChangeDate = (i: any) => {
-                const at = i?.order_updated_at ?? i?.Order?.order_updated_at ?? null;
-                return at ? new Date(at) : null;
-              };
               const statusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
               return (
                 <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 align-top">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-mono font-semibold">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</span>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {isNewInvoice(inv) && <Badge variant="success" className="text-xs">Baru</Badge>}
-                        {getOrderChangeDate(inv) && (
-                          <span className="text-xs text-slate-600">Perubahan {formatDate(getOrderChangeDate(inv)!.toISOString())}</span>
-                        )}
-                      </div>
-                    </div>
+                    <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan />
                   </td>
                   <td className="px-4 py-3 align-top">{inv.User?.name ?? inv.User?.company_name ?? '-'}</td>
                   <td className="px-4 py-3 align-top text-sm">
@@ -485,7 +467,7 @@ const AccountingDashboard: React.FC = () => {
                 }
                 renderRow={(inv: any) => (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 pr-4 font-mono">{formatInvoiceNumberDisplay(inv, INVOICE_STATUS_LABELS)}</td>
+                    <td className="py-3 pr-4 font-mono"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact /></td>
                     <td className="py-3 pr-4">{inv.User?.name ?? '-'}</td>
                     <td className="py-3 pr-4">{inv.Branch?.name ?? '-'}</td>
                     <td className="py-3 pr-4">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
