@@ -1,0 +1,52 @@
+name: Deploy Backend to VPS
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          script: |
+            cd ${{ secrets.APP_PATH }}/backend
+            
+            echo "=== Pulling latest changes ==="
+            git fetch origin master
+            git reset --hard origin/master
+            
+            echo "=== Installing dependencies ==="
+            npm ci --production
+            
+            echo "=== Running database migrations ==="
+            npm run migrate
+            
+            echo "=== Restarting application ==="
+            pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend
+            
+            echo "=== Deployment completed! ==="
+            pm2 status
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+          fi
