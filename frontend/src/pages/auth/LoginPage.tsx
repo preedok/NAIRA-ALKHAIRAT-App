@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Mail, Lock, Eye, EyeOff,
-  AlertCircle, ArrowRight, CheckCircle,
+  AlertCircle, ArrowRight, CheckCircle, Star,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { validateEmail } from '../../utils';
 import Input from '../../components/common/Input';
-import logoImg from '../../assets/logo.png';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -234,20 +233,17 @@ const LoginPage: React.FC = () => {
           <div className="fu" style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:20 }}>
             <div style={{
               marginBottom:10,
+              width: 72, height: 72,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 8px 32px rgba(56,189,248,0.35)',
               transition:'transform .2s, box-shadow .2s', cursor:'default',
             }}
               onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform='scale(1.07)'; }}
               onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform=''; }}
             >
-              <img 
-                src={logoImg} 
-                alt="Bintang Global Group" 
-                style={{ 
-                  width: 120, 
-                  height: 'auto',
-                  filter: 'brightness(0) invert(1) drop-shadow(0 6px 24px rgba(56,189,248,0.42))'
-                }} 
-              />
+              <Star size={36} color="white" fill="white" strokeWidth={1.5} />
             </div>
             <h1 style={{ fontSize:16, fontWeight:800, letterSpacing:'0.18em', color:'white', textTransform:'uppercase', margin:0 }}>
               Bintang Global
