@@ -245,7 +245,7 @@ const LoginPage: React.FC = () => {
                 style={{ 
                   width: 120, 
                   height: 'auto',
-                  filter: 'drop-shadow(0 6px 24px rgba(56,189,248,0.42))'
+                  filter: 'brightness(0) invert(1) drop-shadow(0 6px 24px rgba(56,189,248,0.42))'
                 }} 
               />
             </div>
