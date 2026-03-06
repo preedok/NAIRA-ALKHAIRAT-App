@@ -372,8 +372,7 @@ const list = asyncHandler(async (req, res) => {
 
   const sortCol = ALLOWED_SORT.includes(sort_by) ? sort_by : 'created_at';
   const sortDir = (sort_order || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-  // Order by kolom Invoice saja (alias Sequelize = nama model)
-  const orderBy = [[sequelize.literal('"Invoice"."' + sortCol + '"'), sortDir]];
+  const orderBy = [[sortCol, sortDir]];
 
   const { count, rows } = await Invoice.findAndCountAll({
     where,

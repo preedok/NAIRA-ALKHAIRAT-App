@@ -951,10 +951,9 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   const allowedSort = ['issued_at', 'total_amount', 'paid_amount', 'invoice_number'];
   const sortCol = allowedSort.includes(String(sort_by || '')) ? String(sort_by) : 'issued_at';
   const sortDir = String(sort_order || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-  // ORDER BY must use alias "Invoice" (Sequelize model name) to avoid "invalid reference to FROM-clause" in PostgreSQL
   const orderBy = [
-    [sequelize.literal(`"Invoice"."${sortCol}"`), sortDir],
-    [sequelize.literal('"Invoice"."invoice_number"'), 'ASC']
+    [sortCol, sortDir],
+    ['invoice_number', 'ASC']
   ];
 
   const branchInclude = {
