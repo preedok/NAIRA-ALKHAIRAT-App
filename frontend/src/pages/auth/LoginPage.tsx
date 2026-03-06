@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { validateEmail } from '../../utils';
 import Input from '../../components/common/Input';
+import logoImg from '../../assets/logo.png';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -232,20 +233,21 @@ const LoginPage: React.FC = () => {
           {/* ── Logo ── */}
           <div className="fu" style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:20 }}>
             <div style={{
-              width:52, height:52, borderRadius:15, marginBottom:10,
-              background:'linear-gradient(135deg,#38bdf8 0%,#2563eb 60%,#4f46e5 100%)',
-              boxShadow:'0 6px 24px rgba(56,189,248,0.42)',
-              display:'flex', alignItems:'center', justifyContent:'center',
+              marginBottom:10,
               transition:'transform .2s, box-shadow .2s', cursor:'default',
             }}
-              onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform='scale(1.07) rotate(3deg)'; d.style.boxShadow='0 10px 36px rgba(56,189,248,0.6)'; }}
-              onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform=''; d.style.boxShadow='0 6px 24px rgba(56,189,248,0.42)'; }}
+              onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform='scale(1.07)'; }}
+              onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform=''; }}
             >
-              <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-                <path d="M22 16C22 21.523 17.523 26 12 26C9.387 26 7.02 24.98 5.27 23.3C5.78 23.43 6.315 23.5 6.87 23.5C11.843 23.5 15.87 19.473 15.87 14.5C15.87 11.03 13.973 7.997 11.15 6.387C11.756 6.297 12.374 6.25 13 6.25C18.108 6.25 22 10.692 22 16Z" fill="white" />
-                <circle cx="21" cy="8"  r="2"   fill="white" opacity="0.75" />
-                <circle cx="25" cy="13" r="1.2" fill="white" opacity="0.5"  />
-              </svg>
+              <img 
+                src={logoImg} 
+                alt="Bintang Global Group" 
+                style={{ 
+                  width: 120, 
+                  height: 'auto',
+                  filter: 'drop-shadow(0 6px 24px rgba(56,189,248,0.42))'
+                }} 
+              />
             </div>
             <h1 style={{ fontSize:16, fontWeight:800, letterSpacing:'0.18em', color:'white', textTransform:'uppercase', margin:0 }}>
               Bintang Global
