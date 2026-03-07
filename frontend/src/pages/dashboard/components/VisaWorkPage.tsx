@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, RefreshCw, Eye, Download, ClipboardList, Inbox, Send, Loader2, Check, CheckCircle, Search, User, MapPin } from 'lucide-react';
+import { FileText, RefreshCw, Eye, Download, ClipboardList, Inbox, Send, Loader2, Check, CheckCircle, Search, User, MapPin, Play } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
@@ -73,6 +73,7 @@ const VisaWorkPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
+  const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -133,8 +134,27 @@ const VisaWorkPage: React.FC = () => {
         .catch(() => setDetailInvoice(null));
     } else {
       setDetailInvoice(null);
+      setDetailDraft({});
     }
   }, [invoiceIdParam]);
+
+  const visaItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'visa') || [];
+  useEffect(() => {
+    if (visaItems.length) {
+      const next: Record<string, { status?: string }> = {};
+      visaItems.forEach((item: any) => {
+        const prog = item.VisaProgress;
+        next[item.id] = { status: prog?.status || 'document_received' };
+      });
+      setDetailDraft(prev => ({ ...prev, ...next }));
+    }
+  }, [detailInvoice?.id, visaItems.map((i: any) => i.id).join(',')]);
+
+  const handleProsesVisaItem = (itemId: string) => {
+    const d = detailDraft[itemId];
+    if (!d) return;
+    handleUpdateProgress(itemId, { status: d.status });
+  };
 
   const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
@@ -174,8 +194,6 @@ const VisaWorkPage: React.FC = () => {
       setUploadingId(null);
     }
   };
-
-  const visaItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'visa') || [];
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
 
@@ -344,7 +362,8 @@ const VisaWorkPage: React.FC = () => {
             <ModalBody className="space-y-6 bg-slate-50/30">
               {visaItems.map((item: any) => {
                 const prog = item.VisaProgress;
-                const status = prog?.status || 'document_received';
+                const d = detailDraft[item.id] ?? { status: prog?.status || 'document_received' };
+                const status = d.status ?? prog?.status ?? 'document_received';
                 const manifestLink = fileUrl(item.manifest_file_url);
                 const visaDocLink = fileUrl(prog?.visa_file_url);
                 const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Visa';
@@ -402,7 +421,7 @@ const VisaWorkPage: React.FC = () => {
                         <select
                           className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                           value={status}
-                          onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })}
+                          onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), status: e.target.value } }))}
                           disabled={updatingId === item.id}
                         >
                           {STATUS_OPTIONS.map(opt => (
@@ -457,6 +476,15 @@ const VisaWorkPage: React.FC = () => {
                         </div>
                       )}
 
+                      <div className="flex items-center gap-2 pt-2">
+                        <Button size="sm" variant="primary" onClick={() => handleProsesVisaItem(item.id)} disabled={updatingId === item.id}>
+                          {updatingId === item.id ? (
+                            <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                          ) : (
+                            <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                          )}
+                        </Button>
+                      </div>
                       {updatingId === item.id && (
                         <p className="flex items-center gap-2 text-sm text-slate-500">
                           <RefreshCw className="w-4 h-4 animate-spin" /> Menyimpan...

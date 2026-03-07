@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, ClipboardList, Building2, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText } from 'lucide-react';
+import { RefreshCw, Eye, ClipboardList, Building2, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText, Play } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
@@ -81,6 +81,8 @@ const HotelWorkPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
+  type HotelItemDraft = { status?: string; room_number?: string; meal_status?: string; notes?: string };
+  const [detailDraft, setDetailDraft] = useState<Record<string, HotelItemDraft>>({});
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -150,8 +152,37 @@ const HotelWorkPage: React.FC = () => {
         .catch(() => setDetailInvoice(null));
     } else {
       setDetailInvoice(null);
+      setDetailDraft({});
     }
   }, [invoiceIdParam]);
+
+  const hotelItemsAll = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'hotel') || [];
+  useEffect(() => {
+    if (hotelItemsAll.length) {
+      const next: Record<string, HotelItemDraft> = {};
+      hotelItemsAll.forEach((item: any) => {
+        const prog = item.HotelProgress;
+        next[item.id] = {
+          status: prog?.status || 'waiting_confirmation',
+          room_number: (prog?.room_number || '').trim(),
+          meal_status: prog?.meal_status || 'pending',
+          notes: prog?.notes ?? ''
+        };
+      });
+      setDetailDraft(prev => ({ ...prev, ...next }));
+    }
+  }, [detailInvoice?.id, hotelItemsAll.map((i: any) => i.id).join(',')]);
+
+  const handleProsesHotelItem = (itemId: string) => {
+    const d = detailDraft[itemId];
+    if (!d) return;
+    handleUpdateProgress(itemId, {
+      status: d.status,
+      room_number: d.room_number?.trim() || undefined,
+      meal_status: d.meal_status,
+      notes: d.notes?.trim() || undefined
+    });
+  };
 
   const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
@@ -182,7 +213,6 @@ const HotelWorkPage: React.FC = () => {
     return '';
   }, []);
 
-  const hotelItemsAll = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'hotel') || [];
   /** Di modal detail: jika tab Mekkah/Madinah dipilih, hanya tampilkan item hotel yang lokasinya sesuai */
   const hotelItems = useMemo(() => {
     if (!filterHotelLocation) return hotelItemsAll;
@@ -462,22 +492,25 @@ const HotelWorkPage: React.FC = () => {
                     <div className="p-5 space-y-5">
                       {group.items.map((item: any) => {
                         const prog = item.HotelProgress;
-                        const status = prog?.status || 'waiting_confirmation';
-                        const mealStatus = prog?.meal_status || 'pending';
+                        const d = detailDraft[item.id] ?? {
+                          status: prog?.status || 'waiting_confirmation',
+                          room_number: (prog?.room_number || '').trim(),
+                          meal_status: prog?.meal_status || 'pending',
+                          notes: prog?.notes ?? ''
+                        };
+                        const status = d.status ?? prog?.status ?? 'waiting_confirmation';
+                        const mealStatus = d.meal_status ?? prog?.meal_status ?? 'pending';
                         const jamaahStatus = item.jamaah_status || prog?.jamaah_status;
                         const qty = Math.max(1, Number(item.quantity) || 1);
                         const roomType = (item.meta?.room_type || '').toString() || '–';
                         const roomTypeLabel = ROOM_TYPE_LABELS[roomType] || roomType;
-                        const roomNumbersRaw = (prog?.room_number || '').trim();
-                        const roomNumbersArr = roomNumbersRaw ? roomNumbersRaw.split(',').map((s: string) => s.trim()) : [];
+                        const roomNumbersArr = (d.room_number ?? prog?.room_number ?? '').trim().split(',').map((s: string) => s.trim());
                         const roomNumbersPadded = Array.from({ length: qty }, (_, i) => roomNumbersArr[i] ?? '');
 
-                        const handleRoomNumbersBlur = () => {
-                          const inputs = document.querySelectorAll<HTMLInputElement>(`input[name^="room-${item.id}-"]`);
-                          const values = Array.from(inputs).map(inp => (inp.value ?? '').trim());
-                          const joined = values.join(', ');
-                          const normalizedSaved = roomNumbersRaw.split(',').map((s: string) => s.trim()).join(', ');
-                          if (joined !== normalizedSaved) handleUpdateProgress(item.id, { room_number: joined || undefined });
+                        const setRoomNumberAt = (index: number, value: string) => {
+                          const next = [...roomNumbersPadded];
+                          next[index] = value;
+                          setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), room_number: next.map(s => s.trim()).join(', ').trim() } }));
                         };
 
                         return (
@@ -498,7 +531,7 @@ const HotelWorkPage: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                   <ListChecks className="w-3.5 h-3.5 text-amber-500" /> Status Pekerjaan
                                 </label>
-                                <Autocomplete value={status} onChange={(v) => handleUpdateProgress(item.id, { status: v })} options={STATUS_OPTIONS} disabled={updatingId === item.id} fullWidth />
+                                <Autocomplete value={status} onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), status: v ?? 'waiting_confirmation' } }))} options={STATUS_OPTIONS} disabled={updatingId === item.id} fullWidth />
                               </div>
 
                               {/* Nomor Kamar — hanya saat status Pemberian nomor room */}
@@ -513,11 +546,10 @@ const HotelWorkPage: React.FC = () => {
                                         <label className="block text-xs text-slate-500 mb-1">Kamar {i + 1}</label>
                                         <input
                                           type="text"
-                                          name={`room-${item.id}-${i}`}
                                           className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 placeholder:text-slate-400"
                                           placeholder="No. kamar"
-                                          defaultValue={val}
-                                          onBlur={handleRoomNumbersBlur}
+                                          value={val}
+                                          onChange={(e) => setRoomNumberAt(i, e.target.value)}
                                           disabled={updatingId === item.id}
                                         />
                                       </div>
@@ -531,7 +563,7 @@ const HotelWorkPage: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                   <UtensilsCrossed className="w-3.5 h-3.5 text-amber-500" /> Status Makan
                                 </label>
-                                <Autocomplete value={mealStatus} onChange={(v) => handleUpdateProgress(item.id, { meal_status: v })} options={MEAL_OPTIONS} disabled={updatingId === item.id} fullWidth />
+                                <Autocomplete value={mealStatus} onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), meal_status: v ?? 'pending' } }))} options={MEAL_OPTIONS} disabled={updatingId === item.id} fullWidth />
                               </div>
 
                               {/* Check-in & Check-out — tanggal dari order, jam otomatis 16:00 / 12:00 */}
@@ -555,9 +587,18 @@ const HotelWorkPage: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                   <FileText className="w-3.5 h-3.5 text-amber-500" /> Catatan
                                 </label>
-                                <Textarea label="Catatan (opsional)" rows={2} placeholder="Catatan (opsional)" defaultValue={prog?.notes ?? ''} onBlur={(e) => { const v = e.target.value?.trim() || undefined; if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v }); }} disabled={updatingId === item.id} />
+                                <Textarea label="Catatan (opsional)" rows={2} placeholder="Catatan (opsional)" value={d.notes ?? ''} onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), notes: e.target.value } }))} disabled={updatingId === item.id} />
                               </div>
 
+                              <div className="flex items-center gap-2 pt-2">
+                                <Button size="sm" variant="primary" onClick={() => handleProsesHotelItem(item.id)} disabled={updatingId === item.id}>
+                                  {updatingId === item.id ? (
+                                    <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                                  ) : (
+                                    <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                                  )}
+                                </Button>
+                              </div>
                               {updatingId === item.id && (
                                 <p className="flex items-center gap-2 text-sm text-slate-500">
                                   <RefreshCw className="w-4 h-4 animate-spin" /> Menyimpan...

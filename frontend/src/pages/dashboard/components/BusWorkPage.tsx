@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, ClipboardList, Bus, Ticket, MapPin, Plane, RotateCcw, Search, FileSpreadsheet, FileText, AlertCircle, ChevronRight } from 'lucide-react';
+import { RefreshCw, Eye, ClipboardList, Bus, Ticket, MapPin, Plane, RotateCcw, Search, FileSpreadsheet, FileText, AlertCircle, ChevronRight, Play } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Button from '../../../components/common/Button';
@@ -55,8 +55,8 @@ const BusWorkPage: React.FC = () => {
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const filterChangedOnce = useRef(false);
-  const [localTicketInfo, setLocalTicketInfo] = useState<Record<string, string>>({});
-  const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
+  type BusItemDraft = { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string };
+  const [detailDraft, setDetailDraft] = useState<Record<string, BusItemDraft>>({});
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -176,10 +176,41 @@ const BusWorkPage: React.FC = () => {
         .catch(() => setDetailInvoice(null));
     } else {
       setDetailInvoice(null);
-      setLocalTicketInfo({});
-      setLocalNotes({});
+      setDetailDraft({});
     }
   }, [invoiceIdParam]);
+
+  const busItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'bus') || [];
+  useEffect(() => {
+    if (busItems.length) {
+      const next: Record<string, BusItemDraft> = {};
+      busItems.forEach((item: any) => {
+        const prog = item.BusProgress;
+        next[item.id] = {
+          bus_ticket_status: prog?.bus_ticket_status || 'pending',
+          bus_ticket_info: prog?.bus_ticket_info ?? '',
+          arrival_status: prog?.arrival_status || 'pending',
+          departure_status: prog?.departure_status || 'pending',
+          return_status: prog?.return_status || 'pending',
+          notes: prog?.notes ?? ''
+        };
+      });
+      setDetailDraft(prev => ({ ...prev, ...next }));
+    }
+  }, [detailInvoice?.id, busItems.map((i: any) => i.id).join(',')]);
+
+  const handleProsesItem = (itemId: string) => {
+    const d = detailDraft[itemId];
+    if (!d) return;
+    handleUpdateProgress(itemId, {
+      bus_ticket_status: d.bus_ticket_status,
+      bus_ticket_info: d.bus_ticket_info?.trim() || undefined,
+      arrival_status: d.arrival_status,
+      departure_status: d.departure_status,
+      return_status: d.return_status,
+      notes: d.notes?.trim() || undefined
+    });
+  };
 
   const handleUpdateProgress = async (orderItemId: string, payload: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
@@ -198,7 +229,6 @@ const BusWorkPage: React.FC = () => {
     }
   };
 
-  const busItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'bus') || [];
   const totalInvoices = dashboard?.total_orders ?? invoices.length;
   const totalItems = dashboard?.total_bus_items ?? 0;
   const hasBusInvoices = invoices.length > 0;
@@ -447,10 +477,14 @@ const BusWorkPage: React.FC = () => {
             <ModalBody className="space-y-4">
               {busItems.map((item: any, idx: number) => {
                 const prog = item.BusProgress;
-                const ticketStatus = prog?.bus_ticket_status || 'pending';
-                const arrivalStatus = prog?.arrival_status || 'pending';
-                const departureStatus = prog?.departure_status || 'pending';
-                const returnStatus = prog?.return_status || 'pending';
+                const d = detailDraft[item.id] ?? {
+                  bus_ticket_status: prog?.bus_ticket_status || 'pending',
+                  bus_ticket_info: prog?.bus_ticket_info ?? '',
+                  arrival_status: prog?.arrival_status || 'pending',
+                  departure_status: prog?.departure_status || 'pending',
+                  return_status: prog?.return_status || 'pending',
+                  notes: prog?.notes ?? ''
+                };
                 return (
                   <div key={item.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-slate-50/50">
                     <p className="font-semibold text-slate-800 flex items-center gap-2">
@@ -459,8 +493,8 @@ const BusWorkPage: React.FC = () => {
                     </p>
                     <Autocomplete
                       label="Status Tiket Bis"
-                      value={ticketStatus}
-                      onChange={(v) => handleUpdateProgress(item.id, { bus_ticket_status: v })}
+                      value={d.bus_ticket_status ?? 'pending'}
+                      onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), bus_ticket_status: v ?? 'pending' } }))}
                       options={TICKET_OPTIONS}
                       disabled={updatingId === item.id}
                       fullWidth
@@ -469,40 +503,31 @@ const BusWorkPage: React.FC = () => {
                       label="Info Tiket (nomor, dll)"
                       type="text"
                       placeholder="Opsional"
-                      value={localTicketInfo[item.id] ?? prog?.bus_ticket_info ?? ''}
-                      onChange={(e) => setLocalTicketInfo((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                      onBlur={() => {
-                        const v = (localTicketInfo[item.id] ?? prog?.bus_ticket_info ?? '').trim() || undefined;
-                        if (v !== (prog?.bus_ticket_info ?? '')) handleUpdateProgress(item.id, { bus_ticket_info: v });
-                        setLocalTicketInfo((prev) => {
-                          const next = { ...prev };
-                          delete next[item.id];
-                          return next;
-                        });
-                      }}
+                      value={d.bus_ticket_info ?? ''}
+                      onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), bus_ticket_info: e.target.value } }))}
                       disabled={updatingId === item.id}
                       fullWidth
                     />
                     <Autocomplete
                       label="Status Kedatangan"
-                      value={arrivalStatus}
-                      onChange={(v) => handleUpdateProgress(item.id, { arrival_status: v })}
+                      value={d.arrival_status ?? 'pending'}
+                      onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), arrival_status: v ?? 'pending' } }))}
                       options={TRIP_OPTIONS}
                       disabled={updatingId === item.id}
                       fullWidth
                     />
                     <Autocomplete
                       label="Status Keberangkatan"
-                      value={departureStatus}
-                      onChange={(v) => handleUpdateProgress(item.id, { departure_status: v })}
+                      value={d.departure_status ?? 'pending'}
+                      onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), departure_status: v ?? 'pending' } }))}
                       options={TRIP_OPTIONS}
                       disabled={updatingId === item.id}
                       fullWidth
                     />
                     <Autocomplete
                       label="Status Kepulangan"
-                      value={returnStatus}
-                      onChange={(v) => handleUpdateProgress(item.id, { return_status: v })}
+                      value={d.return_status ?? 'pending'}
+                      onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), return_status: v ?? 'pending' } }))}
                       options={TRIP_OPTIONS}
                       disabled={updatingId === item.id}
                       fullWidth
@@ -511,21 +536,20 @@ const BusWorkPage: React.FC = () => {
                       label="Catatan"
                       rows={2}
                       placeholder="Opsional"
-                      value={localNotes[item.id] ?? prog?.notes ?? ''}
-                      onChange={(e) => setLocalNotes((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                      onBlur={() => {
-                        const v = (localNotes[item.id] ?? prog?.notes ?? '').trim() || undefined;
-                        if (v !== (prog?.notes ?? '')) handleUpdateProgress(item.id, { notes: v });
-                        setLocalNotes((prev) => {
-                          const next = { ...prev };
-                          delete next[item.id];
-                          return next;
-                        });
-                      }}
+                      value={d.notes ?? ''}
+                      onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), notes: e.target.value } }))}
                       disabled={updatingId === item.id}
                       fullWidth
                     />
-                    {updatingId === item.id && <span className="text-xs text-slate-500">Menyimpan...</span>}
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button size="sm" variant="primary" onClick={() => handleProsesItem(item.id)} disabled={updatingId === item.id}>
+                        {updatingId === item.id ? (
+                          <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                        ) : (
+                          <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 );
               })}

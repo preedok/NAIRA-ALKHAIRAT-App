@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Search, User, MapPin } from 'lucide-react';
+import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Search, User, MapPin, Play } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Checkbox from '../../../components/common/Checkbox';
@@ -76,6 +76,7 @@ const TicketWorkPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
+  const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -128,12 +129,31 @@ const TicketWorkPage: React.FC = () => {
         .catch(() => setDetailInvoice(null));
     } else {
       setDetailInvoice(null);
+      setDetailDraft({});
     }
   }, [invoiceIdParam]);
 
   useEffect(() => {
     if (qParam && qParam.trim()) setFilterSearch(qParam.trim());
   }, [qParam]);
+
+  const ticketItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'ticket') || [];
+  useEffect(() => {
+    if (ticketItems.length) {
+      const next: Record<string, { status?: string }> = {};
+      ticketItems.forEach((item: any) => {
+        const prog = item.TicketProgress;
+        next[item.id] = { status: prog?.status || 'pending' };
+      });
+      setDetailDraft(prev => ({ ...prev, ...next }));
+    }
+  }, [detailInvoice?.id, ticketItems.map((i: any) => i.id).join(',')]);
+
+  const handleProsesTicketItem = (itemId: string) => {
+    const d = detailDraft[itemId];
+    if (!d) return;
+    handleUpdateProgress(itemId, { status: d.status });
+  };
 
   const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
@@ -173,8 +193,6 @@ const TicketWorkPage: React.FC = () => {
       setUploadingId(null);
     }
   };
-
-  const ticketItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'ticket') || [];
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
 
@@ -328,7 +346,8 @@ const TicketWorkPage: React.FC = () => {
             <ModalBody className="space-y-5">
               {ticketItems.map((item: any) => {
                 const prog = item.TicketProgress;
-                const status = prog?.status || 'pending';
+                const d = detailDraft[item.id] ?? { status: prog?.status || 'pending' };
+                const status = d.status ?? prog?.status ?? 'pending';
                 const manifestLink = fileUrl(item.manifest_file_url);
                 const ticketLink = fileUrl(prog?.ticket_file_url);
                 const productName = item.Product?.name || (item as any).product_name;
@@ -385,13 +404,23 @@ const TicketWorkPage: React.FC = () => {
                         <select
                           className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
                           value={status}
-                          onChange={(e) => handleUpdateProgress(item.id, { status: e.target.value })}
+                          onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), status: e.target.value } }))}
                           disabled={updatingId === item.id}
                         >
                           {STATUS_OPTIONS.map(opt => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        <Button size="sm" variant="primary" onClick={() => handleProsesTicketItem(item.id)} disabled={updatingId === item.id}>
+                          {updatingId === item.id ? (
+                            <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                          ) : (
+                            <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                          )}
+                        </Button>
                       </div>
 
                       {/* Upload dokumen tiket terbit */}
