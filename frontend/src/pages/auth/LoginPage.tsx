@@ -338,7 +338,7 @@ const LoginPage: React.FC = () => {
 
           {/* Register */}
           <div className="fu fu-4">
-            <Link to="/register" className="btn-sec">
+            <Link to="/register-owner-type" className="btn-sec">
               Daftar sebagai Partner Owner <ArrowRight size={13} />
             </Link>
           </div>

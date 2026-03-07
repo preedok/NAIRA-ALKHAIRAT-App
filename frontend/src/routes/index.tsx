@@ -5,6 +5,7 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import LandingPage from '../pages/landing/LandingPage';
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
+import RegisterOwnerTypePage from '../pages/auth/RegisterOwnerTypePage';
 import DashboardRouter from '../pages/dashboard/DashboardRouter';
 import SuperAdminDashboard from '../pages/dashboard/roles/SuperAdminDashboard';
 import SuperAdminLogsPage from '../pages/dashboard/superadmin/SuperAdminLogsPage';
@@ -47,6 +48,10 @@ const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />
+  },
+  {
+    path: '/register-owner-type',
+    element: <RegisterOwnerTypePage />
   },
   {
     path: '/register',

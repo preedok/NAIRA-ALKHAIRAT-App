@@ -17,7 +17,7 @@ const uploadConfig = require('../config/uploads');
 /**
  * POST /api/v1/owners/register
  * Calon Owner registrasi + upload bukti bayar MoU + input jumlah di awal.
- * Body (multipart): email, password, name, phone, company_name, address, operational_region, whatsapp, npwp, preferred_branch_id, registration_payment_amount.
+ * Body (multipart): email, password, name, phone, company_name, address, operational_region, whatsapp, npwp, preferred_branch_id, registration_payment_amount, is_mou_owner ('true'|'false').
  * File: registration_payment_file (bukti bayar). Setelah daftar status = PENDING_REGISTRATION_VERIFICATION, menunggu admin verifikasi & aktivasi.
  */
 const register = asyncHandler(async (req, res) => {
@@ -32,7 +32,8 @@ const register = asyncHandler(async (req, res) => {
     whatsapp,
     npwp,
     preferred_branch_id,
-    registration_payment_amount: amountRaw
+    registration_payment_amount: amountRaw,
+    is_mou_owner: isMouOwnerRaw
   } = req.body;
 
   const emailNorm = (email != null && email !== '') ? String(email).trim().toLowerCase() : '';
@@ -76,6 +77,7 @@ const register = asyncHandler(async (req, res) => {
   });
 
   const proofUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.REGISTRATION_PAYMENT, req.file.filename);
+  const isMouOwner = isMouOwnerRaw === 'true' || isMouOwnerRaw === true;
 
   await OwnerProfile.create({
     user_id: user.id,
@@ -86,7 +88,8 @@ const register = asyncHandler(async (req, res) => {
     whatsapp: whatsapp || phone,
     npwp,
     registration_payment_proof_url: proofUrl,
-    registration_payment_amount: amount
+    registration_payment_amount: amount,
+    is_mou_owner: isMouOwner
   });
 
   const u = user.toJSON();

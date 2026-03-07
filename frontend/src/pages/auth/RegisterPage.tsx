@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   Mail, Lock, User, Phone, Building2,
   MapPin, FileText, Globe, ArrowRight, Upload,
@@ -288,6 +288,8 @@ interface DropdownOption { value: string; label: string; sub?: string; }
 /* ─── RegisterPage ───────────────────────────────────────────────── */
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const ownerType = searchParams.get('type'); // 'mou' | 'non_mou' | null
   const [branches, setBranches]          = useState<Branch[]>([]);
   const [branchesLoading, setBranchLoad] = useState(true);
   const [form, setForm] = useState({
@@ -365,6 +367,7 @@ const RegisterPage: React.FC = () => {
       if (form.npwp.trim()) fd.append('npwp', form.npwp.trim());
       fd.append('registration_payment_amount', String(amountNum));
       fd.append('registration_payment_file', registrationPaymentFile);
+      fd.append('is_mou_owner', ownerType === 'mou' ? 'true' : 'false');
       await ownersApi.register(fd);
       setSuccess(true);
     } catch (err: any) {
@@ -390,6 +393,11 @@ const RegisterPage: React.FC = () => {
     fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",
     position:'relative', overflow:'hidden',
   };
+
+  /* ── Redirect: no type or invalid type ── */
+  if (ownerType !== 'mou' && ownerType !== 'non_mou') {
+    return null;
+  }
 
   /* ── Success screen ── */
   if (success) {
@@ -466,10 +474,22 @@ const RegisterPage: React.FC = () => {
                 </svg>
               </div>
               <div>
-                <h1 style={{ fontSize:20, fontWeight:800, color:'white', margin:0, letterSpacing:'-0.02em' }}>Daftar Partner Owner</h1>
-                <p style={{ fontSize:12, color:MUTED, margin:'4px 0 0', lineHeight:1.4 }}>Untuk travel yang belum terdaftar di Bintang Global Group</p>
+                <h1 style={{ fontSize:20, fontWeight:800, color:'white', margin:0, letterSpacing:'-0.02em' }}>
+                  {ownerType === 'mou' ? 'Pendaftaran Owner MOU' : 'Pendaftaran Owner Non-MOU'}
+                </h1>
+                <p style={{ fontSize:12, color:MUTED, margin:'4px 0 0', lineHeight:1.4 }}>
+                  {ownerType === 'mou'
+                    ? 'Mitra dengan MOU — dapat harga produk lebih murah (diskon sesuai ketentuan).'
+                    : 'Mitra tanpa MOU — harga produk mengikuti tarif standar.'}
+                </p>
               </div>
             </div>
+            <Link
+              to="/register-owner-type"
+              style={{ marginRight: 8, fontSize: 13, color: MUTED }}
+            >
+              Ganti jenis
+            </Link>
             <Link
               to="/login"
               style={{
