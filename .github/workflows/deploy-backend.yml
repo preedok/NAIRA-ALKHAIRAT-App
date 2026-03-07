@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:  # Manual trigger: Actions → Deploy to VPS → Run workflow
 
 jobs:
   deploy:

@@ -20,6 +20,29 @@ Agar setiap perubahan otomatis ter-deploy ke VPS:
 
 Setelah push, GitHub Actions akan menjalankan deploy ke VPS (backend: npm ci, migrate, pm2 restart; frontend: npm ci, build). Cek status di tab **Actions** di repository GitHub.
 
+### Jika belum terdeploy (manual deploy di VPS)
+
+Jika perubahan belum muncul di server (GitHub Actions gagal atau Secrets belum di-set), jalankan **di VPS** (setelah SSH):
+
+```bash
+cd /var/www/bgg-app
+git fetch origin master
+git reset --hard origin/master
+
+cd /var/www/bgg-app/backend
+npm ci
+npm run migrate 2>/dev/null || true
+pm2 restart bgg-backend --update-env
+
+cd /var/www/bgg-app/frontend
+npm ci
+npm run build
+```
+
+Atau jalankan script: `bash deploy/update-vps.sh` (dari folder `/var/www/bgg-app`).
+
+**Trigger manual dari GitHub:** Buka repo → **Actions** → pilih workflow **Deploy to VPS** → **Run workflow** (perlu Secrets sudah diisi).
+
 ## Pilihan Deployment
 
 Ada 2 metode yang tersedia:
