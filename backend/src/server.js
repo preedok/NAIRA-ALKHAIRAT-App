@@ -65,12 +65,30 @@ async function ensureInvoicesCurrencyRatesSnapshotColumn(db) {
   }
 }
 
+/** Ensure owner_profiles has is_mou_owner column (MOU vs non-MOU owner) */
+async function ensureOwnerProfilesIsMouOwnerColumn(db) {
+  try {
+    const [rows] = await db.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'owner_profiles' AND column_name = 'is_mou_owner'
+      LIMIT 1
+    `);
+    if (rows && rows.length > 0) return;
+    await db.query('ALTER TABLE owner_profiles ADD COLUMN IF NOT EXISTS is_mou_owner BOOLEAN NOT NULL DEFAULT false');
+    await db.query('UPDATE owner_profiles SET is_mou_owner = true');
+    logger.info('owner_profiles: added column is_mou_owner');
+  } catch (e) {
+    logger.warn('ensureOwnerProfilesIsMouOwnerColumn:', e.message);
+  }
+}
+
 // alter: false by default — avoid ALTER when DB has views (e.g. v_orders_summary) that depend on tables.
 // Set SYNC_ALTER=true only when you need schema changes and have dropped dependent views.
 sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
   .then(() => ensureUsersPasswordHashColumn(sequelize))
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
+  .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
   .then(async () => {
     logger.info('Database synchronized');
     const { SystemLog } = require('./models');
