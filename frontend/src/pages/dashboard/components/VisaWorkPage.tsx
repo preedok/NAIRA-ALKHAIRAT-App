@@ -371,18 +371,25 @@ const VisaWorkPage: React.FC = () => {
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                     {/* Item card header */}
                     <div className="px-5 py-4 bg-sky-50/50 border-b border-slate-100">
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-4">
                         <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-sky-100 text-sky-600 shrink-0">
                           <FileText className="w-6 h-6" />
                         </span>
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Visa</p>
                           <p className="font-bold text-slate-900">{productName}</p>
                           <p className="text-xs text-slate-500 mt-0.5">Qty: {item.quantity}</p>
                         </div>
-                        <span className={`ml-auto text-xs font-medium px-2.5 py-1.5 rounded-lg ${STATUS_CARD_COLORS[status] || 'bg-slate-100 text-slate-700'}`}>
+                        <span className={`text-xs font-medium px-2.5 py-1.5 rounded-lg ${STATUS_CARD_COLORS[status] || 'bg-slate-100 text-slate-700'}`}>
                           {STATUS_OPTIONS.find(s => s.value === status)?.label ?? status}
                         </span>
+                        <Button size="sm" variant="primary" onClick={() => handleProsesVisaItem(item.id)} disabled={updatingId === item.id}>
+                          {updatingId === item.id ? (
+                            <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                          ) : (
+                            <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                          )}
+                        </Button>
                       </div>
                     </div>
 
@@ -476,15 +483,6 @@ const VisaWorkPage: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 pt-2">
-                        <Button size="sm" variant="primary" onClick={() => handleProsesVisaItem(item.id)} disabled={updatingId === item.id}>
-                          {updatingId === item.id ? (
-                            <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
-                          ) : (
-                            <><Play className="w-4 h-4 mr-1.5" /> Proses</>
-                          )}
-                        </Button>
-                      </div>
                       {updatingId === item.id && (
                         <p className="flex items-center gap-2 text-sm text-slate-500">
                           <RefreshCw className="w-4 h-4 animate-spin" /> Menyimpan...

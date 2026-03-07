@@ -515,14 +515,23 @@ const HotelWorkPage: React.FC = () => {
 
                         return (
                           <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 space-y-4">
-                            {/* Sub-header: Tipe kamar × qty */}
+                            {/* Sub-header: Tipe kamar × qty + Proses */}
                             <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
-                              <span className="font-semibold text-slate-900">{roomTypeLabel} × {qty} kamar</span>
-                              {jamaahStatus && (
-                                <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${jamaahStatus === 'keluar_room' ? 'bg-slate-200 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                  {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
-                                </span>
-                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-slate-900">{roomTypeLabel} × {qty} kamar</span>
+                                {jamaahStatus && (
+                                  <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${jamaahStatus === 'keluar_room' ? 'bg-slate-200 text-slate-700' : jamaahStatus === 'sudah_masuk_room' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {JAMAAH_STATUS_LABELS[jamaahStatus] ?? jamaahStatus}
+                                  </span>
+                                )}
+                              </div>
+                              <Button size="sm" variant="primary" onClick={() => handleProsesHotelItem(item.id)} disabled={updatingId === item.id}>
+                                {updatingId === item.id ? (
+                                  <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                                ) : (
+                                  <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                                )}
+                              </Button>
                             </div>
 
                             <div className="space-y-4">
@@ -590,15 +599,6 @@ const HotelWorkPage: React.FC = () => {
                                 <Textarea label="Catatan (opsional)" rows={2} placeholder="Catatan (opsional)" value={d.notes ?? ''} onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), notes: e.target.value } }))} disabled={updatingId === item.id} />
                               </div>
 
-                              <div className="flex items-center gap-2 pt-2">
-                                <Button size="sm" variant="primary" onClick={() => handleProsesHotelItem(item.id)} disabled={updatingId === item.id}>
-                                  {updatingId === item.id ? (
-                                    <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
-                                  ) : (
-                                    <><Play className="w-4 h-4 mr-1.5" /> Proses</>
-                                  )}
-                                </Button>
-                              </div>
                               {updatingId === item.id && (
                                 <p className="flex items-center gap-2 text-sm text-slate-500">
                                   <RefreshCw className="w-4 h-4 animate-spin" /> Menyimpan...

@@ -487,10 +487,19 @@ const BusWorkPage: React.FC = () => {
                 };
                 return (
                   <div key={item.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-slate-50/50">
-                    <p className="font-semibold text-slate-800 flex items-center gap-2">
-                      <Bus className="w-4 h-4 text-[#0D1A63]" />
-                      Item Bus #{idx + 1} · Qty: {item.quantity}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-800 flex items-center gap-2">
+                        <Bus className="w-4 h-4 text-[#0D1A63]" />
+                        Item Bus #{idx + 1} · Qty: {item.quantity}
+                      </p>
+                      <Button size="sm" variant="primary" onClick={() => handleProsesItem(item.id)} disabled={updatingId === item.id}>
+                        {updatingId === item.id ? (
+                          <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                        ) : (
+                          <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                        )}
+                      </Button>
+                    </div>
                     <Autocomplete
                       label="Status Tiket Bis"
                       value={d.bus_ticket_status ?? 'pending'}
@@ -541,15 +550,6 @@ const BusWorkPage: React.FC = () => {
                       disabled={updatingId === item.id}
                       fullWidth
                     />
-                    <div className="flex items-center gap-2 pt-2">
-                      <Button size="sm" variant="primary" onClick={() => handleProsesItem(item.id)} disabled={updatingId === item.id}>
-                        {updatingId === item.id ? (
-                          <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
-                        ) : (
-                          <><Play className="w-4 h-4 mr-1.5" /> Proses</>
-                        )}
-                      </Button>
-                    </div>
                   </div>
                 );
               })}

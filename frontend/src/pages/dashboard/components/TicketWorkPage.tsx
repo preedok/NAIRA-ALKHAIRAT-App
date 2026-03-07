@@ -354,7 +354,7 @@ const TicketWorkPage: React.FC = () => {
                 return (
                   <div key={item.id} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                     {/* Card header */}
-                    <div className="flex items-center justify-between gap-3 px-5 py-4 bg-slate-50/80 border-b border-slate-100">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-slate-50/80 border-b border-slate-100">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600 shrink-0">
                           <Ticket className="w-4 h-4" />
@@ -367,6 +367,13 @@ const TicketWorkPage: React.FC = () => {
                           </span>
                         </div>
                       </div>
+                      <Button size="sm" variant="primary" onClick={() => handleProsesTicketItem(item.id)} disabled={updatingId === item.id}>
+                        {updatingId === item.id ? (
+                          <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                        ) : (
+                          <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                        )}
+                      </Button>
                     </div>
                     <div className="p-5 space-y-4">
                       {/* Data jamaah */}
@@ -411,16 +418,6 @@ const TicketWorkPage: React.FC = () => {
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-2">
-                        <Button size="sm" variant="primary" onClick={() => handleProsesTicketItem(item.id)} disabled={updatingId === item.id}>
-                          {updatingId === item.id ? (
-                            <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
-                          ) : (
-                            <><Play className="w-4 h-4 mr-1.5" /> Proses</>
-                          )}
-                        </Button>
                       </div>
 
                       {/* Upload dokumen tiket terbit */}
