@@ -122,6 +122,12 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'admin_pusat', 'role_accounting']
   },
   {
+    title: 'Settings',
+    icon: <Settings className="w-5 h-5" />,
+    path: '/dashboard/settings',
+    roles: ['super_admin', 'admin_pusat', 'role_accounting']
+  },
+  {
     title: 'Data Rekening Bank',
     icon: <FileText className="w-5 h-5" />,
     path: '/dashboard/accounting/chart-of-accounts',
@@ -144,12 +150,6 @@ const menuItems: MenuItem[] = [
     icon: <ShoppingCart className="w-5 h-5" />,
     path: '/dashboard/accounting/purchasing',
     roles: ['role_accounting']
-  },
-  {
-    title: 'Settings',
-    icon: <Settings className="w-5 h-5" />,
-    path: '/dashboard/settings',
-    roles: ['super_admin', 'admin_pusat', 'role_accounting']
   },
   {
     title: 'System Logs',
