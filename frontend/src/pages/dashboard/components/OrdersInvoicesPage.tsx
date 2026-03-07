@@ -112,6 +112,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [statModal, setStatModal] = useState<'total_invoice' | 'total_trip' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
   const [exportingInvoicesExcel, setExportingInvoicesExcel] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1139,19 +1140,22 @@ const OrdersInvoicesPage: React.FC = () => {
               label="Total Invoice"
               value={loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}
               iconClassName="bg-sky-100 text-sky-600"
+              onClick={() => setStatModal('total_invoice')}
             />
             <StatCard
               icon={<Package className="w-5 h-5" />}
               label="Total Trip"
               value={loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}
               iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
+              onClick={() => setStatModal('total_trip')}
             />
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
               label="Total Tagihan"
-              value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
+              value={loadingSummary ? '...' : formatIDR(s.total_amount)}
               iconClassName="bg-slate-100 text-slate-600"
-              subtitle={!loadingSummary ? `Total belum dibayar (sisa) · ≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
+              subtitle={!loadingSummary ? `Total nilai invoice · ≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
+              onClick={() => setStatModal('total_tagihan')}
             />
             <StatCard
               icon={<CreditCard className="w-5 h-5" />}
@@ -1159,15 +1163,69 @@ const OrdersInvoicesPage: React.FC = () => {
               value={loadingSummary ? '...' : formatIDR(s.total_paid)}
               iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
               subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_paid / sarToIdrList)} · ≈ ${formatUSD(s.total_paid / usdToIdrList)}` : undefined}
+              onClick={() => setStatModal('dibayar')}
             />
             <StatCard
               icon={<Wallet className="w-5 h-5" />}
               label="Sisa"
               value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
               iconClassName="bg-amber-100 text-amber-600"
-              subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
+              subtitle={!loadingSummary ? `Belum dibayar · ≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
+              onClick={() => setStatModal('sisa')}
             />
           </div>
+
+          {/* Modal detail card statistik */}
+          {statModal && (
+            <Modal open onClose={() => setStatModal(null)}>
+              <ModalBox>
+                <ModalHeader
+                  title={
+                    statModal === 'total_invoice' ? 'Total Invoice' :
+                    statModal === 'total_trip' ? 'Total Trip' :
+                    statModal === 'total_tagihan' ? 'Total Tagihan' :
+                    statModal === 'dibayar' ? 'Dibayar' : 'Sisa'
+                  }
+                  onClose={() => setStatModal(null)}
+                />
+                <ModalBody className="space-y-3">
+                  {statModal === 'total_invoice' && (
+                    <>
+                      <p className="text-slate-600 text-sm">Jumlah invoice yang masuk dalam filter saat ini.</p>
+                      <p className="text-lg font-semibold text-slate-900">{s.total_invoices.toLocaleString('id-ID')} invoice</p>
+                    </>
+                  )}
+                  {statModal === 'total_trip' && (
+                    <>
+                      <p className="text-slate-600 text-sm">Jumlah order (trip) yang memiliki invoice.</p>
+                      <p className="text-lg font-semibold text-slate-900">{s.total_orders.toLocaleString('id-ID')} trip</p>
+                    </>
+                  )}
+                  {statModal === 'total_tagihan' && (
+                    <>
+                      <p className="text-slate-600 text-sm">Total nilai seluruh invoice (jumlah total_amount). Seluruh tagihan yang tercatat.</p>
+                      <p className="text-lg font-semibold text-slate-900">{formatIDR(s.total_amount)}</p>
+                      <p className="text-xs text-slate-500">≈ {formatSAR(s.total_amount / sarToIdrList)} · ≈ {formatUSD(s.total_amount / usdToIdrList)}</p>
+                    </>
+                  )}
+                  {statModal === 'dibayar' && (
+                    <>
+                      <p className="text-slate-600 text-sm">Total pembayaran yang sudah diterima (paid_amount). Dana yang sudah di-refund tidak dihitung.</p>
+                      <p className="text-lg font-semibold text-emerald-600">{formatIDR(s.total_paid)}</p>
+                      <p className="text-xs text-slate-500">≈ {formatSAR(s.total_paid / sarToIdrList)} · ≈ {formatUSD(s.total_paid / usdToIdrList)}</p>
+                    </>
+                  )}
+                  {statModal === 'sisa' && (
+                    <>
+                      <p className="text-slate-600 text-sm">Total yang belum dibayar (remaining_amount). Sisa tagihan yang masih harus dilunasi.</p>
+                      <p className="text-lg font-semibold text-amber-600">{formatIDR(s.total_remaining)}</p>
+                      <p className="text-xs text-slate-500">≈ {formatSAR(s.total_remaining / sarToIdrList)} · ≈ {formatUSD(s.total_remaining / usdToIdrList)}</p>
+                    </>
+                  )}
+                </ModalBody>
+              </ModalBox>
+            </Modal>
+          )}
 
           <div>
             <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">

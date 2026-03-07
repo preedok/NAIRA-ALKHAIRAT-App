@@ -18,7 +18,7 @@ import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { AutoRefreshControl } from '../../../components/common';
+import { AutoRefreshControl, Modal, ModalHeader, ModalBody, ModalBox } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
@@ -63,6 +63,7 @@ const InvoiceDashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
+  const [statModal, setStatModal] = useState<'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -185,13 +186,65 @@ const InvoiceDashboard: React.FC = () => {
         <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" />
       </div>
 
-      {/* Ringkasan nominal (summary) — pakai StatCard agar seragam */}
-      {summary && (summary.total_remaining > 0 || summary.total_paid > 0) && (
+      {/* Ringkasan nominal (summary) — pakai StatCard agar seragam; klik untuk detail */}
+      {summary && (summary.total_amount > 0 || summary.total_remaining > 0 || summary.total_paid > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Tagihan" value={formatIDR(summary.total_remaining)} subtitle="Total belum dibayar (sisa tagihan)" />
-          <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Dibayar" value={formatIDR(summary.total_paid)} />
-          <StatCard icon={<Wallet className="w-5 h-5" />} label="Sisa" value={formatIDR(summary.total_remaining)} />
+          <StatCard
+            icon={<DollarSign className="w-5 h-5" />}
+            label="Total Tagihan"
+            value={formatIDR(summary.total_amount)}
+            subtitle="Total nilai semua invoice (seluruh tagihan)"
+            onClick={() => setStatModal('total_tagihan')}
+          />
+          <StatCard
+            icon={<CheckCircle className="w-5 h-5" />}
+            label="Dibayar"
+            value={formatIDR(summary.total_paid)}
+            onClick={() => setStatModal('dibayar')}
+          />
+          <StatCard
+            icon={<Wallet className="w-5 h-5" />}
+            label="Sisa"
+            value={formatIDR(summary.total_remaining)}
+            subtitle="Belum dibayar (sisa tagihan)"
+            onClick={() => setStatModal('sisa')}
+          />
         </div>
+      )}
+
+      {/* Modal detail card statistik */}
+      {statModal && summary && (
+        <Modal open onClose={() => setStatModal(null)}>
+          <ModalBox>
+            <ModalHeader
+              title={
+                statModal === 'total_tagihan' ? 'Total Tagihan' : statModal === 'dibayar' ? 'Dibayar' : 'Sisa'
+              }
+              onClose={() => setStatModal(null)}
+            />
+            <ModalBody className="space-y-3">
+              {statModal === 'total_tagihan' && (
+                <>
+                  <p className="text-slate-600 text-sm">Total nilai seluruh invoice (jumlah total_amount semua invoice yang masuk filter).</p>
+                  <p className="text-lg font-semibold text-slate-900">{formatIDR(summary.total_amount)}</p>
+                  <p className="text-xs text-slate-500">Jumlah invoice: {summary.total_invoices}</p>
+                </>
+              )}
+              {statModal === 'dibayar' && (
+                <>
+                  <p className="text-slate-600 text-sm">Total pembayaran yang sudah diterima dan tercatat (paid_amount). Dana yang sudah di-refund tidak dihitung.</p>
+                  <p className="text-lg font-semibold text-emerald-600">{formatIDR(summary.total_paid)}</p>
+                </>
+              )}
+              {statModal === 'sisa' && (
+                <>
+                  <p className="text-slate-600 text-sm">Total yang belum dibayar (remaining_amount). Sisa tagihan yang masih harus dilunasi.</p>
+                  <p className="text-lg font-semibold text-amber-600">{formatIDR(summary.total_remaining)}</p>
+                </>
+              )}
+            </ModalBody>
+          </ModalBox>
+        </Modal>
       )}
 
       {/* Invoice Terbaru (wilayah) – data invoice lengkap */}
