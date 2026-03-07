@@ -14,6 +14,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check GitHub Secrets (VPS)
+        run: |
+          if [ -z "${{ secrets.VPS_HOST }}" ]; then
+            echo "::error::Secret VPS_HOST belum diisi. Buka repo GitHub → Settings → Secrets and variables → Actions → New repository secret"
+            echo "Tambahkan: VPS_HOST (contoh: 187.124.90.214), VPS_USERNAME (contoh: root), VPS_SSH_KEY (isi private key), VPS_SSH_PORT (contoh: 22)"
+            exit 1
+          fi
+          if [ -z "${{ secrets.VPS_USERNAME }}" ]; then
+            echo "::error::Secret VPS_USERNAME belum diisi."
+            exit 1
+          fi
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "::error::Secret VPS_SSH_KEY belum diisi (private key SSH untuk deploy)."
+            exit 1
+          fi
+          echo "Secrets OK, melanjutkan deploy..."
+
       - name: Deploy Backend + Frontend to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:

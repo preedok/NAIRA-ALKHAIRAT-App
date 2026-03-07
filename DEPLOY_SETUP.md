@@ -43,6 +43,22 @@ Atau jalankan script: `bash deploy/update-vps.sh` (dari folder `/var/www/bgg-app
 
 **Trigger manual dari GitHub:** Buka repo → **Actions** → pilih workflow **Deploy to VPS** → **Run workflow** (perlu Secrets sudah diisi).
 
+### Error "missing server host" di GitHub Actions
+
+Artinya **GitHub Secrets** untuk deploy belum diisi. Tambahkan di:
+
+**GitHub repo → Settings → Secrets and variables → Actions → New repository secret**
+
+| Nama secret   | Nilai | Wajib |
+|---------------|--------|-------|
+| `VPS_HOST`    | IP VPS (mis. `187.124.90.214`) | ✅ |
+| `VPS_USERNAME`| User SSH (mis. `root`) | ✅ |
+| `VPS_SSH_KEY` | Isi **seluruh** private key SSH (bisa dari `cat ~/.ssh/id_rsa` di PC atau buat key baru di VPS lalu `cat ~/.ssh/github_actions_deploy` di VPS) | ✅ |
+| `VPS_SSH_PORT`| Port SSH, biasanya `22` | ✅ |
+| `APP_PATH`    | Path app di VPS, mis. `/var/www/bgg-app` | Opsional |
+
+Setelah semua diisi, jalankan lagi **Actions → Deploy to VPS → Run workflow**.
+
 ## Pilihan Deployment
 
 Ada 2 metode yang tersedia:
