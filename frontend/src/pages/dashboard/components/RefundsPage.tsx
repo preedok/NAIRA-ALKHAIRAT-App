@@ -6,7 +6,7 @@ import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading, Modal, ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -39,6 +39,7 @@ const RefundsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
+  const [statModal, setStatModal] = useState<'total' | 'requested' | 'approved' | 'rejected' | 'refunded' | 'amount_pending' | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
@@ -229,30 +230,66 @@ const RefundsPage: React.FC = () => {
       </PageFilter>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Refund" value={stats?.total_refunds ?? '–'} iconClassName="bg-[#0D1A63] text-white" />
+        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Refund" value={stats?.total_refunds ?? '–'} iconClassName="bg-[#0D1A63] text-white" onClick={() => setStatModal('total')} />
         <StatCard
           icon={<Clock className="w-5 h-5" />}
           label="Menunggu"
           value={stats?.requested ?? '–'}
           iconClassName="bg-amber-100 text-amber-600"
           subtitle={(stats?.amount_pending ?? 0) > 0 ? formatIDR(stats!.amount_pending) : undefined}
+          onClick={() => setStatModal('requested')}
         />
-        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Disetujui" value={stats?.approved ?? '–'} iconClassName="bg-sky-100 text-sky-600" />
-        <StatCard icon={<XCircle className="w-5 h-5" />} label="Ditolak" value={stats?.rejected ?? '–'} iconClassName="bg-red-100 text-red-600" />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Disetujui" value={stats?.approved ?? '–'} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('approved')} />
+        <StatCard icon={<XCircle className="w-5 h-5" />} label="Ditolak" value={stats?.rejected ?? '–'} iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('rejected')} />
         <StatCard
           icon={<Wallet className="w-5 h-5" />}
           label="Sudah direfund"
           value={stats?.refunded ?? '–'}
           iconClassName="bg-emerald-100 text-emerald-600"
           subtitle={(stats?.amount_refunded ?? 0) > 0 ? formatIDR(stats!.amount_refunded) : undefined}
+          onClick={() => setStatModal('refunded')}
         />
         <StatCard
           icon={<Banknote className="w-5 h-5" />}
           label="Nominal Pending"
           value={formatIDR(stats?.amount_requested ?? 0)}
           iconClassName="bg-teal-100 text-teal-600"
+          onClick={() => setStatModal('amount_pending')}
         />
       </div>
+
+      {statModal && (() => {
+        const filterByStatus = statModal === 'total' ? list : statModal === 'amount_pending' ? list.filter((r: any) => r.status === 'requested' || r.status === 'approved') : list.filter((r: any) => r.status === statModal);
+        const title = statModal === 'total' ? 'Total Refund' : statModal === 'requested' ? 'Menunggu' : statModal === 'approved' ? 'Disetujui' : statModal === 'rejected' ? 'Ditolak' : statModal === 'refunded' ? 'Sudah direfund' : 'Nominal Pending';
+        return (
+          <Modal open onClose={() => setStatModal(null)}>
+            <ModalBoxLg>
+              <ModalHeader title={title} subtitle={`${filterByStatus.length} permintaan sesuai statistik`} onClose={() => setStatModal(null)} />
+              <ModalBody className="p-0 overflow-hidden flex flex-col min-h-0">
+                <div className="overflow-auto flex-1 min-h-0">
+                  <Table
+                    columns={refundColumns}
+                    data={filterByStatus}
+                    emptyMessage="Tidak ada data dalam kategori ini."
+                    renderRow={(r: any) => (
+                      <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="py-2 px-4 text-sm">
+                          {r.Invoice ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact /> : r.source === 'balance' ? 'Refund saldo' : '–'}
+                        </td>
+                        <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
+                        <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</td>
+                        <td className="py-2 px-4 text-slate-600 text-sm">{r.bank_name && r.account_number ? `${r.bank_name} ${r.account_number}` : '-'}</td>
+                        <td className="py-2 px-4"><Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge></td>
+                        {canUpdateStatus && <td className="py-2 px-4" />}
+                      </tr>
+                    )}
+                  />
+                </div>
+              </ModalBody>
+            </ModalBoxLg>
+          </Modal>
+        );
+      })()}
 
       <Card>
         <CardSectionHeader

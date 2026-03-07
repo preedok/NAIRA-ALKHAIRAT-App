@@ -325,21 +325,24 @@ const AccountingDashboard: React.FC = () => {
               label="Total Invoice"
               value={summary.total_invoices}
               iconClassName="bg-[#0D1A63] text-white"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => openModal('all')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button></div>}
             />
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
               label="Total Terbayar"
               value={formatIDR(summary.total_paid)}
               iconClassName="bg-[#0D1A63] text-white"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => openModal('all')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button></div>}
             />
             <StatCard
               icon={<TrendingUp className="w-5 h-5" />}
               label="Piutang (Sisa)"
               value={formatIDR(summary.total_receivable)}
               iconClassName="bg-amber-100 text-amber-600"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => openModal('all')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button></div>}
             />
           </div>
 

@@ -1175,57 +1175,72 @@ const OrdersInvoicesPage: React.FC = () => {
             />
           </div>
 
-          {/* Modal detail card statistik */}
-          {statModal && (
-            <Modal open onClose={() => setStatModal(null)}>
-              <ModalBox>
-                <ModalHeader
-                  title={
-                    statModal === 'total_invoice' ? 'Total Invoice' :
-                    statModal === 'total_trip' ? 'Total Trip' :
-                    statModal === 'total_tagihan' ? 'Total Tagihan' :
-                    statModal === 'dibayar' ? 'Dibayar' : 'Sisa'
-                  }
-                  onClose={() => setStatModal(null)}
-                />
-                <ModalBody className="space-y-3">
-                  {statModal === 'total_invoice' && (
-                    <>
-                      <p className="text-slate-600 text-sm">Jumlah invoice yang masuk dalam filter saat ini.</p>
-                      <p className="text-lg font-semibold text-slate-900">{s.total_invoices.toLocaleString('id-ID')} invoice</p>
-                    </>
-                  )}
-                  {statModal === 'total_trip' && (
-                    <>
-                      <p className="text-slate-600 text-sm">Jumlah order (trip) yang memiliki invoice.</p>
-                      <p className="text-lg font-semibold text-slate-900">{s.total_orders.toLocaleString('id-ID')} trip</p>
-                    </>
-                  )}
-                  {statModal === 'total_tagihan' && (
-                    <>
-                      <p className="text-slate-600 text-sm">Total nilai seluruh invoice (jumlah total_amount). Seluruh tagihan yang tercatat.</p>
-                      <p className="text-lg font-semibold text-slate-900">{formatIDR(s.total_amount)}</p>
-                      <p className="text-xs text-slate-500">≈ {formatSAR(s.total_amount / sarToIdrList)} · ≈ {formatUSD(s.total_amount / usdToIdrList)}</p>
-                    </>
-                  )}
-                  {statModal === 'dibayar' && (
-                    <>
-                      <p className="text-slate-600 text-sm">Total pembayaran yang sudah diterima (paid_amount). Dana yang sudah di-refund tidak dihitung.</p>
-                      <p className="text-lg font-semibold text-emerald-600">{formatIDR(s.total_paid)}</p>
-                      <p className="text-xs text-slate-500">≈ {formatSAR(s.total_paid / sarToIdrList)} · ≈ {formatUSD(s.total_paid / usdToIdrList)}</p>
-                    </>
-                  )}
-                  {statModal === 'sisa' && (
-                    <>
-                      <p className="text-slate-600 text-sm">Total yang belum dibayar (remaining_amount). Sisa tagihan yang masih harus dilunasi.</p>
-                      <p className="text-lg font-semibold text-amber-600">{formatIDR(s.total_remaining)}</p>
-                      <p className="text-xs text-slate-500">≈ {formatSAR(s.total_remaining / sarToIdrList)} · ≈ {formatUSD(s.total_remaining / usdToIdrList)}</p>
-                    </>
-                  )}
-                </ModalBody>
-              </ModalBox>
-            </Modal>
-          )}
+          {/* Modal detail card statistik: daftar invoice terfilter sesuai statistik */}
+          {statModal && (() => {
+            const getPaid = (inv: any) => {
+              const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+              return parseFloat(inv.paid_amount || 0) || paidFromProofs;
+            };
+            const getRemaining = (inv: any) => {
+              const totalInv = parseFloat(inv.total_amount || 0);
+              return Math.max(0, totalInv - getPaid(inv));
+            };
+            const filteredList = statModal === 'dibayar' ? invoices.filter((inv: any) => getPaid(inv) > 0)
+              : statModal === 'sisa' ? invoices.filter((inv: any) => getRemaining(inv) > 0)
+              : invoices;
+            const statModalColumns: TableColumn[] = [
+              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+              { id: 'owner', label: 'Owner', align: 'left' },
+              { id: 'company', label: 'Perusahaan', align: 'left' },
+              { id: 'total', label: 'Total', align: 'right' },
+              { id: 'paid', label: 'Dibayar', align: 'right' },
+              { id: 'remaining', label: 'Sisa', align: 'right' }
+            ];
+            const totalCount = pagination?.total ?? filteredList.length;
+            const range = pagination ? `Halaman saat ini: ${filteredList.length} dari ${totalCount} invoice` : `${filteredList.length} invoice`;
+            return (
+              <Modal open onClose={() => setStatModal(null)}>
+                <ModalBoxLg>
+                  <ModalHeader
+                    title={
+                      statModal === 'total_invoice' ? 'Total Invoice' :
+                      statModal === 'total_trip' ? 'Total Trip' :
+                      statModal === 'total_tagihan' ? 'Total Tagihan' :
+                      statModal === 'dibayar' ? 'Dibayar' : 'Sisa'
+                    }
+                    subtitle={range + (statModal === 'dibayar' || statModal === 'sisa' ? ' (sesuai filter)' : ' sesuai filter')}
+                    onClose={() => setStatModal(null)}
+                  />
+                  <ModalBody className="p-0 overflow-hidden flex flex-col min-h-0">
+                    <div className="overflow-auto flex-1 min-h-0">
+                      <Table
+                        columns={statModalColumns}
+                        data={filteredList}
+                        emptyMessage="Tidak ada invoice dalam kategori ini."
+                        renderRow={(inv: any) => {
+                          const totalInv = parseFloat(inv.total_amount || 0);
+                          const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+                          const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
+                          const remaining = Math.max(0, totalInv - paid);
+                          const totalTriple = invoiceTotalTriple(inv);
+                          return (
+                            <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                              <td className="py-2 px-4 font-mono text-sm"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan compact /></td>
+                              <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || '-'}</td>
+                              <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
+                              <td className="py-2 px-4 text-right text-sm">{formatIDR(totalTriple.idr)}</td>
+                              <td className="py-2 px-4 text-right text-emerald-600 text-sm">{formatIDR(paid)}</td>
+                              <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm">{formatIDR(remaining)}</td>
+                            </tr>
+                          );
+                        }}
+                      />
+                    </div>
+                  </ModalBody>
+                </ModalBoxLg>
+              </Modal>
+            );
+          })()}
 
           <div>
             <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">

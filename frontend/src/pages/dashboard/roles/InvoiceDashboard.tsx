@@ -18,7 +18,7 @@ import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { AutoRefreshControl, Modal, ModalHeader, ModalBody, ModalBox } from '../../../components/common';
+import { AutoRefreshControl, Modal, ModalHeader, ModalBody, ModalBox, ModalBoxLg } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
@@ -63,7 +63,7 @@ const InvoiceDashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
-  const [statModal, setStatModal] = useState<'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
+  const [statModal, setStatModal] = useState<'pending_verification' | 'verified_today' | 'total_invoice' | 'blocked' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -178,12 +178,12 @@ const InvoiceDashboard: React.FC = () => {
         }
       />
 
-      {/* Stat cards */}
+      {/* Stat cards — klik untuk lihat daftar invoice sesuai statistik */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={pendingVerification.length} subtitle="Bukti bayar perlu diverifikasi" iconClassName="bg-amber-100 text-amber-600" />
-        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'} iconClassName="bg-emerald-100 text-emerald-600" />
-        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary?.total_invoices ?? invoices.length} subtitle={scopeLabel} iconClassName="bg-sky-100 text-sky-600" />
-        <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" />
+        <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={pendingVerification.length} subtitle="Bukti bayar perlu diverifikasi" iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('pending_verification')} />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('verified_today')} />
+        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary?.total_invoices ?? invoices.length} subtitle={scopeLabel} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('total_invoice')} />
+        <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('blocked')} />
       </div>
 
       {/* Ringkasan nominal (summary) — pakai StatCard agar seragam; klik untuk detail */}
@@ -212,40 +212,71 @@ const InvoiceDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Modal detail card statistik */}
-      {statModal && summary && (
-        <Modal open onClose={() => setStatModal(null)}>
-          <ModalBox>
-            <ModalHeader
-              title={
-                statModal === 'total_tagihan' ? 'Total Tagihan' : statModal === 'dibayar' ? 'Dibayar' : 'Sisa'
-              }
-              onClose={() => setStatModal(null)}
-            />
-            <ModalBody className="space-y-3">
-              {statModal === 'total_tagihan' && (
-                <>
-                  <p className="text-slate-600 text-sm">Total nilai seluruh invoice (jumlah total_amount semua invoice yang masuk filter).</p>
-                  <p className="text-lg font-semibold text-slate-900">{formatIDR(summary.total_amount)}</p>
-                  <p className="text-xs text-slate-500">Jumlah invoice: {summary.total_invoices}</p>
-                </>
-              )}
-              {statModal === 'dibayar' && (
-                <>
-                  <p className="text-slate-600 text-sm">Total pembayaran yang sudah diterima dan tercatat (paid_amount). Dana yang sudah di-refund tidak dihitung.</p>
-                  <p className="text-lg font-semibold text-emerald-600">{formatIDR(summary.total_paid)}</p>
-                </>
-              )}
-              {statModal === 'sisa' && (
-                <>
-                  <p className="text-slate-600 text-sm">Total yang belum dibayar (remaining_amount). Sisa tagihan yang masih harus dilunasi.</p>
-                  <p className="text-lg font-semibold text-amber-600">{formatIDR(summary.total_remaining)}</p>
-                </>
-              )}
-            </ModalBody>
-          </ModalBox>
-        </Modal>
-      )}
+      {/* Modal detail card statistik: daftar invoice terfilter sesuai statistik */}
+      {statModal && (() => {
+        const getPaid = (inv: any) => {
+          const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+          return parseFloat(inv.paid_amount || 0) || paidFromProofs;
+        };
+        const getRemaining = (inv: any) => {
+          const totalInv = parseFloat(inv.total_amount || 0);
+          return Math.max(0, totalInv - getPaid(inv));
+        };
+        const filteredList = statModal === 'pending_verification' ? pendingVerification
+          : statModal === 'verified_today' ? verifiedToday
+          : statModal === 'total_invoice' ? invoices
+          : statModal === 'blocked' ? blockedInvoices
+          : statModal === 'dibayar' ? invoices.filter((inv) => getPaid(inv) > 0)
+          : statModal === 'sisa' ? invoices.filter((inv) => getRemaining(inv) > 0)
+          : invoices;
+        const modalTitle = statModal === 'pending_verification' ? 'Pending Verifikasi' : statModal === 'verified_today' ? 'Terverifikasi Hari Ini' : statModal === 'total_invoice' ? 'Total Invoice' : statModal === 'blocked' ? 'Terblokir (DP Overdue)' : statModal === 'total_tagihan' ? 'Total Tagihan' : statModal === 'dibayar' ? 'Dibayar' : 'Sisa';
+        const statModalColumns: TableColumn[] = [
+          { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+          { id: 'owner', label: 'Owner', align: 'left' },
+          { id: 'company', label: 'Perusahaan', align: 'left' },
+          { id: 'total', label: 'Total', align: 'right' },
+          { id: 'paid', label: 'Dibayar', align: 'right' },
+          { id: 'remaining', label: 'Sisa', align: 'right' }
+        ];
+        return (
+          <Modal open onClose={() => setStatModal(null)}>
+            <ModalBoxLg>
+              <ModalHeader
+                title={modalTitle}
+                subtitle={`${filteredList.length} invoice sesuai data statistik`}
+                onClose={() => setStatModal(null)}
+              />
+              <ModalBody className="p-0 overflow-hidden flex flex-col min-h-0">
+                <div className="overflow-auto flex-1 min-h-0">
+                  <Table
+                    columns={statModalColumns}
+                    data={filteredList}
+                    emptyMessage="Tidak ada invoice dalam kategori ini."
+                    renderRow={(inv) => {
+                      const totalInv = parseFloat(inv.total_amount || 0);
+                      const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+                      const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
+                      const remaining = Math.max(0, totalInv - paid);
+                      const tRem = amountTriple(remaining);
+                      const totalTriple = invoiceTotalTriple(inv);
+                      return (
+                        <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                          <td className="py-2 px-4 font-mono text-sm"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact /></td>
+                          <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name ?? inv.User?.company_name ?? '–'}</td>
+                          <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate">{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</td>
+                          <td className="py-2 px-4 text-right text-sm">{formatIDR(totalTriple.idr)}</td>
+                          <td className="py-2 px-4 text-right text-emerald-600 text-sm">{formatIDR(paid)}</td>
+                          <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm">{formatIDR(remaining)}</td>
+                        </tr>
+                      );
+                    }}
+                  />
+                </div>
+              </ModalBody>
+            </ModalBoxLg>
+          </Modal>
+        );
+      })()}
 
       {/* Invoice Terbaru (wilayah) – data invoice lengkap */}
       <Card>
