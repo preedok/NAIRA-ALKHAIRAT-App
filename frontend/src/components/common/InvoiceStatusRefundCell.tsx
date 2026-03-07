@@ -1,6 +1,8 @@
 /**
- * Tampilan status invoice + status refund + jumlah dibayar/refund (sama persis dengan menu Invoice).
- * Gunakan di semua halaman yang menampilkan daftar invoice: Report, Accounting, Dashboard, Work pages.
+ * Satu sumber kebenaran untuk tampilan status invoice (termasuk "Refund diproses", "Sudah direfund", dll).
+ * Gunakan getEffectiveInvoiceStatusLabel(inv) / getEffectiveInvoiceStatusBadgeVariant(inv) atau komponen
+ * InvoiceStatusRefundCell di semua halaman dan popup yang menampilkan data invoice agar informasi konsisten
+ * dengan PDF invoice dan dokumen refund.
  */
 
 import React from 'react';

@@ -86,10 +86,11 @@ const STATUS_LABELS = {
 const CANCELLATION_TO_BALANCE_LABEL = 'Direfund ke saldo akun';
 const REALLOCATION_OUT_LABEL = 'Dana dipindahkan ke invoice lain';
 const REFUNDED_LABEL = 'Sudah direfund';
+const REFUND_IN_PROCESS_LABEL = 'Refund diproses';
 
 /**
- * Status efektif untuk tampilan (PDF/list): prioritaskan refund/saldo/realloc seperti di frontend.
- * @param {object} data - invoice data dengan Refunds, cancellation_handling_note, ReallocationsOut
+ * Status efektif untuk tampilan (PDF/list): sama dengan frontend — prioritaskan refund/saldo/realloc + refund dalam proses.
+ * @param {object} data - invoice data dengan Refunds (urut created_at DESC), cancellation_handling_note, ReallocationsOut
  * @returns {string}
  */
 function getEffectiveStatusLabel(data) {
@@ -99,10 +100,14 @@ function getEffectiveStatusLabel(data) {
   const reallocOut = data.ReallocationsOut || [];
 
   const hasRefundCompleted = refunds.some((r) => (r.status || '').toLowerCase() === 'refunded');
-  const isRefundToBalance = note.includes('saldo akun') || note.includes('dipindahkan ke saldo');
-  const isReallocationOut = reallocOut.length > 0 && (['canceled', 'cancelled', 'cancelled_refund'].includes(status) || note.includes('invoice lain'));
+  const latestRefund = refunds.length > 0 ? refunds[0] : null;
+  const refundInProgress = !hasRefundCompleted && latestRefund && ['requested', 'approved'].includes((latestRefund.status || '').toLowerCase());
+  const isRefundToBalance = (note.includes('saldo akun') || note.includes('dipindahkan ke saldo')) && !hasRefundCompleted;
+  const hasNoteReallocOut = note.includes('dipindahkan ke invoice') || note.includes('dialihkan ke invoice') || note.includes('dialihkan ke ');
+  const isReallocationOut = reallocOut.length > 0 && (['canceled', 'cancelled', 'cancelled_refund'].includes(status) || hasNoteReallocOut) && !hasRefundCompleted;
 
   if (hasRefundCompleted) return REFUNDED_LABEL;
+  if (refundInProgress) return REFUND_IN_PROCESS_LABEL;
   if (isRefundToBalance) return CANCELLATION_TO_BALANCE_LABEL;
   if (isReallocationOut) return REALLOCATION_OUT_LABEL;
   return STATUS_LABELS[data.status] || data.status || status;

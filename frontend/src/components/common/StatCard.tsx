@@ -23,8 +23,10 @@ const DEFAULT_ICON_CLASS = 'bg-[#0D1A63] text-white';
 
 /**
  * Card statistik seragam di semua halaman: ukuran dan layout sama.
- * Yang bisa beda: icon, label, value, subtitle, action.
+ * Tinggi area konten tetap agar card dengan/tanpa subtitle sama tinggi.
  */
+const CARD_CONTENT_HEIGHT = '5.5rem';
+
 const StatCard: React.FC<StatCardProps> = ({
   icon,
   label,
@@ -36,16 +38,23 @@ const StatCard: React.FC<StatCardProps> = ({
 }) => {
   const content = (
     <>
-      <div className="flex items-center gap-3 p-4 flex-1 min-w-0">
+      <div
+        className="flex items-center gap-3 p-4 min-w-0 flex-shrink-0"
+        style={{ minHeight: CARD_CONTENT_HEIGHT, height: CARD_CONTENT_HEIGHT }}
+      >
         <div className={`rounded-xl flex items-center justify-center shrink-0 w-11 h-11 ${DEFAULT_ICON_CLASS}`}>
           {icon}
         </div>
         <div className="min-w-0 flex-1 overflow-hidden">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide truncate">{label}</p>
           <p className="text-lg font-bold text-slate-900 tabular-nums mt-1 truncate leading-tight">{value}</p>
-          {subtitle != null && subtitle !== '' && (
-            <p className="text-xs text-slate-400 mt-0.5 truncate leading-tight">{subtitle}</p>
-          )}
+          <div className="min-h-[1.25rem] mt-0.5">
+            {subtitle != null && subtitle !== '' ? (
+              <p className="text-xs text-slate-400 truncate leading-tight">{subtitle}</p>
+            ) : (
+              <span className="invisible text-xs">&#8203;</span>
+            )}
+          </div>
         </div>
       </div>
       {action != null && (
@@ -56,7 +65,7 @@ const StatCard: React.FC<StatCardProps> = ({
     </>
   );
   const card = (
-    <Card hover padding="none" className={`travel-card flex flex-col overflow-hidden min-h-[7rem] ${className}`}>
+    <Card hover padding="none" className={`travel-card flex flex-col overflow-hidden ${className}`}>
       {content}
     </Card>
   );

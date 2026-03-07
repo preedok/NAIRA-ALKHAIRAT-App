@@ -1225,7 +1225,7 @@ const getPdf = asyncHandler(async (req, res) => {
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
-      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] },
       { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }] },
       { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }] }
     ]

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { formatIDR } from '../../utils/formatters';
+import { getEffectiveInvoiceStatusLabel, type InvoiceForStatusRefund } from './InvoiceStatusRefundCell';
 
 export type InvoiceRefundDocumentInv = {
   id?: string;
@@ -97,8 +98,8 @@ export function InvoiceRefundDocument({
             <p className="text-white">
               {isPreview ? 'Akan dicatat setelah konfirmasi' : formatDate(inv.issued_at ?? inv.created_at ?? null)}
             </p>
-            {!isPreview && inv.status && (
-              <p className="text-slate-300 text-sm mt-0.5 capitalize">{inv.status.replace(/_/g, ' ')}</p>
+            {!isPreview && (
+              <p className="text-slate-300 text-sm mt-0.5">{getEffectiveInvoiceStatusLabel(inv as InvoiceForStatusRefund)}</p>
             )}
           </div>
         </div>
