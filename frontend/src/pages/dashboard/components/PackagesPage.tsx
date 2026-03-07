@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Package, Plus, Edit, Trash2, XCircle, ShoppingCart } from 'lucide-react';
+import { Package, Plus, Edit, Trash2, XCircle, ShoppingCart, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
 import Button from '../../../components/common/Button';
@@ -166,6 +166,7 @@ const PackagesPage: React.FC = () => {
   const [busProducts, setBusProducts] = useState<ProductOption[]>([]);
   const [handlingProducts, setHandlingProducts] = useState<ProductOption[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  const tableSectionRef = useRef<HTMLDivElement>(null);
 
   const canCreatePackage = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
   const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
@@ -515,11 +516,14 @@ const PackagesPage: React.FC = () => {
             label={stat.label}
             value={stat.value}
             iconClassName={`bg-gradient-to-br ${stat.color} text-white`}
+            onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
         ))}
       </div>
 
       {/* Daftar paket - table */}
+      <div ref={tableSectionRef}>
       <Card>
         <CardSectionHeader
           icon={<Package className="w-6 h-6" />}
@@ -691,6 +695,7 @@ const PackagesPage: React.FC = () => {
           )}
         </div>
       </Card>
+      </div>
 
       <Modal open={showModal} onClose={closeModal}>
         <ModalBox>

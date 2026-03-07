@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight, ShoppingCart, Calendar, Trash2 } from 'lucide-react';
+import { Bus, Pencil, X, Plus, ArrowRight, ArrowLeft, ArrowLeftRight, ShoppingCart, Calendar, Trash2, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -132,6 +132,7 @@ const BusPage: React.FC<BusPageProps> = ({
   const [searchName, setSearchName] = useState('');
   const [debouncedSearchName, setDebouncedSearchName] = useState('');
   const lastFilterKeyRef = useRef<string>('');
+  const tableSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
@@ -332,12 +333,13 @@ const BusPage: React.FC<BusPageProps> = ({
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statsBus.map((stat, i) => (
-          <StatCard key={i} icon={<Bus className="w-5 h-5" />} label={stat.label} value={stat.value} />
+          <StatCard key={i} icon={<Bus className="w-5 h-5" />} label={stat.label} value={stat.value} onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         ))}
       </div>
 
       {/* Daftar produk bus */}
       {(canAddToOrder || embedInProducts) && (
+        <div ref={tableSectionRef}>
         <Card>
           <CardSectionHeader
             icon={<Bus className="w-6 h-6" />}
@@ -510,6 +512,7 @@ const BusPage: React.FC<BusPageProps> = ({
             )}
             </div>
         </Card>
+        </div>
       )}
 
       {/* Modal Tambah produk bus — hanya form produk */}

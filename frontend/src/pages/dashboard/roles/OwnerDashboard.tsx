@@ -8,7 +8,8 @@ import {
   Plus,
   MapPin,
   Bell,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
@@ -190,6 +191,8 @@ const OwnerDashboard: React.FC = () => {
               'bg-violet-100 text-violet-600',
               'bg-amber-100 text-amber-600'
             ][index]}
+            onClick={() => navigate('/dashboard/orders-invoices')}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/orders-invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
         ))}
       </div>

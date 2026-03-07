@@ -67,6 +67,8 @@ const AccountingAgingPage: React.FC = () => {
   const [limit, setLimit] = useState(25);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
+  type AgingStatModal = 'total' | 'current' | 'days_1_30' | 'days_31_60' | 'days_61_plus' | null;
+  const [agingStatModal, setAgingStatModal] = useState<AgingStatModal>(null);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number> = {};
@@ -415,12 +417,42 @@ const AccountingAgingPage: React.FC = () => {
         ) : data ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={formatIDR(data.total_outstanding)} />
-            <StatCard icon={<CreditCard className="w-5 h-5" />} label="Belum Jatuh Tempo" value={formatIDR(totals.current)} subtitle={`${bucketCounts.current} invoice`} />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 1–30" value={formatIDR(totals.days_1_30)} subtitle={`${bucketCounts.days_1_30} invoice`} />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 31–60" value={formatIDR(totals.days_31_60)} subtitle={`${bucketCounts.days_31_60} invoice`} />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 61+" value={formatIDR(totals.days_61_plus)} subtitle={`${bucketCounts.days_61_plus} invoice`} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={formatIDR(data.total_outstanding)} onClick={() => setAgingStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<CreditCard className="w-5 h-5" />} label="Belum Jatuh Tempo" value={formatIDR(totals.current)} subtitle={`${bucketCounts.current} invoice`} onClick={() => setAgingStatModal('current')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('current')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 1–30" value={formatIDR(totals.days_1_30)} subtitle={`${bucketCounts.days_1_30} invoice`} onClick={() => setAgingStatModal('days_1_30')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_1_30')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 31–60" value={formatIDR(totals.days_31_60)} subtitle={`${bucketCounts.days_31_60} invoice`} onClick={() => setAgingStatModal('days_31_60')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_31_60')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 61+" value={formatIDR(totals.days_61_plus)} subtitle={`${bucketCounts.days_61_plus} invoice`} onClick={() => setAgingStatModal('days_61_plus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_61_plus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           </div>
+
+          {agingStatModal && (
+            <Modal open onClose={() => setAgingStatModal(null)}>
+              <ModalBoxLg>
+                <ModalHeader title={agingStatModal === 'total' ? 'Daftar Invoice – Total Piutang' : agingStatModal === 'current' ? 'Daftar Invoice – Belum Jatuh Tempo' : agingStatModal === 'days_1_30' ? 'Daftar Invoice – Terlambat 1–30' : agingStatModal === 'days_31_60' ? 'Daftar Invoice – Terlambat 31–60' : 'Daftar Invoice – Terlambat 61+'} onClose={() => setAgingStatModal(null)} />
+                <ModalBody>
+                  {(() => {
+                    const modalItems = agingStatModal === 'total' ? (data?.items ?? [...(buckets.current || []), ...(buckets.days_1_30 || []), ...(buckets.days_31_60 || []), ...(buckets.days_61_plus || [])]) : (buckets[agingStatModal] || []);
+                    const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'remaining', label: 'Sisa' }, { id: 'status', label: 'Status' }];
+                    return (
+                      <Table
+                        columns={cols}
+                        data={modalItems}
+                        emptyMessage="Tidak ada invoice"
+                        renderRow={(row: any) => (
+                          <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                            <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
+                            <td className="py-2 px-4 text-sm">{row.User?.name ?? row.User?.company_name ?? '–'}</td>
+                            <td className="py-2 px-4 text-sm">{formatIDR(parseFloat(row.total_amount || 0))}</td>
+                            <td className="py-2 px-4 text-sm">{formatIDR(parseFloat(row.remaining_amount || 0))}</td>
+                            <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
+                          </tr>
+                        )}
+                      />
+                    );
+                  })()}
+                </ModalBody>
+              </ModalBoxLg>
+            </Modal>
+          )}
 
           <Card>
             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, CheckCircle, Copy, Power, PowerOff } from 'lucide-react';
 import { ROLE_NAMES, TableColumn, OWNER_STATUS_LABELS } from '../../../types';
 import Card from '../../../components/common/Card';
@@ -73,6 +73,7 @@ const UsersPage: React.FC = () => {
   const [verifyRegPaymentReject, setVerifyRegPaymentReject] = useState('');
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
   const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
+  const tableSectionRef = useRef<HTMLDivElement>(null);
 
   /** Modal Tambah User: owner (kabupaten→provinsi&wilayah), koordinator (pilih wilayah), pusat/bus/hotel/accounting (tanpa wilayah) */
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
@@ -498,10 +499,13 @@ const UsersPage: React.FC = () => {
             label={stat.label}
             value={stat.value}
             iconClassName={`bg-gradient-to-br ${stat.color} text-white`}
+            onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
         ))}
       </div>
 
+      <div ref={tableSectionRef}>
       <Card className="travel-card overflow-visible">
         <CardSectionHeader
           icon={<UsersIcon className="w-6 h-6" />}
@@ -678,6 +682,7 @@ const UsersPage: React.FC = () => {
           )}
         </div>
       </Card>
+      </div>
 
       {/* Modal Edit User — isi sama dengan Tambah User */}
       <Modal open={!!editUser} onClose={() => { setEditUser(null); setEditActivationPassword(null); }}>

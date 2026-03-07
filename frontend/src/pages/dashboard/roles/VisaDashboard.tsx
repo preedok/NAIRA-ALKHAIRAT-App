@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, ClipboardList, Inbox, Send, Loader2, CheckCircle, Check } from 'lucide-react';
+import { FileText, ClipboardList, Inbox, Send, Loader2, CheckCircle, Check, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import { AutoRefreshControl } from '../../../components/common';
@@ -78,8 +78,8 @@ const VisaDashboard: React.FC = () => {
 
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={totalInvoices} subtitle="Invoice dengan item visa" iconClassName="bg-slate-100 text-slate-600" />
-          <StatCard icon={<FileText className="w-5 h-5" />} label="Item Visa" value={totalItems} subtitle="Item visa di cabang" iconClassName="bg-sky-100 text-sky-600" />
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={totalInvoices} subtitle="Invoice dengan item visa" iconClassName="bg-slate-100 text-slate-600" onClick={() => navigate('/dashboard/progress-visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+          <StatCard icon={<FileText className="w-5 h-5" />} label="Item Visa" value={totalItems} subtitle="Item visa di cabang" iconClassName="bg-sky-100 text-sky-600" onClick={() => navigate('/dashboard/progress-visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>
@@ -90,6 +90,8 @@ const VisaDashboard: React.FC = () => {
                 icon={STATUS_ICONS[status] || <FileText className="w-5 h-5" />}
                 label={RECAP_STATUS_LABELS[status] || status}
                 value={byStatus[status] ?? 0}
+                onClick={() => navigate('/dashboard/progress-visa')}
+                action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
               />
             ))}
           </div>

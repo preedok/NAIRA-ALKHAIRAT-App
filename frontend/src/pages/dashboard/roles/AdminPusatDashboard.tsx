@@ -462,7 +462,8 @@ const AdminPusatDashboard: React.FC = () => {
               value={orders.total}
               subtitle="Semua status"
               iconClassName="bg-[#0D1A63] text-white"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('orders')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => openModal('orders')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => openModal('orders')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
@@ -470,7 +471,8 @@ const AdminPusatDashboard: React.FC = () => {
               value={formatIDR(orders.total_revenue)}
               subtitle="Excl. draft & cancelled"
               iconClassName="bg-[#0D1A63] text-white"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('orders')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => openModal('orders')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => openModal('orders')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<FileText className="w-5 h-5" />}
@@ -478,7 +480,8 @@ const AdminPusatDashboard: React.FC = () => {
               value={invoices.total}
               subtitle={`${Object.keys(invoices.by_status || {}).length} status`}
               iconClassName="bg-[#0D1A63] text-white"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('invoices')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => openModal('invoices')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => openModal('invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<Users className="w-5 h-5" />}
@@ -486,7 +489,8 @@ const AdminPusatDashboard: React.FC = () => {
               value={data.owners_total ?? 0}
               subtitle="Terdaftar"
               iconClassName="bg-amber-100 text-amber-600"
-              action={<Button variant="ghost" size="sm" className="gap-1" onClick={() => navigate('/dashboard/admin-pusat/users')}>View All <ChevronRight className="w-4 h-4" /></Button>}
+              onClick={() => navigate('/dashboard/admin-pusat/users')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/admin-pusat/users')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
           </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Filter,
   FileSpreadsheet,
@@ -7,7 +7,8 @@ import {
   Receipt,
   Package,
   Users,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
@@ -116,6 +117,7 @@ const ReportsPage: React.FC = () => {
   const [invoicePagination, setInvoicePagination] = useState<{ page: number; limit: number; total: number; totalPages: number }>({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
+  const tableSectionRef = useRef<HTMLDivElement>(null);
 
   const isSuperAdmin = user?.role === 'super_admin';
 
@@ -430,23 +432,24 @@ const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
             {reportType === 'financial' && (
               <>
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" />
-                <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={summary.invoice_count ?? 0} iconClassName="bg-sky-100 text-sky-600" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={summary.invoice_count ?? 0} iconClassName="bg-sky-100 text-sky-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
               </>
             )}
             {(reportType === 'revenue' || reportType === 'orders' || reportType === 'partners' || reportType === 'jamaah') && (
               <>
-                <StatCard icon={<Package className="w-5 h-5" />} label="Total Order" value={summary.total_orders ?? 0} iconClassName="bg-slate-100 text-slate-600" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" />
-                <StatCard icon={<Users className="w-5 h-5" />} label="Total Jamaah" value={summary.total_jamaah ?? 0} iconClassName="bg-emerald-100 text-emerald-600" />
-                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary.total_invoices ?? 0} iconClassName="bg-sky-100 text-sky-600" />
+                <StatCard icon={<Package className="w-5 h-5" />} label="Total Order" value={summary.total_orders ?? 0} iconClassName="bg-slate-100 text-slate-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+                <StatCard icon={<Users className="w-5 h-5" />} label="Total Jamaah" value={summary.total_jamaah ?? 0} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary.total_invoices ?? 0} iconClassName="bg-sky-100 text-sky-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
               </>
             )}
             {reportType === 'logs' && (
-              <StatCard icon={<FileText className="w-5 h-5" />} label="Total Log" value={summary.total_logs ?? 0} iconClassName="bg-slate-100 text-slate-600" />
+              <StatCard icon={<FileText className="w-5 h-5" />} label="Total Log" value={summary.total_logs ?? 0} iconClassName="bg-slate-100 text-slate-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
             )}
           </div>
 
+          <div ref={tableSectionRef}>
           {/* Series (time) */}
           {series.length > 0 && (
             <Card className="travel-card shrink-0">
@@ -554,6 +557,7 @@ const ReportsPage: React.FC = () => {
                 </div>
               </Card>
             )}
+          </div>
           </div>
 
           {/* Detail table — struktur sama seperti tabel Invoice (OrdersInvoicesPage) */}

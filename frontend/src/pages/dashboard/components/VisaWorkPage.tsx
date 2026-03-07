@@ -75,6 +75,8 @@ const VisaWorkPage: React.FC = () => {
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
+  type VisaStatModal = 'total' | 'item_visa' | 'document_received' | 'submitted' | 'in_process' | 'approved' | 'issued' | null;
+  const [statModal, setStatModal] = useState<VisaStatModal>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -252,8 +254,8 @@ const VisaWorkPage: React.FC = () => {
       {/* Stat cards */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" />
-          <StatCard icon={<FileText className="w-5 h-5" />} label="Total Item Visa" value={loading ? '–' : totalItems} iconClassName="bg-sky-100 text-sky-600" />
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" onClick={() => setStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+          <StatCard icon={<FileText className="w-5 h-5" />} label="Total Item Visa" value={loading ? '–' : totalItems} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('item_visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('item_visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Per Status Progress</p>
@@ -264,11 +266,44 @@ const VisaWorkPage: React.FC = () => {
                 icon={STATUS_ICONS[opt.value] || <FileText className="w-5 h-5" />}
                 label={RECAP_STATUS_LABELS[opt.value] || opt.label}
                 value={loading ? '–' : (byStatus[opt.value] ?? 0)}
+                onClick={() => setStatModal(opt.value as VisaStatModal)}
+                action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal(opt.value as VisaStatModal)}><Eye className="w-4 h-4" /> Lihat</Button></div>}
               />
             ))}
           </div>
         </div>
       </div>
+
+      {/* Modal daftar invoice per stat */}
+      {statModal && (
+        <Modal open onClose={() => setStatModal(null)}>
+          <ModalBoxLg>
+            <ModalHeader title={statModal === 'total' ? 'Daftar Invoice – Total Invoice' : statModal === 'item_visa' ? 'Daftar Invoice – Item Visa' : `Daftar Invoice – ${RECAP_STATUS_LABELS[statModal] || statModal}`} onClose={() => setStatModal(null)} />
+            <ModalBody>
+              {(() => {
+                const hasStatus = (inv: any, s: string) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'visa').some((i: any) => (i.VisaProgress?.status || '') === s);
+                const list = statModal === 'total' || statModal === 'item_visa' ? invoices : invoices.filter((inv: any) => hasStatus(inv, statModal));
+                const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'status', label: 'Status' }];
+                return (
+                  <Table
+                    columns={cols}
+                    data={list}
+                    emptyMessage="Tidak ada invoice"
+                    renderRow={(row: any) => (
+                      <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
+                        <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
+                        <td className="py-2 px-4 text-sm">{formatIDR(row.total_amount ?? 0)}</td>
+                        <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
+                      </tr>
+                    )}
+                  />
+                );
+              })()}
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      )}
 
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">

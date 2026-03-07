@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, Wallet, Landmark, ShoppingCart } from 'lucide-react';
+import { Activity, Receipt, DollarSign, TrendingUp, Building2, MapPin, BarChart3, ChevronRight, X, FileText, Wallet, Landmark, ShoppingCart, Eye } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -326,7 +326,7 @@ const AccountingDashboard: React.FC = () => {
               value={summary.total_invoices}
               iconClassName="bg-[#0D1A63] text-white"
               onClick={() => openModal('all')}
-              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button></div>}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => openModal('all')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
@@ -334,7 +334,7 @@ const AccountingDashboard: React.FC = () => {
               value={formatIDR(summary.total_paid)}
               iconClassName="bg-[#0D1A63] text-white"
               onClick={() => openModal('all')}
-              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button></div>}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => openModal('all')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<TrendingUp className="w-5 h-5" />}
@@ -342,7 +342,7 @@ const AccountingDashboard: React.FC = () => {
               value={formatIDR(summary.total_receivable)}
               iconClassName="bg-amber-100 text-amber-600"
               onClick={() => openModal('all')}
-              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('all')}>View All <ChevronRight className="w-4 h-4" /></Button></div>}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => openModal('all')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
           </div>
 

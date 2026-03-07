@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bus, ClipboardList, Ticket, MapPin, Plane, RotateCcw, AlertCircle, ChevronRight } from 'lucide-react';
+import { Bus, ClipboardList, Ticket, MapPin, Plane, RotateCcw, AlertCircle, ChevronRight, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import { AutoRefreshControl } from '../../../components/common';
@@ -60,17 +60,17 @@ const BusDashboard: React.FC = () => {
       {(totalOrders > 0 || totalItems > 0) && (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
-            <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={totalOrders} subtitle="Invoice dengan item bus" />
-            <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={totalItems} subtitle="Total item di cabang" />
+            <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={totalOrders} subtitle="Invoice dengan item bus" onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={totalItems} subtitle="Total item di cabang" onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={ticketPending} />
-              <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={ticketIssued} />
-              <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={arrival.completed ?? 0} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} />
-              <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={departure.completed ?? 0} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} />
-              <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={returnStat.completed ?? 0} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} />
+              <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={ticketPending} onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+              <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={ticketIssued} onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+              <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={arrival.completed ?? 0} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+              <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={departure.completed ?? 0} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+              <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={returnStat.completed ?? 0} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
             </div>
           </div>
         </div>

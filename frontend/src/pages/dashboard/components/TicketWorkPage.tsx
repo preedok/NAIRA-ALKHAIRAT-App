@@ -78,6 +78,8 @@ const TicketWorkPage: React.FC = () => {
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
+  type TicketStatModal = 'total' | 'item_ticket' | 'pending' | 'data_received' | 'seat_reserved' | 'booking' | 'payment_airline' | 'ticket_issued' | null;
+  const [statModal, setStatModal] = useState<TicketStatModal>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -251,8 +253,8 @@ const TicketWorkPage: React.FC = () => {
       {/* Stat cards - 2 utama + status breakdown */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" />
-          <StatCard icon={<Ticket className="w-5 h-5" />} label="Item Tiket" value={loading ? '–' : totalItems} iconClassName="bg-emerald-100 text-emerald-600" />
+          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" onClick={() => setStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+          <StatCard icon={<Ticket className="w-5 h-5" />} label="Item Tiket" value={loading ? '–' : totalItems} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('item_ticket')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('item_ticket')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         </div>
         {/* Status breakdown — pakai StatCard agar seragam */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -262,10 +264,43 @@ const TicketWorkPage: React.FC = () => {
               icon={RECAP_STATUS_ICONS[opt.value] || <Ticket className="w-5 h-5" />}
               label={RECAP_STATUS_LABELS[opt.value] || opt.label}
               value={loading ? '–' : (byStatus[opt.value] ?? 0)}
+              onClick={() => setStatModal(opt.value as TicketStatModal)}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal(opt.value as TicketStatModal)}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
           ))}
         </div>
       </div>
+
+      {/* Modal daftar invoice per stat */}
+      {statModal && (
+        <Modal open onClose={() => setStatModal(null)}>
+          <ModalBoxLg>
+            <ModalHeader title={statModal === 'total' ? 'Daftar Invoice – Total Invoice' : statModal === 'item_ticket' ? 'Daftar Invoice – Item Tiket' : `Daftar Invoice – ${RECAP_STATUS_LABELS[statModal] || statModal}`} onClose={() => setStatModal(null)} />
+            <ModalBody>
+              {(() => {
+                const hasStatus = (inv: any, s: string) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'ticket').some((i: any) => (i.TicketProgress?.status || '') === s);
+                const list = statModal === 'total' || statModal === 'item_ticket' ? invoices : invoices.filter((inv: any) => hasStatus(inv, statModal));
+                const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'status', label: 'Status' }];
+                return (
+                  <Table
+                    columns={cols}
+                    data={list}
+                    emptyMessage="Tidak ada invoice"
+                    renderRow={(row: any) => (
+                      <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
+                        <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
+                        <td className="py-2 px-4 text-sm">{formatIDR(row.total_amount ?? 0)}</td>
+                        <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
+                      </tr>
+                    )}
+                  />
+                );
+              })()}
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      )}
 
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">

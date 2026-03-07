@@ -58,6 +58,8 @@ const BusWorkPage: React.FC = () => {
   const filterChangedOnce = useRef(false);
   type BusItemDraft = { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string };
   const [detailDraft, setDetailDraft] = useState<Record<string, BusItemDraft>>({});
+  type BusStatModal = 'total_order' | 'item_bus' | 'tiket_pending' | 'tiket_issued' | 'kedatangan' | 'keberangkatan' | 'kepulangan' | null;
+  const [statModal, setStatModal] = useState<BusStatModal>(null);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -279,14 +281,44 @@ const BusWorkPage: React.FC = () => {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
-        <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={loading ? '–' : totalInvoices} iconClassName="bg-[#0D1A63] text-white" />
-        <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={loading ? '–' : totalItems} iconClassName="bg-slate-100 text-slate-600" />
-        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={loading ? '–' : ticketPending} iconClassName="bg-amber-100 text-amber-600" />
-        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={loading ? '–' : ticketIssued} iconClassName="bg-emerald-100 text-emerald-600" />
-        <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={loading ? '–' : (arrival.completed ?? 0)} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} iconClassName="bg-sky-100 text-sky-600" />
-        <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={loading ? '–' : (departure.completed ?? 0)} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} iconClassName="bg-violet-100 text-violet-600" />
-        <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={loading ? '–' : (returnStat.completed ?? 0)} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} iconClassName="bg-teal-100 text-teal-600" />
+        <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={loading ? '–' : totalInvoices} iconClassName="bg-[#0D1A63] text-white" onClick={() => setStatModal('total_order')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_order')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={loading ? '–' : totalItems} iconClassName="bg-slate-100 text-slate-600" onClick={() => setStatModal('item_bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('item_bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={loading ? '–' : ticketPending} iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('tiket_pending')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('tiket_pending')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={loading ? '–' : ticketIssued} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('tiket_issued')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('tiket_issued')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={loading ? '–' : (arrival.completed ?? 0)} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('kedatangan')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('kedatangan')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={loading ? '–' : (departure.completed ?? 0)} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} iconClassName="bg-violet-100 text-violet-600" onClick={() => setStatModal('keberangkatan')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('keberangkatan')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={loading ? '–' : (returnStat.completed ?? 0)} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} iconClassName="bg-teal-100 text-teal-600" onClick={() => setStatModal('kepulangan')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('kepulangan')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
       </div>
+
+      {/* Modal daftar invoice per stat */}
+      {statModal && (
+        <Modal open onClose={() => setStatModal(null)}>
+          <ModalBoxLg>
+            <ModalHeader title={statModal === 'total_order' ? 'Daftar Invoice – Total Order' : statModal === 'item_bus' ? 'Daftar Invoice – Item Bus' : statModal === 'tiket_pending' ? 'Daftar Invoice – Tiket Pending' : statModal === 'tiket_issued' ? 'Daftar Invoice – Tiket Terbit' : statModal === 'kedatangan' ? 'Daftar Invoice – Kedatangan' : statModal === 'keberangkatan' ? 'Daftar Invoice – Keberangkatan' : 'Daftar Invoice – Kepulangan'} onClose={() => setStatModal(null)} />
+            <ModalBody>
+              {(() => {
+                const list = statModal === 'tiket_pending' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.bus_ticket_status || 'pending') === 'pending')) : statModal === 'tiket_issued' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.bus_ticket_status || '') === 'issued')) : statModal === 'kedatangan' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.arrival_status || 'pending') === 'completed')) : statModal === 'keberangkatan' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.departure_status || 'pending') === 'completed')) : statModal === 'kepulangan' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.return_status || 'pending') === 'completed')) : invoices;
+                const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'status', label: 'Status' }];
+                return (
+                  <Table
+                    columns={cols}
+                    data={list}
+                    emptyMessage="Tidak ada invoice"
+                    renderRow={(row: any) => (
+                      <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
+                        <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
+                        <td className="py-2 px-4 text-sm">{formatIDR(row.total_amount ?? 0)}</td>
+                        <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
+                      </tr>
+                    )}
+                  />
+                );
+              })()}
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      )}
 
       {/* Progress ring / summary */}
       {totalItems > 0 && (

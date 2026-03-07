@@ -10,7 +10,8 @@ import {
   XCircle,
   ShoppingCart,
   Calendar,
-  ArrowLeft
+  ArrowLeft,
+  Eye
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -276,6 +277,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const lastFilterKeyRef = useRef<string>('');
+  const tableSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 350);
@@ -678,6 +680,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             label={stat.label}
             value={stat.value}
             iconClassName={`bg-gradient-to-br ${stat.color} text-white`}
+            onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
         ))}
       </div>
@@ -687,14 +691,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         <h3 className="text-sm font-semibold text-slate-700 mb-1">Statistik Ketersediaan Kamar (30 hari ke depan)</h3>
         <p className="text-xs text-slate-500 mb-2">Data per hotel mengikuti pilihan di Jumlah Kamar &amp; Musim (Semua jumlah kamar / Per musim).</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-          <StatCard icon={<Bed className="w-5 h-5" />} label="Total Tersedia" value={availabilityStats.total} subtitle="kamar" />
+          <StatCard icon={<Bed className="w-5 h-5" />} label="Total Tersedia" value={availabilityStats.total} subtitle="kamar" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           {ROOM_TYPES.map((rt) => (
-            <StatCard key={rt} icon={<Bed className="w-5 h-5" />} label={rt} value={availabilityStats.byRoom[rt] ?? 0} subtitle="tersedia" />
+            <StatCard key={rt} icon={<Bed className="w-5 h-5" />} label={rt} value={availabilityStats.byRoom[rt] ?? 0} subtitle="tersedia" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           ))}
         </div>
       </div>
 
       {/* Cari & filter + tabel dalam satu card */}
+      <div ref={tableSectionRef}>
       <Card>
         <CardSectionHeader
           icon={<HotelIcon className="w-6 h-6" />}
@@ -938,6 +943,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           )}
         </div>
       </Card>
+      </div>
 
       {/* Popup Ketersediaan per tanggal: lebar, layout rapi, per tipe kamar */}
       {availabilityPopupHotelId && (() => {

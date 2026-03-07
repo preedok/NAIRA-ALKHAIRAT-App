@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Receipt, Users, FileText, Hotel, Plane, Bus, Settings } from 'lucide-react';
+import { Receipt, Users, FileText, Hotel, Plane, Bus, Settings, Eye } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import Card from '../../../components/common/Card';
@@ -66,15 +66,9 @@ const KoordinatorDashboard: React.FC = () => {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="cursor-pointer" onClick={() => navigate('/dashboard/orders-invoices')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/orders-invoices')}>
-          <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order Wilayah" value={orders.total ?? 0} subtitle="Order & invoice wilayah Anda" iconClassName="bg-[#0D1A63] text-white" />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate('/dashboard/koordinator/owners')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/koordinator/owners')}>
-          <StatCard icon={<Users className="w-5 h-5" />} label="Owner di Wilayah" value={owners.total ?? 0} subtitle="Owner yang dilayani koordinator wilayah Anda" iconClassName="bg-[#0D1A63] text-white" />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate('/dashboard/products')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate('/dashboard/products')}>
-          <StatCard icon={<Settings className="w-5 h-5" />} label="Pengaturan Harga" value="Harga General & Khusus" subtitle="Produk, paket, kurs cabang di wilayah" iconClassName="bg-amber-100 text-amber-600" />
-        </div>
+        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order Wilayah" value={orders.total ?? 0} subtitle="Order & invoice wilayah Anda" iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/orders-invoices')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/orders-invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Users className="w-5 h-5" />} label="Owner di Wilayah" value={owners.total ?? 0} subtitle="Owner yang dilayani koordinator wilayah Anda" iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/koordinator/owners')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/koordinator/owners')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Settings className="w-5 h-5" />} label="Pengaturan Harga" value="Harga General & Khusus" subtitle="Produk, paket, kurs cabang di wilayah" iconClassName="bg-amber-100 text-amber-600" onClick={() => navigate('/dashboard/products')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/products')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         <Card>
           <div className="p-3 rounded-xl bg-slate-100 text-slate-600">
             <p className="text-sm font-medium">Wilayah Anda</p>

@@ -60,7 +60,16 @@ const HotelDashboard: React.FC = () => {
       {((d.total_orders ?? 0) > 0 || (d.total_hotel_items ?? 0) > 0) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, i) => (
-            <StatCard key={i} icon={stat.icon} label={stat.label} value={stat.value} subtitle={stat.subtitle} iconClassName={stat.iconClassName} />
+            <StatCard
+              key={i}
+              icon={stat.icon}
+              label={stat.label}
+              value={stat.value}
+              subtitle={stat.subtitle}
+              iconClassName={stat.iconClassName}
+              onClick={() => navigate('/dashboard/progress-hotel')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-hotel')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
+            />
           ))}
         </div>
       )}
