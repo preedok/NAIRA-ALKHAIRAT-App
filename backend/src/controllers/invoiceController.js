@@ -12,7 +12,7 @@ const KOORDINATOR_ROLES = ['invoice_koordinator', 'tiket_koordinator', 'visa_koo
 function isKoordinatorRole(role) {
   return KOORDINATOR_ROLES.includes(role);
 }
-const { buildInvoicePdfBuffer } = require('../utils/invoicePdf');
+const { buildInvoicePdfBuffer, getEffectiveStatusLabel } = require('../utils/invoicePdf');
 const { SUBDIRS, getDir, invoiceFilename, toUrlPath } = require('../config/uploads');
 const { sendInvoiceCreatedEmail, sendPaymentReceivedEmail } = require('../utils/emailService');
 const logger = require('../config/logger');
@@ -1259,7 +1259,12 @@ const getPdf = asyncHandler(async (req, res) => {
     generated_by: req.user?.id
   }, { conflictFields: ['invoice_id'] });
 
-  const downloadName = `invoice-${invoice.invoice_number}.pdf`;
+  // Format: STATUS INVOICE_INV_NOMOR INVOICE_Nama Owner_Tanggal Order Invoice.pdf
+  const statusLabel = getEffectiveStatusLabel(data);
+  const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
+  const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || 'Owner';
+  const dateOrder = (invoice.issued_at || invoice.created_at) ? new Date(invoice.issued_at || invoice.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+  const downloadName = `${safe(statusLabel)}_INV_${safe(invoice.invoice_number)}_${safe(ownerName)}_${dateOrder}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');

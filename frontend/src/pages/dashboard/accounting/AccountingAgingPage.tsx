@@ -275,8 +275,18 @@ const AccountingAgingPage: React.FC = () => {
     try {
       const res = await invoicesApi.getPdf(invoiceId);
       const blob = res.data as Blob;
+      const disposition = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n]+)|filename="?([^";\n]+)"?/);
+      const filename = (match && (decodeURIComponent((match[1] || match[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `invoice-${invoiceId}.pdf`;
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'invoice.pdf';
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal unduh PDF', 'error');

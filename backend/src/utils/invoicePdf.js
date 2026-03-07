@@ -553,4 +553,4 @@ async function buildInvoicePdfBuffer(data) {
   });
 }
 
-module.exports = { renderInvoicePdf, buildInvoicePdfBuffer, formatIDR, formatDate, STATUS_LABELS };
+module.exports = { renderInvoicePdf, buildInvoicePdfBuffer, formatIDR, formatDate, STATUS_LABELS, getEffectiveStatusLabel };
