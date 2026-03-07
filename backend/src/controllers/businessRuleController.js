@@ -73,8 +73,8 @@ const get = asyncHandler(async (req, res) => {
  */
 const set = asyncHandler(async (req, res) => {
   const { branch_id, wilayah_id, rules } = req.body;
-  const canSetGlobal = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT].includes(req.user.role);
-  const canSetBranch = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT].includes(req.user.role);
+  const canSetGlobal = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING].includes(req.user.role);
+  const canSetBranch = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING].includes(req.user.role);
   const finalBranchId = branch_id ?? null;
   const finalWilayahId = wilayah_id ?? null;
   if (finalBranchId && !canSetBranch) return res.status(403).json({ success: false, message: 'Tidak boleh set rule cabang' });

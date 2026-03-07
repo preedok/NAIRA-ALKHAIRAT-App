@@ -28,7 +28,9 @@
     "generate:payment-proofs": "cd backend && npm run generate:payment-proofs",
     "generate:penawaran-pdf": "node scripts/generate-penawaran-pdf.js",
     "db:recreate": "cd backend && npm run db:recreate",
-    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules"
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules",
+    "push": "git push origin master",
+    "deploy": "git push origin master"
   },
   "keywords": [
     "umroh",

@@ -39,7 +39,7 @@ const SettingsPage: React.FC = () => {
     notification_invoice: true
   });
 
-  const canEdit = user?.role === 'super_admin' || user?.role === 'admin_pusat';
+  const canEdit = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
 
   const fetchSettings = useCallback(() => {
     setLoading(true);
@@ -211,7 +211,7 @@ const SettingsPage: React.FC = () => {
             <Card className="travel-card">
               <CardSectionHeader title="Currency & Kurs" subtitle="Nilai tukar ke IDR untuk konversi tagihan." className="mb-6" />
               <div className="space-y-6">
-                <p className="text-sm text-slate-600">Nilai tukar ke IDR (untuk konversi tagihan). Hanya Admin Pusat / Super Admin yang dapat mengubah kurs global.</p>
+                <p className="text-sm text-slate-600">Nilai tukar ke IDR (untuk konversi tagihan). Admin Pusat, Super Admin, dan Accounting dapat mengubah kurs global.</p>
                 <div className="space-y-4">
                   <div className="p-4 bg-slate-50 rounded-lg">
                     <Input

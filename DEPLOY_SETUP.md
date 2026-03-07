@@ -2,6 +2,24 @@
 
 Panduan untuk setup auto-deployment dari GitHub ke VPS.
 
+## Setiap Ada Perubahan → Auto Deploy
+
+Agar setiap perubahan otomatis ter-deploy ke VPS:
+
+1. **Commit perubahan**
+   ```bash
+   git add .
+   git commit -m "Deskripsi perubahan"
+   ```
+
+2. **Push ke master** (memicu auto deploy backend + frontend)
+   ```bash
+   npm run push
+   ```
+   atau: `git push origin master`
+
+Setelah push, GitHub Actions akan menjalankan deploy ke VPS (backend: npm ci, migrate, pm2 restart; frontend: npm ci, build). Cek status di tab **Actions** di repository GitHub.
+
 ## Pilihan Deployment
 
 Ada 2 metode yang tersedia:
@@ -71,11 +89,11 @@ Tambahkan secrets berikut:
 
 ### Step 4: Test Deployment
 
-1. Push perubahan ke branch `main`:
+1. Push perubahan ke branch `master`:
    ```bash
    git add .
    git commit -m "Test auto-deploy"
-   git push origin main
+   npm run push
    ```
 
 2. Cek status di GitHub → Actions tab

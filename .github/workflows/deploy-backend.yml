@@ -1,22 +1,19 @@
-name: Deploy Backend to VPS
+# Auto-deploy backend + frontend ke VPS setiap push ke master
+name: Deploy to VPS
 
 on:
   push:
     branches:
       - master
-    paths:
-      - 'backend/**'
-      - '.github/workflows/deploy-backend.yml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to VPS via SSH
+      - name: Deploy Backend + Frontend to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -24,29 +21,35 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_SSH_PORT }}
           script: |
-            cd ${{ secrets.APP_PATH }}/backend
+            set -e
+            APP_PATH="${{ secrets.APP_PATH }}"
+            [ -z "$APP_PATH" ] && APP_PATH="/var/www/bgg-app"
+            cd "$APP_PATH"
             
             echo "=== Pulling latest changes ==="
             git fetch origin master
             git reset --hard origin/master
             
-            echo "=== Installing dependencies ==="
-            npm ci --production
-            
-            echo "=== Running database migrations ==="
-            npm run migrate
-            
-            echo "=== Restarting application ==="
+            echo "=== Backend: install & migrate ==="
+            cd "$APP_PATH/backend"
+            npm ci
+            npm run migrate 2>/dev/null || true
+            echo "=== Backend: restart PM2 ==="
             pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend
             
-            echo "=== Deployment completed! ==="
+            echo "=== Frontend: install & build ==="
+            cd "$APP_PATH/frontend"
+            npm ci
+            npm run build
+            
+            echo "=== Deployment completed ==="
             pm2 status
 
-      - name: Notify deployment status
+      - name: Notify
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment successful!"
+            echo "✅ Deploy berhasil (backend + frontend)"
           else
-            echo "❌ Deployment failed!"
+            echo "❌ Deploy gagal"
           fi

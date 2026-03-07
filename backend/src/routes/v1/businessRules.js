@@ -6,6 +6,6 @@ const businessRuleController = require('../../controllers/businessRuleController
 
 router.use(auth);
 router.get('/', businessRuleController.get);
-router.put('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), businessRuleController.set);
+router.put('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), businessRuleController.set);
 
 module.exports = router;

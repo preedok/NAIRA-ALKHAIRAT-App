@@ -149,7 +149,7 @@ const menuItems: MenuItem[] = [
     title: 'Settings',
     icon: <Settings className="w-5 h-5" />,
     path: '/dashboard/settings',
-    roles: ['super_admin', 'admin_pusat']
+    roles: ['super_admin', 'admin_pusat', 'role_accounting']
   },
   {
     title: 'System Logs',
