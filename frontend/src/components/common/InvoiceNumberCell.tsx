@@ -1,14 +1,13 @@
 /**
  * Satu komponen untuk kolom "No. Invoice" di semua tabel yang menampilkan data invoice.
- * Menampilkan: nomor + label status, status refund, badge Baru, Perubahan, catatan batal, optional DP payment.
+ * Di tabel: hanya nomor invoice (tanpa label status). Status tampil di kolom Status.
+ * Menampilkan: nomor, badge Baru, Perubahan, catatan batal, optional DP payment.
  * Gunakan di: OrdersInvoicesPage, InvoiceDashboard, AdminPusatDashboard, ReportsPage, Accounting*, Visa/Ticket/Hotel/Bus/Handling Work, RefundsPage, OwnerDashboard.
  */
 
 import React from 'react';
 import Badge from './Badge';
-import { InvoiceRefundStatusLabel, getEffectiveInvoiceStatusLabel, type InvoiceForStatusRefund } from './InvoiceStatusRefundCell';
 import { INVOICE_STATUS_LABELS } from '../../utils/constants';
-import { formatInvoiceNumberDisplay } from '../../utils/formatters';
 import { formatIDR } from '../../utils/formatters';
 
 export type InvoiceNumberCellInv = {
@@ -96,13 +95,12 @@ export function InvoiceNumberCell({
     .replace(/Diproses di menu Refund\.?\s*/gi, '')
     .trim();
 
-  const effectiveLabel = getEffectiveInvoiceStatusLabel(inv as InvoiceForStatusRefund);
+  const numberOnly = isDraftRow(inv) ? 'Draft' : (inv.invoice_number || '–');
 
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       <span>
-        {formatInvoiceNumberDisplay(inv as { status?: string; invoice_number?: string; is_draft_order?: boolean }, statusLabels, effectiveLabel)}
-        <InvoiceRefundStatusLabel inv={inv} />
+        {numberOnly}
         {noteCleaned ? (
           <span className="block text-xs text-slate-600 mt-1 max-w-md">{noteCleaned}</span>
         ) : null}
