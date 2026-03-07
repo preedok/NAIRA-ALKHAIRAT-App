@@ -348,9 +348,12 @@ const RegisterPage: React.FC = () => {
     const emailErr = validateEmail(form.email);
     if (emailErr)           { setError(emailErr); return; }
     if (!form.password || form.password.length < 6) { setError('Password minimal 6 karakter'); return; }
-    const amountNum = parseFloat(String(form.registration_payment_amount).replace(/[^\d.-]/g, ''));
-    if (!Number.isFinite(amountNum) || amountNum <= 0) { setError('Jumlah pembayaran MoU wajib diisi dan harus lebih dari 0'); return; }
-    if (!registrationPaymentFile) { setError('Bukti bayar MoU wajib diupload'); return; }
+    const isMou = ownerType === 'mou';
+    if (isMou) {
+      const amountNum = parseFloat(String(form.registration_payment_amount).replace(/[^\d.-]/g, ''));
+      if (!Number.isFinite(amountNum) || amountNum <= 0) { setError('Jumlah pembayaran MoU wajib diisi dan harus lebih dari 0'); return; }
+      if (!registrationPaymentFile) { setError('Bukti bayar MoU wajib diupload'); return; }
+    }
 
     setLoading(true);
     try {
@@ -365,9 +368,12 @@ const RegisterPage: React.FC = () => {
       if (form.preferred_branch_id) fd.append('preferred_branch_id', form.preferred_branch_id);
       fd.append('whatsapp', (form.whatsapp.trim() || form.phone.trim()) || '');
       if (form.npwp.trim()) fd.append('npwp', form.npwp.trim());
-      fd.append('registration_payment_amount', String(amountNum));
-      fd.append('registration_payment_file', registrationPaymentFile);
-      fd.append('is_mou_owner', ownerType === 'mou' ? 'true' : 'false');
+      if (isMou) {
+        const amountNum = parseFloat(String(form.registration_payment_amount).replace(/[^\d.-]/g, ''));
+        fd.append('registration_payment_amount', String(amountNum));
+        if (registrationPaymentFile) fd.append('registration_payment_file', registrationPaymentFile);
+      }
+      fd.append('is_mou_owner', isMou ? 'true' : 'false');
       await ownersApi.register(fd);
       setSuccess(true);
     } catch (err: any) {
@@ -577,48 +583,61 @@ const RegisterPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Section: Pembayaran MoU */}
-              <div className="rg-section">
-                <div className="rg-section-title">Pembayaran MoU (wajib di awal pendaftaran)</div>
-                <div className="rg-form-row-2">
-                  <div>
-                    <span className="rg-label req">Jumlah pembayaran (Rp)</span>
-                    <div className="rg-field">
-                      <FileText size={16} color={MUTED} style={{ flexShrink:0 }} />
-                      <input
-                        name="registration_payment_amount"
-                        type="text"
-                        inputMode="numeric"
-                        value={form.registration_payment_amount}
-                        onChange={handleChange}
-                        placeholder="Contoh: 25000000"
-                      />
+              {/* Section: Pembayaran MoU — hanya untuk Owner MOU */}
+              {ownerType === 'mou' && (
+                <>
+                  <div className="rg-section">
+                    <div className="rg-section-title">Pembayaran MoU (wajib di awal pendaftaran)</div>
+                    <div className="rg-form-row-2">
+                      <div>
+                        <span className="rg-label req">Jumlah pembayaran (Rp)</span>
+                        <div className="rg-field">
+                          <FileText size={16} color={MUTED} style={{ flexShrink:0 }} />
+                          <input
+                            name="registration_payment_amount"
+                            type="text"
+                            inputMode="numeric"
+                            value={form.registration_payment_amount}
+                            onChange={handleChange}
+                            placeholder="Contoh: 25000000"
+                          />
+                        </div>
+                        <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Biaya MoU pendaftaran: Rp 25.000.000</p>
+                      </div>
+                      <div>
+                        <span className="rg-label req">Bukti bayar MoU</span>
+                        <input
+                          ref={paymentFileInputRef}
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => setRegistrationPaymentFile(e.target.files?.[0] || null)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => paymentFileInputRef.current?.click()}
+                          className="dd-trigger"
+                          style={{ width:'100%', justifyContent:'flex-start', padding:'12px 14px' }}
+                        >
+                          <Upload size={16} color={MUTED} style={{ flexShrink:0 }} />
+                          <span className="dd-value" style={{ color: registrationPaymentFile ? '#e2e8f0' : MUTED }}>
+                            {registrationPaymentFile ? registrationPaymentFile.name : 'Pilih file (PDF / gambar)'}
+                          </span>
+                        </button>
+                      </div>
                     </div>
-                    <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Biaya MoU pendaftaran: Rp 25.000.000</p>
                   </div>
-                  <div>
-                    <span className="rg-label req">Bukti bayar MoU</span>
-                    <input
-                      ref={paymentFileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={(e) => setRegistrationPaymentFile(e.target.files?.[0] || null)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => paymentFileInputRef.current?.click()}
-                      className="dd-trigger"
-                      style={{ width:'100%', justifyContent:'flex-start', padding:'12px 14px' }}
-                    >
-                      <Upload size={16} color={MUTED} style={{ flexShrink:0 }} />
-                      <span className="dd-value" style={{ color: registrationPaymentFile ? '#e2e8f0' : MUTED }}>
-                        {registrationPaymentFile ? registrationPaymentFile.name : 'Pilih file (PDF / gambar)'}
-                      </span>
-                    </button>
-                  </div>
+                </>
+              )}
+
+              {ownerType === 'non_mou' && (
+                <div className="rg-section" style={{ background: 'rgba(100,116,139,0.08)', borderColor: 'rgba(100,116,139,0.2)' }}>
+                  <div className="rg-section-title" style={{ color: '#94a3b8' }}>Pendaftaran Non-MOU (gratis)</div>
+                  <p style={{ fontSize:13, color:'#94a3b8', lineHeight:1.6, margin:0 }}>
+                    Tidak ada pembayaran MoU. Akun Anda tetap akan divalidasi oleh Admin Pusat. Setelah disetujui dan diaktifkan, Anda dapat login dan menggunakan aplikasi.
+                  </p>
                 </div>
-              </div>
+              )}
 
               {/* Info: Alur aktivasi */}
               <div className="fu fu-2" style={{
@@ -626,7 +645,9 @@ const RegisterPage: React.FC = () => {
                 background:'rgba(56,189,248,0.06)', border:'1px solid rgba(56,189,248,0.18)',
               }}>
                 <p style={{ fontSize:13, color:'#94a3b8', lineHeight:1.65, margin:0, maxWidth:'100%' }}>
-                  <strong style={{ color:'#e2e8f0' }}>Alur aktivasi:</strong> Pembayaran MoU dilakukan di awal pendaftaran (upload bukti + isi jumlah). Setelah Anda daftar, Admin Pusat akan memverifikasi bukti bayar dan mengaktifkan akun. Setelah akun aktif, Anda dapat login dan mengakses seluruh fitur aplikasi.
+                  {ownerType === 'mou'
+                    ? <><strong style={{ color:'#e2e8f0' }}>Alur aktivasi:</strong> Pembayaran MoU dilakukan di awal pendaftaran (upload bukti + isi jumlah). Setelah Anda daftar, Admin Pusat akan memverifikasi bukti bayar dan mengaktifkan akun. Setelah akun aktif, Anda dapat login dan mengakses seluruh fitur aplikasi.</>
+                    : <><strong style={{ color:'#e2e8f0' }}>Alur aktivasi:</strong> Setelah mendaftar, Admin Pusat akan memvalidasi dan mengaktifkan akun Anda. Setelah diaktifkan, Anda dapat login dan mengakses seluruh fitur aplikasi.</>}
                 </p>
               </div>
 

@@ -832,7 +832,9 @@ const UsersPage: React.FC = () => {
           return (
             <ModalBox>
               <ModalHeader
-                title="Verifikasi Bukti Bayar MoU (diupload owner)"
+                title={(verifyRegPaymentUser as UserListItem & { is_mou_owner?: boolean }).is_mou_owner === false && !proofPath
+                  ? 'Validasi Pendaftaran Owner Non-MOU'
+                  : 'Verifikasi Bukti Bayar MoU (diupload owner)'}
                 icon={<FileCheck className="w-5 h-5" />}
                 subtitle={
                   <>
@@ -860,7 +862,11 @@ const UsersPage: React.FC = () => {
                     <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline mt-1 inline-block">Buka dokumen di tab baru</a>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">Owner belum mengupload bukti bayar.</p>
+                  <p className="text-sm text-slate-600">
+                    {(verifyRegPaymentUser as UserListItem & { is_mou_owner?: boolean }).is_mou_owner === false
+                      ? 'Pendaftaran Non-MOU (gratis). Tidak ada bukti bayar. Setujui untuk lanjut ke aktivasi.'
+                      : 'Owner belum mengupload bukti bayar.'}
+                  </p>
                 )}
                 <Autocomplete
                   label="Alasan penolakan (wajib jika tolak)"
@@ -875,7 +881,9 @@ const UsersPage: React.FC = () => {
               <ModalFooter>
                 <Button variant="outline" onClick={() => { setVerifyRegPaymentUser(null); setVerifyRegPaymentReject(''); }}>Batal</Button>
                 <Button variant="outline" onClick={() => handleVerifyRegistrationPayment(false)} disabled={verifyingRegPayment || !verifyRegPaymentReject.trim()}>Tolak</Button>
-                <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>{verifyingRegPayment ? 'Memproses...' : 'Setujui Bukti Bayar'}</Button>
+                <Button variant="primary" onClick={() => handleVerifyRegistrationPayment(true)} disabled={verifyingRegPayment}>
+                {verifyingRegPayment ? 'Memproses...' : !proofPath && (verifyRegPaymentUser as UserListItem & { is_mou_owner?: boolean }).is_mou_owner === false ? 'Setujui & lanjut aktivasi' : 'Setujui Bukti Bayar'}
+              </Button>
               </ModalFooter>
             </ModalBox>
           );

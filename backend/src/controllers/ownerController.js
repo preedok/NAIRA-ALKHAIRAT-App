@@ -16,9 +16,9 @@ const uploadConfig = require('../config/uploads');
 
 /**
  * POST /api/v1/owners/register
- * Calon Owner registrasi + upload bukti bayar MoU + input jumlah di awal.
- * Body (multipart): email, password, name, phone, company_name, address, operational_region, whatsapp, npwp, preferred_branch_id, registration_payment_amount, is_mou_owner ('true'|'false').
- * File: registration_payment_file (bukti bayar). Setelah daftar status = PENDING_REGISTRATION_VERIFICATION, menunggu admin verifikasi & aktivasi.
+ * Calon Owner registrasi. Body: is_mou_owner ('true'|'false').
+ * - Owner MOU: wajib upload bukti bayar + jumlah (registration_payment_file, registration_payment_amount). Status = PENDING_REGISTRATION_VERIFICATION.
+ * - Owner Non-MOU: tidak ada pembayaran (gratis); tetap status PENDING_REGISTRATION_VERIFICATION, validasi & aktivasi oleh Admin Pusat.
  */
 const register = asyncHandler(async (req, res) => {
   const {
@@ -36,6 +36,8 @@ const register = asyncHandler(async (req, res) => {
     is_mou_owner: isMouOwnerRaw
   } = req.body;
 
+  const isMouOwner = isMouOwnerRaw === 'true' || isMouOwnerRaw === true;
+
   const emailNorm = (email != null && email !== '') ? String(email).trim().toLowerCase() : '';
   if (!emailNorm) {
     return res.status(400).json({ success: false, message: 'Email wajib diisi' });
@@ -51,13 +53,15 @@ const register = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email sudah terdaftar' });
   }
 
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: 'Bukti bayar MoU wajib diupload' });
-  }
-
-  const amount = amountRaw != null && amountRaw !== '' ? parseFloat(String(amountRaw).replace(/[^\d.-]/g, '')) : NaN;
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ success: false, message: 'Jumlah pembayaran MoU wajib diisi dan harus lebih dari 0' });
+  // Hanya Owner MOU yang wajib bukti bayar dan jumlah
+  if (isMouOwner) {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Bukti bayar MoU wajib diupload' });
+    }
+    const amount = amountRaw != null && amountRaw !== '' ? parseFloat(String(amountRaw).replace(/[^\d.-]/g, '')) : NaN;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Jumlah pembayaran MoU wajib diisi dan harus lebih dari 0' });
+    }
   }
 
   let operationalRegion = operational_region;
@@ -76,8 +80,12 @@ const register = asyncHandler(async (req, res) => {
     is_active: true
   });
 
-  const proofUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.REGISTRATION_PAYMENT, req.file.filename);
-  const isMouOwner = isMouOwnerRaw === 'true' || isMouOwnerRaw === true;
+  let proofUrl = null;
+  let amount = null;
+  if (isMouOwner && req.file) {
+    proofUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.REGISTRATION_PAYMENT, req.file.filename);
+    amount = amountRaw != null && amountRaw !== '' ? parseFloat(String(amountRaw).replace(/[^\d.-]/g, '')) : null;
+  }
 
   await OwnerProfile.create({
     user_id: user.id,
@@ -94,9 +102,12 @@ const register = asyncHandler(async (req, res) => {
 
   const u = user.toJSON();
   delete u.password_hash;
+  const message = isMouOwner
+    ? 'Registrasi berhasil. Bukti bayar Anda akan diverifikasi oleh Admin Pusat. Setelah verifikasi dan aktivasi akun, Anda dapat login dan mengakses fitur aplikasi.'
+    : 'Registrasi berhasil (gratis). Admin Pusat akan memvalidasi dan mengaktifkan akun Anda. Setelah diaktifkan, Anda dapat login dan mengakses fitur aplikasi.';
   res.status(201).json({
     success: true,
-    message: 'Registrasi berhasil. Bukti bayar Anda akan diverifikasi oleh Admin Pusat. Setelah verifikasi dan aktivasi akun, Anda dapat login dan mengakses fitur aplikasi.',
+    message,
     data: { user: u, owner_status: OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION }
   });
 });
