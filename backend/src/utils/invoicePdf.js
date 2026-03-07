@@ -113,6 +113,38 @@ function getEffectiveStatusLabel(data) {
   return STATUS_LABELS[data.status] || data.status || status;
 }
 
+/**
+ * Warna PDF per status efektif: header (strip atas + tabel), stroke (border tabel), accent (teks INVOICE & status).
+ * Memudahkan membedakan jenis invoice dari warna file.
+ */
+function getColorsForStatusLabel(statusLabel) {
+  const s = (statusLabel || '').toLowerCase();
+  const map = {
+    lunas: { header: '#059669', stroke: '#047857', accent: '#047857' },
+    'pembayaran dp': { header: '#D97706', stroke: '#B45309', accent: '#B45309' },
+    'tagihan dp': { header: '#CA8A04', stroke: '#A16207', accent: '#A16207' },
+    'refund diproses': { header: '#0284C7', stroke: '#0369A1', accent: '#0369A1' },
+    'sudah direfund': { header: '#0D9488', stroke: '#0F766E', accent: '#0F766E' },
+    'direfund ke saldo akun': { header: '#7C3AED', stroke: '#6D28D9', accent: '#6D28D9' },
+    'dana dipindahkan ke invoice lain': { header: '#EA580C', stroke: '#C2410C', accent: '#C2410C' },
+    'dibatalkan refund': { header: '#DC2626', stroke: '#B91C1C', accent: '#B91C1C' },
+    'refund dibatalkan': { header: '#991B1B', stroke: '#7F1D1D', accent: '#7F1D1D' },
+    dibatalkan: { header: '#DC2626', stroke: '#B91C1C', accent: '#B91C1C' },
+    draft: { header: '#64748B', stroke: '#475569', accent: '#475569' },
+    overdue: { header: '#DC2626', stroke: '#B91C1C', accent: '#B91C1C' },
+    'order diupdate': { header: '#475569', stroke: '#334155', accent: '#334155' },
+    'kelebihan bayar': { header: '#B45309', stroke: '#92400E', accent: '#92400E' },
+    'sisa pengembalian': { header: '#B45309', stroke: '#92400E', accent: '#92400E' },
+    processing: { header: '#0D1A63', stroke: '#1e3a8a', accent: '#0D1A63' },
+    completed: { header: '#059669', stroke: '#047857', accent: '#047857' }
+  };
+  const entries = Object.entries(map).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, colors] of entries) {
+    if (s === key || s.includes(key)) return colors;
+  }
+  return { header: '#0D1A63', stroke: '#1e3a8a', accent: '#0D1A63' };
+}
+
 function formatAmount(amount, currency) {
   const n = parseFloat(amount || 0);
   if (!currency || currency === 'IDR') return formatIDR(n);
@@ -163,9 +195,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const pageWidth = doc.page.width - margin * 2;
   let y = margin;
 
-  // ---- Header modern: strip warna biru dongker + logo + judul ----
+  const statusLabel = getEffectiveStatusLabel(data);
+  const colors = getColorsForStatusLabel(statusLabel);
+
+  // ---- Header modern: strip warna sesuai status + logo + judul ----
   const headerH = 72;
-  doc.rect(0, 0, doc.page.width, headerH).fill('#0D1A63');
+  doc.rect(0, 0, doc.page.width, headerH).fill(colors.header);
   const logoSize = 44;
   const logoX = margin;
   const logoY = (headerH - logoSize) / 2;
@@ -188,12 +223,11 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const titleX = margin + (logoDrawn ? logoSize + 12 : 0);
   doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('BINTANG GLOBAL GROUP', titleX, 22);
   doc.fontSize(10).font('Helvetica').fillColor('rgba(255,255,255,0.9)').text('Travel & Umroh | Invoice Resmi', titleX, 48);
-  doc.fillColor('#0D1A63').fontSize(14).font('Helvetica-Bold').text('INVOICE', doc.page.width - margin - 80, 28);
+  doc.fillColor(colors.accent).fontSize(14).font('Helvetica-Bold').text('INVOICE', doc.page.width - margin - 80, 28);
   doc.fillColor('#334155');
   y = 88;
 
   // ---- Info utama: grid 2 baris x 3 kolom (rapi, tidak tumpang tindih) ----
-  const statusLabel = getEffectiveStatusLabel(data);
   const infoColW = pageWidth / 3;
   const infoX = (col) => margin + col * infoColW + 10;
   doc.fontSize(9).fillColor('#64748b');
@@ -202,7 +236,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   y += 12;
   doc.fontSize(10).fillColor('#0f172a');
   doc.text(data.invoice_number || '-', infoX(0), y, { width: infoColW - 20 });
-  doc.font('Helvetica-Bold').fillColor('#0D1A63').text(statusLabel, infoX(1), y, { width: infoColW - 20 }).font('Helvetica').fillColor('#0f172a');
+  doc.font('Helvetica-Bold').fillColor(colors.accent).text(statusLabel, infoX(1), y, { width: infoColW - 20 }).font('Helvetica').fillColor('#0f172a');
   y += 18;
   doc.fontSize(9).fillColor('#64748b');
   doc.text('Tanggal Terbit', infoX(0), y);
@@ -259,7 +293,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const descLineGap = 5;
   const descBlockGap = 6;
   const rates = getRates(data);
-  doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke('#0D1A63', '#1e3a8a');
+  doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke(colors.header, colors.stroke);
   doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
   doc.text('No', x(0), tableTop + 8, { width: w(0) });
   doc.text('Tipe', x(1), tableTop + 8, { width: w(1) });
@@ -432,14 +466,14 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.rect(boxLeft, y, boxW, 155).fillAndStroke('#eef2ff', '#93c5fd');
   let by = y + 12;
   const amountX = boxLeft + boxW - 14 - amountBoxW;
-  doc.fontSize(10).fillColor('#0D1A63');
+  doc.fontSize(10).fillColor(colors.accent);
   doc.text('Total Tagihan', boxLeft + 14, by);
   doc.text(formatIDR(totalAmount), amountX, by, { width: amountBoxW, align: 'right' });
   by += 11;
   doc.fontSize(7).fillColor('#64748b');
   doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, amountX, by, { width: amountBoxW, align: 'right' });
   by += 16;
-  doc.fontSize(10).fillColor('#0D1A63');
+  doc.fontSize(10).fillColor(colors.accent);
   doc.text(`DP (${dpPct}%)`, boxLeft + 14, by);
   doc.text(formatIDR(dpAmount), amountX, by, { width: amountBoxW, align: 'right' });
   by += 18;
@@ -505,7 +539,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       y += 20;
     });
     y += 8;
-    doc.fontSize(9).fillColor('#0D1A63').font('Helvetica-Bold');
+    doc.fontSize(9).fillColor(colors.accent).font('Helvetica-Bold');
     const totalPaidFromProofs = proofs.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
     doc.text(`Total Jumlah Pembayaran (dari ${proofs.length} bukti): ${formatIDR(totalPaidFromProofs)}`, margin, y);
     y += 22;
