@@ -206,8 +206,19 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       showToast('Produk tiket dihapus', 'success');
       fetchTicketProducts();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menghapus produk tiket', 'error');
+      const err = e as { response?: { status?: number; data?: { message?: string } } };
+      const msg = err.response?.data?.message || 'Gagal menghapus produk tiket';
+      showToast(msg, 'error');
+      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan produk tiket "${p.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
+        try {
+          await productsApi.update(p.id, { is_active: false });
+          showToast('Produk tiket dinonaktifkan', 'success');
+          fetchTicketProducts();
+        } catch (e2: unknown) {
+          const e2err = e2 as { response?: { data?: { message?: string } } };
+          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan produk tiket', 'error');
+        }
+      }
     }
   };
 

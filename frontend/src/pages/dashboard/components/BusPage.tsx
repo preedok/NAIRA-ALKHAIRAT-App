@@ -206,8 +206,19 @@ const BusPage: React.FC<BusPageProps> = ({
       showToast('Produk bus dihapus', 'success');
       fetchBusProducts();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menghapus produk bus', 'error');
+      const err = e as { response?: { status?: number; data?: { message?: string } } };
+      const msg = err.response?.data?.message || 'Gagal menghapus produk bus';
+      showToast(msg, 'error');
+      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan produk bus "${p.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
+        try {
+          await productsApi.update(p.id, { is_active: false });
+          showToast('Produk bus dinonaktifkan', 'success');
+          fetchBusProducts();
+        } catch (e2: unknown) {
+          const e2err = e2 as { response?: { data?: { message?: string } } };
+          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan produk bus', 'error');
+        }
+      }
     }
   };
 

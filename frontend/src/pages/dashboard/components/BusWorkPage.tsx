@@ -17,6 +17,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { getEffectiveInvoiceStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 
 const TICKET_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -484,7 +485,7 @@ const BusWorkPage: React.FC = () => {
         {detailInvoice && (
           <ModalBoxLg>
             <ModalHeader
-              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS)}
+              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS, getEffectiveInvoiceStatusLabel(detailInvoice))}
               subtitle={`Owner: ${detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}`}
               icon={<Bus className="w-5 h-5" />}
               onClose={() => setSearchParams({})}

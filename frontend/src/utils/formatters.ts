@@ -386,13 +386,17 @@ type InvoiceDisplayInv = {
 /**
  * Format nomor invoice seragam di semua halaman (satu acuan: nomor invoice saja).
  * Draft: "Draft". Non-draft: "StatusLabel_InvoiceNumber".
+ * Jika effectiveStatusLabel diberikan (mis. "Refund diproses"), dipakai sebagai label alih-alih status biasa.
  */
 export const formatInvoiceNumberDisplay = (
   inv: InvoiceDisplayInv,
-  statusLabels?: Record<string, string>
+  statusLabels?: Record<string, string>,
+  effectiveStatusLabel?: string
 ): string => {
   if (!inv) return '–';
   const isDraft = inv.status === 'draft' || inv.is_draft_order;
   if (isDraft) return 'Draft';
-  return formatInvoiceDisplay(inv.status || '', inv.invoice_number || '', statusLabels);
+  const num = inv.invoice_number || '';
+  if (effectiveStatusLabel != null && effectiveStatusLabel !== '') return `${effectiveStatusLabel}_${num || '–'}`;
+  return formatInvoiceDisplay(inv.status || '', num, statusLabels);
 };

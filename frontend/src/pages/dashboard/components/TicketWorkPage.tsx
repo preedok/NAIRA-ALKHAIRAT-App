@@ -17,6 +17,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { getEffectiveInvoiceStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -346,7 +347,7 @@ const TicketWorkPage: React.FC = () => {
         {detailInvoice && (
           <ModalBoxLg>
             <ModalHeader
-              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS)}
+              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS, getEffectiveInvoiceStatusLabel(detailInvoice))}
               subtitle={`Owner: ${detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}`}
               icon={<Ticket className="w-5 h-5" />}
               onClose={() => setSearchParams({})}

@@ -18,6 +18,7 @@ import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../
 import { formatIDR } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { getEffectiveInvoiceStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -349,7 +350,7 @@ const VisaWorkPage: React.FC = () => {
         {detailInvoice && (
           <ModalBoxLg>
             <ModalHeader
-              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS)}
+              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS, getEffectiveInvoiceStatusLabel(detailInvoice))}
               subtitle={
                 <>
                   <span className="flex items-center gap-1.5">

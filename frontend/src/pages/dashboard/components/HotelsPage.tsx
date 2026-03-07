@@ -577,8 +577,19 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       setHotels((prev) => prev.filter((h) => h.id !== hotel.id));
       fetchProducts();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menghapus hotel', 'error');
+      const err = e as { response?: { status?: number; data?: { message?: string } } };
+      const msg = err.response?.data?.message || 'Gagal menghapus hotel';
+      showToast(msg, 'error');
+      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan hotel "${hotel.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
+        try {
+          await productsApi.update(hotel.id, { is_active: false });
+          showToast('Hotel dinonaktifkan', 'success');
+          fetchProducts();
+        } catch (e2: unknown) {
+          const e2err = e2 as { response?: { data?: { message?: string } } };
+          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan hotel', 'error');
+        }
+      }
     }
   };
 

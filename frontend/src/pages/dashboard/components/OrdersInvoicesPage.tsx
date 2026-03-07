@@ -1757,7 +1757,7 @@ const OrdersInvoicesPage: React.FC = () => {
           <ModalBoxLg>
             <ModalHeader
               title="Detail Invoice"
-              subtitle={formatInvoiceNumberDisplay(viewInvoice, INVOICE_STATUS_LABELS)}
+              subtitle={formatInvoiceNumberDisplay(viewInvoice, INVOICE_STATUS_LABELS, getEffectiveInvoiceStatusLabel(viewInvoice))}
               icon={<Receipt className="w-5 h-5" />}
               onClose={closeModal}
             />

@@ -230,13 +230,26 @@ const HandlingPage: React.FC = () => {
   };
 
   const handleDelete = async (row: HandlingProduct) => {
+    if (!window.confirm(`Hapus produk "${row.name}"? Data akan dihapus permanen dari database.`)) return;
     setDeleting(true);
     try {
       await productsApi.delete(row.id);
       showToast('Produk handling berhasil dihapus', 'success');
       fetchList();
-    } catch {
-      showToast('Gagal menghapus produk', 'error');
+    } catch (e: unknown) {
+      const err = e as { response?: { status?: number; data?: { message?: string } } };
+      const msg = err.response?.data?.message || 'Gagal menghapus produk';
+      showToast(msg, 'error');
+      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan produk "${row.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
+        try {
+          await productsApi.update(row.id, { is_active: false });
+          showToast('Produk dinonaktifkan', 'success');
+          fetchList();
+        } catch (e2: unknown) {
+          const e2err = e2 as { response?: { data?: { message?: string } } };
+          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan produk', 'error');
+        }
+      }
     } finally {
       setDeleting(false);
     }

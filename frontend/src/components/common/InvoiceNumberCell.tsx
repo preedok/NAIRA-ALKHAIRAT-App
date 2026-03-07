@@ -6,7 +6,7 @@
 
 import React from 'react';
 import Badge from './Badge';
-import { InvoiceRefundStatusLabel } from './InvoiceStatusRefundCell';
+import { InvoiceRefundStatusLabel, getEffectiveInvoiceStatusLabel, type InvoiceForStatusRefund } from './InvoiceStatusRefundCell';
 import { INVOICE_STATUS_LABELS } from '../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../utils/formatters';
 import { formatIDR } from '../../utils/formatters';
@@ -96,10 +96,12 @@ export function InvoiceNumberCell({
     .replace(/Diproses di menu Refund\.?\s*/gi, '')
     .trim();
 
+  const effectiveLabel = getEffectiveInvoiceStatusLabel(inv as InvoiceForStatusRefund);
+
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       <span>
-        {formatInvoiceNumberDisplay(inv as { status?: string; invoice_number?: string; is_draft_order?: boolean }, statusLabels)}
+        {formatInvoiceNumberDisplay(inv as { status?: string; invoice_number?: string; is_draft_order?: boolean }, statusLabels, effectiveLabel)}
         <InvoiceRefundStatusLabel inv={inv} />
         {noteCleaned ? (
           <span className="block text-xs text-slate-600 mt-1 max-w-md">{noteCleaned}</span>

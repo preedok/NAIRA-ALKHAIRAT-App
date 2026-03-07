@@ -482,8 +482,19 @@ const PackagesPage: React.FC = () => {
       setPackages((prev) => prev.filter((p) => p.id !== pkg.id));
       fetchPackages();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menghapus paket', 'error');
+      const err = e as { response?: { status?: number; data?: { message?: string } } };
+      const msg = err.response?.data?.message || 'Gagal menghapus paket';
+      showToast(msg, 'error');
+      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan paket "${pkg.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
+        try {
+          await productsApi.update(pkg.id, { is_active: false });
+          showToast('Paket dinonaktifkan', 'success');
+          fetchPackages();
+        } catch (e2: unknown) {
+          const e2err = e2 as { response?: { data?: { message?: string } } };
+          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan paket', 'error');
+        }
+      }
     }
   };
 
