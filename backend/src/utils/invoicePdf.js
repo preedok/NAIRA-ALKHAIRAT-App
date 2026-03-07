@@ -122,7 +122,7 @@ function getColorsForStatusLabel(statusLabel) {
   const map = {
     lunas: { header: '#059669', stroke: '#047857', accent: '#047857' },
     'pembayaran dp': { header: '#D97706', stroke: '#B45309', accent: '#B45309' },
-    'tagihan dp': { header: '#CA8A04', stroke: '#A16207', accent: '#A16207' },
+    'tagihan dp': { header: '#64748B', stroke: '#475569', accent: '#475569' },
     'refund diproses': { header: '#0284C7', stroke: '#0369A1', accent: '#0369A1' },
     'sudah direfund': { header: '#0D9488', stroke: '#0F766E', accent: '#0F766E' },
     'direfund ke saldo akun': { header: '#7C3AED', stroke: '#6D28D9', accent: '#6D28D9' },
