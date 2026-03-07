@@ -15,23 +15,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check GitHub Secrets (VPS)
+        id: check-secrets
         run: |
-          if [ -z "${{ secrets.VPS_HOST }}" ]; then
-            echo "::error::Secret VPS_HOST belum diisi. Buka repo GitHub → Settings → Secrets and variables → Actions → New repository secret"
-            echo "Tambahkan: VPS_HOST (contoh: 187.124.90.214), VPS_USERNAME (contoh: root), VPS_SSH_KEY (isi private key), VPS_SSH_PORT (contoh: 22)"
-            exit 1
+          if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_USERNAME }}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "secrets_ok=false" >> $GITHUB_OUTPUT
+            echo "::notice::Deploy dilewati: Secret VPS belum diisi. Tanpa ini auto-deploy tidak jalan."
+            echo "Cara mengaktifkan: Repo → Settings → Secrets and variables → Actions → New repository secret"
+            echo "Tambahkan: VPS_HOST, VPS_USERNAME, VPS_SSH_KEY, VPS_SSH_PORT (lihat DEPLOY_SETUP.md)"
+            echo "Atau deploy manual: jalankan .\deploy\run-deploy-from-windows.ps1 dari PC, atau SSH ke VPS lalu bash deploy/update-vps.sh"
+            exit 0
           fi
-          if [ -z "${{ secrets.VPS_USERNAME }}" ]; then
-            echo "::error::Secret VPS_USERNAME belum diisi."
-            exit 1
-          fi
-          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
-            echo "::error::Secret VPS_SSH_KEY belum diisi (private key SSH untuk deploy)."
-            exit 1
-          fi
+          echo "secrets_ok=true" >> $GITHUB_OUTPUT
           echo "Secrets OK, melanjutkan deploy..."
 
       - name: Deploy Backend + Frontend to VPS
+        if: steps.check-secrets.outputs.secrets_ok == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -66,7 +64,9 @@ jobs:
       - name: Notify
         if: always()
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
+          if [ "${{ steps.check-secrets.outputs.secrets_ok }}" != "true" ]; then
+            echo "⏭️ Deploy dilewati — isi VPS_HOST, VPS_USERNAME, VPS_SSH_KEY di Settings → Secrets untuk auto-deploy"
+          elif [ "${{ job.status }}" == "success" ]; then
             echo "✅ Deploy berhasil (backend + frontend)"
           else
             echo "❌ Deploy gagal"
