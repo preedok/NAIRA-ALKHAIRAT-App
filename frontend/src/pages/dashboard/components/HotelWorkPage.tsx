@@ -16,7 +16,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
-import { getEffectiveInvoiceStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
+import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 
 const STATUS_OPTIONS = [
@@ -401,8 +401,8 @@ const HotelWorkPage: React.FC = () => {
               });
               const summaryParts = STATUS_OPTIONS.filter(s => (statusCounts[s.value] || 0) > 0).map(s => `${statusCounts[s.value]} ${s.label}`);
               const progressSummary = summaryParts.length ? summaryParts.join(', ') : '–';
-              const hasRefundCompleted = (inv.Refunds || []).some((r: any) => r.status === 'refunded');
-              const invStatusLabel = hasRefundCompleted ? 'Sudah direfund' : (INVOICE_STATUS_LABELS[inv.status] || inv.status);
+              const invStatusLabel = getEffectiveInvoiceStatusLabel(inv);
+              const statusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant(inv);
               const firstHotel = hotelItemsList[0];
               const checkInDate = firstHotel?.HotelProgress?.check_in_date ?? firstHotel?.meta?.check_in;
               const checkOutDate = firstHotel?.HotelProgress?.check_out_date ?? firstHotel?.meta?.check_out;
@@ -423,7 +423,7 @@ const HotelWorkPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
                   <td className="px-6 py-4 align-top">
-                    <Badge variant={hasRefundCompleted ? 'success' : (inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning')}>
+                    <Badge variant={statusBadgeVariant}>
                       {invStatusLabel}
                     </Badge>
                   </td>

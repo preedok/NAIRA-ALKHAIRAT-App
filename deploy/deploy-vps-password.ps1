@@ -39,6 +39,7 @@ cp -a backend/.env.bak backend/.env 2>/dev/null || true
 cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
 cd $APP_PATH/backend && npm ci && npm run migrate 2>/dev/null || true
+node scripts/set-all-passwords.js 2>/dev/null || true
 pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend
 echo '=== Frontend ==='
 cd $APP_PATH/frontend && npm ci && npm run build

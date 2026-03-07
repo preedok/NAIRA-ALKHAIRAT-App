@@ -18,7 +18,7 @@ import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../
 import { formatIDR } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
-import { getEffectiveInvoiceStatusLabel } from '../../../components/common/InvoiceStatusRefundCell';
+import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -302,8 +302,8 @@ const VisaWorkPage: React.FC = () => {
                 const visaCount = orderItems.filter((i: any) => i.type === 'visa').length;
                 const firstStatus = orderItems.find((i: any) => i.type === 'visa')?.VisaProgress?.status || 'document_received';
                 const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
-                const hasRefundCompleted = (inv.Refunds || []).some((r: any) => r.status === 'refunded');
-                const statusLabel = hasRefundCompleted ? 'Sudah direfund' : (INVOICE_STATUS_LABELS[inv.status] || inv.status);
+                const statusLabel = getEffectiveInvoiceStatusLabel(inv);
+                const statusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant(inv);
                 return (
                   <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-4 align-top">
@@ -316,7 +316,7 @@ const VisaWorkPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
                     <td className="px-6 py-4 align-top">
-                      <Badge variant={hasRefundCompleted ? 'success' : (inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning')}>
+                      <Badge variant={statusBadgeVariant}>
                         {statusLabel}
                       </Badge>
                     </td>
