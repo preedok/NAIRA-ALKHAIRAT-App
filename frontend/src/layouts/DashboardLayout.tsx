@@ -265,9 +265,11 @@ const DashboardLayout: React.FC = () => {
   };
 
   // Filter menu based on user role. For items with children, filter children by role and show parent if any child visible.
+  // Super Admin: hak akses sama seperti Admin Pusat (Dashboard, Invoice, Refund, Users, Settings, Products, Reports) + menu super-admin (Logs, Maintenance)
+  const superAdminAllowedPaths = ['/dashboard', '/dashboard/reports', '/dashboard/orders-invoices', '/dashboard/refunds', '/dashboard/users', '/dashboard/settings', '/dashboard/products'];
   const filteredMenuItems = user
     ? user.role === 'super_admin'
-      ? menuItems.filter(item => item.roles.includes('super_admin') && (item.path === '/dashboard' || item.path.startsWith('/dashboard/super-admin') || item.path === '/dashboard/reports'))
+      ? menuItems.filter(item => item.roles.includes('super_admin') && (superAdminAllowedPaths.includes(item.path) || item.path.startsWith('/dashboard/super-admin')))
       : menuItems.filter((item) => {
           if (item.children?.length) {
             const visibleChildren = item.children.filter(c => c.roles.includes(user.role));
@@ -603,7 +605,7 @@ const DashboardLayout: React.FC = () => {
           <div className="mb-4">
             <MaintenanceBanner />
           </div>
-          {user?.role === 'super_admin' && location.pathname !== '/dashboard' && !location.pathname.startsWith('/dashboard/super-admin') ? (
+          {user?.role === 'super_admin' && location.pathname !== '/dashboard' && !location.pathname.startsWith('/dashboard/super-admin') && location.pathname !== '/dashboard/reports' && location.pathname !== '/dashboard/orders-invoices' && location.pathname !== '/dashboard/refunds' && location.pathname !== '/dashboard/users' && location.pathname !== '/dashboard/settings' && !location.pathname.startsWith('/dashboard/products') ? (
             <Navigate to="/dashboard" replace />
           ) : (
             <OrderDraftProvider>
