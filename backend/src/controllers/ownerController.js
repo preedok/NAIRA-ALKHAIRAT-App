@@ -1,4 +1,5 @@
 const asyncHandler = require('express-async-handler');
+const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const path = require('path');
 const { Op } = require('sequelize');
@@ -48,8 +49,11 @@ const register = asyncHandler(async (req, res) => {
   if (!password || String(password).length < 6) {
     return res.status(400).json({ success: false, message: 'Password wajib minimal 6 karakter' });
   }
-  const existing = await User.findOne({ where: { email: emailNorm } });
-  if (existing) {
+  const existing = await User.findOne({
+    where: { email: emailNorm },
+    include: [{ model: OwnerProfile, as: 'OwnerProfile', required: false }]
+  });
+  if (existing && existing.is_active) {
     return res.status(400).json({ success: false, message: 'Email sudah terdaftar' });
   }
 
@@ -70,16 +74,6 @@ const register = asyncHandler(async (req, res) => {
     if (branch) operationalRegion = branch.region || operationalRegion;
   }
 
-  const user = await User.create({
-    email: emailNorm,
-    password_hash: password,
-    name: String(name).trim(),
-    phone: phone != null && phone !== '' ? String(phone).trim() : null,
-    company_name: company_name != null && company_name !== '' ? String(company_name).trim() : null,
-    role: ROLES.OWNER,
-    is_active: true
-  });
-
   let proofUrl = null;
   let amount = null;
   if (isMouOwner && req.file) {
@@ -87,18 +81,55 @@ const register = asyncHandler(async (req, res) => {
     amount = amountRaw != null && amountRaw !== '' ? parseFloat(String(amountRaw).replace(/[^\d.-]/g, '')) : null;
   }
 
-  await OwnerProfile.create({
-    user_id: user.id,
-    status: OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION,
-    address,
-    operational_region: operationalRegion,
-    preferred_branch_id: preferred_branch_id || null,
-    whatsapp: whatsapp || phone,
-    npwp,
-    registration_payment_proof_url: proofUrl,
-    registration_payment_amount: amount,
-    is_mou_owner: isMouOwner
-  });
+  let user;
+  if (existing && !existing.is_active && existing.role === ROLES.OWNER && existing.OwnerProfile) {
+    // Reuse akun yang pernah dihapus (soft delete): aktifkan lagi dan update data registrasi
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+    await existing.update({
+      password_hash,
+      name: String(name).trim(),
+      phone: phone != null && phone !== '' ? String(phone).trim() : null,
+      company_name: company_name != null && company_name !== '' ? String(company_name).trim() : null,
+      is_active: true
+    });
+    await existing.OwnerProfile.update({
+      status: OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION,
+      address,
+      operational_region: operationalRegion,
+      preferred_branch_id: preferred_branch_id || null,
+      whatsapp: whatsapp || phone,
+      npwp,
+      registration_payment_proof_url: proofUrl,
+      registration_payment_amount: amount,
+      is_mou_owner: isMouOwner
+    });
+    user = await User.findByPk(existing.id);
+  } else if (existing && !existing.is_active) {
+    return res.status(400).json({ success: false, message: 'Email sudah pernah dipakai. Gunakan email lain atau hubungi Admin.' });
+  } else {
+    user = await User.create({
+      email: emailNorm,
+      password_hash: password,
+      name: String(name).trim(),
+      phone: phone != null && phone !== '' ? String(phone).trim() : null,
+      company_name: company_name != null && company_name !== '' ? String(company_name).trim() : null,
+      role: ROLES.OWNER,
+      is_active: true
+    });
+    await OwnerProfile.create({
+      user_id: user.id,
+      status: OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION,
+      address,
+      operational_region: operationalRegion,
+      preferred_branch_id: preferred_branch_id || null,
+      whatsapp: whatsapp || phone,
+      npwp,
+      registration_payment_proof_url: proofUrl,
+      registration_payment_amount: amount,
+      is_mou_owner: isMouOwner
+    });
+  }
 
   const u = user.toJSON();
   delete u.password_hash;
