@@ -28,7 +28,7 @@ const {
   BusSeason,
   BusSeasonQuota
 } = require('../models');
-const { ROLES, ORDER_ITEM_TYPE } = require('../constants');
+const { ROLES, ORDER_ITEM_TYPE, isOwnerRole, OWNER_ROLES } = require('../constants');
 const { getHotelAvailabilityConfig } = require('../services/hotelAvailabilityService');
 
 /**
@@ -180,7 +180,7 @@ const listUsers = asyncHandler(async (req, res) => {
   const { role, branch_id, wilayah_id, provinsi_id, region, is_active, limit = 25, page = 1, sort_by, sort_order } = req.query;
   const where = {};
   if (role === 'divisi') {
-    where.role = { [Op.ne]: ROLES.OWNER };
+    where.role = { [Op.notIn]: OWNER_ROLES };
   } else if (role) {
     where.role = role;
   }
@@ -239,7 +239,7 @@ const listUsers = asyncHandler(async (req, res) => {
   const includeOwnerProfile = {
     model: OwnerProfile,
     as: 'OwnerProfile',
-    attributes: ['id', 'status', 'preferred_branch_id', 'registration_payment_proof_url', 'registration_payment_amount', 'activation_generated_password'],
+    attributes: ['id', 'status', 'preferred_branch_id', 'registration_payment_proof_url', 'registration_payment_amount', 'activation_generated_password', 'is_mou_owner'],
     required: false,
     include: [
       {
@@ -272,7 +272,7 @@ const listUsers = asyncHandler(async (req, res) => {
 
   const data = rows.map((u) => {
     const j = u.toJSON();
-    const isOwner = j.role === ROLES.OWNER;
+    const isOwner = isOwnerRole(j.role);
     const branchSource = isOwner && j.OwnerProfile?.PreferredBranch ? j.OwnerProfile.PreferredBranch : j.Branch;
     j.branch_name = branchSource?.name ?? null;
     j.branch_code = branchSource?.code ?? null;
@@ -314,7 +314,7 @@ const getUserById = asyncHandler(async (req, res) => {
     attributes: ['id', 'email', 'name', 'phone', 'role', 'branch_id', 'wilayah_id', 'company_name', 'is_active', 'created_at'],
     include: [
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city', 'provinsi_id'], required: false },
-      { model: OwnerProfile, as: 'OwnerProfile', attributes: ['id', 'status', 'activation_generated_password', 'assigned_branch_id', 'operational_region'], required: false }
+      { model: OwnerProfile, as: 'OwnerProfile', attributes: ['id', 'status', 'activation_generated_password', 'assigned_branch_id', 'operational_region', 'is_mou_owner'], required: false }
     ]
   });
   if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
@@ -338,7 +338,7 @@ const KOORDINATOR_CREATE_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDIN
  */
 const createUser = asyncHandler(async (req, res) => {
   const { name, email, password, role, branch_id, region, provinsi_id, kabupaten_kode, kabupaten_nama } = req.body;
-  const allowedRoles = [ROLES.OWNER, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
+  const allowedRoles = [ROLES.OWNER, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
   if (!name || !email || !password || !role) {
     return res.status(400).json({ success: false, message: 'name, email, password, role wajib' });
   }
@@ -348,7 +348,7 @@ const createUser = asyncHandler(async (req, res) => {
   if (KOORDINATOR_CREATE_ROLES.includes(role) && !region) {
     return res.status(400).json({ success: false, message: 'Koordinator wajib pilih wilayah (provinsi & kota di wilayah tersebut otomatis)' });
   }
-  if (role === ROLES.OWNER && (!provinsi_id || !kabupaten_kode)) {
+  if (OWNER_ROLES.includes(role) && (!provinsi_id || !kabupaten_kode)) {
     return res.status(400).json({ success: false, message: 'owner wajib pilih kabupaten (provinsi_id dan kabupaten_kode)' });
   }
 
@@ -359,7 +359,7 @@ const createUser = asyncHandler(async (req, res) => {
   let finalRegion = null;
   let finalWilayahId = null;
 
-  if (role === ROLES.OWNER) {
+  if (OWNER_ROLES.includes(role)) {
     const prov = await Provinsi.findByPk(provinsi_id, { attributes: ['id', 'wilayah_id'] });
     if (!prov) return res.status(400).json({ success: false, message: 'Provinsi tidak ditemukan' });
     finalWilayahId = prov.wilayah_id;
@@ -398,11 +398,11 @@ const createUser = asyncHandler(async (req, res) => {
     role,
     branch_id: finalBranchId,
     region: finalRegion,
-    wilayah_id: role === ROLES.OWNER ? finalWilayahId : (KOORDINATOR_CREATE_ROLES.includes(role) ? finalWilayahId : null),
+    wilayah_id: OWNER_ROLES.includes(role) ? finalWilayahId : (KOORDINATOR_CREATE_ROLES.includes(role) ? finalWilayahId : null),
     is_active: true
   });
 
-  if (role === ROLES.OWNER) {
+  if (OWNER_ROLES.includes(role)) {
     const { OWNER_STATUS } = require('../constants');
     // Owner daftar lewat Admin Pusat: skip workflow (bukti bayar, MOU, aktivasi). Langsung aktif.
     await OwnerProfile.create({
@@ -419,7 +419,7 @@ const createUser = asyncHandler(async (req, res) => {
   const u = user.toJSON();
   delete u.password_hash;
   // Agar daftar user langsung tampil "Aktif" untuk owner yang baru dibuat
-  if (role === ROLES.OWNER) u.owner_status = 'active';
+  if (OWNER_ROLES.includes(role)) u.owner_status = 'active';
   res.status(201).json({ success: true, message: 'Akun berhasil dibuat', data: u });
 });
 
@@ -453,14 +453,14 @@ const updateUser = asyncHandler(async (req, res) => {
     updates.password_hash = await bcrypt.hash(password, salt);
   }
 
-  const allowedRoles = [ROLES.OWNER, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
+  const allowedRoles = [ROLES.OWNER, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
   if (role !== undefined && allowedRoles.includes(role)) updates.role = role;
   const currentRole = role !== undefined ? role : user.role;
 
   // Update lokasi sesuai role (sama seperti createUser)
   let resolvedBranchId = null;
   if (allowedRoles.includes(currentRole)) {
-    if (currentRole === ROLES.OWNER && provinsi_id && kabupaten_kode) {
+    if (OWNER_ROLES.includes(currentRole) && provinsi_id && kabupaten_kode) {
       const prov = await Provinsi.findByPk(provinsi_id, { attributes: ['id', 'wilayah_id'] });
       if (prov) {
         updates.wilayah_id = prov.wilayah_id;
@@ -485,7 +485,7 @@ const updateUser = asyncHandler(async (req, res) => {
     }
   }
 
-  const wasOwner = user.role === ROLES.OWNER;
+  const wasOwner = isOwnerRole(user.role);
   if (Object.keys(updates).length > 0) await user.update(updates);
 
   if (wasOwner) {

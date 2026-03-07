@@ -4,7 +4,7 @@ const multer = require('multer');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory, Notification } = require('../models');
-const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS, NOTIFICATION_TRIGGER } = require('../constants');
+const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS, NOTIFICATION_TRIGGER, isOwnerRole } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { sendRefundProofToOwner } = require('../utils/emailService');
 
@@ -45,7 +45,7 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
  * Body: { amount, bank_name, account_number } untuk tarik saldo ke rekening.
  */
 const createFromBalance = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'owner') return res.status(403).json({ success: false, message: 'Hanya owner yang dapat meminta refund dari saldo' });
+  if (!isOwnerRole(req.user.role)) return res.status(403).json({ success: false, message: 'Hanya owner yang dapat meminta refund dari saldo' });
   const { amount: amountRaw, bank_name, account_number } = req.body || {};
   const amount = parseFloat(amountRaw);
   if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'amount wajib angka positif' });
@@ -82,7 +82,7 @@ function buildRefundWhere(req) {
   const { status, owner_id, date_from, date_to, source } = req.query;
   const where = {};
   if (status) where.status = status;
-  if (req.user.role === 'owner') where.owner_id = req.user.id;
+  if (isOwnerRole(req.user.role)) where.owner_id = req.user.id;
   else if (owner_id) where.owner_id = owner_id;
   if (source) where.source = source;
   if (date_from || date_to) {
@@ -375,7 +375,7 @@ const uploadProof = [
 const getProofFile = asyncHandler(async (req, res) => {
   const r = await Refund.findByPk(req.params.id, { attributes: ['id', 'proof_file_url', 'owner_id'] });
   if (!r || !r.proof_file_url) return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
-  const canAccess = req.user.role === 'owner' ? r.owner_id === req.user.id : ['admin_pusat', 'super_admin', 'role_accounting', 'invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
+  const canAccess = isOwnerRole(req.user.role) ? r.owner_id === req.user.id : ['admin_pusat', 'super_admin', 'role_accounting', 'invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
 
   const urlNorm = (r.proof_file_url || '').replace(/\\/g, '/').trim();

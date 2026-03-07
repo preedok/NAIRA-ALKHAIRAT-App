@@ -76,7 +76,7 @@ const SettingsPage: React.FC = () => {
     fetchSettings();
   }, [fetchSettings, user?.role, user?.branch_id]);
 
-  if (user?.role === 'owner') return <Navigate to="/dashboard" replace />;
+  if (user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') return <Navigate to="/dashboard" replace />;
 
   const tabs = [
     { id: 'general', label: 'General', icon: <SettingsIcon className="w-5 h-5" /> },

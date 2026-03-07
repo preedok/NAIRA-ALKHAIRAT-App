@@ -1,7 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const { User, OwnerProfile } = require('../models');
 const { signToken } = require('../middleware/auth');
-const { ROLES, OWNER_STATUS } = require('../constants');
+const { ROLES, OWNER_STATUS, isOwnerRole } = require('../constants');
 const logger = require('../config/logger');
 
 /**
@@ -41,7 +41,7 @@ const login = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Akun tidak aktif' });
   }
 
-  if (user.role === ROLES.OWNER) {
+  if (isOwnerRole(user.role)) {
     const profile = await OwnerProfile.findOne({ where: { user_id: user.id } });
     if (profile) {
       const status = profile.status;
@@ -94,7 +94,7 @@ const me = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
   }
   const u = user.toJSON();
-  if (user.role === ROLES.OWNER) {
+  if (isOwnerRole(user.role)) {
     const profile = await OwnerProfile.findOne({ where: { user_id: user.id } });
     u.owner_status = profile ? profile.status : null;
     u.has_special_price = profile ? profile.has_special_price : false;

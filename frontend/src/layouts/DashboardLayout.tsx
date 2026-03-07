@@ -480,11 +480,12 @@ const DashboardLayout: React.FC = () => {
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
     { path: '/dashboard/products/packages', label: 'Paket', icon: Package },
-    ...(user?.role === 'owner' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
+    ...((user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
   const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices' || m.path === '/dashboard/products');
 
-  if (user?.role === 'owner' && user?.owner_status && user.owner_status !== 'active' && location.pathname !== '/dashboard/owner-activation') {
+  const isOwner = user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  if (isOwner && user?.owner_status && user.owner_status !== 'active' && location.pathname !== '/dashboard/owner-activation') {
     return <Navigate to="/dashboard/owner-activation" replace />;
   }
 

@@ -1,27 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-// import { useAuth } from '../../../contexts/AuthContext';
-// import { ownersApi } from '../../../services/api';
-// import { OWNER_STATUS_LABELS, type OwnerStatus } from '../../../types';
-// import Card from '../../../components/common/Card';
-// import Button from '../../../components/common/Button';
-// import { API_BASE_URL } from '../../../utils/constants';
-
-// ─── MOCK / DEMO SHIMS (remove in production) ───────────────────────────────
-const OWNER_STATUS_LABELS: Record<string, string> = {
-  pending_registration_payment: 'Menunggu Pembayaran',
-  pending_registration_verification: 'Menunggu Verifikasi',
-  deposit_verified: 'Deposit Diverifikasi',
-  assigned_to_branch: 'Ditugaskan ke Cabang',
-  active: 'Aktif',
-  rejected: 'Ditolak',
-};
-type OwnerStatus = keyof typeof OWNER_STATUS_LABELS;
-const useAuth = () => ({ user: { owner_status: 'pending_registration_payment' }, refreshUser: () => {} });
-const ownersApi = {
-  getMe: () => Promise.resolve({ data: { success: true, data: { status: 'pending_registration_payment', registration_payment_proof_url: null, mou_rejected_reason: null } } }),
-  uploadRegistrationPayment: (_: FormData) => new Promise<any>((res) => setTimeout(() => res({ data: { success: true, message: 'Upload berhasil!', data: { owner_status: 'pending_registration_verification' } } }), 1800)),
-};
-// ─────────────────────────────────────────────────────────────────────────────
+import { useAuth } from '../../../contexts/AuthContext';
+import { ownersApi } from '../../../services/api';
+import type { OwnerStatus } from '../../../types';
 
 const STATUS = {
   pending_registration_payment: 'pending_registration_payment',
@@ -82,6 +62,7 @@ const OwnerActivationPage: React.FC = () => {
     status: string;
     registration_payment_proof_url?: string | null;
     mou_rejected_reason?: string | null;
+    is_mou_owner?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -135,7 +116,8 @@ const OwnerActivationPage: React.FC = () => {
   };
 
   const status = (profile?.status || (user as any)?.owner_status || '') as OwnerStatus;
-  const isPendingPayment = status === STATUS.pending_registration_payment;
+  const isMouOwner = user?.role === 'owner_mou' || profile?.is_mou_owner === true;
+  const isPendingPayment = status === STATUS.pending_registration_payment && isMouOwner;
   const isPendingVerification = status === STATUS.pending_registration_verification;
   const isRejected = status === STATUS.rejected;
   const isWaitingActivation = status === STATUS.deposit_verified || status === STATUS.assigned_to_branch;

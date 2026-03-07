@@ -25,7 +25,7 @@ const ProfilePage: React.FC = () => {
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'mou' | 'security'>('profile');
 
-  const isOwner = user?.role === 'owner';
+  const isOwner = user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
 
   const fetchProfile = useCallback(() => {
     if (!isOwner) return;

@@ -79,7 +79,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const canOrderAction = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canOrderAction = (user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const [branchId, setBranchId] = useState<string>('');
   const [wilayahId, setWilayahId] = useState<string>('');
   const [provinsiId, setProvinsiId] = useState<string>('');
@@ -432,7 +432,7 @@ const OrdersInvoicesPage: React.FC = () => {
       closeCancelModal();
       fetchInvoices();
       if (wasViewing) setViewInvoice(null);
-      if (user?.role === 'owner') fetchOwnerBalance();
+      if (user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') fetchOwnerBalance();
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
     } finally {
@@ -508,11 +508,11 @@ const OrdersInvoicesPage: React.FC = () => {
   }, [branchId, wilayahId, provinsiId, filterStatus, filterOwnerId, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus]);
 
   useEffect(() => {
-    if (user?.role === 'owner') fetchOwnerBalance();
+    if (user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') fetchOwnerBalance();
   }, [user?.role, fetchOwnerBalance]);
 
   useEffect(() => {
-    if (viewInvoice && user?.role === 'owner') fetchOwnerBalance();
+    if (viewInvoice && (user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou')) fetchOwnerBalance();
   }, [viewInvoice?.id, user?.role, fetchOwnerBalance]);
 
   const summaryFromTable = (() => {
@@ -2064,7 +2064,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
                           {/* Saldo (owner) + Kurs */}
                           <div className="lg:col-span-3 space-y-4">
-                            {user?.role === 'owner' && viewInvoice?.owner_id === user?.id && (
+                            {(user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && viewInvoice?.owner_id === user?.id && (
                               <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 shadow-sm">
                                 <h4 className="text-sm font-semibold text-emerald-800 flex items-center gap-2 mb-3">
                                   <Wallet className="w-4 h-4" /> Saldo Akun Anda

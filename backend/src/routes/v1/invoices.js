@@ -3,7 +3,7 @@ const router = express.Router();
 const invoiceController = require('../../controllers/invoiceController');
 const paymentProofController = require('../../controllers/paymentProofController');
 const { auth, requireRole } = require('../../middleware/auth');
-const { ROLES } = require('../../constants');
+const { ROLES, OWNER_ROLES } = require('../../constants');
 
 router.use(auth);
 
@@ -12,8 +12,8 @@ router.get('/summary', invoiceController.getSummary);
 router.get('/reallocations', invoiceController.listReallocations);
 router.get('/draft-orders', invoiceController.listDraftOrders);
 router.get('/', invoiceController.list);
-router.post('/', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
-router.post('/reallocate-payments', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.reallocatePayments);
+router.post('/', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
+router.post('/reallocate-payments', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.reallocatePayments);
 router.get('/:id/pdf', invoiceController.getPdf);
 router.get('/:id/status-history', invoiceController.getStatusHistory);
 router.get('/:id/order-revisions', invoiceController.getOrderRevisions);
@@ -24,7 +24,7 @@ router.patch('/:id/unblock', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.ADMIN_
 // Verifikasi hanya untuk karyawan (bukan owner/pembeli). invoice_koordinator + invoice_saudi + accounting + admin
 router.post('/:id/verify-payment', requireRole(ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_ACCOUNTING, ROLES.SUPER_ADMIN), invoiceController.verifyPayment);
 router.patch('/:id/overpaid', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.SUPER_ADMIN), invoiceController.handleOverpaid);
-router.post('/:id/allocate-balance', requireRole(ROLES.OWNER, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.allocateBalance);
+router.post('/:id/allocate-balance', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.allocateBalance);
 router.post('/:id/payment-proofs', paymentProofController.create);
 
 module.exports = router;

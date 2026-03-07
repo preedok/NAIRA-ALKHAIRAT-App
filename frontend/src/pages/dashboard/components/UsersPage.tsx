@@ -152,7 +152,7 @@ const UsersPage: React.FC = () => {
 
   /** Untuk owner: load semua kabupaten dengan provinsi & wilayah (pilih kabupaten → auto provinsi & wilayah) */
   useEffect(() => {
-    if (!addUserModalOpen || addUserForm.role !== 'owner') {
+    if (!addUserModalOpen || (addUserForm.role !== 'owner' && addUserForm.role !== 'owner_mou' && addUserForm.role !== 'owner_non_mou')) {
       setKabupatenForOwner([]);
       return;
     }
@@ -194,7 +194,8 @@ const UsersPage: React.FC = () => {
       showToast('Pilih wilayah untuk koordinator', 'error');
       return;
     }
-    if (role === 'owner' && (!provinsi_id.trim() || !kabupaten_kode.trim())) {
+    const isOwnerRole = role === 'owner' || role === 'owner_mou' || role === 'owner_non_mou';
+    if (isOwnerRole && (!provinsi_id.trim() || !kabupaten_kode.trim())) {
       showToast('Pilih kabupaten (provinsi dan kabupaten/kota)', 'error');
       return;
     }
@@ -207,7 +208,7 @@ const UsersPage: React.FC = () => {
         role
       };
       if (isKoordinatorRole && region.trim()) body.region = region.trim();
-      if (role === 'owner') {
+      if (isOwnerRole) {
         body.provinsi_id = provinsi_id.trim();
         body.kabupaten_kode = kabupaten_kode.trim();
         if (kabupaten_nama.trim()) body.kabupaten_nama = kabupaten_nama.trim();
@@ -250,7 +251,7 @@ const UsersPage: React.FC = () => {
     setEditForm(baseForm);
     try {
       let kabList: KabupatenForOwnerItem[] = [];
-      if ((user as any).role === 'owner') {
+      if ((user as any).role === 'owner' || (user as any).role === 'owner_mou' || (user as any).role === 'owner_non_mou') {
         const kabRes = await branchesApi.listKabupatenForOwner();
         if (kabRes.data?.data) {
           kabList = kabRes.data.data;
@@ -277,7 +278,7 @@ const UsersPage: React.FC = () => {
           kabupaten_kode: '',
           kabupaten_nama: ''
         };
-        if (d.role === 'owner' && d.Branch?.provinsi_id) {
+        if ((d.role === 'owner' || d.role === 'owner_mou' || d.role === 'owner_non_mou') && d.Branch?.provinsi_id) {
           next.provinsi_id = d.Branch.provinsi_id;
           const cityOrName = (d.Branch.city || d.Branch.name || '').trim();
           if (cityOrName && kabList.length > 0) {
@@ -314,7 +315,7 @@ const UsersPage: React.FC = () => {
       showToast('Pilih wilayah untuk koordinator', 'error');
       return;
     }
-    if (editForm.role === 'owner' && (!editForm.provinsi_id.trim() || !editForm.kabupaten_kode.trim())) {
+    if ((editForm.role === 'owner' || editForm.role === 'owner_mou' || editForm.role === 'owner_non_mou') && (!editForm.provinsi_id.trim() || !editForm.kabupaten_kode.trim())) {
       showToast('Pilih kabupaten/kota untuk owner', 'error');
       return;
     }
@@ -327,7 +328,7 @@ const UsersPage: React.FC = () => {
       };
       if (editForm.password.length >= 6) body.password = editForm.password;
       if (isKoordinator) body.region = editForm.region.trim();
-      if (editForm.role === 'owner') {
+      if (editForm.role === 'owner' || editForm.role === 'owner_mou' || editForm.role === 'owner_non_mou') {
         body.provinsi_id = editForm.provinsi_id.trim();
         body.kabupaten_kode = editForm.kabupaten_kode.trim();
         if (editForm.kabupaten_nama.trim()) body.kabupaten_nama = editForm.kabupaten_nama.trim();
@@ -450,8 +451,8 @@ const UsersPage: React.FC = () => {
   const stats = [
     { label: 'Total Users', value: pagination?.total ?? users.length, color: 'from-blue-500 to-cyan-500' },
     { label: 'Aktif', value: users.filter((u: UserListItem) => u.is_active).length, color: 'from-emerald-500 to-teal-500' },
-    { label: 'Owner', value: users.filter((u: UserListItem) => u.role === 'owner').length, color: 'from-purple-500 to-pink-500' },
-    { label: 'Staff', value: users.filter((u: UserListItem) => u.role !== 'owner').length, color: 'from-orange-500 to-red-500' }
+    { label: 'Owner', value: users.filter((u: UserListItem) => u.role === 'owner' || u.role === 'owner_mou' || u.role === 'owner_non_mou').length, color: 'from-purple-500 to-pink-500' },
+    { label: 'Staff', value: users.filter((u: UserListItem) => u.role !== 'owner' && u.role !== 'owner_mou' && u.role !== 'owner_non_mou').length, color: 'from-orange-500 to-red-500' }
   ];
 
   const tableColumns: TableColumn[] = [
@@ -470,7 +471,7 @@ const UsersPage: React.FC = () => {
   const buildActionItems = (user: UserListItem): ActionsMenuItem[] => {
     const ownerStatus = (user as UserListItem & { owner_status?: string }).owner_status;
     const ownerProfileId = user.owner_profile_id;
-    const isOwner = user.role === 'owner';
+    const isOwner = user.role === 'owner' || user.role === 'owner_mou' || user.role === 'owner_non_mou';
     const hideEdit = isOwner && ownerStatus != null && ownerStatus !== 'active';
     const items: ActionsMenuItem[] = [];
     items.push({
@@ -660,7 +661,7 @@ const UsersPage: React.FC = () => {
               <td className="px-6 py-4 text-slate-700">{user.wilayah_name ?? '-'}</td>
               <td className="px-6 py-4 text-slate-700">{user.provinsi_name ?? '-'}</td>
               <td className="px-6 py-4 text-center">
-                {user.role === 'owner' ? (
+                {(user.role === 'owner' || user.role === 'owner_mou' || user.role === 'owner_non_mou') ? (
                   (() => {
                     const status = (user as UserListItem & { owner_status?: string }).owner_status;
                     const isOwnerActive = status === 'active';
@@ -677,7 +678,7 @@ const UsersPage: React.FC = () => {
                 )}
               </td>
               <td className="px-6 py-4">
-                {user.role === 'owner' && user.activation_generated_password ? (
+                {(user.role === 'owner' || user.role === 'owner_mou' || user.role === 'owner_non_mou') && user.activation_generated_password ? (
                   <div className="flex items-center gap-2">
                     <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded break-all max-w-[120px] truncate" title={user.activation_generated_password}>
                       {user.activation_generated_password}
@@ -725,6 +726,8 @@ const UsersPage: React.FC = () => {
                 onChange={(v) => setEditForm((f) => ({ ...f, role: v, region: '', provinsi_id: '', kabupaten_kode: '', kabupaten_nama: '' }))}
                 options={[
                   { value: 'owner', label: 'Owner' },
+                  { value: 'owner_mou', label: 'Owner MOU' },
+                  { value: 'owner_non_mou', label: 'Owner Non-MOU' },
                   { value: 'role_bus', label: 'Bus Saudi' },
                   { value: 'role_hotel', label: 'Hotel Saudi' },
                   { value: 'admin_pusat', label: 'Admin Pusat' },
@@ -750,7 +753,7 @@ const UsersPage: React.FC = () => {
                   <p className="text-xs text-slate-500 mt-1">Provinsi dan kota di wilayah ini otomatis berlaku.</p>
                 </>
               )}
-              {editForm.role === 'owner' && (
+              {(editForm.role === 'owner' || editForm.role === 'owner_mou' || editForm.role === 'owner_non_mou') && (
                 <>
                   <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
                     Untuk role Owner: cukup pilih <strong>Kabupaten/Kota</strong>. Provinsi dan Wilayah otomatis mengikuti.
@@ -781,7 +784,7 @@ const UsersPage: React.FC = () => {
                   })()}
                 </>
               )}
-              {editForm.role === 'owner' && (
+              {(editForm.role === 'owner' || editForm.role === 'owner_mou' || editForm.role === 'owner_non_mou') && (
                 <div>
                   {editActivationPassword ? (
                     <>
@@ -1029,6 +1032,8 @@ const UsersPage: React.FC = () => {
                 }))}
                 options={[
                   { value: 'owner', label: 'Owner' },
+                  { value: 'owner_mou', label: 'Owner MOU' },
+                  { value: 'owner_non_mou', label: 'Owner Non-MOU' },
                   { value: 'role_bus', label: 'Bus Saudi' },
                   { value: 'role_hotel', label: 'Hotel Saudi' },
                   { value: 'admin_pusat', label: 'Admin Pusat' },
@@ -1056,7 +1061,7 @@ const UsersPage: React.FC = () => {
                   </p>
                 </>
               )}
-              {addUserForm.role === 'owner' && (
+              {(addUserForm.role === 'owner' || addUserForm.role === 'owner_mou' || addUserForm.role === 'owner_non_mou') && (
                 <>
                   <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
                     Untuk role Owner: cukup pilih <strong>Kabupaten/Kota</strong>. Provinsi dan Wilayah otomatis mengikuti.

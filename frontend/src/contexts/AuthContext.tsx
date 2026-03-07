@@ -92,8 +92,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const hasRole = (role: UserRole | UserRole[]): boolean => {
     if (!user) return false;
-    if (Array.isArray(role)) return role.includes(user.role);
-    return user.role === role;
+    const isOwner = () => ['owner', 'owner_mou', 'owner_non_mou'].includes(user!.role);
+    if (Array.isArray(role)) return role.some(r => user.role === r || (r === 'owner' && isOwner()));
+    return user.role === role || (role === 'owner' && isOwner());
   };
 
   const value: AuthContextType = {

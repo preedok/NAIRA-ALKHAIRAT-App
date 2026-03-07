@@ -131,7 +131,7 @@ const OrderFormPage: React.FC = () => {
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
 
-  const isOwner      = user?.role === 'owner';
+  const isOwner      = user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
   const ownerProf    = canPickOwner && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
   const [ownerMeProfile, setOwnerMeProfile] = useState<{ is_mou_owner?: boolean } | null>(null);

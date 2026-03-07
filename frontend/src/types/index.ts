@@ -17,6 +17,8 @@ export type UserRole =
   | 'handling'
   | 'admin_cabang'
   | 'owner'
+  | 'owner_mou'
+  | 'owner_non_mou'
   | 'role_hotel'
   | 'role_bus'
   | 'role_accounting';
@@ -74,10 +76,18 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   handling: 'Handling',
   admin_cabang: 'Admin Cabang',
   owner: 'Owner',
+  owner_mou: 'Owner MOU',
+  owner_non_mou: 'Owner Non-MOU',
   role_hotel: 'Hotel',
   role_bus: 'Bus',
   role_accounting: 'Accounting'
 };
+
+/** Role owner (legacy, MOU, non-MOU) untuk pengecekan akses */
+export const OWNER_ROLES: UserRole[] = ['owner', 'owner_mou', 'owner_non_mou'];
+export function isOwnerRole(role: string): role is UserRole {
+  return OWNER_ROLES.includes(role as UserRole);
+}
 
 export const KOORDINATOR_ROLES: UserRole[] = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
 export function isKoordinatorRole(role: UserRole): boolean {

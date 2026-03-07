@@ -82,6 +82,22 @@ async function ensureOwnerProfilesIsMouOwnerColumn(db) {
   }
 }
 
+/** Ensure enum_users_role has owner_mou, owner_non_mou; migrate existing owner -> owner_mou */
+async function ensureOwnerRolesEnum(db) {
+  try {
+    for (const val of ['owner_mou', 'owner_non_mou']) {
+      try {
+        await db.query(`ALTER TYPE "enum_users_role" ADD VALUE '${val}'`);
+      } catch (e) {
+        if (!String(e.message || '').includes('already exists')) logger.warn('ensureOwnerRolesEnum:', e.message);
+      }
+    }
+    await db.query(`UPDATE users SET role = 'owner_mou', updated_at = NOW() WHERE role = 'owner'`);
+  } catch (e) {
+    logger.warn('ensureOwnerRolesEnum:', e.message);
+  }
+}
+
 // alter: false by default — avoid ALTER when DB has views (e.g. v_orders_summary) that depend on tables.
 // Set SYNC_ALTER=true only when you need schema changes and have dropped dependent views.
 sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
@@ -89,6 +105,7 @@ sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
+  .then(() => ensureOwnerRolesEnum(sequelize))
   .then(async () => {
     logger.info('Database synchronized');
     const { SystemLog } = require('./models');

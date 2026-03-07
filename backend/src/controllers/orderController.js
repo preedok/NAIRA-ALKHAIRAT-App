@@ -5,7 +5,7 @@ const multer = require('multer');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof, PaymentReallocation } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
-const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS } = require('../constants');
+const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS, isOwnerRole } = require('../constants');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
@@ -154,7 +154,7 @@ const list = asyncHandler(async (req, res) => {
       where.created_at[Op.lte] = d;
     }
   }
-  if (req.user.role === 'owner') where.owner_id = req.user.id;
+  if (isOwnerRole(req.user.role)) where.owner_id = req.user.id;
 
   // Role invoice Saudi / super_admin / admin_pusat: lihat semua order (tanpa filter branch dari role)
   const isKoordinatorOrInvoiceKoordinator = ['invoice_koordinator'].includes(req.user.role);
@@ -264,7 +264,7 @@ const create = asyncHandler(async (req, res) => {
   const isInvoiceRole = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
 
   // Untuk owner: ambil assigned_branch_id dari OwnerProfile jika belum ada branch_id
-  if (req.user.role === 'owner' && !effectiveBranchId) {
+  if (isOwnerRole(req.user.role) && !effectiveBranchId) {
     try {
       const profile = await OwnerProfile.findOne({
         where: { user_id: req.user.id },
@@ -318,7 +318,7 @@ const create = asyncHandler(async (req, res) => {
       effectiveBranchId,
       branchIdStr
     });
-    const msg = req.user.role === 'owner'
+    const msg = isOwnerRole(req.user.role)
       ? 'Owner belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
       : isInvoiceRole
         ? 'Owner yang dipilih belum memiliki cabang. Pilih owner lain atau hubungi admin untuk menetapkan cabang.'
@@ -460,7 +460,7 @@ const create = asyncHandler(async (req, res) => {
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
     return res.status(400).json({
       success: false,
-      message: req.user.role === 'owner'
+      message: isOwnerRole(req.user.role)
         ? 'Owner belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
         : 'Branch/cabang wajib. Pilih cabang atau pastikan akun owner sudah di-assign cabang.'
     });
@@ -509,7 +509,7 @@ const create = asyncHandler(async (req, res) => {
       if (field === 'branch_id' || (createErr.message && createErr.message.includes('branch_id'))) {
         return res.status(400).json({
           success: false,
-          message: req.user.role === 'owner'
+          message: isOwnerRole(req.user.role)
             ? 'Owner belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
             : 'Branch/cabang wajib. Pilih cabang atau pastikan akun owner sudah di-assign cabang.'
         });
@@ -572,7 +572,7 @@ const getById = asyncHandler(async (req, res) => {
     ]
   });
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  if (req.user.role === 'owner' && order.owner_id !== req.user.id) {
+  if (isOwnerRole(req.user.role) && order.owner_id !== req.user.id) {
     return res.status(403).json({ success: false, message: 'Akses ditolak' });
   }
   res.json({ success: true, data: order });
@@ -586,7 +586,7 @@ const getById = asyncHandler(async (req, res) => {
 const update = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id, { include: [{ model: OrderItem, as: 'OrderItems' }] });
   if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  const canUpdate = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
+  const canUpdate = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role) || (isOwnerRole(req.user.role) && order.owner_id === req.user.id);
   if (!canUpdate) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau invoice koordinator/Saudi yang dapat mengubah order' });
   }
@@ -834,7 +834,7 @@ const update = asyncHandler(async (req, res) => {
 const destroy = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-  const canDelete = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role) || (req.user.role === 'owner' && order.owner_id === req.user.id);
+  const canDelete = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role) || (isOwnerRole(req.user.role) && order.owner_id === req.user.id);
   if (!canDelete) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau tim invoice/admin yang dapat membatalkan order' });
   }
@@ -1149,7 +1149,7 @@ const uploadJamaahData = [
     const { orderId, itemId } = req.params;
     const order = await Order.findByPk(orderId, { include: [{ model: OrderItem, as: 'OrderItems' }] });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-    const canUpload = (req.user.role === 'owner' && order.owner_id === req.user.id) ||
+    const canUpload = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
       ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
     if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice yang dapat mengupload data jamaah' });
 

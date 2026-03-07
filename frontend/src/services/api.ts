@@ -1051,6 +1051,7 @@ export interface OwnerProfile {
   registration_payment_proof_url?: string;
   mou_generated_url?: string;
   mou_rejected_reason?: string;
+  is_mou_owner?: boolean;
   assigned_branch_id?: string;
   activated_at?: string;
   activated_by?: string;

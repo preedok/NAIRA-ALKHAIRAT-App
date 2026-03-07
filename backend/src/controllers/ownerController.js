@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { Op } = require('sequelize');
 const { User, OwnerProfile, Branch, OwnerBalanceTransaction } = require('../models');
-const { ROLES, OWNER_STATUS, MOU_REGISTRATION_FEE_IDR } = require('../constants');
+const { ROLES, OWNER_STATUS, MOU_REGISTRATION_FEE_IDR, isOwnerRole } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { generateMouPdf } = require('../utils/mouPdf');
 const { sendMouToOwner } = require('../utils/emailService');
@@ -82,7 +82,7 @@ const register = asyncHandler(async (req, res) => {
   }
 
   let user;
-  if (existing && !existing.is_active && existing.role === ROLES.OWNER && existing.OwnerProfile) {
+  if (existing && !existing.is_active && isOwnerRole(existing.role) && existing.OwnerProfile) {
     // Reuse akun yang pernah dihapus (soft delete): aktifkan lagi dan update data registrasi
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
@@ -114,7 +114,7 @@ const register = asyncHandler(async (req, res) => {
       name: String(name).trim(),
       phone: phone != null && phone !== '' ? String(phone).trim() : null,
       company_name: company_name != null && company_name !== '' ? String(company_name).trim() : null,
-      role: ROLES.OWNER,
+      role: isMouOwner ? ROLES.OWNER_MOU : ROLES.OWNER_NON_MOU,
       is_active: true
     });
     await OwnerProfile.create({
@@ -148,6 +148,9 @@ const register = asyncHandler(async (req, res) => {
  * Owner upload bukti bayar pendaftaran. Status: PENDING_REGISTRATION_PAYMENT → PENDING_REGISTRATION_VERIFICATION
  */
 const uploadRegistrationPayment = asyncHandler(async (req, res) => {
+  if (req.user.role === ROLES.OWNER_NON_MOU) {
+    return res.status(400).json({ success: false, message: 'Owner Non-MOU tidak perlu upload bukti bayar. Akun Anda akan diverifikasi dan diaktivasi oleh Admin Pusat.' });
+  }
   const userId = req.user.id;
   const profile = await OwnerProfile.findOne({ where: { user_id: userId } });
   if (!profile) return res.status(404).json({ success: false, message: 'Profil owner tidak ditemukan' });
