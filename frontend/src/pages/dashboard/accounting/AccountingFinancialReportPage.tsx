@@ -11,6 +11,8 @@ import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialR
 import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, type InvoiceForStatusRefund } from '../../../components/common/InvoiceStatusRefundCell';
+import Badge from '../../../components/common/Badge';
 
 type ReportTab = 'ringkasan' | 'wilayah' | 'provinsi' | 'cabang' | 'owner' | 'produk' | 'periode' | 'detail';
 
@@ -885,7 +887,9 @@ const AccountingFinancialReportPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right align-top">
                       <div className="flex flex-col items-end gap-1">
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span>
+                        <Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv as InvoiceForStatusRefund)} className="text-xs">
+                          {getEffectiveInvoiceStatusLabel(inv as InvoiceForStatusRefund)}
+                        </Badge>
                         {(() => {
                           const st = (inv.status || '').toLowerCase();
                           const totalInv = Number(inv.total_amount) || 0;

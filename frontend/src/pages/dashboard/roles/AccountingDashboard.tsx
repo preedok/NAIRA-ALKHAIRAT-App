@@ -11,6 +11,7 @@ import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, 
 import { formatIDR } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import type { TableColumn } from '../../../types';
 
 /** Modal daftar invoice lengkap dengan filter dan pagination */
@@ -156,7 +157,8 @@ const InvoiceListModal: React.FC<{
                 : undefined
             }
             renderRow={(inv) => {
-              const statusLabel = INVOICE_STATUS_LABELS[inv.status] || inv.status;
+              const statusLabel = getEffectiveInvoiceStatusLabel(inv);
+              const statusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant(inv);
               return (
                 <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 align-top">
@@ -170,7 +172,7 @@ const InvoiceListModal: React.FC<{
                   <td className="px-4 py-3 text-right align-top">{formatIDR(parseFloat((inv.total_amount_idr ?? inv.total_amount) || 0))}</td>
                   <td className="px-4 py-3 text-right text-blue-600 align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
                   <td className="px-4 py-3 text-right align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                  <td className="px-4 py-3 align-top"><Badge variant={inv.status === 'paid' || inv.status === 'completed' ? 'success' : inv.status === 'canceled' || inv.status === 'cancelled' ? 'error' : 'warning'}>{statusLabel}</Badge></td>
+                  <td className="px-4 py-3 align-top"><Badge variant={statusBadgeVariant}>{statusLabel}</Badge></td>
                 </tr>
               );
             }}
@@ -473,7 +475,7 @@ const AccountingDashboard: React.FC = () => {
                     <td className="py-3 pr-4">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
                     <td className="py-3 pr-4 text-blue-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
                     <td className="py-3 pr-4">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                    <td className="py-3"><Badge variant="info">{inv.status}</Badge></td>
+                    <td className="py-3"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge></td>
                   </tr>
                 )}
               />

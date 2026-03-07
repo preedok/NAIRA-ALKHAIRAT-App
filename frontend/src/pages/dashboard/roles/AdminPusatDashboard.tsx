@@ -21,7 +21,7 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
-import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { formatIDR } from '../../../utils';
 import type { TableColumn } from '../../../types';
@@ -289,7 +289,7 @@ const InvoiceListModalAdmin: React.FC<{
                 <td className="px-4 py-3 align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
                 <td className="px-4 py-3 text-emerald-600 align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
                 <td className="px-4 py-3 align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
-                <td className="px-4 py-3 align-top"><Badge variant="info">{inv.status}</Badge></td>
+                <td className="px-4 py-3 align-top"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge></td>
               </tr>
             )}
           />

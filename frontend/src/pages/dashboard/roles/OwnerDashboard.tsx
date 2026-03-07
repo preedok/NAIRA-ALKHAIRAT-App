@@ -19,6 +19,7 @@ import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
 import { AutoRefreshControl } from '../../../components/common';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
+import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { formatIDR } from '../../../utils';
 import { INVOICE_STATUS_LABELS as INVOICE_STATUS_LABELS_GLOBAL } from '../../../utils/constants';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
@@ -273,7 +274,7 @@ const OwnerDashboard: React.FC = () => {
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <div className="font-semibold text-stone-900 font-mono"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS_GLOBAL} compact /></div>
-                    <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
+                    <Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge>
                   </div>
                   <p className="text-xs text-stone-500 mt-1">{formatDate(inv.issued_at || inv.created_at)}</p>
                 </div>
@@ -307,7 +308,7 @@ const OwnerDashboard: React.FC = () => {
                       <div>
                         <div className="font-semibold text-stone-900 font-mono"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS_GLOBAL} compact /></div>
                       </div>
-                      <Badge variant={getStatusBadge(inv.status)}>{INVOICE_STATUS_LABELS[inv.status] || inv.status}</Badge>
+                      <Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge>
                     </div>
                     <div className="space-y-2 mb-3">
                       <div className="flex justify-between text-sm">
