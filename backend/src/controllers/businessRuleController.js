@@ -27,7 +27,8 @@ const DEFAULTS = {
   [BUSINESS_RULE_KEYS.MIN_DP_PERCENTAGE]: (typeof BUSINESS_RULES.MIN_DP_PERCENTAGE !== 'undefined' ? BUSINESS_RULES.MIN_DP_PERCENTAGE : 30),
   [BUSINESS_RULE_KEYS.BANK_ACCOUNTS]: JSON.stringify(BUSINESS_RULES.BANK_ACCOUNTS || []),
   [BUSINESS_RULE_KEYS.BUS_MENENGAH_PRICE_IDR]: 2000,
-  [BUSINESS_RULE_KEYS.BUS_KECIL_PRICE_IDR]: 0
+  [BUSINESS_RULE_KEYS.BUS_KECIL_PRICE_IDR]: 0,
+  [BUSINESS_RULE_KEYS.MOU_DISCOUNT_PERCENT]: (typeof BUSINESS_RULES.MOU_DISCOUNT_PERCENT !== 'undefined' ? BUSINESS_RULES.MOU_DISCOUNT_PERCENT : 10)
 };
 
 /**
@@ -59,7 +60,7 @@ const get = asyncHandler(async (req, res) => {
     let val = branchMap[key] ?? wilayahMap[key] ?? globalMap[key] ?? DEFAULTS[key];
     if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
       try { val = JSON.parse(val); } catch (e) {}
-    } else if (['bus_min_pack', 'dp_grace_hours', 'dp_due_days', 'registration_deposit_idr', 'min_dp_percentage'].includes(key)) val = parseInt(val, 10);
+    } else if (['bus_min_pack', 'dp_grace_hours', 'dp_due_days', 'registration_deposit_idr', 'min_dp_percentage', 'mou_discount_percent'].includes(key)) val = parseInt(val, 10);
     else if (['bus_penalty_idr', 'handling_default_sar', 'visa_default_idr', 'ticket_default_idr', 'ticket_general_idr', 'ticket_lion_idr', 'ticket_super_air_jet_idr', 'ticket_garuda_idr', 'bus_menengah_price_idr', 'bus_kecil_price_idr'].includes(key)) val = parseFloat(val);
     else if (key === 'require_hotel_with_visa') val = val === 'true' || val === true;
     result[key] = val;
@@ -139,7 +140,7 @@ async function getRulesForBranch(branchId) {
   Object.keys(DEFAULTS).forEach(key => {
     let val = branchMap[key] ?? wilayahMap[key] ?? globalMap[key] ?? DEFAULTS[key];
     if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) { try { val = JSON.parse(val); } catch (e) {} }
-    else if (['bus_min_pack', 'dp_grace_hours', 'dp_due_days', 'registration_deposit_idr', 'min_dp_percentage'].includes(key)) val = parseInt(val, 10);
+    else if (['bus_min_pack', 'dp_grace_hours', 'dp_due_days', 'registration_deposit_idr', 'min_dp_percentage', 'mou_discount_percent'].includes(key)) val = parseInt(val, 10);
     else if (['bus_penalty_idr', 'handling_default_sar', 'visa_default_idr', 'ticket_default_idr', 'ticket_general_idr', 'ticket_lion_idr', 'ticket_super_air_jet_idr', 'ticket_garuda_idr', 'bus_menengah_price_idr', 'bus_kecil_price_idr'].includes(key)) val = parseFloat(val);
     else if (key === 'require_hotel_with_visa') val = val === 'true' || val === true;
     result[key] = val;

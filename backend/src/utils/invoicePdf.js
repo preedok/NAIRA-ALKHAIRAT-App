@@ -272,6 +272,10 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.text('Wilayah / Kota', col2StartX + 12, y);
   doc.text(String(wilayahStr), col2StartX + 92, y, { width: valW2 - 82 });
   y += 14;
+  const ownerMouLabel = data.User?.OwnerProfile?.is_mou_owner ? 'Owner MOU' : 'Non-MOU';
+  doc.fontSize(8).fillColor('#64748b').text('Tipe Owner', margin + 12, y);
+  doc.fontSize(9).fillColor('#334155').text(ownerMouLabel, margin + 92, y, { width: valW1 });
+  y += 18;
   doc.text('Email', margin + 12, y);
   doc.text(String(data.User?.email || '-'), margin + 92, y, { width: valW1 });
   doc.text('Kode Cabang', col2StartX + 12, y);

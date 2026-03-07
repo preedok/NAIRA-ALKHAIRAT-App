@@ -1029,7 +1029,8 @@ export const ownersApi = {
     api.patch<{ success: boolean; message?: string; data?: { owner_status: string } }>(`/owners/${id}/verify-registration-payment`, body),
   assignBranch: (ownerId: string, branchId: string) => api.patch(`/owners/${ownerId}/assign-branch`, { branch_id: branchId }),
   verifyDeposit: (ownerId: string) => api.patch(`/owners/${ownerId}/verify-deposit`),
-  activate: (ownerId: string) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`),
+  activate: (ownerId: string, body?: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`, body || {}),
+  updateProfile: (profileId: string, body: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; data: OwnerProfile }>(`/owners/${profileId}`, body),
   getMyBalance: () => api.get<{ success: boolean; data: { balance: number; transactions: Array<{ id: string; amount: number; type: string; reference_type?: string; reference_id?: string; notes?: string; created_at: string }> } }>('/owners/me/balance')
 };
 

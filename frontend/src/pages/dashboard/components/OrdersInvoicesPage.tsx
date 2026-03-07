@@ -2022,6 +2022,7 @@ const OrdersInvoicesPage: React.FC = () => {
                             </h4>
                             <dl className="space-y-4">
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.User?.name || viewInvoice.User?.company_name}</dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipe Owner</dt><dd className="mt-1"><span className={`inline-flex items-center px-2 py-0.5 rounded font-medium text-sm ${viewInvoice.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{viewInvoice.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></dd></div>
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Cabang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mata Uang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
                             </dl>

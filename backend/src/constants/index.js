@@ -220,7 +220,8 @@ const BUSINESS_RULE_KEYS = {
   MIN_DP_PERCENTAGE: 'min_dp_percentage',
   BANK_ACCOUNTS: 'bank_accounts',
   BUS_MENENGAH_PRICE_IDR: 'bus_menengah_price_idr',
-  BUS_KECIL_PRICE_IDR: 'bus_kecil_price_idr'
+  BUS_KECIL_PRICE_IDR: 'bus_kecil_price_idr',
+  MOU_DISCOUNT_PERCENT: 'mou_discount_percent'
 };
 
 // Notifikasi trigger (VIII)
@@ -289,7 +290,8 @@ const BUSINESS_RULES = {
   CURRENCY: ['IDR', 'SAR'],
   REGISTRATION_DEPOSIT_IDR: 25000000,
   MIN_DP_PERCENTAGE: 30,
-  BANK_ACCOUNTS: []  // [{ bank_name, account_number, account_name, currency? }]
+  BANK_ACCOUNTS: [],  // [{ bank_name, account_number, account_name, currency? }]
+  MOU_DISCOUNT_PERCENT: 10  // diskon % untuk owner MOU (harga 10% lebih murah dari non-MOU)
 };
 
 module.exports = {

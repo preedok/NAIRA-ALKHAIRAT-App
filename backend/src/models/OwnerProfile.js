@@ -119,6 +119,12 @@ const OwnerProfile = sequelize.define('OwnerProfile', {
     allowNull: false,
     defaultValue: 0,
     comment: 'Saldo owner dari pembatalan order (jadikan saldo); dipakai untuk order baru atau alokasi ke tagihan'
+  },
+  is_mou_owner: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: 'true = owner MOU dapat harga diskon produk (persen diatur di Settings)'
   }
 }, {
   tableName: 'owner_profiles',

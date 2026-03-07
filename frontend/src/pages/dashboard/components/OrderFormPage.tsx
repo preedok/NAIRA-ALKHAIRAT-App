@@ -82,7 +82,7 @@ function getDisplayCurrency(type: ItemType, product?: ProductOption | null): Dis
 }
 interface HotelRoomLine { id:string; room_type:RoomTypeId|''; quantity:number; unit_price:number; meal_unit_price?:number; with_meal?:boolean; }
 interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; price_currency?:DisplayCurrency; }
-interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
+interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; is_mou_owner?:boolean; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
 
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'', quantity:0, unit_price:0, with_meal:false });
@@ -134,6 +134,7 @@ const OrderFormPage: React.FC = () => {
   const isOwner      = user?.role === 'owner';
   const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
   const ownerProf    = canPickOwner && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
+  const [ownerMeProfile, setOwnerMeProfile] = useState<{ is_mou_owner?: boolean } | null>(null);
   const bFromOwner   = ownerProf?.AssignedBranch?.id ?? ownerProf?.assigned_branch_id ?? null;
   const branchId     = order?.branch_id || (canPickOwner ? bFromOwner : null) || branchSel || user?.branch_id || undefined;
   const ownerId      = isOwner ? user?.id : (isEdit ? order?.owner_id : canPickOwner ? ownerSel : undefined) ?? order?.owner_id ?? user?.id;
@@ -168,6 +169,14 @@ const OrderFormPage: React.FC = () => {
       setOwnerSel(p=>{ const f=data[0]; const fid=f?.User?.id??f?.user_id; return fid&&!p?fid:p; });
     }).catch(()=>{});
   },[canPickOwner]);
+
+  useEffect(() => {
+    if (!isOwner || !user?.id) return;
+    ownersApi.getMe().then(r => {
+      const data = (r.data as { data?: { is_mou_owner?: boolean } })?.data;
+      setOwnerMeProfile(data ? { is_mou_owner: !!data.is_mou_owner } : null);
+    }).catch(() => setOwnerMeProfile(null));
+  }, [isOwner, user?.id]);
 
   // Kurs SAR & USD + aturan bus (min pack, penalty per pack) dari business rules.
   useEffect(()=>{
@@ -762,6 +771,24 @@ const OrderFormPage: React.FC = () => {
           </section>
         )}
 
+        {/* Tipe Owner (saat login sebagai owner) */}
+        {isOwner && ownerMeProfile && (
+          <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+                <Users className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-semibold text-slate-900 text-sm">Tipe Owner</h2>
+                <p className="text-xs text-slate-500">Harga produk mengikuti tipe akun Anda</p>
+              </div>
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg font-medium ${ownerMeProfile.is_mou_owner ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                {ownerMeProfile.is_mou_owner ? 'Owner MOU' : 'Non-MOU'}
+              </span>
+            </div>
+          </section>
+        )}
+
         {/* Owner */}
         {canPickOwner&&(
           <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
@@ -774,8 +801,16 @@ const OrderFormPage: React.FC = () => {
                 <p className="text-xs text-slate-500">Order & cabang mengikuti owner yang dipilih</p>
               </div>
             </div>
-            <div className="p-4">
+            <div className="p-4 space-y-2">
               <Autocomplete label="Owner" value={ownerSel} onChange={setOwnerSel} options={owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return { value: uid2, label: lbl }; })} placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_OWNER} />
+              {ownerProf && (
+                <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium ${ownerProf.is_mou_owner ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                    {ownerProf.is_mou_owner ? 'Owner MOU' : 'Non-MOU'}
+                  </span>
+                  {ownerProf.is_mou_owner && <span className="text-slate-500">Harga produk diskon sesuai setting</span>}
+                </p>
+              )}
             </div>
           </section>
         )}

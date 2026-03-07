@@ -454,11 +454,29 @@ const assignBranch = asyncHandler(async (req, res) => {
 });
 
 /**
+ * PATCH /api/v1/owners/:id (Admin Pusat / Super Admin)
+ * Update profil owner: is_mou_owner (untuk diskon harga produk). :id = OwnerProfile.id.
+ */
+const updateProfile = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { is_mou_owner } = req.body;
+  if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT].includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Hanya Admin Pusat / Super Admin yang dapat mengubah profil owner' });
+  }
+  const profile = await OwnerProfile.findByPk(id);
+  if (!profile) return res.status(404).json({ success: false, message: 'Owner tidak ditemukan' });
+  if (typeof is_mou_owner === 'boolean') await profile.update({ is_mou_owner });
+  res.json({ success: true, data: profile });
+});
+
+/**
  * PATCH /api/v1/owners/:id/activate (Admin Pusat / Admin Koordinator wilayah)
  * Generate password baru, update user (password lama tidak berlaku), generate MOU PDF, set ACTIVE.
+ * Body: is_mou_owner (optional) - set true/false saat aktivasi.
  */
 const activate = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { is_mou_owner: bodyIsMou } = req.body || {};
   const profile = await OwnerProfile.findByPk(id, {
     include: [
       { model: User, as: 'User', attributes: ['id', 'email', 'name', 'phone', 'company_name'] },
@@ -499,14 +517,16 @@ const activate = asyncHandler(async (req, res) => {
     assignedBranchName
   });
 
-  await profile.update({
+  const activatePayload = {
     status: OWNER_STATUS.ACTIVE,
     activated_at: new Date(),
     activated_by: req.user.id,
     mou_generated_url,
     assigned_branch_id: profile.assigned_branch_id || profile.preferred_branch_id,
-    activation_generated_password: newPassword // simpan ke DB agar tampil di Admin Pusat (list + edit)
-  });
+    activation_generated_password: newPassword
+  };
+  if (typeof bodyIsMou === 'boolean') activatePayload.is_mou_owner = bodyIsMou;
+  await profile.update(activatePayload);
   await User.update(
     { branch_id: profile.assigned_branch_id || profile.preferred_branch_id },
     { where: { id: user.id } }
@@ -539,6 +559,7 @@ module.exports = {
   getStats,
   list,
   getById,
+  updateProfile,
   verifyMou,
   verifyRegistrationPayment,
   verifyDeposit,

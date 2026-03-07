@@ -1,12 +1,13 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem } = require('../models');
+const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
 const { getTicketCalendar } = require('../services/ticketAvailabilityService');
 const { getBusCalendar } = require('../services/busAvailabilityService');
 const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES, BUS_ROUTE_TYPES, BUS_TRIP_TYPES } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
+const { getRulesForBranch } = require('./businessRuleController');
 const sequelize = require('../config/sequelize');
 
 const VISA_KIND_VALUES = Object.values(VISA_KIND);
@@ -120,8 +121,18 @@ async function getEffectivePrice(productId, branchId, ownerId, meta = {}, curren
     order: [['created_at', 'DESC']]
   });
 
-  const price = special || branch || general;
-  return price ? parseFloat(price.amount) : null;
+  const priceRow = special || branch || general;
+  if (!priceRow) return null;
+  let amount = parseFloat(priceRow.amount);
+  if (ownerId && amount > 0) {
+    const profile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
+    if (profile && profile.is_mou_owner) {
+      const rules = await getRulesForBranch(branchId);
+      const discountPct = Math.min(100, Math.max(0, parseInt(rules.mou_discount_percent, 10) || 0));
+      if (discountPct > 0) amount = amount * (1 - discountPct / 100);
+    }
+  }
+  return amount;
 }
 
 const PRODUCT_ALLOWED_SORT = ['code', 'name', 'type', 'is_active', 'created_at'];
@@ -168,6 +179,21 @@ const list = asyncHandler(async (req, res) => {
     const viewAsPusat = req.query.view_as_pusat === 'true' && req.user?.role === 'role_hotel';
     const bid = viewAsPusat ? null : (branch_id || req.user?.branch_id || null);
     const oid = owner_id || null;
+    let mouMultiplier = 1;
+    let ownerIsMou = false;
+    let mouDiscountPercent = 0;
+    if (oid) {
+      const profile = await OwnerProfile.findOne({ where: { user_id: oid }, attributes: ['is_mou_owner'], raw: true });
+      if (profile && profile.is_mou_owner) {
+        const rules = await getRulesForBranch(bid);
+        mouDiscountPercent = Math.min(100, Math.max(0, parseInt(rules.mou_discount_percent, 10) || 0));
+        if (mouDiscountPercent > 0) {
+          ownerIsMou = true;
+          mouMultiplier = 1 - mouDiscountPercent / 100;
+        }
+      }
+    }
+    const applyMou = (n) => (n != null && typeof n === 'number' && !Number.isNaN(n) ? Math.round(n * mouMultiplier * 100) / 100 : n);
     const result = (products || []).map(p => {
       const prices = p.ProductPrices || [];
       const generalPrices = prices.filter(pr => !pr.branch_id && !pr.owner_id);
@@ -190,14 +216,18 @@ const list = asyncHandler(async (req, res) => {
       const generalInRefCur = generalPrices.find(pr => pr.currency === refCur) || general;
       const base = {
         ...p.toJSON(),
-        price_general: generalInRefCur ? parseFloat(generalInRefCur.amount) : (general ? parseFloat(general.amount) : null),
-        price_branch: branch ? parseFloat(branch.amount) : null,
-        price_special: special ? parseFloat(special.amount) : null,
+        price_general: applyMou(generalInRefCur ? parseFloat(generalInRefCur.amount) : (general ? parseFloat(general.amount) : null)),
+        price_branch: applyMou(branch ? parseFloat(branch.amount) : null),
+        price_special: applyMou(special ? parseFloat(special.amount) : null),
         currency: (p.meta && typeof p.meta === 'object' && p.meta.currency) ? p.meta.currency : (refCurrencyFromPrice || general?.currency || branch?.currency || 'IDR'),
-        price_general_idr: price_general_idr ?? null,
-        price_general_sar: price_general_sar ?? null,
-        price_general_usd: price_general_usd ?? null
+        price_general_idr: applyMou(price_general_idr ?? null),
+        price_general_sar: applyMou(price_general_sar ?? null),
+        price_general_usd: applyMou(price_general_usd ?? null)
       };
+      if (oid) {
+        base.owner_is_mou = ownerIsMou;
+        base.mou_discount_percent = mouDiscountPercent;
+      }
       const productType = p.type || (p.toJSON && p.toJSON().type);
       if (productType === 'hotel') {
         const av = p.ProductAvailability;
@@ -220,11 +250,11 @@ const list = asyncHandler(async (req, res) => {
           const priceRow = byRoomRefCur(rt, false);
           const priceWithMeal = byRoomRefCur(rt, true);
           const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
-          rooms[rt] = { quantity: qty, price: basePrice };
+          rooms[rt] = { quantity: qty, price: applyMou(basePrice) };
         });
         base.room_breakdown = rooms;
         base.prices_by_room = rooms;
-        base.meal_price_idr = mealPriceInRef;
+        base.meal_price_idr = applyMou(mealPriceInRef);
       }
       if (productType === 'visa') {
         const av = p.ProductAvailability;
@@ -255,13 +285,14 @@ const list = asyncHandler(async (req, res) => {
       if (productType === 'bus') {
         const meta = base.meta && typeof base.meta === 'object' ? base.meta : {};
         const byTrip = meta.route_prices_by_trip && typeof meta.route_prices_by_trip === 'object' ? meta.route_prices_by_trip : {};
-        const roundTrip = typeof byTrip.round_trip === 'number' && !Number.isNaN(byTrip.round_trip) ? Number(byTrip.round_trip) : 0;
-        const oneWay = typeof byTrip.one_way === 'number' && !Number.isNaN(byTrip.one_way) ? Number(byTrip.one_way) : 0;
-        const returnOnly = typeof byTrip.return_only === 'number' && !Number.isNaN(byTrip.return_only) ? Number(byTrip.return_only) : 0;
-        const pricePerVehicleIdr = typeof meta.price_per_vehicle_idr === 'number' && !Number.isNaN(meta.price_per_vehicle_idr) ? Number(meta.price_per_vehicle_idr) : 0;
+        const roundTrip = applyMou(typeof byTrip.round_trip === 'number' && !Number.isNaN(byTrip.round_trip) ? Number(byTrip.round_trip) : 0);
+        const oneWay = applyMou(typeof byTrip.one_way === 'number' && !Number.isNaN(byTrip.one_way) ? Number(byTrip.one_way) : 0);
+        const returnOnly = applyMou(typeof byTrip.return_only === 'number' && !Number.isNaN(byTrip.return_only) ? Number(byTrip.return_only) : 0);
+        const pricePerVehicleIdr = applyMou(typeof meta.price_per_vehicle_idr === 'number' && !Number.isNaN(meta.price_per_vehicle_idr) ? Number(meta.price_per_vehicle_idr) : 0);
+        const tripObj = { round_trip: roundTrip, one_way: oneWay, return_only: returnOnly };
         base.meta = {
           ...meta,
-          route_prices_by_trip: byTrip,
+          route_prices_by_trip: tripObj,
           route_prices: {
             full_route: roundTrip || oneWay || pricePerVehicleIdr,
             bandara_makkah: oneWay || roundTrip || pricePerVehicleIdr,
@@ -269,11 +300,9 @@ const list = asyncHandler(async (req, res) => {
             bandara_madinah_only: returnOnly || oneWay || pricePerVehicleIdr
           }
         };
-        if ((base.price_general_idr == null || base.price_general_idr === 0) && (roundTrip > 0 || oneWay > 0 || returnOnly > 0)) {
-          base.price_general_idr = roundTrip || oneWay || returnOnly;
-        }
-        if ((base.price_general_idr == null || base.price_general_idr === 0) && pricePerVehicleIdr > 0) {
-          base.price_general_idr = pricePerVehicleIdr;
+        const busGeneralIdr = roundTrip || oneWay || returnOnly || pricePerVehicleIdr;
+        if ((base.price_general_idr == null || base.price_general_idr === 0) && busGeneralIdr > 0) {
+          base.price_general_idr = busGeneralIdr;
         }
       }
       return base;
