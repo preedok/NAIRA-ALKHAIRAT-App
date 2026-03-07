@@ -156,6 +156,14 @@ const VisaWorkPage: React.FC = () => {
     handleUpdateProgress(itemId, { status: d.status });
   };
 
+  const handleProsesSemua = async () => {
+    for (const item of visaItems) {
+      const d = detailDraft[item.id];
+      if (!d) continue;
+      await handleUpdateProgress(item.id, { status: d.status });
+    }
+  };
+
   const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
     try {
@@ -493,10 +501,16 @@ const VisaWorkPage: React.FC = () => {
                 );
               })}
             </ModalBody>
-            <ModalFooter>
-              <Button variant="outline" size="sm" onClick={() => setSearchParams({})} className="rounded-xl">
-                Tutup
-              </Button>
+            <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
+              <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || visaItems.length === 0}>
+                  {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setSearchParams({})} className="rounded-xl">
+                  Tutup
+                </Button>
+              </div>
             </ModalFooter>
           </ModalBoxLg>
         )}

@@ -4,7 +4,7 @@ import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Checkbox from '../../../components/common/Checkbox';
-import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { Input, Autocomplete, CardSectionHeader, ContentLoading } from '../../../components/common';
@@ -153,6 +153,14 @@ const TicketWorkPage: React.FC = () => {
     const d = detailDraft[itemId];
     if (!d) return;
     handleUpdateProgress(itemId, { status: d.status });
+  };
+
+  const handleProsesSemua = async () => {
+    for (const item of ticketItems) {
+      const d = detailDraft[item.id];
+      if (!d) continue;
+      await handleUpdateProgress(item.id, { status: d.status });
+    }
   };
 
   const handleUpdateProgress = async (orderItemId: string, payload: { status?: string; notes?: string }) => {
@@ -460,6 +468,12 @@ const TicketWorkPage: React.FC = () => {
                 );
               })}
             </ModalBody>
+            <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
+              <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
+              <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || ticketItems.length === 0}>
+                {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
+              </Button>
+            </ModalFooter>
           </ModalBoxLg>
         )}
       </Modal>

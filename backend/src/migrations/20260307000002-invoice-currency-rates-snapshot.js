@@ -3,15 +3,21 @@
 /** Snapshot kurs global saat invoice dibuat; dipakai jika sudah ada pembayaran (agar kurs tetap). */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn(
-      'invoices',
-      'currency_rates_snapshot',
-      {
-        type: Sequelize.JSONB,
-        allowNull: true,
-        comment: 'Kurs global saat invoice dibuat; dipakai bila sudah ada pembayaran dan order tidak punya kurs khusus'
-      }
-    );
+    const dialect = queryInterface.sequelize.getDialect();
+    if (dialect === 'postgres') {
+      await queryInterface.sequelize.query(
+        'ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency_rates_snapshot JSONB NULL;'
+      );
+    } else {
+      await queryInterface.addColumn(
+        'invoices',
+        'currency_rates_snapshot',
+        {
+          type: Sequelize.JSONB,
+          allowNull: true,
+        }
+      );
+    }
   },
 
   async down(queryInterface) {

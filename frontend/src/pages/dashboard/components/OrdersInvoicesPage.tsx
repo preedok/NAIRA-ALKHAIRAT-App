@@ -981,12 +981,7 @@ const OrdersInvoicesPage: React.FC = () => {
     { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
     { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
     { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
-    { id: 'status_visa', label: 'Status Visa', align: 'left' },
-    { id: 'status_ticket', label: 'Status Tiket', align: 'left' },
-    { id: 'status_hotel', label: 'Status Hotel', align: 'left' },
-    { id: 'status_bus', label: 'Status Bus', align: 'left' },
-    { id: 'status_handling', label: 'Status Handling', align: 'left' },
-    { id: 'status_package', label: 'Status Paket', align: 'left' },
+    { id: 'status_progress', label: 'Status Progress', align: 'left' },
     INVOICE_TABLE_COLUMN_PROOF,
     { id: 'date', label: 'Tgl', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'center' }
@@ -1301,167 +1296,116 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div>{formatIDR(remaining)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                    <td className="py-3 px-4 align-top max-w-[320px]">
                       {(() => {
-                        const visaItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'visa');
-                        if (visaItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        const labels: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
-                        return (
-                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                            {visaItems.map((item: any, idx: number) => {
-                              const name = item.Product?.name || item.product_name || 'Visa';
-                              const statusLabel = labels[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
-                              const depDate = formatDate(item.meta?.travel_date ?? null);
-                              return (
-                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                  <div className="flex flex-wrap items-baseline gap-1">
-                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                    <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
-                                  </div>
-                                  <div className="text-slate-500 pl-0.5">Tgl keberangkatan {depDate}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-                      {(() => {
-                        const ticketItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'ticket');
-                        if (ticketItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        const labels: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
-                        return (
-                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                            {ticketItems.map((item: any, idx: number) => {
-                              const name = item.Product?.name || item.product_name || 'Tiket';
-                              const statusLabel = labels[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
-                              const tripType = String(item.meta?.trip_type || 'round_trip');
-                              const dep = formatDate(item.meta?.departure_date ?? null);
-                              const ret = formatDate(item.meta?.return_date ?? null);
-                              const dateLine =
-                                tripType === 'one_way' ? `Berangkat ${dep}` :
-                                tripType === 'return_only' ? `Pulang ${ret}` :
-                                `Berangkat ${dep} · Pulang ${ret}`;
-                              return (
-                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                  <div className="flex flex-wrap items-baseline gap-1">
-                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                    <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
-                                  </div>
-                                  <div className="text-slate-500 pl-0.5">{dateLine}</div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-                      {(() => {
-                        const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
-                        if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        const labels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Penetapan room', room_assigned: 'Pemberian nomor room', completed: 'Selesai' };
+                        const items = inv.Order?.OrderItems || [];
+                        if (items.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                        const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
+                        const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
+                        const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
+                        const busItems = items.filter((i: any) => (i.type || i.product_type) === 'bus');
+                        const handlingItems = items.filter((i: any) => (i.type || i.product_type) === 'handling');
+                        const packageItems = items.filter((i: any) => (i.type || i.product_type) === 'package');
+                        const visaLabels: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
+                        const ticketLabels: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
+                        const hotelLabels: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Penetapan room', room_assigned: 'Pemberian nomor room', completed: 'Selesai' };
                         const mealLabels: Record<string, string> = { pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' };
+                        const busLabels: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
+                        const sections: { title: string; nodes: React.ReactNode[] }[] = [];
+                        if (visaItems.length > 0) {
+                          sections.push({ title: 'Visa', nodes: visaItems.map((item: any, idx: number) => {
+                            const name = item.Product?.name || item.product_name || 'Visa';
+                            const statusLabel = visaLabels[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+                            const depDate = formatDate(item.meta?.travel_date ?? null);
+                            return (
+                              <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+                                <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
+                                {depDate ? <div className="text-slate-500 mt-0.5">Tgl {depDate}</div> : null}
+                              </div>
+                            );
+                          }) });
+                        }
+                        if (ticketItems.length > 0) {
+                          sections.push({ title: 'Tiket', nodes: ticketItems.map((item: any, idx: number) => {
+                            const name = item.Product?.name || item.product_name || 'Tiket';
+                            const statusLabel = ticketLabels[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+                            const tripType = String(item.meta?.trip_type || 'round_trip');
+                            const dep = formatDate(item.meta?.departure_date ?? null);
+                            const ret = formatDate(item.meta?.return_date ?? null);
+                            const dateLine = tripType === 'one_way' ? `Berangkat ${dep}` : tripType === 'return_only' ? `Pulang ${ret}` : `Berangkat ${dep} · Pulang ${ret}`;
+                            return (
+                              <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+                                <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
+                                {dateLine ? <div className="text-slate-500 mt-0.5">{dateLine}</div> : null}
+                              </div>
+                            );
+                          }) });
+                        }
+                        if (hotelItems.length > 0) {
+                          sections.push({ title: 'Hotel', nodes: hotelItems.map((item: any, idx: number) => {
+                            const name = item.Product?.name || item.product_name || 'Hotel';
+                            const status = hotelLabels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
+                            const mealStatus = item.HotelProgress?.meal_status;
+                            const mealLabel = mealStatus ? (mealLabels[mealStatus] || mealStatus) : null;
+                            const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
+                            const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
+                            return (
+                              <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+                                <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className={status === 'Selesai' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{status}</span>
+                                {mealLabel != null && <div className="text-slate-600 mt-0.5">Makan: {mealLabel}</div>}
+                                <div className="text-slate-500 mt-0.5">CI {checkIn} · CO {checkOut}</div>
+                              </div>
+                            );
+                          }) });
+                        }
+                        if (busItems.length > 0) {
+                          sections.push({ title: 'Bus', nodes: busItems.map((item: any, idx: number) => {
+                            const name = item.Product?.name || item.product_name || 'Bus';
+                            const statusLabel = busLabels[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
+                            const travelDate = formatDate(item.meta?.travel_date ?? null);
+                            const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
+                            const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
+                            const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
+                            const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel].filter(Boolean).join(' · ');
+                            return (
+                              <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+                                <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
+                                {metaLine ? <div className="text-slate-500 mt-0.5">{metaLine}</div> : null}
+                              </div>
+                            );
+                          }) });
+                        }
+                        if (handlingItems.length > 0) {
+                          sections.push({ title: 'Handling', nodes: handlingItems.map((item: any, idx: number) => {
+                            const name = item.Product?.name || item.product_name || 'Handling';
+                            const qty = Math.max(0, item.quantity ?? 1);
+                            return (
+                              <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+                                <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className="text-slate-600">Qty {qty}</span>
+                              </div>
+                            );
+                          }) });
+                        }
+                        if (packageItems.length > 0) {
+                          sections.push({ title: 'Paket', nodes: packageItems.map((item: any, idx: number) => {
+                            const name = item.Product?.name || item.product_name || 'Paket';
+                            const qty = Math.max(0, item.quantity ?? 1);
+                            return (
+                              <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+                                <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className="text-slate-600">Qty {qty}</span>
+                              </div>
+                            );
+                          }) });
+                        }
+                        if (sections.length === 0) return <span className="text-slate-400 text-xs">–</span>;
                         return (
-                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                            {hotelItems.map((item: any, idx: number) => {
-                              const name = item.Product?.name || item.product_name || 'Hotel';
-                              const status = labels[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
-                              const mealStatus = item.HotelProgress?.meal_status;
-                              const mealLabel = mealStatus ? (mealLabels[mealStatus] || mealStatus) : null;
-                              const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
-                              const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
-                              return (
-                                <div key={item.id || idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                  <div className="flex flex-wrap items-baseline gap-1">
-                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                    <span className={status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
-                                  </div>
-                                  {mealLabel != null && (
-                                    <div className="text-slate-600 pl-0.5 text-xs">Status makan: {mealLabel}</div>
-                                  )}
-                                  <div className="text-slate-500 pl-0.5">
-                                    <span>CI {checkIn}</span>
-                                    <span className="mx-1">·</span>
-                                    <span>CO {checkOut}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-                      {(() => {
-                        const busItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'bus');
-                        if (busItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        const labels: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
-                        return (
-                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                            {busItems.map((item: any, idx: number) => {
-                              const name = item.Product?.name || item.product_name || 'Bus';
-                              const statusLabel = labels[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
-                              const travelDate = formatDate(item.meta?.travel_date ?? null);
-                              const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
-                              const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
-                              const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
-                              const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel ? tripTypeLabel : null].filter(Boolean).join(' · ');
-                              return (
-                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                  <div className="flex flex-wrap items-baseline gap-1">
-                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                    <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
-                                  </div>
-                                  {metaLine ? <div className="text-slate-500 pl-0.5">{metaLine}</div> : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-                      {(() => {
-                        const handlingItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'handling');
-                        if (handlingItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        return (
-                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                            {handlingItems.map((item: any, idx: number) => {
-                              const name = item.Product?.name || item.product_name || 'Handling';
-                              const qty = Math.max(0, item.quantity ?? 1);
-                              return (
-                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                  <div className="flex flex-wrap items-baseline gap-1">
-                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                    <span className="text-slate-600">Qty {qty}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-                      {(() => {
-                        const packageItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'package');
-                        if (packageItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
-                        return (
-                          <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                            {packageItems.map((item: any, idx: number) => {
-                              const name = item.Product?.name || item.product_name || 'Paket';
-                              const qty = Math.max(0, item.quantity ?? 1);
-                              return (
-                                <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
-                                  <div className="flex flex-wrap items-baseline gap-1">
-                                    <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                    <span className="text-slate-600">Qty {qty}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                          <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 text-xs">
+                            {sections.map((sec) => (
+                              <div key={sec.title}>
+                                <div className="font-semibold text-slate-600 uppercase tracking-wide mb-1 text-[10px]">{sec.title}</div>
+                                <div className="space-y-1">{sec.nodes}</div>
+                              </div>
+                            ))}
                           </div>
                         );
                       })()}

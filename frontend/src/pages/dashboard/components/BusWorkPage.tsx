@@ -5,7 +5,7 @@ import Card from '../../../components/common/Card';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
-import Modal, { ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common/Modal';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
@@ -210,6 +210,21 @@ const BusWorkPage: React.FC = () => {
       return_status: d.return_status,
       notes: d.notes?.trim() || undefined
     });
+  };
+
+  const handleProsesSemua = async () => {
+    for (const item of busItems) {
+      const d = detailDraft[item.id];
+      if (!d) continue;
+      await handleUpdateProgress(item.id, {
+        bus_ticket_status: d.bus_ticket_status,
+        bus_ticket_info: d.bus_ticket_info?.trim() || undefined,
+        arrival_status: d.arrival_status,
+        departure_status: d.departure_status,
+        return_status: d.return_status,
+        notes: d.notes?.trim() || undefined
+      });
+    }
   };
 
   const handleUpdateProgress = async (orderItemId: string, payload: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) => {
@@ -554,6 +569,12 @@ const BusWorkPage: React.FC = () => {
                 );
               })}
             </ModalBody>
+            <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
+              <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
+              <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || busItems.length === 0}>
+                {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
+              </Button>
+            </ModalFooter>
           </ModalBoxLg>
         )}
       </Modal>

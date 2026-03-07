@@ -134,59 +134,70 @@ const SuperAdminDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title={`Selamat datang, ${user?.name ?? 'Admin'}`}
-        subtitle="Super Admin – Informasi transaksi & monitoring sistem"
-        right={
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-slate-600">Filter:</span>
-          <select
-            value={filterBranch}
-            onChange={(e) => setFilterBranch(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[140px]"
-            title="Per cabang"
-          >
-            <option value="">Semua cabang</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-          <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[140px]"
-            title="Per role"
-          >
-            <option value="">Semua role</option>
-            {MONITORING_ROLES.map((r) => (
-              <option key={r} value={r}>{ROLE_NAMES[r] || r}</option>
-            ))}
-          </select>
-          <span className="text-sm text-slate-600">Rekap periode:</span>
-          <select
-            value={exportPeriod}
-            onChange={(e) => setExportPeriod(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
-          >
-            <option value="today">Harian</option>
-            <option value="week">Mingguan</option>
-            <option value="month">Bulanan</option>
-            <option value="year">Tahunan</option>
-            <option value="all">Semua</option>
-          </select>
-          <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}>
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            {exporting === 'excel' ? '...' : 'Export Excel'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}>
-            <FileDown className="w-4 h-4 mr-2" />
-            {exporting === 'pdf' ? '...' : 'Export PDF'}
-          </Button>
-          <AutoRefreshControl onRefresh={fetchMonitoring} disabled={loading} size="sm" />
-          </div>
-        }
+        subtitle="Informasi transaksi & monitoring sistem"
       />
+
+      {/* Toolbar: Filter & Export — terpisah dari header agar tidak overlap */}
+      <Card className="rounded-xl border-slate-200/80 shadow-sm">
+        <div className="p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-full lg:w-auto">Filter</span>
+              <select
+                value={filterBranch}
+                onChange={(e) => setFilterBranch(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white min-w-[160px] focus:ring-2 focus:ring-[#0D1A63]/20 focus:border-[#0D1A63] transition-shadow"
+                title="Per cabang"
+              >
+                <option value="">Semua cabang</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white min-w-[160px] focus:ring-2 focus:ring-[#0D1A63]/20 focus:border-[#0D1A63] transition-shadow"
+                title="Per role"
+              >
+                <option value="">Semua role</option>
+                {MONITORING_ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_NAMES[r] || r}</option>
+                ))}
+              </select>
+              <span className="hidden sm:inline text-slate-300">|</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-600 whitespace-nowrap">Rekap periode:</span>
+                <select
+                  value={exportPeriod}
+                  onChange={(e) => setExportPeriod(e.target.value)}
+                  className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-[#0D1A63]/20 focus:border-[#0D1A63] transition-shadow"
+                >
+                  <option value="today">Harian</option>
+                  <option value="week">Mingguan</option>
+                  <option value="month">Bulanan</option>
+                  <option value="year">Tahunan</option>
+                  <option value="all">Semua</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-6">
+              <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting} className="rounded-xl">
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                {exporting === 'excel' ? 'Mengunduh...' : 'Export Excel'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting} className="rounded-xl">
+                <FileDown className="w-4 h-4 mr-2" />
+                {exporting === 'pdf' ? 'Mengunduh...' : 'Export PDF'}
+              </Button>
+              <AutoRefreshControl onRefresh={fetchMonitoring} disabled={loading} size="sm" />
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card className="travel-card">
         <CardSectionHeader icon={<Activity className="w-6 h-6" />} title="Dashboard Super Admin" subtitle="Rekap transaksi dan kesehatan sistem." className="mb-4" />

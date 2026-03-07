@@ -1,11 +1,12 @@
 # Auto-deploy backend + frontend ke VPS setiap push ke master
+# Deploy via rsync (tidak butuh git/credentials di VPS)
 name: Deploy to VPS
 
 on:
   push:
     branches:
       - master
-  workflow_dispatch:  # Manual trigger: Actions → Deploy to VPS → Run workflow
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -20,46 +21,36 @@ jobs:
           if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_USERNAME }}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
             echo "secrets_ok=false" >> $GITHUB_OUTPUT
             echo "::notice::Deploy dilewati: Secret VPS belum diisi. Tanpa ini auto-deploy tidak jalan."
-            echo "Cara mengaktifkan: Repo → Settings → Secrets and variables → Actions → New repository secret"
-            echo "Tambahkan: VPS_HOST, VPS_USERNAME, VPS_SSH_KEY, VPS_SSH_PORT (lihat DEPLOY_SETUP.md)"
-            echo "Atau deploy manual: jalankan .\deploy\run-deploy-from-windows.ps1 dari PC, atau SSH ke VPS lalu bash deploy/update-vps.sh"
+            echo "Cara: Repo → Settings → Secrets and variables → Actions → tambah VPS_HOST, VPS_USERNAME, VPS_SSH_KEY (opsional VPS_SSH_PORT, APP_PATH)"
             exit 0
           fi
           echo "secrets_ok=true" >> $GITHUB_OUTPUT
           echo "Secrets OK, melanjutkan deploy..."
 
-      - name: Deploy Backend + Frontend to VPS
+      - name: Deploy via rsync + SSH
         if: steps.check-secrets.outputs.secrets_ok == 'true'
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          script: |
-            set -e
-            APP_PATH="${{ secrets.APP_PATH }}"
-            [ -z "$APP_PATH" ] && APP_PATH="/var/www/bgg-app"
-            cd "$APP_PATH"
-            
-            echo "=== Pulling latest changes ==="
-            git fetch origin master
-            git reset --hard origin/master
-            
-            echo "=== Backend: install & migrate ==="
-            cd "$APP_PATH/backend"
-            npm ci
-            npm run migrate 2>/dev/null || true
-            echo "=== Backend: restart PM2 ==="
-            pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend
-            
-            echo "=== Frontend: install & build ==="
-            cd "$APP_PATH/frontend"
-            npm ci
-            npm run build
-            
-            echo "=== Deployment completed ==="
-            pm2 status
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USERNAME }}
+          VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_PORT: ${{ secrets.VPS_SSH_PORT || 22 }}
+          APP_PATH: ${{ secrets.APP_PATH || '/var/www/bgg-app' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "=== Rsync ke VPS ==="
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p $VPS_PORT" \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='backend/.env' \
+            --exclude='frontend/.env.production' \
+            --exclude='frontend/build' \
+            . "$VPS_USER@$VPS_HOST:$APP_PATH/"
+          echo "=== Backend & Frontend di VPS ==="
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "export APP_PATH='$APP_PATH'; set -e; cp -a \$APP_PATH/backend/.env \$APP_PATH/backend/.env.bak 2>/dev/null || true; cp -a \$APP_PATH/frontend/.env.production \$APP_PATH/frontend/.env.production.bak 2>/dev/null || true; cd \$APP_PATH/backend && npm ci && npm run migrate 2>/dev/null || true && (pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend); cd \$APP_PATH/frontend && npm ci && npm run build; cp -a \$APP_PATH/backend/.env.bak \$APP_PATH/backend/.env 2>/dev/null || true; cp -a \$APP_PATH/frontend/.env.production.bak \$APP_PATH/frontend/.env.production 2>/dev/null || true; echo '=== Deploy selesai ==='"
 
       - name: Notify
         if: always()

@@ -97,40 +97,59 @@ export const SuperAdminLogsPage: React.FC = () => {
       <PageHeader
         title="System Logs (realtime)"
         subtitle="Log sistem backend, frontend, dan database"
-        right={
-          <div className="flex gap-2 items-center flex-wrap">
-            <AutoRefreshControl onRefresh={() => fetchLogs()} disabled={loading} size="sm" />
-            <button
-              type="button"
-              onClick={() => setLive(!live)}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
-                live ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'
-              }`}
-            >
-              <Circle className={`w-2.5 h-2.5 ${live ? 'fill-emerald-500 text-emerald-500' : ''}`} />
-              {live ? 'Live' : 'Paused'}
-            </button>
-            <Autocomplete value={source} onChange={setSource} options={[{ value: 'backend', label: 'Backend' }, { value: 'frontend', label: 'Frontend' }, { value: 'database', label: 'Database' }]} emptyLabel="Semua sumber" className="w-40" fullWidth={false} />
-            <Autocomplete value={level} onChange={setLevel} options={[{ value: 'info', label: 'Info' }, { value: 'warn', label: 'Warn' }, { value: 'error', label: 'Error' }, { value: 'debug', label: 'Debug' }]} emptyLabel="Semua level" className="w-40" fullWidth={false} />
-            <Input type="text" placeholder="Cari pesan..." value={search} onChange={(e) => setSearch(e.target.value)} icon={<Search className="w-4 h-4" />} className="w-40" />
-            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting}><FileSpreadsheet className="w-4 h-4 mr-1" />{exporting === 'excel' ? '...' : 'Excel'}</Button>
-            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting}><FileDown className="w-4 h-4 mr-1" />{exporting === 'pdf' ? '...' : 'PDF'}</Button>
-          </div>
-        }
       />
 
-      <Card className="overflow-hidden">
+      {/* Toolbar: refresh, live, filter, search, export */}
+      <Card className="rounded-xl border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="p-4 space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <AutoRefreshControl onRefresh={() => fetchLogs()} disabled={loading} size="sm" />
+              <span className="hidden sm:inline text-slate-300">|</span>
+              <button
+                type="button"
+                onClick={() => setLive(!live)}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                  live ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}
+              >
+                <Circle className={`w-2.5 h-2.5 shrink-0 ${live ? 'fill-emerald-500 text-emerald-500' : ''}`} />
+                {live ? 'Live' : 'Paused'}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Autocomplete value={source} onChange={setSource} options={[{ value: 'backend', label: 'Backend' }, { value: 'frontend', label: 'Frontend' }, { value: 'database', label: 'Database' }]} emptyLabel="Semua sumber" className="min-w-[140px]" fullWidth={false} />
+              <Autocomplete value={level} onChange={setLevel} options={[{ value: 'info', label: 'Info' }, { value: 'warn', label: 'Warn' }, { value: 'error', label: 'Error' }, { value: 'debug', label: 'Debug' }]} emptyLabel="Semua level" className="min-w-[120px]" fullWidth={false} />
+              <div className="flex-1 min-w-[180px] max-w-[280px]">
+                <Input type="text" placeholder="Cari pesan..." value={search} onChange={(e) => setSearch(e.target.value)} icon={<Search className="w-4 h-4 text-slate-400" />} className="rounded-xl" />
+              </div>
+              <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!!exporting} className="rounded-xl shrink-0">
+                <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                {exporting === 'excel' ? '...' : 'Excel'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!!exporting} className="rounded-xl shrink-0">
+                <FileDown className="w-4 h-4 mr-1.5" />
+                {exporting === 'pdf' ? '...' : 'PDF'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden rounded-xl border-slate-200/80 shadow-sm">
         {loading ? (
           <ContentLoading />
         ) : items.length === 0 ? (
-          <div className="py-12 text-center text-slate-500">
-            Belum ada log. Log akan muncul saat ada aktivitas atau error di aplikasi (backend/frontend/database).
+          <div className="py-16 text-center text-slate-500">
+            <FileText className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+            <p className="text-sm">Belum ada log.</p>
+            <p className="text-xs mt-1 max-w-md mx-auto">Log akan muncul saat ada aktivitas atau error di aplikasi (backend, frontend, database).</p>
           </div>
         ) : (
           <>
             <div
               ref={containerRef}
-              className="overflow-x-auto overflow-y-auto max-h-[70vh] font-mono text-sm bg-slate-900 text-slate-100"
+              className="overflow-x-auto overflow-y-auto max-h-[70vh] font-mono text-sm bg-slate-900 text-slate-100 rounded-b-xl"
             >
               <table className="w-full text-sm">
                 <thead className="bg-slate-800 sticky top-0 z-10">
@@ -168,9 +187,9 @@ export const SuperAdminLogsPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-between items-center py-2 px-4 border-t border-slate-200 bg-slate-50">
-              <span className="text-sm text-slate-600">Total: {total} log</span>
-              {live && <span className="text-xs text-emerald-600">Update otomatis tiap 2 detik</span>}
+            <div className="flex flex-wrap justify-between items-center gap-2 py-3 px-4 border-t border-slate-200 bg-slate-50/80">
+              <span className="text-sm text-slate-600">Total: <strong>{total}</strong> log</span>
+              {live && <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-medium"><Circle className="w-2 h-2 fill-emerald-500 text-emerald-500" /> Update otomatis tiap 2 detik</span>}
             </div>
           </>
         )}
