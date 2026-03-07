@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { ownersApi } from '../../../services/api';
-import type { OwnerStatus } from '../../../types';
+import { OWNER_STATUS_LABELS, type OwnerStatus } from '../../../types';
 
 const STATUS = {
   pending_registration_payment: 'pending_registration_payment',
