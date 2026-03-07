@@ -24,7 +24,7 @@ const {
 const { ROLES, OWNER_STATUS } = require(path.join(__dirname, '../src/constants'));
 const bcrypt = require('bcryptjs');
 
-const DEFAULT_PASSWORD = 'Password123';
+const DEFAULT_PASSWORD = 'Sarolangun99@';
 const slug = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 const WILAYAH_KERJA_NAMA = ['Bali-Nusa Tenggara', 'Jawa', 'Kalimantan'];
 

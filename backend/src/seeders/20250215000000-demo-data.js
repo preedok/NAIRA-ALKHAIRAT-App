@@ -3,7 +3,7 @@
 const bcrypt = require('bcryptjs');
 const { ROLES, OWNER_STATUS } = require('../constants');
 
-const DEFAULT_PASSWORD = 'Password123';
+const DEFAULT_PASSWORD = 'Sarolangun99@';
 const BRANCH_JKT = 'a0000000-0000-0000-0000-000000000001';
 const BRANCH_SBY = 'a0000000-0000-0000-0000-000000000002';
 const BRANCH_BDG = 'a0000000-0000-0000-0000-000000000003';
