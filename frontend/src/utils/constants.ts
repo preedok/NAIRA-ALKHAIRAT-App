@@ -173,6 +173,9 @@ export const REFUND_STATUS_LABELS: Record<string, string> = {
 /** Status pembatalan: jadikan saldo akun (tampil di Status · Dibayar). */
 export const CANCELLATION_TO_BALANCE_LABEL = 'Direfund ke saldo akun';
 
+/** Badge status saat refund disetujui/diproses (bukan Tagihan DP / Pembayaran DP). */
+export const REFUND_IN_PROCESS_LABEL = 'Refund diproses';
+
 /** Label pemindahan dana: invoice pengirim / penerima (tampil di Status · Dibayar). */
 export const REALLOCATION_OUT_LABEL = 'Dana dipindahkan ke';
 export const REALLOCATION_IN_LABEL = 'Dana diterima dari';

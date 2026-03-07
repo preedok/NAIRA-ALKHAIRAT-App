@@ -9,6 +9,7 @@ import {
   INVOICE_STATUS_LABELS,
   REFUND_STATUS_LABELS,
   CANCELLATION_TO_BALANCE_LABEL,
+  REFUND_IN_PROCESS_LABEL,
   REALLOCATION_OUT_LABEL,
   REALLOCATION_IN_LABEL,
   REALLOCATION_OUT_STATUS_LABEL
@@ -48,12 +49,14 @@ const getStatusBadge = (status: string): 'success' | 'warning' | 'info' | 'error
   return (map[status] || 'default') as 'success' | 'warning' | 'info' | 'error' | 'default';
 };
 
-/** Label status dari data GET invoice (satu sumber kebenaran: refund ke saldo, pemindahan ke invoice lain, sudah direfund, atau status biasa). */
+/** Label status dari data GET invoice (satu sumber kebenaran: refund ke saldo, pemindahan ke invoice lain, sudah direfund, refund diproses, atau status biasa). */
 export function getEffectiveInvoiceStatusLabel(inv: InvoiceForStatusRefund): string {
   const st = (inv?.status || '').toLowerCase();
   const refunds = (inv.Refunds || []) as { status: string }[];
   const completedRefund = refunds.find((r: { status: string }) => r.status === 'refunded');
   const isRefunded = !!completedRefund;
+  const latestRefund = refunds[0];
+  const refundInProgress = !isRefunded && latestRefund && ['requested', 'approved'].includes(latestRefund.status);
   const note = (inv.cancellation_handling_note || '').toLowerCase();
   const reallocOut = (inv.ReallocationsOut || []) as ReallocationItem[];
   const hasNoteRefundToBalance = (note.includes('saldo akun') || note.includes('dipindahkan ke saldo')) && !isRefunded;
@@ -68,16 +71,19 @@ export function getEffectiveInvoiceStatusLabel(inv: InvoiceForStatusRefund): str
       ? (INVOICE_STATUS_LABELS[inv?.status || ''] || 'Dibatalkan Refund')
       : (INVOICE_STATUS_LABELS[inv?.status || ''] || inv?.status || '');
   if (isRefunded) return 'Sudah direfund';
+  if (refundInProgress) return REFUND_IN_PROCESS_LABEL;
   if (isRefundToBalance) return CANCELLATION_TO_BALANCE_LABEL;
   if (isReallocationOut) return REALLOCATION_OUT_STATUS_LABEL;
   return statusLabel;
 }
 
-/** Variant badge untuk status efektif (success jika sudah direfund, else dari status invoice). */
+/** Variant badge untuk status efektif (success jika sudah direfund, info jika refund diproses, else dari status invoice). */
 export function getEffectiveInvoiceStatusBadgeVariant(inv: InvoiceForStatusRefund): 'success' | 'warning' | 'info' | 'error' | 'default' {
   const refunds = (inv.Refunds || []) as { status: string }[];
   const isRefunded = refunds.some((r: { status: string }) => r.status === 'refunded');
   if (isRefunded) return 'success';
+  const latest = refunds[0];
+  if (latest && ['requested', 'approved'].includes(latest.status)) return 'info';
   return getStatusBadge(inv?.status || '');
 }
 
@@ -140,21 +146,27 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
 
   const displayRefundAmount = refundAmt > 0 ? refundAmt : (isRefunded && completedRefund && Number((completedRefund as any).amount)) || 0;
   const showRefundBlock = isRefunded || (isCancelledRefund && displayRefundAmount > 0 && !isRefundToBalance);
-  // Prioritas badge: Sudah direfund > Direfund ke saldo akun > Dana dipindahkan ke invoice lain > status biasa (jangan tampilkan Tagihan DP)
+  // Refund dalam proses (requested / approved): tampilkan "Refund diproses" bukan "Pembayaran DP" / "Tagihan DP"
+  const refundInProgress = !isRefunded && latestRefund && ['requested', 'approved'].includes(latestRefund.status);
+  // Prioritas badge: Sudah direfund > Refund diproses > Direfund ke saldo akun > Dana dipindahkan ke invoice lain > status biasa
   const effectiveStatusLabel = isRefunded
     ? 'Sudah direfund'
-    : isRefundToBalance
-      ? CANCELLATION_TO_BALANCE_LABEL
-      : isReallocationOut
-        ? REALLOCATION_OUT_STATUS_LABEL
-        : statusLabel;
+    : refundInProgress
+      ? REFUND_IN_PROCESS_LABEL
+      : isRefundToBalance
+        ? CANCELLATION_TO_BALANCE_LABEL
+        : isReallocationOut
+          ? REALLOCATION_OUT_STATUS_LABEL
+          : statusLabel;
 
   const alignClass = align === 'right' ? 'items-end' : 'items-start';
   const textAlign = align === 'right' ? 'text-right' : 'text-left';
 
+  const badgeVariant = isRefunded ? 'success' : refundInProgress ? 'info' : getStatusBadge(inv.status || '');
+
   return (
     <div className={`flex flex-col gap-1 ${alignClass} ${textAlign} ${className}`}>
-      <Badge variant={isRefunded ? 'success' : getStatusBadge(inv.status || '')} className="w-fit text-xs">
+      <Badge variant={badgeVariant} className="w-fit text-xs">
         {effectiveStatusLabel}
       </Badge>
       {refundProcessLabel != null && !isRefunded && (
