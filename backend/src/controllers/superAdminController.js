@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
+const sequelize = require('../config/sequelize');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const {
@@ -45,8 +46,8 @@ const getMonitoring = asyncHandler(async (req, res) => {
     Order.count({ where: { ...orderWhere, created_at: { [Op.gte]: todayStart } }, include: orderIncludeInvoice }),
     Invoice.count({ where: invoiceWhere }),
     Invoice.count({ where: { ...invoiceWhere, created_at: { [Op.gte]: todayStart } } }),
-    Order.sum('total_amount', { where: revenueWhere, include: orderIncludeInvoice }),
-    Order.sum('total_amount', {
+    Order.sum(sequelize.col('Order.total_amount'), { where: revenueWhere, include: orderIncludeInvoice }),
+    Order.sum(sequelize.col('Order.total_amount'), {
       where: { ...revenueWhere, created_at: { [Op.gte]: todayStart } },
       include: orderIncludeInvoice
     }),
@@ -530,7 +531,7 @@ const exportMonitoringExcel = asyncHandler(async (req, res) => {
   ] = await Promise.all([
     Order.count({ where: { ...orderWhere, ...orderDateWhere }, include: orderIncludeInvoice }),
     Invoice.count({ where: { ...invoiceWhere, ...invoiceDateWhere } }),
-    Order.sum('total_amount', { where: revenueWhere, include: orderIncludeInvoice }),
+    Order.sum(sequelize.col('Order.total_amount'), { where: revenueWhere, include: orderIncludeInvoice }),
     User.count({ where: { ...userWhere, last_login_at: { [Op.gte]: last24h } } }),
     User.count({ where: userWhere }),
     Order.findAll({
@@ -620,7 +621,7 @@ const exportMonitoringPdf = asyncHandler(async (req, res) => {
   ] = await Promise.all([
     Order.count({ where: { ...orderWhere, ...orderDateWhere }, include: orderIncludeInvoice }),
     Invoice.count({ where: { ...invoiceWhere, ...invoiceDateWhere } }),
-    Order.sum('total_amount', { where: revenueWhere, include: orderIncludeInvoice }),
+    Order.sum(sequelize.col('Order.total_amount'), { where: revenueWhere, include: orderIncludeInvoice }),
     User.count({ where: { ...userWhere, last_login_at: { [Op.gte]: last24h } } }),
     User.count({ where: userWhere }),
     Order.findAll({ where: { ...orderWhere, ...orderDateWhere }, include: orderIncludeInvoice, attributes: ['status'], raw: true })

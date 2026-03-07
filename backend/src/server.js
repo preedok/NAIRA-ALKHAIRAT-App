@@ -62,10 +62,14 @@ sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
       console.error('SystemLog create failed (pastikan tabel system_logs ada):', err.message);
     });
     app.listen(PORT, async () => {
+      const apiVersion = process.env.API_VERSION || 'v1';
+      const apiUrl = (process.env.NODE_ENV === 'production' && process.env.CORS_ORIGIN)
+        ? `${process.env.CORS_ORIGIN}/api/${apiVersion}`
+        : `http://localhost:${PORT}/api/${apiVersion}`;
       logger.info(`🚀 Server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🗄️  Database: PostgreSQL`);
-      logger.info(`🌐 API: http://localhost:${PORT}/api/v1`);
+      logger.info(`🌐 API: ${apiUrl}`);
       await SystemLog.create({ source: 'backend', level: 'info', message: 'Server started', meta: { port: PORT } }).catch((err) => {
         console.error('SystemLog (Server started) failed:', err.message);
       });
