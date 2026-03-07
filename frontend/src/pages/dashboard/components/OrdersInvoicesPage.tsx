@@ -399,10 +399,6 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast('Jumlah refund tidak valid', 'error');
         return;
       }
-      if (refundAmt < paid && cancelRemainderAction === 'allocate_to_order' && !cancelRemainderTargetInvoiceId.trim()) {
-        showToast('Pilih invoice tujuan untuk sisa dana', 'error');
-        return;
-      }
     }
     if (paid > 0 && cancelAction === 'allocate_to_order' && !cancelTargetInvoiceId.trim()) {
       showToast('Pilih invoice tujuan untuk mengalihkan dana', 'error');
@@ -421,8 +417,7 @@ const OrdersInvoicesPage: React.FC = () => {
           const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
           if (refundAmt < paid) {
             body.refund_amount = refundAmt;
-            body.remainder_action = cancelRemainderAction;
-            if (cancelRemainderAction === 'allocate_to_order' && cancelRemainderTargetInvoiceId.trim()) body.remainder_target_invoice_id = cancelRemainderTargetInvoiceId.trim();
+            body.remainder_action = 'to_balance';
           }
         } else if (cancelAction === 'allocate_to_order' && cancelTargetInvoiceId.trim()) {
           body.target_invoice_id = cancelTargetInvoiceId.trim();
@@ -2611,12 +2606,12 @@ const OrdersInvoicesPage: React.FC = () => {
                       return {
                         action: cancelAction,
                         refundAmount: Number.isFinite(refundAmt) ? refundAmt : paid,
-                        remainderAction: cancelRemainderAction,
+                        remainderAction: cancelAction === 'refund' ? 'to_balance' : cancelRemainderAction,
                         bankName: cancelBankName || undefined,
                         accountNumber: cancelAccountNumber || undefined,
                         accountHolderName: cancelAccountHolderName || undefined,
-                        targetInvoiceNumber: targetOpt?.invoice_number,
-                        remainderTargetInvoiceNumber: remainderOpt?.invoice_number,
+                        targetInvoiceNumber: cancelAction === 'allocate_to_order' ? targetOpt?.invoice_number : undefined,
+                        remainderTargetInvoiceNumber: cancelAction !== 'refund' && cancelRemainderAction === 'allocate_to_order' ? remainderOpt?.invoice_number : undefined,
                         reason: cancelReason || undefined,
                       };
                     })()}
@@ -2648,18 +2643,6 @@ const OrdersInvoicesPage: React.FC = () => {
                           {cancelAction === 'refund' && (
                             <div className="space-y-3 pt-3 border-t border-slate-200">
                               <Input label="Jumlah yang ingin di-refund (default = sesuai yang dibayarkan, kosong = full)" type="text" value={cancelRefundAmount} onChange={(e) => setCancelRefundAmount(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))} placeholder={formatIDR(paid)} disabled={!!deletingOrderId} />
-                              {isPartialRefund && remainder > 0 && (
-                                <>
-                                  <p className="text-xs text-slate-600">Sisa <strong>{formatIDR(remainder)}</strong> mau dialokasikan ke mana?</p>
-                                  <div className="flex gap-2">
-                                    <Button type="button" size="sm" variant={cancelRemainderAction === 'to_balance' ? 'primary' : 'outline'} onClick={() => setCancelRemainderAction('to_balance')}>Jadikan saldo</Button>
-                                    <Button type="button" size="sm" variant={cancelRemainderAction === 'allocate_to_order' ? 'primary' : 'outline'} onClick={() => setCancelRemainderAction('allocate_to_order')}>Alokasi ke invoice lain</Button>
-                                  </div>
-                                  {cancelRemainderAction === 'allocate_to_order' && (
-                                    <Autocomplete label="Invoice tujuan (sisa dana)" value={cancelRemainderTargetInvoiceId} onChange={(v) => setCancelRemainderTargetInvoiceId(v || '')} options={cancelTargetInvoiceOptions.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(parseFloat(i.remaining_amount) || 0)} sisa` }))} placeholder="Pilih invoice" emptyLabel="Pilih invoice" />
-                                  )}
-                                </>
-                              )}
                               <Autocomplete label="Nama Bank (wajib)" value={cancelBankName} onChange={(v) => setCancelBankName(v || '')} options={paymentBanks.map((b) => ({ value: b.name, label: b.name }))} placeholder="Pilih bank" emptyLabel="Pilih bank" disabled={!!deletingOrderId} />
                               <Input label="Nomor Rekening (wajib)" type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" disabled={!!deletingOrderId} />
                               <Input label="Nama pemilik rekening (opsional)" type="text" value={cancelAccountHolderName} onChange={(e) => setCancelAccountHolderName(e.target.value)} placeholder="A.n. nama pemilik" disabled={!!deletingOrderId} />
