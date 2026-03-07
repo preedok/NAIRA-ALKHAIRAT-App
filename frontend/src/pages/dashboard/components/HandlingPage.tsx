@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Package, Plus, Pencil, Trash2, HandHelping, ShoppingCart } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, HandHelping } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -12,7 +12,6 @@ import { Input, Autocomplete, PriceCurrencyField, Textarea, Modal, ModalHeader, 
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
-import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
@@ -35,9 +34,7 @@ const PAGE_SIZE = 25;
 const HandlingPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { addItem: addDraftItem } = useOrderDraft();
   const canConfig = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
 
   const [list, setList] = useState<HandlingProduct[]>([]);
@@ -262,8 +259,7 @@ const HandlingPage: React.FC = () => {
     { id: 'currency', label: 'Mata Uang', align: 'center' },
     { id: 'price', label: 'Harga (IDR · SAR · USD)', align: 'right' },
     { id: 'status', label: 'Status', align: 'center' },
-    ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : []),
-    ...(canAddToOrder ? [{ id: 'order_action', label: 'Aksi order', align: 'center' as const }] : [])
+    ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
   ].filter(Boolean) as TableColumn[];
 
   return (
@@ -340,38 +336,6 @@ const HandlingPage: React.FC = () => {
                           { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => { void handleDelete(row); }, danger: true }
                         ]}
                       />
-                    )}
-                  </td>
-                )}
-                {canAddToOrder && (
-                  <td className="py-3 px-4 text-center">
-                    {row.is_active && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1"
-                        onClick={() => {
-                          const sar = currencyRates.SAR_TO_IDR ?? 4200;
-                          const usd = currencyRates.USD_TO_IDR ?? 15500;
-                          const cur = ((row as any).meta?.currency || row.currency || 'IDR').toUpperCase();
-                          let unitPriceIdr = Number(row.price_general_idr) || 0;
-                          if (unitPriceIdr <= 0 && cur === 'SAR' && (row as any).price_general_sar) unitPriceIdr = Number((row as any).price_general_sar) * sar;
-                          if (unitPriceIdr <= 0 && cur === 'USD' && (row as any).price_general_usd) unitPriceIdr = Number((row as any).price_general_usd) * usd;
-                          if (unitPriceIdr <= 0 && (row as any).price_general) unitPriceIdr = cur === 'IDR' ? Number((row as any).price_general) : cur === 'SAR' ? Number((row as any).price_general) * sar : Number((row as any).price_general) * usd;
-                          addDraftItem({
-                            type: 'handling',
-                            product_id: row.id,
-                            product_name: row.name,
-                            unit_price_idr: Math.round(unitPriceIdr),
-                            quantity: 1
-                          });
-                          showToast('Handling ditambahkan ke order. Buka menu Invoice / Buat order untuk melanjutkan.', 'success');
-                        }}
-                        title="Tambah ke order"
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                        Tambah ke order
-                      </Button>
                     )}
                   </td>
                 )}
