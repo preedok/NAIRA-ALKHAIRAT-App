@@ -239,7 +239,7 @@ const listUsers = asyncHandler(async (req, res) => {
   const includeOwnerProfile = {
     model: OwnerProfile,
     as: 'OwnerProfile',
-    attributes: ['id', 'status', 'preferred_branch_id', 'registration_payment_proof_url', 'registration_payment_amount', 'activation_generated_password', 'is_mou_owner'],
+    attributes: ['id', 'status', 'preferred_branch_id', 'registration_payment_proof_url', 'registration_payment_amount', 'activation_generated_password'],
     required: false,
     include: [
       {
@@ -314,7 +314,7 @@ const getUserById = asyncHandler(async (req, res) => {
     attributes: ['id', 'email', 'name', 'phone', 'role', 'branch_id', 'wilayah_id', 'company_name', 'is_active', 'created_at'],
     include: [
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city', 'provinsi_id'], required: false },
-      { model: OwnerProfile, as: 'OwnerProfile', attributes: ['id', 'status', 'activation_generated_password', 'assigned_branch_id', 'operational_region', 'is_mou_owner'], required: false }
+      { model: OwnerProfile, as: 'OwnerProfile', attributes: ['id', 'status', 'activation_generated_password', 'assigned_branch_id', 'operational_region'], required: false }
     ]
   });
   if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
@@ -325,7 +325,7 @@ const getUserById = asyncHandler(async (req, res) => {
     j.activation_generated_password = j.OwnerProfile.activation_generated_password != null ? String(j.OwnerProfile.activation_generated_password) : null;
     j.assigned_branch_id = j.OwnerProfile.assigned_branch_id;
     j.operational_region = j.OwnerProfile.operational_region;
-    j.is_mou_owner = !!j.OwnerProfile.is_mou_owner;
+    if (typeof j.OwnerProfile.is_mou_owner !== 'undefined') j.is_mou_owner = !!j.OwnerProfile.is_mou_owner;
   }
   res.json({ success: true, data: j });
 });
