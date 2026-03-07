@@ -36,7 +36,7 @@ export const AUTOCOMPLETE_PILIH = {
 
 // Use relative path in dev (proxy to backend) when REACT_APP_API_URL not set
 export const API_BASE_URL = process.env.REACT_APP_API_URL || '/api/v1';
-export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
+export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 // ============================================
 // CURRENCY
