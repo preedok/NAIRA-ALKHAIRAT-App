@@ -1,6 +1,6 @@
 # Daftar Akun (Seeder Workflow Koordinator per Wilayah)
 
-**Password semua akun:** `Sarolangun99@`
+**Password semua akun:** `Yakusa123@`
 
 Sistem mengatur otomatis: **setiap owner sesuai daerah masuk ke koordinator wilayah masing-masing**.  
 Koordinator Sumatra tidak bisa memproses owner dari Pati (Jawa), dan sebaliknya.  
