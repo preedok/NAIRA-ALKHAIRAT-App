@@ -374,7 +374,7 @@ const list = asyncHandler(async (req, res) => {
     where,
     include: [
       orderInclude,
-      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] }
     ],
@@ -391,6 +391,7 @@ const list = asyncHandler(async (req, res) => {
   const data = rows.map((row) => {
     const plain = row.get ? row.get({ plain: true }) : (typeof row.toJSON === 'function' ? row.toJSON() : row);
     if (plain.Order && !Array.isArray(plain.Order.OrderItems)) plain.Order.OrderItems = [];
+    plain.owner_is_mou = !!(plain.User && plain.User.OwnerProfile && plain.User.OwnerProfile.is_mou_owner);
     return plain;
   });
 
