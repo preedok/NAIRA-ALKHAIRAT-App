@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig } = require('../models');
+const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
 const { getTicketCalendar } = require('../services/ticketAvailabilityService');
@@ -697,10 +697,20 @@ const update = asyncHandler(async (req, res) => {
 /**
  * DELETE /api/v1/products/:id - hard delete (hapus permanen dari database). Super Admin / Admin Pusat only.
  * ProductPrice dan ProductAvailability akan terhapus otomatis (CASCADE).
+ * Tidak bisa dihapus jika masih dirujuk oleh order_items (order/invoice).
  */
 const remove = asyncHandler(async (req, res) => {
   const product = await Product.findByPk(req.params.id);
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+
+  const usedCount = await OrderItem.count({ where: { product_ref_id: product.id } });
+  if (usedCount > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Product tidak dapat dihapus karena masih digunakan di ${usedCount} item order/invoice. Nonaktifkan produk (is_active = false) jika tidak ingin ditampilkan.`
+    });
+  }
+
   await product.destroy();
   res.json({ success: true, message: 'Product berhasil dihapus' });
 });
