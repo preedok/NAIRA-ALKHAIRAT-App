@@ -36,11 +36,9 @@ async function sendInvoiceCreatedNotificationEmail(invoiceId, notificationId, du
     });
     if (!invoice || !invoice.User) return;
     const data = invoice.toJSON();
-    try {
-      const rules = await getRulesForBranch(invoice.branch_id);
-      data.currency_rates = rules.currency_rates || {};
-    } catch (e) { data.currency_rates = {}; }
-    if (data.Order?.currency_rates_override) data.currency_rates_override = data.Order.currency_rates_override;
+    const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
+    data.currency_rates = effectiveRates;
+    data.currency_rates_override = effectiveRates;
     const pdfBuffer = await buildInvoicePdfBuffer(data);
     const sent = await sendInvoiceCreatedEmail(
       invoice.User.email,
@@ -83,11 +81,9 @@ async function sendPaymentReceivedNotificationEmail(invoiceId, notificationId, p
       }
     }
     const data = invoice.toJSON();
-    try {
-      const rules = await getRulesForBranch(invoice.branch_id);
-      data.currency_rates = rules.currency_rates || {};
-    } catch (e) { data.currency_rates = {}; }
-    if (data.Order?.currency_rates_override) data.currency_rates_override = data.Order.currency_rates_override;
+    const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
+    data.currency_rates = effectiveRates;
+    data.currency_rates_override = effectiveRates;
     const pdfBuffer = await buildInvoicePdfBuffer(data);
     const paidAmount = parseFloat(invoice.paid_amount) || 0;
     const sent = await sendPaymentReceivedEmail(
@@ -143,7 +139,7 @@ async function updateOrderDpStatusFromInvoice(invoice, order = null) {
   const hasDpPaid = dpMetByPayment || (hadAnyPayment && (alreadyPembayaranDp || orderWasPembayaranDp));
   const dpPaymentStatus = !isIssued ? null : (hasDpPaid ? DP_PAYMENT_STATUS.PEMBAYARAN_DP : DP_PAYMENT_STATUS.TAGIHAN_DP);
   const orderTotal = parseFloat(order.total_amount) || 0;
-  const rates = await getOrderRatesForConversion(invoice.order_id);
+  const rates = await getEffectiveKursForInvoice(invoice, order);
   const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
   const payload = {
     dp_payment_status: dpPaymentStatus,
@@ -903,6 +899,11 @@ async function createInvoiceForOrder(order, opts = {}) {
   autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
   const rates = await getOrderRatesForConversion(orderId);
   const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
+  const currencyRatesSnapshot = (!order.currency_rates_override || typeof order.currency_rates_override !== 'object')
+    ? (rules.currency_rates && typeof rules.currency_rates === 'object'
+        ? { ...rules.currency_rates }
+        : (typeof rules.currency_rates === 'string' ? (() => { try { return JSON.parse(rules.currency_rates); } catch (e) { return null; } })() : null))
+    : null;
   const invoice = await Invoice.create({
     invoice_number: generateInvoiceNumber(),
     order_id: orderId,
@@ -924,7 +925,8 @@ async function createInvoiceForOrder(order, opts = {}) {
       `Invoice batal otomatis bila dalam ${dpGraceHours} jam setelah issued belum ada DP`,
       `Minimal DP ${dpPercentage}% dari total`,
       `Jatuh tempo DP ${dpDueDays} hari setelah issued`
-    ]
+    ],
+    currency_rates_snapshot: currencyRatesSnapshot
   });
   await logInvoiceStatusChange({
     invoice_id: invoice.id,
@@ -1013,14 +1015,16 @@ const getById = asyncHandler(async (req, res) => {
       invoice.status = INVOICE_STATUS.PARTIAL_PAID;
     }
   }
-  const rules = await getRulesForBranch(invoice.branch_id);
   const data = invoice.toJSON();
-  data.currency_rates = rules.currency_rates || {};
+  const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
+  data.currency_rates = effectiveRates;
+  data.currency_rates_override = effectiveRates;
   if ((data.status || '').toLowerCase() === 'refund_canceled' && Array.isArray(data.Refunds)) {
     const cancelRefund = data.Refunds.find((r) => r.source === REFUND_SOURCE.CANCEL);
     data.cancel_refund_amount = cancelRefund != null ? parseFloat(cancelRefund.amount) || null : null;
   }
   // Rekening bank untuk pembayaran: dari Data Rekening Bank (accounting), agar owner/role lain dapat daftar tanpa akses API accounting
+  const rules = await getRulesForBranch(invoice.branch_id);
   const accountingBankAccounts = await AccountingBankAccount.findAll({
     where: { is_active: true },
     order: [['bank_name', 'ASC'], ['account_number', 'ASC']],
@@ -1231,16 +1235,9 @@ const getPdf = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Akses ditolak' });
   }
   const data = invoice.toJSON();
-  try {
-    const rules = await getRulesForBranch(invoice.branch_id);
-    data.currency_rates = rules.currency_rates || {};
-  } catch (e) {
-    data.currency_rates = {};
-  }
-  // Prioritaskan kurs order/invoice agar PDF selalu sesuai data transaksi
-  if (data.Order?.currency_rates_override) {
-    data.currency_rates_override = data.Order.currency_rates_override;
-  }
+  const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
+  data.currency_rates = effectiveRates;
+  data.currency_rates_override = effectiveRates;
   const buf = await buildInvoicePdfBuffer(data);
 
   // Simpan ke disk (local - uploads/invoices/) — setiap request regenerate agar selalu terupdate
@@ -1271,31 +1268,64 @@ const getPdf = asyncHandler(async (req, res) => {
   res.send(buf);
 });
 
+/** Normalize rates object to { SAR_TO_IDR, USD_TO_IDR } with defaults. */
+function normalizeRates(rates) {
+  if (!rates || typeof rates !== 'object') return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+  const cr = typeof rates === 'string' ? (() => { try { return JSON.parse(rates); } catch (e) { return null; } })() : rates;
+  if (!cr || typeof cr !== 'object') return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+  return {
+    SAR_TO_IDR: typeof cr.SAR_TO_IDR === 'number' && cr.SAR_TO_IDR > 0 ? cr.SAR_TO_IDR : 4200,
+    USD_TO_IDR: typeof cr.USD_TO_IDR === 'number' && cr.USD_TO_IDR > 0 ? cr.USD_TO_IDR : 15500
+  };
+}
+
+/**
+ * Kurs efektif untuk invoice (sync bila currentRules sudah ada):
+ * - Jika order punya kurs khusus (form order) → pakai itu.
+ * - Jika sudah ada pembayaran → pakai kurs snapshot (kurs saat invoice dibuat).
+ * - Jika masih tagihan DP / belum bayar → pakai kurs terbaru dari setting (currentRules).
+ */
+function getEffectiveKursForInvoiceSync(invoice, order, currentRules) {
+  const orderRates = order && order.currency_rates_override && typeof order.currency_rates_override === 'object'
+    ? order.currency_rates_override
+    : null;
+  if (orderRates && (typeof orderRates.SAR_TO_IDR === 'number' || typeof orderRates.USD_TO_IDR === 'number')) {
+    return normalizeRates(orderRates);
+  }
+  const paidAmount = parseFloat(invoice && invoice.paid_amount) || 0;
+  const snapshot = invoice && invoice.currency_rates_snapshot && typeof invoice.currency_rates_snapshot === 'object'
+    ? invoice.currency_rates_snapshot
+    : null;
+  if (paidAmount > 0 && snapshot && (typeof snapshot.SAR_TO_IDR === 'number' || typeof snapshot.USD_TO_IDR === 'number')) {
+    return normalizeRates(snapshot);
+  }
+  return normalizeRates(currentRules && currentRules.currency_rates);
+}
+
+/**
+ * Kurs efektif untuk invoice (async; load rules jika currentRules tidak dikirim).
+ */
+async function getEffectiveKursForInvoice(invoice, order, currentRules) {
+  if (currentRules) return getEffectiveKursForInvoiceSync(invoice, order, currentRules);
+  const rules = invoice && invoice.branch_id ? await getRulesForBranch(invoice.branch_id) : await getRulesForBranch(null);
+  return getEffectiveKursForInvoiceSync(invoice, order, rules);
+}
+
 /**
  * Ambil kurs untuk konversi IDR -> SAR (order.currency_rates_override atau business rules cabang).
- * Return { SAR_TO_IDR } default 4200.
+ * Return { SAR_TO_IDR, USD_TO_IDR } default 4200/15500.
  */
 async function getOrderRatesForConversion(orderId) {
   const ord = await Order.findByPk(orderId, { attributes: ['id', 'branch_id', 'currency_rates_override'] });
   if (!ord) return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
   const ov = ord.currency_rates_override && typeof ord.currency_rates_override === 'object' ? ord.currency_rates_override : null;
   if (ov && (typeof ov.SAR_TO_IDR === 'number' || typeof ov.USD_TO_IDR === 'number')) {
-    return {
-      SAR_TO_IDR: typeof ov.SAR_TO_IDR === 'number' ? ov.SAR_TO_IDR : 4200,
-      USD_TO_IDR: typeof ov.USD_TO_IDR === 'number' ? ov.USD_TO_IDR : 15500
-    };
+    return normalizeRates(ov);
   }
   if (ord.branch_id) {
     try {
       const rules = await getRulesForBranch(ord.branch_id);
-      const cr = rules.currency_rates;
-      const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
-      if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
-        return {
-          SAR_TO_IDR: typeof crObj.SAR_TO_IDR === 'number' ? crObj.SAR_TO_IDR : 4200,
-          USD_TO_IDR: typeof crObj.USD_TO_IDR === 'number' ? crObj.USD_TO_IDR : 15500
-        };
-      }
+      return normalizeRates(rules.currency_rates);
     } catch (e) { /* ignore */ }
   }
   return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
@@ -1310,7 +1340,7 @@ async function syncInvoiceFromOrder(order, opts = {}) {
   const invoice = await Invoice.findOne({ where: { order_id: order.id } });
   if (!invoice) return null;
   const newTotal = parseFloat(order.total_amount) || 0;
-  const rates = await getOrderRatesForConversion(order.id);
+  const rates = await getEffectiveKursForInvoice(invoice, order);
   const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
   const totalAmountIdr = newTotal;
   const totalAmountSar = newTotal / sarToIdr;

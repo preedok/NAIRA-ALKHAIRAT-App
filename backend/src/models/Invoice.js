@@ -126,6 +126,11 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: 'Keterangan workflow pembatalan: dipindah ke saldo, refund, atau alihkan ke invoice lain'
+  },
+  currency_rates_snapshot: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    comment: 'Kurs global saat invoice dibuat; dipakai bila sudah ada pembayaran dan order tidak punya kurs khusus'
   }
 }, {
   tableName: 'invoices',
