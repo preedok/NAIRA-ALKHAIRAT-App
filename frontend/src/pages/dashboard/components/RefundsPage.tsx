@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Receipt, Wallet, Clock, CheckCircle, XCircle, Banknote, Upload, Download } from 'lucide-react';
+import { Receipt, Wallet, Clock, CheckCircle, XCircle, Banknote, Upload, Download, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -230,7 +230,7 @@ const RefundsPage: React.FC = () => {
       </PageFilter>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Refund" value={stats?.total_refunds ?? '–'} iconClassName="bg-[#0D1A63] text-white" onClick={() => setStatModal('total')} />
+        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Refund" value={stats?.total_refunds ?? '–'} iconClassName="bg-[#0D1A63] text-white" onClick={() => setStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         <StatCard
           icon={<Clock className="w-5 h-5" />}
           label="Menunggu"
@@ -238,9 +238,10 @@ const RefundsPage: React.FC = () => {
           iconClassName="bg-amber-100 text-amber-600"
           subtitle={(stats?.amount_pending ?? 0) > 0 ? formatIDR(stats!.amount_pending) : undefined}
           onClick={() => setStatModal('requested')}
+          action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('requested')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
         />
-        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Disetujui" value={stats?.approved ?? '–'} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('approved')} />
-        <StatCard icon={<XCircle className="w-5 h-5" />} label="Ditolak" value={stats?.rejected ?? '–'} iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('rejected')} />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Disetujui" value={stats?.approved ?? '–'} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('approved')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('approved')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<XCircle className="w-5 h-5" />} label="Ditolak" value={stats?.rejected ?? '–'} iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('rejected')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('rejected')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         <StatCard
           icon={<Wallet className="w-5 h-5" />}
           label="Sudah direfund"
@@ -248,6 +249,7 @@ const RefundsPage: React.FC = () => {
           iconClassName="bg-emerald-100 text-emerald-600"
           subtitle={(stats?.amount_refunded ?? 0) > 0 ? formatIDR(stats!.amount_refunded) : undefined}
           onClick={() => setStatModal('refunded')}
+          action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('refunded')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
         />
         <StatCard
           icon={<Banknote className="w-5 h-5" />}
@@ -255,6 +257,7 @@ const RefundsPage: React.FC = () => {
           value={formatIDR(stats?.amount_requested ?? 0)}
           iconClassName="bg-teal-100 text-teal-600"
           onClick={() => setStatModal('amount_pending')}
+          action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('amount_pending')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
         />
       </div>
 

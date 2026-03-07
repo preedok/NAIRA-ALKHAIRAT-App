@@ -56,7 +56,7 @@ const StatCard: React.FC<StatCardProps> = ({
     </>
   );
   const card = (
-    <Card hover padding="none" className={`travel-card flex flex-col overflow-hidden ${className}`}>
+    <Card hover padding="none" className={`travel-card flex flex-col overflow-hidden min-h-[7rem] ${className}`}>
       {content}
     </Card>
   );

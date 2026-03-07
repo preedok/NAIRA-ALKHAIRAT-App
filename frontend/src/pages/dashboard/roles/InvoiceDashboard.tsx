@@ -178,15 +178,15 @@ const InvoiceDashboard: React.FC = () => {
         }
       />
 
-      {/* Stat cards — klik untuk lihat daftar invoice sesuai statistik */}
+      {/* Stat cards — klik atau tombol Lihat untuk daftar invoice sesuai statistik */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={pendingVerification.length} subtitle="Bukti bayar perlu diverifikasi" iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('pending_verification')} />
-        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('verified_today')} />
-        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary?.total_invoices ?? invoices.length} subtitle={scopeLabel} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('total_invoice')} />
-        <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('blocked')} />
+        <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={pendingVerification.length} subtitle="Bukti bayar perlu diverifikasi" iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('pending_verification')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('pending_verification')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('verified_today')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('verified_today')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary?.total_invoices ?? invoices.length} subtitle={scopeLabel} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('total_invoice')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_invoice')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('blocked')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('blocked')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
       </div>
 
-      {/* Ringkasan nominal (summary) — pakai StatCard agar seragam; klik untuk detail */}
+      {/* Ringkasan nominal (summary) — pakai StatCard agar seragam; klik atau Lihat untuk detail */}
       {summary && (summary.total_amount > 0 || summary.total_remaining > 0 || summary.total_paid > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
@@ -195,12 +195,14 @@ const InvoiceDashboard: React.FC = () => {
             value={formatIDR(summary.total_amount)}
             subtitle="Total nilai semua invoice (seluruh tagihan)"
             onClick={() => setStatModal('total_tagihan')}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_tagihan')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
           <StatCard
             icon={<CheckCircle className="w-5 h-5" />}
             label="Dibayar"
             value={formatIDR(summary.total_paid)}
             onClick={() => setStatModal('dibayar')}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('dibayar')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
           <StatCard
             icon={<Wallet className="w-5 h-5" />}
@@ -208,6 +210,7 @@ const InvoiceDashboard: React.FC = () => {
             value={formatIDR(summary.total_remaining)}
             subtitle="Belum dibayar (sisa tagihan)"
             onClick={() => setStatModal('sisa')}
+            action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('sisa')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
         </div>
       )}

@@ -113,6 +113,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [statModal, setStatModal] = useState<'total_invoice' | 'total_trip' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
+  const [statusModal, setStatusModal] = useState<string | null>(null);
   const [exportingInvoicesExcel, setExportingInvoicesExcel] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1141,6 +1142,7 @@ const OrdersInvoicesPage: React.FC = () => {
               value={loadingSummary ? '...' : s.total_invoices.toLocaleString('id-ID')}
               iconClassName="bg-sky-100 text-sky-600"
               onClick={() => setStatModal('total_invoice')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_invoice')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<Package className="w-5 h-5" />}
@@ -1148,6 +1150,7 @@ const OrdersInvoicesPage: React.FC = () => {
               value={loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}
               iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
               onClick={() => setStatModal('total_trip')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_trip')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
@@ -1156,6 +1159,7 @@ const OrdersInvoicesPage: React.FC = () => {
               iconClassName="bg-slate-100 text-slate-600"
               subtitle={!loadingSummary ? `Total nilai invoice · ≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
               onClick={() => setStatModal('total_tagihan')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_tagihan')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<CreditCard className="w-5 h-5" />}
@@ -1164,6 +1168,7 @@ const OrdersInvoicesPage: React.FC = () => {
               iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
               subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_paid / sarToIdrList)} · ≈ ${formatUSD(s.total_paid / usdToIdrList)}` : undefined}
               onClick={() => setStatModal('dibayar')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('dibayar')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<Wallet className="w-5 h-5" />}
@@ -1172,6 +1177,7 @@ const OrdersInvoicesPage: React.FC = () => {
               iconClassName="bg-amber-100 text-amber-600"
               subtitle={!loadingSummary ? `Belum dibayar · ≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
               onClick={() => setStatModal('sisa')}
+              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('sisa')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
           </div>
 
@@ -1242,6 +1248,56 @@ const OrdersInvoicesPage: React.FC = () => {
             );
           })()}
 
+          {/* Modal Per Status Invoice: daftar invoice per status */}
+          {statusModal && (() => {
+            const byStatusList = invoices.filter((inv: any) => (inv.status || '') === statusModal);
+            const statModalColumns: TableColumn[] = [
+              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
+              { id: 'owner', label: 'Owner', align: 'left' },
+              { id: 'company', label: 'Perusahaan', align: 'left' },
+              { id: 'total', label: 'Total', align: 'right' },
+              { id: 'paid', label: 'Dibayar', align: 'right' },
+              { id: 'remaining', label: 'Sisa', align: 'right' }
+            ];
+            return (
+              <Modal open onClose={() => setStatusModal(null)}>
+                <ModalBoxLg>
+                  <ModalHeader
+                    title={INVOICE_STATUS_LABELS[statusModal] || statusModal}
+                    subtitle={`${byStatusList.length} invoice dengan status ini (sesuai filter)`}
+                    onClose={() => setStatusModal(null)}
+                  />
+                  <ModalBody className="p-0 overflow-hidden flex flex-col min-h-0">
+                    <div className="overflow-auto flex-1 min-h-0">
+                      <Table
+                        columns={statModalColumns}
+                        data={byStatusList}
+                        emptyMessage="Tidak ada invoice dengan status ini."
+                        renderRow={(inv: any) => {
+                          const totalInv = parseFloat(inv.total_amount || 0);
+                          const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+                          const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
+                          const remaining = Math.max(0, totalInv - paid);
+                          const totalTriple = invoiceTotalTriple(inv);
+                          return (
+                            <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                              <td className="py-2 px-4 font-mono text-sm"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan compact /></td>
+                              <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || '-'}</td>
+                              <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
+                              <td className="py-2 px-4 text-right text-sm">{formatIDR(totalTriple.idr)}</td>
+                              <td className="py-2 px-4 text-right text-emerald-600 text-sm">{formatIDR(paid)}</td>
+                              <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm">{formatIDR(remaining)}</td>
+                            </tr>
+                          );
+                        }}
+                      />
+                    </div>
+                  </ModalBody>
+                </ModalBoxLg>
+              </Modal>
+            );
+          })()}
+
           <div>
             <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-slate-500" /> Per Status Invoice
@@ -1271,6 +1327,8 @@ const OrdersInvoicesPage: React.FC = () => {
                           icon={cfg.icon}
                           label={INVOICE_STATUS_LABELS[status] || status}
                           value={Number(count).toLocaleString('id-ID')}
+                          onClick={() => setStatusModal(status)}
+                          action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatusModal(status)}><Eye className="w-4 h-4" /> Lihat</Button></div>}
                         />
                       );
                     });
