@@ -117,7 +117,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
+        attributes: ['id', 'owner_id', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
         include: [
           {
             model: OrderItem,

@@ -40,7 +40,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   const invoices = await Invoice.findAll({
     where,
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'status'] },
+      { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'status'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
       branchInclude
     ],
@@ -628,7 +628,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   const invoices = await Invoice.findAll({
     where,
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'total_amount', 'status'] },
+      { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'total_amount', 'status'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       { model: PaymentProof, as: 'PaymentProofs', required: false }
@@ -681,7 +681,7 @@ const exportInvoicesExcel = asyncHandler(async (req, res) => {
     include: [
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       branchIncludeExport,
-      { model: Order, as: 'Order', attributes: ['id', 'status', 'total_amount'], required: false, include: [{ model: OrderItem, as: 'OrderItems', required: false }] },
+      { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'status', 'total_amount'], required: false, include: [{ model: OrderItem, as: 'OrderItems', required: false }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_currency', 'verified_status', 'payment_location', 'amount_original'] },
       { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] }
     ],
@@ -1104,7 +1104,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
     const prevInvs = await Invoice.findAll({
       where: prevInvWhere,
       attributes: ['id', 'paid_amount'],
-      include: [{ model: Order, as: 'Order', attributes: ['id'], required: true }]
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'owner_id'], required: true }]
     });
     prevRevenue = prevInvs.reduce((s, i) => s + parseFloat(i.paid_amount || 0), 0);
     prevInvoiceCount = prevInvs.length;
@@ -1887,7 +1887,7 @@ const getDashboardKpi = asyncHandler(async (req, res) => {
     where: invWhere,
     include: [
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'], include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'] }] }] },
-      { model: Order, as: 'Order', attributes: ['id'] }
+      { model: Order, as: 'Order', attributes: ['id', 'owner_id'] }
     ]
   });
 

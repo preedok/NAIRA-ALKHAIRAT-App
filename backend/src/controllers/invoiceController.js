@@ -499,7 +499,7 @@ const list = asyncHandler(async (req, res) => {
     Invoice.findAll({ where, include: [orderInclude], attributes: ['id', 'status', 'order_id'], raw: true }),
     Invoice.findAll({
       where,
-      include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'owner_id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
       attributes: ['order_id'],
       raw: true
     })
@@ -718,7 +718,7 @@ const getSummary = asyncHandler(async (req, res) => {
     where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
   }
 
-  const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'status'] };
+  const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'status'] };
   if (order_status) {
     orderInclude.required = true;
     orderInclude.where = { status: order_status };
@@ -738,7 +738,7 @@ const getSummary = asyncHandler(async (req, res) => {
     }),
     Invoice.findAll({
       where,
-      include: [{ model: Order, as: 'Order', attributes: ['id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'owner_id', 'status'], required: !!order_status, where: order_status ? orderInclude.where : undefined }],
       attributes: ['order_id'],
       raw: true
     })
@@ -1203,7 +1203,7 @@ const allocateBalance = asyncHandler(async (req, res) => {
 
   const full = await Invoice.findByPk(invoice.id, {
     include: [
-      { model: Order, as: 'Order', attributes: ['id'] },
+      { model: Order, as: 'Order', attributes: ['id', 'owner_id'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
     ]
   });
