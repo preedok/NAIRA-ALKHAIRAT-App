@@ -172,7 +172,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
   if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
   where[Op.and] = where[Op.and] || [];
-  where[Op.and].push({ status: { [Op.notIn]: ['canceled', 'cancelled', 'cancelled_refund'] } });
+  where[Op.and].push({ status: { [Op.notIn]: [INVOICE_STATUS.CANCELED, INVOICE_STATUS.CANCELLED_REFUND] } });
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
