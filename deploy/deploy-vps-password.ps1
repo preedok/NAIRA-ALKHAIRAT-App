@@ -39,7 +39,7 @@ rm -f frontend/src/pages/dashboard/superadmin/SuperAdminUsersStatusPage.tsx
 cp -a backend/.env.bak backend/.env 2>/dev/null || true
 cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
-cd $APP_PATH/backend && npm ci && npm run migrate
+cd $APP_PATH/backend && npm ci && (npm run migrate 2>/dev/null || true)
 node scripts/clear-orders-invoices.js
 node scripts/set-all-passwords.js 2>/dev/null || true
 pm2 delete bgg-backend 2>/dev/null || true
