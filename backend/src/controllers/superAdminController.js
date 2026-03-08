@@ -752,7 +752,7 @@ const exportLogsPdf = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/super-admin/users-status
- * Daftar user dengan status aktif (is_active) dan online (last_activity_at atau last_login_at dalam 5 menit).
+ * Daftar user dengan status aktif (is_active) dan online (last_login_at dalam 5 menit).
  * Query: branch_id, role (optional filter).
  */
 const getUsersStatus = asyncHandler(async (req, res) => {
@@ -765,27 +765,22 @@ const getUsersStatus = asyncHandler(async (req, res) => {
 
   const users = await User.findAll({
     where,
-    attributes: ['id', 'name', 'email', 'role', 'branch_id', 'is_active', 'last_login_at', 'last_activity_at', 'created_at'],
-    order: [['last_activity_at', 'DESC'], ['last_login_at', 'DESC'], ['name', 'ASC']],
+    attributes: ['id', 'name', 'email', 'role', 'branch_id', 'is_active', 'last_login_at', 'created_at'],
+    order: [['last_login_at', 'DESC'], ['name', 'ASC']],
     raw: true
   });
 
-  const list = (users || []).map((u) => {
-    const lastActive = u.last_activity_at || u.last_login_at;
-    const isOnline = lastActive ? new Date(lastActive) >= fiveMinAgo : false;
-    return {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      branch_id: u.branch_id || null,
-      is_active: !!u.is_active,
-      last_login_at: u.last_login_at ? u.last_login_at.toISOString() : null,
-      last_activity_at: u.last_activity_at ? u.last_activity_at.toISOString() : null,
-      is_online: isOnline,
-      created_at: u.created_at ? u.created_at.toISOString() : null
-    };
-  });
+  const list = (users || []).map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    branch_id: u.branch_id || null,
+    is_active: !!u.is_active,
+    last_login_at: u.last_login_at ? u.last_login_at.toISOString() : null,
+    is_online: u.last_login_at ? new Date(u.last_login_at) >= fiveMinAgo : false,
+    created_at: u.created_at ? u.created_at.toISOString() : null
+  }));
 
   res.json({ success: true, data: list });
 });

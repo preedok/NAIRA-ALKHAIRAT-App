@@ -127,16 +127,4 @@ const changePassword = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Password berhasil diubah' });
 });
 
-/**
- * GET /api/v1/auth/activity
- * Heartbeat: update last_activity_at agar Super Admin bisa deteksi user online (realtime).
- */
-const activity = asyncHandler(async (req, res) => {
-  await User.update(
-    { last_activity_at: new Date() },
-    { where: { id: req.user.id } }
-  );
-  res.json({ success: true });
-});
-
-module.exports = { login, me, changePassword, activity };
+module.exports = { login, me, changePassword };
