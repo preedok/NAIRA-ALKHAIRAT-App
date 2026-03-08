@@ -131,22 +131,22 @@ const OwnerActivationPage: React.FC = () => {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         .oap-root {
-          --gold: #C9A84C;
-          --gold-light: #E8C96B;
-          --gold-dim: rgba(201,168,76,0.15);
-          --gold-border: rgba(201,168,76,0.3);
-          --bg: #0D0F14;
-          --surface: #141720;
-          --surface-2: #1C2030;
-          --surface-3: #242840;
-          --text: #EEF0F6;
-          --text-muted: #8B90A8;
-          --text-dim: #555A70;
-          --danger: #E05454;
-          --danger-dim: rgba(224,84,84,0.12);
-          --success: #4CAF7C;
-          --success-dim: rgba(76,175,124,0.12);
-          --amber: #F59E0B;
+          --accent: #0d9488;
+          --accent-light: #14b8a6;
+          --accent-dim: rgba(13,148,136,0.08);
+          --accent-border: rgba(13,148,136,0.35);
+          --bg: #f0f9ff;
+          --surface: #ffffff;
+          --surface-2: #f8fafc;
+          --surface-3: #e2e8f0;
+          --text: #0f172a;
+          --text-muted: #475569;
+          --text-dim: #64748b;
+          --danger: #dc2626;
+          --danger-dim: rgba(220,38,38,0.08);
+          --success: #059669;
+          --success-dim: rgba(5,150,105,0.1);
+          --amber: #d97706;
 
           font-family: 'DM Sans', sans-serif;
           background: var(--bg);
@@ -162,8 +162,8 @@ const OwnerActivationPage: React.FC = () => {
           position: fixed;
           inset: 0;
           background:
-            radial-gradient(ellipse 60% 40% at 70% -10%, rgba(201,168,76,0.07) 0%, transparent 60%),
-            radial-gradient(ellipse 50% 30% at -10% 80%, rgba(76,102,175,0.06) 0%, transparent 60%);
+            radial-gradient(ellipse 70% 50% at 80% -20%, rgba(13,148,136,0.06) 0%, transparent 50%),
+            radial-gradient(ellipse 50% 40% at -10% 90%, rgba(99,102,241,0.04) 0%, transparent 50%);
           pointer-events: none;
           z-index: 0;
         }
@@ -185,7 +185,7 @@ const OwnerActivationPage: React.FC = () => {
           font-weight: 600;
           letter-spacing: 0.18em;
           text-transform: uppercase;
-          color: var(--gold);
+          color: var(--accent);
           margin-bottom: 10px;
           display: flex;
           align-items: center;
@@ -195,7 +195,7 @@ const OwnerActivationPage: React.FC = () => {
           content: '';
           display: block;
           width: 24px; height: 1px;
-          background: var(--gold);
+          background: var(--accent);
         }
         .oap-title {
           font-family: 'DM Serif Display', serif;
@@ -226,15 +226,17 @@ const OwnerActivationPage: React.FC = () => {
           top: 18px;
           left: calc(12.5%);
           right: calc(12.5%);
-          height: 1px;
+          height: 2px;
           background: var(--surface-3);
           z-index: 0;
+          border-radius: 1px;
         }
         .oap-step-fill {
           position: absolute;
           left: 0; top: 0; height: 100%;
-          background: linear-gradient(90deg, var(--gold), var(--gold-light));
+          background: linear-gradient(90deg, var(--accent), var(--accent-light));
           transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+          border-radius: 1px;
         }
         .oap-step {
           display: flex;
@@ -256,15 +258,15 @@ const OwnerActivationPage: React.FC = () => {
           position: relative;
         }
         .oap-step-dot.done {
-          background: var(--gold);
-          color: #000;
-          box-shadow: 0 0 0 4px var(--gold-dim), 0 4px 16px rgba(201,168,76,0.25);
+          background: var(--accent);
+          color: #fff;
+          box-shadow: 0 0 0 4px var(--accent-dim), 0 4px 16px rgba(13,148,136,0.2);
         }
         .oap-step-dot.active {
-          background: var(--surface-2);
-          color: var(--gold);
-          border: 1.5px solid var(--gold);
-          box-shadow: 0 0 0 4px var(--gold-dim);
+          background: var(--surface);
+          color: var(--accent);
+          border: 1.5px solid var(--accent);
+          box-shadow: 0 0 0 4px var(--accent-dim);
           animation: pulse-dot 2.5s ease-in-out infinite;
         }
         .oap-step-dot.idle {
@@ -278,8 +280,8 @@ const OwnerActivationPage: React.FC = () => {
           border: 1.5px solid var(--danger);
         }
         @keyframes pulse-dot {
-          0%, 100% { box-shadow: 0 0 0 4px var(--gold-dim); }
-          50% { box-shadow: 0 0 0 8px rgba(201,168,76,0.06); }
+          0%, 100% { box-shadow: 0 0 0 4px var(--accent-dim); }
+          50% { box-shadow: 0 0 0 8px rgba(13,148,136,0.06); }
         }
         .oap-step-label {
           font-size: 11px;
@@ -289,7 +291,7 @@ const OwnerActivationPage: React.FC = () => {
           text-align: center;
           transition: color 0.3s;
         }
-        .oap-step-label.active { color: var(--gold); }
+        .oap-step-label.active { color: var(--accent); }
         .oap-step-label.done { color: var(--text-muted); }
 
         /* Alert banners */
@@ -307,17 +309,18 @@ const OwnerActivationPage: React.FC = () => {
           from { opacity: 0; transform: translateY(-8px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .oap-alert.err { background: var(--danger-dim); border: 1px solid rgba(224,84,84,0.25); color: var(--danger); }
-        .oap-alert.ok { background: var(--success-dim); border: 1px solid rgba(76,175,124,0.25); color: var(--success); }
+        .oap-alert.err { background: var(--danger-dim); border: 1px solid rgba(220,38,38,0.2); color: var(--danger); }
+        .oap-alert.ok { background: var(--success-dim); border: 1px solid rgba(5,150,105,0.2); color: var(--success); }
         .oap-alert-icon { flex-shrink: 0; margin-top: 1px; }
 
         /* Card */
         .oap-card {
           background: var(--surface);
-          border: 1px solid rgba(255,255,255,0.06);
+          border: 1px solid var(--surface-3);
           border-radius: 18px;
           overflow: hidden;
           animation: card-in 0.5s ease forwards;
+          box-shadow: 0 4px 24px rgba(15,23,42,0.06);
         }
         @keyframes card-in {
           from { opacity: 0; transform: translateY(16px); }
@@ -325,7 +328,7 @@ const OwnerActivationPage: React.FC = () => {
         }
         .oap-card-header {
           padding: 28px 32px 20px;
-          border-bottom: 1px solid rgba(255,255,255,0.05);
+          border-bottom: 1px solid var(--surface-3);
           display: flex;
           align-items: flex-start;
           gap: 16px;
@@ -336,42 +339,42 @@ const OwnerActivationPage: React.FC = () => {
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
-        .oap-card-icon.amber { background: rgba(245,158,11,0.12); color: var(--amber); }
-        .oap-card-icon.blue { background: rgba(99,132,255,0.1); color: #6384FF; }
+        .oap-card-icon.amber { background: rgba(217,119,6,0.12); color: var(--amber); }
+        .oap-card-icon.blue { background: rgba(13,148,136,0.12); color: var(--accent); }
         .oap-card-icon.red { background: var(--danger-dim); color: var(--danger); }
         .oap-card-icon.green { background: var(--success-dim); color: var(--success); }
         .oap-card-title { font-family: 'DM Serif Display', serif; font-size: 20px; line-height: 1.2; color: var(--text); margin-bottom: 4px; }
-        .oap-card-desc { font-size: 13px; color: var(--text-muted); font-weight: 300; line-height: 1.6; }
+        .oap-card-desc { font-size: 13px; color: var(--text-muted); font-weight: 400; line-height: 1.6; }
         .oap-card-body { padding: 24px 32px 28px; }
 
         /* Upload zone */
         .oap-dropzone {
-          border: 1.5px dashed var(--gold-border);
+          border: 1.5px dashed var(--accent-border);
           border-radius: 14px;
           padding: 36px 24px;
           text-align: center;
           cursor: pointer;
           transition: all 0.25s ease;
-          background: var(--gold-dim);
+          background: var(--accent-dim);
           position: relative;
           overflow: hidden;
         }
         .oap-dropzone:hover, .oap-dropzone.drag {
-          border-color: var(--gold);
-          background: rgba(201,168,76,0.08);
+          border-color: var(--accent);
+          background: rgba(13,148,136,0.06);
         }
         .oap-dropzone-inner { position: relative; z-index: 1; }
         .oap-dropzone-icon {
           width: 56px; height: 56px;
           border-radius: 16px;
-          background: rgba(201,168,76,0.1);
+          background: rgba(13,148,136,0.1);
           display: flex; align-items: center; justify-content: center;
           margin: 0 auto 16px;
-          color: var(--gold);
+          color: var(--accent);
         }
         .oap-dropzone-title { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
         .oap-dropzone-sub { font-size: 12.5px; color: var(--text-muted); }
-        .oap-dropzone-sub span { color: var(--gold); font-weight: 500; }
+        .oap-dropzone-sub span { color: var(--accent); font-weight: 500; }
 
         .oap-upload-btn {
           display: inline-flex;
@@ -380,8 +383,8 @@ const OwnerActivationPage: React.FC = () => {
           margin-top: 20px;
           padding: 13px 28px;
           border-radius: 10px;
-          background: var(--gold);
-          color: #000;
+          background: var(--accent);
+          color: #fff;
           font-family: 'DM Sans', sans-serif;
           font-size: 14px;
           font-weight: 600;
@@ -391,9 +394,9 @@ const OwnerActivationPage: React.FC = () => {
           letter-spacing: 0.01em;
         }
         .oap-upload-btn:hover:not(:disabled) {
-          background: var(--gold-light);
+          background: var(--accent-light);
           transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(201,168,76,0.3);
+          box-shadow: 0 8px 24px rgba(13,148,136,0.25);
         }
         .oap-upload-btn:disabled {
           opacity: 0.6; cursor: not-allowed;
@@ -403,8 +406,8 @@ const OwnerActivationPage: React.FC = () => {
         .spin {
           display: inline-block;
           width: 16px; height: 16px;
-          border: 2px solid rgba(0,0,0,0.2);
-          border-top-color: #000;
+          border: 2px solid rgba(255,255,255,0.4);
+          border-top-color: #fff;
           border-radius: 50%;
           animation: spin 0.75s linear infinite;
         }
@@ -416,7 +419,7 @@ const OwnerActivationPage: React.FC = () => {
           align-items: center;
           gap: 12px;
           padding: 14px 0;
-          border-bottom: 1px solid rgba(255,255,255,0.04);
+          border-bottom: 1px solid var(--surface-3);
           font-size: 13.5px;
           color: var(--text-muted);
         }
@@ -424,7 +427,7 @@ const OwnerActivationPage: React.FC = () => {
         .oap-info-bullet {
           width: 6px; height: 6px;
           border-radius: 50%;
-          background: var(--gold);
+          background: var(--accent);
           flex-shrink: 0;
         }
 
@@ -433,18 +436,18 @@ const OwnerActivationPage: React.FC = () => {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          color: var(--gold);
+          color: var(--accent);
           font-size: 13px;
           font-weight: 500;
           text-decoration: none;
           margin-top: 18px;
           padding: 9px 16px;
           border-radius: 8px;
-          border: 1px solid var(--gold-border);
-          background: var(--gold-dim);
+          border: 1px solid var(--accent-border);
+          background: var(--accent-dim);
           transition: all 0.2s;
         }
-        .oap-view-link:hover { background: rgba(201,168,76,0.12); border-color: var(--gold); }
+        .oap-view-link:hover { background: rgba(13,148,136,0.1); border-color: var(--accent); }
 
         /* Waiting pulse animation */
         .oap-waiting-dots {
@@ -456,7 +459,7 @@ const OwnerActivationPage: React.FC = () => {
         .oap-dot {
           width: 6px; height: 6px;
           border-radius: 50%;
-          background: var(--gold);
+          background: var(--accent);
           animation: dot-pulse 1.4s ease-in-out infinite;
         }
         .oap-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -481,7 +484,7 @@ const OwnerActivationPage: React.FC = () => {
           padding: 6px 14px;
           border-radius: 100px;
           background: var(--surface-2);
-          border: 1px solid rgba(255,255,255,0.07);
+          border: 1px solid var(--surface-3);
           font-size: 12px;
           color: var(--text-muted);
           font-weight: 500;
@@ -489,7 +492,7 @@ const OwnerActivationPage: React.FC = () => {
         .oap-status-dot {
           width: 6px; height: 6px;
           border-radius: 50%;
-          background: var(--gold);
+          background: var(--accent);
           animation: pulse-dot 2s ease-in-out infinite;
         }
         .oap-status-dot.red { background: var(--danger); }
@@ -507,7 +510,7 @@ const OwnerActivationPage: React.FC = () => {
         .oap-loading-ring {
           width: 48px; height: 48px;
           border: 2px solid var(--surface-3);
-          border-top-color: var(--gold);
+          border-top-color: var(--accent);
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -520,12 +523,12 @@ const OwnerActivationPage: React.FC = () => {
           gap: 8px;
           padding: 8px 16px;
           border-radius: 8px;
-          background: rgba(201,168,76,0.08);
-          border: 1px solid var(--gold-border);
+          background: var(--accent-dim);
+          border: 1px solid var(--accent-border);
           margin-bottom: 20px;
         }
         .oap-amount-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
-        .oap-amount-value { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--gold); }
+        .oap-amount-value { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--accent); }
 
         @media (max-width: 480px) {
           .oap-card-header, .oap-card-body { padding-left: 20px; padding-right: 20px; }
