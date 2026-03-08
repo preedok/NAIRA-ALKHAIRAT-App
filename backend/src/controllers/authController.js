@@ -1,5 +1,5 @@
 const asyncHandler = require('express-async-handler');
-const { User, OwnerProfile } = require('../models');
+const { User, OwnerProfile, Branch, Provinsi, Wilayah } = require('../models');
 const { signToken } = require('../middleware/auth');
 const { ROLES, OWNER_STATUS, isOwnerRole } = require('../constants');
 const logger = require('../config/logger');
@@ -17,7 +17,13 @@ const login = asyncHandler(async (req, res) => {
   try {
     user = await User.findOne({
       where: { email: email.toLowerCase() },
-      include: [{ model: require('../models').Branch, as: 'Branch', attributes: ['id', 'code', 'name'] }]
+      include: [{
+        model: Branch,
+        as: 'Branch',
+        attributes: ['id', 'code', 'name', 'city'],
+        required: false,
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+      }]
     });
   } catch (err) {
     const dbMessage = (err && err.original && err.original.message) ? err.original.message : (err && err.message) ? String(err.message) : String(err);
@@ -66,9 +72,14 @@ const login = asyncHandler(async (req, res) => {
   const token = signToken(user.id, user.email, user.role);
   const u = user.toJSON();
   delete u.password_hash;
+  const branch = user.Branch;
   const payload = {
     ...u,
-    branch_name: user.Branch ? user.Branch.name : null
+    branch_name: branch ? branch.name : null,
+    branch_code: branch ? branch.code : null,
+    city: branch ? branch.city : null,
+    provinsi_name: branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null,
+    wilayah_name: branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null
   };
   if (isOwnerRole(user.role) && user.owner_status) {
     payload.owner_status = user.owner_status;
@@ -90,19 +101,40 @@ const login = asyncHandler(async (req, res) => {
 const me = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id, {
     attributes: { exclude: ['password_hash'] },
-    include: [
-      { model: require('../models').Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'] }
-    ]
+    include: [{
+      model: Branch,
+      as: 'Branch',
+      attributes: ['id', 'code', 'name', 'city'],
+      required: false,
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+    }]
   });
   if (!user) {
     return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
   }
   const u = user.toJSON();
+  let branch = user.Branch;
+  let ownerProfile = null;
   if (isOwnerRole(user.role)) {
-    const profile = await OwnerProfile.findOne({ where: { user_id: user.id } });
-    u.owner_status = profile ? profile.status : null;
-    u.has_special_price = profile ? profile.has_special_price : false;
+    ownerProfile = await OwnerProfile.findOne({
+      where: { user_id: user.id },
+      include: [{
+        model: Branch,
+        as: 'AssignedBranch',
+        attributes: ['id', 'code', 'name', 'city'],
+        required: false,
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+      }]
+    });
+    u.owner_status = ownerProfile ? ownerProfile.status : null;
+    u.has_special_price = ownerProfile ? ownerProfile.has_special_price : false;
+    if (!branch && ownerProfile?.AssignedBranch) branch = ownerProfile.AssignedBranch;
   }
+  u.branch_name = branch ? branch.name : null;
+  u.branch_code = branch ? branch.code : null;
+  u.city = branch ? branch.city : null;
+  u.provinsi_name = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
+  u.wilayah_name = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
   res.json({ success: true, data: u });
 });
 

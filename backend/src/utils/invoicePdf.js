@@ -258,12 +258,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.moveTo(col2StartX, y).lineTo(col2StartX, y + boxH).stroke('#cbd5e1');
   y += 10;
   doc.fontSize(8).fillColor('#64748b').text('DITAGIH KEPADA', margin + 12, y);
-  doc.text('CABANG & LOKASI', col2StartX + 12, y);
+  doc.text('LOKASI', col2StartX + 12, y);
   y += 15;
   doc.fontSize(9).fillColor('#334155');
   doc.text('Nama', margin + 12, y);
   doc.text(String(data.User?.name || '-'), margin + 92, y, { width: valW1 });
-  doc.text('Cabang', col2StartX + 12, y);
+  doc.text('Kota', col2StartX + 12, y);
   doc.text(String(data.Branch?.name || data.Branch?.code || '-'), col2StartX + 92, y, { width: valW2 - 82 });
   y += 14;
   doc.text('Perusahaan', margin + 12, y);
