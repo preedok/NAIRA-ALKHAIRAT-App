@@ -40,7 +40,11 @@ cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
 cd $APP_PATH/backend && npm ci && (npm run migrate 2>/dev/null || true)
 node scripts/set-all-passwords.js 2>/dev/null || true
-pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend
+pm2 delete bgg-backend 2>/dev/null || true
+cd $APP_PATH/backend && pm2 start src/server.js --name bgg-backend
+pm2 save
+sleep 2
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/health || echo "health-fail"
 echo '=== Frontend ==='
 cd $APP_PATH/frontend && npm ci && npm run build
 echo DEPLOY_DONE

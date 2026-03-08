@@ -1,12 +1,35 @@
-require('dotenv').config();
-const app = require('./app');
-const sequelize = require('./config/sequelize');
-const logger = require('./config/logger');
-
-// Load models (register with sequelize)
-require('./models');
-
 const PORT = process.env.PORT || 5000;
+
+/** Fallback server jika require/app gagal — agar Nginx dapat response (bukan 502) dan error terlihat di log */
+function startFallbackServer(err) {
+  const http = require('http');
+  const msg = (err && (err.message || err.stack)) ? String(err.message || err.stack) : 'Unknown startup error';
+  console.error('[FALLBACK] Startup failed:', msg);
+  const server = http.createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/health' || req.url === '/api/v1/health') {
+      res.writeHead(200);
+      res.end(JSON.stringify({ status: 'degraded', error: msg, hint: 'Cek log backend / .env / koneksi DB' }));
+    } else {
+      res.writeHead(503);
+      res.end(JSON.stringify({ success: false, message: 'Backend startup failed', error: msg }));
+    }
+  });
+  server.listen(PORT, () => console.error(`[FALLBACK] Listening on ${PORT} — perbaiki error lalu pm2 restart bgg-backend`));
+}
+
+let app, sequelize, logger;
+try {
+  require('dotenv').config();
+  app = require('./app');
+  sequelize = require('./config/sequelize');
+  logger = require('./config/logger');
+  require('./models');
+} catch (e) {
+  startFallbackServer(e);
+  process.exitCode = 1;
+  return;
+}
 
 /** Ensure users table has password_hash column (fix login error if column was missing or named differently) */
 async function ensureUsersPasswordHashColumn(db) {
