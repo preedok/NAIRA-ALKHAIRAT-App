@@ -300,7 +300,7 @@ const DashboardLayout: React.FC = () => {
     ...(user?.role !== 'super_admin'
       ? [
           { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" />, onClick: () => navigate('/dashboard/profile') },
-          ...(user?.role !== 'owner' ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }] : [])
+          ...((user?.role !== 'owner_mou' && user?.role !== 'owner_non_mou') ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }] : [])
         ]
       : []),
     {
