@@ -31,6 +31,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+/** Atribut PaymentProof yang selalu ada di tabel (tanpa proof_file_name, proof_file_content_type, proof_file_data) */
+const PAYMENT_PROOF_ATTRS_SAFE = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
+
 /**
  * POST /api/v1/invoices/:id/payment-proofs
  * Owner upload bukti bayar. Or role invoice (Saudi) issue bukti: body only, no file (payment_location: saudi).
@@ -123,9 +126,6 @@ const create = [
       recipient_bank_account_id: recipientBankAccountId,
       transfer_date: transfer_date || null,
       proof_file_url: fileUrl,
-      proof_file_name: proofFileName,
-      proof_file_content_type: proofFileContentType,
-      proof_file_data: proofFileData,
       uploaded_by: isIssueByInvoice ? null : req.user.id,
       issued_by: isIssueByInvoice ? req.user.id : null,
       payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
@@ -135,7 +135,7 @@ const create = [
     // Auto-verify pembayaran Saudi (SAR/USD/IDR): invoice dan order otomatis update. Hitung paid_amount dari jumlah SEMUA bukti terverifikasi di DB.
     if (isIssueByInvoice) {
       await proof.update({ verified_by: req.user.id, verified_at: new Date(), verified_status: 'verified' });
-      const allProofs = await PaymentProof.findAll({ where: { invoice_id: invoice.id } });
+      const allProofs = await PaymentProof.findAll({ where: { invoice_id: invoice.id }, attributes: PAYMENT_PROOF_ATTRS_SAFE });
       const verifiedSum = allProofs
         .filter(p => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
         .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
@@ -170,10 +170,10 @@ const create = [
       setImmediate(() => sendPaymentReceivedNotificationEmail(inv.id, notif.id, proof.id, newStatus === INVOICE_STATUS.PAID));
     }
 
-    const full = await PaymentProof.findByPk(proof.id);
+    const full = await PaymentProof.findByPk(proof.id, { attributes: PAYMENT_PROOF_ATTRS_SAFE });
     const out = { success: true, data: full };
     if (isIssueByInvoice) {
-      const updatedInv = await Invoice.findByPk(invoice.id, { include: [{ model: Order, as: 'Order', attributes: ['id', 'order_number', 'total_amount', 'currency', 'status'] }, { model: PaymentProof, as: 'PaymentProofs' }] });
+      const updatedInv = await Invoice.findByPk(invoice.id, { include: [{ model: Order, as: 'Order', attributes: ['id', 'order_number', 'total_amount', 'currency', 'status'] }, { model: PaymentProof, as: 'PaymentProofs', attributes: PAYMENT_PROOF_ATTRS_SAFE }] });
       if (updatedInv) out.invoice = updatedInv;
     }
     res.status(201).json(out);
@@ -187,7 +187,7 @@ const create = [
 const getFile = asyncHandler(async (req, res) => {
   const proof = await PaymentProof.findOne({
     where: { id: req.params.proofId, invoice_id: req.params.id },
-    attributes: ['id', 'invoice_id', 'proof_file_url', 'proof_file_name', 'proof_file_content_type', 'proof_file_data']
+    attributes: ['id', 'invoice_id', 'proof_file_url']
   });
   if (!proof || !proof.proof_file_url || proof.proof_file_url === 'issued-saudi') {
     return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
@@ -203,19 +203,6 @@ const getFile = asyncHandler(async (req, res) => {
   );
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
 
-  // Prioritas 1: kirim dari DB jika ada (file disimpan di database)
-  const data = proof.proof_file_data;
-  if (data && (Buffer.isBuffer(data) || data instanceof Uint8Array)) {
-    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    const mime = proof.proof_file_content_type || 'application/octet-stream';
-    const name = proof.proof_file_name || 'bukti-bayar';
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `inline; filename="${name.replace(/"/g, '%22')}"`);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return res.send(buf);
-  }
-
-  // Prioritas 2: stream dari disk
   const urlNorm = (proof.proof_file_url || '').replace(/\\/g, '/').trim();
   const match = urlNorm.match(/payment-proofs\/?(.+)$/i);
   const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : null;
@@ -224,7 +211,9 @@ const getFile = asyncHandler(async (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada di server' });
   const ext = path.extname(filePath).toLowerCase();
   const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  const downloadName = filename || 'bukti-bayar';
   res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `inline; filename="${downloadName.replace(/"/g, '%22')}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');
   fs.createReadStream(filePath).pipe(res);
 });

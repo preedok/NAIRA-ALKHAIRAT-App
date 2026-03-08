@@ -133,7 +133,7 @@ const PaymentProof = sequelize.define('PaymentProof', {
   underscored: true,
   timestamps: true,
   defaultScope: {
-    attributes: { exclude: ['proof_file_data'] }
+    attributes: { exclude: ['proof_file_data', 'proof_file_name', 'proof_file_content_type'] }
   }
 });
 

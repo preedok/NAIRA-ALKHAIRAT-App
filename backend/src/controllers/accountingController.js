@@ -6,6 +6,9 @@ const PDFDocument = require('pdfkit');
 const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, PaymentReallocation, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
 const { INVOICE_STATUS } = require('../constants');
 
+/** Atribut PaymentProof tanpa kolom opsional (proof_file_name, proof_file_content_type, proof_file_data) agar kompatibel dengan DB lama */
+const PAYMENT_PROOF_ATTRS_SAFE = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
+
 // Role accounting bekerja di pusat: filter cabang untuk lihat order/invoice per cabang atau seluruh cabang.
 const isAccountingPusat = (user) => user && user.role === 'role_accounting';
 
@@ -603,6 +606,7 @@ const getPaymentsList = asyncHandler(async (req, res) => {
 
   const payments = await PaymentProof.findAll({
     where: ppWhere,
+    attributes: PAYMENT_PROOF_ATTRS_SAFE,
     include: [
       { model: Invoice, as: 'Invoice', include: [{ model: Order, as: 'Order' }, { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }] }
     ],
@@ -631,7 +635,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'total_amount', 'status'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
-      { model: PaymentProof, as: 'PaymentProofs', required: false }
+      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: PAYMENT_PROOF_ATTRS_SAFE }
     ],
     order: [['created_at', 'DESC']]
   });
@@ -971,7 +975,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
     include: [
       branchInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
-      { model: PaymentProof, as: 'PaymentProofs', required: false },
+      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: PAYMENT_PROOF_ATTRS_SAFE },
       orderInclude
     ],
     order: orderBy
@@ -1394,7 +1398,7 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
  * Tandai bukti pembayaran sudah direkonsiliasi (rekonsiliasi bank).
  */
 const reconcilePayment = asyncHandler(async (req, res) => {
-  const proof = await PaymentProof.findByPk(req.params.id, { include: [{ model: Invoice, as: 'Invoice' }] });
+  const proof = await PaymentProof.findByPk(req.params.id, { attributes: PAYMENT_PROOF_ATTRS_SAFE, include: [{ model: Invoice, as: 'Invoice' }] });
   if (!proof) return res.status(404).json({ success: false, message: 'Bukti pembayaran tidak ditemukan' });
   await proof.update({ reconciled_at: new Date(), reconciled_by: req.user.id });
   res.json({ success: true, data: proof, message: 'Berhasil ditandai rekonsiliasi' });

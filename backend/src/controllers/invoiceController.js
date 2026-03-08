@@ -195,7 +195,8 @@ async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, met
         { verified_status: 'verified' },
         { payment_location: 'saudi' }
       ]
-    }
+    },
+    attributes: PAYMENT_PROOF_ATTRS
   });
   const verifiedSum = proofs.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   const total = parseFloat(invoice.total_amount) || 0;
@@ -1089,7 +1090,7 @@ const unblock = asyncHandler(async (req, res) => {
 const verifyPayment = asyncHandler(async (req, res) => {
   const { payment_proof_id, verified, notes } = req.body;
   const isApproved = verified === true || verified === 'true';
-  const proof = await PaymentProof.findByPk(payment_proof_id);
+  const proof = await PaymentProof.findByPk(payment_proof_id, { attributes: PAYMENT_PROOF_ATTRS });
   if (!proof || proof.invoice_id !== req.params.id) return res.status(404).json({ success: false, message: 'Bukti bayar tidak ditemukan' });
   // Hanya karyawan (bukan owner/pembeli) yang boleh verifikasi
   const allowedVerify = ['admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting', 'super_admin'];
