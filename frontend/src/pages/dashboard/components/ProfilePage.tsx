@@ -68,11 +68,16 @@ const ProfilePage: React.FC = () => {
     ? `${UPLOAD_BASE.replace(/\/$/, '')}${ownerProfile.mou_generated_url.startsWith('/') ? '' : '/'}${ownerProfile.mou_generated_url}`
     : '';
 
+  const isOwnerMou = user?.role === 'owner_mou';
   const tabs = [
     { id: 'profile' as const, label: 'Profil', icon: User },
-    ...(isOwner ? [{ id: 'mou' as const, label: 'Surat MoU', icon: FileText }] : []),
+    ...(isOwnerMou ? [{ id: 'mou' as const, label: 'Surat MoU', icon: FileText }] : []),
     { id: 'security' as const, label: 'Keamanan', icon: Shield },
   ];
+
+  useEffect(() => {
+    if (activeTab === 'mou' && !isOwnerMou) setActiveTab('profile');
+  }, [activeTab, isOwnerMou]);
 
   const avatarInitial = user?.name?.charAt(0)?.toUpperCase() || '?';
   const roleLabel = user?.role ? (ROLE_NAMES[user.role as keyof typeof ROLE_NAMES] || user.role) : '—';
@@ -81,86 +86,81 @@ const ProfilePage: React.FC = () => {
   const strengthColors = ['', 'bg-red-500', 'bg-amber-500', 'bg-emerald-500'];
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-slate-50">
-      {/* Full-width hero */}
-      <div className="relative w-full min-h-[280px] md:min-h-[320px] flex-shrink-0 overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(129,140,248,0.4),transparent)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_50%,rgba(139,92,246,0.2),transparent)]" />
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6 md:pt-12 md:pb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-          <div className="flex items-center gap-5 md:gap-8">
-            <div className="relative flex-shrink-0">
-              <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur border-2 border-white/30 flex items-center justify-center text-3xl md:text-4xl font-bold text-white shadow-xl">
-                {avatarInitial}
-              </div>
-              {isOwner && ownerProfile?.activated_at && (
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-500 border-2 border-indigo-700 flex items-center justify-center shadow">
-                  <CheckCircle size={16} className="text-white" />
+    <div className="min-h-screen w-full flex flex-col bg-slate-100">
+      {/* Header - neutral modern */}
+      <div className="w-full flex-shrink-0 border-b border-slate-200 bg-white">
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4 md:gap-6">
+              <div className="relative flex-shrink-0">
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-slate-700 flex items-center justify-center text-2xl md:text-3xl font-bold text-white shadow-sm">
+                  {avatarInitial}
                 </div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold text-white truncate">{user?.name || '—'}</h1>
-              <p className="mt-1 flex items-center gap-2 text-indigo-200 text-sm md:text-base truncate">
-                <Mail size={14} className="flex-shrink-0" />
-                {user?.email || '—'}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white border border-white/30">
-                  {roleLabel}
-                </span>
-                {user?.company_name && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/15 text-indigo-100 border border-white/20">
-                    <Building2 size={12} />
-                    {user.company_name}
-                  </span>
-                )}
-                {isOwner && ownerProfile?.AssignedBranch && (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-100 border border-emerald-400/30">
-                    {ownerProfile.AssignedBranch.code} – {ownerProfile.AssignedBranch.name}
-                  </span>
+                {isOwner && ownerProfile?.activated_at && (
+                  <div className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center shadow">
+                    <CheckCircle size={14} className="text-white" />
+                  </div>
                 )}
               </div>
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-2xl font-bold text-slate-900 truncate">{user?.name || '—'}</h1>
+                <p className="mt-0.5 flex items-center gap-2 text-slate-500 text-sm truncate">
+                  <Mail size={14} className="flex-shrink-0" />
+                  {user?.email || '—'}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                    {roleLabel}
+                  </span>
+                  {user?.company_name && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                      <Building2 size={12} />
+                      {user.company_name}
+                    </span>
+                  )}
+                  {isOwner && ownerProfile?.AssignedBranch && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      {ownerProfile.AssignedBranch.code} – {ownerProfile.AssignedBranch.name}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex-shrink-0 self-start md:self-center">
-            <AutoRefreshControl onRefresh={fetchProfile} disabled={ownerLoading} size="sm" />
+            <div className="flex-shrink-0">
+              <AutoRefreshControl onRefresh={fetchProfile} disabled={ownerLoading} size="sm" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs + content - full width container */}
-      <div className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-          {/* Tab navigation - horizontal on mobile, can stay above content */}
-          <div className="flex-shrink-0">
-            <nav className="flex gap-1 p-1 rounded-xl bg-slate-200/60 w-fit" aria-label="Tabs">
-              {tabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setActiveTab(id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === id
-                      ? 'bg-white text-indigo-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                  }`}
-                >
-                  <Icon size={18} />
-                  {label}
-                </button>
-              ))}
-            </nav>
-          </div>
+      {/* Tabs + content */}
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div className="flex flex-col gap-6">
+          <nav className="flex gap-1 p-1 rounded-lg bg-slate-200/70 w-fit border border-slate-200/80" aria-label="Tabs">
+            {tabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
+                  activeTab === id
+                    ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
+                }`}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            ))}
+          </nav>
 
-          {/* Content area - takes remaining space */}
           <div className="flex-1 min-w-0">
-            {/* PROFILE TAB */}
             {activeTab === 'profile' && (
-              <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+              <Card className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="p-6 md:p-8">
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
-                      <User className="w-6 h-6 text-indigo-600" />
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center border border-slate-200/80">
+                      <User className="w-6 h-6 text-slate-600" />
                     </div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-900">Informasi Akun</h2>
@@ -195,9 +195,8 @@ const ProfilePage: React.FC = () => {
               </Card>
             )}
 
-            {/* MOU TAB */}
-            {activeTab === 'mou' && isOwner && (
-              <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            {activeTab === 'mou' && isOwnerMou && (
+              <Card className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="p-6 md:p-8">
                   <div className="flex items-center gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -211,7 +210,7 @@ const ProfilePage: React.FC = () => {
 
                   {ownerLoading ? (
                     <div className="flex flex-col items-center justify-center py-16 gap-4">
-                      <div className="w-10 h-10 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                      <div className="w-10 h-10 border-2 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
                       <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                     </div>
                   ) : mouUrl ? (
@@ -265,13 +264,12 @@ const ProfilePage: React.FC = () => {
               </Card>
             )}
 
-            {/* SECURITY TAB */}
             {activeTab === 'security' && (
-              <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+              <Card className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="p-6 md:p-8">
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
-                      <Shield className="w-6 h-6 text-violet-600" />
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center border border-slate-200/80">
+                      <Shield className="w-6 h-6 text-slate-600" />
                     </div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-900">Keamanan Akun</h2>
