@@ -246,7 +246,7 @@ const RefundsPage: React.FC = () => {
           label="Sudah direfund"
           value={stats?.refunded ?? '–'}
           iconClassName="bg-emerald-100 text-emerald-600"
-          subtitle={(stats?.amount_refunded ?? 0) > 0 ? formatIDR(stats!.amount_refunded) : undefined}
+          subtitle={(stats?.amount_refunded ?? 0) > 0 ? <NominalDisplay amount={stats!.amount_refunded} currency="IDR" /> : undefined}
           onClick={() => setStatModal('refunded')}
           action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('refunded')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
         />
