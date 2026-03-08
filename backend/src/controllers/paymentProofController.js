@@ -110,27 +110,30 @@ const create = [
       if (!acc) recipientBankAccountId = null;
     }
 
-    const proof = await PaymentProof.create({
-      invoice_id: invoice.id,
-      payment_type: type,
-      amount: amt,
-      amount_idr: amt,
-      amount_sar: paymentCurrency === 'SAR' && amountOriginal != null ? amountOriginal : null,
-      payment_currency: paymentCurrency,
-      amount_original: amountOriginal,
-      bank_id: resolvedBankId,
-      bank_name: resolvedBankName,
-      account_number: account_number || null,
-      sender_account_name: (sender_account_name && String(sender_account_name).trim()) || null,
-      sender_account_number: (sender_account_number && String(sender_account_number).trim()) || null,
-      recipient_bank_account_id: recipientBankAccountId,
-      transfer_date: transfer_date || null,
-      proof_file_url: fileUrl,
-      uploaded_by: isIssueByInvoice ? null : req.user.id,
-      issued_by: isIssueByInvoice ? req.user.id : null,
-      payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
-      notes
-    });
+    const proof = await PaymentProof.create(
+      {
+        invoice_id: invoice.id,
+        payment_type: type,
+        amount: amt,
+        amount_idr: amt,
+        amount_sar: paymentCurrency === 'SAR' && amountOriginal != null ? amountOriginal : null,
+        payment_currency: paymentCurrency,
+        amount_original: amountOriginal,
+        bank_id: resolvedBankId,
+        bank_name: resolvedBankName,
+        account_number: account_number || null,
+        sender_account_name: (sender_account_name && String(sender_account_name).trim()) || null,
+        sender_account_number: (sender_account_number && String(sender_account_number).trim()) || null,
+        recipient_bank_account_id: recipientBankAccountId,
+        transfer_date: transfer_date || null,
+        proof_file_url: fileUrl,
+        uploaded_by: isIssueByInvoice ? null : req.user.id,
+        issued_by: isIssueByInvoice ? req.user.id : null,
+        payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
+        notes
+      },
+      { fields: PAYMENT_PROOF_ATTRS_SAFE }
+    );
 
     // Auto-verify pembayaran Saudi (SAR/USD/IDR): invoice dan order otomatis update. Hitung paid_amount dari jumlah SEMUA bukti terverifikasi di DB.
     if (isIssueByInvoice) {
