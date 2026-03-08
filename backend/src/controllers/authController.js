@@ -127,4 +127,23 @@ const changePassword = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Password berhasil diubah' });
 });
 
-module.exports = { login, me, changePassword };
+/**
+ * GET /api/v1/auth/activity
+ * Mengembalikan last_login_at user saat ini (untuk tampilan "terakhir aktif" / online).
+ */
+const activity = asyncHandler(async (req, res) => {
+  const user = await User.findByPk(req.user.id, {
+    attributes: ['id', 'last_login_at']
+  });
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
+  }
+  res.json({
+    success: true,
+    data: {
+      last_login_at: user.last_login_at ? user.last_login_at.toISOString() : null
+    }
+  });
+});
+
+module.exports = { login, me, changePassword, activity };
