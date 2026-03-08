@@ -240,7 +240,7 @@ const getAgingReport = asyncHandler(async (req, res) => {
       orderInclude,
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
-      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_type', 'verified_at', 'verified_status', 'proof_file_url', 'proof_file_name'] },
+      { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: ['id', 'amount', 'payment_type', 'verified_at', 'verified_status', 'proof_file_url'] },
       { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'], order: [['created_at', 'DESC']] }
     ],
     order: [['due_date_dp', 'ASC'], ['created_at', 'ASC']]
