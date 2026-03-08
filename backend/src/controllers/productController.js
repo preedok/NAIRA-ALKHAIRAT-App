@@ -258,7 +258,11 @@ const list = asyncHandler(async (req, res) => {
         });
         base.room_breakdown = rooms;
         base.prices_by_room = rooms;
-        base.meal_price_idr = applyMou(mealPriceInRef);
+        const mealPriceDiscounted = applyMou(mealPriceInRef);
+        base.meal_price_idr = mealPriceDiscounted;
+        if (oid != null && base.meta && typeof base.meta === 'object') {
+          base.meta = { ...base.meta, meal_price: mealPriceDiscounted != null ? mealPriceDiscounted : base.meta.meal_price };
+        }
       }
       if (productType === 'visa') {
         const av = p.ProductAvailability;
