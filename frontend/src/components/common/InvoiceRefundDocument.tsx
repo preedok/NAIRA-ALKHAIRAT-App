@@ -119,7 +119,7 @@ export function InvoiceRefundDocument({
               {preview.action === 'refund' && (
                 <div className="mt-2 space-y-1 text-sm">
                   {preview.refundAmount != null && preview.refundAmount > 0 && (
-                    <p>Jumlah refund: <span className="text-amber-300 font-medium">{formatIDR(preview.refundAmount)}</span></p>
+                    <p>Jumlah refund: <span className="text-amber-300 font-medium"><NominalDisplay amount={preview.refundAmount ?? 0} currency="IDR" /></span></p>
                   )}
                   {(preview.bankName || preview.accountNumber) && (
                     <p>Rekening: {[preview.bankName, preview.accountNumber].filter(Boolean).join(' · ')}</p>
