@@ -6,7 +6,7 @@ const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, Bank, InvoiceStatusHistory, OrderRevision } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, isOwnerRole } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
-const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
 
 const KOORDINATOR_ROLES = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
 function isKoordinatorRole(role) {
@@ -987,8 +987,8 @@ const getById = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Akses ditolak' });
   }
   if (isKoordinatorRole(req.user.role)) {
-    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
-    if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+    const inWilayah = await invoiceInKoordinatorWilayah(invoice, req.user.wilayah_id);
+    if (!inWilayah) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
   }
   if (req.user.role === 'role_hotel') {
     const order = invoice.Order || await Order.findByPk(invoice.order_id, { include: [{ model: OrderItem, as: 'OrderItems', attributes: ['type'] }] });
@@ -1056,8 +1056,8 @@ const unblock = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Tidak berwenang mengaktifkan invoice' });
   }
   if (isKoordinatorRole(req.user.role) && invoice) {
-    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
-    if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+    const inWilayah = await invoiceInKoordinatorWilayah(invoice, req.user.wilayah_id);
+    if (!inWilayah) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
   }
   const rules = await getRulesForBranch(invoice.branch_id);
   const dpGraceHours = Math.max(1, parseInt(rules.dp_grace_hours, 10) || 24);
@@ -1103,8 +1103,8 @@ const verifyPayment = asyncHandler(async (req, res) => {
   }
   const invoice = await Invoice.findByPk(proof.invoice_id);
   if (isKoordinatorRole(req.user.role) && invoice) {
-    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
-    if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+    const inWilayah = await invoiceInKoordinatorWilayah(invoice, req.user.wilayah_id);
+    if (!inWilayah) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
   }
   if (isApproved) {
     await proof.update({ verified_by: req.user.id, verified_at: new Date(), verified_status: 'verified', notes: notes || proof.notes });
@@ -1148,8 +1148,8 @@ const handleOverpaid = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id);
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (isKoordinatorRole(req.user.role)) {
-    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
-    if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+    const inWilayah = await invoiceInKoordinatorWilayah(invoice, req.user.wilayah_id);
+    if (!inWilayah) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
   }
   const overpaid = parseFloat(invoice.overpaid_amount || 0);
   if (overpaid <= 0) return res.status(400).json({ success: false, message: 'Tidak ada overpaid' });
@@ -1430,8 +1430,8 @@ async function canAccessInvoiceForReallocation(invoiceId, user) {
   if (!invoice) return { ok: false, message: 'Invoice tidak ditemukan' };
   if (isOwnerRole(user.role) && invoice.owner_id !== user.id) return { ok: false, message: 'Bukan invoice Anda' };
   if (isKoordinatorRole(user.role)) {
-    const branchIds = await getBranchIdsForWilayah(user.wilayah_id);
-    if (!branchIds.includes(invoice.branch_id)) return { ok: false, message: 'Invoice bukan di wilayah Anda' };
+    const inWilayah = await invoiceInKoordinatorWilayah(invoice, user.wilayah_id);
+    if (!inWilayah) return { ok: false, message: 'Invoice bukan di wilayah Anda' };
   }
   if (user.branch_id && !isOwnerRole(user.role) && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi'].includes(user.role) && !isKoordinatorRole(user.role)) {
     if (invoice.branch_id !== user.branch_id) return { ok: false, message: 'Invoice bukan di cabang Anda' };
@@ -1604,8 +1604,8 @@ const listReallocations = asyncHandler(async (req, res) => {
   if (invoice_id && isKoordinatorRole(req.user.role)) {
     const inv = await Invoice.findByPk(invoice_id, { attributes: ['id', 'branch_id'] });
     if (inv) {
-      const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
-      if (!branchIds.includes(inv.branch_id)) {
+      const inWilayah = await invoiceInKoordinatorWilayah(inv, req.user.wilayah_id);
+      if (!inWilayah) {
         return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
       }
     }
