@@ -36,6 +36,12 @@ const ROOM_TYPES = [
   { id:'quint',  label:'Quint',  cap:5 },
 ] as const;
 
+/** Pilihan lokasi hotel: Madinah atau Mekkah */
+const HOTEL_LOCATION_OPTIONS = [
+  { value: 'madinah', label: 'Madinah' },
+  { value: 'mekkah', label: 'Mekkah' },
+] as const;
+
 type TicketTripType = 'one_way' | 'return_only' | 'round_trip';
 const TICKET_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
 
@@ -268,12 +274,15 @@ const OrderFormPage: React.FC = () => {
           const checkIn=(firstMeta.check_in??getVal(grp[0],'check_in')) as string|undefined;
           const checkOut=(firstMeta.check_out??getVal(grp[0],'check_out')) as string|undefined;
           const hotelCur=currencyFromBackend||itemCur(grp[0]);
+          const hotelMeta: Record<string, unknown> = {};
+          if (firstMeta.hotel_location) hotelMeta.hotel_location = firstMeta.hotel_location;
           rows.push({ id:oi.id||`row-${uid()}`, type:'hotel', product_id:productRefId, product_name:productName,
             quantity:grp.reduce((s:number,o:any)=>s+qty(o),0),
             unit_price:unitPrice,
             price_currency:hotelCur as DisplayCurrency|undefined,
             check_in:checkIn||undefined,
             check_out:checkOut||undefined,
+            meta: Object.keys(hotelMeta).length ? hotelMeta : undefined,
             room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; const lineCur=itemCur(o); return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId,'hotel',lineCur), with_meal:!!(m.with_meal??m.meal) }; })
           });
         }
@@ -575,7 +584,7 @@ const OrderFormPage: React.FC = () => {
         for(const l of r.room_breakdown){
           if(l.quantity<=0||!l.room_type) continue;
           const meal=l.with_meal??false;
-          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out;
+          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
@@ -584,7 +593,7 @@ const OrderFormPage: React.FC = () => {
           out.push(item);
         }
       } else if(r.type==='hotel'&&r.room_type){
-        const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out;
+        const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
@@ -897,6 +906,16 @@ const OrderFormPage: React.FC = () => {
                         <div className="p-3 space-y-3">
                           {row.type==='hotel' ? (
                             <>
+                              <div className="rounded-lg bg-slate-50/80 border border-slate-100 p-3">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lokasi</p>
+                                <Autocomplete
+                                  label=""
+                                  value={(row.meta?.hotel_location as string) ?? ''}
+                                  onChange={v => updateRow(row.id, { meta: { ...row.meta, hotel_location: v || undefined } })}
+                                  options={HOTEL_LOCATION_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                                  emptyLabel="— Pilih Madinah atau Mekkah —"
+                                />
+                              </div>
                               <div className="rounded-lg bg-slate-50/80 border border-slate-100 p-3">
                                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tanggal menginap</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
