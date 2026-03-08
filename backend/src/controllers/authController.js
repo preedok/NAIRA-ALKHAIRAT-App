@@ -22,7 +22,7 @@ const login = asyncHandler(async (req, res) => {
         as: 'Branch',
         attributes: ['id', 'code', 'name', 'city'],
         required: false,
-        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
       }]
     });
   } catch (err) {
@@ -76,13 +76,17 @@ const login = asyncHandler(async (req, res) => {
   let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
   let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
   if (branch && !provinsiName && branch.code) {
-    const kabupaten = await Kabupaten.findOne({
-      where: { kode: branch.code },
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-    });
-    if (kabupaten?.Provinsi) {
-      provinsiName = kabupaten.Provinsi.name || kabupaten.Provinsi.nama || null;
-      wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+    try {
+      const kabupaten = await Kabupaten.findOne({
+        where: { kode: branch.code },
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+      });
+      if (kabupaten?.Provinsi) {
+        provinsiName = kabupaten.Provinsi.name || null;
+        wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+      }
+    } catch (e) {
+      logger.warn('Login: Kabupaten lookup failed (non-fatal):', e && e.message);
     }
   }
   const payload = {
@@ -118,7 +122,7 @@ const me = asyncHandler(async (req, res) => {
       as: 'Branch',
       attributes: ['id', 'code', 'name', 'city'],
       required: false,
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
     }]
   });
   if (!user) {
@@ -135,7 +139,7 @@ const me = asyncHandler(async (req, res) => {
         as: 'AssignedBranch',
         attributes: ['id', 'code', 'name', 'city'],
         required: false,
-        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
       }]
     });
     u.owner_status = ownerProfile ? ownerProfile.status : null;
@@ -148,13 +152,17 @@ const me = asyncHandler(async (req, res) => {
   let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
   let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
   if (branch && !provinsiName && branch.code) {
-    const kabupaten = await Kabupaten.findOne({
-      where: { kode: branch.code },
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-    });
-    if (kabupaten?.Provinsi) {
-      provinsiName = kabupaten.Provinsi.name || kabupaten.Provinsi.nama || null;
-      wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+    try {
+      const kabupaten = await Kabupaten.findOne({
+        where: { kode: branch.code },
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+      });
+      if (kabupaten?.Provinsi) {
+        provinsiName = kabupaten.Provinsi.name || null;
+        wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+      }
+    } catch (e) {
+      logger.warn('me: Kabupaten lookup failed (non-fatal):', e && e.message);
     }
   }
   u.provinsi_name = provinsiName;
