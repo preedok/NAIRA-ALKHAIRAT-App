@@ -79,8 +79,8 @@ function getDisplayCurrency(type: ItemType, product?: ProductOption | null): Dis
   if (type === 'visa') return 'USD';
   return 'IDR';
 }
-interface HotelRoomLine { id:string; room_type:RoomTypeId|''; quantity:number; unit_price:number; meal_unit_price?:number; with_meal?:boolean; }
-interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; price_currency?:DisplayCurrency; }
+interface HotelRoomLine { id:string; room_type:RoomTypeId|''; quantity:number; unit_price:number; unit_price_currency?:DisplayCurrency; meal_unit_price?:number; meal_unit_price_currency?:DisplayCurrency; with_meal?:boolean; }
+interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; unit_price_currency?:DisplayCurrency; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; price_currency?:DisplayCurrency; }
 interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; is_mou_owner?:boolean; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
 
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
@@ -379,15 +379,23 @@ const OrderFormPage: React.FC = () => {
     ? { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR ?? rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: orderRatesOverride.USD_TO_IDR ?? rates.USD_TO_IDR ?? 15500 }
     : rates;
   const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
-  const toIDR=(price:number,row:OrderItemRow)=>{ const c=rowCur(row); if(c==='SAR') return price*(effectiveRates.SAR_TO_IDR||4200); if(c==='USD') return price*(effectiveRates.USD_TO_IDR||15500); return price; };
-  const toIDRWithRates=(price:number,row:OrderItemRow,rateSet:{SAR_TO_IDR?:number;USD_TO_IDR?:number})=>{ const c=rowCur(row); const s=rateSet.SAR_TO_IDR||4200; const u=rateSet.USD_TO_IDR||15500; if(c==='SAR') return price*s; if(c==='USD') return price*u; return price; };
-  const getInC=(priceInRow:number,row:OrderItemRow,cur:'IDR'|'SAR'|'USD')=>{ const idr=toIDR(priceInRow,row); const t=fillFromSource('IDR',idr,effectiveRates); return cur==='IDR'?t.idr:cur==='SAR'?t.sar:t.usd; };
-  const toRowCurrency=(idr:number,row:OrderItemRow)=>{ const c=rowCur(row); const s2i=effectiveRates.SAR_TO_IDR||4200; const u2i=effectiveRates.USD_TO_IDR||15500; if(c==='SAR') return idr/s2i; if(c==='USD') return idr/u2i; return idr; };
   const s2iEff=effectiveRates.SAR_TO_IDR||4200; const u2iEff=effectiveRates.USD_TO_IDR||15500;
+  /** Konversi nilai dari satu mata uang ke mata uang lain (satu sumber kebenaran: kurs effectiveRates). */
+  const convertAmount=(value:number,fromCur:DisplayCurrency,toCur:DisplayCurrency):number=>{
+    if(fromCur===toCur) return value;
+    const idr=fromCur==='IDR'?value:fromCur==='SAR'?value*s2iEff:value*u2iEff;
+    return toCur==='IDR'?idr:toCur==='SAR'?idr/s2iEff:idr/u2iEff;
+  };
+  /** Nilai price dianggap dalam currency row (row.unit_price_currency ?? rowCur); kembalikan dalam IDR. */
+  const toIDR=(price:number,row:OrderItemRow)=>{ const c=row.unit_price_currency??rowCur(row); if(c==='SAR') return price*s2iEff; if(c==='USD') return price*u2iEff; return price; };
+  const toIDRWithRates=(price:number,row:OrderItemRow,rateSet:{SAR_TO_IDR?:number;USD_TO_IDR?:number})=>{ const c=row.unit_price_currency??rowCur(row); const s=rateSet.SAR_TO_IDR||4200; const u=rateSet.USD_TO_IDR||15500; if(c==='SAR') return price*s; if(c==='USD') return price*u; return price; };
+  /** Untuk baris: nilai price dalam rowCur(row); kembalikan nilai dalam cur. Untuk konsistensi dengan product: selalu konversi via IDR. */
+  const getInC=(priceInRow:number,row:OrderItemRow,cur:'IDR'|'SAR'|'USD')=>{ const idr=toIDR(priceInRow,row); const t=fillFromSource('IDR',idr,effectiveRates); return cur==='IDR'?t.idr:cur==='SAR'?t.sar:t.usd; };
+  const toRowCurrency=(idr:number,row:OrderItemRow)=>{ const c=rowCur(row); if(c==='SAR') return idr/s2iEff; if(c==='USD') return idr/u2iEff; return idr; };
   const toCurrencyFromSAR=(sar:number,cur:DisplayCurrency)=> cur==='SAR'?sar: cur==='IDR'?sar*s2iEff: sar*s2iEff/u2iEff;
-  const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updateRow(rowId,{unit_price:toRowCurrency(idr,row)}); };
-  const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row)}); };
-  const setMealLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*(effectiveRates.SAR_TO_IDR||4200):val*(effectiveRates.USD_TO_IDR||15500); updLine(rowId,lineId,{meal_unit_price:toRowCurrency(idr,row)}); };
+  const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updateRow(rowId,{unit_price:toRowCurrency(idr,row),unit_price_currency:rowCur(row)}); };
+  const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row),unit_price_currency:rowCur(row)}); };
+  const setMealLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updLine(rowId,lineId,{meal_unit_price:toRowCurrency(idr,row),meal_unit_price_currency:rowCur(row)}); };
   const getMealPriceSar=(p:ProductOption|undefined):number=>{ if(!p) return 0; const raw=(p.meta?.meal_price as number)??0; const cur=(p.currency||'IDR').toUpperCase(); return cur==='SAR'?raw:cur==='USD'?raw*u2iR/s2i:raw/s2i; };
 
   /* mutations */
