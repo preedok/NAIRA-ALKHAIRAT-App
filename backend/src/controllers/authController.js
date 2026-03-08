@@ -57,7 +57,11 @@ const login = asyncHandler(async (req, res) => {
     }
   }
 
-  await user.update({ last_login_at: new Date() });
+  try {
+    await user.update({ last_login_at: new Date() });
+  } catch (e) {
+    logger.warn('Login: update last_login_at failed (non-fatal):', e && e.message);
+  }
 
   const token = signToken(user.id, user.email, user.role);
   const u = user.toJSON();

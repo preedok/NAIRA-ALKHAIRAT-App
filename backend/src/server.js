@@ -58,6 +58,28 @@ async function ensureUsersPasswordHashColumn(db) {
   }
 }
 
+/** Ensure users table has last_login_at and last_activity_at (untuk login & fitur online) */
+async function ensureUsersLastLoginColumns(db) {
+  try {
+    const [rows] = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'users'
+      AND column_name IN ('last_login_at', 'last_activity_at');
+    `);
+    const have = (rows || []).map(r => r.column_name);
+    if (!have.includes('last_login_at')) {
+      await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE NULL');
+      logger.info('users: added column last_login_at');
+    }
+    if (!have.includes('last_activity_at')) {
+      await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE NULL');
+      logger.info('users: added column last_activity_at');
+    }
+  } catch (e) {
+    logger.warn('ensureUsersLastLoginColumns:', e.message);
+  }
+}
+
 /** Ensure maintenance_notices has block_app column (untuk blokir akses aplikasi) */
 async function ensureMaintenanceBlockAppColumn(db) {
   try {
@@ -138,6 +160,7 @@ app.listen(PORT, () => {
 const alter = process.env.SYNC_ALTER === 'true';
 sequelize.sync({ alter })
   .then(() => ensureUsersPasswordHashColumn(sequelize))
+  .then(() => ensureUsersLastLoginColumns(sequelize))
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
