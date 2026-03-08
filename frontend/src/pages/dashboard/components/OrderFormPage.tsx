@@ -906,7 +906,7 @@ const OrderFormPage: React.FC = () => {
                                   updateRow(row.id, { meta: nextMeta, ...(clearProduct ? { product_id: '', product_name: '', unit_price: 0 } : {}) });
                                 }}
                                 options={HOTEL_LOCATION_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-                                emptyLabel="— Lokasi —"
+                                emptyLabel=""
                               />
                             </div>
                           )}
