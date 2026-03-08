@@ -35,6 +35,7 @@ cp -a backend/.env backend/.env.bak 2>/dev/null || true
 cp -a frontend/.env.production frontend/.env.production.bak 2>/dev/null || true
 tar xf bgg-app-deploy.tar
 rm -f bgg-app-deploy.tar
+rm -f frontend/src/pages/dashboard/superadmin/SuperAdminUsersStatusPage.tsx
 cp -a backend/.env.bak backend/.env 2>/dev/null || true
 cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
