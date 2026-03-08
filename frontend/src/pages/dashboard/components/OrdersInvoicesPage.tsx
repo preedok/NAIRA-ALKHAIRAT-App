@@ -192,10 +192,12 @@ const OrdersInvoicesPage: React.FC = () => {
   }, [isAdminPusat, isAccounting, isInvoiceSaudi]);
 
   const fetchOwners = async () => {
-    if (!isAdminPusat && !isAccounting && !isInvoiceSaudi) return; // GET /owners untuk admin/accounting/invoice Saudi
+    const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
+    if (!canListOwners) return; // GET /owners untuk admin, accounting, invoice Saudi, koordinator wilayah
     try {
-      const params: { branch_id?: string } = {};
+      const params: { branch_id?: string; wilayah_id?: string } = {};
       if (branchId) params.branch_id = branchId;
+      if (user?.role === 'invoice_koordinator' && user?.wilayah_id) params.wilayah_id = user.wilayah_id;
       const res = await ownersApi.list(params);
       if (res.data.success) setOwners(res.data.data || []);
     } catch {
@@ -461,8 +463,9 @@ const OrdersInvoicesPage: React.FC = () => {
   }, [isAdminPusat, isAccounting, isInvoiceSaudi]);
 
   useEffect(() => {
-    if (isAdminPusat || isAccounting || isInvoiceSaudi) fetchOwners();
-  }, [isAdminPusat, isAccounting, isInvoiceSaudi, branchId]);
+    const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
+    if (canListOwners) fetchOwners();
+  }, [isAdminPusat, isAccounting, isInvoiceSaudi, user?.role, user?.wilayah_id, branchId]);
 
   useEffect(() => {
     setPage(1);
@@ -995,6 +998,19 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const hasActiveFilters = !!(branchId || wilayahId || provinsiId || filterStatus || filterOwnerId || filterInvoiceNumber.trim() || filterDateFrom || filterDateTo || filterDueStatus || sortBy !== 'created_at' || sortOrder !== 'desc');
 
+  /** Opsi filter Owner: dari API bila ada, else dari unique owner di data invoice (supaya filter selalu punya opsi sesuai data) */
+  const ownerFilterOptions = (() => {
+    if (owners.length > 0) return owners.map((o) => ({ id: o.User?.id || (o as any).user_id || o.id, name: o.User?.name || o.User?.company_name, User: o.User }));
+    const map = new Map<string, { id: string; name?: string; User?: { name?: string; company_name?: string } }>();
+    invoices.forEach((inv: any) => {
+      const id = inv.owner_id || inv.User?.id || inv.Order?.User?.id;
+      if (!id) return;
+      const name = (inv.User?.name || inv.User?.company_name || inv.Order?.User?.name || inv.Order?.User?.company_name || '').trim() || undefined;
+      if (!map.has(id)) map.set(id, { id, name, User: { name, company_name: inv.User?.company_name || inv.Order?.User?.company_name } });
+    });
+    return Array.from(map.values());
+  })();
+
   const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
   const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
   const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList });
@@ -1157,7 +1173,7 @@ const OrdersInvoicesPage: React.FC = () => {
             provinces={provinces}
             branches={branches}
             invoiceStatusOptions={[{ value: '', label: 'Semua status' }, ...Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))]}
-            owners={owners.map((o) => ({ id: o.User?.id || (o as any).user_id || o.id, User: o.User }))}
+            owners={ownerFilterOptions}
             dueStatusOptions={[
               { value: '', label: 'Semua' },
               { value: 'current', label: 'Belum Jatuh Tempo' },
