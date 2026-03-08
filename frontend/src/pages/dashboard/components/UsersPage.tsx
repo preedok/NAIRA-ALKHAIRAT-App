@@ -74,7 +74,7 @@ const UsersPage: React.FC = () => {
   const [verifyRegPaymentReject, setVerifyRegPaymentReject] = useState('');
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
   const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
-  const [activateModal, setActivateModal] = useState<{ profileId: string; isMouOwner: boolean } | null>(null);
+  const [activateModal, setActivateModal] = useState<{ profileId: string; isMouOwner: boolean; userRole?: 'owner_mou' | 'owner_non_mou' } | null>(null);
   const [mouTargetUser, setMouTargetUser] = useState<UserListItem | null>(null);
   const [mouCheckValue, setMouCheckValue] = useState(false);
   const [mouSaving, setMouSaving] = useState(false);
@@ -488,13 +488,13 @@ const UsersPage: React.FC = () => {
       const isNonMou = user.role === 'owner_non_mou';
       if (ownerStatus === 'pending_registration_verification') {
         if (isNonMou) {
-          items.unshift({ id: 'activate', label: 'Aktivasi Akun', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: false }) });
+          items.unshift({ id: 'activate', label: 'Aktivasi Akun', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: false, userRole: 'owner_non_mou' }) });
         } else {
           items.unshift({ id: 'verify_reg', label: 'Verifikasi Bukti Bayar', icon: <FileCheck className="w-4 h-4" />, onClick: () => setVerifyRegPaymentUser(user) });
         }
       }
       if (ownerStatus === 'deposit_verified' || ownerStatus === 'assigned_to_branch') {
-        items.unshift({ id: 'activate', label: 'Aktivasi Owner', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: user.role === 'owner_mou' }) });
+        items.unshift({ id: 'activate', label: 'Aktivasi Owner', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: user.role === 'owner_mou', userRole: user.role === 'owner_mou' ? 'owner_mou' : 'owner_non_mou' }) });
       }
       if (ownerStatus === 'active' && ownerProfileId) {
         items.unshift({ id: 'set_mou', label: 'Set Owner MOU / Non-MOU', icon: <FileText className="w-4 h-4" />, onClick: () => { setMouTargetUser(user); setMouCheckValue(!!(user as UserListItem & { is_mou_owner?: boolean }).is_mou_owner); } });
@@ -897,20 +897,27 @@ const UsersPage: React.FC = () => {
         })()}
       </Modal>
 
-      {/* Modal Konfirmasi Aktivasi (dengan opsi Owner MOU) */}
+      {/* Modal Konfirmasi Aktivasi (opsi Owner MOU hanya untuk role owner_mou) */}
       <Modal open={!!activateModal} onClose={() => setActivateModal(null)}>
         {activateModal && (
           <ModalBox>
             <ModalHeader title="Aktivasi Owner" subtitle="Setelah aktivasi, owner dapat login dan membuat order." icon={<CheckCircle className="w-5 h-5" />} onClose={() => setActivateModal(null)} />
             <ModalBody className="space-y-4">
-              <p className="text-sm text-slate-600">Centang &quot;Owner MOU&quot; jika owner ini berhak mendapat harga diskon produk (persen diskon diatur di Settings → Diskon MOU).</p>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={activateModal.isMouOwner}
-                  onChange={(e) => setActivateModal((m) => m ? { ...m, isMouOwner: e.target.checked } : m)}
-                />
-                <span className="text-sm font-medium text-slate-700">Owner MOU (harga produk diskon)</span>
-              </label>
+              {activateModal.userRole !== 'owner_non_mou' && (
+                <>
+                  <p className="text-sm text-slate-600">Centang &quot;Owner MOU&quot; jika owner ini berhak mendapat harga diskon produk (persen diskon diatur di Settings → Diskon MOU).</p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={activateModal.isMouOwner}
+                      onChange={(e) => setActivateModal((m) => m ? { ...m, isMouOwner: e.target.checked } : m)}
+                    />
+                    <span className="text-sm font-medium text-slate-700">Owner MOU (harga produk diskon)</span>
+                  </label>
+                </>
+              )}
+              {activateModal.userRole === 'owner_non_mou' && (
+                <p className="text-sm text-slate-600">Owner Non-MOU — aktivasi akun tanpa opsi diskon MOU.</p>
+              )}
             </ModalBody>
             <ModalFooter>
               <Button variant="outline" onClick={() => setActivateModal(null)}>Batal</Button>
