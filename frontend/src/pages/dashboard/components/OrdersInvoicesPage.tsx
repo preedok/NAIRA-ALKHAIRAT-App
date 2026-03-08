@@ -20,7 +20,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
-import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem, type BankItem } from '../../../services/api';
 
 /** Konfigurasi icon untuk card Per Status Invoice (StatCard pakai satu warna) */
@@ -1172,6 +1172,8 @@ const OrdersInvoicesPage: React.FC = () => {
             wilayahList={wilayahList}
             provinces={provinces}
             branches={branches}
+            branchLabel="Kota"
+            branchEmptyLabel={AUTOCOMPLETE_FILTER.SEMUA_KOTA}
             invoiceStatusOptions={[{ value: '', label: 'Semua status' }, ...Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))]}
             owners={ownerFilterOptions}
             dueStatusOptions={[
@@ -1962,7 +1964,7 @@ const OrdersInvoicesPage: React.FC = () => {
                             <dl className="space-y-4">
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.User?.name || viewInvoice.User?.company_name}</dd></div>
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipe Owner</dt><dd className="mt-1"><span className={`inline-flex items-center px-2 py-0.5 rounded font-medium text-sm ${viewInvoice.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{viewInvoice.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></dd></div>
-                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Cabang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Kota</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mata Uang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
                             </dl>
                           </div>

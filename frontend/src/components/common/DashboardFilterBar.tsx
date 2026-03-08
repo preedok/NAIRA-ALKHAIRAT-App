@@ -60,6 +60,10 @@ export interface DashboardFilterBarProps {
   invoiceStatusOptions?: { value: string; label: string }[];
   owners?: { id: string; name?: string; User?: { name?: string; company_name?: string } }[];
   dueStatusOptions?: { value: string; label: string }[];
+  /** Label untuk filter cabang (default: Cabang). Misal di halaman Invoice pakai "Kota". */
+  branchLabel?: string;
+  /** Empty label untuk filter cabang (default: Semua cabang). Misal "Semua kota". */
+  branchEmptyLabel?: string;
 }
 
 const DEFAULT_INVOICE_STATUS_OPTIONS = [
@@ -131,6 +135,8 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   orderStatusOptions = {},
   invoiceStatusOptions = DEFAULT_INVOICE_STATUS_OPTIONS,
   owners = [],
+  branchLabel = 'Cabang',
+  branchEmptyLabel = AUTOCOMPLETE_FILTER.SEMUA_CABANG,
   dueStatusOptions = [
     { value: '', label: 'Semua' },
     { value: 'current', label: 'Current' },
@@ -173,11 +179,11 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
       )}
       {showBranch && (
         <Autocomplete
-          label="Cabang"
+          label={branchLabel}
           value={branchId}
           onChange={(v) => onBranchChange?.(v)}
           options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))}
-          emptyLabel={isModal ? AUTOCOMPLETE_FILTER.SEMUA : AUTOCOMPLETE_FILTER.SEMUA_CABANG}
+          emptyLabel={isModal ? AUTOCOMPLETE_FILTER.SEMUA : branchEmptyLabel}
         />
       )}
       {showStatus && (

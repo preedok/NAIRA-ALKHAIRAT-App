@@ -11,6 +11,7 @@ export const AUTOCOMPLETE_FILTER = {
   SEMUA_WILAYAH: 'Semua wilayah',
   SEMUA_PROVINSI: 'Semua provinsi',
   SEMUA_CABANG: 'Semua cabang',
+  SEMUA_KOTA: 'Semua kota',
   SEMUA_STATUS: 'Semua status',
   SEMUA_PROGRESS: 'Semua progress',
   SEMUA_OWNER: 'Semua owner',
