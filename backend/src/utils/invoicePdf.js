@@ -269,7 +269,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.text('Perusahaan', margin + 12, y);
   doc.text(String(data.User?.company_name || '-'), margin + 92, y, { width: valW1 });
   const wilayahStr = [data.Branch?.Provinsi?.Wilayah?.name, data.Branch?.Provinsi?.name, data.Branch?.city].filter(Boolean).join(', ') || '-';
-  doc.text('Wilayah / Kota', col2StartX + 12, y);
+  doc.text('Wilayah', col2StartX + 12, y);
   doc.text(String(wilayahStr), col2StartX + 92, y, { width: valW2 - 82 });
   y += 14;
   const ownerMouLabel = data.User?.OwnerProfile?.is_mou_owner ? 'Owner MOU' : 'Non-MOU';
