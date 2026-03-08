@@ -36,10 +36,10 @@ const ROOM_TYPES = [
   { id:'quint',  label:'Quint',  cap:5 },
 ] as const;
 
-/** Pilihan lokasi hotel: Madinah atau Mekkah */
+/** Pilihan lokasi hotel: Madinah atau Mekkah (value sama dengan product.meta.location di master hotel) */
 const HOTEL_LOCATION_OPTIONS = [
   { value: 'madinah', label: 'Madinah' },
-  { value: 'mekkah', label: 'Mekkah' },
+  { value: 'makkah', label: 'Mekkah' },
 ] as const;
 
 type TicketTripType = 'one_way' | 'return_only' | 'round_trip';
@@ -324,6 +324,12 @@ const OrderFormPage: React.FC = () => {
 
   /* helpers */
   const byType=(type:ItemType)=> type==='package'?products.filter(p=>p.is_package):products.filter(p=>!p.is_package&&p.type===type);
+  /** Untuk hotel: produk yang lokasinya cocok dengan filter (meta.location = madinah | makkah). Jika lokasi kosong, tampilkan semua hotel. */
+  const hotelProductsByLocation=(location?:string)=>{
+    const hotels=byType('hotel');
+    if(!location) return hotels;
+    return hotels.filter(p=>(p.meta as { location?: string })?.location===location);
+  };
   /** Hanya tipe yang punya produk di data — agar dropdown Tipe hanya tampil pilihan yang tersedia */
   const availableItemTypes = ITEM_TYPES.filter((t) => byType(t.id).length > 0);
   /** Mata uang dari data produk (tanpa hardcode); fallback IDR jika belum ada produk */
@@ -886,8 +892,32 @@ const OrderFormPage: React.FC = () => {
                           <div className="min-w-[90px] flex-1 sm:flex-initial sm:w-[120px]">
                             <Autocomplete label="Tipe" value={row.type} onChange={v=>updateRow(row.id,{type:v as ItemType})} options={(availableItemTypes.some(t=>t.id===row.type) ? availableItemTypes : [...availableItemTypes, ITEM_TYPES.find(t=>t.id===row.type)!].filter(Boolean)).map(t=>({value:t.id,label:t.label}))} emptyLabel="— Pilih tipe —" />
                           </div>
+                          {row.type==='hotel' && (
+                            <div className="min-w-[100px] flex-1 sm:flex-initial sm:w-[120px]">
+                              <Autocomplete
+                                label="Lokasi"
+                                value={(row.meta?.hotel_location as string) ?? ''}
+                                onChange={v=>{
+                                  const loc = v || undefined;
+                                  const nextMeta = { ...row.meta, hotel_location: loc };
+                                  const currentProd = row.product_id ? products.find(x=>x.id===row.product_id) : null;
+                                  const prodLocation = currentProd ? (currentProd.meta as { location?: string })?.location : null;
+                                  const clearProduct = loc && prodLocation && prodLocation !== loc;
+                                  updateRow(row.id, { meta: nextMeta, ...(clearProduct ? { product_id: '', product_name: '', unit_price: 0 } : {}) });
+                                }}
+                                options={HOTEL_LOCATION_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                                emptyLabel="— Madinah / Mekkah —"
+                              />
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1 basis-40">
-                            <Autocomplete label="Produk" value={row.product_id} onChange={v=>{ const p=byType(row.type).find(x=>x.id===v); updateRow(row.id,{product_id:v,product_name:p?.name??'',unit_price:p?effP(p):0}); }} options={byType(row.type).map(p=>({value:p.id,label:`${p.name} (${p.code})`}))} emptyLabel="— Pilih produk —" />
+                            <Autocomplete
+                              label="Produk"
+                              value={row.product_id}
+                              onChange={v=>{ const list = row.type==='hotel' ? hotelProductsByLocation(row.meta?.hotel_location as string) : byType(row.type); const p=list.find(x=>x.id===v); updateRow(row.id,{product_id:v,product_name:p?.name??'',unit_price:p?effP(p):0}); }}
+                              options={(row.type==='hotel' ? hotelProductsByLocation(row.meta?.hotel_location as string) : byType(row.type)).map(p=>({value:p.id,label:`${p.name} (${p.code})`}))}
+                              emptyLabel={row.type==='hotel' && !row.meta?.hotel_location ? "— Pilih lokasi dulu —" : "— Pilih produk —"}
+                            />
                           </div>
                           {canEditPrice && (
                             <div className="min-w-[80px] flex-1 sm:flex-initial sm:w-[100px]">
@@ -906,16 +936,6 @@ const OrderFormPage: React.FC = () => {
                         <div className="p-3 space-y-3">
                           {row.type==='hotel' ? (
                             <>
-                              <div className="rounded-lg bg-slate-50/80 border border-slate-100 p-3">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lokasi</p>
-                                <Autocomplete
-                                  label=""
-                                  value={(row.meta?.hotel_location as string) ?? ''}
-                                  onChange={v => updateRow(row.id, { meta: { ...row.meta, hotel_location: v || undefined } })}
-                                  options={HOTEL_LOCATION_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-                                  emptyLabel="— Pilih Madinah atau Mekkah —"
-                                />
-                              </div>
                               <div className="rounded-lg bg-slate-50/80 border border-slate-100 p-3">
                                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tanggal menginap</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
