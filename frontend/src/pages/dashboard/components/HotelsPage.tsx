@@ -33,6 +33,7 @@ import type { HotelSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable } from '../../../utils';
 import { CURRENCY_OPTIONS } from '../../../utils/constants';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 
 const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
 const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
@@ -294,7 +295,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     }
     setLoading(true);
     setError(null);
-    const params = { type: 'hotel' as const, with_prices: 'true' as const, include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchTerm.trim() ? { name: debouncedSearchTerm.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}) };
+    const ownerId = getProductListOwnerId(user);
+    const params = { type: 'hotel' as const, with_prices: 'true' as const, include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchTerm.trim() ? { name: debouncedSearchTerm.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
     productsApi
       .list(params)
       .then((res) => {

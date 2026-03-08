@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { List, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import VisaPage from './VisaPage';
@@ -24,12 +25,14 @@ const ProductVisaPage: React.FC = () => {
 
   const fetchVisaProducts = useCallback(() => {
     setVisaLoading(true);
+    const ownerId = getProductListOwnerId(user);
     const params = {
       type: 'visa' as const,
       with_prices: 'true' as const,
       include_inactive: 'false' as const,
       limit: 500,
-      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {})
+      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}),
+      ...(ownerId ? { owner_id: ownerId } : {})
     };
     productsApi
       .list(params)

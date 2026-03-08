@@ -15,6 +15,7 @@ import { businessRulesApi, productsApi, adminPusatApi, type VisaSeason } from '.
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 import VisaWorkPage from './VisaWorkPage';
 
 const PAGE_SIZE = 25;
@@ -141,7 +142,8 @@ const VisaPage: React.FC<VisaPageProps> = ({
       pageToUse = 1;
     }
     setLoadingVisaProducts(true);
-    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: visaLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const ownerId = getProductListOwnerId(user);
+    const params = { type: 'visa', with_prices: 'true', include_inactive: filterIncludeInactive, limit: visaLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
     productsApi.list(params)
       .then((res) => {
         const body = res.data as { data?: VisaProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };

@@ -570,13 +570,21 @@ const activate = asyncHandler(async (req, res) => {
   const password_hash = await bcrypt.hash(newPassword, salt);
   await User.update({ password_hash }, { where: { id: user.id } });
 
-  const assignedBranchName = (profile.AssignedBranch && profile.AssignedBranch.name) || (profile.PreferredBranch && profile.PreferredBranch.name) || (profile.preferred_branch_id ? (await Branch.findByPk(profile.preferred_branch_id, { attributes: ['name'] }))?.name : null) || 'Cabang Bintang Global';
-  const mou_generated_url = await generateMouPdf({
-    user: user.get ? user.get({ plain: true }) : user,
-    ownerProfile: profile.get ? profile.get({ plain: true }) : profile,
-    newPassword,
-    assignedBranchName
-  });
+  let mou_generated_url = null;
+  let emailSent = false;
+
+  if (!isNonMou) {
+    const assignedBranchName = (profile.AssignedBranch && profile.AssignedBranch.name) || (profile.PreferredBranch && profile.PreferredBranch.name) || (profile.preferred_branch_id ? (await Branch.findByPk(profile.preferred_branch_id, { attributes: ['name'] }))?.name : null) || 'Cabang Bintang Global';
+    mou_generated_url = await generateMouPdf({
+      user: user.get ? user.get({ plain: true }) : user,
+      ownerProfile: profile.get ? profile.get({ plain: true }) : profile,
+      newPassword,
+      assignedBranchName
+    });
+    const mouDir = uploadConfig.getDir(uploadConfig.SUBDIRS.MOU);
+    const mouFilePath = path.join(mouDir, path.basename(mou_generated_url));
+    emailSent = await sendMouToOwner(user.email, user.name, newPassword, mouFilePath);
+  }
 
   const activatePayload = {
     status: OWNER_STATUS.ACTIVE,
@@ -593,9 +601,19 @@ const activate = asyncHandler(async (req, res) => {
     { where: { id: user.id } }
   );
 
-  const mouDir = uploadConfig.getDir(uploadConfig.SUBDIRS.MOU);
-  const mouFilePath = path.join(mouDir, path.basename(mou_generated_url));
-  const emailSent = await sendMouToOwner(user.email, user.name, newPassword, mouFilePath);
+  if (isNonMou) {
+    res.json({
+      success: true,
+      message: 'Owner Non-MOU berhasil diaktifkan. Berikan password baru kepada owner (tidak ada surat MOU).',
+      data: {
+        owner_status: OWNER_STATUS.ACTIVE,
+        generated_password: newPassword,
+        mou_generated_url: null,
+        email_sent: false
+      }
+    });
+    return;
+  }
 
   res.json({
     success: true,

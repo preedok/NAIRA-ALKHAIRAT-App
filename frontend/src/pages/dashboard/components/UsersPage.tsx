@@ -73,7 +73,7 @@ const UsersPage: React.FC = () => {
   const [verifyRegPaymentUser, setVerifyRegPaymentUser] = useState<UserListItem | null>(null);
   const [verifyRegPaymentReject, setVerifyRegPaymentReject] = useState('');
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
-  const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
+  const [activateResult, setActivateResult] = useState<{ password: string; mouUrl?: string | null } | null>(null);
   const [activateModal, setActivateModal] = useState<{ profileId: string; isMouOwner: boolean; userRole?: 'owner_mou' | 'owner_non_mou' } | null>(null);
   const [mouTargetUser, setMouTargetUser] = useState<UserListItem | null>(null);
   const [mouCheckValue, setMouCheckValue] = useState(false);
@@ -383,8 +383,8 @@ const UsersPage: React.FC = () => {
     try {
       const res = await ownersApi.activate(profileId, typeof isMouOwner === 'boolean' ? { is_mou_owner: isMouOwner } : undefined);
       const data = res.data?.data;
-      if (data?.generated_password != null && data?.mou_generated_url) {
-        setActivateResult({ password: data.generated_password, mouUrl: data.mou_generated_url });
+      if (data?.generated_password != null) {
+        setActivateResult({ password: data.generated_password, mouUrl: data.mou_generated_url ?? null });
       } else {
         showToast('Owner berhasil diaktifkan', 'success');
       }
@@ -970,22 +970,31 @@ const UsersPage: React.FC = () => {
       <Modal open={!!activateResult} onClose={() => setActivateResult(null)}>
         {activateResult && (
           <ModalBox>
-            <ModalHeader title="Owner Diaktifkan" subtitle="Email MOU dan kredensial telah dikirim ke owner" icon={<CheckCircle className="w-5 h-5" />} onClose={() => setActivateResult(null)} />
+            <ModalHeader
+              title="Owner Diaktifkan"
+              subtitle={activateResult.mouUrl ? 'Email MOU dan kredensial telah dikirim ke owner' : 'Owner Non-MOU — tidak ada surat MOU. Berikan password kepada owner.'}
+              icon={<CheckCircle className="w-5 h-5" />}
+              onClose={() => setActivateResult(null)}
+            />
             <ModalBody className="space-y-4">
-            <p className="text-sm text-slate-600">Email berisi MOU dan kredensial telah dikirim ke owner. Berikan data berikut jika diperlukan.</p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Password baru</label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-slate-100 rounded-lg font-mono text-sm break-all">{activateResult.password}</code>
-                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(activateResult.password); showToast('Disalin', 'success'); }}>Salin</Button>
+              <p className="text-sm text-slate-600">
+                {activateResult.mouUrl ? 'Email berisi MOU dan kredensial telah dikirim ke owner. Berikan data berikut jika diperlukan.' : 'Berikan password berikut kepada owner untuk login.'}
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Password baru</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-3 py-2 bg-slate-100 rounded-lg font-mono text-sm break-all">{activateResult.password}</code>
+                    <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(activateResult.password); showToast('Disalin', 'success'); }}>Salin</Button>
+                  </div>
                 </div>
+                {activateResult.mouUrl && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Surat MoU</label>
+                    <a href={`${UPLOAD_BASE}${activateResult.mouUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline text-sm">Unduh / Buka MoU (PDF)</a>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Surat MoU</label>
-                <a href={`${UPLOAD_BASE}${activateResult.mouUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline text-sm">Unduh / Buka MoU (PDF)</a>
-              </div>
-            </div>
             </ModalBody>
             <ModalFooter>
               <Button variant="primary" className="w-full" onClick={() => setActivateResult(null)}>Tutup</Button>

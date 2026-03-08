@@ -14,6 +14,7 @@ import { productsApi, businessRulesApi, adminPusatApi, type BusSeason } from '..
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL, formatIDR } from '../../../utils';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 import BusWorkPage from './BusWorkPage';
 
 const PAGE_SIZE = 25;
@@ -162,7 +163,8 @@ const BusPage: React.FC<BusPageProps> = ({
       pageToUse = 1;
     }
     setLoadingBusProducts(true);
-    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: busLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const ownerId = getProductListOwnerId(user);
+    const params = { type: 'bus', with_prices: 'true', include_inactive: filterIncludeInactive, limit: busLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
     productsApi.list(params)
       .then((res) => {
         const body = res.data as { data?: BusProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };

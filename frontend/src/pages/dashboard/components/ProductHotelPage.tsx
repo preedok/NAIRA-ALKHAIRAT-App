@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { List, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import HotelsPage from './HotelsPage';
@@ -27,6 +28,7 @@ const ProductHotelPage: React.FC = () => {
 
   const fetchHotels = useCallback(() => {
     setHotelsLoading(true);
+    const ownerId = getProductListOwnerId(user);
     const params = {
       type: 'hotel' as const,
       with_prices: 'true' as const,
@@ -34,7 +36,8 @@ const ProductHotelPage: React.FC = () => {
       page: 1,
       sort_by: 'code',
       sort_order: 'asc' as const,
-      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {})
+      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}),
+      ...(ownerId ? { owner_id: ownerId } : {})
     };
     productsApi
       .list(params)

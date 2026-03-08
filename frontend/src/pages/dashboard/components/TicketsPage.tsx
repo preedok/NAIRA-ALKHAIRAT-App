@@ -14,6 +14,7 @@ import { businessRulesApi, productsApi, adminPusatApi, type TicketSeason } from 
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
 import { getPriceTripleForTable } from '../../../utils';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 import TicketWorkPage from './TicketWorkPage';
 
 const PAGE_SIZE = 25;
@@ -166,7 +167,8 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       pageToUse = 1;
     }
     setLoadingTicketProducts(true);
-    const params = { type: 'ticket', with_prices: 'true', include_inactive: filterIncludeInactive, limit: ticketLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const ownerId = getProductListOwnerId(user);
+    const params = { type: 'ticket', with_prices: 'true', include_inactive: filterIncludeInactive, limit: ticketLimit, page: pageToUse, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
     productsApi.list(params)
       .then((res) => {
         const body = res.data as { data?: TicketProduct[]; pagination?: { total: number; page: number; limit: number; totalPages: number } };

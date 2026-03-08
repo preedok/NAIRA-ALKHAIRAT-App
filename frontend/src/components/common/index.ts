@@ -15,6 +15,8 @@ export { default as PageFilter, FilterIconButton } from './PageFilter';
 export { default as PageHeader } from './PageHeader';
 export { default as PriceInput } from './PriceInput';
 export { default as PriceCurrencyField } from './PriceCurrencyField';
+export { default as ProductPriceDisplay, ProductMouBadge, ProductPriceTripleCell, formatPriceByCurrency } from './ProductPriceDisplay';
+export type { ProductPriceDisplayProps, PriceCurrency, ProductPriceTripleCellProps } from './ProductPriceDisplay';
 export type { PriceCurrencyFieldValue } from './PriceCurrencyField';
 export { default as ProductCalendar } from './ProductCalendar';
 export type { ProductCalendarMonth, ProductCalendarDayInfo, ProductCalendarProps } from './ProductCalendar';

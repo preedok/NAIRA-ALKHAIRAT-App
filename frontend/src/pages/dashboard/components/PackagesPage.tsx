@@ -17,6 +17,7 @@ import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getRatesFromRates, fromIDR } from '../../../utils/currencyConversion';
 import { PRICE_COLUMN_LABEL, getPriceTripleForTable } from '../../../utils';
 import { CURRENCY_OPTIONS } from '../../../utils/constants';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 
 const INCLUDE_OPTIONS = [
   { id: 'hotel', label: 'Hotel' },
@@ -242,7 +243,8 @@ const PackagesPage: React.FC = () => {
     }
     setLoading(true);
     setError(null);
-    const params = { is_package: 'true', with_prices: 'true', include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}) };
+    const ownerId = getProductListOwnerId(user);
+    const params = { is_package: 'true', with_prices: 'true', include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
     productsApi
       .list(params)
       .then((res) => {

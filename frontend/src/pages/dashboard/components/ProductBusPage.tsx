@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { List, Calendar as CalendarIcon } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { productsApi } from '../../../services/api';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import BusPage from './BusPage';
@@ -24,13 +25,16 @@ const ProductBusPage: React.FC = () => {
 
   const fetchBusProducts = useCallback(() => {
     setBusLoading(true);
-    const params = {
-      type: 'bus' as const,
-      with_prices: 'true' as const,
-      include_inactive: 'false' as const,
+    const ownerId = getProductListOwnerId(user);
+    const params: Record<string, string | number | boolean | undefined> = {
+      type: 'bus',
+      with_prices: 'true',
+      include_inactive: 'false',
       limit: 500,
-      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {})
+      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}),
+      ...(ownerId ? { owner_id: ownerId } : {})
     };
+    if (ownerId && user?.branch_id) params.branch_id = user.branch_id;
     productsApi
       .list(params)
       .then((res) => {
