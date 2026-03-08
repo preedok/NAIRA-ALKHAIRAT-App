@@ -23,8 +23,10 @@ const TABLES_IN_ORDER = [
   'reconciliation_logs',    // payment_proof_id
   'payment_reallocations',  // source/target invoice
   'payment_proofs',         // invoice_id
-  'refunds',                // invoice_id, order_id
+  'invoice_status_histories', // invoice_id
   'invoice_files',          // invoice_id, order_id
+  'refunds',                // invoice_id, order_id
+  'order_revisions',        // order_id, invoice_id
   'owner_balance_transactions', // reference_type order/invoice
   'visa_progress',          // order_item_id
   'ticket_progress',        // order_item_id
@@ -48,10 +50,14 @@ async function run() {
 
   for (const table of TABLES_IN_ORDER) {
     try {
-      const [r] = await sequelize.query(`DELETE FROM "${table}"`);
+      await sequelize.query(`DELETE FROM "${table}"`);
       console.log(`  ✓ ${table}`);
     } catch (err) {
-      console.error(`  ✗ ${table}:`, err.message);
+      if (err.message && err.message.includes('does not exist')) {
+        console.log(`  - ${table} (tabel tidak ada, skip)`);
+      } else {
+        console.error(`  ✗ ${table}:`, err.message);
+      }
     }
   }
 
