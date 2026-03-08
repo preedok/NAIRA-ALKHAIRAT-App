@@ -1,7 +1,9 @@
 const asyncHandler = require('express-async-handler');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const multer = require('multer');
+const sequelize = require('../config/sequelize');
 const { PaymentProof, Invoice, Order, Notification, Bank, AccountingBankAccount } = require('../models');
 const { ROLES } = require('../constants');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, DP_PAYMENT_STATUS } = require('../constants');
@@ -110,30 +112,47 @@ const create = [
       if (!acc) recipientBankAccountId = null;
     }
 
-    const proof = await PaymentProof.create(
+    // Raw INSERT agar hanya kolom yang ada di DB (tanpa proof_file_name, proof_file_content_type, proof_file_data)
+    const proofId = crypto.randomUUID();
+    const now = new Date();
+    await sequelize.query(
+      `INSERT INTO payment_proofs (
+        id, invoice_id, payment_type, amount, amount_idr, amount_sar, payment_currency, amount_original,
+        bank_id, bank_name, account_number, sender_account_name, sender_account_number, recipient_bank_account_id,
+        transfer_date, proof_file_url, uploaded_by, issued_by, payment_location, notes, verified_status, created_at, updated_at
+      ) VALUES (
+        :id, :invoice_id, :payment_type, :amount, :amount_idr, :amount_sar, :payment_currency, :amount_original,
+        :bank_id, :bank_name, :account_number, :sender_account_name, :sender_account_number, :recipient_bank_account_id,
+        :transfer_date, :proof_file_url, :uploaded_by, :issued_by, :payment_location, :notes, 'pending', :created_at, :updated_at
+      )`,
       {
-        invoice_id: invoice.id,
-        payment_type: type,
-        amount: amt,
-        amount_idr: amt,
-        amount_sar: paymentCurrency === 'SAR' && amountOriginal != null ? amountOriginal : null,
-        payment_currency: paymentCurrency,
-        amount_original: amountOriginal,
-        bank_id: resolvedBankId,
-        bank_name: resolvedBankName,
-        account_number: account_number || null,
-        sender_account_name: (sender_account_name && String(sender_account_name).trim()) || null,
-        sender_account_number: (sender_account_number && String(sender_account_number).trim()) || null,
-        recipient_bank_account_id: recipientBankAccountId,
-        transfer_date: transfer_date || null,
-        proof_file_url: fileUrl,
-        uploaded_by: isIssueByInvoice ? null : req.user.id,
-        issued_by: isIssueByInvoice ? req.user.id : null,
-        payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
-        notes
-      },
-      { fields: PAYMENT_PROOF_ATTRS_SAFE }
+        replacements: {
+          id: proofId,
+          invoice_id: invoice.id,
+          payment_type: type,
+          amount: amt,
+          amount_idr: amt,
+          amount_sar: paymentCurrency === 'SAR' && amountOriginal != null ? amountOriginal : null,
+          payment_currency: paymentCurrency,
+          amount_original: amountOriginal,
+          bank_id: resolvedBankId,
+          bank_name: resolvedBankName,
+          account_number: account_number || null,
+          sender_account_name: (sender_account_name && String(sender_account_name).trim()) || null,
+          sender_account_number: (sender_account_number && String(sender_account_number).trim()) || null,
+          recipient_bank_account_id: recipientBankAccountId,
+          transfer_date: transfer_date || null,
+          proof_file_url: fileUrl,
+          uploaded_by: isIssueByInvoice ? null : req.user.id,
+          issued_by: isIssueByInvoice ? req.user.id : null,
+          payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
+          notes: notes || null,
+          created_at: now,
+          updated_at: now
+        }
+      }
     );
+    const proof = await PaymentProof.findByPk(proofId, { attributes: PAYMENT_PROOF_ATTRS_SAFE });
 
     // Auto-verify pembayaran Saudi (SAR/USD/IDR): invoice dan order otomatis update. Hitung paid_amount dari jumlah SEMUA bukti terverifikasi di DB.
     if (isIssueByInvoice) {
