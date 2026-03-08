@@ -12,11 +12,18 @@ const STATUS = {
   rejected: 'rejected',
 } as const;
 
-const STEPS = [
+const STEPS_MOU = [
   { key: STATUS.pending_registration_payment, label: 'Pembayaran', short: '01' },
   { key: STATUS.pending_registration_verification, label: 'Verifikasi', short: '02' },
   { key: STATUS.deposit_verified, label: 'Aktivasi', short: '03' },
   { key: STATUS.active, label: 'Selesai', short: '04' },
+];
+
+const STEPS_NON_MOU = [
+  { label: 'Daftar', short: '01' },
+  { label: 'Verifikasi', short: '02' },
+  { label: 'Aktivasi', short: '03' },
+  { label: 'Selesai', short: '04' },
 ];
 
 function getStepIndex(status: string) {
@@ -547,30 +554,39 @@ const OwnerActivationPage: React.FC = () => {
 
             {/* Header */}
             <div className="oap-eyebrow">Partner Program</div>
-            <h1 className="oap-title">Aktivasi Akun Partner</h1>
-            <p className="oap-subtitle">Selesaikan langkah berikut agar akun Anda dapat digunakan penuh dan mulai beroperasi.</p>
+            <h1 className="oap-title">{isMouOwner ? 'Aktivasi Akun Partner' : 'Aktivasi Akun Partner (Non-MoU)'}</h1>
+            <p className="oap-subtitle">
+              {isMouOwner
+                ? 'Selesaikan langkah berikut agar akun Anda dapat digunakan penuh dan mulai beroperasi.'
+                : 'Lengkapi verifikasi agar akun Anda dapat digunakan penuh dan mulai beroperasi.'}
+            </p>
 
             {/* Step Progress */}
-            <div className="oap-steps">
-              <div className="oap-step-track">
-                <div
-                  className="oap-step-fill"
-                  style={{ width: isRejected ? '0%' : `${Math.min(100, (currentStep / (STEPS.length - 1)) * 100)}%` }}
-                />
-              </div>
-              {STEPS.map((step, i) => {
-                const isDone = currentStep > i;
-                const isActive = currentStep === i;
-                return (
-                  <div className="oap-step" key={step.key}>
-                    <div className={`oap-step-dot ${isDone ? 'done' : isActive ? (isRejected ? 'rejected-dot' : 'active') : 'idle'}`}>
-                      {isDone ? <CheckIcon /> : step.short}
-                    </div>
-                    <span className={`oap-step-label ${isDone ? 'done' : isActive ? 'active' : ''}`}>{step.label}</span>
+            {(() => {
+              const steps = isMouOwner ? STEPS_MOU : STEPS_NON_MOU;
+              return (
+                <div className="oap-steps">
+                  <div className="oap-step-track">
+                    <div
+                      className="oap-step-fill"
+                      style={{ width: isRejected ? '0%' : `${Math.min(100, (currentStep / (steps.length - 1)) * 100)}%` }}
+                    />
                   </div>
-                );
-              })}
-            </div>
+                  {steps.map((step, i) => {
+                    const isDone = currentStep > i;
+                    const isActive = currentStep === i;
+                    return (
+                      <div className="oap-step" key={`step-${i}-${step.short}`}>
+                        <div className={`oap-step-dot ${isDone ? 'done' : isActive ? (isRejected ? 'rejected-dot' : 'active') : 'idle'}`}>
+                          {isDone ? <CheckIcon /> : step.short}
+                        </div>
+                        <span className={`oap-step-label ${isDone ? 'done' : isActive ? 'active' : ''}`}>{step.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Alerts */}
             {error && (
@@ -661,20 +677,26 @@ const OwnerActivationPage: React.FC = () => {
                 <div className="oap-card-header">
                   <div className="oap-card-icon blue"><ClockIcon /></div>
                   <div>
-                    <div className="oap-card-title">Menunggu Verifikasi Admin</div>
+                    <div className="oap-card-title">
+                      {isMouOwner ? 'Menunggu Verifikasi Admin' : 'Pendaftaran Dalam Peninjauan'}
+                    </div>
                     <div className="oap-card-desc">
-                      Bukti bayar Anda sedang ditinjau. Setelah disetujui, admin akan menetapkan cabang dan mengaktivasi akun.
+                      {isMouOwner
+                        ? 'Bukti bayar Anda sedang ditinjau. Setelah disetujui, admin akan menetapkan cabang dan mengaktivasi akun.'
+                        : 'Pendaftaran Anda sedang ditinjau oleh Admin Pusat. Setelah disetujui, cabang akan ditetapkan dan akun Anda diaktivasi.'}
                     </div>
                   </div>
                 </div>
                 <div className="oap-card-body">
                   <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 6 }}>Proses verifikasi sedang berjalan</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 6 }}>
+                      {isMouOwner ? 'Proses verifikasi sedang berjalan' : 'Proses peninjauan pendaftaran sedang berjalan'}
+                    </div>
                     <div className="oap-waiting-dots">
                       <div className="oap-dot" /><div className="oap-dot" /><div className="oap-dot" />
                     </div>
                   </div>
-                  {profile?.registration_payment_proof_url && (
+                  {isMouOwner && profile?.registration_payment_proof_url && (
                     <div style={{ marginTop: 20 }}>
                       <a
                         href={profile.registration_payment_proof_url}
@@ -686,11 +708,18 @@ const OwnerActivationPage: React.FC = () => {
                       </a>
                     </div>
                   )}
-                  {[
-                    'Estimasi verifikasi: 1–2 hari kerja',
-                    'Anda akan mendapat notifikasi via email setelah diverifikasi',
-                    'Hubungi Admin Pusat jika belum ada kabar dalam 3 hari',
-                  ].map((t, i) => (
+                  {(isMouOwner
+                    ? [
+                        'Estimasi verifikasi: 1–2 hari kerja',
+                        'Anda akan mendapat notifikasi via email setelah diverifikasi',
+                        'Hubungi Admin Pusat jika belum ada kabar dalam 3 hari',
+                      ]
+                    : [
+                        'Estimasi peninjauan: 1–2 hari kerja',
+                        'Anda akan mendapat notifikasi via email setelah akun diaktivasi',
+                        'Hubungi Admin Pusat jika belum ada kabar dalam 3 hari kerja',
+                      ]
+                  ).map((t, i) => (
                     <div className="oap-info-row" key={i}>
                       <span className="oap-info-bullet" />
                       {t}
@@ -779,9 +808,11 @@ const OwnerActivationPage: React.FC = () => {
             <div className="oap-status-footer">
               <div className="oap-status-badge">
                 <div className={`oap-status-dot${isRejected ? ' red' : status === STATUS.active ? ' green' : ''}`} />
-                Status: {OWNER_STATUS_LABELS[status] || status}
+                Status: {!isMouOwner && status === STATUS.pending_registration_verification
+                  ? 'Pendaftaran dalam peninjauan'
+                  : (OWNER_STATUS_LABELS[status] || status)}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>ID: {(user as any)?.id || '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>ID akun: {(user as any)?.id || '—'}</div>
             </div>
 
           </div>
