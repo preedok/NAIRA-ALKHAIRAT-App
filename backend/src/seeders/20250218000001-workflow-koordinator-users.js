@@ -14,7 +14,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { ROLES, OWNER_STATUS } = require('../constants');
 
-const DEFAULT_PASSWORD = 'Yakusa123@';
+const DEFAULT_PASSWORD = 'Yakusa2499@';
 const uuid = () => crypto.randomUUID();
 const slug = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 

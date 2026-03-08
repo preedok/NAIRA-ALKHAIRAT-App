@@ -1,5 +1,5 @@
 /**
- * Set password semua user di database menjadi Yakusa123@
+ * Set password semua user di database menjadi Yakusa2499@
  * Jalankan dari folder backend: node scripts/set-all-passwords.js
  * Berguna untuk update password user yang sudah ada tanpa re-seed (tanpa hapus data).
  */
@@ -10,7 +10,7 @@ const bcrypt = require('bcryptjs');
 const sequelize = require(path.join(__dirname, '../src/config/sequelize'));
 const { User } = require(path.join(__dirname, '../src/models'));
 
-const NEW_PASSWORD = 'Yakusa123@';
+const NEW_PASSWORD = 'Yakusa2499@';
 
 async function main() {
   const hash = await bcrypt.hash(NEW_PASSWORD, 10);
