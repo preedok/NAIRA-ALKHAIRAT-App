@@ -2508,10 +2508,15 @@ const OrdersInvoicesPage: React.FC = () => {
                                     Tanggal upload bukti: {formatDate(p.created_at)} · Jam: {new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 )}
+                                {(p as any).proof_file_name && (
+                                  <span className="text-xs text-slate-600">
+                                    File: <span className="font-medium text-slate-700">{(p as any).proof_file_name}</span>
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-2">
                                 {(fileUrl || (p.proof_file_url && p.proof_file_url !== 'issued-saudi')) && (
-                                  <button type="button" onClick={() => downloadProofFile(viewInvoice.id, p)} className="inline-flex items-center gap-1 text-sm text-[#0D1A63] hover:underline bg-transparent border-0 cursor-pointer p-0">
+                                  <button type="button" onClick={() => downloadProofFile(viewInvoice.id, p)} className="inline-flex items-center gap-1 text-sm text-[#0D1A63] hover:underline bg-transparent border-0 cursor-pointer p-0" title={(p as any).proof_file_name ? `Unduh: ${(p as any).proof_file_name}` : undefined}>
                                     <Download className="w-4 h-4" /> Unduh
                                   </button>
                                 )}

@@ -22,6 +22,7 @@ export type PaymentProofItem = {
   sender_account_number?: string;
   created_at?: string | null;
   proof_file_url?: string;
+  proof_file_name?: string;
   Bank?: { name?: string };
   RecipientAccount?: { bank_name?: string; account_number?: string; name?: string };
   VerifiedBy?: { name?: string };
