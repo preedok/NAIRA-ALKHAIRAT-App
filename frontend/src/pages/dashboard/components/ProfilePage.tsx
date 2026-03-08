@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Save, FileText, Download, ExternalLink, Shield, Building2, User, CheckCircle, Clock, Lock, Eye, EyeOff } from 'lucide-react';
+import { Save, FileText, Download, ExternalLink, Shield, Building2, User, CheckCircle, Clock, Lock, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { authApi, ownersApi, type OwnerProfile } from '../../../services/api';
 import { API_BASE_URL } from '../../../utils/constants';
 import { CONTENT_LOADING_MESSAGE, AutoRefreshControl } from '../../../components/common';
+import Card from '../../../components/common/Card';
+import Button from '../../../components/common/Button';
+import Input from '../../../components/common/Input';
+import { ROLE_NAMES } from '../../../types';
 
 const UPLOAD_BASE = (API_BASE_URL || '').replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -71,707 +75,311 @@ const ProfilePage: React.FC = () => {
   ];
 
   const avatarInitial = user?.name?.charAt(0)?.toUpperCase() || '?';
+  const roleLabel = user?.role ? (ROLE_NAMES[user.role as keyof typeof ROLE_NAMES] || user.role) : '—';
   const passwordStrength = newPassword.length === 0 ? 0 : newPassword.length < 6 ? 1 : newPassword.length < 10 ? 2 : 3;
   const strengthLabels = ['', 'Lemah', 'Sedang', 'Kuat'];
-  const strengthColors = ['', '#ef4444', '#f59e0b', '#10b981'];
+  const strengthColors = ['', 'bg-red-500', 'bg-amber-500', 'bg-emerald-500'];
 
   return (
-    <div style={styles.page}>
-      <div className="flex justify-end mb-4">
-        <AutoRefreshControl onRefresh={fetchProfile} disabled={ownerLoading} size="sm" />
-      </div>
-      {/* Hero header */}
-      <div style={styles.heroSection}>
-        <div style={styles.heroBg} />
-        <div style={styles.heroContent}>
-          <div style={styles.avatarWrap}>
-            <div style={styles.avatarRing}>
-              <div style={styles.avatar}>{avatarInitial}</div>
-            </div>
-            {isOwner && ownerProfile?.activated_at && (
-              <div style={styles.verifiedBadge}>
-                <CheckCircle size={12} color="#fff" />
+    <div className="min-h-screen w-full flex flex-col bg-slate-50">
+      {/* Full-width hero */}
+      <div className="relative w-full min-h-[280px] md:min-h-[320px] flex-shrink-0 overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(129,140,248,0.4),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_50%,rgba(139,92,246,0.2),transparent)]" />
+        <div className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6 md:pt-12 md:pb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div className="flex items-center gap-5 md:gap-8">
+            <div className="relative flex-shrink-0">
+              <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur border-2 border-white/30 flex items-center justify-center text-3xl md:text-4xl font-bold text-white shadow-xl">
+                {avatarInitial}
               </div>
-            )}
-          </div>
-          <div style={styles.heroText}>
-            <h1 style={styles.heroName}>{user?.name || '—'}</h1>
-            <p style={styles.heroEmail}>{user?.email || '—'}</p>
-            <div style={styles.heroBadges}>
-              <span style={styles.roleBadge}>{user?.role || 'user'}</span>
-              {user?.company_name && (
-                <span style={styles.companyBadge}>
-                  <Building2 size={11} style={{ marginRight: 4 }} />
-                  {user.company_name}
-                </span>
-              )}
-              {isOwner && ownerProfile?.AssignedBranch && (
-                <span style={styles.branchBadge}>
-                  {ownerProfile.AssignedBranch.code} – {ownerProfile.AssignedBranch.name}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tab bar */}
-      <div style={styles.tabBar}>
-        <div style={styles.tabList}>
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              style={{ ...styles.tab, ...(activeTab === id ? styles.tabActive : {}) }}
-              onClick={() => setActiveTab(id)}
-            >
-              <Icon size={15} style={{ marginRight: 6 }} />
-              {label}
-              {activeTab === id && <div style={styles.tabUnderline} />}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={styles.content}>
-
-        {/* ── PROFILE TAB ── */}
-        {activeTab === 'profile' && (
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <div style={styles.cardIconWrap}>
-                <User size={18} color="#6366f1" />
-              </div>
-              <div>
-                <h2 style={styles.cardTitle}>Informasi Akun</h2>
-                <p style={styles.cardSub}>Data pribadi dan organisasi Anda</p>
-              </div>
-            </div>
-            <div style={styles.divider} />
-            <div style={styles.infoGrid}>
-              {[
-                { label: 'Nama Lengkap', value: user?.name },
-                { label: 'Alamat Email', value: user?.email },
-                { label: 'Peran Akun', value: user?.role },
-                { label: 'Nama Perusahaan', value: user?.company_name },
-                ...(isOwner && ownerProfile?.AssignedBranch ? [
-                  { label: 'Cabang', value: `${ownerProfile.AssignedBranch.code} – ${ownerProfile.AssignedBranch.name}` },
-                ] : []),
-                ...(isOwner && ownerProfile?.activated_at ? [
-                  { label: 'Tanggal Aktivasi', value: formatDate(ownerProfile.activated_at) },
-                ] : []),
-              ].map(({ label, value }) => value ? (
-                <div key={label} style={styles.infoItem}>
-                  <span style={styles.infoLabel}>{label}</span>
-                  <span style={styles.infoValue}>{value}</span>
+              {isOwner && ownerProfile?.activated_at && (
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-500 border-2 border-indigo-700 flex items-center justify-center shadow">
+                  <CheckCircle size={16} className="text-white" />
                 </div>
-              ) : null)}
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl md:text-3xl font-bold text-white truncate">{user?.name || '—'}</h1>
+              <p className="mt-1 flex items-center gap-2 text-indigo-200 text-sm md:text-base truncate">
+                <Mail size={14} className="flex-shrink-0" />
+                {user?.email || '—'}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white border border-white/30">
+                  {roleLabel}
+                </span>
+                {user?.company_name && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/15 text-indigo-100 border border-white/20">
+                    <Building2 size={12} />
+                    {user.company_name}
+                  </span>
+                )}
+                {isOwner && ownerProfile?.AssignedBranch && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-100 border border-emerald-400/30">
+                    {ownerProfile.AssignedBranch.code} – {ownerProfile.AssignedBranch.name}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        )}
+          <div className="flex-shrink-0 self-start md:self-center">
+            <AutoRefreshControl onRefresh={fetchProfile} disabled={ownerLoading} size="sm" />
+          </div>
+        </div>
+      </div>
 
-        {/* ── MOU TAB ── */}
-        {activeTab === 'mou' && isOwner && (
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <div style={{ ...styles.cardIconWrap, background: '#f0fdf4' }}>
-                <FileText size={18} color="#16a34a" />
-              </div>
-              <div>
-                <h2 style={styles.cardTitle}>Surat MoU</h2>
-                <p style={styles.cardSub}>Dokumen perjanjian kerjasama Anda dengan kami</p>
-              </div>
-            </div>
-            <div style={styles.divider} />
+      {/* Tabs + content - full width container */}
+      <div className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+          {/* Tab navigation - horizontal on mobile, can stay above content */}
+          <div className="flex-shrink-0">
+            <nav className="flex gap-1 p-1 rounded-xl bg-slate-200/60 w-fit" aria-label="Tabs">
+              {tabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === id
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <Icon size={18} />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
 
-            {ownerLoading ? (
-              <div style={styles.mouLoading}>
-                <div style={styles.spinner} />
-                <p style={{ color: '#94a3b8', fontSize: 14 }}>{CONTENT_LOADING_MESSAGE}</p>
-              </div>
-            ) : mouUrl ? (
-              <div>
-                <div style={styles.mouAvailable}>
-                  <div style={styles.mouIcon}>
-                    <FileText size={36} color="#16a34a" />
+          {/* Content area - takes remaining space */}
+          <div className="flex-1 min-w-0">
+            {/* PROFILE TAB */}
+            {activeTab === 'profile' && (
+              <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div className="p-6 md:p-8">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+                      <User className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">Informasi Akun</h2>
+                      <p className="text-sm text-slate-500">Data pribadi dan organisasi Anda</p>
+                    </div>
                   </div>
-                  <div>
-                    <p style={styles.mouAvailTitle}>Dokumen MoU Tersedia</p>
-                    <p style={styles.mouAvailSub}>Dokumen ditandatangani dan siap diakses</p>
-                    {ownerProfile?.activated_at && (
-                      <p style={styles.mouDate}>
-                        <Clock size={12} style={{ marginRight: 4 }} />
-                        Aktivasi: {formatDate(ownerProfile.activated_at)}
-                      </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {[
+                      { label: 'Nama Lengkap', value: user?.name },
+                      { label: 'Alamat Email', value: user?.email },
+                      { label: 'Peran Akun', value: roleLabel },
+                      { label: 'Nama Perusahaan', value: user?.company_name },
+                      ...(isOwner && ownerProfile?.AssignedBranch
+                        ? [{ label: 'Cabang', value: `${ownerProfile.AssignedBranch.code} – ${ownerProfile.AssignedBranch.name}` }]
+                        : []),
+                      ...(isOwner && ownerProfile?.activated_at
+                        ? [{ label: 'Tanggal Aktivasi', value: formatDate(ownerProfile.activated_at) }]
+                        : []),
+                    ].map(
+                      (item) =>
+                        item.value && (
+                          <div key={item.label} className="flex flex-col gap-1">
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                              {item.label}
+                            </span>
+                            <span className="text-base font-medium text-slate-800">{item.value}</span>
+                          </div>
+                        )
                     )}
                   </div>
                 </div>
-                <div style={styles.mouActions}>
-                  <button style={styles.btnPrimary} onClick={() => window.open(mouUrl, '_blank')}>
-                    <ExternalLink size={15} style={{ marginRight: 8 }} />
-                    Buka di Tab Baru
-                  </button>
-                  <a href={mouUrl} download style={{ ...styles.btnSecondary, textDecoration: 'none' }}>
-                    <Download size={15} style={{ marginRight: 8 }} />
-                    Unduh PDF
-                  </a>
+              </Card>
+            )}
+
+            {/* MOU TAB */}
+            {activeTab === 'mou' && isOwner && (
+              <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div className="p-6 md:p-8">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">Surat MoU</h2>
+                      <p className="text-sm text-slate-500">Dokumen perjanjian kerjasama Anda dengan kami</p>
+                    </div>
+                  </div>
+
+                  {ownerLoading ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-4">
+                      <div className="w-10 h-10 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                      <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+                    </div>
+                  ) : mouUrl ? (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-5 p-5 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/80">
+                        <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                          <FileText className="w-8 h-8 text-emerald-600" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-emerald-800">Dokumen MoU Tersedia</p>
+                          <p className="text-sm text-emerald-600 mt-0.5">Dokumen ditandatangani dan siap diakses</p>
+                          {ownerProfile?.activated_at && (
+                            <p className="flex items-center gap-1.5 mt-2 text-xs text-emerald-700 font-medium">
+                              <Clock size={14} />
+                              Aktivasi: {formatDate(ownerProfile.activated_at)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={() => window.open(mouUrl, '_blank')}
+                          icon={<ExternalLink size={18} />}
+                        >
+                          Buka di Tab Baru
+                        </Button>
+                        <a href={mouUrl} download className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-emerald-200 text-emerald-700 font-semibold text-sm hover:bg-emerald-50 transition-colors">
+                          <Download size={18} />
+                          Unduh PDF
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center text-center py-12 px-4">
+                      <div className="w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-200 flex items-center justify-center mb-4">
+                        <FileText className="w-10 h-10 text-slate-300" />
+                      </div>
+                      <p className="font-semibold text-slate-700">MoU Belum Tersedia</p>
+                      <p className="mt-2 text-sm text-slate-500 max-w-md">
+                        Setelah akun Anda diaktivasi oleh Admin Pusat, surat MoU akan muncul di sini dan dikirim ke email Anda.
+                      </p>
+                      <div className="mt-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 border border-slate-200">
+                        <span className="text-xs font-semibold text-slate-500 uppercase">Email terdaftar</span>
+                        <span className="text-sm font-medium text-slate-700">{user?.email ?? '—'}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div style={styles.mouEmpty}>
-                <div style={styles.mouEmptyIcon}>
-                  <FileText size={40} color="#cbd5e1" />
+              </Card>
+            )}
+
+            {/* SECURITY TAB */}
+            {activeTab === 'security' && (
+              <Card className="rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div className="p-6 md:p-8">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
+                      <Shield className="w-6 h-6 text-violet-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">Keamanan Akun</h2>
+                      <p className="text-sm text-slate-500">Perbarui password untuk menjaga keamanan akun</p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleChangePassword} className="space-y-5 max-w-xl">
+                    <Input
+                      label="Password Saat Ini"
+                      type={showCurrent ? 'text' : 'password'}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Masukkan password saat ini"
+                      autoComplete="current-password"
+                      suffix={
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrent((p) => !p)}
+                          className="text-slate-400 hover:text-slate-600"
+                          aria-label={showCurrent ? 'Sembunyikan' : 'Tampilkan'}
+                        >
+                          {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      }
+                    />
+                    <Input
+                      label="Password Baru"
+                      type={showNew ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimal 6 karakter"
+                      autoComplete="new-password"
+                      suffix={
+                        <button
+                          type="button"
+                          onClick={() => setShowNew((p) => !p)}
+                          className="text-slate-400 hover:text-slate-600"
+                          aria-label={showNew ? 'Sembunyikan' : 'Tampilkan'}
+                        >
+                          {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      }
+                    />
+                    <Input
+                      label="Konfirmasi Password Baru"
+                      type={showConfirm ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Ulangi password baru"
+                      autoComplete="new-password"
+                      suffix={
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirm((p) => !p)}
+                          className="text-slate-400 hover:text-slate-600"
+                          aria-label={showConfirm ? 'Sembunyikan' : 'Tampilkan'}
+                        >
+                          {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      }
+                    />
+
+                    {newPassword.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1 flex-1">
+                          {[1, 2, 3].map((i) => (
+                            <div
+                              key={i}
+                              className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                i <= passwordStrength ? strengthColors[passwordStrength] : 'bg-slate-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span
+                          className={`text-sm font-semibold min-w-[4rem] ${
+                            passwordStrength === 1
+                              ? 'text-red-500'
+                              : passwordStrength === 2
+                                ? 'text-amber-500'
+                                : 'text-emerald-600'
+                          }`}
+                        >
+                          {strengthLabels[passwordStrength]}
+                        </span>
+                      </div>
+                    )}
+
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={saving}
+                      isLoading={saving}
+                      icon={!saving ? <Save size={18} /> : undefined}
+                      className="mt-2"
+                    >
+                      {saving ? 'Menyimpan...' : 'Simpan Password'}
+                    </Button>
+                  </form>
                 </div>
-                <p style={styles.mouEmptyTitle}>MoU Belum Tersedia</p>
-                <p style={styles.mouEmptyDesc}>
-                  Setelah akun Anda diaktivasi oleh Admin Pusat, surat MoU akan muncul di sini dan dikirim ke email Anda.
-                </p>
-                <div style={styles.mouEmailBox}>
-                  <span style={styles.mouEmailLabel}>Email terdaftar</span>
-                  <span style={styles.mouEmailVal}>{user?.email ?? '—'}</span>
-                </div>
-              </div>
+              </Card>
             )}
           </div>
-        )}
-
-        {/* ── SECURITY TAB ── */}
-        {activeTab === 'security' && (
-          <div style={styles.card}>
-            <div style={styles.cardHeader}>
-              <div style={{ ...styles.cardIconWrap, background: '#fdf4ff' }}>
-                <Shield size={18} color="#a855f7" />
-              </div>
-              <div>
-                <h2 style={styles.cardTitle}>Keamanan Akun</h2>
-                <p style={styles.cardSub}>Perbarui password untuk menjaga keamanan akun</p>
-              </div>
-            </div>
-            <div style={styles.divider} />
-
-            <form onSubmit={handleChangePassword} style={styles.form}>
-              {[
-                { label: 'Password Saat Ini', value: currentPassword, set: setCurrentPassword, show: showCurrent, toggle: () => setShowCurrent(p => !p), auto: 'current-password', placeholder: 'Masukkan password saat ini' },
-                { label: 'Password Baru', value: newPassword, set: setNewPassword, show: showNew, toggle: () => setShowNew(p => !p), auto: 'new-password', placeholder: 'Minimal 6 karakter' },
-                { label: 'Konfirmasi Password Baru', value: confirmPassword, set: setConfirmPassword, show: showConfirm, toggle: () => setShowConfirm(p => !p), auto: 'new-password', placeholder: 'Ulangi password baru' },
-              ].map(({ label, value, set, show, toggle, auto, placeholder }) => (
-                <div key={label} style={styles.fieldGroup}>
-                  <label style={styles.label}>{label}</label>
-                  <div style={styles.inputWrap}>
-                    <Lock size={16} color="#94a3b8" style={styles.inputIcon} />
-                    <input
-                      type={show ? 'text' : 'password'}
-                      value={value}
-                      onChange={e => set(e.target.value)}
-                      style={styles.input}
-                      placeholder={placeholder}
-                      autoComplete={auto}
-                    />
-                    <button type="button" onClick={toggle} style={styles.eyeBtn}>
-                      {show ? <EyeOff size={16} color="#94a3b8" /> : <Eye size={16} color="#94a3b8" />}
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* Password strength */}
-              {newPassword.length > 0 && (
-                <div style={styles.strengthWrap}>
-                  <div style={styles.strengthBars}>
-                    {[1, 2, 3].map(i => (
-                      <div key={i} style={{ ...styles.strengthBar, background: i <= passwordStrength ? strengthColors[passwordStrength] : '#e2e8f0' }} />
-                    ))}
-                  </div>
-                  <span style={{ ...styles.strengthLabel, color: strengthColors[passwordStrength] }}>
-                    {strengthLabels[passwordStrength]}
-                  </span>
-                </div>
-              )}
-
-              <button type="submit" style={styles.submitBtn} disabled={saving}>
-                {saving ? (
-                  <><div style={styles.spinnerSm} /> Menyimpan...</>
-                ) : (
-                  <><Save size={15} style={{ marginRight: 8 }} /> Simpan Password</>
-                )}
-              </button>
-            </form>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 };
-
-/* ─── Styles ─── */
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    background: '#f8fafc',
-    fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-  },
-  heroSection: {
-    position: 'relative',
-    overflow: 'hidden',
-    padding: '48px 40px 36px',
-    background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)',
-  },
-  heroBg: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(167,139,250,0.2) 0%, transparent 40%)',
-    pointerEvents: 'none',
-  },
-  heroContent: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 28,
-    maxWidth: 1200,
-  },
-  avatarWrap: {
-    position: 'relative',
-    flexShrink: 0,
-  },
-  avatarRing: {
-    padding: 3,
-    borderRadius: '50%',
-    background: 'linear-gradient(135deg, #818cf8, #c084fc)',
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: '50%',
-    background: '#1e1b4b',
-    border: '3px solid #1e1b4b',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 28,
-    fontWeight: 700,
-    color: '#a5b4fc',
-    letterSpacing: -1,
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    background: '#16a34a',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: '2px solid #1e1b4b',
-  },
-  heroText: {
-    flex: 1,
-  },
-  heroName: {
-    margin: 0,
-    fontSize: 26,
-    fontWeight: 700,
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  heroEmail: {
-    margin: '4px 0 12px',
-    fontSize: 14,
-    color: '#a5b4fc',
-  },
-  heroBadges: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  roleBadge: {
-    padding: '3px 12px',
-    background: 'rgba(165,180,252,0.2)',
-    border: '1px solid rgba(165,180,252,0.3)',
-    borderRadius: 20,
-    fontSize: 12,
-    color: '#c7d2fe',
-    fontWeight: 600,
-    textTransform: 'capitalize',
-  },
-  companyBadge: {
-    padding: '3px 12px',
-    background: 'rgba(165,180,252,0.15)',
-    border: '1px solid rgba(165,180,252,0.25)',
-    borderRadius: 20,
-    fontSize: 12,
-    color: '#c7d2fe',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  branchBadge: {
-    padding: '3px 12px',
-    background: 'rgba(52,211,153,0.15)',
-    border: '1px solid rgba(52,211,153,0.3)',
-    borderRadius: 20,
-    fontSize: 12,
-    color: '#6ee7b7',
-    fontWeight: 500,
-  },
-
-  /* Tab bar */
-  tabBar: {
-    background: '#fff',
-    borderBottom: '1px solid #e2e8f0',
-    padding: '0 40px',
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-  },
-  tabList: {
-    display: 'flex',
-    gap: 4,
-  },
-  tab: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    padding: '16px 20px',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#94a3b8',
-    transition: 'color 0.2s',
-    whiteSpace: 'nowrap',
-  },
-  tabActive: {
-    color: '#4f46e5',
-    fontWeight: 600,
-  },
-  tabUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-    borderRadius: '2px 2px 0 0',
-  },
-
-  /* Content */
-  content: {
-    padding: '32px 40px 60px',
-    maxWidth: 760,
-  },
-
-  /* Card */
-  card: {
-    background: '#fff',
-    borderRadius: 16,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.07), 0 4px 20px rgba(0,0,0,0.04)',
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 16,
-    padding: '24px 28px',
-  },
-  cardIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    background: '#eef2ff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  cardTitle: {
-    margin: 0,
-    fontSize: 17,
-    fontWeight: 700,
-    color: '#0f172a',
-  },
-  cardSub: {
-    margin: '2px 0 0',
-    fontSize: 13,
-    color: '#94a3b8',
-  },
-  divider: {
-    height: 1,
-    background: '#f1f5f9',
-    margin: '0 28px',
-  },
-
-  /* Info grid */
-  infoGrid: {
-    padding: '20px 28px 28px',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 20,
-  },
-  infoItem: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
-  },
-  infoLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#94a3b8',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  infoValue: {
-    fontSize: 15,
-    color: '#1e293b',
-    fontWeight: 500,
-  },
-
-  /* MoU */
-  mouLoading: {
-    padding: '48px 28px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    gap: 12,
-  },
-  spinner: {
-    width: 32,
-    height: 32,
-    border: '3px solid #e2e8f0',
-    borderTop: '3px solid #6366f1',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-  mouAvailable: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 20,
-    margin: '24px 28px',
-    padding: '20px 24px',
-    background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
-    borderRadius: 12,
-    border: '1px solid #bbf7d0',
-  },
-  mouIcon: {
-    width: 64,
-    height: 64,
-    background: '#fff',
-    borderRadius: 12,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    boxShadow: '0 2px 8px rgba(22,163,74,0.15)',
-  },
-  mouAvailTitle: {
-    margin: 0,
-    fontSize: 16,
-    fontWeight: 700,
-    color: '#15803d',
-  },
-  mouAvailSub: {
-    margin: '4px 0',
-    fontSize: 13,
-    color: '#16a34a',
-  },
-  mouDate: {
-    display: 'flex',
-    alignItems: 'center',
-    margin: '6px 0 0',
-    fontSize: 12,
-    color: '#4ade80',
-    fontWeight: 500,
-  },
-  mouActions: {
-    display: 'flex',
-    gap: 12,
-    padding: '0 28px 28px',
-  },
-  btnPrimary: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '10px 20px',
-    background: 'linear-gradient(135deg, #16a34a, #15803d)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 10,
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-    boxShadow: '0 2px 8px rgba(22,163,74,0.3)',
-  },
-  btnSecondary: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '10px 20px',
-    background: '#fff',
-    color: '#16a34a',
-    border: '1.5px solid #bbf7d0',
-    borderRadius: 10,
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  mouEmpty: {
-    padding: '40px 28px 36px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    textAlign: 'center' as const,
-  },
-  mouEmptyIcon: {
-    width: 80,
-    height: 80,
-    background: '#f8fafc',
-    borderRadius: 20,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    border: '2px dashed #e2e8f0',
-  },
-  mouEmptyTitle: {
-    margin: 0,
-    fontSize: 17,
-    fontWeight: 700,
-    color: '#475569',
-  },
-  mouEmptyDesc: {
-    margin: '8px 0 20px',
-    fontSize: 14,
-    color: '#94a3b8',
-    lineHeight: 1.6,
-    maxWidth: 420,
-  },
-  mouEmailBox: {
-    padding: '12px 24px',
-    background: '#f8fafc',
-    borderRadius: 10,
-    border: '1px solid #e2e8f0',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  },
-  mouEmailLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: 600,
-  },
-  mouEmailVal: {
-    fontSize: 14,
-    color: '#334155',
-    fontWeight: 500,
-  },
-
-  /* Form */
-  form: {
-    padding: '24px 28px 28px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 20,
-  },
-  fieldGroup: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 8,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#374151',
-  },
-  inputWrap: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 14,
-    pointerEvents: 'none' as const,
-  },
-  input: {
-    width: '100%',
-    padding: '12px 44px 12px 42px',
-    border: '1.5px solid #e2e8f0',
-    borderRadius: 10,
-    fontSize: 14,
-    color: '#1e293b',
-    background: '#fafafa',
-    outline: 'none',
-    transition: 'border-color 0.2s, box-shadow 0.2s',
-    boxSizing: 'border-box' as const,
-  },
-  eyeBtn: {
-    position: 'absolute',
-    right: 12,
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 4,
-    display: 'flex',
-    alignItems: 'center',
-  },
-  strengthWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: -8,
-  },
-  strengthBars: {
-    display: 'flex',
-    gap: 4,
-    flex: 1,
-  },
-  strengthBar: {
-    flex: 1,
-    height: 4,
-    borderRadius: 4,
-    transition: 'background 0.3s',
-  },
-  strengthLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    minWidth: 40,
-  },
-  submitBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '13px 24px',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 10,
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: 'pointer',
-    boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
-    marginTop: 4,
-    transition: 'opacity 0.2s',
-  },
-  spinnerSm: {
-    width: 16,
-    height: 16,
-    border: '2px solid rgba(255,255,255,0.4)',
-    borderTop: '2px solid #fff',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-    marginRight: 8,
-  },
-};
-
-/* Inject keyframe */
-if (typeof document !== 'undefined') {
-  const id = '__profile_spin';
-  if (!document.getElementById(id)) {
-    const s = document.createElement('style');
-    s.id = id;
-    s.textContent = `@keyframes spin { to { transform: rotate(360deg) } }`;
-    document.head.appendChild(s);
-  }
-}
 
 export default ProfilePage;
