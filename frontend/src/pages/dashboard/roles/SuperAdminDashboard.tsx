@@ -14,8 +14,8 @@ import {
   Eye
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { Card, Button, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl } from '../../../components/common';
-import { formatIDR, DONUT_COLORS } from '../../../utils';
+import { Card, Button, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl, NominalDisplay } from '../../../components/common';
+import { DONUT_COLORS } from '../../../utils';
 import { superAdminApi, branchesApi } from '../../../services/api';
 import { ROLE_NAMES } from '../../../types';
 import type { UserRole } from '../../../types';
@@ -208,7 +208,7 @@ const SuperAdminDashboard: React.FC = () => {
         <div className="space-y-8">
           {/* Informasi transaksi keseluruhan */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={loading && !data ? '–' : formatIDR(o.total_revenue || 0)} subtitle={loading && !data ? '–' : `Hari ini: ${formatIDR(o.revenue_today || 0)}`} iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/orders-invoices')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/orders-invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={loading && !data ? '–' : <NominalDisplay amount={o.total_revenue || 0} currency="IDR" />} subtitle={loading && !data ? '–' : <>Hari ini: <NominalDisplay amount={o.revenue_today || 0} currency="IDR" /></>} iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/orders-invoices')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/orders-invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
             <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Order" value={loading && !data ? '–' : (o.total_orders ?? 0)} subtitle={loading && !data ? '–' : `Hari ini: ${o.orders_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/orders-invoices')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/orders-invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
             <StatCard icon={<FileCheck className="w-5 h-5" />} label="Total Faktur" value={loading && !data ? '–' : (o.total_invoices ?? 0)} subtitle={loading && !data ? '–' : `Hari ini: ${o.invoices_today ?? 0}`} iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/orders-invoices')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/orders-invoices')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
             <StatCard icon={<Users className="w-5 h-5" />} label="Pengguna Aktif (24j)" value={loading && !data ? '–' : (o.active_users_24h ?? 0)} subtitle={loading && !data ? '–' : `Total: ${o.total_users ?? 0}`} iconClassName="bg-[#0D1A63] text-white" onClick={() => navigate('/dashboard/users')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/users')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />

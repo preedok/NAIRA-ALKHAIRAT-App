@@ -12,8 +12,8 @@ import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import ContentLoading from '../../../components/common/ContentLoading';
 import AutoRefreshControl from '../../../components/common/AutoRefreshControl';
+import NominalDisplay from '../../../components/common/NominalDisplay';
 import { accountingApi, type PurchasingByProduct } from '../../../services/api';
-import { formatIDR } from '../../../utils';
 import AccountingPurchasingSuppliersPage from './AccountingPurchasingSuppliersPage';
 import AccountingPurchasingOrdersPage from './AccountingPurchasingOrdersPage';
 import AccountingPurchasingInvoicesPage from './AccountingPurchasingInvoicesPage';
@@ -209,7 +209,7 @@ const AccountingPurchasingPage: React.FC = () => {
               <StatCard icon={<Users className="w-5 h-5" />} label="Total Supplier" value={suppliersCount} iconClassName="bg-slate-600 text-white" />
               <StatCard icon={<FileText className="w-5 h-5" />} label="Total PO" value={totalPo} iconClassName="bg-blue-600 text-white" />
               <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Faktur" value={totalInv} iconClassName="bg-amber-600 text-white" />
-              <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Hutang (Sisa)" value={formatIDR(totalRemaining)} iconClassName="bg-amber-100 text-amber-700" />
+              <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Hutang (Sisa)" value={<NominalDisplay amount={totalRemaining} currency="IDR" />} iconClassName="bg-amber-100 text-amber-700" />
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => setTab('suppliers')}>
@@ -267,9 +267,9 @@ const AccountingPurchasingPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-right">{row.po_count}</td>
                   <td className="py-3 px-4 text-right">{row.invoice_count}</td>
-                  <td className="py-3 px-4 text-right">{formatIDR(row.total_amount)}</td>
-                  <td className="py-3 px-4 text-right text-blue-600">{formatIDR(row.paid_amount)}</td>
-                  <td className="py-3 px-4 text-right text-amber-600">{formatIDR(row.remaining_amount)}</td>
+                  <td className="py-3 px-4 text-right"><NominalDisplay amount={row.total_amount} currency="IDR" /></td>
+                  <td className="py-3 px-4 text-right text-blue-600"><NominalDisplay amount={row.paid_amount} currency="IDR" /></td>
+                  <td className="py-3 px-4 text-right text-amber-600"><NominalDisplay amount={row.remaining_amount} currency="IDR" /></td>
                   <td className="py-3 px-4 text-right">
                     <ActionsMenu
                       items={[

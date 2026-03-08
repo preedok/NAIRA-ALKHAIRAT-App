@@ -9,12 +9,12 @@ import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
-import { Input, Autocomplete, Textarea, ContentLoading } from '../../../components/common';
+import { Input, Autocomplete, Textarea, ContentLoading, NominalDisplay } from '../../../components/common';
 import type { TableColumn } from '../../../types';
 import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
-import { formatInvoiceNumberDisplay, formatIDR } from '../../../utils';
+import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
@@ -341,7 +341,7 @@ const HotelWorkPage: React.FC = () => {
                       <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                         <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
                         <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
-                        <td className="py-2 px-4 text-sm">{formatIDR(row.total_amount ?? 0)}</td>
+                        <td className="py-2 px-4 text-sm"><NominalDisplay amount={row.total_amount ?? 0} currency="IDR" /></td>
                         <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
                       </tr>
                     )}
@@ -456,7 +456,7 @@ const HotelWorkPage: React.FC = () => {
                     <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
                     <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                   </td>
-                  <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
+                  <td className="px-6 py-4 text-right font-medium text-slate-900 align-top"><NominalDisplay amount={totalIdr} currency="IDR" /></td>
                   <td className="px-6 py-4 align-top">
                     <Badge variant={statusBadgeVariant}>
                       {invStatusLabel}

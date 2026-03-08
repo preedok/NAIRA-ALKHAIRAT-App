@@ -18,12 +18,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading } from '../../../components/common';
+import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
-import { formatIDR } from '../../../utils';
 import type { TableColumn } from '../../../types';
 import { ORDER_STATUS_LABELS, INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
@@ -170,7 +169,7 @@ const OrderListModal: React.FC<{
                 <td className="px-4 py-3">{o.User?.name ?? '-'}</td>
                 <td className="px-4 py-3">{o.Branch?.name ?? '-'}</td>
                 <td className="px-4 py-3"><Badge variant="info">{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></td>
-                <td className="px-4 py-3">{formatIDR(o.total_amount || 0)}</td>
+                <td className="px-4 py-3">{<NominalDisplay amount={o.total_amount || 0} currency="IDR" />}</td>
                 <td className="px-4 py-3">{o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : '-'}</td>
                 <td className="px-4 py-3">
                   <Button variant="ghost" size="sm" className="gap-1" onClick={() => { onClose(); navigate('/dashboard/orders-invoices'); }}>
@@ -243,9 +242,9 @@ const InvoiceListModalAdmin: React.FC<{
           {summary && (
             <div className="flex flex-wrap gap-4 mb-4 p-3 bg-slate-50 rounded-lg text-sm">
               <span>Total: <strong>{summary.total_invoices}</strong> invoice</span>
-              <span>Total amount: <strong>{formatIDR(parseFloat(summary.total_amount || 0))}</strong></span>
-              <span>Terbayar: <strong className="text-emerald-600">{formatIDR(parseFloat(summary.total_paid || 0))}</strong></span>
-              <span>Sisa: <strong className="text-amber-600">{formatIDR(parseFloat(summary.total_remaining || 0))}</strong></span>
+              <span>Total amount: <strong>{<NominalDisplay amount={parseFloat(summary.total_amount || 0)} currency="IDR" />}</strong></span>
+              <span>Terbayar: <strong className="text-emerald-600">{<NominalDisplay amount={parseFloat(summary.total_paid || 0)} currency="IDR" />}</strong></span>
+              <span>Sisa: <strong className="text-amber-600">{<NominalDisplay amount={parseFloat(summary.total_remaining || 0)} currency="IDR" />}</strong></span>
             </div>
           )}
           <Table
@@ -286,9 +285,9 @@ const InvoiceListModalAdmin: React.FC<{
                   <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
                   <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                 </td>
-                <td className="px-4 py-3 align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
-                <td className="px-4 py-3 text-emerald-600 align-top">{formatIDR(parseFloat(inv.paid_amount || 0))}</td>
-                <td className="px-4 py-3 align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                <td className="px-4 py-3 align-top">{<NominalDisplay amount={parseFloat(inv.total_amount || 0)} currency="IDR" />}</td>
+                <td className="px-4 py-3 text-emerald-600 align-top">{<NominalDisplay amount={parseFloat(inv.paid_amount || 0)} currency="IDR" />}</td>
+                <td className="px-4 py-3 align-top">{<NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" />}</td>
                 <td className="px-4 py-3 align-top"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge></td>
               </tr>
             )}
@@ -468,7 +467,7 @@ const AdminPusatDashboard: React.FC = () => {
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
               label="Total Revenue"
-              value={formatIDR(orders.total_revenue)}
+              value={<NominalDisplay amount={orders.total_revenue} currency="IDR" />}
               subtitle="Excl. draft & cancelled"
               iconClassName="bg-[#0D1A63] text-white"
               onClick={() => openModal('orders')}
@@ -532,7 +531,7 @@ const AdminPusatDashboard: React.FC = () => {
                 {(orders.by_branch || []).map((row: any) => (
                   <div key={row.branch_id} className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-slate-50">
                     <span className="text-slate-800 font-medium">{row.branch_name || row.code}</span>
-                    <span className="text-sm font-semibold">{row.count} · {formatIDR(row.revenue || 0)}</span>
+                    <span className="text-sm font-semibold">{row.count} · {<NominalDisplay amount={row.revenue || 0} currency="IDR" />}</span>
                   </div>
                 ))}
                 {(orders.by_branch || []).length === 0 && (
@@ -554,7 +553,7 @@ const AdminPusatDashboard: React.FC = () => {
                 {(orders.by_wilayah || []).map((row: any, i: number) => (
                   <div key={row.wilayah_id || `w-${i}`} className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-slate-50">
                     <span className="text-slate-800 font-medium">{row.wilayah_name}</span>
-                    <span className="text-sm font-semibold">{row.count} · {formatIDR(row.revenue || 0)}</span>
+                    <span className="text-sm font-semibold">{row.count} · {<NominalDisplay amount={row.revenue || 0} currency="IDR" />}</span>
                   </div>
                 ))}
                 {(orders.by_wilayah || []).length === 0 && (
@@ -576,7 +575,7 @@ const AdminPusatDashboard: React.FC = () => {
                 {(orders.by_provinsi || []).map((row: any, i: number) => (
                   <div key={row.provinsi_id || `p-${i}`} className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-slate-50">
                     <span className="text-slate-800 font-medium">{row.provinsi_name}</span>
-                    <span className="text-sm font-semibold">{row.count} · {formatIDR(row.revenue || 0)}</span>
+                    <span className="text-sm font-semibold">{row.count} · {<NominalDisplay amount={row.revenue || 0} currency="IDR" />}</span>
                   </div>
                 ))}
                 {(orders.by_provinsi || []).length === 0 && (
@@ -636,7 +635,7 @@ const AdminPusatDashboard: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">{inv.User?.name ?? '-'}</td>
                     <td className="px-4 py-3">{inv.Branch?.name ?? '-'}</td>
-                    <td className="px-4 py-3">{formatIDR(inv.total_amount || 0)}</td>
+                    <td className="px-4 py-3">{<NominalDisplay amount={inv.total_amount || 0} currency="IDR" />}</td>
                     <td className="px-4 py-3">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('id-ID') : '-'}</td>
                     <td className="px-4 py-3">
                       <Button variant="ghost" size="sm" className="gap-1" onClick={() => navigate('/dashboard/orders-invoices')}>

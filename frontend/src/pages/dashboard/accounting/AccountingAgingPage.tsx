@@ -9,7 +9,7 @@ import PageFilter from '../../../components/common/PageFilter';
 import Table from '../../../components/common/Table';
 import TablePagination from '../../../components/common/TablePagination';
 import type { TableColumn } from '../../../types';
-import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, AutoRefreshControl } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, AutoRefreshControl, NominalDisplay } from '../../../components/common';
 import { AUTOCOMPLETE_FILTER } from '../../../utils/constants';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
@@ -18,7 +18,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel } from '../../../components/common/PaymentProofCell';
-import { formatIDR } from '../../../utils';
 import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
 import { useToast } from '../../../contexts/ToastContext';
 
@@ -427,11 +426,11 @@ const AccountingAgingPage: React.FC = () => {
         ) : data ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={formatIDR(data.total_outstanding)} onClick={() => setAgingStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-            <StatCard icon={<CreditCard className="w-5 h-5" />} label="Belum Jatuh Tempo" value={formatIDR(totals.current)} subtitle={`${bucketCounts.current} invoice`} onClick={() => setAgingStatModal('current')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('current')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 1–30" value={formatIDR(totals.days_1_30)} subtitle={`${bucketCounts.days_1_30} invoice`} onClick={() => setAgingStatModal('days_1_30')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_1_30')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 31–60" value={formatIDR(totals.days_31_60)} subtitle={`${bucketCounts.days_31_60} invoice`} onClick={() => setAgingStatModal('days_31_60')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_31_60')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 61+" value={formatIDR(totals.days_61_plus)} subtitle={`${bucketCounts.days_61_plus} invoice`} onClick={() => setAgingStatModal('days_61_plus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_61_plus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Piutang" value={<NominalDisplay amount={data.total_outstanding} currency="IDR" />} onClick={() => setAgingStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<CreditCard className="w-5 h-5" />} label="Belum Jatuh Tempo" value={<NominalDisplay amount={totals.current} currency="IDR" />} subtitle={`${bucketCounts.current} invoice`} onClick={() => setAgingStatModal('current')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('current')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 1–30" value={<NominalDisplay amount={totals.days_1_30} currency="IDR" />} subtitle={`${bucketCounts.days_1_30} invoice`} onClick={() => setAgingStatModal('days_1_30')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_1_30')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 31–60" value={<NominalDisplay amount={totals.days_31_60} currency="IDR" />} subtitle={`${bucketCounts.days_31_60} invoice`} onClick={() => setAgingStatModal('days_31_60')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_31_60')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<Receipt className="w-5 h-5" />} label="Terlambat 61+" value={<NominalDisplay amount={totals.days_61_plus} currency="IDR" />} subtitle={`${bucketCounts.days_61_plus} invoice`} onClick={() => setAgingStatModal('days_61_plus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setAgingStatModal('days_61_plus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           </div>
 
           {agingStatModal && (
@@ -451,8 +450,8 @@ const AccountingAgingPage: React.FC = () => {
                           <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                             <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
                             <td className="py-2 px-4 text-sm">{row.User?.name ?? row.User?.company_name ?? '–'}</td>
-                            <td className="py-2 px-4 text-sm">{formatIDR(parseFloat(row.total_amount || 0))}</td>
-                            <td className="py-2 px-4 text-sm">{formatIDR(parseFloat(row.remaining_amount || 0))}</td>
+                            <td className="py-2 px-4 text-sm"><NominalDisplay amount={parseFloat(row.total_amount || 0)} currency="IDR" /></td>
+                            <td className="py-2 px-4 text-sm"><NominalDisplay amount={parseFloat(row.remaining_amount || 0)} currency="IDR" /></td>
                             <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
                           </tr>
                         )}
@@ -497,11 +496,11 @@ const AccountingAgingPage: React.FC = () => {
                     <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
                     <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                   </td>
-                  <td className="py-3 px-4 text-right font-medium align-top">{formatIDR(parseFloat(inv.total_amount || 0))}</td>
+                  <td className="py-3 px-4 text-right font-medium align-top"><NominalDisplay amount={parseFloat(inv.total_amount || 0)} currency="IDR" /></td>
                   <td className="py-3 px-4 text-right align-top">
                     <InvoiceStatusRefundCell inv={inv} align="right" />
                   </td>
-                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top">{formatIDR(parseFloat(inv.remaining_amount || 0))}</td>
+                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top"><NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" /></td>
                   <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>
                   <td className="py-3 px-4 text-center align-top">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
                   <td className="py-3 px-4 align-top">
@@ -600,10 +599,10 @@ const AccountingAgingPage: React.FC = () => {
                       <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data Invoice</h4>
                       <dl className="space-y-1.5 text-sm">
                         <div className="flex justify-between"><dt className="text-slate-600">Status</dt><dd><Badge variant={getEffectiveInvoiceStatusBadgeVariant(viewInvoice)}>{getEffectiveInvoiceStatusLabel(viewInvoice)}</Badge>{viewInvoice.is_blocked && <Badge variant="error" className="ml-1">Block</Badge>}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Total</dt><dd className="font-semibold">{formatIDR(parseFloat(viewInvoice.total_amount || 0))}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">DP ({viewInvoice.dp_percentage || 0}%)</dt><dd className="font-semibold">{formatIDR(parseFloat(viewInvoice.dp_amount || 0))}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Dibayar</dt><dd className="font-semibold text-emerald-600">{formatIDR(parseFloat(viewInvoice.paid_amount || 0))}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Sisa</dt><dd className="font-semibold text-red-600">{formatIDR(parseFloat(viewInvoice.remaining_amount || 0))}</dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">Total</dt><dd className="font-semibold"><NominalDisplay amount={parseFloat(viewInvoice.total_amount || 0)} currency="IDR" /></dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">DP ({viewInvoice.dp_percentage || 0}%)</dt><dd className="font-semibold"><NominalDisplay amount={parseFloat(viewInvoice.dp_amount || 0)} currency="IDR" /></dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">Dibayar</dt><dd className="font-semibold text-emerald-600"><NominalDisplay amount={parseFloat(viewInvoice.paid_amount || 0)} currency="IDR" /></dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">Sisa</dt><dd className="font-semibold text-red-600"><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Tgl Invoice</dt><dd>{formatDate(viewInvoice.issued_at || viewInvoice.created_at)}</dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Jatuh Tempo DP</dt><dd>{formatDate(viewInvoice.due_date_dp)}</dd></div>
                       </dl>
@@ -611,12 +610,12 @@ const AccountingAgingPage: React.FC = () => {
                     <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
                       <h4 className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-2">Kurs (untuk pembayaran)</h4>
                       <dl className="space-y-1.5 text-sm text-slate-700">
-                        <div>1 SAR = {formatIDR(sarToIdr)} IDR</div>
-                        <div>1 USD = {formatIDR(usdToIdr)} IDR</div>
+                        <div>1 SAR = <NominalDisplay amount={sarToIdr} currency="IDR" /> IDR</div>
+                        <div>1 USD = <NominalDisplay amount={usdToIdr} currency="IDR" /> IDR</div>
                         {(viewInvoice.Order?.currency === 'SAR' || viewInvoice.Order?.currency === 'USD') && (
                           <div className="pt-2 mt-2 border-t border-emerald-200 font-semibold">
                             Total: {viewInvoice.Order?.currency === 'SAR' && `${(parseFloat(viewInvoice.total_amount || 0) / sarToIdr).toFixed(2)} SAR`}
-                            {viewInvoice.Order?.currency === 'USD' && `${(parseFloat(viewInvoice.total_amount || 0) / usdToIdr).toFixed(2)} USD`} = {formatIDR(parseFloat(viewInvoice.total_amount || 0))} IDR
+                            {viewInvoice.Order?.currency === 'USD' && `${(parseFloat(viewInvoice.total_amount || 0) / usdToIdr).toFixed(2)} USD`} = <NominalDisplay amount={parseFloat(viewInvoice.total_amount || 0)} currency="IDR" /> IDR
                           </div>
                         )}
                       </dl>
@@ -661,7 +660,7 @@ const AccountingAgingPage: React.FC = () => {
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
                               <div className="flex items-center gap-3">
                                 <span className="font-semibold text-slate-800 capitalize">{getProofTypeLabel(p.payment_type)}</span>
-                                <span className="text-emerald-600 font-semibold">{formatIDR(parseFloat(p.amount || 0))}</span>
+                                <span className="text-emerald-600 font-semibold"><NominalDisplay amount={parseFloat(p.amount || 0)} currency="IDR" /></span>
                                 <Badge variant={ps.variant}>{ps.label}</Badge>
                                 {p.bank_name && <span className="text-sm text-slate-600">{p.bank_name}</span>}
                               </div>

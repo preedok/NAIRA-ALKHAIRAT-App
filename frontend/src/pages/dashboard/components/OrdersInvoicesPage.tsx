@@ -7,7 +7,7 @@ import {
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
@@ -1166,27 +1166,27 @@ const OrdersInvoicesPage: React.FC = () => {
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
               label="Total Tagihan"
-              value={loadingSummary ? '...' : formatIDR(s.total_amount)}
+              value={loadingSummary ? '...' : <NominalDisplay amount={s.total_amount} currency="IDR" />}
               iconClassName="bg-slate-100 text-slate-600"
-              subtitle={!loadingSummary ? `Total nilai invoice · ≈ ${formatSAR(s.total_amount / sarToIdrList)} · ≈ ${formatUSD(s.total_amount / usdToIdrList)}` : undefined}
+              subtitle={!loadingSummary ? <>Total nilai invoice · ≈ <NominalDisplay amount={s.total_amount / sarToIdrList} currency="SAR" /> · ≈ <NominalDisplay amount={s.total_amount / usdToIdrList} currency="USD" /></> : undefined}
               onClick={() => setStatModal('total_tagihan')}
               action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_tagihan')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<CreditCard className="w-5 h-5" />}
               label="Dibayar"
-              value={loadingSummary ? '...' : formatIDR(s.total_paid)}
+              value={loadingSummary ? '...' : <NominalDisplay amount={s.total_paid} currency="IDR" />}
               iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
-              subtitle={!loadingSummary ? `≈ ${formatSAR(s.total_paid / sarToIdrList)} · ≈ ${formatUSD(s.total_paid / usdToIdrList)}` : undefined}
+              subtitle={!loadingSummary ? <>≈ <NominalDisplay amount={s.total_paid / sarToIdrList} currency="SAR" /> · ≈ <NominalDisplay amount={s.total_paid / usdToIdrList} currency="USD" /></> : undefined}
               onClick={() => setStatModal('dibayar')}
               action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('dibayar')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<Wallet className="w-5 h-5" />}
               label="Sisa"
-              value={loadingSummary ? '...' : formatIDR(s.total_remaining)}
+              value={loadingSummary ? '...' : <NominalDisplay amount={s.total_remaining} currency="IDR" />}
               iconClassName="bg-amber-100 text-amber-600"
-              subtitle={!loadingSummary ? `Belum dibayar · ≈ ${formatSAR(s.total_remaining / sarToIdrList)} · ≈ ${formatUSD(s.total_remaining / usdToIdrList)}` : undefined}
+              subtitle={!loadingSummary ? <>Belum dibayar · ≈ <NominalDisplay amount={s.total_remaining / sarToIdrList} currency="SAR" /> · ≈ <NominalDisplay amount={s.total_remaining / usdToIdrList} currency="USD" /></> : undefined}
               onClick={() => setStatModal('sisa')}
               action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('sisa')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
@@ -1247,9 +1247,9 @@ const OrdersInvoicesPage: React.FC = () => {
                               <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || '-'}</td>
                               <td className="py-2 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></td>
                               <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
-                              <td className="py-2 px-4 text-right text-sm">{formatIDR(totalTriple.idr)}</td>
-                              <td className="py-2 px-4 text-right text-emerald-600 text-sm">{formatIDR(paid)}</td>
-                              <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm">{formatIDR(remaining)}</td>
+                              <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
+                              <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
+                              <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
                             </tr>
                           );
                         }}
@@ -1299,9 +1299,9 @@ const OrdersInvoicesPage: React.FC = () => {
                               <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || '-'}</td>
                               <td className="py-2 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></td>
                               <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
-                              <td className="py-2 px-4 text-right text-sm">{formatIDR(totalTriple.idr)}</td>
-                              <td className="py-2 px-4 text-right text-emerald-600 text-sm">{formatIDR(paid)}</td>
-                              <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm">{formatIDR(remaining)}</td>
+                              <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
+                              <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
+                              <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
                             </tr>
                           );
                         }}
@@ -1427,7 +1427,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
-                      {(() => { const t = invoiceTotalTriple(inv); return <><div>{formatIDR(t.idr)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>; })()}
+                      {(() => { const t = invoiceTotalTriple(inv); return <><div><NominalDisplay amount={t.idr} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>; })()}
                       {inv.Order?.currency_rates_override && (inv.Order.currency_rates_override.SAR_TO_IDR != null || inv.Order.currency_rates_override.USD_TO_IDR != null) && (
                         <div className="text-xs text-amber-700 mt-1 font-medium" title="Kurs & harga khusus order ini">
                           Kurs: {inv.Order.currency_rates_override.SAR_TO_IDR != null ? `SAR ${Number(inv.Order.currency_rates_override.SAR_TO_IDR).toLocaleString('id-ID')}` : ''}{inv.Order.currency_rates_override.SAR_TO_IDR != null && inv.Order.currency_rates_override.USD_TO_IDR != null ? ', ' : ''}{inv.Order.currency_rates_override.USD_TO_IDR != null ? `USD ${Number(inv.Order.currency_rates_override.USD_TO_IDR).toLocaleString('id-ID')}` : ''}
@@ -1444,7 +1444,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
                         const remaining = Math.max(0, totalInv - paid);
                         const t = amountTriple(remaining);
-                        return <><div>{formatIDR(remaining)}</div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div></>;
+                        return <><div><NominalDisplay amount={remaining} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
                       })()}
                     </td>
                     <td className="py-3 px-4 align-top max-w-[320px]">
@@ -2046,13 +2046,13 @@ const OrdersInvoicesPage: React.FC = () => {
                             <div className="space-y-4">
                               <div className="pb-4 border-b border-slate-100">
                                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
-                                <p className="text-xl font-bold text-slate-900 mt-1">{formatIDR(totalInv)}</p>
-                                <p className="text-sm text-slate-500 mt-0.5">{formatSAR(totalInvSar)} · {formatUSD(totalInv / usdToIdr)}</p>
+                                <p className="text-xl font-bold text-slate-900 mt-1"><NominalDisplay amount={totalInv} currency="IDR" /></p>
+                                <p className="text-sm text-slate-500 mt-0.5"><NominalDisplay amount={totalInvSar} currency="SAR" /> · <NominalDisplay amount={totalInv / usdToIdr} currency="USD" /></p>
                               </div>
                               <div className="grid grid-cols-2 gap-4">
-                                <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5">{formatIDR(Number(viewInvoice.dp_amount) || 0)}</p></div>
-                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-[#0D1A63] mt-0.5">{formatIDR(displayPaid)}</p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-[#0D1A63] mt-0.5">KES: {formatSAR(kesSar)}{kesUsd > 0 ? ` · ${formatUSD(kesUsd)}` : ''}</p>}</div>
-                                <div><p className="text-xs text-slate-500">Sisa</p><p className="font-semibold text-red-600 mt-0.5">{formatIDR(displayRemaining)}</p></div>
+                                <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5"><NominalDisplay amount={Number(viewInvoice.dp_amount) || 0} currency="IDR" /></p></div>
+                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-[#0D1A63] mt-0.5"><NominalDisplay amount={displayPaid} currency="IDR" /></p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-[#0D1A63] mt-0.5">KES: <NominalDisplay amount={kesSar} currency="SAR" />{kesUsd > 0 ? <> · <NominalDisplay amount={kesUsd} currency="USD" /></> : ''}</p>}</div>
+                                <div><p className="text-xs text-slate-500">Sisa</p><p className="font-semibold text-red-600 mt-0.5"><NominalDisplay amount={displayRemaining} currency="IDR" /></p></div>
                                 <div><p className="text-xs text-slate-500">Terbayar</p><p className="font-semibold text-slate-900 mt-0.5">{(Number.isFinite(totalPct) ? totalPct.toFixed(1) : '0')}%</p></div>
                               </div>
                               <div className="flex flex-wrap gap-4 pt-2 text-sm text-slate-600">
@@ -2073,7 +2073,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                                 ) : (
                                   <>
-                                    <p className="text-2xl font-bold text-emerald-700">{formatIDR(ownerBalance ?? 0)}</p>
+                                    <p className="text-2xl font-bold text-emerald-700"><NominalDisplay amount={ownerBalance ?? 0} currency="IDR" /></p>
                                     <p className="text-xs text-slate-600 mt-1">Untuk order baru atau alokasi ke tagihan.</p>
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
                                       <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
@@ -2102,10 +2102,10 @@ const OrdersInvoicesPage: React.FC = () => {
                             )}
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Kurs pembayaran</p>
-                              <p className="text-sm text-slate-700">1 SAR = {formatIDR(sarToIdr)}</p>
-                              <p className="text-sm text-slate-700">1 USD = {formatIDR(usdToIdr)}</p>
+                              <p className="text-sm text-slate-700">1 SAR = <NominalDisplay amount={sarToIdr} currency="IDR" /></p>
+                              <p className="text-sm text-slate-700">1 USD = <NominalDisplay amount={usdToIdr} currency="IDR" /></p>
                               {(viewInvoice.Order?.currency === 'SAR' || viewInvoice.Order?.currency === 'USD') && (
-                                <p className="text-xs font-semibold text-slate-600 mt-2 pt-2 border-t border-slate-200">Total = {formatIDR(totalInv)} IDR</p>
+                                <p className="text-xs font-semibold text-slate-600 mt-2 pt-2 border-t border-slate-200">Total = <NominalDisplay amount={totalInv} currency="IDR" /> IDR</p>
                               )}
                             </div>
                           </div>
@@ -2185,7 +2185,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-900 align-top">{name}</td>
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{qty}</td>
-                                          <td className="py-2 px-2 text-right font-medium tabular-nums align-top">{formatIDR(subtotal)}</td>
+                                          <td className="py-2 px-2 text-right font-medium tabular-nums align-top"><NominalDisplay amount={subtotal} currency="IDR" /></td>
                                         </tr>
                                       );
                                     })}
@@ -2286,7 +2286,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {added.map((x: any, idx: number) => (
                                       <div key={idx} className="text-xs text-slate-700 p-2 rounded-lg bg-emerald-50/40 border border-emerald-100">
                                         <div className="font-medium">{x.after?.product_name || x.after?.product_ref_id || 'Item'}</div>
-                                        <div className="text-slate-600">Qty {x.after?.quantity} · {formatIDR(Number(x.after?.unit_price || 0))}</div>
+                                        <div className="text-slate-600">Qty {x.after?.quantity} · <NominalDisplay amount={Number(x.after?.unit_price || 0)} currency="IDR" /></div>
                                       </div>
                                     ))}
                                   </div>
@@ -2300,7 +2300,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                       <div key={idx} className="text-xs text-slate-700 p-2 rounded-lg bg-amber-50/40 border border-amber-100">
                                         <div className="font-medium">{x.after?.product_name || x.before?.product_name || x.after?.product_ref_id || 'Item'}</div>
                                         <div className="text-slate-600">
-                                          Qty {x.before?.quantity} → {x.after?.quantity} · {formatIDR(Number(x.before?.unit_price || 0))} → {formatIDR(Number(x.after?.unit_price || 0))}
+                                          Qty {x.before?.quantity} → {x.after?.quantity} · <NominalDisplay amount={Number(x.before?.unit_price || 0)} currency="IDR" /> → <NominalDisplay amount={Number(x.after?.unit_price || 0)} currency="IDR" />
                                         </div>
                                       </div>
                                     ))}
@@ -2314,7 +2314,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {removed.map((x: any, idx: number) => (
                                       <div key={idx} className="text-xs text-slate-700 p-2 rounded-lg bg-rose-50/40 border border-rose-100">
                                         <div className="font-medium">{x.before?.product_name || x.before?.product_ref_id || 'Item'}</div>
-                                        <div className="text-slate-600">Qty {x.before?.quantity} · {formatIDR(Number(x.before?.unit_price || 0))}</div>
+                                        <div className="text-slate-600">Qty {x.before?.quantity} · <NominalDisplay amount={Number(x.before?.unit_price || 0)} currency="IDR" /></div>
                                       </div>
                                     ))}
                                   </div>
@@ -2349,7 +2349,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         {(viewInvoice.Refunds as any[]).map((r: any) => (
                           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm p-3 bg-white rounded-lg border border-slate-200">
                             <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                              <span className="font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</span>
+                              <span className="font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></span>
                               <Badge variant={r.status === 'refunded' ? 'success' : r.status === 'rejected' ? 'error' : 'warning'}>
                                 {r.status === 'requested' ? 'Menunggu proses' : r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Sudah direfund'}
                               </Badge>
@@ -2467,12 +2467,12 @@ const OrdersInvoicesPage: React.FC = () => {
                                 })()}
                                 {p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR' ? (
                                   <span className="text-[#0D1A63] font-semibold">
-                                    Nominal diinput: {p.payment_currency === 'SAR' ? formatSAR(Number(p.amount_original)) : formatUSD(Number(p.amount_original))} = {formatIDR(parseFloat(p.amount))}
+                                    Nominal diinput: {p.payment_currency === 'SAR' ? <NominalDisplay amount={Number(p.amount_original)} currency="SAR" /> : <NominalDisplay amount={Number(p.amount_original)} currency="USD" />} = <NominalDisplay amount={parseFloat(p.amount)} currency="IDR" />
                                   </span>
                                 ) : (
                                   <>
-                                    <span className="text-[#0D1A63] font-semibold">{formatIDR(parseFloat(p.amount))}</span>
-                                    <span className="text-xs text-slate-500">≈ {formatSAR(parseFloat(p.amount) / sarToIdr)} · ≈ {formatUSD(parseFloat(p.amount) / usdToIdr)}</span>
+                                    <span className="text-[#0D1A63] font-semibold"><NominalDisplay amount={parseFloat(p.amount)} currency="IDR" /></span>
+                                    <span className="text-xs text-slate-500">≈ <NominalDisplay amount={parseFloat(p.amount) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={parseFloat(p.amount) / usdToIdr} currency="USD" /></span>
                                   </>
                                 )}
                                 <Badge variant={ps.variant}>{ps.label}</Badge>
@@ -2944,7 +2944,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       )}
                       {transfers.length > 0 && (
                         <p className="text-sm text-slate-600">
-                          Total dipindahkan: <strong>{formatIDR(totalAmount)}</strong>
+                          Total dipindahkan: <strong><NominalDisplay amount={totalAmount} currency="IDR" /></strong>
                           {!sourceOk && <span className="text-red-600 ml-2">— Jumlah dari salah satu sumber melebihi dana yang tersedia.</span>}
                         </p>
                       )}
@@ -3021,7 +3021,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     placeholder="Pilih mata uang"
                   />
                   {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
-                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong>{formatIDR(parseFloat(viewInvoice.remaining_amount || 0))}</strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
+                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
                   )}
                   <Input
                     label={`Jumlah bayar (${payCurrencySaudi}) *`}
@@ -3039,10 +3039,10 @@ const OrdersInvoicesPage: React.FC = () => {
                     const newRemain = Math.max(0, totalInvPay - newPaid);
                     return (
                       <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
-                        {payCurrencySaudi !== 'IDR' && <p className="text-xs text-slate-600">≈ {formatIDR(Math.round(idr))} IDR (konversi untuk tagihan)</p>}
+                        {payCurrencySaudi !== 'IDR' && <p className="text-xs text-slate-600">≈ <NominalDisplay amount={Math.round(idr)} currency="IDR" /> IDR (konversi untuk tagihan)</p>}
                         <p className="font-semibold text-slate-800">Setelah pembayaran ini</p>
-                        <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]">{formatIDR(newPaid)}</strong></p>
-                        <p><span className="text-slate-600">Sisa tagihan:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>{formatIDR(newRemain)}</strong></p>
+                        <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]"><NominalDisplay amount={newPaid} currency="IDR" /></strong></p>
+                        <p><span className="text-slate-600">Sisa tagihan:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={newRemain} currency="IDR" /></strong></p>
                       </div>
                     );
                   })()}
@@ -3121,7 +3121,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     )}
                   </div>
                   {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
-                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong>{formatIDR(parseFloat(viewInvoice.remaining_amount || 0))}</strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
+                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
                   )}
                   <Input
                     label="Jumlah bayar (IDR) *"
@@ -3141,10 +3141,10 @@ const OrdersInvoicesPage: React.FC = () => {
                       return (
                         <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
                           <p className="font-semibold text-slate-800">Validasi pembayaran (otomatis)</p>
-                          <p><span className="text-slate-600">Jumlah yang diinput:</span> <strong>{formatIDR(inputIdr)}</strong> ≈ {formatSAR(inputIdr / sarToIdr)} · ≈ {formatUSD(inputIdr / usdToIdr)}</p>
+                          <p><span className="text-slate-600">Jumlah yang diinput:</span> <strong><NominalDisplay amount={inputIdr} currency="IDR" /></strong> ≈ <NominalDisplay amount={inputIdr / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={inputIdr / usdToIdr} currency="USD" /></p>
                           <p><span className="text-slate-600">Setelah pembayaran ini —</span></p>
-                          <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]">{formatIDR(newPaid)}</strong> ≈ {formatSAR(newPaid / sarToIdr)} · ≈ {formatUSD(newPaid / usdToIdr)}</p>
-                          <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>{formatIDR(Math.max(0, newRemain))}</strong> ≈ {formatSAR(Math.max(0, newRemain) / sarToIdr)} · ≈ {formatUSD(Math.max(0, newRemain) / usdToIdr)}</p>
+                          <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]"><NominalDisplay amount={newPaid} currency="IDR" /></strong> ≈ <NominalDisplay amount={newPaid / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={newPaid / usdToIdr} currency="USD" /></p>
+                          <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" /></strong> ≈ <NominalDisplay amount={Math.max(0, newRemain) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={Math.max(0, newRemain) / usdToIdr} currency="USD" /></p>
                           {overpay && <p className="text-amber-700 text-xs">Jumlah melebihi sisa tagihan. Sistem akan catat sebagai pelunasan; kelebihan tidak dikembalikan otomatis.</p>}
                         </div>
                       );

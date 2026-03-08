@@ -6,11 +6,10 @@ import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading, Modal, ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading, Modal, ModalHeader, ModalBody, ModalBoxLg, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
-import { formatIDR } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { refundsApi, accountingApi, type RefundStats } from '../../../services/api';
@@ -236,7 +235,7 @@ const RefundsPage: React.FC = () => {
           label="Menunggu"
           value={stats?.requested ?? '–'}
           iconClassName="bg-amber-100 text-amber-600"
-          subtitle={(stats?.amount_pending ?? 0) > 0 ? formatIDR(stats!.amount_pending) : undefined}
+          subtitle={(stats?.amount_pending ?? 0) > 0 ? <NominalDisplay amount={stats!.amount_pending} currency="IDR" /> : undefined}
           onClick={() => setStatModal('requested')}
           action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('requested')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
         />
@@ -254,7 +253,7 @@ const RefundsPage: React.FC = () => {
         <StatCard
           icon={<Banknote className="w-5 h-5" />}
           label="Nominal Pending"
-          value={formatIDR(stats?.amount_requested ?? 0)}
+          value={<NominalDisplay amount={stats?.amount_requested ?? 0} currency="IDR" />}
           iconClassName="bg-teal-100 text-teal-600"
           onClick={() => setStatModal('amount_pending')}
           action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('amount_pending')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
@@ -280,7 +279,7 @@ const RefundsPage: React.FC = () => {
                           {r.Invoice ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact /> : r.source === 'balance' ? 'Refund saldo' : '–'}
                         </td>
                         <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
-                        <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</td>
+                        <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                         <td className="py-2 px-4 text-slate-600 text-sm">{r.bank_name && r.account_number ? `${r.bank_name} ${r.account_number}` : '-'}</td>
                         <td className="py-2 px-4"><Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge></td>
                         {canUpdateStatus && <td className="py-2 px-4" />}
@@ -337,7 +336,7 @@ const RefundsPage: React.FC = () => {
                 <td className="py-3 px-4">
                   {r.Owner ? <span>{r.Owner.name || r.Owner.company_name}</span> : '-'}
                 </td>
-                <td className="py-3 px-4 text-right font-semibold text-emerald-700">{formatIDR(parseFloat(r.amount))}</td>
+                <td className="py-3 px-4 text-right font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                 <td className="py-3 px-4 text-slate-600">{r.bank_name && r.account_number ? `${r.bank_name} ${r.account_number}` : '-'}</td>
                 <td className="py-3 px-4">
                   <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge>

@@ -10,7 +10,7 @@ import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
-import { Input, Autocomplete, ContentLoading } from '../../../components/common';
+import { Input, Autocomplete, ContentLoading, NominalDisplay } from '../../../components/common';
 import { visaApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
@@ -293,7 +293,7 @@ const VisaWorkPage: React.FC = () => {
                       <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                         <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
                         <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
-                        <td className="py-2 px-4 text-sm">{formatIDR(row.total_amount ?? 0)}</td>
+                        <td className="py-2 px-4 text-sm"><NominalDisplay amount={row.total_amount ?? 0} currency="IDR" /></td>
                         <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
                       </tr>
                     )}
@@ -349,7 +349,7 @@ const VisaWorkPage: React.FC = () => {
                       <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
                       <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900 align-top">{formatIDR(totalIdr)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-900 align-top"><NominalDisplay amount={totalIdr} currency="IDR" /></td>
                     <td className="px-6 py-4 align-top">
                       <Badge variant={statusBadgeVariant}>
                         {statusLabel}

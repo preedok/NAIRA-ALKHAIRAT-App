@@ -20,7 +20,7 @@ import Table from '../../../components/common/Table';
 import Input from '../../../components/common/Input';
 import Autocomplete from '../../../components/common/Autocomplete';
 import PageHeader from '../../../components/common/PageHeader';
-import { AutoRefreshControl } from '../../../components/common';
+import { AutoRefreshControl, NominalDisplay } from '../../../components/common';
 import { FilterIconButton } from '../../../components/common/PageFilter';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { TableColumn } from '../../../types';
@@ -36,7 +36,6 @@ import {
 } from '../../../services/api';
 import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
-import { formatIDR } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -433,14 +432,14 @@ const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
             {reportType === 'financial' && (
               <>
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={summary.total_revenue ?? 0} currency="IDR" />} iconClassName="bg-[#0D1A63] text-white" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={summary.invoice_count ?? 0} iconClassName="bg-sky-100 text-sky-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
               </>
             )}
             {(reportType === 'revenue' || reportType === 'orders' || reportType === 'partners' || reportType === 'jamaah') && (
               <>
                 <StatCard icon={<Package className="w-5 h-5" />} label="Total Order" value={summary.total_orders ?? 0} iconClassName="bg-slate-100 text-slate-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={formatIDR(summary.total_revenue ?? 0)} iconClassName="bg-[#0D1A63] text-white" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Revenue" value={<NominalDisplay amount={summary.total_revenue ?? 0} currency="IDR" />} iconClassName="bg-[#0D1A63] text-white" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
                 <StatCard icon={<Users className="w-5 h-5" />} label="Total Jamaah" value={summary.total_jamaah ?? 0} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary.total_invoices ?? 0} iconClassName="bg-sky-100 text-sky-600" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
               </>
@@ -468,7 +467,7 @@ const ReportsPage: React.FC = () => {
                   <tr key={s.period} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4 font-medium text-slate-900">{s.period}</td>
                     <td className="py-3 px-4 text-right text-slate-700">{s.count ?? 0}</td>
-                    <td className="py-3 px-4 text-right text-slate-700">{s.revenue != null ? formatIDR(s.revenue) : '-'}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{s.revenue != null ? <NominalDisplay amount={s.revenue} currency="IDR" /> : '-'}</td>
                     <td className="py-3 px-4 text-right text-slate-700">{s.jamaah ?? 0}</td>
                   </tr>
                 )}
@@ -494,7 +493,7 @@ const ReportsPage: React.FC = () => {
                       <tr key={row.branch_id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-3 px-4 text-slate-700">{row.branch_name ?? row.code ?? row.branch_id}</td>
                         <td className="py-3 px-4 text-right text-slate-700">{row.count ?? row.invoice_count ?? 0}</td>
-                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? <NominalDisplay amount={row.revenue} currency="IDR" /> : '-'}</td>
                       </tr>
                     )}
                   />
@@ -529,7 +528,7 @@ const ReportsPage: React.FC = () => {
                       <tr key={row.provinsi_id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-3 px-4 text-slate-700">{row.provinsi_name ?? row.provinsi_id}</td>
                         <td className="py-3 px-4 text-right text-slate-700">{row.count ?? row.invoice_count ?? 0}</td>
-                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? <NominalDisplay amount={row.revenue} currency="IDR" /> : '-'}</td>
                       </tr>
                     )}
                   />
@@ -551,7 +550,7 @@ const ReportsPage: React.FC = () => {
                       <tr key={row.wilayah_id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-3 px-4 text-slate-700">{row.wilayah_name ?? row.wilayah_id}</td>
                         <td className="py-3 px-4 text-right text-slate-700">{row.count ?? row.invoice_count ?? 0}</td>
-                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? formatIDR(row.revenue) : '-'}</td>
+                        <td className="py-3 px-4 text-right text-slate-700">{row.revenue != null ? <NominalDisplay amount={row.revenue} currency="IDR" /> : '-'}</td>
                       </tr>
                     )}
                   />
@@ -613,11 +612,11 @@ const ReportsPage: React.FC = () => {
                       <div>{inv.User?.company_name ?? inv.User?.name ?? '–'}</div>
                       <div className="text-xs text-slate-600 mt-0.5">{inv.Branch?.Provinsi?.Wilayah?.name && inv.Branch?.Provinsi?.name ? `${inv.Branch.Provinsi.Wilayah.name} · ${inv.Branch.Provinsi.name}` : (inv.Branch?.name ?? '–')}</div>
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-900">{formatIDR(parseFloat(inv.total_amount) || 0)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-900">{<NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />}</td>
                     <td className="py-3 px-4 text-right align-top">
                       <InvoiceStatusRefundCell inv={inv} currencyRates={currencyRates} align="right" />
                     </td>
-                    <td className="py-3 px-4 text-right text-slate-700">{formatIDR(parseFloat(inv.remaining_amount) || 0)}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{<NominalDisplay amount={parseFloat(inv.remaining_amount) || 0} currency="IDR" />}</td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at || inv.created_at ? new Date(inv.issued_at || inv.created_at).toLocaleDateString('id-ID') : '–'}</td>
                   </tr>
                 )}
