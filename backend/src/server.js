@@ -82,6 +82,22 @@ async function ensureOwnerProfilesIsMouOwnerColumn(db) {
   }
 }
 
+/** Ensure users has last_activity_at (untuk deteksi online realtime) */
+async function ensureUsersLastActivityAtColumn(db) {
+  try {
+    const [rows] = await db.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'last_activity_at'
+      LIMIT 1
+    `);
+    if (rows && rows.length > 0) return;
+    await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP WITH TIME ZONE NULL');
+    logger.info('users: added column last_activity_at');
+  } catch (e) {
+    logger.warn('ensureUsersLastActivityAtColumn:', e.message);
+  }
+}
+
 /** Ensure enum_users_role has owner_mou, owner_non_mou; migrate existing owner -> owner_mou */
 async function ensureOwnerRolesEnum(db) {
   try {
@@ -105,6 +121,7 @@ sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
+  .then(() => ensureUsersLastActivityAtColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
   .then(async () => {
     logger.info('Database synchronized');

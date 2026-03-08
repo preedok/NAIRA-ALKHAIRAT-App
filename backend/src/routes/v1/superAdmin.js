@@ -13,6 +13,7 @@ router.use(auth);
 router.use(requireRole(ROLES.SUPER_ADMIN));
 
 router.get('/monitoring', superAdminController.getMonitoring);
+router.get('/users-status', superAdminController.getUsersStatus);
 router.get('/logs', superAdminController.getLogs);
 router.post('/logs', superAdminController.createLog);
 router.get('/maintenance', superAdminController.listMaintenance);

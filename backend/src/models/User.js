@@ -58,6 +58,11 @@ const User = sequelize.define('User', {
   },
   last_login_at: {
     type: DataTypes.DATE
+  },
+  last_activity_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Updated by heartbeat; used for is_online (within 5 min)'
   }
 }, {
   tableName: 'users',

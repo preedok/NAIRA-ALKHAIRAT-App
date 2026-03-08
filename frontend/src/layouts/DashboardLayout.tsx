@@ -162,6 +162,12 @@ const menuItems: MenuItem[] = [
     icon: <Bell className="w-5 h-5" />,
     path: '/dashboard/super-admin/maintenance',
     roles: ['super_admin']
+  },
+  {
+    title: 'Status User',
+    icon: <Users className="w-5 h-5" />,
+    path: '/dashboard/super-admin/users-status',
+    roles: ['super_admin']
   }
 ];
 

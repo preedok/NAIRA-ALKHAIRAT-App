@@ -63,6 +63,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshUser();
   }, []);
 
+  // Heartbeat: update last_activity_at agar Super Admin bisa deteksi user online (realtime)
+  useEffect(() => {
+    if (!user) return;
+    const HEARTBEAT_MS = 22000;
+    const t = setInterval(() => {
+      authApi.activity().catch(() => {});
+    }, HEARTBEAT_MS);
+    return () => clearInterval(t);
+  }, [user?.id]);
+
   const login = async (credentials: LoginCredentials): Promise<{ success: boolean; message?: string }> => {
     setIsLoading(true);
     try {

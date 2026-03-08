@@ -33,12 +33,15 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<{ success: boolean; message?: string; data?: { user: any; token: string } }>('/auth/login', { email, password }),
   me: () => api.get<{ success: boolean; data: any }>('/auth/me'),
+  activity: () => api.get<{ success: boolean }>('/auth/activity'),
   changePassword: (current_password: string, new_password: string) =>
     api.post<{ success: boolean; message?: string }>('/auth/change-password', { current_password, new_password })
 };
 
 export const superAdminApi = {
   getMonitoring: (params?: { branch_id?: string; role?: string }) => api.get('/super-admin/monitoring', { params }),
+  getUsersStatus: (params?: { branch_id?: string; role?: string }) =>
+    api.get<{ success: boolean; data: Array<{ id: string; name: string; email: string; role: string; branch_id: string | null; is_active: boolean; last_login_at: string | null; last_activity_at: string | null; is_online: boolean; created_at: string | null }> }>('/super-admin/users-status', { params }),
   getLogs: (params?: { source?: string; level?: string; q?: string; page?: number; limit?: number }) => api.get('/super-admin/logs', { params }),
   createLog: (body: { source?: string; level?: string; message: string; meta?: object }) => api.post('/super-admin/logs', body),
   listMaintenance: (params?: { active_only?: string }) => api.get('/super-admin/maintenance', { params }),
