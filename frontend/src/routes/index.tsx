@@ -10,7 +10,6 @@ import DashboardRouter from '../pages/dashboard/DashboardRouter';
 import SuperAdminDashboard from '../pages/dashboard/roles/SuperAdminDashboard';
 import SuperAdminLogsPage from '../pages/dashboard/superadmin/SuperAdminLogsPage';
 import SuperAdminMaintenancePage from '../pages/dashboard/superadmin/SuperAdminMaintenancePage';
-import SuperAdminUsersStatusPage from '../pages/dashboard/superadmin/SuperAdminUsersStatusPage';
 import ProductsPage from '../pages/dashboard/components/ProductsPage';
 import ProductHotelPage from '../pages/dashboard/components/ProductHotelPage';
 import HotelWorkPage from '../pages/dashboard/components/HotelWorkPage';
@@ -92,10 +91,6 @@ const router = createBrowserRouter([
           {
             path: 'super-admin/maintenance',
             element: <SuperAdminMaintenancePage />
-          },
-          {
-            path: 'super-admin/users-status',
-            element: <SuperAdminUsersStatusPage />
           },
           {
             path: 'products',

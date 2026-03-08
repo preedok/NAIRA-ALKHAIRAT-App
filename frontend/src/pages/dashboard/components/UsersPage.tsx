@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, FileText, CheckCircle, Copy, Power, PowerOff } from 'lucide-react';
+import { Users as UsersIcon, Plus, Search, Edit, Trash2, Eye, Shield, Mail, FileCheck, FileText, CheckCircle, Copy, Power, PowerOff, Radio } from 'lucide-react';
 import { ROLE_NAMES, TableColumn, OWNER_STATUS_LABELS } from '../../../types';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
@@ -451,6 +451,7 @@ const UsersPage: React.FC = () => {
   const stats = [
     { label: 'Total Users', value: pagination?.total ?? users.length, color: 'from-blue-500 to-cyan-500' },
     { label: 'Aktif', value: users.filter((u: UserListItem) => u.is_active).length, color: 'from-emerald-500 to-teal-500' },
+    { label: 'Online', value: users.filter((u: UserListItem) => u.is_online).length, color: 'from-teal-500 to-emerald-500' },
     { label: 'Owner', value: users.filter((u: UserListItem) => u.role === 'owner_mou' || u.role === 'owner_non_mou').length, color: 'from-purple-500 to-pink-500' },
     { label: 'Staff', value: users.filter((u: UserListItem) => u.role !== 'owner_mou' && u.role !== 'owner_non_mou').length, color: 'from-orange-500 to-red-500' }
   ];
@@ -464,9 +465,20 @@ const UsersPage: React.FC = () => {
     { id: 'wilayah', label: 'Wilayah', align: 'left' },
     { id: 'provinsi', label: 'Provinsi', align: 'left' },
     { id: 'status', label: 'Status', align: 'center' },
+    { id: 'is_online', label: 'Online', align: 'center' },
+    { id: 'last_login_at', label: 'Terakhir login', align: 'left' },
     { id: 'password_aktivasi', label: 'Password (aktivasi)', align: 'left' },
     { id: 'actions', label: 'Aksi', align: 'center' }
   ];
+
+  const formatLastLogin = (iso: string | null | undefined): string => {
+    if (!iso) return '–';
+    try {
+      return new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+    } catch {
+      return '–';
+    }
+  };
 
   const buildActionItems = (user: UserListItem): ActionsMenuItem[] => {
     const ownerStatus = (user as UserListItem & { owner_status?: string }).owner_status;
@@ -519,7 +531,7 @@ const UsersPage: React.FC = () => {
         right={<AutoRefreshControl onRefresh={fetchUsers} disabled={loading} />}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map((stat, i) => (
           <StatCard
             key={i}
@@ -681,6 +693,18 @@ const UsersPage: React.FC = () => {
                     {user.is_active ? 'Aktif' : 'Nonaktif'}
                   </Badge>
                 )}
+              </td>
+              <td className="px-6 py-4 text-center">
+                {user.is_online ? (
+                  <Badge variant="success" className="gap-1 bg-emerald-100 text-emerald-800 border-emerald-200">
+                    <Radio className="w-3 h-3" /> Online
+                  </Badge>
+                ) : (
+                  <span className="text-slate-500 text-sm">Offline</span>
+                )}
+              </td>
+              <td className="px-6 py-4 text-slate-600 text-sm">
+                {formatLastLogin(user.last_login_at)}
               </td>
               <td className="px-6 py-4">
                 {(user.role === 'owner_mou' || user.role === 'owner_non_mou') && user.activation_generated_password ? (

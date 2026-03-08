@@ -39,8 +39,6 @@ export const authApi = {
 
 export const superAdminApi = {
   getMonitoring: (params?: { branch_id?: string; role?: string }) => api.get('/super-admin/monitoring', { params }),
-  getUsersStatus: (params?: { branch_id?: string; role?: string }) =>
-    api.get<{ success: boolean; data: Array<{ id: string; name: string; email: string; role: string; branch_id: string | null; is_active: boolean; last_login_at: string | null; is_online: boolean; created_at: string | null }> }>('/super-admin/users-status', { params }),
   getLogs: (params?: { source?: string; level?: string; q?: string; page?: number; limit?: number }) => api.get('/super-admin/logs', { params }),
   createLog: (body: { source?: string; level?: string; message: string; meta?: object }) => api.post('/super-admin/logs', body),
   listMaintenance: (params?: { active_only?: string }) => api.get('/super-admin/maintenance', { params }),
@@ -522,6 +520,8 @@ export interface UserListItem {
   registration_payment_proof_url?: string | null;
   registration_payment_amount?: number | null;
   activation_generated_password?: string | null;
+  last_login_at?: string | null;
+  is_online?: boolean;
 }
 export const adminPusatApi = {
   getDashboard: (params?: { branch_id?: string; date_from?: string; date_to?: string; status?: string; provinsi_id?: string; wilayah_id?: string }) =>

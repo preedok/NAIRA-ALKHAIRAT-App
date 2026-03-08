@@ -260,7 +260,7 @@ const listUsers = asyncHandler(async (req, res) => {
 
   const { count, rows } = await User.findAndCountAll({
     where,
-    attributes: ['id', 'email', 'name', 'phone', 'role', 'branch_id', 'wilayah_id', 'region', 'company_name', 'is_active', 'created_at'],
+    attributes: ['id', 'email', 'name', 'phone', 'role', 'branch_id', 'wilayah_id', 'region', 'company_name', 'is_active', 'created_at', 'last_login_at'],
     include: [
       includeBranch,
       includeOwnerProfile,
@@ -272,6 +272,7 @@ const listUsers = asyncHandler(async (req, res) => {
     distinct: true
   });
 
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
   const data = rows.map((u) => {
     const j = u.toJSON();
     const isOwner = isOwnerRole(j.role);
@@ -291,6 +292,15 @@ const listUsers = asyncHandler(async (req, res) => {
       j.activation_generated_password = j.OwnerProfile.activation_generated_password != null ? String(j.OwnerProfile.activation_generated_password) : null;
       j.is_mou_owner = !!j.OwnerProfile.is_mou_owner;
       delete j.OwnerProfile;
+    }
+    const lastLoginAt = j.last_login_at;
+    if (lastLoginAt) {
+      const d = new Date(lastLoginAt);
+      j.last_login_at = d.toISOString();
+      j.is_online = d >= fiveMinAgo;
+    } else {
+      j.last_login_at = null;
+      j.is_online = false;
     }
     delete j.Branch;
     return j;
