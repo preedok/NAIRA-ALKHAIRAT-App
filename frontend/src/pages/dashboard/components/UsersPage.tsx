@@ -109,9 +109,12 @@ const UsersPage: React.FC = () => {
     branchesApi.listWilayah().then((res) => {
       if (res.data?.data && Array.isArray(res.data.data)) {
         const list = res.data.data as { id: string; name: string }[];
-        const byId = new Map<string, { id: string; name: string }>();
-        list.forEach((w) => { if (!byId.has(w.id)) byId.set(w.id, { id: w.id, name: w.name || '' }); });
-        setWilayahList(Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name)));
+        const byName = new Map<string, { id: string; name: string }>();
+        list.forEach((w) => {
+          const key = (w.name || '').trim().toLowerCase();
+          if (key && !byName.has(key)) byName.set(key, { id: w.id, name: w.name || '' });
+        });
+        setWilayahList(Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name)));
       }
     }).catch(() => {});
   }, []);

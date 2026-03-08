@@ -32,12 +32,13 @@ const listWilayah = asyncHandler(async (req, res) => {
     attributes: ['id', 'name'],
     order: [['name', 'ASC']]
   });
-  // Dedupe by id (hindari duplikat di dropdown jika ada data ganda di tabel)
-  const byId = new Map();
+  // Dedupe by name (nama sama cukup tampil sekali; pakai id pertama yang ketemu)
+  const byName = new Map();
   wilayah.forEach((w) => {
-    if (!byId.has(w.id)) byId.set(w.id, { id: w.id, name: w.name });
+    const key = (w.name || '').trim().toLowerCase();
+    if (key && !byName.has(key)) byName.set(key, { id: w.id, name: w.name || '' });
   });
-  const data = Array.from(byId.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const data = Array.from(byName.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   res.json({ success: true, data });
 });
 
