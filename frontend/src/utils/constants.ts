@@ -209,7 +209,8 @@ export const USER_ROLES = {
   ROLE_HOTEL: 'role_hotel',
   ROLE_BUS: 'role_bus',
   ROLE_ACCOUNTING: 'role_accounting',
-  OWNER: 'owner'
+  OWNER_MOU: 'owner_mou',
+  OWNER_NON_MOU: 'owner_non_mou'
 } as const;
 
 // ============================================

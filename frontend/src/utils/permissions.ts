@@ -14,7 +14,7 @@ export function canDownloadVisaTicketHotel(role: UserRole): boolean {
 
 /** Bisa buat order: Owner, Invoice, Admin Cabang, Admin Pusat, Super Admin */
 export function canCreateOrder(role: UserRole): boolean {
-  return ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(role);
+  return ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(role);
 }
 
 /** Bisa verifikasi pembayaran & aktifkan invoice overdue: Role Invoice + Admin */

@@ -318,7 +318,7 @@ const getAnalytics = asyncHandler(async (req, res) => {
       byBranch[bid].revenue += !['draft', 'cancelled'].includes(j.status) ? parseFloat(j.total_amount || 0) : 0;
       byBranch[bid].jamaah += parseInt(j.total_jamaah || 0, 10);
     }
-    const r = j.User?.role || 'owner';
+    const r = j.User?.role || 'owner_mou';
     byRole[r] = (byRole[r] || 0) + 1;
     const provinsiId = j.Branch?.Provinsi?.id || j.Branch?.provinsi_id;
     const wilayahId = j.Branch?.Provinsi?.Wilayah?.id;

@@ -49,7 +49,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
 }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const isOwner = user?.role === 'owner';
+  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canSeeBookingDetails = !isOwner;
   const canAddRoomForRole = canAddRoom && !isOwner;
   const [selectedHotelId, setSelectedHotelId] = useState<string>('');
@@ -379,14 +379,9 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                       </thead>
                       <tbody>
                         {(() => {
-                          const roomTypeKeys = Object.keys(addQuantityPopup.roomTypes).sort((a, b) => {
-                            const ia = ROOM_TYPES.indexOf(a as typeof ROOM_TYPES[number]);
-                            const ib = ROOM_TYPES.indexOf(b as typeof ROOM_TYPES[number]);
-                            if (ia >= 0 && ib >= 0) return ia - ib;
-                            if (ia >= 0) return -1;
-                            if (ib >= 0) return 1;
-                            return a.localeCompare(b);
-                          });
+                          const roomTypeKeys = Object.keys(addQuantityPopup.roomTypes).sort(
+                            (a, b) => ROOM_TYPES.indexOf(a as typeof ROOM_TYPES[number]) - ROOM_TYPES.indexOf(b as typeof ROOM_TYPES[number])
+                          );
                           return roomTypeKeys.map((rt) => {
                             const r = addQuantityPopup.roomTypes[rt];
                             const total = r?.total ?? 0;

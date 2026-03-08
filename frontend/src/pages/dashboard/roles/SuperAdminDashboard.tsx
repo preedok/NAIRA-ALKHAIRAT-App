@@ -40,7 +40,7 @@ async function readBlobError(blob: Blob): Promise<string> {
 }
 
 const MONITORING_ROLES: UserRole[] = [
-  'admin_pusat', 'owner', 'invoice_koordinator', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_accounting'
+  'admin_pusat', 'owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_accounting'
 ];
 
 const SuperAdminDashboard: React.FC = () => {

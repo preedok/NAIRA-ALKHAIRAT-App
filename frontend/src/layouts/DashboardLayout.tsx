@@ -38,14 +38,14 @@ import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
 // Semua submenu Products tampil untuk setiap role yang punya akses Products. Accounting hak akses sama seperti admin_pusat.
-const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling', 'owner'];
+const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling', 'owner_mou', 'owner_non_mou'];
 
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner', 'handling']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling']
   },
   {
     title: 'Owners Wilayah',
@@ -101,13 +101,13 @@ const menuItems: MenuItem[] = [
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus']
+    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner_mou', 'owner_non_mou', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus']
   },
   {
     title: 'Refund',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/refunds',
-    roles: ['admin_pusat', 'super_admin', 'role_accounting', 'owner']
+    roles: ['admin_pusat', 'super_admin', 'role_accounting', 'owner_mou', 'owner_non_mou']
   },
   {
     title: 'Users',
@@ -480,11 +480,11 @@ const DashboardLayout: React.FC = () => {
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
     { path: '/dashboard/products/packages', label: 'Paket', icon: Package },
-    ...((user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou') ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
+    ...((user?.role === 'owner_mou' || user?.role === 'owner_non_mou') ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
   const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices' || m.path === '/dashboard/products');
 
-  const isOwner = user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   if (isOwner && user?.owner_status && user.owner_status !== 'active' && location.pathname !== '/dashboard/owner-activation') {
     return <Navigate to="/dashboard/owner-activation" replace />;
   }

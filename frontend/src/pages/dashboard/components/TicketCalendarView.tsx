@@ -53,7 +53,7 @@ interface TicketCalendarViewProps {
 const TicketCalendarView: React.FC<TicketCalendarViewProps> = ({ ticketProducts, onAddQuotaClick }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const isOwner = user?.role === 'owner';
+  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canSeeBookingDetails = !isOwner;
   const canAddQuota = !isOwner && !!onAddQuotaClick;
   const [tripTypeFilter, setTripTypeFilter] = useState<TicketTripType | ''>('');

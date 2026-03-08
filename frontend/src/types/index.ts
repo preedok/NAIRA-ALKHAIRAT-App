@@ -16,7 +16,6 @@ export type UserRole =
   | 'invoice_saudi'
   | 'handling'
   | 'admin_cabang'
-  | 'owner'
   | 'owner_mou'
   | 'owner_non_mou'
   | 'role_hotel'
@@ -75,7 +74,6 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   invoice_saudi: 'Invoice Saudi',
   handling: 'Handling',
   admin_cabang: 'Admin Cabang',
-  owner: 'Owner',
   owner_mou: 'Owner MOU',
   owner_non_mou: 'Owner Non-MOU',
   role_hotel: 'Hotel',
@@ -83,8 +81,8 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   role_accounting: 'Accounting'
 };
 
-/** Role owner (legacy, MOU, non-MOU) untuk pengecekan akses */
-export const OWNER_ROLES: UserRole[] = ['owner', 'owner_mou', 'owner_non_mou'];
+/** Role owner (hanya owner_mou dan owner_non_mou; role "owner" sudah tidak dipakai) */
+export const OWNER_ROLES: UserRole[] = ['owner_mou', 'owner_non_mou'];
 export function isOwnerRole(role: string): role is UserRole {
   return OWNER_ROLES.includes(role as UserRole);
 }

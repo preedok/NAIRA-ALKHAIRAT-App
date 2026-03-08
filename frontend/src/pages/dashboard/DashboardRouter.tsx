@@ -30,8 +30,8 @@ const RoleDeprecatedMessage: React.FC<{ label?: string }> = ({ label = 'Role ini
 
 const DashboardRouter: React.FC = () => {
   const { user } = useAuth();
-  const role = user?.role ?? 'owner';
-  const isOwner = role === 'owner' || role === 'owner_mou' || role === 'owner_non_mou';
+  const role = user?.role;
+  const isOwner = role === 'owner_mou' || role === 'owner_non_mou';
 
   if (isOwner && user?.owner_status && user.owner_status !== 'active') {
     return <Navigate to="/dashboard/owner-activation" replace />;
@@ -50,7 +50,6 @@ const DashboardRouter: React.FC = () => {
       return <VisaDashboard />;
     case 'tiket_koordinator':
       return <TicketDashboard />;
-    case 'owner':
     case 'owner_mou':
     case 'owner_non_mou':
       return <OwnerDashboard />;

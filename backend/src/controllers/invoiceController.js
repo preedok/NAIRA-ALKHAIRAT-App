@@ -1436,7 +1436,7 @@ async function canAccessInvoiceForReallocation(invoiceId, user) {
  * Pemindahan dana dari invoice sumber (canceled/overpaid) ke invoice penerima. Bisa banyak sumber -> banyak penerima.
  */
 const reallocatePayments = asyncHandler(async (req, res) => {
-  const allowed = ['owner', 'owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
+  const allowed = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
   if (!allowed.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Hanya owner atau role invoice yang dapat memindahkan dana' });
   }
@@ -1573,7 +1573,7 @@ const reallocatePayments = asyncHandler(async (req, res) => {
  * Query: invoice_id (optional, filter sebagai sumber atau target), limit, page
  */
 const listReallocations = asyncHandler(async (req, res) => {
-  const allowed = ['owner', 'owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'];
+  const allowed = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'role_accounting'];
   if (!allowed.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang melihat riwayat pemindahan dana' });
   }
@@ -1630,7 +1630,7 @@ const getReleasable = asyncHandler(async (req, res) => {
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   const access = await canAccessInvoiceForReallocation(invoice.id, req.user);
   if (!access.ok) return res.status(403).json({ success: false, message: access.message });
-  const allowed = ['owner', 'owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
+  const allowed = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
   if (!allowed.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Tidak berwenang' });
   }

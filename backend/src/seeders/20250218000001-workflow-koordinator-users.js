@@ -145,7 +145,7 @@ module.exports = {
         email: o.email,
         password_hash: hash,
         name: o.name,
-        role: ROLES.OWNER,
+        role: ROLES.OWNER_MOU,
         branch_id: null,
         wilayah_id: null,
         company_name: o.company_name,

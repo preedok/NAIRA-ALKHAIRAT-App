@@ -30,7 +30,7 @@ const ProductDraftBar: React.FC = () => {
   const { items, count, removeItem } = useOrderDraft();
   const [expanded, setExpanded] = useState(true);
 
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canAddToOrder = user?.role === 'owner_mou' || user?.role === 'owner_non_mou' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const onProductsPath = location.pathname.startsWith('/dashboard/products');
   const showBar = onProductsPath && canAddToOrder && count > 0;
 

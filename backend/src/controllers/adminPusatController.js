@@ -181,6 +181,8 @@ const listUsers = asyncHandler(async (req, res) => {
   const where = {};
   if (role === 'divisi') {
     where.role = { [Op.notIn]: OWNER_ROLES };
+  } else if (role === 'owner') {
+    where.role = { [Op.in]: OWNER_ROLES };
   } else if (role) {
     where.role = role;
   }
@@ -338,7 +340,7 @@ const KOORDINATOR_CREATE_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDIN
  */
 const createUser = asyncHandler(async (req, res) => {
   const { name, email, password, role, branch_id, region, provinsi_id, kabupaten_kode, kabupaten_nama } = req.body;
-  const allowedRoles = [ROLES.OWNER, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
+  const allowedRoles = [ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
   if (!name || !email || !password || !role) {
     return res.status(400).json({ success: false, message: 'name, email, password, role wajib' });
   }
@@ -453,7 +455,7 @@ const updateUser = asyncHandler(async (req, res) => {
     updates.password_hash = await bcrypt.hash(password, salt);
   }
 
-  const allowedRoles = [ROLES.OWNER, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
+  const allowedRoles = [ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU, ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING];
   if (role !== undefined && allowedRoles.includes(role)) updates.role = role;
   const currentRole = role !== undefined ? role : user.role;
 

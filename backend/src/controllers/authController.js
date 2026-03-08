@@ -66,7 +66,7 @@ const login = asyncHandler(async (req, res) => {
     ...u,
     branch_name: user.Branch ? user.Branch.name : null
   };
-  if (user.role === ROLES.OWNER && user.owner_status) {
+  if (isOwnerRole(user.role) && user.owner_status) {
     payload.owner_status = user.owner_status;
   }
 

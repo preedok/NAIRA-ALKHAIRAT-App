@@ -88,7 +88,7 @@ const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'', quantity:0, unit_price:0, with_meal:false });
 const newRow  = (): OrderItemRow  => ({ id:`row-${uid()}`, type:'hotel', product_id:'', product_name:'', quantity:0, unit_price:0, room_breakdown:[newLine()] });
 const rCap = (rt?:RoomTypeId) => rt ? (ROOM_TYPES.find(t=>t.id===rt)?.cap??0) : 0;
-const canManage = (role?:string) => role==='owner' || role==='invoice_koordinator' || role==='invoice_saudi';
+const canManage = (role?:string) => role==='owner_mou' || role==='owner_non_mou' || role==='invoice_koordinator' || role==='invoice_saudi';
 /** Jumlah malam dari check_in s/d check_out (tanggal saja). Return 0 jika invalid. */
 function getNights(checkIn?: string, checkOut?: string): number {
   if (!checkIn || !checkOut) return 0;
@@ -131,7 +131,7 @@ const OrderFormPage: React.FC = () => {
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
 
-  const isOwner      = user?.role === 'owner' || user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const isOwner      = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
   const ownerProf    = canPickOwner && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
   const [ownerMeProfile, setOwnerMeProfile] = useState<{ is_mou_owner?: boolean } | null>(null);
@@ -638,7 +638,7 @@ const OrderFormPage: React.FC = () => {
     } else {
       const body:Record<string,any>={items:payload,...ratesPayload};
       if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
-      if(ownerId&&user?.role!=='owner') body.owner_id=ownerId;
+      if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
       ordersApi.create(body)
         .then(()=>{ orderDraft.clear(); showToast('Invoice dibuat.','success'); navigate('/dashboard/orders-invoices',{state:{refreshList:true}}); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal membuat invoice','error'))
@@ -676,7 +676,7 @@ const OrderFormPage: React.FC = () => {
     } else {
       const body:Record<string,any>={items:payload,save_as_draft:true,...ratesPayload};
       if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
-      if(ownerId&&user?.role!=='owner') body.owner_id=ownerId;
+      if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
       ordersApi.create(body)
         .then((res:any)=>{
           orderDraft.clear();

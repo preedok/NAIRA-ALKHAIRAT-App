@@ -78,7 +78,8 @@ const GROUP_BY_OPTIONS: { value: ReportGroupBy; label: string }[] = [
 
 const ROLES_FILTER = [
   { value: '', label: 'Semua role' },
-  { value: 'owner', label: 'Owner' },
+  { value: 'owner_mou', label: 'Owner MOU' },
+  { value: 'owner_non_mou', label: 'Owner Non-MOU' },
   { value: 'admin_pusat', label: 'Admin Pusat' },
   { value: 'role_accounting', label: 'Accounting' }
 ];

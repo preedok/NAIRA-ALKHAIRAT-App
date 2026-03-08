@@ -158,8 +158,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
   /** Owner tidak boleh edit/hapus product; hanya role yang diizinkan backend */
   const canEditProduct = ['super_admin', 'admin_pusat', 'role_accounting'].includes(user?.role ?? '');
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
-  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role ?? '');
+  const canAddToOrder = user?.role === 'owner_mou' || user?.role === 'owner_non_mou' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role ?? '');
 
   useEffect(() => {
     if (openSeasonsForHotelId && hotels.length > 0) {

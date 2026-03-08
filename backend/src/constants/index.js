@@ -16,10 +16,10 @@ const ROLES = {
   ROLE_BUS: 'role_bus',
   ROLE_INVOICE_SAUDI: 'invoice_saudi',
   ROLE_ACCOUNTING: 'role_accounting',
-  OWNER: 'owner',
   OWNER_MOU: 'owner_mou',
   OWNER_NON_MOU: 'owner_non_mou',
   // Deprecated (tetap di enum DB untuk kompatibilitas, tidak dipakai)
+  OWNER: 'owner',
   ADMIN_PROVINSI: 'admin_provinsi',
   ADMIN_WILAYAH: 'admin_wilayah',
   ADMIN_CABANG: 'admin_cabang',
@@ -296,13 +296,13 @@ const BUSINESS_RULES = {
   MOU_DISCOUNT_PERCENT: 10  // diskon % untuk owner MOU (harga 10% lebih murah dari non-MOU)
 };
 
-/** True if role is any owner type (owner, owner_mou, owner_non_mou) */
+/** True if role is owner_mou or owner_non_mou (role "owner" deprecated, sudah dimigrasi ke owner_mou) */
 function isOwnerRole(role) {
-  return role && [ROLES.OWNER, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU].includes(role);
+  return role && [ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU].includes(role);
 }
 
-/** Semua role owner untuk RBAC (allow list) */
-const OWNER_ROLES = [ROLES.OWNER, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU];
+/** Role owner untuk RBAC (hanya owner_mou dan owner_non_mou) */
+const OWNER_ROLES = [ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU];
 
 module.exports = {
   ROLES,

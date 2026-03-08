@@ -189,7 +189,7 @@ const getById = asyncHandler(async (req, res) => {
     ]
   });
   if (!r) return res.status(404).json({ success: false, message: 'Refund tidak ditemukan' });
-  if (req.user.role === 'owner' && r.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Akses ditolak' });
+  if (isOwnerRole(req.user.role) && r.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Akses ditolak' });
   res.json({ success: true, data: r, status_labels: REFUND_STATUS_LABELS });
 });
 

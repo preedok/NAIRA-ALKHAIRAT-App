@@ -40,7 +40,7 @@ interface BusCalendarViewProps {
 const BusCalendarView: React.FC<BusCalendarViewProps> = ({ busProducts, onAddQuotaClick }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const isOwner = user?.role === 'owner';
+  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canSeeBookingDetails = !isOwner;
   const canAddQuota = !isOwner && !!onAddQuotaClick;
   const [selectedProductId, setSelectedProductId] = useState<string>('');

@@ -34,7 +34,7 @@ const ProductsPage: React.FC = () => {
     setSearchParams({ tab: id });
   };
 
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canAddToOrder = user?.role === 'owner_mou' || user?.role === 'owner_non_mou' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const showDraftBar = canAddToOrder && draftCount > 0;
 
   return (

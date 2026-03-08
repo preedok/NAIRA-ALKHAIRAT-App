@@ -80,8 +80,8 @@ const BusPage: React.FC<BusPageProps> = ({
   const { user } = useAuth();
   const { showToast } = useToast();
   const { addItem: addDraftItem } = useOrderDraft();
-  const canAddToOrder = user?.role === 'owner' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
-  const canShowProductActions = ['owner', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
+  const canAddToOrder = user?.role === 'owner_mou' || user?.role === 'owner_non_mou' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const canShowProductActions = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
   const [busProducts, setBusProducts] = useState<BusProduct[]>([]);
   const [loadingBusProducts, setLoadingBusProducts] = useState(false);
 

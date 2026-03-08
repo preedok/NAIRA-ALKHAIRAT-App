@@ -35,9 +35,9 @@ module.exports = {
       { id: 'b0000000-0000-0000-0000-000000000008', email: 'ticket@bintangglobal.com', name: 'Koordinator Tiket', role: ROLES.TIKET_KOORDINATOR, branch_id: null, wilayah_id: null },
       { id: 'b0000000-0000-0000-0000-000000000009', email: 'bus@bintangglobal.com', name: 'Staff Bus', role: ROLES.ROLE_BUS, branch_id: BRANCH_JKT },
       { id: 'b0000000-0000-0000-0000-000000000010', email: 'accounting@bintangglobal.com', name: 'Staff Accounting', role: ROLES.ROLE_ACCOUNTING, branch_id: null },
-      { id: 'b0000000-0000-0000-0000-000000000011', email: 'owner1@bintangglobal.com', name: 'Owner Travel Satu', role: ROLES.OWNER, branch_id: null, company_name: 'Travel Satu Jaya' },
-      { id: 'b0000000-0000-0000-0000-000000000012', email: 'owner2@bintangglobal.com', name: 'Owner Travel Dua', role: ROLES.OWNER, branch_id: null, company_name: 'CV Travel Dua' },
-      { id: 'b0000000-0000-0000-0000-000000000013', email: 'owner3@bintangglobal.com', name: 'Owner Travel Tiga', role: ROLES.OWNER, branch_id: null, company_name: 'PT Travel Tiga Utama' }
+      { id: 'b0000000-0000-0000-0000-000000000011', email: 'owner1@bintangglobal.com', name: 'Owner Travel Satu', role: ROLES.OWNER_MOU, branch_id: null, company_name: 'Travel Satu Jaya' },
+      { id: 'b0000000-0000-0000-0000-000000000012', email: 'owner2@bintangglobal.com', name: 'Owner Travel Dua', role: ROLES.OWNER_MOU, branch_id: null, company_name: 'CV Travel Dua' },
+      { id: 'b0000000-0000-0000-0000-000000000013', email: 'owner3@bintangglobal.com', name: 'Owner Travel Tiga', role: ROLES.OWNER_MOU, branch_id: null, company_name: 'PT Travel Tiga Utama' }
     ];
 
     const userRows = users.map(u => ({
