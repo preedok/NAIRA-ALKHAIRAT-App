@@ -107,7 +107,12 @@ const UsersPage: React.FC = () => {
 
   useEffect(() => {
     branchesApi.listWilayah().then((res) => {
-      if (res.data?.data) setWilayahList(res.data.data);
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        const list = res.data.data as { id: string; name: string }[];
+        const byId = new Map<string, { id: string; name: string }>();
+        list.forEach((w) => { if (!byId.has(w.id)) byId.set(w.id, { id: w.id, name: w.name || '' }); });
+        setWilayahList(Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name)));
+      }
     }).catch(() => {});
   }, []);
 
