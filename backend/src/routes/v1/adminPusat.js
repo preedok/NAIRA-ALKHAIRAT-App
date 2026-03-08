@@ -5,7 +5,7 @@ const { ROLES } = require('../../constants');
 const adminPusatController = require('../../controllers/adminPusatController');
 
 router.use(auth);
-router.use(requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT));
+router.use(requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING));
 
 // Dashboard
 router.get('/dashboard', adminPusatController.getDashboard);

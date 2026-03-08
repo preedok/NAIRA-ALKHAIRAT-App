@@ -18,13 +18,10 @@ import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
+import { PROGRESS_STATUS_OPTIONS_HOTEL, PROGRESS_STATUS_OPTIONS_MEAL, ROOM_TYPE_LABELS as ROOM_TYPE_LABELS_SHARED } from '../../../components/common/InvoiceProgressStatusCell';
 
-const STATUS_OPTIONS = [
-  { value: 'waiting_confirmation', label: 'Progress' },
-  { value: 'confirmed', label: 'Penetapan room' },
-  { value: 'room_assigned', label: 'Pemberian nomor room' },
-  { value: 'completed', label: 'Selesai' }
-];
+/** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
+const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_HOTEL;
 
 const JAMAAH_STATUS_LABELS: Record<string, string> = {
   belum_masuk: 'Belum masuk room',
@@ -32,18 +29,10 @@ const JAMAAH_STATUS_LABELS: Record<string, string> = {
   keluar_room: 'Keluar room'
 };
 
-const MEAL_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Dikonfirmasi' },
-  { value: 'completed', label: 'Selesai' }
-];
+/** Satu sumber kebenaran dengan InvoiceProgressStatusCell */
+const MEAL_OPTIONS = PROGRESS_STATUS_OPTIONS_MEAL;
 
-const ROOM_TYPE_LABELS: Record<string, string> = {
-  single: 'Single',
-  double: 'Double',
-  triple: 'Triple',
-  quad: 'Quad'
-};
+const ROOM_TYPE_LABELS = ROOM_TYPE_LABELS_SHARED;
 
 const formatDate = (d: string | null | undefined) => {
   if (!d) return '–';

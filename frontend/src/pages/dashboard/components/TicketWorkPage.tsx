@@ -23,23 +23,12 @@ import Badge from '../../../components/common/Badge';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
-const STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'data_received', label: 'Data Diterima' },
-  { value: 'seat_reserved', label: 'Kursi Direservasi' },
-  { value: 'booking', label: 'Booking' },
-  { value: 'payment_airline', label: 'Pembayaran Maskapai' },
-  { value: 'ticket_issued', label: 'Tiket Terbit' }
-];
+import { PROGRESS_STATUS_OPTIONS_TICKET, PROGRESS_LABELS_TICKET } from '../../../components/common/InvoiceProgressStatusCell';
 
-const RECAP_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  data_received: 'Data Diterima',
-  seat_reserved: 'Kursi Reserved',
-  booking: 'Booking',
-  payment_airline: 'Bayar Maskapai',
-  ticket_issued: 'Terbit'
-};
+/** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
+const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_TICKET;
+
+const RECAP_STATUS_LABELS: Record<string, string> = { ...PROGRESS_LABELS_TICKET };
 
 const RECAP_STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <Clock className="w-5 h-5" />,

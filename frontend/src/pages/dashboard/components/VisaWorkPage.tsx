@@ -20,24 +20,14 @@ import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
+import { PROGRESS_STATUS_OPTIONS_VISA, PROGRESS_LABELS_VISA } from '../../../components/common/InvoiceProgressStatusCell';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
-const STATUS_OPTIONS = [
-  { value: 'document_received', label: 'Dokumen Diterima' },
-  { value: 'submitted', label: 'Terkirim (Nusuk)' },
-  { value: 'in_process', label: 'Dalam Proses' },
-  { value: 'approved', label: 'Disetujui' },
-  { value: 'issued', label: 'Visa Terbit' }
-];
+/** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
+const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_VISA;
 
-const RECAP_STATUS_LABELS: Record<string, string> = {
-  document_received: 'Dok. Diterima',
-  submitted: 'Terkirim',
-  in_process: 'Proses',
-  approved: 'Disetujui',
-  issued: 'Terbit'
-};
+const RECAP_STATUS_LABELS: Record<string, string> = { ...PROGRESS_LABELS_VISA };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   document_received: <Inbox className="h-5 w-5" />,

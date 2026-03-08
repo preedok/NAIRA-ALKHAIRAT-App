@@ -18,11 +18,10 @@ import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
+import { PROGRESS_STATUS_OPTIONS_BUS } from '../../../components/common/InvoiceProgressStatusCell';
 
-const TICKET_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'issued', label: 'Terbit' }
-];
+/** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
+const TICKET_OPTIONS = PROGRESS_STATUS_OPTIONS_BUS;
 
 const TRIP_OPTIONS = [
   { value: 'pending', label: 'Pending' },
