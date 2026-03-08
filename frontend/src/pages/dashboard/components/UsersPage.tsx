@@ -51,6 +51,8 @@ const UsersPage: React.FC = () => {
   const [wilayahId, setWilayahId] = useState<string>('');
   const [provinsiId, setProvinsiId] = useState<string>('');
   const [branchId, setBranchId] = useState<string>('');
+  const [kabupatenId, setKabupatenId] = useState<string>('');
+  const [kabupatenList, setKabupatenList] = useState<{ id: string; kode?: string; nama: string; name?: string }[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [sortBy, setSortBy] = useState('created_at');
@@ -136,13 +138,23 @@ const UsersPage: React.FC = () => {
   const provincesFiltered = provincesList;
 
   useEffect(() => {
-    const params: { limit: number; page: number; provinsi_id?: string; wilayah_id?: string } = { limit: 500, page: 1 };
-    if (provinsiId) params.provinsi_id = provinsiId;
-    else if (wilayahId) params.wilayah_id = wilayahId;
-    branchesApi.list(params).then((res) => {
-      if (res.data?.data) setBranches(res.data.data);
-    }).catch(() => {});
-  }, [wilayahId, provinsiId]);
+    if (!provinsiId || !provinsiId.trim()) {
+      setKabupatenList([]);
+      setKabupatenId('');
+      return;
+    }
+    branchesApi.listKabupaten(provinsiId).then((res) => {
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        const list = (res.data.data as { id: string; kode?: string; nama?: string; name?: string }[]).map((k) => ({
+          id: k.id,
+          kode: k.kode,
+          nama: k.nama || k.name || '',
+          name: k.nama || k.name || ''
+        }));
+        setKabupatenList(list);
+      } else setKabupatenList([]);
+    }).catch(() => setKabupatenList([]));
+  }, [provinsiId]);
 
   useEffect(() => {
     if (addUserModalOpen) {
@@ -409,8 +421,8 @@ const UsersPage: React.FC = () => {
     if (!canListUsers) return;
     setLoading(true);
     setError(null);
-    const params: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' } = { limit, page, sort_by: sortBy, sort_order: sortOrder };
-    if (branchId) params.branch_id = branchId;
+    const params: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; kabupaten_id?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' } = { limit, page, sort_by: sortBy, sort_order: sortOrder };
+    if (kabupatenId) params.kabupaten_id = kabupatenId;
     if (wilayahId) params.wilayah_id = wilayahId;
     if (provinsiId) params.provinsi_id = provinsiId;
     if (tabFilter === 'owner') params.role = 'owner';
@@ -426,7 +438,7 @@ const UsersPage: React.FC = () => {
         setError(err.response?.data?.message || 'Gagal memuat daftar user');
       })
       .finally(() => setLoading(false));
-  }, [canListUsers, branchId, wilayahId, provinsiId, tabFilter, page, limit, sortBy, sortOrder]);
+  }, [canListUsers, kabupatenId, wilayahId, provinsiId, tabFilter, page, limit, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchUsers();
@@ -447,7 +459,7 @@ const UsersPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [branchId, wilayahId, provinsiId, tabFilter]);
+  }, [kabupatenId, wilayahId, provinsiId, tabFilter]);
 
   const filteredUsers = users.filter((user: UserListItem) => {
     const matchesSearch =
@@ -558,7 +570,7 @@ const UsersPage: React.FC = () => {
         <CardSectionHeader
           icon={<UsersIcon className="w-6 h-6" />}
           title="Daftar User"
-          subtitle="Filter menurut tipe, wilayah, provinsi, cabang. Hanya dapat diakses Super Admin dan Admin Pusat."
+          subtitle="Filter menurut tipe, wilayah, provinsi, kabupaten/kota. Hanya dapat diakses Super Admin dan Admin Pusat."
           className="mb-4"
           right={
             canListUsers ? (
@@ -588,7 +600,7 @@ const UsersPage: React.FC = () => {
                 <div className="min-w-0">
                   <Autocomplete
                     value={wilayahId}
-                    onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+                    onChange={(v) => { setWilayahId(v); setProvinsiId(''); setKabupatenId(''); }}
                     options={[{ value: '', label: 'Semua wilayah' }, ...wilayahList.map((w) => ({ value: w.id, label: w.name }))]}
                     placeholder="Wilayah"
                     emptyLabel="Semua wilayah"
@@ -598,7 +610,7 @@ const UsersPage: React.FC = () => {
                 <div className="min-w-0">
                   <Autocomplete
                     value={provinsiId}
-                    onChange={(v) => { setProvinsiId(v); setBranchId(''); }}
+                    onChange={(v) => { setProvinsiId(v); setKabupatenId(''); }}
                     options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_PROVINSI }, ...provincesFiltered.map((p) => ({ value: p.id, label: p.name }))]}
                     placeholder={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI}
                     emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI}
@@ -607,11 +619,11 @@ const UsersPage: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <Autocomplete
-                    value={branchId}
-                    onChange={(v) => setBranchId(v)}
-                    options={[{ value: '', label: 'Semua cabang' }, ...branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}${b.city ? ` (${b.city})` : ''}` }))]}
-                    placeholder="Cabang"
-                    emptyLabel="Semua cabang"
+                    value={kabupatenId}
+                    onChange={(v) => setKabupatenId(v)}
+                    options={[{ value: '', label: 'Semua kabupaten/kota' }, ...kabupatenList.map((k) => ({ value: k.id, label: k.nama || k.name || '' }))]}
+                    placeholder="Kabupaten/Kota"
+                    emptyLabel="Semua kabupaten/kota"
                     fullWidth
                   />
                 </div>

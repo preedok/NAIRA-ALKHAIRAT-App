@@ -526,7 +526,7 @@ export interface UserListItem {
 export const adminPusatApi = {
   getDashboard: (params?: { branch_id?: string; date_from?: string; date_to?: string; status?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: AdminPusatDashboardData }>('/admin-pusat/dashboard', { params }),
-  listUsers: (params?: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; is_active?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  listUsers: (params?: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; kabupaten_id?: string; is_active?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get<{ success: boolean; data: UserListItem[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/admin-pusat/users', { params }),
   getUserById: (id: string) =>
     api.get<{ success: boolean; data: UserListItem & { OwnerProfile?: any; address?: string; whatsapp?: string; npwp?: string; preferred_branch_id?: string } }>(`/admin-pusat/users/${id}`),

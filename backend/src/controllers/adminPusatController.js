@@ -10,6 +10,7 @@ const {
   Branch,
   Provinsi,
   Wilayah,
+  Kabupaten,
   OwnerProfile,
   Invoice,
   Refund,
@@ -177,7 +178,7 @@ const getDashboard = asyncHandler(async (req, res) => {
 const USER_ALLOWED_SORT = ['name', 'email', 'role', 'created_at'];
 
 const listUsers = asyncHandler(async (req, res) => {
-  const { role, branch_id, wilayah_id, provinsi_id, region, is_active, limit = 25, page = 1, sort_by, sort_order } = req.query;
+  const { role, branch_id, wilayah_id, provinsi_id, kabupaten_id, region, is_active, limit = 25, page = 1, sort_by, sort_order } = req.query;
   const where = {};
   if (role === 'divisi') {
     where.role = { [Op.notIn]: OWNER_ROLES };
@@ -195,7 +196,17 @@ const listUsers = asyncHandler(async (req, res) => {
   }
 
   let branchIds = null;
-  if (wilayah_id || provinsi_id) {
+  if (kabupaten_id && String(kabupaten_id).trim()) {
+    const kab = await Kabupaten.findByPk(kabupaten_id.trim(), { attributes: ['id', 'nama', 'provinsi_id'] });
+    if (kab && kab.provinsi_id) {
+      const nama = (kab.nama || '').trim();
+      const branchWhere = { provinsi_id: kab.provinsi_id };
+      if (nama) branchWhere[Op.or] = [{ city: { [Op.iLike]: `%${nama}%` } }, { name: { [Op.iLike]: `%${nama}%` } }];
+      const branchesInKab = await Branch.findAll({ where: branchWhere, attributes: ['id'] });
+      branchIds = branchesInKab.length > 0 ? branchesInKab.map((b) => b.id) : [];
+    }
+  }
+  if (branchIds == null && (wilayah_id || provinsi_id)) {
     const branchWhere = {};
     if (provinsi_id) branchWhere.provinsi_id = provinsi_id;
     const branchOpts = { attributes: ['id'] };
