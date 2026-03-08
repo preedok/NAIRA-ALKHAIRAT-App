@@ -98,9 +98,22 @@ async function ensureOwnerRolesEnum(db) {
   }
 }
 
-// alter: false by default — avoid ALTER when DB has views (e.g. v_orders_summary) that depend on tables.
-// Set SYNC_ALTER=true only when you need schema changes and have dropped dependent views.
-sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
+// Start HTTP server first so Nginx gets a response (avoid 502 while DB initializes)
+const apiVersion = process.env.API_VERSION || 'v1';
+const apiUrl = (process.env.NODE_ENV === 'production' && process.env.CORS_ORIGIN)
+  ? `${process.env.CORS_ORIGIN}/api/${apiVersion}`
+  : `http://localhost:${PORT}/api/${apiVersion}`;
+
+app.listen(PORT, () => {
+  logger.info(`🚀 Server running on port ${PORT}`);
+  logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
+  logger.info(`🗄️  Database: PostgreSQL`);
+  logger.info(`🌐 API: ${apiUrl}`);
+});
+
+// Then sync DB and run ensure* (non-blocking; failures logged but server stays up)
+const alter = process.env.SYNC_ALTER === 'true';
+sequelize.sync({ alter })
   .then(() => ensureUsersPasswordHashColumn(sequelize))
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
@@ -112,26 +125,16 @@ sequelize.sync({ alter: process.env.SYNC_ALTER === 'true' })
     await SystemLog.create({ source: 'backend', level: 'info', message: 'Database ready', meta: {} }).catch((err) => {
       console.error('SystemLog create failed (pastikan tabel system_logs ada):', err.message);
     });
-    app.listen(PORT, async () => {
-      const apiVersion = process.env.API_VERSION || 'v1';
-      const apiUrl = (process.env.NODE_ENV === 'production' && process.env.CORS_ORIGIN)
-        ? `${process.env.CORS_ORIGIN}/api/${apiVersion}`
-        : `http://localhost:${PORT}/api/${apiVersion}`;
-      logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
-      logger.info(`🗄️  Database: PostgreSQL`);
-      logger.info(`🌐 API: ${apiUrl}`);
-      await SystemLog.create({ source: 'backend', level: 'info', message: 'Server started', meta: { port: PORT } }).catch((err) => {
-        console.error('SystemLog (Server started) failed:', err.message);
-      });
+    await SystemLog.create({ source: 'backend', level: 'info', message: 'Server started', meta: { port: PORT } }).catch((err) => {
+      console.error('SystemLog (Server started) failed:', err.message);
     });
   })
   .catch(err => {
     logger.error('Failed to sync database:', err);
-    process.exit(1);
+    // Jangan exit(1) agar server tetap jalan; /health dan retry request tetap bisa
   });
 
 process.on('unhandledRejection', (err) => {
   logger.error('Unhandled Rejection:', err);
-  process.exit(1);
+  if (process.env.NODE_ENV !== 'production') process.exit(1);
 });
