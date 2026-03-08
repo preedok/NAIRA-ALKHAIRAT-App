@@ -95,6 +95,11 @@ export const notificationsApi = {
     api.patch<{ success: boolean; message?: string }>('/notifications/read-all')
 };
 
+export const maskapaiApi = {
+  list: (params?: { q?: string; active_only?: string }) =>
+    api.get<{ success: boolean; data: { id: string; code: string; name: string; is_active: boolean }[] }>('/maskapai', { params })
+};
+
 export const productsApi = {
   list: (params?: { type?: string; with_prices?: string; branch_id?: string; owner_id?: string; view_as_pusat?: string; is_package?: string; include_inactive?: string; name?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/products', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
@@ -167,7 +172,7 @@ export const productsApi = {
   create: (body: { type: string; code?: string; name: string; description?: string; is_package?: boolean; meta?: object }) => api.post('/products', body),
   createHotel: (body: { name: string; description?: string; meta?: object }) => api.post('/products/hotels', body),
   createVisa: (body: { name: string; description?: string; visa_kind: 'only' | 'tasreh' | 'premium'; require_hotel?: boolean; default_quota?: number | null; currency?: 'IDR' | 'SAR' | 'USD' }) => api.post('/products/visas', body),
-  createTicket: (body: { name: string; description?: string; trip_type?: 'one_way' | 'return_only' | 'round_trip' }) => api.post('/products/tickets', body),
+  createTicket: (body: { name: string; description?: string; trip_type?: 'one_way' | 'return_only' | 'round_trip'; maskapai_id?: string }) => api.post('/products/tickets', body),
   createBus: (body: { name: string; description?: string; bus_kind?: 'bus' | 'hiace'; trip_type?: 'one_way' | 'return_only' | 'round_trip'; price_currency?: 'IDR' | 'SAR' | 'USD'; route_prices_by_trip?: Record<'one_way' | 'return_only' | 'round_trip', number>; price_per_vehicle_idr?: number; default_quota?: number | null }) => api.post('/products/bus', body),
   setTicketBandara: (productId: string, body: { bandara: string; period_type?: 'default' | 'month' | 'week' | 'day'; period_key?: string; price_idr: number; seat_quota: number }) => api.put(`/products/${productId}/ticket-bandara`, body),
   setTicketBandaraBulk: (productId: string, body: { bandara_defaults: Record<string, { price_idr?: number; seat_quota?: number }> }) => api.put(`/products/${productId}/ticket-bandara-bulk`, body),

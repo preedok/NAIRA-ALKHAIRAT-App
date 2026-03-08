@@ -438,12 +438,18 @@ async function generateTicketCode() {
 
 /**
  * POST /api/v1/products/tickets - buat produk tiket (workflow: pergi saja / pulang saja / pulang pergi)
- * Body: name, description?, trip_type? ('one_way' | 'return_only' | 'round_trip')
+ * Body: name, description?, trip_type? ('one_way' | 'return_only' | 'round_trip'), maskapai_id? (UUID dari master maskapai)
  */
 const createTicket = asyncHandler(async (req, res) => {
-  const { name, description, trip_type } = req.body;
+  const { name, description, trip_type, maskapai_id } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
   const tripType = (trip_type && TICKET_TRIP_TYPES.includes(trip_type)) ? trip_type : 'round_trip';
+  const meta = { trip_type: tripType };
+  if (maskapai_id && String(maskapai_id).trim()) {
+    const { Maskapai } = require('../models');
+    const maskapai = await Maskapai.findByPk(String(maskapai_id).trim());
+    if (maskapai) meta.maskapai_id = maskapai.id;
+  }
   const code = await generateTicketCode();
   const product = await Product.create({
     type: 'ticket',
@@ -451,7 +457,7 @@ const createTicket = asyncHandler(async (req, res) => {
     name: name.trim(),
     description: description || null,
     is_package: false,
-    meta: { trip_type: tripType },
+    meta,
     created_by: req.user.id
   });
   res.status(201).json({ success: true, data: product });
@@ -700,8 +706,12 @@ const update = asyncHandler(async (req, res) => {
         else { const q = parseInt(nextMeta.default_quota, 10); nextMeta.default_quota = (Number.isNaN(q) || q < 0) ? 0 : Math.round(q); }
       }
     }
-    if (product.type === 'ticket' && nextMeta.trip_type && !TICKET_TRIP_TYPES.includes(nextMeta.trip_type)) {
-      nextMeta.trip_type = 'round_trip';
+    if (product.type === 'ticket') {
+      if (nextMeta.trip_type && !TICKET_TRIP_TYPES.includes(nextMeta.trip_type)) nextMeta.trip_type = 'round_trip';
+      if (nextMeta.hasOwnProperty('maskapai_id')) {
+        if (nextMeta.maskapai_id === null || nextMeta.maskapai_id === '' || nextMeta.maskapai_id === undefined) delete nextMeta.maskapai_id;
+        else nextMeta.maskapai_id = String(nextMeta.maskapai_id).trim();
+      }
     }
     if (product.type === 'bus') {
       if (nextMeta.bus_kind && !BUS_KIND_VALUES.includes(nextMeta.bus_kind)) nextMeta.bus_kind = 'bus';

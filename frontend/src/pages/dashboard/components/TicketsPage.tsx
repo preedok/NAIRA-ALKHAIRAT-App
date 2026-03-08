@@ -10,7 +10,7 @@ import { StatCard, CardSectionHeader, Input, PriceCurrencyField, Textarea, Autoc
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import { businessRulesApi, productsApi, adminPusatApi, type TicketSeason } from '../../../services/api';
+import { businessRulesApi, productsApi, adminPusatApi, maskapaiApi, type TicketSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
 import { getPriceTripleForTable } from '../../../utils';
@@ -51,8 +51,14 @@ interface TicketProduct {
   code: string;
   name: string;
   description?: string | null;
-  meta?: { trip_type?: TicketTripType };
+  meta?: { trip_type?: TicketTripType; maskapai_id?: string };
   bandara_options?: BandaraSchedule[];
+}
+
+interface MaskapaiItem {
+  id: string;
+  code: string;
+  name: string;
 }
 
 /** Senin dari minggu yang berisi dateStr */
@@ -108,18 +114,21 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
     name: '',
     description: '',
     trip_type: 'round_trip' as TicketTripType,
+    maskapai_id: '',
     bandara_defaults: BANDARA_TIKET.reduce((acc, b) => {
       acc[b.code] = {};
       return acc;
     }, {} as Record<string, { price_idr?: number; seat_quota?: number }>)
   });
   const [addSaving, setAddSaving] = useState(false);
+  const [maskapaiList, setMaskapaiList] = useState<MaskapaiItem[]>([]);
 
   const [editProductModal, setEditProductModal] = useState<{
     product: TicketProduct;
     name: string;
     description: string;
     trip_type: TicketTripType;
+    maskapai_id: string;
   } | null>(null);
   const [editProductSaving, setEditProductSaving] = useState(false);
   const [ticketQuotaProduct, setTicketQuotaProduct] = useState<TicketProduct | null>(null);
@@ -155,6 +164,13 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       const rates = cr as { SAR_TO_IDR?: number; USD_TO_IDR?: number } | null;
       if (rates && typeof rates === 'object') setCurrencyRates({ SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 });
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    maskapaiApi.list().then((res) => {
+      const data = (res.data as { data?: MaskapaiItem[] })?.data;
+      setMaskapaiList(Array.isArray(data) ? data : []);
+    }).catch(() => setMaskapaiList([]));
   }, []);
 
   const fetchTicketProducts = useCallback(() => {
@@ -271,7 +287,8 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       const createRes = await productsApi.createTicket({
         name: addForm.name.trim(),
         description: addForm.description.trim() || undefined,
-        trip_type: addForm.trip_type
+        trip_type: addForm.trip_type,
+        maskapai_id: addForm.maskapai_id?.trim() || undefined
       });
       const product = (createRes.data as { data?: { id: string } })?.data;
       const productId = product?.id;
@@ -292,6 +309,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
         name: '',
         description: '',
         trip_type: 'round_trip',
+        maskapai_id: '',
         bandara_defaults: BANDARA_TIKET.reduce((acc, b) => { acc[b.code] = {}; return acc; }, {} as Record<string, { price_idr?: number; seat_quota?: number }>)
       });
       fetchTicketProducts();
@@ -311,7 +329,10 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       await productsApi.update(editProductModal.product.id, {
         name: editProductModal.name.trim(),
         description: editProductModal.description.trim() || null,
-        meta: { trip_type: editProductModal.trip_type }
+        meta: {
+          trip_type: editProductModal.trip_type,
+          maskapai_id: editProductModal.maskapai_id?.trim() || null
+        }
       });
       showToast('Produk tiket diperbarui', 'success');
       setEditProductModal(null);
@@ -400,6 +421,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
               columns={[
                 { id: 'code', label: 'Kode', align: 'left' },
                 { id: 'name', label: 'Nama Produk', align: 'left' },
+                { id: 'maskapai', label: 'Maskapai', align: 'left' },
                 { id: 'workflow', label: 'Workflow', align: 'left' },
                 { id: 'currency', label: 'Mata Uang', align: 'center' },
                 ...BANDARA_TIKET.map((b) => ({ id: `bandara_${b.code}`, label: `${b.name} (${b.code})`, align: 'left' as const })),
@@ -410,6 +432,9 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                   <td className="py-2 px-4 font-medium text-slate-900">{p.code}</td>
                   <td className="py-2 px-4 text-slate-800">{p.name}</td>
+                  <td className="py-2 px-4 text-slate-600 text-sm">
+                    {p.meta?.maskapai_id ? (maskapaiList.find((m) => m.id === p.meta?.maskapai_id)?.name ?? '—') : '—'}
+                  </td>
                   <td className="py-2 px-4">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-primary-100 text-primary-700">
                       {TICKET_TRIP_LABELS[(p.meta?.trip_type as TicketTripType) || 'round_trip']}
@@ -459,7 +484,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                           align="right"
                           items={[
                             { id: 'periode', label: 'Kuota per periode', icon: <Calendar className="w-4 h-4" />, onClick: () => { setTicketQuotaProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
-                            { id: 'edit', label: 'Edit produk', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditProductModal({ product: p, name: p.name, description: p.description ?? '', trip_type: (p.meta?.trip_type as TicketTripType) || 'round_trip' }) },
+                            { id: 'edit', label: 'Edit produk', icon: <Pencil className="w-4 h-4" />, onClick: () => setEditProductModal({ product: p, name: p.name, description: p.description ?? '', trip_type: (p.meta?.trip_type as TicketTripType) || 'round_trip', maskapai_id: (p.meta?.maskapai_id as string) ?? '' }) },
                             { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteTicket(p), danger: true },
                           ]}
                         />
@@ -620,6 +645,25 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                 </div>
               </section>
 
+              {/* Maskapai */}
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <Plane className="w-4 h-4 text-primary-500" />
+                  <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Maskapai</span>
+                </div>
+                <p className="text-xs text-slate-500 mb-3">Pilih maskapai untuk produk tiket ini (opsional).</p>
+                <Autocomplete
+                  label="Maskapai"
+                  value={addForm.maskapai_id}
+                  onChange={(v) => setAddForm((f) => ({ ...f, maskapai_id: v }))}
+                  options={[
+                    { value: '', label: '— Tidak dipilih —' },
+                    ...maskapaiList.map((m) => ({ value: m.id, label: `${m.name} (${m.code})` }))
+                  ]}
+                  placeholder="Pilih maskapai..."
+                />
+              </section>
+
               {/* Harga & kuota per bandara */}
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -722,6 +766,16 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
                   ))}
                 </div>
               </div>
+              <Autocomplete
+                label="Maskapai"
+                value={editProductModal.maskapai_id}
+                onChange={(v) => setEditProductModal((m) => m ? { ...m, maskapai_id: v } : null)}
+                options={[
+                  { value: '', label: '— Tidak dipilih —' },
+                  ...maskapaiList.map((m) => ({ value: m.id, label: `${m.name} (${m.code})` }))
+                ]}
+                placeholder="Pilih maskapai..."
+              />
             </ModalBody>
             <ModalFooter>
               <Button variant="outline" onClick={() => setEditProductModal(null)} disabled={editProductSaving}>Batal</Button>
