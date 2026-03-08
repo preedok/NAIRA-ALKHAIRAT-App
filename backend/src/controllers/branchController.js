@@ -59,21 +59,43 @@ const listKabupaten = asyncHandler(async (req, res) => {
   const isUuid = uuidRegex.test(String(provinceId).trim());
   let provinsiId = isUuid ? provinceId : null;
   let kode = isUuid ? null : provinceId;
+  let provinsiName = null;
   if (isUuid) {
-    const prov = await Provinsi.findByPk(provinceId, { attributes: ['id', 'kode'] });
+    const prov = await Provinsi.findByPk(provinceId, { attributes: ['id', 'kode', 'name'] });
     if (!prov) return res.status(404).json({ success: false, message: 'Provinsi tidak ditemukan' });
     provinsiId = prov.id;
     kode = prov.kode;
+    provinsiName = prov.name;
   } else {
-    const prov = await Provinsi.findOne({ where: { kode: provinceId }, attributes: ['id'] });
-    if (prov) provinsiId = prov.id;
+    const prov = await Provinsi.findOne({ where: { kode: provinceId }, attributes: ['id', 'kode', 'name'] });
+    if (prov) {
+      provinsiId = prov.id;
+      provinsiName = prov.name;
+    }
   }
-  const fromDb = provinsiId
-    ? await Kabupaten.findAll({ where: { provinsi_id: provinsiId }, attributes: ['id', 'kode', 'nama'], order: [['kode', 'ASC']] })
-    : [];
-  const data = fromDb.length > 0
-    ? fromDb.map((k) => ({ id: k.id, kode: k.kode, nama: k.nama, name: k.nama }))
-    : await getKabupatenByProvince(kode || provinceId);
+  let provinsiIds = provinsiId ? [provinsiId] : [];
+  if (provinsiId && provinsiName) {
+    const allProv = await Provinsi.findAll({ attributes: ['id', 'name'], raw: true });
+    const nameKey = (provinsiName || '').trim().toLowerCase();
+    provinsiIds = (allProv || []).filter((p) => (p.name || '').trim().toLowerCase() === nameKey).map((p) => p.id);
+  }
+  let fromDb = [];
+  if (provinsiIds.length > 0) {
+    fromDb = await Kabupaten.findAll({
+      where: { provinsi_id: { [Op.in]: provinsiIds } },
+      attributes: ['id', 'kode', 'nama'],
+      order: [['kode', 'ASC']]
+    });
+  }
+  let data;
+  if (fromDb.length > 0) {
+    data = fromDb.map((k) => ({ id: k.id, kode: k.kode, nama: k.nama, name: k.nama }));
+  } else {
+    const fromApi = await getKabupatenByProvince(kode || provinceId);
+    data = Array.isArray(fromApi)
+      ? fromApi.map((k) => ({ id: k.id || k.kode, kode: k.kode || k.id, nama: k.nama || k.name || '', name: k.nama || k.name || '' }))
+      : [];
+  }
   res.json({ success: true, data });
 });
 
