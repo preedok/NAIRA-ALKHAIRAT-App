@@ -15,6 +15,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
+import { getProductListOwnerId } from '../../../utils/productHelpers';
 
 interface HandlingProduct {
   id: string;
@@ -71,6 +72,7 @@ const HandlingPage: React.FC = () => {
     return () => clearTimeout(t);
   }, [searchName]);
 
+  const ownerId = getProductListOwnerId(user);
   const fetchList = useCallback(() => {
     const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
     let pageToUse = page;
@@ -97,6 +99,7 @@ const HandlingPage: React.FC = () => {
         sort_by: filterSortBy,
         sort_order: filterSortOrder,
         ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}),
+        ...(ownerId ? { owner_id: ownerId } : {}),
         limit,
         page: pageToUse
       })
@@ -113,7 +116,7 @@ const HandlingPage: React.FC = () => {
       })
       .catch(() => setList([]))
       .finally(() => setLoading(false));
-  }, [page, limit, filterIncludeInactive, filterSortBy, filterSortOrder, debouncedSearchName]);
+  }, [page, limit, filterIncludeInactive, filterSortBy, filterSortOrder, debouncedSearchName, ownerId]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 

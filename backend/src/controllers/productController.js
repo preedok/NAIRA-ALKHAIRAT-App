@@ -43,6 +43,17 @@ function fillTriple(sourceCurrency, value, rates) {
   return { idr: v * USD_TO_IDR, sar: (v * USD_TO_IDR) / SAR_TO_IDR, usd: v };
 }
 
+/** Terapkan diskon MOU ke amount jika owner_id adalah owner MOU. Dipakai di getEffectivePrice (bus, tiket, umum). */
+async function applyMouDiscountIfOwner(amount, ownerId, branchId) {
+  if (amount == null || typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0 || !ownerId) return amount;
+  const profile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
+  if (!profile || !profile.is_mou_owner) return amount;
+  const rules = await getRulesForBranch(branchId);
+  const discountPct = Math.min(100, Math.max(0, parseInt(rules.mou_discount_percent, 10) || 0));
+  if (discountPct <= 0) return amount;
+  return Math.round(amount * (1 - discountPct / 100) * 100) / 100;
+}
+
 /**
  * Resolve effective price: special owner > branch > general (pusat).
  * Untuk produk tiket: jika meta.bandara diisi, cari harga general dengan meta.bandara yang sama.
@@ -54,7 +65,7 @@ async function getEffectivePrice(productId, branchId, ownerId, meta = {}, curren
     if (product && product.type === 'bus' && product.meta && product.meta.route_prices_by_trip) {
       const tripType = (meta.trip_type && BUS_TRIP_TYPES.includes(meta.trip_type)) ? meta.trip_type : 'round_trip';
       const price = product.meta.route_prices_by_trip[tripType];
-      if (typeof price === 'number' && price >= 0) return price;
+      if (typeof price === 'number' && price >= 0) return await applyMouDiscountIfOwner(price, ownerId, branchId);
     }
   }
 
@@ -83,7 +94,7 @@ async function getEffectivePrice(productId, branchId, ownerId, meta = {}, curren
         if (schedules.month[monthKey]) slot = schedules.month[monthKey];
       }
       if (!slot && schedules.default) slot = schedules.default;
-      if (slot && slot.price_idr != null) return parseFloat(slot.price_idr);
+      if (slot && slot.price_idr != null) return await applyMouDiscountIfOwner(parseFloat(slot.price_idr), ownerId, branchId);
     }
     const price = await ProductPrice.findOne({
       where: {
@@ -96,7 +107,8 @@ async function getEffectivePrice(productId, branchId, ownerId, meta = {}, curren
       },
       order: [['created_at', 'DESC']]
     });
-    return price ? parseFloat(price.amount) : null;
+    if (price) return await applyMouDiscountIfOwner(parseFloat(price.amount), ownerId, branchId);
+    return null;
   }
 
   const where = { product_id: productId, currency, ...effectiveWhere };
@@ -123,16 +135,8 @@ async function getEffectivePrice(productId, branchId, ownerId, meta = {}, curren
 
   const priceRow = special || branch || general;
   if (!priceRow) return null;
-  let amount = parseFloat(priceRow.amount);
-  if (ownerId && amount > 0) {
-    const profile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
-    if (profile && profile.is_mou_owner) {
-      const rules = await getRulesForBranch(branchId);
-      const discountPct = Math.min(100, Math.max(0, parseInt(rules.mou_discount_percent, 10) || 0));
-      if (discountPct > 0) amount = amount * (1 - discountPct / 100);
-    }
-  }
-  return amount;
+  const amount = parseFloat(priceRow.amount);
+  return await applyMouDiscountIfOwner(amount, ownerId, branchId) ?? amount;
 }
 
 const PRODUCT_ALLOWED_SORT = ['code', 'name', 'type', 'is_active', 'created_at'];
@@ -272,10 +276,11 @@ const list = asyncHandler(async (req, res) => {
           const priceRow = generalTicket.find(pr => pr.meta && pr.meta.bandara === code && pr.currency === refCur);
           if (priceRow && !defaultSlot.price_idr) defaultSlot.price_idr = parseFloat(priceRow.amount);
           if (bandaraSeats[code] != null && defaultSlot.seat_quota == null) defaultSlot.seat_quota = Number(bandaraSeats[code]) || 0;
+          const rawPriceIdr = Number(defaultSlot.price_idr) || 0;
           return {
             bandara: code,
             name,
-            default: { price_idr: Number(defaultSlot.price_idr) || 0, seat_quota: Number(defaultSlot.seat_quota) || 0 },
+            default: { price_idr: applyMou(rawPriceIdr), seat_quota: Number(defaultSlot.seat_quota) || 0 },
             month: s.month && typeof s.month === 'object' ? s.month : {},
             week: s.week && typeof s.week === 'object' ? s.week : {},
             day: s.day && typeof s.day === 'object' ? s.day : {}

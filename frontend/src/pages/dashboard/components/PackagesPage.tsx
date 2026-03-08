@@ -187,14 +187,17 @@ const PackagesPage: React.FC = () => {
     }
   }, [canCreatePackage]);
 
+  const optionsOwnerId = getProductListOwnerId(user);
   useEffect(() => {
     if (!canCreatePackage) return;
     setProductsLoading(true);
+    const base = { with_prices: 'true' as const, include_inactive: 'false' as const, limit: 500 };
+    const ownerParam = optionsOwnerId ? { owner_id: optionsOwnerId } : {};
     Promise.all([
-      productsApi.list({ type: 'visa', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? []),
-      productsApi.list({ type: 'ticket', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? []),
-      productsApi.list({ type: 'bus', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? []),
-      productsApi.list({ type: 'handling', with_prices: 'true', include_inactive: 'false', limit: 500 }).then((r) => (r.data?.data as ProductOption[]) ?? [])
+      productsApi.list({ type: 'visa', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'ticket', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'bus', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'handling', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? [])
     ])
       .then(([visa, ticket, bus, handling]) => {
         setVisaProducts(visa);
@@ -204,7 +207,7 @@ const PackagesPage: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setProductsLoading(false));
-  }, [canCreatePackage]);
+  }, [canCreatePackage, optionsOwnerId]);
 
   useEffect(() => {
     businessRulesApi.get().then((res) => {
