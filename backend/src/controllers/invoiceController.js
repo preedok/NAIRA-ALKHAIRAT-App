@@ -244,7 +244,8 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
       const ids = await getBranchIdsForWilayah(effectiveWilayahId);
       if (ids.length > 0) return { branch_id: { [Op.in]: ids } };
       if (user.branch_id) return { branch_id: user.branch_id };
-      return { branch_id: { [Op.in]: [] } };
+      // Wilayah tidak punya cabang ter-link: jangan filter (tampilkan semua invoice) agar koordinator tetap bisa lihat data
+      return {};
     }
     if (user.branch_id) return { branch_id: user.branch_id };
     return {};
@@ -687,7 +688,7 @@ const getSummary = asyncHandler(async (req, res) => {
   if (req.user.wilayah_id && isKoordinatorRole(req.user.role)) {
     const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
     if (branchIds.length) where.branch_id = { [Op.in]: branchIds };
-    else where.branch_id = { [Op.in]: [] };
+    // bila wilayah tidak punya cabang ter-link: jangan set filter agar summary tampil
   }
   // Role hotel/bus/handling/visa_koordinator/tiket_koordinator: summary hanya invoice yang order-nya sudah ada pembayaran DP (sama seperti list)
   const divisiProgressRolesSummary = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
