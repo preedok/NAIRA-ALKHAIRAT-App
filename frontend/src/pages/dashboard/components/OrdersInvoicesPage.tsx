@@ -1969,6 +1969,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <div className="space-y-2">
                                   <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Cabang</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
                                   <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Wilayah</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.Provinsi?.Wilayah?.name || '–'}</dd></div>
+                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Provinsi</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.Provinsi?.name || viewInvoice.Branch?.Provinsi?.nama || '–'}</dd></div>
                                   <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Kode Cabang</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.code || '–'}</dd></div>
                                 </div>
                               </div>
