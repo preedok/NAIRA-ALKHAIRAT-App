@@ -508,7 +508,11 @@ const list = asyncHandler(async (req, res) => {
   ]);
 
   const orderIds = [...new Set((orderRows || []).map((r) => r.order_id).filter(Boolean))];
+  // invoiceRows bisa duplikat karena include Order+OrderItems (satu invoice = banyak baris); hitung unik per invoice
+  const seenInvoiceIds = new Set();
   const byInvoiceStatus = (invoiceRows || []).reduce((acc, r) => {
+    if (seenInvoiceIds.has(r.id)) return acc;
+    seenInvoiceIds.add(r.id);
     acc[r.status] = (acc[r.status] || 0) + 1;
     return acc;
   }, {});
