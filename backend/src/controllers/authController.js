@@ -1,5 +1,5 @@
 const asyncHandler = require('express-async-handler');
-const { User, OwnerProfile, Branch, Provinsi, Wilayah } = require('../models');
+const { User, OwnerProfile, Branch, Provinsi, Wilayah, Kabupaten } = require('../models');
 const { signToken } = require('../middleware/auth');
 const { ROLES, OWNER_STATUS, isOwnerRole } = require('../constants');
 const logger = require('../config/logger');
@@ -73,13 +73,25 @@ const login = asyncHandler(async (req, res) => {
   const u = user.toJSON();
   delete u.password_hash;
   const branch = user.Branch;
+  let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
+  let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
+  if (branch && !provinsiName && branch.code) {
+    const kabupaten = await Kabupaten.findOne({
+      where: { kode: branch.code },
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+    });
+    if (kabupaten?.Provinsi) {
+      provinsiName = kabupaten.Provinsi.name || kabupaten.Provinsi.nama || null;
+      wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+    }
+  }
   const payload = {
     ...u,
     branch_name: branch ? branch.name : null,
     branch_code: branch ? branch.code : null,
     city: branch ? branch.city : null,
-    provinsi_name: branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null,
-    wilayah_name: branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null
+    provinsi_name: provinsiName,
+    wilayah_name: wilayahName
   };
   if (isOwnerRole(user.role) && user.owner_status) {
     payload.owner_status = user.owner_status;
@@ -133,8 +145,20 @@ const me = asyncHandler(async (req, res) => {
   u.branch_name = branch ? branch.name : null;
   u.branch_code = branch ? branch.code : null;
   u.city = branch ? branch.city : null;
-  u.provinsi_name = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
-  u.wilayah_name = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
+  let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
+  let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
+  if (branch && !provinsiName && branch.code) {
+    const kabupaten = await Kabupaten.findOne({
+      where: { kode: branch.code },
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'nama'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+    });
+    if (kabupaten?.Provinsi) {
+      provinsiName = kabupaten.Provinsi.name || kabupaten.Provinsi.nama || null;
+      wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+    }
+  }
+  u.provinsi_name = provinsiName;
+  u.wilayah_name = wilayahName;
   res.json({ success: true, data: u });
 });
 
