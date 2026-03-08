@@ -77,6 +77,21 @@ const PaymentProof = sequelize.define('PaymentProof', {
     type: DataTypes.STRING(500),
     allowNull: false
   },
+  proof_file_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Nama file asli saat upload'
+  },
+  proof_file_content_type: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'MIME type (image/jpeg, application/pdf, dll)'
+  },
+  proof_file_data: {
+    type: DataTypes.BLOB,
+    allowNull: true,
+    comment: 'Isi file disimpan di DB untuk tampil/unduh'
+  },
   uploaded_by: {
     type: DataTypes.UUID,
     references: { model: 'users', key: 'id' }
@@ -116,7 +131,10 @@ const PaymentProof = sequelize.define('PaymentProof', {
 }, {
   tableName: 'payment_proofs',
   underscored: true,
-  timestamps: true
+  timestamps: true,
+  defaultScope: {
+    attributes: { exclude: ['proof_file_data'] }
+  }
 });
 
 module.exports = PaymentProof;

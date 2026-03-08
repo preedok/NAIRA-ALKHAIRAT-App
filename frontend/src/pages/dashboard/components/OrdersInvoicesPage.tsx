@@ -683,6 +683,30 @@ const OrdersInvoicesPage: React.FC = () => {
     }
   };
 
+  /** Unduh bukti bayar via API (supaya file yang disimpan di DB juga bisa diunduh) */
+  const downloadProofFile = async (invoiceId: string, proof: { id: string; proof_file_url?: string; proof_file_name?: string }) => {
+    if (!proof?.proof_file_url || proof.proof_file_url === 'issued-saudi') return;
+    try {
+      const res = await invoicesApi.getPaymentProofFile(invoiceId, proof.id);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || (proof as any).proof_file_name || `bukti-bayar-${proof.id.slice(-6)}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name || 'bukti-bayar';
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh bukti bayar', 'error');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const map: Record<string, 'success' | 'warning' | 'info' | 'error' | 'default'> = {
       paid: 'success', partial_paid: 'warning', tentative: 'default', draft: 'info', confirmed: 'info',
@@ -2486,10 +2510,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                {fileUrl && (
-                                  <a href={fileUrl} download target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[#0D1A63] hover:underline">
+                                {(fileUrl || (p.proof_file_url && p.proof_file_url !== 'issued-saudi')) && (
+                                  <button type="button" onClick={() => downloadProofFile(viewInvoice.id, p)} className="inline-flex items-center gap-1 text-sm text-[#0D1A63] hover:underline bg-transparent border-0 cursor-pointer p-0">
                                     <Download className="w-4 h-4" /> Unduh
-                                  </a>
+                                  </button>
                                 )}
                                 {isPending && canVerify && p.payment_location !== 'saudi' && (
                                   <>

@@ -66,6 +66,9 @@ const create = [
     // IDR: jumlah sesuai mata uang, tidak perlu konversi
 
     let fileUrl = null;
+    let proofFileName = null;
+    let proofFileContentType = null;
+    let proofFileData = null;
     if (req.file) {
       const finalName = uploadConfig.paymentProofFilename(invoice.invoice_number, type, amt, req.file.originalname);
       const oldPath = req.file.path;
@@ -78,6 +81,13 @@ const create = [
         // jika rename gagal (misal cross-device), pakai nama file sementara
       }
       fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.PAYMENT_PROOFS, savedName);
+      proofFileName = (req.file.originalname || savedName || 'bukti').replace(/[^\w\s.-]/gi, '_').slice(0, 255);
+      proofFileContentType = req.file.mimetype || MIME_BY_EXT[path.extname(savedName).toLowerCase()] || 'application/octet-stream';
+      try {
+        proofFileData = fs.readFileSync(newPath);
+      } catch (e) {
+        // simpan ke DB opsional; jika gagal baca tetap simpan path
+      }
     }
     if (!fileUrl) return res.status(400).json({ success: false, message: 'Upload bukti bayar wajib.' });
 
@@ -113,6 +123,9 @@ const create = [
       recipient_bank_account_id: recipientBankAccountId,
       transfer_date: transfer_date || null,
       proof_file_url: fileUrl,
+      proof_file_name: proofFileName,
+      proof_file_content_type: proofFileContentType,
+      proof_file_data: proofFileData,
       uploaded_by: isIssueByInvoice ? null : req.user.id,
       issued_by: isIssueByInvoice ? req.user.id : null,
       payment_location: payment_location === 'saudi' ? 'saudi' : 'indonesia',
@@ -173,7 +186,8 @@ const create = [
  */
 const getFile = asyncHandler(async (req, res) => {
   const proof = await PaymentProof.findOne({
-    where: { id: req.params.proofId, invoice_id: req.params.id }
+    where: { id: req.params.proofId, invoice_id: req.params.id },
+    attributes: ['id', 'invoice_id', 'proof_file_url', 'proof_file_name', 'proof_file_content_type', 'proof_file_data']
   });
   if (!proof || !proof.proof_file_url || proof.proof_file_url === 'issued-saudi') {
     return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
@@ -188,7 +202,20 @@ const getFile = asyncHandler(async (req, res) => {
     (req.user.role && allowedRoles.includes(req.user.role))
   );
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
-  // Ekstrak nama file: terima /uploads/payment-proofs/xxx, uploads/payment-proofs/xxx, atau URL penuh
+
+  // Prioritas 1: kirim dari DB jika ada (file disimpan di database)
+  const data = proof.proof_file_data;
+  if (data && (Buffer.isBuffer(data) || data instanceof Uint8Array)) {
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    const mime = proof.proof_file_content_type || 'application/octet-stream';
+    const name = proof.proof_file_name || 'bukti-bayar';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${name.replace(/"/g, '%22')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return res.send(buf);
+  }
+
+  // Prioritas 2: stream dari disk
   const urlNorm = (proof.proof_file_url || '').replace(/\\/g, '/').trim();
   const match = urlNorm.match(/payment-proofs\/?(.+)$/i);
   const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : null;
