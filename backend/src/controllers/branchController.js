@@ -9,7 +9,17 @@ const ALLOWED_SORT = ['code', 'name', 'city', 'region', 'manager_name', 'is_acti
 const listProvinces = asyncHandler(async (req, res) => {
   const { wilayah_id: qWilayahId } = req.query;
   const where = {};
-  if (qWilayahId && String(qWilayahId).trim() !== '') where.wilayah_id = qWilayahId;
+  if (qWilayahId && String(qWilayahId).trim() !== '') {
+    const sel = await Wilayah.findByPk(qWilayahId.trim(), { attributes: ['id', 'name'] });
+    if (sel && sel.name) {
+      const allWilayah = await Wilayah.findAll({ attributes: ['id', 'name'], raw: true });
+      const nameKey = (sel.name || '').trim().toLowerCase();
+      const ids = (allWilayah || []).filter((w) => (w.name || '').trim().toLowerCase() === nameKey).map((w) => w.id);
+      if (ids.length > 0) where.wilayah_id = { [Op.in]: ids };
+    } else {
+      where.wilayah_id = qWilayahId.trim();
+    }
+  }
   const provinsi = await Provinsi.findAll({
     where,
     attributes: ['id', 'kode', 'name', 'wilayah_id'],
