@@ -1129,7 +1129,7 @@ const OrdersInvoicesPage: React.FC = () => {
             variant="page"
             loading={loading}
             showWilayah={isAdminPusat || isAccounting || isInvoiceSaudi}
-            showProvinsi={isAdminPusat || isAccounting || isInvoiceSaudi}
+            showProvinsi={false}
             showBranch={isAdminPusat || isAccounting || isInvoiceSaudi}
             showStatus
             statusType="invoice"
@@ -1172,8 +1172,8 @@ const OrdersInvoicesPage: React.FC = () => {
             wilayahList={wilayahList}
             provinces={provinces}
             branches={branches}
-            branchLabel="Kota"
-            branchEmptyLabel={AUTOCOMPLETE_FILTER.SEMUA_KOTA}
+            branchLabel="Cabang"
+            branchEmptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG}
             invoiceStatusOptions={[{ value: '', label: 'Semua status' }, ...Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))]}
             owners={ownerFilterOptions}
             dueStatusOptions={[
