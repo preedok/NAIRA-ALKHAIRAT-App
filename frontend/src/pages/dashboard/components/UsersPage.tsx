@@ -485,11 +485,16 @@ const UsersPage: React.FC = () => {
     }
     items.push({ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => setDeleteTarget(user), danger: true });
     if (isOwner && ownerProfileId) {
+      const isNonMou = user.role === 'owner_non_mou';
       if (ownerStatus === 'pending_registration_verification') {
-        items.unshift({ id: 'verify_reg', label: 'Verifikasi Bukti Bayar', icon: <FileCheck className="w-4 h-4" />, onClick: () => setVerifyRegPaymentUser(user) });
+        if (isNonMou) {
+          items.unshift({ id: 'activate', label: 'Aktivasi Akun', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: false }) });
+        } else {
+          items.unshift({ id: 'verify_reg', label: 'Verifikasi Bukti Bayar', icon: <FileCheck className="w-4 h-4" />, onClick: () => setVerifyRegPaymentUser(user) });
+        }
       }
       if (ownerStatus === 'deposit_verified' || ownerStatus === 'assigned_to_branch') {
-        items.unshift({ id: 'activate', label: 'Aktivasi Owner', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: false }) });
+        items.unshift({ id: 'activate', label: 'Aktivasi Owner', icon: <CheckCircle className="w-4 h-4" />, onClick: () => setActivateModal({ profileId: ownerProfileId, isMouOwner: user.role === 'owner_mou' }) });
       }
       if (ownerStatus === 'active' && ownerProfileId) {
         items.unshift({ id: 'set_mou', label: 'Set Owner MOU / Non-MOU', icon: <FileText className="w-4 h-4" />, onClick: () => { setMouTargetUser(user); setMouCheckValue(!!(user as UserListItem & { is_mou_owner?: boolean }).is_mou_owner); } });

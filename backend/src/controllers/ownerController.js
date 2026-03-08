@@ -421,15 +421,19 @@ const verifyMou = asyncHandler(async (req, res) => {
 
 /**
  * PATCH /api/v1/owners/:id/verify-registration-payment (Admin Pusat / Super Admin)
- * Verifikasi bukti bayar pendaftaran: setujui → DEPOSIT_VERIFIED, tolak → REJECTED
+ * Verifikasi bukti bayar pendaftaran (hanya Owner MOU): setujui → DEPOSIT_VERIFIED, tolak → REJECTED.
+ * Owner Non-MOU tidak perlu langkah ini; gunakan Aktivasi Akun langsung.
  */
 const verifyRegistrationPayment = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { approved, rejection_reason } = req.body;
   const profile = await OwnerProfile.findByPk(id, {
-    include: [{ model: User, as: 'User', attributes: ['id', 'email', 'name', 'phone', 'company_name'] }]
+    include: [{ model: User, as: 'User', attributes: ['id', 'email', 'name', 'phone', 'company_name', 'role'] }]
   });
   if (!profile) return res.status(404).json({ success: false, message: 'Owner tidak ditemukan' });
+  if (profile.User?.role === ROLES.OWNER_NON_MOU) {
+    return res.status(400).json({ success: false, message: 'Owner Non-MOU tidak perlu verifikasi bukti bayar. Gunakan menu Aktivasi Akun.' });
+  }
   if (profile.status !== OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION) {
     return res.status(400).json({ success: false, message: 'Status tidak sesuai. Hanya owner yang sudah upload bukti bayar pendaftaran yang dapat diverifikasi.' });
   }
@@ -479,10 +483,15 @@ const verifyDeposit = asyncHandler(async (req, res) => {
 const assignBranch = asyncHandler(async (req, res) => {
   const { id } = req.params;
   let { branch_id } = req.body;
-  const profile = await OwnerProfile.findByPk(id);
+  const profile = await OwnerProfile.findByPk(id, { include: [{ model: User, as: 'User', attributes: ['role'] }] });
   if (!profile) return res.status(404).json({ success: false, message: 'Owner tidak ditemukan' });
-  if (profile.status !== OWNER_STATUS.DEPOSIT_VERIFIED) {
-    return res.status(400).json({ success: false, message: 'Deposit harus terverifikasi dulu' });
+  const userRole = profile.User?.role;
+  const isNonMou = userRole === ROLES.OWNER_NON_MOU;
+  const allowedStatus = isNonMou
+    ? [OWNER_STATUS.DEPOSIT_VERIFIED, OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION]
+    : [OWNER_STATUS.DEPOSIT_VERIFIED];
+  if (!allowedStatus.includes(profile.status)) {
+    return res.status(400).json({ success: false, message: isNonMou ? 'Status tidak sesuai' : 'Deposit harus terverifikasi dulu' });
   }
 
   const branch = await Branch.findByPk(branch_id);
@@ -527,14 +536,18 @@ const activate = asyncHandler(async (req, res) => {
   const { is_mou_owner: bodyIsMou } = req.body || {};
   const profile = await OwnerProfile.findByPk(id, {
     include: [
-      { model: User, as: 'User', attributes: ['id', 'email', 'name', 'phone', 'company_name'] },
+      { model: User, as: 'User', attributes: ['id', 'email', 'name', 'phone', 'company_name', 'role'] },
       { model: Branch, as: 'AssignedBranch', attributes: ['id', 'name', 'code'], required: false },
       { model: Branch, as: 'PreferredBranch', attributes: ['id', 'name', 'code'], required: false }
     ]
   });
   if (!profile) return res.status(404).json({ success: false, message: 'Owner tidak ditemukan' });
-  if (profile.status !== OWNER_STATUS.ASSIGNED_TO_BRANCH && profile.status !== OWNER_STATUS.DEPOSIT_VERIFIED) {
-    return res.status(400).json({ success: false, message: 'Owner harus sudah verifikasi bukti bayar. Cabang diisi otomatis dari pilihan saat pendaftaran.' });
+  const userRole = profile.User?.role;
+  const isNonMou = userRole === ROLES.OWNER_NON_MOU;
+  const canActivate = [OWNER_STATUS.ASSIGNED_TO_BRANCH, OWNER_STATUS.DEPOSIT_VERIFIED].includes(profile.status)
+    || (isNonMou && profile.status === OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION);
+  if (!canActivate) {
+    return res.status(400).json({ success: false, message: 'Owner harus sudah verifikasi bukti bayar (MOU) atau langsung aktivasi (Non-MOU).' });
   }
   if (req.user.role !== ROLES.SUPER_ADMIN && req.user.role !== ROLES.ADMIN_PUSAT) {
     if (isKoordinatorRole(req.user.role)) {
