@@ -11,6 +11,8 @@ export { default as DashboardFilterBar } from './DashboardFilterBar';
 export { default as Dropdown } from './Dropdown';
 export { default as Input } from './Input';
 export { default as Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ModalBoxXl } from './Modal';
+export { default as NominalDisplay } from './NominalDisplay';
+export type { NominalCurrency, NominalDisplayProps } from './NominalDisplay';
 export { default as PageFilter, FilterIconButton } from './PageFilter';
 export { default as PageHeader } from './PageHeader';
 export { default as PriceInput } from './PriceInput';

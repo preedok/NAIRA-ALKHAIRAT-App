@@ -4,11 +4,10 @@ import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Pac
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoRefreshControl } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoRefreshControl, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
-import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, type InvoiceForStatusRefund } from '../../../components/common/InvoiceStatusRefundCell';
@@ -443,9 +442,9 @@ const AccountingFinancialReportPage: React.FC = () => {
                 <Autocomplete label="Jenis Produk" value={productType} onChange={setProductType} options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua produk" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={data.total_revenue > 0 ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ≈ ${formatUSD(data.total_revenue / usdToIdr, false)}` : 'Dari pembayaran terverifikasi'} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={data.total_revenue > 0 ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · ≈ <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : 'Dari pembayaran terverifikasi'} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={data.invoice_count} subtitle="Dalam periode laporan" />
-                <StatCard icon={data.invoice_count > 0 ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />} label="Rata-rata per Invoice" value={data.invoice_count > 0 ? formatIDR(data.total_revenue / data.invoice_count) : '–'} subtitle={data.invoice_count > 0 ? `≈ ${formatSAR((data.total_revenue / data.invoice_count) / sarToIdr, false)} · ≈ ${formatUSD((data.total_revenue / data.invoice_count) / usdToIdr, false)}` : undefined} />
+                <StatCard icon={data.invoice_count > 0 ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />} label="Rata-rata per Invoice" value={data.invoice_count > 0 ? <NominalDisplay amount={data.total_revenue / data.invoice_count} currency="IDR" /> : '–'} subtitle={data.invoice_count > 0 ? <>≈ <NominalDisplay amount={(data.total_revenue / data.invoice_count) / sarToIdr} currency="SAR" showCurrency={false} /> · ≈ <NominalDisplay amount={(data.total_revenue / data.invoice_count) / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Calendar className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} />
                 <StatCard icon={<MapPin className="w-5 h-5" />} label="Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
                 <StatCard icon={<Map className="w-5 h-5" />} label="Provinsi" value={(data.by_provinsi || []).length} subtitle="Provinsi dengan transaksi" />
@@ -455,7 +454,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                   <StatCard
                     icon={prevPeriod.growth_percent != null && parseFloat(prevPeriod.growth_percent) >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                     label="Periode Sebelumnya"
-                    value={formatIDR(prevPeriod.revenue)}
+                    value={<NominalDisplay amount={prevPeriod.revenue} currency="IDR" />}
                     subtitle={prevPeriod.invoice_count + ' invoice' + (prevPeriod.growth_percent != null ? ` · ${parseFloat(prevPeriod.growth_percent) >= 0 ? '+' : ''}${prevPeriod.growth_percent}% vs periode ini` : '')}
                   />
                 )}
@@ -467,11 +466,11 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<MapPin className="w-5 h-5" />} label="Jumlah Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_wilayah || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={(data.by_wilayah || []).length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_wilayah || []).reduce((s, w) => s + (w.invoice_count ?? 0), 0)} subtitle="Seluruh wilayah" />
                 {(data.by_wilayah || []).length > 0 && (() => {
                   const top = [...(data.by_wilayah || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Wilayah Tertinggi" value={top?.wilayah_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Wilayah Tertinggi" value={top?.wilayah_name || '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
@@ -505,8 +504,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{row.wilayah_name || row.wilayah_id || 'Lainnya'}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(row.revenue)}</div>
-                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
@@ -522,11 +521,11 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<Map className="w-5 h-5" />} label="Jumlah Provinsi" value={(data.by_provinsi || []).length} subtitle="Provinsi dengan transaksi" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_provinsi || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={(data.by_provinsi || []).length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_provinsi || []).reduce((s, p) => s + (p.invoice_count ?? 0), 0)} subtitle="Seluruh provinsi" />
                 {(data.by_provinsi || []).length > 0 && (() => {
                   const top = [...(data.by_provinsi || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Provinsi Tertinggi" value={top?.provinsi_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Provinsi Tertinggi" value={top?.provinsi_name || '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
@@ -561,8 +560,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{row.provinsi_name || row.provinsi_id || 'Lainnya'}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(row.revenue)}</div>
-                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
@@ -578,11 +577,11 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<Building2 className="w-5 h-5" />} label="Jumlah Cabang" value={data.by_branch.length} subtitle="Cabang dengan transaksi" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={data.by_branch.length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={data.by_branch.length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={data.by_branch.reduce((s, b) => s + (b.invoice_count ?? 0), 0)} subtitle="Seluruh cabang" />
                 {data.by_branch.length > 0 && (() => {
                   const top = [...data.by_branch].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Cabang Tertinggi" value={top?.branch_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Cabang Tertinggi" value={top?.branch_name || '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
@@ -618,8 +617,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{row.branch_name || row.branch_id || 'Lainnya'}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(row.revenue)}</div>
-                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
@@ -635,11 +634,11 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<Users className="w-5 h-5" />} label="Jumlah Owner" value={(data.by_owner || []).length} subtitle="Owner dengan transaksi" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_owner || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={(data.by_owner || []).length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_owner || []).reduce((s, o) => s + (o.invoice_count ?? 0), 0)} subtitle="Seluruh owner" />
                 {(data.by_owner || []).length > 0 && (() => {
                   const top = [...(data.by_owner || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Owner Tertinggi" value={top?.owner_name || '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Owner Tertinggi" value={top?.owner_name || '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
@@ -676,8 +675,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{row.owner_name || row.owner_id || 'Lainnya'}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(row.revenue)}</div>
-                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
@@ -693,10 +692,10 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<Package className="w-5 h-5" />} label="Jenis Produk" value={(data.by_product_type || []).length} subtitle="Jenis dengan transaksi" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_product_type || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={(data.by_product_type || []).length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 {(data.by_product_type || []).length > 0 && (() => {
                   const top = [...(data.by_product_type || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Produk Tertinggi" value={top ? (PRODUCT_TYPE_LABELS[top.type] || top.type) : '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Produk Tertinggi" value={top ? (PRODUCT_TYPE_LABELS[top.type] || top.type) : '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
@@ -730,8 +729,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{PRODUCT_TYPE_LABELS[row.type] || row.type}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(row.revenue)}</div>
-                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                       </tr>
@@ -746,11 +745,11 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<Calendar className="w-5 h-5" />} label="Jumlah Periode" value={(data.by_period || []).length} subtitle="Bulan dalam laporan" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={(data.by_period || []).length ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={(data.by_period || []).length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={(data.by_period || []).reduce((s, p) => s + (p.invoice_count ?? 0), 0)} subtitle="Seluruh periode" />
                 {(data.by_period || []).length > 0 && (() => {
                   const top = [...(data.by_period || [])].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Bulan Tertinggi" value={top ? formatPeriodLabel(top.period) : '–'} subtitle={top ? formatIDR(top.revenue) : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Bulan Tertinggi" value={top ? formatPeriodLabel(top.period) : '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
@@ -784,8 +783,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{formatPeriodLabel(row.period)}</td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(row.revenue)}</div>
-                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
@@ -801,8 +800,8 @@ const AccountingFinancialReportPage: React.FC = () => {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <StatCard icon={<List className="w-5 h-5" />} label="Jumlah Invoice" value={pagination.total} subtitle="Dalam filter periode & filter lain" />
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={formatIDR(data.total_revenue)} subtitle={pagination.total > 0 ? `≈ ${formatSAR(data.total_revenue / sarToIdr, false)} · ${formatUSD(data.total_revenue / usdToIdr, false)}` : undefined} />
-                <StatCard icon={pagination.total > 0 ? <TrendingUp className="w-5 h-5" /> : <Receipt className="w-5 h-5" />} label="Rata-rata per Invoice" value={pagination.total > 0 ? formatIDR(data.total_revenue / pagination.total) : '–'} subtitle={pagination.total > 0 ? `≈ ${formatSAR((data.total_revenue / pagination.total) / sarToIdr, false)} · ${formatUSD((data.total_revenue / pagination.total) / usdToIdr, false)}` : undefined} />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={pagination.total > 0 ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
+                <StatCard icon={pagination.total > 0 ? <TrendingUp className="w-5 h-5" /> : <Receipt className="w-5 h-5" />} label="Rata-rata per Invoice" value={pagination.total > 0 ? <NominalDisplay amount={data.total_revenue / pagination.total} currency="IDR" /> : '–'} subtitle={pagination.total > 0 ? <>≈ <NominalDisplay amount={(data.total_revenue / pagination.total) / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={(data.total_revenue / pagination.total) / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<FileText className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} subtitle="Rentang laporan" />
               </div>
               <Card className="min-w-0">
@@ -882,8 +881,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                       <div className="text-xs text-slate-600 mt-0.5">{perusahaanLine2}</div>
                     </td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(inv.total_amount)}</div>
-                      {(() => { const t = amountTriple(Number(inv.total_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={Number(inv.total_amount) || 0} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(Number(inv.total_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right align-top">
                       <div className="flex flex-col items-end gap-1">
@@ -902,16 +901,16 @@ const AccountingFinancialReportPage: React.FC = () => {
                           if (isCancelNoPayment) return <><span className="text-slate-400 text-sm">–</span>{pctPaid != null && <div className="text-xs text-slate-500 mt-0.5">{pctPaid}% dari total tagihan</div>}</>;
                           if (st === 'cancelled_refund' && refundAmt > 0) {
                             const t = amountTriple(refundAmt);
-                            return <><div className="text-amber-700 font-medium text-sm">Refund: {formatIDR(refundAmt)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctRefund != null && <div className="text-xs text-slate-600 mt-0.5">{pctRefund}% dari total tagihan</div>}</>;
+                            return <><div className="text-amber-700 font-medium text-sm">Refund: <NominalDisplay amount={refundAmt} currency="IDR" /></div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>{pctRefund != null && <div className="text-xs text-slate-600 mt-0.5">{pctRefund}% dari total tagihan</div>}</>;
                           }
                           const t = amountTriple(paid);
-                          return <><div className="text-emerald-600 font-medium">{formatIDR(paid)}</div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>{pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}</>;
+                          return <><div className="text-emerald-600 font-medium"><NominalDisplay amount={paid} currency="IDR" /></div><div className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>{pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}</>;
                         })()}
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div>{formatIDR(inv.remaining_amount)}</div>
-                      {(() => { const t = amountTriple(Number(inv.remaining_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>; })()}
+                      <div><NominalDisplay amount={Number(inv.remaining_amount) || 0} currency="IDR" /></div>
+                      {(() => { const t = amountTriple(Number(inv.remaining_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 align-top">{formatDate(inv.issued_at ?? null)}</td>
                     <td className="py-3 px-4 align-top">

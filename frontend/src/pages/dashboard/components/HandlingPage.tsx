@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Package, Plus, Pencil, Trash2, HandHelping } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, HandHelping, ShoppingCart } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -16,6 +16,7 @@ import { productsApi, businessRulesApi } from '../../../services/api';
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
 import { getProductListOwnerId } from '../../../utils/productHelpers';
+import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 
 interface HandlingProduct {
   id: string;
@@ -35,7 +36,9 @@ const PAGE_SIZE = 25;
 const HandlingPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { addItem: addDraftItem } = useOrderDraft();
   const canConfig = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
+  const canAddToOrder = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi'].includes(user?.role || '');
   const canShowProductActions = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role || '');
 
   const [list, setList] = useState<HandlingProduct[]>([]);
@@ -229,6 +232,22 @@ const HandlingPage: React.FC = () => {
     }
   };
 
+  const handleAddToOrder = (row: HandlingProduct) => {
+    const priceIdr = row.price_general_idr ?? 0;
+    if (priceIdr <= 0) {
+      showToast('Produk ini belum memiliki harga. Hubungi admin.', 'error');
+      return;
+    }
+    addDraftItem({
+      type: 'handling',
+      product_id: row.id,
+      product_name: row.name,
+      unit_price_idr: priceIdr,
+      quantity: 1
+    });
+    showToast('Handling ditambahkan ke order.', 'success');
+  };
+
   const handleDelete = async (row: HandlingProduct) => {
     if (!window.confirm(`Hapus produk "${row.name}"? Data akan dihapus permanen dari database.`)) return;
     setDeleting(true);
@@ -332,14 +351,28 @@ const HandlingPage: React.FC = () => {
                 </td>
                 {canShowProductActions && (
                   <td className="py-3 px-4">
-                    {canConfig && (
-                      <ActionsMenu
-                        items={[
-                          { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => openEdit(row) },
-                          { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => { void handleDelete(row); }, danger: true }
-                        ]}
-                      />
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 justify-center">
+                      {canAddToOrder && (row.price_general_idr ?? 0) > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => handleAddToOrder(row)}
+                          title="Tambah ke order (Beli)"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          Beli
+                        </Button>
+                      )}
+                      {canConfig && (
+                        <ActionsMenu
+                          items={[
+                            { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => openEdit(row) },
+                            { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => { void handleDelete(row); }, danger: true }
+                          ]}
+                        />
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>

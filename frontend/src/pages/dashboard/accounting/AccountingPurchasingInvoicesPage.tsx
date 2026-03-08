@@ -10,7 +10,7 @@ import type { TableColumn } from '../../../types';
 import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu, AutoRefreshControl } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { NominalDisplay } from '../../../components/common';
 
 const INVOICE_STATUS_LABELS: Record<string, string> = { draft: 'Draft', posted: 'Posted', partial_paid: 'Partial', paid: 'Lunas' };
 const DEFAULT_LIMIT = 20;
@@ -228,9 +228,9 @@ const AccountingPurchasingInvoicesPage: React.FC<AccountingPurchasingInvoicesPag
                 <td className="px-4 py-3 text-sm">{row.Supplier?.name ?? '-'}</td>
                 <td className="px-4 py-3 text-sm">{row.Product?.name ?? '–'}</td>
                 <td className="px-4 py-3 text-sm">{row.invoice_date ? new Date(row.invoice_date).toLocaleDateString('id-ID') : '–'}</td>
-                <td className="px-4 py-3 text-right">{formatIDR(parseFloat(row.total_amount || 0))}</td>
-                <td className="px-4 py-3 text-right text-blue-600">{formatIDR(parseFloat(row.paid_amount || 0))}</td>
-                <td className="px-4 py-3 text-right text-amber-600">{formatIDR(parseFloat(row.remaining_amount || 0))}</td>
+                <td className="px-4 py-3 text-right"><NominalDisplay amount={parseFloat(row.total_amount || 0)} currency="IDR" /></td>
+                <td className="px-4 py-3 text-right text-blue-600"><NominalDisplay amount={parseFloat(row.paid_amount || 0)} currency="IDR" /></td>
+                <td className="px-4 py-3 text-right text-amber-600"><NominalDisplay amount={parseFloat(row.remaining_amount || 0)} currency="IDR" /></td>
                 <td className="px-4 py-3"><Badge variant={row.status === 'paid' ? 'success' : row.status === 'posted' || row.status === 'partial_paid' ? 'warning' : 'default'}>{INVOICE_STATUS_LABELS[row.status] ?? row.status}</Badge></td>
                 <td className="px-4 py-3 text-right">{menuItems.length > 0 && <ActionsMenu items={menuItems} />}</td>
               </tr>

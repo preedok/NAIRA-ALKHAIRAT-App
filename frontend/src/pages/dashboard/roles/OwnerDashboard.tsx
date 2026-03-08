@@ -21,7 +21,7 @@ import ContentLoading from '../../../components/common/ContentLoading';
 import { AutoRefreshControl } from '../../../components/common';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
-import { formatIDR } from '../../../utils';
+import { NominalDisplay } from '../../../components/common';
 import { INVOICE_STATUS_LABELS as INVOICE_STATUS_LABELS_GLOBAL } from '../../../utils/constants';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
@@ -71,7 +71,7 @@ const OwnerDashboard: React.FC = () => {
     },
     {
       title: 'Total Dibayar',
-      value: loading ? '...' : formatIDR(summary?.total_paid ?? 0),
+      value: loading ? '...' : <NominalDisplay amount={summary?.total_paid ?? 0} currency="IDR" />,
       subtitle: 'Sudah dibayar ke Bintang Global',
       trend: 'up' as const,
       icon: <DollarSign className="w-6 h-6" />,
@@ -88,7 +88,7 @@ const OwnerDashboard: React.FC = () => {
     {
       title: 'Belum Lunas',
       value: loading ? '...' : `${pendingCount} invoice`,
-      subtitle: formatIDR(summary?.total_remaining ?? 0) + ' outstanding',
+      subtitle: <><NominalDisplay amount={summary?.total_remaining ?? 0} currency="IDR" /> outstanding</>,
       trend: 'neutral' as const,
       icon: <Receipt className="w-6 h-6" />,
       color: 'from-orange-500 to-red-500'
@@ -281,7 +281,7 @@ const OwnerDashboard: React.FC = () => {
                   </div>
                   <p className="text-xs text-stone-500 mt-1">{formatDate(inv.issued_at || inv.created_at)}</p>
                 </div>
-                <p className="text-lg font-bold text-primary-600">{formatIDR(parseFloat(inv.total_amount || 0))}</p>
+                <p className="text-lg font-bold text-primary-600"><NominalDisplay amount={parseFloat(inv.total_amount || 0)} currency="IDR" /></p>
               </div>
               <Button variant="outline" size="sm" className="w-full mt-3" onClick={() => navigate('/dashboard/orders-invoices')}>
                 Detail Invoice
@@ -316,17 +316,17 @@ const OwnerDashboard: React.FC = () => {
                     <div className="space-y-2 mb-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-600">Total</span>
-                        <span className="font-semibold text-stone-900">{formatIDR(parseFloat(inv.total_amount || 0))}</span>
+                        <span className="font-semibold text-stone-900"><NominalDisplay amount={parseFloat(inv.total_amount || 0)} currency="IDR" /></span>
                       </div>
                       {parseFloat(inv.paid_amount || 0) > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-stone-600">Terbayar</span>
-                          <span className="font-semibold text-primary-600">{formatIDR(parseFloat(inv.paid_amount || 0))}</span>
+                          <span className="font-semibold text-primary-600"><NominalDisplay amount={parseFloat(inv.paid_amount || 0)} currency="IDR" /></span>
                         </div>
                       )}
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-600">Sisa</span>
-                        <span className="font-bold text-red-600">{formatIDR(parseFloat(inv.remaining_amount || 0))}</span>
+                        <span className="font-bold text-red-600"><NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" /></span>
                       </div>
                     </div>
                     {due && (

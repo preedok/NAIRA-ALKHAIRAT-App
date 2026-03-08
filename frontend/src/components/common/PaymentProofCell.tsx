@@ -5,7 +5,7 @@
 
 import React from 'react';
 import Badge from './Badge';
-import { formatIDR, formatSAR, formatUSD } from '../../utils/formatters';
+import NominalDisplay from './NominalDisplay';
 
 export type PaymentProofItem = {
   id: string;
@@ -116,11 +116,11 @@ export function PaymentProofCell({
               {isKesNominal ? (
                 <>
                   <span className="text-slate-500">Nominal:</span>{' '}
-                  {p.payment_currency === 'SAR' ? formatSAR(Number(p.amount_original)) : formatUSD(Number(p.amount_original))} = {formatIDR(amt)}
+                  {p.payment_currency === 'SAR' ? <NominalDisplay amount={Number(p.amount_original)} currency="SAR" /> : <NominalDisplay amount={Number(p.amount_original)} currency="USD" />} = <NominalDisplay amount={amt} currency="IDR" />
                 </>
               ) : (
                 <>
-                  <span className="text-slate-500">IDR:</span> {formatIDR(amt)} · <span className="text-slate-500">SAR:</span> {formatSAR(sar, false)} · <span className="text-slate-500">USD:</span> {formatUSD(usd, false)}
+                  <span className="text-slate-500">IDR:</span> <NominalDisplay amount={amt} currency="IDR" /> · <span className="text-slate-500">SAR:</span> <NominalDisplay amount={sar} currency="SAR" showCurrency={false} /> · <span className="text-slate-500">USD:</span> <NominalDisplay amount={usd} currency="USD" showCurrency={false} />
                 </>
               )}
             </div>

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { formatIDR } from '../../utils/formatters';
+import NominalDisplay from './NominalDisplay';
 import { getEffectiveInvoiceStatusLabel, type InvoiceForStatusRefund } from './InvoiceStatusRefundCell';
 
 export type InvoiceRefundDocumentInv = {
@@ -106,7 +106,7 @@ export function InvoiceRefundDocument({
 
         <div>
           <p className="text-xs uppercase tracking-wider text-slate-300 mb-0.5">Jumlah yang dibayarkan (sebelum dibatalkan)</p>
-          <p className="text-xl font-bold text-amber-300">{formatIDR(amountDisplay)}</p>
+          <p className="text-xl font-bold text-amber-300"><NominalDisplay amount={amountDisplay} currency="IDR" /></p>
         </div>
 
         {isPreview ? (
@@ -155,7 +155,7 @@ export function InvoiceRefundDocument({
                 <ul className="space-y-2">
                   {inv.Refunds!.map((r) => (
                     <li key={r.id ?? r.status} className="bg-slate-800/50 rounded-lg px-4 py-3 text-sm">
-                      <span className="font-semibold text-amber-300">{formatIDR(parseFloat(String(r.amount || 0)))}</span>
+                      <span className="font-semibold text-amber-300"><NominalDisplay amount={parseFloat(String(r.amount || 0))} currency="IDR" /></span>
                       <span className="ml-2 text-slate-300 capitalize">({r.status})</span>
                       {(r.bank_name || r.account_number) && (
                         <p className="mt-1 text-slate-400">Rekening: {[r.bank_name, r.account_number].filter(Boolean).join(' · ')}</p>

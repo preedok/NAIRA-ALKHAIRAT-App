@@ -10,7 +10,7 @@ import type { TableColumn } from '../../../types';
 import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu, AutoRefreshControl } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { NominalDisplay } from '../../../components/common';
 
 const PO_STATUS_LABELS: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', approved: 'Approved' };
 const DEFAULT_LIMIT = 20;
@@ -250,7 +250,7 @@ const AccountingPurchasingOrdersPage: React.FC<AccountingPurchasingOrdersPagePro
                 <td className="px-4 py-3 text-sm">{row.Supplier?.name ?? '-'}</td>
                 <td className="px-4 py-3 text-sm">{row.Product?.name ?? '–'}</td>
                 <td className="px-4 py-3 text-sm">{row.order_date ? new Date(row.order_date).toLocaleDateString('id-ID') : '–'}</td>
-                <td className="px-4 py-3 text-right">{formatIDR(parseFloat(row.total_amount || 0))}</td>
+                <td className="px-4 py-3 text-right"><NominalDisplay amount={parseFloat(row.total_amount || 0)} currency="IDR" /></td>
                 <td className="px-4 py-3">
                   <Badge variant={row.status === 'approved' ? 'success' : row.status === 'submitted' ? 'warning' : 'default'}>{PO_STATUS_LABELS[row.status] ?? row.status}</Badge>
                 </td>

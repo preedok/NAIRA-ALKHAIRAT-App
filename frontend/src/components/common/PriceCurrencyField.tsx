@@ -7,7 +7,7 @@
 import React from 'react';
 import { fillFromSource } from '../../utils/currencyConversion';
 import { CURRENCY_OPTIONS, type CurrencyId } from '../../utils/constants';
-import { formatIDR, formatSAR, formatUSD } from '../../utils';
+import NominalDisplay from './NominalDisplay';
 import PriceInput from './PriceInput';
 import Autocomplete from './Autocomplete';
 
@@ -88,13 +88,13 @@ const PriceCurrencyField: React.FC<PriceCurrencyFieldProps> = ({
           />
         </div>
         {showConversions && (value > 0 || triple.idr > 0 || triple.sar > 0 || triple.usd > 0) && (
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-1">
             <span className="font-medium text-slate-600">Konversi: </span>
-            <span>{formatIDR(triple.idr)}</span>
+            <NominalDisplay amount={triple.idr} currency="IDR" />
             <span> · </span>
-            <span>{formatSAR(triple.sar)}</span>
+            <NominalDisplay amount={triple.sar} currency="SAR" />
             <span> · </span>
-            <span>{formatUSD(triple.usd)}</span>
+            <NominalDisplay amount={triple.usd} currency="USD" />
           </div>
         )}
       </div>

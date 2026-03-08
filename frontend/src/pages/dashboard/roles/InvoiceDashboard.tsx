@@ -26,7 +26,7 @@ import Table from '../../../components/common/Table';
 import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell } from '../../../components/common/PaymentProofCell';
-import { formatIDR, formatSAR, formatUSD } from '../../../utils';
+import { NominalDisplay } from '../../../components/common';
 import type { TableColumn } from '../../../types';
 import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
 import { invoicesApi, businessRulesApi } from '../../../services/api';
@@ -181,7 +181,7 @@ const InvoiceDashboard: React.FC = () => {
       {/* Stat cards — klik atau tombol Lihat untuk daftar invoice sesuai statistik */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<Clock className="w-5 h-5" />} label="Pending Verifikasi" value={pendingVerification.length} subtitle="Bukti bayar perlu diverifikasi" iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('pending_verification')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('pending_verification')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? formatIDR(verifiedTodayAmount) : '–'} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('verified_today')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('verified_today')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+        <StatCard icon={<CheckCircle className="w-5 h-5" />} label="Terverifikasi Hari Ini" value={`${verifiedToday.length} invoice`} subtitle={verifiedToday.length ? <NominalDisplay amount={verifiedTodayAmount} currency="IDR" /> : '–'} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('verified_today')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('verified_today')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={summary?.total_invoices ?? invoices.length} subtitle={scopeLabel} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('total_invoice')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_invoice')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         <StatCard icon={<AlertCircle className="w-5 h-5" />} label="Terblokir (DP Overdue)" value={blockedInvoices.length} subtitle="Bisa diaktifkan kembali" iconClassName="bg-red-100 text-red-600" onClick={() => setStatModal('blocked')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('blocked')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
       </div>
@@ -192,7 +192,7 @@ const InvoiceDashboard: React.FC = () => {
           <StatCard
             icon={<DollarSign className="w-5 h-5" />}
             label="Total Tagihan"
-            value={formatIDR(summary.total_amount)}
+            value={<NominalDisplay amount={summary.total_amount} currency="IDR" />}
             subtitle="Total nilai semua invoice (seluruh tagihan)"
             onClick={() => setStatModal('total_tagihan')}
             action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_tagihan')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
@@ -200,14 +200,14 @@ const InvoiceDashboard: React.FC = () => {
           <StatCard
             icon={<CheckCircle className="w-5 h-5" />}
             label="Dibayar"
-            value={formatIDR(summary.total_paid)}
+            value={<NominalDisplay amount={summary.total_paid} currency="IDR" />}
             onClick={() => setStatModal('dibayar')}
             action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('dibayar')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
           />
           <StatCard
             icon={<Wallet className="w-5 h-5" />}
             label="Sisa"
-            value={formatIDR(summary.total_remaining)}
+            value={<NominalDisplay amount={summary.total_remaining} currency="IDR" />}
             subtitle="Belum dibayar (sisa tagihan)"
             onClick={() => setStatModal('sisa')}
             action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('sisa')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
@@ -267,9 +267,9 @@ const InvoiceDashboard: React.FC = () => {
                           <td className="py-2 px-4 font-mono text-sm"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact /></td>
                           <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name ?? inv.User?.company_name ?? '–'}</td>
                           <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate">{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</td>
-                          <td className="py-2 px-4 text-right text-sm">{formatIDR(totalTriple.idr)}</td>
-                          <td className="py-2 px-4 text-right text-emerald-600 text-sm">{formatIDR(paid)}</td>
-                          <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm">{formatIDR(remaining)}</td>
+                          <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
+                          <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
+                          <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
                         </tr>
                       );
                     }}
@@ -347,15 +347,15 @@ const InvoiceDashboard: React.FC = () => {
                   <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                 </td>
                 <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
-                  <div>{formatIDR(totalTriple.idr)}</div>
-                  <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(totalTriple.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(totalTriple.usd, false)}</div>
+                  <div><NominalDisplay amount={totalTriple.idr} currency="IDR" /></div>
+                  <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={totalTriple.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={totalTriple.usd} currency="USD" showCurrency={false} /></div>
                 </td>
                 <td className="py-3 px-4 text-right align-top">
                   <InvoiceStatusRefundCell inv={inv} currencyRates={currencyRates} align="right" />
                 </td>
                 <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
-                  <div>{formatIDR(remaining)}</div>
-                  <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}</div>
+                  <div><NominalDisplay amount={remaining} currency="IDR" /></div>
+                  <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>
                 </td>
                 <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                   {(() => {
@@ -541,11 +541,11 @@ const InvoiceDashboard: React.FC = () => {
                       <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact />
                     </div>
                     <p className="text-sm text-slate-600 mt-0.5">
-                      {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · Total {formatIDR(inv.total_amount)}
+                      {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · Total <NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />
                     </p>
                     {proof && (
                       <p className="text-xs text-slate-500 mt-1">
-                        Klaim: {formatIDR(proof.amount)} · {proof.bank_name || '-'}
+                        Klaim: <NominalDisplay amount={parseFloat(proof.amount) || 0} currency="IDR" /> · {proof.bank_name || '-'}
                       </p>
                     )}
                   </div>
@@ -575,7 +575,7 @@ const InvoiceDashboard: React.FC = () => {
                     <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact />
                   </div>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · {formatIDR(inv.total_amount)}
+                    {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · <NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => handleUnblock(inv.id)}>

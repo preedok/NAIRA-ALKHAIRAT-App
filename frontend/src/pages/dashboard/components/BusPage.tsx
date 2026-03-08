@@ -13,7 +13,8 @@ import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, businessRulesApi, adminPusatApi, type BusSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
-import { getPriceTripleForTable, PRICE_COLUMN_LABEL, formatIDR } from '../../../utils';
+import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
+import { NominalDisplay } from '../../../components/common';
 import { getProductListOwnerId } from '../../../utils/productHelpers';
 import BusWorkPage from './BusWorkPage';
 
@@ -405,7 +406,7 @@ const BusPage: React.FC<BusPageProps> = ({
                                 <span className="text-slate-700 font-medium tabular-nums">{t.idrText}</span>
                                 <span className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</span>
                                 <span className="text-xs text-slate-400">per orang</span>
-                                <span className="text-xs text-amber-700 mt-0.5">Penalti: {formatIDR(busPenaltyRule.bus_penalty_idr)}/pack yang kurang (min {busPenaltyRule.bus_min_pack} pack)</span>
+                                <span className="text-xs text-amber-700 mt-0.5">Penalti: <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" />/pack yang kurang (min {busPenaltyRule.bus_min_pack} pack)</span>
                               </div>
                             );
                           })()

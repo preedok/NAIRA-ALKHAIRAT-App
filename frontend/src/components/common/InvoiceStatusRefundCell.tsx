@@ -16,7 +16,7 @@ import {
   REALLOCATION_IN_LABEL,
   REALLOCATION_OUT_STATUS_LABEL
 } from '../../utils/constants';
-import { formatIDR, formatSAR, formatUSD } from '../../utils/formatters';
+import NominalDisplay from './NominalDisplay';
 import { fromIDR, getRatesFromRates } from '../../utils/currencyConversion';
 
 export type ReallocationItem = {
@@ -190,9 +190,9 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
           const t = amountTriple(amt);
           return (
             <>
-              <div className="text-violet-700 font-medium text-sm">{formatIDR(amt)}</div>
+              <div className="text-violet-700 font-medium text-sm"><NominalDisplay amount={amt} currency="IDR" /></div>
               <div className="text-xs text-slate-500">
-                <span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}
+                <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
               <div className="text-xs text-violet-600 mt-0.5">Dana masuk ke saldo akun owner</div>
             </>
@@ -204,9 +204,9 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
           const t = amountTriple(totalMoved);
           return (
             <>
-              <div className="text-amber-700 font-medium text-sm">{formatIDR(totalMoved)}</div>
+              <div className="text-amber-700 font-medium text-sm"><NominalDisplay amount={totalMoved} currency="IDR" /></div>
               <div className="text-xs text-slate-500">
-                <span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}
+                <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
               <div className="text-xs text-amber-600 mt-0.5">Dana dipindahkan ke invoice lain</div>
             </>
@@ -219,9 +219,9 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
             const pctR = totalInv > 0 ? Math.round((displayRefundAmount / totalInv) * 100) : null;
             return (
               <>
-                <div className="text-amber-700 font-medium text-sm">Refund: {formatIDR(displayRefundAmount)}</div>
+                <div className="text-amber-700 font-medium text-sm">Refund: <NominalDisplay amount={displayRefundAmount} currency="IDR" /></div>
                 <div className="text-xs text-slate-500">
-                  <span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}
+                  <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
                 </div>
                 {pctR != null && <div className="text-xs text-slate-600 mt-0.5">{pctR}% dari total tagihan</div>}
               </>
@@ -235,9 +235,9 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
           const t = amountTriple(paid);
           return (
             <>
-              <div className="text-[#0D1A63] font-medium">{formatIDR(paid)}</div>
+              <div className="text-[#0D1A63] font-medium"><NominalDisplay amount={paid} currency="IDR" /></div>
               <div className="text-xs text-slate-500">
-                <span className="text-slate-400">SAR:</span> {formatSAR(t.sar, false)} <span className="text-slate-400 ml-1">USD:</span> {formatUSD(t.usd, false)}
+                <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
               {pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}
             </>
@@ -251,7 +251,7 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
             const targetNum = r.TargetInvoice?.invoice_number || '–';
             return (
               <div key={`out-${i}`} className="text-xs text-amber-700">
-                {REALLOCATION_OUT_LABEL} <strong>{targetNum}</strong>: {formatIDR(amt)}
+                {REALLOCATION_OUT_LABEL} <strong>{targetNum}</strong>: <NominalDisplay amount={amt} currency="IDR" />
               </div>
             );
           })}
@@ -264,7 +264,7 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
             const sourceNum = r.SourceInvoice?.invoice_number || '–';
             return (
               <div key={`in-${i}`} className="text-xs text-emerald-700">
-                {REALLOCATION_IN_LABEL} <strong>{sourceNum}</strong>: {formatIDR(amt)}
+                {REALLOCATION_IN_LABEL} <strong>{sourceNum}</strong>: <NominalDisplay amount={amt} currency="IDR" />
               </div>
             );
           })}

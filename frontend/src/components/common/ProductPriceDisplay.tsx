@@ -3,7 +3,8 @@
  * Menggunakan setting diskon MOU dari Admin Pusat; badge MOU/Non-MOU opsional.
  */
 import React from 'react';
-import { formatIDR, formatSAR, formatUSD, getPriceTripleForTable } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
+import NominalDisplay from './NominalDisplay';
 
 export type PriceCurrency = 'IDR' | 'SAR' | 'USD';
 
@@ -20,9 +21,7 @@ export interface ProductPriceDisplayProps {
 }
 
 export function formatPriceByCurrency(amount: number, currency: PriceCurrency = 'IDR'): string {
-  if (currency === 'SAR') return formatSAR(amount);
-  if (currency === 'USD') return formatUSD(amount);
-  return formatIDR(amount);
+  return formatCurrency(amount, currency);
 }
 
 /** Badge MOU/Non-MOU untuk konsistensi di semua halaman produk */
@@ -50,12 +49,11 @@ const ProductPriceDisplay: React.FC<ProductPriceDisplayProps> = ({
   className = '',
   hideBadge = false
 }) => {
-  const priceText = formatPriceByCurrency(Number(amount) || 0, currency);
   const showBadge = !hideBadge && ownerIsMou !== undefined;
 
   return (
     <span className={`inline-flex items-center gap-2 flex-wrap ${className}`}>
-      <span className="tabular-nums font-medium text-slate-800">{priceText}</span>
+      <NominalDisplay amount={Number(amount) || 0} currency={currency} className="tabular-nums font-medium text-slate-800" />
       {showBadge && <ProductMouBadge ownerIsMou={ownerIsMou} mouDiscountPercent={mouDiscountPercent} />}
     </span>
   );
@@ -79,15 +77,19 @@ export const ProductPriceTripleCell: React.FC<ProductPriceTripleCellProps> = ({
   mouDiscountPercent,
   className = ''
 }) => {
-  const t = getPriceTripleForTable(idr, sar, usd);
+  const hasIdr = idr != null && Number(idr) > 0;
+  const hasSar = sar != null && Number(sar) > 0;
+  const hasUsd = usd != null && Number(usd) > 0;
   return (
     <div className={`flex flex-col gap-0.5 ${className}`}>
-      <div className="tabular-nums text-slate-800">{t.idrText}</div>
-      {(t.sarText !== '–' || t.usdText !== '–') && (
-        <div className="text-xs text-slate-500">
-          {t.sarText !== '–' && `SAR: ${t.sarText}`}
-          {t.sarText !== '–' && t.usdText !== '–' && ' · '}
-          {t.usdText !== '–' && `USD: ${t.usdText}`}
+      <div className="tabular-nums text-slate-800">
+        {hasIdr ? <NominalDisplay amount={Number(idr)} currency="IDR" /> : '–'}
+      </div>
+      {(hasSar || hasUsd) && (
+        <div className="text-xs text-slate-500 flex flex-wrap gap-x-1">
+          {hasSar && <span><span className="text-slate-400">SAR:</span> <NominalDisplay amount={Number(sar)} currency="SAR" showCurrency={false} /></span>}
+          {hasSar && hasUsd && ' · '}
+          {hasUsd && <span><span className="text-slate-400">USD:</span> <NominalDisplay amount={Number(usd)} currency="USD" showCurrency={false} /></span>}
         </div>
       )}
       {(ownerIsMou !== undefined) && (

@@ -10,7 +10,8 @@ import type { TableColumn } from '../../../types';
 import { Input, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ActionsMenu, AutoRefreshControl } from '../../../components/common';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { accountingApi } from '../../../services/api';
-import { formatIDR } from '../../../utils';
+import { NominalDisplay } from '../../../components/common';
+import { formatCurrency } from '../../../utils/formatters';
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = { draft: 'Draft', posted: 'Posted' };
 const DEFAULT_LIMIT = 20;
@@ -199,7 +200,7 @@ const AccountingPurchasingPaymentsPage: React.FC<AccountingPurchasingPaymentsPag
                 <td className="px-4 py-3 text-sm">{row.PurchaseInvoice?.invoice_number ?? '-'}</td>
                 <td className="px-4 py-3 text-sm">{row.Supplier?.name ?? '-'}</td>
                 <td className="px-4 py-3 text-sm">{row.payment_date ? new Date(row.payment_date).toLocaleDateString('id-ID') : '–'}</td>
-                <td className="px-4 py-3 text-right">{formatIDR(parseFloat(row.amount || 0))}</td>
+                <td className="px-4 py-3 text-right"><NominalDisplay amount={parseFloat(row.amount || 0)} currency="IDR" /></td>
                 <td className="px-4 py-3">
                   <Badge variant={row.status === 'posted' ? 'success' : 'default'}>{PAYMENT_STATUS_LABELS[row.status] ?? row.status}</Badge>
                 </td>
@@ -228,7 +229,7 @@ const AccountingPurchasingPaymentsPage: React.FC<AccountingPurchasingPaymentsPag
                   emptyLabel="Pilih faktur"
                   options={invoices.map((inv) => ({
                     value: inv.id,
-                    label: `${inv.invoice_number} – ${inv.Supplier?.name} – Sisa ${formatIDR(parseFloat(inv.remaining_amount || 0))}`
+                    label: `${inv.invoice_number} – ${inv.Supplier?.name} – Sisa ${formatCurrency(parseFloat(inv.remaining_amount || 0), 'IDR')}`
                   }))}
                 />
                 <Input type="date" label="Tanggal pembayaran" value={form.payment_date} onChange={(e) => setForm((f) => ({ ...f, payment_date: e.target.value }))} />

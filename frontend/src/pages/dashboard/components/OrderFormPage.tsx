@@ -9,13 +9,12 @@ import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { productsApi, ordersApi, invoicesApi, businessRulesApi, branchesApi, ownersApi } from '../../../services/api';
-import { formatIDR, formatSAR, formatUSD } from '../../../utils';
 import { AUTOCOMPLETE_PILIH } from '../../../utils/constants';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { Autocomplete, Input, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { Autocomplete, Input, ContentLoading, CONTENT_LOADING_MESSAGE, NominalDisplay } from '../../../components/common';
 
 /* ═══════════════════════════════════════════════
    TYPES & CONSTANTS
@@ -555,6 +554,8 @@ const OrderFormPage: React.FC = () => {
   const totalIDR=subtotalIDR+busPenaltyIDR;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
+  /** Nilai dalam mata uang baris untuk ditampilkan pakai NominalDisplay */
+  const nominalInRowCur=(row:OrderItemRow,n:number)=>({ amount: getInC(n,row,rowCur(row)), currency: rowCur(row) as 'IDR'|'SAR'|'USD' });
   const fmt=(n:number)=>new Intl.NumberFormat('id-ID').format(Math.round(n));
 
   /** Kirim unit_price dalam mata uang yang dipilih (currency). Backend menyimpan as-is dan konversi ke IDR hanya untuk total. */
@@ -730,15 +731,15 @@ const OrderFormPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0D1A63] text-white text-sm">
                 <span className="text-xs opacity-90">Total</span>
-                <span className="font-bold tabular-nums">{formatSAR(totalSAR)}</span>
+                <NominalDisplay amount={totalSAR} currency="SAR" className="font-bold tabular-nums" />
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm">
                 <span className="text-xs text-slate-500">IDR</span>
-                <span className="font-semibold tabular-nums">{formatIDR(totalIDR)}</span>
+                <NominalDisplay amount={totalIDR} currency="IDR" className="font-semibold tabular-nums" />
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm">
                 <span className="text-xs text-slate-500">USD</span>
-                <span className="font-semibold tabular-nums">{formatUSD(totalIDR/(effectiveRates.USD_TO_IDR||15500))}</span>
+                <NominalDisplay amount={totalIDR/(effectiveRates.USD_TO_IDR||15500)} currency="USD" className="font-semibold tabular-nums" />
               </div>
               {totalPax>0&&(
                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm">
@@ -878,7 +879,7 @@ const OrderFormPage: React.FC = () => {
                           )}
                           <div className="text-right min-w-[80px] shrink-0 text-white">
                             <p className="text-xs font-medium uppercase tracking-wide opacity-90">Subtotal</p>
-                            <p className="text-sm font-bold tabular-nums">{rowCur(row)==='SAR'?`${fmt(rowSub(row))} SAR`:rowCur(row)==='USD'?formatUSD(rowSub(row)):formatIDR(rowSub(row))}</p>
+                            <p className="text-sm font-bold tabular-nums"><NominalDisplay {...nominalInRowCur(row,rowSub(row))} /></p>
                           </div>
                           <Button type="button" variant="ghost" size="sm" onClick={()=>removeRow(row.id)} aria-label="Hapus item" className="text-white/90 hover:text-white hover:bg-white/20 w-8 h-8 min-w-[32px] min-h-[32px] p-0 rounded-lg shrink-0 self-end inline-flex items-center justify-center">
                             <Trash2 size={16} className="shrink-0"/>
@@ -958,7 +959,7 @@ const OrderFormPage: React.FC = () => {
                                     ) : (
                                       <>
                                         <label className={labelClass}>Harga kamar / malam</label>
-                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(getEffectiveRoomPrice(row,line))} SAR`:rowCur(row)==='USD'?formatUSD(getEffectiveRoomPrice(row,line)):formatIDR(getEffectiveRoomPrice(row,line))}</p>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums"><NominalDisplay {...nominalInRowCur(row,getEffectiveRoomPrice(row,line))} /></p>
                                       </>
                                     )}
                                   </div>
@@ -978,7 +979,7 @@ const OrderFormPage: React.FC = () => {
                                     ) : (
                                       <>
                                         <label className={labelClass}>Harga makan / malam</label>
-                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{line.with_meal?(rowCur(row)==='SAR'?`${fmt(getEffectiveMealPrice(row,line))} SAR`:rowCur(row)==='USD'?formatUSD(getEffectiveMealPrice(row,line)):formatIDR(getEffectiveMealPrice(row,line))):'—'}</p>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">{line.with_meal ? <NominalDisplay {...nominalInRowCur(row,getEffectiveMealPrice(row,line))} /> : '—'}</p>
                                       </>
                                     )}
                                   </div>
@@ -990,9 +991,9 @@ const OrderFormPage: React.FC = () => {
                                       const qty=Math.max(0,line.quantity);
                                       const total=qty*pricePerNight*nights;
                                       if(nights>0){
-                                        return <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(total)} SAR`:rowCur(row)==='USD'?formatUSD(total):formatIDR(total)}</p>;
+                                        return <p className="text-sm font-bold text-slate-900 tabular-nums"><NominalDisplay {...nominalInRowCur(row,total)} /></p>;
                                       }
-                                      const perNightLabel=rowCur(row)==='SAR'?`${fmt(qty*pricePerNight)} SAR/malam`:rowCur(row)==='USD'?formatUSD(qty*pricePerNight)+' USD/malam':formatIDR(qty*pricePerNight)+' IDR/malam';
+                                      const perNightLabel=<><NominalDisplay {...nominalInRowCur(row,qty*pricePerNight)} suffix="/malam" /></>;
                                       return <><p className="text-sm font-bold text-slate-900 tabular-nums">{perNightLabel}</p><p className="text-xs text-slate-500 mt-0.5">Isi check-in & check-out untuk total</p></>;
                                     })()}
                                   </div>
@@ -1006,15 +1007,15 @@ const OrderFormPage: React.FC = () => {
                                   <p className="font-semibold text-slate-800 text-xs">Hitungan (harga/malam × malam × kamar)</p>
                                   {(row.room_breakdown||[]).filter(l=>l.quantity>0&&l.room_type).map(line=>{
                                     const nights = getNights(row.check_in!, row.check_out!);
-                                    const roomSar = getEffectiveRoomPrice(row, line);
-                                    const mealSar = getEffectiveMealPrice(row, line);
-                                    const lineTotalRoom = roomSar * line.quantity * nights;
-                                    const lineTotalMeal = mealSar * line.quantity * nights;
+                                    const roomPerNight = getEffectiveRoomPrice(row, line);
+                                    const mealPerNight = getEffectiveMealPrice(row, line);
+                                    const lineTotalRoom = roomPerNight * line.quantity * nights;
+                                    const lineTotalMeal = mealPerNight * line.quantity * nights;
                                     const roomLabel = ROOM_TYPES.find(t=>t.id===line.room_type)?.label ?? line.room_type;
                                     return (
                                       <div key={line.id} className="pl-2 border-l-2 border-slate-300">
-                                        <p className="tabular-nums">Kamar {roomLabel}: {fmt(roomSar)} SAR/malam × {nights} malam × {line.quantity} kamar = {fmt(lineTotalRoom)} SAR</p>
-                                        {line.with_meal && <p className="tabular-nums text-slate-600">Makan: {fmt(mealSar)} SAR/malam × {nights} malam × {line.quantity} kamar = {fmt(lineTotalMeal)} SAR</p>}
+                                        <p className="tabular-nums">Kamar {roomLabel}: <NominalDisplay {...nominalInRowCur(row,roomPerNight)} suffix="/malam" /> × {nights} malam × {line.quantity} kamar = <NominalDisplay {...nominalInRowCur(row,lineTotalRoom)} /></p>
+                                        {line.with_meal && <p className="tabular-nums text-slate-600">Makan: <NominalDisplay {...nominalInRowCur(row,mealPerNight)} suffix="/malam" /> × {nights} malam × {line.quantity} kamar = <NominalDisplay {...nominalInRowCur(row,lineTotalMeal)} /></p>}
                                       </div>
                                     );
                                   })}
@@ -1086,7 +1087,7 @@ const OrderFormPage: React.FC = () => {
                                 <div className="min-w-0 flex flex-col justify-end">
                                   <div className="flex items-center gap-2">
                                     <label className={`${labelClass} mb-0 shrink-0`}>Harga Satuan ({rowCur(row)})</label>
-                                    <p className="text-sm font-bold text-slate-900 tabular-nums">{rowCur(row)==='SAR'?`${fmt(row.unit_price||0)} SAR`:rowCur(row)==='USD'?formatUSD(row.unit_price||0):formatIDR(row.unit_price||0)}</p>
+                                    <p className="text-sm font-bold text-slate-900 tabular-nums"><NominalDisplay {...nominalInRowCur(row,row.unit_price||0)} /></p>
                                   </div>
                                 </div>
                               )}
@@ -1129,8 +1130,8 @@ const OrderFormPage: React.FC = () => {
                 <div className="rounded-lg bg-emerald-50 border border-emerald-200/80 p-3">
                   <p className="text-xs font-semibold text-emerald-800 mb-2">Kurs terbaru (untuk item tambahan)</p>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <span>1 SAR = <b className="text-slate-900">{formatIDR(latestRates.SAR_TO_IDR)}</b></span>
-                    <span>1 USD = <b className="text-slate-900">{formatIDR(latestRates.USD_TO_IDR)}</b></span>
+                    <span>1 SAR = <b className="text-slate-900"><NominalDisplay amount={latestRates.SAR_TO_IDR} currency="IDR" /></b></span>
+                    <span>1 USD = <b className="text-slate-900"><NominalDisplay amount={latestRates.USD_TO_IDR} currency="IDR" /></b></span>
                   </div>
                 </div>
               )}
@@ -1153,28 +1154,28 @@ const OrderFormPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="rounded-lg bg-primary-500/5 border border-primary-200/80 p-3">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total SAR</p>
-                <p className="text-lg font-bold text-[#0D1A63] tabular-nums mt-0.5">{formatSAR(totalSAR)}</p>
+                <p className="text-lg font-bold text-[#0D1A63] tabular-nums mt-0.5"><NominalDisplay amount={totalSAR} currency="SAR" /></p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total IDR</p>
-                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatIDR(totalIDR)}</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5"><NominalDisplay amount={totalIDR} currency="IDR" /></p>
                 <p className="text-xs text-slate-500">Tagihan Rupiah</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total USD</p>
-                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{formatUSD(totalIDR/(effectiveRates.USD_TO_IDR||15500))}</p>
+                <p className="text-lg font-bold text-slate-900 tabular-nums mt-0.5"><NominalDisplay amount={totalIDR/(effectiveRates.USD_TO_IDR||15500)} currency="USD" /></p>
                 <p className="text-xs text-slate-500">Pembayaran USD</p>
               </div>
             </div>
             {busPenaltyIDR>0&&(
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
                 <p className="text-amber-800 font-medium">Penalti bus: {totalBusPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
-                <p className="text-slate-600 text-xs mt-0.5">{busPenaltyRule.bus_min_pack - totalBusPacks} pack × {formatIDR(busPenaltyRule.bus_penalty_idr)} = {formatIDR(busPenaltyIDR)}</p>
+                <p className="text-slate-600 text-xs mt-0.5">{busPenaltyRule.bus_min_pack - totalBusPacks} pack × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></p>
               </div>
             )}
             <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">
-              <span>1 SAR = <b className="text-slate-900">{formatIDR(rates.SAR_TO_IDR??4200)}</b></span>
-              <span>1 USD = <b className="text-slate-900">{formatIDR(rates.USD_TO_IDR??15500)}</b></span>
+              <span>1 SAR = <b className="text-slate-900"><NominalDisplay amount={rates.SAR_TO_IDR??4200} currency="IDR" /></b></span>
+              <span>1 USD = <b className="text-slate-900"><NominalDisplay amount={rates.USD_TO_IDR??15500} currency="IDR" /></b></span>
             </div>
           </div>
         </section>

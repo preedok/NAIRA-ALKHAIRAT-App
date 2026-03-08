@@ -8,7 +8,7 @@
 import React from 'react';
 import Badge from './Badge';
 import { INVOICE_STATUS_LABELS } from '../../utils/constants';
-import { formatIDR } from '../../utils/formatters';
+import NominalDisplay from './NominalDisplay';
 
 export type InvoiceNumberCellInv = {
   id?: string;
@@ -107,7 +107,7 @@ export function InvoiceNumberCell({
       </span>
       {showDp && (
         <span className="text-xs text-emerald-700 font-medium">
-          Pembayaran DP: {formatIDR(paidForDp)} (sudah dibayar)
+          Pembayaran DP: <NominalDisplay amount={paidForDp} currency="IDR" /> (sudah dibayar)
         </span>
       )}
       {!compact && showBaruAndPerubahan && !isDraftRow(inv) && (
