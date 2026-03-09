@@ -16,8 +16,10 @@ function isKoordinatorRole(role) {
 
 /** Atribut PaymentProof untuk include (tanpa proof_file_name, proof_file_content_type, proof_file_data agar kompatibel dengan DB yang belum punya kolom tersebut; setelah migration 20260327000001 jalan, bisa tambah proof_file_name) */
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
+const archiver = require('archiver');
 const { buildInvoicePdfBuffer, getEffectiveStatusLabel } = require('../utils/invoicePdf');
 const { SUBDIRS, getDir, invoiceFilename, toUrlPath } = require('../config/uploads');
+const uploadConfig = require('../config/uploads');
 const { sendInvoiceCreatedEmail, sendPaymentReceivedEmail } = require('../utils/emailService');
 const logger = require('../config/logger');
 
@@ -1300,6 +1302,102 @@ const getPdf = asyncHandler(async (req, res) => {
   res.send(buf);
 });
 
+/**
+ * GET /api/v1/invoices/:id/archive
+ * Download ZIP berisi: invoice PDF (status terkini) + semua bukti bayar (payment proof files).
+ * Untuk mengumpulkan dokumen invoice selama proses (tagihan DP, pembayaran DP, lunas, dll).
+ */
+const getArchive = asyncHandler(async (req, res) => {
+  const invoice = await Invoice.findByPk(req.params.id, {
+    include: [
+      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }] }] },
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+      { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount', 'proof_file_url'], order: [['created_at', 'DESC']] },
+      { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }] },
+      { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }] }
+    ]
+  });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (isOwnerRole(req.user.role) && invoice.owner_id !== req.user.id) {
+    return res.status(403).json({ success: false, message: 'Akses ditolak' });
+  }
+  if (isKoordinatorRole(req.user.role)) {
+    const inWilayah = await invoiceInKoordinatorWilayah(invoice, req.user.wilayah_id);
+    if (!inWilayah) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+  }
+
+  const data = invoice.toJSON();
+  const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
+  data.currency_rates = effectiveRates;
+  data.currency_rates_override = effectiveRates;
+  const invoicePdfBuffer = await buildInvoicePdfBuffer(data);
+  const statusLabel = getEffectiveStatusLabel(data);
+  const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
+  const invNum = invoice.invoice_number || 'INV';
+  const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || 'Owner';
+
+  res.setHeader('Content-Type', 'application/zip');
+  const zipFileName = `Invoice_${safe(invNum)}_${safe(ownerName)}.zip`;
+  res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', (err) => {
+    logger.error('Invoice archive error:', err);
+    if (!res.headersSent) res.status(500).json({ success: false, message: 'Gagal membuat arsip' });
+  });
+  archive.pipe(res);
+
+  archive.append(invoicePdfBuffer, { name: `01_Invoice_${safe(invNum)}_${safe(statusLabel)}.pdf` });
+
+  const proofDir = uploadConfig.getDir(uploadConfig.SUBDIRS.PAYMENT_PROOFS);
+  const proofs = invoice.PaymentProofs || [];
+  proofs.forEach((proof, idx) => {
+    const url = (proof.proof_file_url || '').trim();
+    if (!url || url === 'issued-saudi') return;
+    const match = url.replace(/\\/g, '/').match(/payment-proofs\/?(.+)$/i);
+    const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : path.basename(url);
+    if (!filename) return;
+    const filePath = path.join(proofDir, filename);
+    if (fs.existsSync(filePath)) {
+      archive.file(filePath, { name: `02_Bukti_Bayar_${String(idx + 1).padStart(2, '0')}_${filename}` });
+    }
+  });
+
+  const refundDir = uploadConfig.getDir(uploadConfig.SUBDIRS.REFUND_PROOFS || 'refund-proofs');
+  const refunds = invoice.Refunds || [];
+  refunds.forEach((r, idx) => {
+    const url = (r.proof_file_url || '').trim();
+    if (!url) return;
+    const match = url.replace(/\\/g, '/').match(/refund-proofs\/?(.+)$/i);
+    const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : path.basename(url);
+    if (!filename) return;
+    const filePath = path.join(refundDir, filename);
+    if (fs.existsSync(filePath)) {
+      archive.file(filePath, { name: `03_Bukti_Refund_${String(idx + 1).padStart(2, '0')}_${filename}` });
+    }
+  });
+
+  const readmeLines = [
+    `Arsip Dokumen Invoice: ${invNum}`,
+    `Owner: ${ownerName}`,
+    `Status: ${statusLabel}`,
+    `Tanggal: ${(invoice.issued_at || invoice.created_at) ? new Date(invoice.issued_at || invoice.created_at).toLocaleString('id-ID') : '-'}`,
+    '',
+    'Isi arsip (dokumen dari seluruh proses invoice):',
+    '- 01_Invoice_*.pdf : Invoice PDF (status terkini)',
+    '- 02_Bukti_Bayar_* : Bukti pembayaran (tagihan DP, pembayaran DP, lunas, dll)',
+    ...refunds.filter((r) => r.proof_file_url).map((r, i) => `- 03_Bukti_Refund_${String(i + 1).padStart(2, '0')}_* : Bukti refund ${i + 1}`),
+    '',
+    'Dibuat dari menu Detail Invoice.'
+  ];
+  archive.append(readmeLines.join('\r\n'), { name: 'README.txt' });
+
+  await archive.finalize();
+});
+
 /** Normalize rates object to { SAR_TO_IDR, USD_TO_IDR } with defaults. */
 function normalizeRates(rates) {
   if (!rates || typeof rates !== 'object') return { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
@@ -1702,6 +1800,7 @@ module.exports = {
   createInvoiceForOrder,
   getById,
   getPdf,
+  getArchive,
   unblock,
   verifyPayment,
   handleOverpaid,

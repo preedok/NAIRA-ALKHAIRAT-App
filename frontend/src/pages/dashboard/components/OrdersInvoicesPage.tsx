@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -109,6 +109,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [auditLoading, setAuditLoading] = useState(false);
   const [invoicePdfUrl, setInvoicePdfUrl] = useState<string | null>(null);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [loadingArchiveId, setLoadingArchiveId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
@@ -691,6 +692,33 @@ const OrdersInvoicesPage: React.FC = () => {
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal unduh PDF', 'error');
+    }
+  };
+
+  /** Unduh arsip ZIP: invoice PDF + semua bukti bayar (tagihan DP, pembayaran DP, lunas) + bukti refund jika ada */
+  const openArchive = async (invoiceId: string) => {
+    setLoadingArchiveId(invoiceId);
+    try {
+      const res = await invoicesApi.getArchive(invoiceId);
+      const blob = res.data as Blob;
+      const disposition = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n]+)|filename="?([^";\n]+)"?/);
+      const filename = (match && (decodeURIComponent((match[1] || match[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `invoice-${invoiceId}-arsip.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'invoice-arsip.zip';
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Arsip ZIP berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh arsip ZIP', 'error');
+    } finally {
+      setLoadingArchiveId(null);
     }
   };
 
@@ -1861,6 +1889,9 @@ const OrdersInvoicesPage: React.FC = () => {
             <div className="px-6 pt-2 pb-2 flex gap-2 flex-wrap">
               <Button variant="outline" size="sm" onClick={() => openPdf(viewInvoice.id)} className="rounded-lg">
                 <Download className="w-4 h-4 mr-2" /> Unduh PDF
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openArchive(viewInvoice.id)} disabled={loadingArchiveId === viewInvoice.id} className="rounded-lg" title="Unduh ZIP berisi: Invoice PDF + semua bukti bayar (tagihan DP, pembayaran DP, lunas) + bukti refund">
+                {loadingArchiveId === viewInvoice.id ? <span className="animate-pulse">Membuat ZIP...</span> : <><Archive className="w-4 h-4 mr-2" /> Unduh ZIP</>}
               </Button>
               {canUnblock(viewInvoice) && (
                 <Button variant="secondary" size="sm" onClick={() => handleUnblock(viewInvoice)} className="rounded-lg">

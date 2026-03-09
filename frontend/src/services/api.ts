@@ -404,6 +404,8 @@ export const invoicesApi = {
   getStatusHistory: (id: string) => api.get(`/invoices/${id}/status-history`),
   getOrderRevisions: (id: string) => api.get(`/invoices/${id}/order-revisions`),
   getPdf: (id: string) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
+  /** Download ZIP: invoice PDF + semua bukti bayar (tagihan DP, pembayaran DP, lunas, dll) */
+  getArchive: (id: string) => api.get(`/invoices/${id}/archive`, { responseType: 'blob' }),
   create: (body: { order_id: string; is_super_promo?: boolean }) => api.post('/invoices', body),
   unblock: (id: string) => api.patch(`/invoices/${id}/unblock`),
   verifyPayment: (id: string, body: { payment_proof_id: string; verified: boolean; notes?: string }) => api.post(`/invoices/${id}/verify-payment`, body),
