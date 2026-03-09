@@ -128,40 +128,18 @@ const getDashboard = asyncHandler(async (req, res) => {
  * List invoice yang punya order bus (sumber data sama dengan menu Invoice: hanya invoice yang order-nya ada item bus).
  * Scope cabang role bus. Sama pola dengan visa/ticket.
  */
-function parseItemDate(d) {
-  if (!d) return null;
-  const s = typeof d === 'string' ? d.split('T')[0] : (d.toISOString && d.toISOString().slice(0, 10));
-  return s || null;
-}
-
 const listInvoices = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 25, date_from: dateFrom, date_to: dateTo } = req.query;
+  const { status, page = 1, limit = 25 } = req.query;
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  let orderIdsFromBus = await OrderItem.findAll({
+  const orderIdsFromBus = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS },
     attributes: ['order_id'],
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
   if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
-
-  if (dateFrom && dateTo && orderIdsFromBus.length > 0) {
-    const items = await OrderItem.findAll({
-      where: { order_id: { [Op.in]: orderIdsFromBus }, type: ORDER_ITEM_TYPE.BUS },
-      attributes: ['order_id', 'meta'],
-      raw: true
-    });
-    const inRange = new Set();
-    for (const oi of items) {
-      const meta = oi.meta || {};
-      const dStr = parseItemDate(meta.travel_date || meta.departure_date);
-      if (dStr && dStr >= dateFrom && dStr <= dateTo) inRange.add(oi.order_id);
-    }
-    orderIdsFromBus = [...inRange];
-    if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: parseInt(page, 10) || 1, limit: Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500), totalPages: 0 } });
-  }
 
   const { DP_PAYMENT_STATUS } = require('../constants');
   const ordersWithDpPaid = await Order.findAll({

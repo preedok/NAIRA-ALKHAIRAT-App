@@ -19,7 +19,6 @@ import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { PROGRESS_STATUS_OPTIONS_BUS } from '../../../components/common/InvoiceProgressStatusCell';
-import { PROGRESS_DATE_PRESETS, getProgressDateRange, type ProgressDatePresetKey } from '../../../utils/progressDatePresets';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
 const TICKET_OPTIONS = PROGRESS_STATUS_OPTIONS_BUS;
@@ -46,7 +45,6 @@ const BusWorkPage: React.FC = () => {
   const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterDatePreset, setFilterDatePreset] = useState<ProgressDatePresetKey>('');
   const [filterTicketStatus, setFilterTicketStatus] = useState<string>('');
   const [filterArrival, setFilterArrival] = useState<string>('');
   const [filterDeparture, setFilterDeparture] = useState<string>('');
@@ -73,7 +71,7 @@ const BusWorkPage: React.FC = () => {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const params: { status?: string; page?: number; limit?: number; date_from?: string; date_to?: string } = { page, limit, ...getProgressDateRange(filterDatePreset) };
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
       if (filterStatus) params.status = filterStatus;
       const res = await busApi.listInvoices(params);
       if (res.data.success) {
@@ -85,7 +83,7 @@ const BusWorkPage: React.FC = () => {
       setInvoices([]);
       setPagination(null);
     }
-  }, [filterStatus, filterDatePreset, page, limit]);
+  }, [filterStatus, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -162,7 +160,7 @@ const BusWorkPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [filterStatus, filterDatePreset]);
+  }, [filterStatus]);
 
   useEffect(() => {
     if (!filterChangedOnce.current) {
@@ -171,7 +169,7 @@ const BusWorkPage: React.FC = () => {
     }
     setLoading(true);
     fetchInvoices().finally(() => setLoading(false));
-  }, [filterStatus, filterDatePreset]);
+  }, [filterStatus]);
 
   useEffect(() => {
     if (invoiceIdParam) {
@@ -374,22 +372,7 @@ const BusWorkPage: React.FC = () => {
 
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">
-        <CardSectionHeader icon={<Bus className="w-6 h-6" />} title="Daftar Invoice Bus" subtitle="Invoice dengan item bus. Filter menurut tanggal item, status invoice, tiket, kedatangan, keberangkatan, kepulangan." className="mb-4" />
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium text-slate-600">Tanggal item bus:</span>
-          <div className="flex flex-wrap gap-2">
-            {PROGRESS_DATE_PRESETS.map((opt) => (
-              <button
-                key={opt.value || 'all'}
-                type="button"
-                onClick={() => setFilterDatePreset((opt.value || '') as ProgressDatePresetKey)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDatePreset === (opt.value || '') ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <CardSectionHeader icon={<Bus className="w-6 h-6" />} title="Daftar Invoice Bus" subtitle="Invoice dengan item bus. Filter menurut status invoice, tiket, kedatangan, keberangkatan, kepulangan." className="mb-4" />
         <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
           <div className="flex-1 min-w-0 sm:min-w-[180px]">
             <Input

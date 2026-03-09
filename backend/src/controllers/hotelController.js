@@ -76,42 +76,18 @@ async function getHotelBranchIds(user) {
  * GET /api/v1/hotel/invoices
  * List invoices that have hotel items (scope cabang). Sama pola dengan visa/ticket/bus.
  */
-/** Ambil order_id yang punya item hotel dengan check_in dalam range [date_from, date_to]. */
-function parseItemDate(d) {
-  if (!d) return null;
-  const s = typeof d === 'string' ? d.split('T')[0] : (d.toISOString && d.toISOString().slice(0, 10));
-  return s || null;
-}
-
 const listInvoices = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 25, date_from: dateFrom, date_to: dateTo } = req.query;
+  const { status, page = 1, limit = 25 } = req.query;
   const branchIds = await getHotelBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  let orderIdsFromHotel = await OrderItem.findAll({
+  const orderIdsFromHotel = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.HOTEL },
     attributes: ['order_id'],
     raw: true
   }).then(rows => [...new Set(rows.map(r => r.order_id))]);
 
   if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
-
-  if (dateFrom && dateTo && orderIdsFromHotel.length > 0) {
-    const items = await OrderItem.findAll({
-      where: { order_id: { [Op.in]: orderIdsFromHotel }, type: ORDER_ITEM_TYPE.HOTEL },
-      include: [{ model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['check_in_date'] }],
-      attributes: ['id', 'order_id', 'meta'],
-      raw: false
-    });
-    const inRange = new Set();
-    for (const oi of items) {
-      const d = oi.HotelProgress?.check_in_date ?? (oi.meta && (oi.meta.check_in || oi.meta.check_in_date));
-      const dStr = parseItemDate(d);
-      if (dStr && dStr >= dateFrom && dStr <= dateTo) inRange.add(oi.order_id);
-    }
-    orderIdsFromHotel = [...inRange];
-    if (orderIdsFromHotel.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: parseInt(page, 10) || 1, limit: Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500), totalPages: 0 } });
-  }
 
   const where = { order_id: { [Op.in]: orderIdsFromHotel }, branch_id: { [Op.in]: branchIds } };
   // Tampilkan invoice yang sudah ada pembayaran DP (status partial_paid ke atas) — pakai status invoice sebagai sumber kebenaran

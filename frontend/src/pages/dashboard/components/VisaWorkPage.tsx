@@ -21,7 +21,6 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 import { PROGRESS_STATUS_OPTIONS_VISA, PROGRESS_LABELS_VISA } from '../../../components/common/InvoiceProgressStatusCell';
-import { PROGRESS_DATE_PRESETS, getProgressDateRange, type ProgressDatePresetKey } from '../../../utils/progressDatePresets';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -61,7 +60,6 @@ const VisaWorkPage: React.FC = () => {
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
-  const [filterDatePreset, setFilterDatePreset] = useState<ProgressDatePresetKey>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -81,7 +79,7 @@ const VisaWorkPage: React.FC = () => {
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const params: { status?: string; page?: number; limit?: number; date_from?: string; date_to?: string } = { page, limit, ...getProgressDateRange(filterDatePreset) };
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
       if (filterInvoiceStatus) params.status = filterInvoiceStatus;
       const res = await visaApi.listInvoices(params);
       if (res.data.success) {
@@ -93,7 +91,7 @@ const VisaWorkPage: React.FC = () => {
       setInvoices([]);
       setPagination(null);
     }
-  }, [filterInvoiceStatus, filterDatePreset, page, limit]);
+  }, [filterInvoiceStatus, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -110,7 +108,7 @@ const VisaWorkPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [filterInvoiceStatus, filterDatePreset]);
+  }, [filterInvoiceStatus]);
 
   useEffect(() => {
     if (qParam && qParam.trim()) setFilterSearch(qParam.trim());
@@ -305,21 +303,6 @@ const VisaWorkPage: React.FC = () => {
           subtitle={pagination ? `${pagination.total} invoice` : `${filteredInvoices.length} invoice. Filter menurut status invoice & progress.`}
           className="mb-4"
         />
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium text-slate-600">Tanggal item visa:</span>
-          <div className="flex flex-wrap gap-2">
-            {PROGRESS_DATE_PRESETS.map((opt) => (
-              <button
-                key={opt.value || 'all'}
-                type="button"
-                onClick={() => setFilterDatePreset((opt.value || '') as ProgressDatePresetKey)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDatePreset === (opt.value || '') ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
         <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
