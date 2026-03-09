@@ -2656,9 +2656,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                 const ord = viewInvoice?.Order;
                                 const invoiceNum = viewInvoice?.invoice_number ?? '–';
                                 const ownerName = ord?.User?.name || ord?.User?.company_name || '–';
+                                const slipTitle = isHotel ? 'Slip Informasi Hotel' : isVisa ? 'Slip Informasi Visa' : isTicket ? 'Slip Informasi Tiket' : 'Slip Informasi Bus';
                                 return (
                                   <div className="border-t border-slate-200 bg-slate-50/50 p-4 space-y-4">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Slip</p>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{slipTitle}</p>
                                     {slipItems.map((item: any) => {
                                       const prog = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : isHotel ? item.HotelProgress : item.BusProgress;
                                       const productName = item.Product?.name || (item as any).product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
