@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import type { OrderDraftItemInput } from '../../../contexts/OrderDraftContext';
-import { aiChatApi, type AiChatOrderDraftItem } from '../../../services/api';
+import { aiChatApi, ordersApi, type AiChatOrderDraftItem } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
@@ -53,6 +53,37 @@ function formatConversationDate(updatedAt: string): string {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
 }
 
+/**
+ * Konversi draft AI ke payload POST /orders (items) agar order + invoice otomatis dibuat.
+ * Backend auto-create invoice bila save_as_draft tidak true.
+ */
+function draftToOrderCreatePayload(aiItems: AiChatOrderDraftItem[]): { product_id: string; type: string; quantity: number; unit_price: number; currency: string; check_in?: string; check_out?: string; room_type?: string; meal?: boolean; meta?: Record<string, unknown> }[] {
+  const out: { product_id: string; type: string; quantity: number; unit_price: number; currency: string; check_in?: string; check_out?: string; room_type?: string; meal?: boolean; meta?: Record<string, unknown> }[] = [];
+  for (const ai of aiItems) {
+    if (!ai?.product_id || !ai.type) continue;
+    const qty = Math.max(1, Number(ai.quantity) || 1);
+    const unitPrice = Number(ai.unit_price_idr) || 0;
+    const meta = (ai.meta && typeof ai.meta === 'object' ? ai.meta : {}) as Record<string, unknown>;
+    const base: Record<string, unknown> = {
+      product_id: ai.product_id,
+      type: ai.type,
+      quantity: qty,
+      unit_price: unitPrice,
+      currency: 'IDR',
+      meta: { ...meta },
+    };
+    if (ai.type === 'hotel') {
+      const roomType = (meta.room_type as string) || 'quad';
+      (base as Record<string, unknown>).check_in = meta.check_in ?? undefined;
+      (base as Record<string, unknown>).check_out = meta.check_out ?? undefined;
+      (base as Record<string, unknown>).room_type = roomType;
+      (base as Record<string, unknown>).meal = Boolean(meta.with_meal ?? meta.meal);
+    }
+    out.push(base as { product_id: string; type: string; quantity: number; unit_price: number; currency: string; check_in?: string; check_out?: string; room_type?: string; meal?: boolean; meta?: Record<string, unknown> });
+  }
+  return out;
+}
+
 /** Map item draft dari AI ke OrderDraftItemInput untuk form order */
 function mapAiDraftToOrderDraftItem(ai: AiChatOrderDraftItem): OrderDraftItemInput {
   const meta = ai.meta || {};
@@ -96,10 +127,10 @@ const Avatar = ({ role }: { role: 'user' | 'assistant' }) => (
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       flexShrink: 0,
       background: role === 'user'
-        ? 'linear-gradient(135deg, #10b981, #059669)'
+        ? 'linear-gradient(135deg, #1e3a8a, #2563eb)'
         : 'linear-gradient(135deg, #1e293b, #334155)',
       boxShadow: role === 'user'
-        ? '0 4px 12px rgba(16,185,129,0.35)'
+        ? '0 4px 12px rgba(30,58,138,0.35)'
         : '0 4px 12px rgba(0,0,0,0.2)',
       fontSize: 15,
     }}
@@ -113,7 +144,7 @@ const TypingDots = () => (
     {[0, 1, 2].map(i => (
       <div key={i} style={{
         width: 7, height: 7, borderRadius: '50%',
-        background: '#10b981',
+        background: '#1e3a8a',
         animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
       }} />
     ))}
@@ -134,7 +165,7 @@ const MessageBubble = ({ msg, isNew }: { msg: ChatMessage; isNew: boolean }) => 
       <div style={{
         maxWidth: '72%',
         background: isUser
-          ? 'linear-gradient(135deg, #10b981, #059669)'
+          ? 'linear-gradient(135deg, #1e3a8a, #2563eb)'
           : '#ffffff',
         color: isUser ? '#fff' : '#334155',
         borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
@@ -143,7 +174,7 @@ const MessageBubble = ({ msg, isNew }: { msg: ChatMessage; isNew: boolean }) => 
         lineHeight: 1.65,
         whiteSpace: 'pre-wrap',
         boxShadow: isUser
-          ? '0 4px 16px rgba(16,185,129,0.3)'
+          ? '0 4px 16px rgba(30,58,138,0.3)'
           : '0 1px 3px rgba(0,0,0,0.08)',
         border: isUser ? 'none' : '1px solid #e2e8f0',
         letterSpacing: '0.01em',
@@ -220,7 +251,7 @@ export default function OwnerAIChatPage() {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   };
 
-  /** Isi draft ke form order lalu navigate ke Buat invoice baru (orders/new). Saat user klik Simpan di form → invoice terbit di daftar. */
+  /** Isi draft ke form order lalu navigate ke Buat invoice baru (fallback jika auto-create gagal). */
   const applyDraftAndNavigate = (draft: { items: AiChatOrderDraftItem[] }) => {
     const mapped = draft.items.map(mapAiDraftToOrderDraftItem).filter((i) => i.product_id && i.quantity > 0);
     if (mapped.length === 0) {
@@ -229,8 +260,31 @@ export default function OwnerAIChatPage() {
     }
     orderDraft.clear();
     orderDraft.setDraftItems(mapped);
-    showToast('Draft order telah diisi ke form. Klik Simpan/Order untuk menerbitkan invoice.', 'success');
+    showToast('Draft order diisi ke form. Klik Simpan untuk menerbitkan invoice.', 'success');
     navigate('/dashboard/orders/new');
+  };
+
+  /** Buat order + invoice otomatis dari draft AI; muncul di Daftar Invoice. */
+  const createOrderAndInvoiceFromDraft = async (draft: { items: AiChatOrderDraftItem[] }) => {
+    const payloadItems = draftToOrderCreatePayload(draft.items).filter((i) => i.product_id && i.quantity > 0);
+    if (payloadItems.length === 0) {
+      showToast('Draft order tidak valid untuk dibuat otomatis.', 'error');
+      setLastOrderDraft(draft);
+      return;
+    }
+    try {
+      const res = await ordersApi.create({ items: payloadItems });
+      const orderId = (res.data as { data?: { id?: string } })?.data?.id;
+      orderDraft.clear();
+      showToast('Order dan invoice berhasil dibuat. Muncul di Daftar Invoice.', 'success');
+      navigate('/dashboard/orders-invoices', { state: { refreshList: true } });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
+        || (err as { message?: string })?.message
+        || 'Gagal membuat order. Coba buka form dan simpan manual.';
+      showToast(msg, 'error');
+      setLastOrderDraft(draft);
+    }
   };
 
   const handleSend = async () => {
@@ -273,7 +327,7 @@ export default function OwnerAIChatPage() {
       });
       if (data?.order_draft?.items?.length) {
         setLastOrderDraft(data.order_draft);
-        applyDraftAndNavigate(data.order_draft);
+        await createOrderAndInvoiceFromDraft(data.order_draft);
       }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -343,24 +397,24 @@ export default function OwnerAIChatPage() {
         .chat-page * { box-sizing: border-box; }
         .chat-page { font-family: 'Sora', sans-serif; }
         .prompt-chip:hover {
-          background: rgba(16,185,129,0.15) !important;
-          border-color: rgba(16,185,129,0.5) !important;
-          color: #10b981 !important;
+          background: rgba(30,58,138,0.15) !important;
+          border-color: rgba(30,58,138,0.5) !important;
+          color: #1e3a8a !important;
           transform: translateY(-2px);
         }
         .send-btn:hover:not(:disabled) {
           transform: scale(1.05);
-          box-shadow: 0 8px 28px rgba(16,185,129,0.45) !important;
+          box-shadow: 0 8px 28px rgba(30,58,138,0.45) !important;
         }
         .send-btn:active:not(:disabled) { transform: scale(0.96); }
         .send-btn:disabled { opacity:.4; cursor:not-allowed; }
-        .chat-input:focus { outline:none; border-color:rgba(16,185,129,0.6) !important; box-shadow: 0 0 0 3px rgba(16,185,129,0.12) !important; }
+        .chat-input:focus { outline:none; border-color:rgba(30,58,138,0.6) !important; box-shadow: 0 0 0 3px rgba(30,58,138,0.12) !important; }
         .msg-area::-webkit-scrollbar { width:6px }
         .msg-area::-webkit-scrollbar-track { background:#f1f5f9 }
         .msg-area::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px }
         .draft-item { transition: background .15s; }
-        .draft-item:hover { background: rgba(16,185,129,0.08) !important; }
-        .apply-btn:hover { background: linear-gradient(135deg,#059669,#047857) !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,0.4) !important; }
+        .draft-item:hover { background: rgba(30,58,138,0.08) !important; }
+        .apply-btn:hover { background: linear-gradient(135deg,#1e3a8a,#2563eb) !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(30,58,138,0.4) !important; }
       `}</style>
 
       {/* Layout: sidebar rekap + area chat */}
@@ -401,8 +455,8 @@ export default function OwnerAIChatPage() {
               padding: '10px 14px',
               borderRadius: 12,
               border: '1px dashed #cbd5e1',
-              background: 'rgba(16,185,129,0.06)',
-              color: '#059669',
+              background: 'rgba(30,58,138,0.06)',
+              color: '#1e3a8a',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
@@ -433,8 +487,8 @@ export default function OwnerAIChatPage() {
                   marginBottom: 6,
                   borderRadius: 12,
                   border: '1px solid transparent',
-                  background: activeConversationId === conv.id ? 'rgba(16,185,129,0.12)' : 'transparent',
-                  color: activeConversationId === conv.id ? '#047857' : '#334155',
+                  background: activeConversationId === conv.id ? 'rgba(30,58,138,0.12)' : 'transparent',
+                  color: activeConversationId === conv.id ? '#1e40af' : '#334155',
                   fontSize: 12,
                   lineHeight: 1.4,
                   cursor: 'pointer',
@@ -484,10 +538,10 @@ export default function OwnerAIChatPage() {
           {/* Logo mark */}
           <div style={{
             width: 44, height: 44, borderRadius: 14,
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 60%, #0d9488 100%)',
+            background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #1e40af 100%)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 20, flexShrink: 0,
-            boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
+            boxShadow: '0 4px 12px rgba(30,58,138,0.3)',
           }}>
             🤖
           </div>
@@ -500,7 +554,7 @@ export default function OwnerAIChatPage() {
               }}>Bintang AI</h1>
               <span style={{
                 fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-                color: '#059669',
+                color: '#1e3a8a',
                 textTransform: 'uppercase',
               }}>PRO</span>
             </div>
@@ -516,15 +570,15 @@ export default function OwnerAIChatPage() {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '6px 12px', borderRadius: 100,
-            background: 'rgba(16,185,129,0.1)',
-            border: '1px solid rgba(16,185,129,0.25)',
+            background: 'rgba(30,58,138,0.1)',
+            border: '1px solid rgba(30,58,138,0.25)',
           }}>
             <div style={{
               width: 7, height: 7, borderRadius: '50%',
-              background: '#10b981',
+              background: '#1e3a8a',
               animation: 'shimmer 2s ease-in-out infinite',
             }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#059669', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#1e3a8a', letterSpacing: '0.04em' }}>
               AKTIF
             </span>
           </div>
@@ -548,11 +602,11 @@ export default function OwnerAIChatPage() {
               {/* Hero icon */}
               <div style={{
                 width: 80, height: 80, borderRadius: 28,
-                background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))',
-                border: '1px solid rgba(16,185,129,0.2)',
+                background: 'linear-gradient(135deg, rgba(30,58,138,0.15), rgba(6,182,212,0.1))',
+                border: '1px solid rgba(30,58,138,0.2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 36, marginBottom: 20,
-                boxShadow: '0 4px 20px rgba(16,185,129,0.15)',
+                boxShadow: '0 4px 20px rgba(30,58,138,0.15)',
               }}>✨</div>
 
               <h2 style={{
@@ -642,11 +696,11 @@ export default function OwnerAIChatPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16 }}>📦</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>Draft Order Siap</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>Draft Order Siap</span>
               </div>
               <span style={{
-                fontSize: 10, fontWeight: 600, color: '#047857',
-                background: 'rgba(16,185,129,0.2)', padding: '2px 8px', borderRadius: 100,
+                fontSize: 10, fontWeight: 600, color: '#1e40af',
+                background: 'rgba(30,58,138,0.2)', padding: '2px 8px', borderRadius: 100,
               }}>{lastOrderDraft.items.length} item</span>
             </div>
 
@@ -672,14 +726,14 @@ export default function OwnerAIChatPage() {
               onClick={() => applyDraftAndNavigate(lastOrderDraft)}
               style={{
                 marginTop: 12, width: '100%',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
+                background: 'linear-gradient(135deg, #1e3a8a, #2563eb)',
                 border: 'none', borderRadius: 12,
                 padding: '11px 16px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 color: '#fff', fontSize: 13, fontWeight: 700,
                 cursor: 'pointer', transition: 'all .2s ease',
                 fontFamily: 'Sora, sans-serif',
-                boxShadow: '0 4px 16px rgba(16,185,129,0.3)',
+                boxShadow: '0 4px 16px rgba(30,58,138,0.3)',
               }}
             >
               <span>🛒</span>
@@ -722,7 +776,7 @@ export default function OwnerAIChatPage() {
                 color: '#334155', fontSize: 14,
                 fontFamily: 'Sora, sans-serif',
                 lineHeight: 1.6,
-                caretColor: '#10b981',
+                caretColor: '#1e3a8a',
                 paddingTop: 12,
               }}
             />
@@ -733,12 +787,12 @@ export default function OwnerAIChatPage() {
               style={{
                 width: 44, height: 44, borderRadius: 13, flexShrink: 0,
                 background: input.trim()
-                  ? 'linear-gradient(135deg, #10b981, #059669)'
+                  ? 'linear-gradient(135deg, #1e3a8a, #2563eb)'
                   : '#e2e8f0',
                 border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 18, transition: 'all .2s ease',
-                boxShadow: input.trim() ? '0 4px 16px rgba(16,185,129,0.35)' : 'none',
+                boxShadow: input.trim() ? '0 4px 16px rgba(30,58,138,0.35)' : 'none',
               }}
             >
               {loading ? (
