@@ -12,7 +12,8 @@ import {
   MapPin,
   BarChart3,
   TrendingUp,
-  ExternalLink
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
@@ -321,6 +322,7 @@ const AdminPusatDashboard: React.FC = () => {
   const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
   const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
   const [showFilters, setShowFilters] = useState(true);
+  const [syncingLocation, setSyncingLocation] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -403,6 +405,39 @@ const AdminPusatDashboard: React.FC = () => {
         subtitle="Rekapitulasi transaksi dan pekerjaan cabang"
         right={
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncingLocation || loading}
+              onClick={async () => {
+                setSyncingLocation(true);
+                try {
+                  const res = await adminPusatApi.syncLocation();
+                  if (res.data?.success && res.data?.data) {
+                    const d = res.data.data;
+                    const msg = [
+                      d.provinsi_updated != null && d.provinsi_updated > 0 ? `${d.provinsi_updated} provinsi` : null,
+                      d.branch_by_code != null && d.branch_by_code > 0 ? `${d.branch_by_code} cabang (dari kode)` : null,
+                      d.branch_by_city != null && d.branch_by_city > 0 ? `${d.branch_by_city} cabang (dari kota)` : null,
+                      d.branch_by_region != null && d.branch_by_region > 0 ? `${d.branch_by_region} cabang (dari region)` : null,
+                      d.user_wilayah_updated != null && d.user_wilayah_updated > 0 ? `${d.user_wilayah_updated} user` : null
+                    ].filter(Boolean).join(', ') || 'Tidak ada data yang diubah.';
+                    alert(`Sinkronisasi lokasi selesai.\n${msg}`);
+                  } else {
+                    alert(res.data?.message || 'Sinkronisasi selesai.');
+                  }
+                  await fetchDashboard();
+                } catch (e: any) {
+                  alert(e.response?.data?.message || 'Gagal sinkronisasi lokasi.');
+                } finally {
+                  setSyncingLocation(false);
+                }
+              }}
+              title="Isi otomatis provinsi/wilayah yang masih null dari kode cabang, kota, atau region"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${syncingLocation ? 'animate-spin' : ''}`} />
+              Sync Lokasi
+            </Button>
             <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} />
             <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v: boolean) => !v)} hasActiveFilters={hasActiveFilters} />
           </div>

@@ -2,11 +2,13 @@
  * Branch & master lokasi (wilayah, provinsi, kabupaten/kota).
  * Semua data wilayah, provinsi, kabupaten/kota dari database master saja (tabel wilayah, provinsi, kabupaten).
  * Isi master: migration 20250217000004 (wilayah + provinsi), seeder seed:kabupaten (kabupaten/kota).
+ * Utility locationMaster: generate otomatis provinsi/wilayah dari kota (kode kabupaten) dan sebaliknya.
  */
 const asyncHandler = require('express-async-handler');
 const { Branch, Wilayah, Provinsi, Kabupaten } = require('../models');
 const { ROLES } = require('../constants');
 const { Op } = require('sequelize');
+const { resolveFromKota, enrichBranchWithLocation } = require('../utils/locationMaster');
 
 const ALLOWED_SORT = ['code', 'name', 'city', 'region', 'manager_name', 'is_active', 'created_at'];
 
@@ -185,7 +187,9 @@ const list = asyncHandler(async (req, res) => {
   const sortCol = ALLOWED_SORT.includes(sort_by) ? sort_by : 'code';
   const sortDir = (sort_order || '').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
-  const includeOpt = wilayah_id ? [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }] : [];
+  const includeOpt = wilayah_id
+    ? [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: true, where: { wilayah_id }, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+    : [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }];
   const { count, rows } = await Branch.findAndCountAll({
     where,
     include: includeOpt,
@@ -195,10 +199,40 @@ const list = asyncHandler(async (req, res) => {
     distinct: true
   });
   const totalPages = Math.ceil(count / lim) || 1;
+  const data = await Promise.all(rows.map(async (row) => {
+    const plain = row.toJSON ? row.toJSON() : { ...row };
+    const loc = await enrichBranchWithLocation(row, { syncDb: true });
+    return { ...plain, provinsi_name: loc.provinsi_name, wilayah_name: loc.wilayah_name, provinsi_id: loc.provinsi_id || plain.provinsi_id, wilayah_id: loc.wilayah_id };
+  }));
   res.json({
     success: true,
-    data: rows,
+    data,
     pagination: { total: count, page: pg, limit: lim, totalPages }
+  });
+});
+
+/**
+ * GET /branches/location-by-kota
+ * Resolve lokasi lengkap (kabupaten, provinsi, wilayah) dari kode kota atau id kabupaten.
+ * Untuk modul yang perlu generate otomatis provinsi/wilayah ketika data kota ada.
+ * Query: kode (kode kabupaten, e.g. 3201) atau id (UUID kabupaten)
+ */
+const getLocationByKota = asyncHandler(async (req, res) => {
+  const kode = req.query.kode || req.query.id;
+  if (!kode || String(kode).trim() === '') {
+    return res.status(400).json({ success: false, message: 'Query kode atau id diperlukan' });
+  }
+  const resolved = await resolveFromKota(String(kode).trim());
+  if (!resolved) {
+    return res.status(404).json({ success: false, message: 'Kota/kabupaten tidak ditemukan di master' });
+  }
+  res.json({
+    success: true,
+    data: {
+      kabupaten: resolved.kabupaten,
+      provinsi: resolved.provinsi,
+      wilayah: resolved.wilayah
+    }
   });
 });
 
@@ -208,5 +242,6 @@ module.exports = {
   listProvinces,
   listWilayah,
   listKabupaten,
-  listKabupatenForOwner
+  listKabupatenForOwner,
+  getLocationByKota
 };

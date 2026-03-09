@@ -7,6 +7,9 @@ const adminPusatController = require('../../controllers/adminPusatController');
 router.use(auth);
 router.use(requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING));
 
+// Sync lokasi: isi provinsi.wilayah_id & branch.provinsi_id yang null (dari kode/kota/region)
+router.post('/sync-location', adminPusatController.syncLocation);
+
 // Dashboard
 router.get('/dashboard', adminPusatController.getDashboard);
 

@@ -4,6 +4,7 @@ const sequelize = require('../config/sequelize');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, PaymentReallocation, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi, Kabupaten } = require('../models');
+const { enrichBranchWithLocation, enrichItemBranchLocation } = require('../utils/locationMaster');
 const { INVOICE_STATUS } = require('../constants');
 
 /** Atribut PaymentProof tanpa kolom opsional (proof_file_name, proof_file_content_type, proof_file_data) agar kompatibel dengan DB lama */
@@ -50,6 +51,10 @@ const getDashboard = asyncHandler(async (req, res) => {
     order: [['created_at', 'DESC']]
   });
 
+  for (const inv of invoices) {
+    if (inv.Branch) await enrichItemBranchLocation(inv, { syncDb: false });
+  }
+
   let totalReceivable = 0;
   let totalPaid = 0;
   const byStatus = {};
@@ -66,15 +71,15 @@ const getDashboard = asyncHandler(async (req, res) => {
       byBranch[bid].receivable += parseFloat(j.remaining_amount || 0);
       byBranch[bid].paid += parseFloat(j.paid_amount || 0);
       const pid = j.Branch?.Provinsi?.id || j.Branch?.provinsi_id;
-      const pname = j.Branch?.Provinsi?.name;
+      const pname = j.Branch?.Provinsi?.name || j.Branch?.provinsi_name;
       if (pid) {
         byProvinsi[pid] = byProvinsi[pid] || { provinsi_name: pname, count: 0, receivable: 0, paid: 0 };
         byProvinsi[pid].count += 1;
         byProvinsi[pid].receivable += parseFloat(j.remaining_amount || 0);
         byProvinsi[pid].paid += parseFloat(j.paid_amount || 0);
       }
-      const wid = j.Branch?.Provinsi?.Wilayah?.id;
-      const wname = j.Branch?.Provinsi?.Wilayah?.name;
+      const wid = j.Branch?.Provinsi?.Wilayah?.id || j.Branch?.wilayah_id;
+      const wname = j.Branch?.Provinsi?.Wilayah?.name || j.Branch?.wilayah_name;
       if (wid) {
         byWilayah[wid] = byWilayah[wid] || { wilayah_name: wname, count: 0, receivable: 0, paid: 0 };
         byWilayah[wid].count += 1;
@@ -86,12 +91,17 @@ const getDashboard = asyncHandler(async (req, res) => {
     totalPaid += parseFloat(j.paid_amount || 0);
   });
 
-  const branches = await Branch.findAll({
+  const branchesRaw = await Branch.findAll({
     where: { is_active: true },
     attributes: ['id', 'code', 'name', 'provinsi_id'],
     include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }],
     order: [['code', 'ASC']]
   });
+  const branches = await Promise.all(branchesRaw.map(async (b) => {
+    const loc = await enrichBranchWithLocation(b, { syncDb: true });
+    const j = b.toJSON ? b.toJSON() : b;
+    return { ...j, provinsi_name: loc.provinsi_name ?? j.Provinsi?.name, wilayah_name: loc.wilayah_name ?? j.Provinsi?.Wilayah?.name, provinsi_id: loc.provinsi_id || j.provinsi_id, wilayah_id: loc.wilayah_id || j.Provinsi?.Wilayah?.id };
+  }));
 
   res.json({
     success: true,
@@ -1014,6 +1024,18 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   const byPeriod = {};
   const invoicesDetail = [];
 
+  await Promise.all(invoices.map(async (inv) => {
+    if (inv.Branch && (inv.Branch.code || inv.Branch.provinsi_id)) {
+      try {
+        const loc = await enrichBranchWithLocation(inv.Branch, { syncDb: false });
+        inv.Branch.provinsi_name = loc.provinsi_name;
+        inv.Branch.wilayah_name = loc.wilayah_name;
+        if (loc.provinsi_id) inv.Branch.provinsi_id = loc.provinsi_id;
+        if (loc.wilayah_id) inv.Branch.wilayah_id = loc.wilayah_id;
+      } catch (_) { /* non-fatal */ }
+    }
+  }));
+
   invoices.forEach(inv => {
     const paid = parseFloat(inv.paid_amount || 0);
     totalRevenue += paid;
@@ -1023,8 +1045,9 @@ const getFinancialReport = asyncHandler(async (req, res) => {
     byBranch[bid].revenue += paid;
     byBranch[bid].invoice_count += 1;
 
-    const wid = inv.Branch?.Provinsi?.Wilayah?.id || 'other';
-    byWilayah[wid] = byWilayah[wid] || { wilayah_id: wid, wilayah_name: inv.Branch?.Provinsi?.Wilayah?.name || 'Lainnya', revenue: 0, invoice_count: 0 };
+    const wid = inv.Branch?.wilayah_id || inv.Branch?.Provinsi?.Wilayah?.id || 'other';
+    const wilayahName = inv.Branch?.wilayah_name || inv.Branch?.Provinsi?.Wilayah?.name || 'Lainnya';
+    byWilayah[wid] = byWilayah[wid] || { wilayah_id: wid, wilayah_name: wilayahName, revenue: 0, invoice_count: 0 };
     byWilayah[wid].revenue += paid;
     byWilayah[wid].invoice_count += 1;
 

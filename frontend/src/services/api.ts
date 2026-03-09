@@ -531,6 +531,9 @@ export interface UserListItem {
   is_online?: boolean;
 }
 export const adminPusatApi = {
+  /** Sinkronisasi lokasi: isi provinsi.wilayah_id & branch.provinsi_id yang null (dari kode/kota/region). */
+  syncLocation: () =>
+    api.post<{ success: boolean; message?: string; data?: { provinsi_updated?: number; branch_by_code?: number; branch_by_city?: number; branch_by_region?: number; user_wilayah_updated?: number } }>('/admin-pusat/sync-location'),
   getDashboard: (params?: { branch_id?: string; date_from?: string; date_to?: string; status?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: AdminPusatDashboardData }>('/admin-pusat/dashboard', { params }),
   listUsers: (params?: { role?: string; branch_id?: string; wilayah_id?: string; provinsi_id?: string; kabupaten_id?: string; is_active?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>

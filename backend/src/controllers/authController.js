@@ -1,7 +1,8 @@
 const asyncHandler = require('express-async-handler');
-const { User, OwnerProfile, Branch, Provinsi, Wilayah, Kabupaten } = require('../models');
+const { User, OwnerProfile, Branch, Provinsi, Wilayah } = require('../models');
 const { signToken } = require('../middleware/auth');
 const { ROLES, OWNER_STATUS, isOwnerRole } = require('../constants');
+const { fillLocationFromKotaCode } = require('../utils/locationMaster');
 const logger = require('../config/logger');
 
 /**
@@ -77,16 +78,13 @@ const login = asyncHandler(async (req, res) => {
   let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
   if (branch && !provinsiName && branch.code) {
     try {
-      const kabupaten = await Kabupaten.findOne({
-        where: { kode: branch.code },
-        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-      });
-      if (kabupaten?.Provinsi) {
-        provinsiName = kabupaten.Provinsi.name || null;
-        wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+      const filled = await fillLocationFromKotaCode(branch.code);
+      if (filled) {
+        provinsiName = filled.provinsi_name || null;
+        wilayahName = filled.wilayah_name || null;
       }
     } catch (e) {
-      logger.warn('Login: Kabupaten lookup failed (non-fatal):', e && e.message);
+      logger.warn('Login: locationMaster fill failed (non-fatal):', e && e.message);
     }
   }
   const payload = {
@@ -153,16 +151,13 @@ const me = asyncHandler(async (req, res) => {
   let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
   if (branch && !provinsiName && branch.code) {
     try {
-      const kabupaten = await Kabupaten.findOne({
-        where: { kode: branch.code },
-        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-      });
-      if (kabupaten?.Provinsi) {
-        provinsiName = kabupaten.Provinsi.name || null;
-        wilayahName = kabupaten.Provinsi.Wilayah ? kabupaten.Provinsi.Wilayah.name : null;
+      const filled = await fillLocationFromKotaCode(branch.code);
+      if (filled) {
+        provinsiName = filled.provinsi_name || null;
+        wilayahName = filled.wilayah_name || null;
       }
     } catch (e) {
-      logger.warn('me: Kabupaten lookup failed (non-fatal):', e && e.message);
+      logger.warn('me: locationMaster fill failed (non-fatal):', e && e.message);
     }
   }
   u.provinsi_name = provinsiName;

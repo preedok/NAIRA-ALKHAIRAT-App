@@ -31,6 +31,26 @@ const {
 } = require('../models');
 const { ROLES, ORDER_ITEM_TYPE, isOwnerRole, OWNER_ROLES } = require('../constants');
 const { getHotelAvailabilityConfig } = require('../services/hotelAvailabilityService');
+const { runFullSync, enrichBranchWithLocation } = require('../utils/locationMaster');
+
+/**
+ * POST /api/v1/admin-pusat/sync-location
+ * Generate otomatis: isi provinsi.wilayah_id dan branch.provinsi_id yang masih null; isi user.wilayah_id dari branch.
+ */
+const syncLocation = asyncHandler(async (req, res) => {
+  const result = await runFullSync();
+  res.json({
+    success: true,
+    message: 'Sinkronisasi lokasi selesai.',
+    data: {
+      provinsi_updated: result.provinsiUpdated,
+      branch_by_code: result.branchByCode,
+      branch_by_city: result.branchByCity,
+      branch_by_region: result.branchByRegion,
+      user_wilayah_updated: result.userWilayahUpdated
+    }
+  });
+});
 
 /**
  * GET /api/v1/admin-pusat/dashboard
@@ -48,11 +68,17 @@ const getDashboard = asyncHandler(async (req, res) => {
         include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }
     ]
   });
-  const branchMap = branchWithProvinsi.reduce((acc, b) => {
+  const branchMap = {};
+  for (const b of branchWithProvinsi) {
+    const loc = await enrichBranchWithLocation(b, { syncDb: true });
     const j = b.toJSON();
-    acc[j.id] = { provinsi_id: j.provinsi_id, provinsi_name: j.Provinsi?.name, wilayah_id: j.Provinsi?.Wilayah?.id, wilayah_name: j.Provinsi?.Wilayah?.name };
-    return acc;
-  }, {});
+    branchMap[j.id] = {
+      provinsi_id: loc.provinsi_id || j.provinsi_id,
+      provinsi_name: loc.provinsi_name ?? j.Provinsi?.name,
+      wilayah_id: loc.wilayah_id ?? j.Provinsi?.Wilayah?.id,
+      wilayah_name: loc.wilayah_name ?? j.Provinsi?.Wilayah?.name
+    };
+  }
 
   // Dashboard hanya pakai data invoice (orders & invoices section = invoice-based), konsisten dengan reports/analytics
   const whereInvoice = {};
@@ -975,5 +1001,6 @@ module.exports = {
   createBusSeason,
   updateBusSeason,
   deleteBusSeason,
-  setBusSeasonQuota
+  setBusSeasonQuota,
+  syncLocation
 };

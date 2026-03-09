@@ -7,6 +7,7 @@ const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Noti
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, isOwnerRole } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
+const { enrichBranchWithLocation } = require('../utils/locationMaster');
 
 const KOORDINATOR_ROLES = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
 function isKoordinatorRole(role) {
@@ -533,6 +534,17 @@ const list = asyncHandler(async (req, res) => {
     totalPaidFinal = Math.max(0, totalPaidFinal - parseFloat(refundedSum));
   }
 
+  await Promise.all(data.map(async (d) => {
+    if (!d.Branch || (!d.Branch.code && !d.Branch.provinsi_id)) return;
+    try {
+      const loc = await enrichBranchWithLocation(d.Branch, { syncDb: false });
+      d.Branch.provinsi_name = loc.provinsi_name ?? d.Branch.provinsi_name;
+      d.Branch.wilayah_name = loc.wilayah_name ?? d.Branch.wilayah_name;
+      d.Branch.provinsi_id = loc.provinsi_id ?? d.Branch.provinsi_id;
+      d.Branch.wilayah_id = loc.wilayah_id ?? d.Branch.wilayah_id;
+    } catch (_) { /* non-fatal */ }
+  }));
+
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.json({
     success: true,
@@ -1042,6 +1054,15 @@ const getById = asyncHandler(async (req, res) => {
     attributes: ['id', 'code', 'name', 'bank_name', 'account_number', 'currency']
   });
   data.bank_accounts = accountingBankAccounts.length > 0 ? accountingBankAccounts.map((a) => a.toJSON()) : (Array.isArray(rules.bank_accounts) ? rules.bank_accounts : (typeof rules.bank_accounts === 'string' ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })() : []));
+  if (data.Branch && (data.Branch.code || data.Branch.provinsi_id)) {
+    try {
+      const loc = await enrichBranchWithLocation(data.Branch, { syncDb: false });
+      data.Branch.provinsi_name = loc.provinsi_name ?? data.Branch.provinsi_name;
+      data.Branch.wilayah_name = loc.wilayah_name ?? data.Branch.wilayah_name;
+      data.Branch.provinsi_id = loc.provinsi_id ?? data.Branch.provinsi_id;
+      data.Branch.wilayah_id = loc.wilayah_id ?? data.Branch.wilayah_id;
+    } catch (_) { /* non-fatal */ }
+  }
   res.json({ success: true, data });
 });
 
