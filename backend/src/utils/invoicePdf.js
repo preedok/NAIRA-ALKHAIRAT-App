@@ -367,7 +367,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         const totalOrang = qtyRooms * capacity;
         const cur = (item.unit_price_currency || 'IDR').toUpperCase();
         const toIdr = (v) => (cur === 'SAR' ? v * s2i : cur === 'USD' ? v * u2i : v);
-        const roomUnitRaw = meta.room_unit_price != null ? parseFloat(meta.room_unit_price) : NaN;
+        const roomUnitRaw = meta.room_unit_price != null ? parseFloat(meta.room_unit_price) : (item.unit_price != null ? parseFloat(item.unit_price) : NaN);
         const mealUnitRaw = meta.meal_unit_price != null ? parseFloat(meta.meal_unit_price) : NaN;
         if (Number.isFinite(roomUnitRaw)) hotelRoomUnitIdr = toIdr(roomUnitRaw);
         if (Number.isFinite(mealUnitRaw)) hotelMealUnitIdr = toIdr(mealUnitRaw);

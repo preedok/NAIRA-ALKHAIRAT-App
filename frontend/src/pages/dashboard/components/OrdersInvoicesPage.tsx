@@ -2204,13 +2204,13 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const nights = meta.nights != null ? Number(meta.nights) : 0;
                                       const cur = (item.unit_price_currency || 'IDR').toUpperCase();
                                       const toIdr = (v: number) => cur === 'SAR' ? v * sarToIdr : cur === 'USD' ? v * usdToIdr : v;
-                                      const roomUnit = meta.room_unit_price != null ? Number(meta.room_unit_price) : NaN;
-                                      const mealUnit = meta.meal_unit_price != null ? Number(meta.meal_unit_price) : NaN;
                                       const ROOM_CAP_TBL = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>;
                                       const capacity = ROOM_CAP_TBL[String(meta.room_type || '').toLowerCase()] ?? 1;
                                       const totalOrang = qty * capacity;
-                                      let roomUnitIdr = Number.isFinite(roomUnit) ? toIdr(roomUnit) : 0;
-                                      let mealUnitIdr = Number.isFinite(mealUnit) ? toIdr(mealUnit) : 0;
+                                      const roomUnitRaw = meta.room_unit_price != null ? Number(meta.room_unit_price) : (typeKey === 'hotel' ? Number(item.unit_price) : NaN);
+                                      const mealUnitRaw = meta.meal_unit_price != null ? Number(meta.meal_unit_price) : NaN;
+                                      let roomUnitIdr = Number.isFinite(roomUnitRaw) ? toIdr(roomUnitRaw) : 0;
+                                      let mealUnitIdr = Number.isFinite(mealUnitRaw) ? toIdr(mealUnitRaw) : 0;
                                       const withMeal = !!(meta.meal || meta.with_meal);
                                       const roomPart = typeKey === 'hotel' && nights > 0 ? roomUnitIdr * qty * nights : 0;
                                       let mealPart = typeKey === 'hotel' && nights > 0 && mealUnitIdr > 0 ? mealUnitIdr * totalOrang * nights : 0;

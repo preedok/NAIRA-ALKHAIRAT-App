@@ -435,6 +435,8 @@ const create = asyncHandler(async (req, res) => {
       const nights = getNights(checkIn, checkOut);
       if (nights > 0) meta.nights = nights;
     }
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
     if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
     orderItems.push({
       type: it.type,
@@ -721,6 +723,8 @@ const update = asyncHandler(async (req, res) => {
         const nights = getNights(checkIn, checkOut);
         if (nights > 0) meta.nights = nights;
       }
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
       if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
       afterItemsRaw.push({
         type: it.type,

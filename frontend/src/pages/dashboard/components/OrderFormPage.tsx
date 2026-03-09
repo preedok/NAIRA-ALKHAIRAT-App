@@ -283,7 +283,7 @@ const OrderFormPage: React.FC = () => {
             check_in:checkIn||undefined,
             check_out:checkOut||undefined,
             meta: Object.keys(hotelMeta).length ? hotelMeta : undefined,
-            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; const lineCur=itemCur(o); return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(parseFloat(getVal(o,'unit_price'))||0,productRefId,'hotel',lineCur), with_meal:!!(m.with_meal??m.meal) }; })
+            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; const lineCur=itemCur(o); const withMeal=!!(m.with_meal??m.meal); const roomUp=parseFloat(m.room_unit_price??getVal(o,'unit_price'))||0; const mealUp=m.meal_unit_price!=null?Number(m.meal_unit_price):undefined; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(roomUp,productRefId,'hotel',lineCur), meal_unit_price:mealUp!=null?disp(mealUp,productRefId,'hotel',lineCur):undefined, with_meal:withMeal }; })
           });
         }
       } else {
