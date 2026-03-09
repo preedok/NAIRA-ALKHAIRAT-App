@@ -175,15 +175,18 @@ const OrdersInvoicesPage: React.FC = () => {
     return inv.owner_id === user?.id || ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   };
 
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     if (!isAdminPusat && !isAccounting && !isInvoiceSaudi) return;
     try {
-      const res = await branchesApi.list({ limit: 500, page: 1 });
+      const params: { limit: number; page: number; wilayah_id?: string; provinsi_id?: string } = { limit: 500, page: 1 };
+      if (wilayahId) params.wilayah_id = wilayahId;
+      if (provinsiId) params.provinsi_id = provinsiId;
+      const res = await branchesApi.list(params);
       if (res.data.success) setBranches(res.data.data || []);
     } catch {
       setBranches([]);
     }
-  };
+  }, [isAdminPusat, isAccounting, isInvoiceSaudi, wilayahId, provinsiId]);
 
   useEffect(() => {
     if (isAdminPusat || isAccounting || isInvoiceSaudi) {
@@ -191,6 +194,10 @@ const OrdersInvoicesPage: React.FC = () => {
       branchesApi.listProvinces().then((r) => { if (r.data.success) setProvinces(r.data.data || []); }).catch(() => {});
     }
   }, [isAdminPusat, isAccounting, isInvoiceSaudi]);
+
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
 
   const fetchOwners = async () => {
     const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
@@ -459,7 +466,6 @@ const OrdersInvoicesPage: React.FC = () => {
   }, [showToast]);
 
   useEffect(() => {
-    fetchBranches();
     fetchCurrencyRates();
   }, [isAdminPusat, isAccounting, isInvoiceSaudi]);
 
@@ -1160,8 +1166,8 @@ const OrdersInvoicesPage: React.FC = () => {
             ]}
             onSortByChange={setSortBy}
             onSortOrderChange={setSortOrder}
-            onWilayahChange={setWilayahId}
-            onProvinsiChange={setProvinsiId}
+            onWilayahChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+            onProvinsiChange={(v) => { setProvinsiId(v); setBranchId(''); }}
             onBranchChange={setBranchId}
             onStatusChange={setFilterStatus}
             onOwnerChange={setFilterOwnerId}

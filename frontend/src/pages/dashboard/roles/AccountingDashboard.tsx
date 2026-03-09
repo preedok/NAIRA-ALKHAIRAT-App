@@ -77,12 +77,18 @@ const InvoiceListModal: React.FC<{
   }, [open, fetchInvoices]);
 
   useEffect(() => {
-    if (open) {
-      branchesApi.list({ limit: 500 }).then((r) => { if (r.data.success) setBranches(r.data.data || []); }).catch(() => {});
-      branchesApi.listProvinces().then((r) => { if (r.data.success) setProvinces(r.data.data || []); }).catch(() => {});
-      branchesApi.listWilayah().then((r) => { if (r.data.success) setWilayahList(r.data.data || []); }).catch(() => {});
-    }
+    if (!open) return;
+    branchesApi.listWilayah().then((r) => { if (r.data.success) setWilayahList(r.data.data || []); }).catch(() => {});
+    branchesApi.listProvinces().then((r) => { if (r.data.success) setProvinces(r.data.data || []); }).catch(() => {});
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const params: { limit: number; wilayah_id?: string; provinsi_id?: string } = { limit: 500 };
+    if (fWilayah) params.wilayah_id = fWilayah;
+    if (fProvinsi) params.provinsi_id = fProvinsi;
+    branchesApi.list(params).then((r) => { if (r.data.success) setBranches(r.data.data || []); }).catch(() => setBranches([]));
+  }, [open, fWilayah, fProvinsi]);
 
   if (!open) return null;
 
@@ -112,15 +118,15 @@ const InvoiceListModal: React.FC<{
               status={fStatus}
               dateFrom={fDateFrom}
               dateTo={fDateTo}
-              onWilayahChange={setFWilayah}
-              onProvinsiChange={setFProvinsi}
+              onWilayahChange={(v) => { setFWilayah(v); setFProvinsi(''); setFBranch(''); }}
+              onProvinsiChange={(v) => { setFProvinsi(v); setFBranch(''); }}
               onBranchChange={setFBranch}
               onStatusChange={setFStatus}
               onDateFromChange={setFDateFrom}
               onDateToChange={setFDateTo}
               onApply={() => { setPage(1); fetchInvoices(); }}
               wilayahList={wilayahList}
-              provinces={provinces}
+              provinces={fWilayah ? provinces.filter((p) => p.wilayah_id === fWilayah) : provinces}
               branches={branches}
             />
           </div>
@@ -297,14 +303,14 @@ const AccountingDashboard: React.FC = () => {
           branchId={branchId}
           dateFrom={dateFrom}
           dateTo={dateTo}
-          onWilayahChange={setWilayahId}
-          onProvinsiChange={setProvinsiId}
+          onWilayahChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }}
+          onProvinsiChange={(v) => { setProvinsiId(v); setBranchId(''); }}
           onBranchChange={setBranchId}
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
           onApply={fetchDashboard}
           wilayahList={wilayahList}
-          provinces={provinces}
+          provinces={wilayahId ? provinces.filter((p) => p.wilayah_id === wilayahId) : provinces}
           branches={branches}
         />
       </PageFilter>
