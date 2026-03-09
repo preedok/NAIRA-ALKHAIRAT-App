@@ -15,6 +15,7 @@ try {
   getDir(SUBDIRS.MANIFEST_TICKET);
   getDir(SUBDIRS.VISA_DOCS);
   getDir(SUBDIRS.TICKET_DOCS);
+  getDir(SUBDIRS.HOTEL_DOCS);
   getDir(SUBDIRS.INVOICES);
 } catch (e) { /* ignore */ }
 

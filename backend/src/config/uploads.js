@@ -37,6 +37,7 @@ const SUBDIRS = {
   MANIFEST_TICKET: 'manifest/ticket',
   VISA_DOCS: 'visa-docs',
   TICKET_DOCS: 'ticket-docs',
+  HOTEL_DOCS: 'hotel-docs',
   JAMAAH_DATA: 'jamaah-data',
   INVOICES: 'invoices',
   REFUND_PROOFS: 'refund-proofs',
@@ -133,6 +134,16 @@ function ticketDocFilename(orderNumber, orderItemId, originalName) {
 }
 
 /**
+ * Nama file dokumen info hotel (auto-generate): HOTEL_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.pdf
+ */
+function hotelDocFilename(orderNumber, orderItemId) {
+  const { date, time } = dateTimeForFilename();
+  const ord = (orderNumber || 'ORD').replace(/[^a-zA-Z0-9-]/g, '_');
+  const id6 = (orderItemId || '').toString().slice(-6);
+  return `HOTEL_${ord}_${id6}_${date}_${time}.pdf`;
+}
+
+/**
  * Nama file invoice PDF: INV_{invoiceNumber}_{status}_YYYYMMDD_HHmmss.pdf
  */
 function invoiceFilename(invoiceNumber, status) {
@@ -186,6 +197,7 @@ module.exports = {
   paymentProofFilename,
   visaDocFilename,
   ticketDocFilename,
+  hotelDocFilename,
   jamaahDataFilename,
   invoiceFilename,
   refundProofFilename,

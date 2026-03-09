@@ -746,6 +746,33 @@ const OrdersInvoicesPage: React.FC = () => {
     }
   };
 
+  /** Unduh dokumen terbit (tiket/visa) via API — file di-stream dari server, mengatasi "file not available" */
+  const downloadIssuedDoc = async (invoiceId: string, orderItemId: string, type: 'ticket' | 'visa') => {
+    try {
+      const res = type === 'ticket'
+        ? await invoicesApi.getTicketFile(invoiceId, orderItemId)
+        : await invoicesApi.getVisaFile(invoiceId, orderItemId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `dokumen-terbit-${type}-${orderItemId.slice(-6)}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Dokumen terbit berhasil diunduh', 'success');
+    } catch (e: any) {
+      const msg = e.response?.data?.message || (e.response?.status === 404 ? 'File tidak tersedia di server' : 'Gagal unduh dokumen terbit');
+      showToast(msg, 'error');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const map: Record<string, 'success' | 'warning' | 'info' | 'error' | 'default'> = {
       paid: 'success', partial_paid: 'warning', tentative: 'default', draft: 'info', confirmed: 'info',
@@ -2598,10 +2625,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                         <Download className="w-3.5 h-3.5" /> Manifest
                                       </a>
                                     )}
-                                    {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && (
-                                      <a href={getFileUrl(progress.visa_file_url || progress.ticket_file_url) || (progress.visa_file_url || progress.ticket_file_url)} target="_blank" rel="noopener noreferrer" download className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium">
+                                    {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && viewInvoice?.id && first?.id && (
+                                      <button type="button" onClick={() => downloadIssuedDoc(viewInvoice.id, first.id, isVisa ? 'visa' : 'ticket')} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0">
                                         <Download className="w-3.5 h-3.5" /> Dokumen terbit
-                                      </a>
+                                      </button>
                                     )}
                                   </div>
                                   {progress?.issued_at && (

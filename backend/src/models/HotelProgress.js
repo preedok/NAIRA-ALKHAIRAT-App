@@ -37,6 +37,11 @@ const HotelProgress = sequelize.define('HotelProgress', {
   check_in_time: { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:mm, otomatis sistem 16:00' },
   check_out_time: { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:mm, otomatis sistem 12:00' },
   notes: { type: DataTypes.TEXT },
+  hotel_document_url: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path file PDF info hotel (auto-generate saat room number + meal selesai)'
+  },
   updated_by: {
     type: DataTypes.UUID,
     references: { model: 'users', key: 'id' }

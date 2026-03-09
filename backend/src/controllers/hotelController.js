@@ -1,9 +1,13 @@
+const fs = require('fs');
+const path = require('path');
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice, HotelProgress, Invoice, Refund, PaymentReallocation } = require('../models');
 const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const uploadConfig = require('../config/uploads');
+const { buildHotelInfoPdfBuffer } = require('../utils/hotelPdf');
 
 /** Default jam check-in 16:00, check-out 12:00 (otomatis sistem, tidak perlu pilih jam) */
 const DEFAULT_CHECK_IN_TIME = '16:00';
@@ -481,7 +485,37 @@ const updateItemProgress = asyncHandler(async (req, res) => {
     await progress.update(updates);
   }
 
-  const updated = await HotelProgress.findByPk(progress.id);
+  let updated = await HotelProgress.findByPk(progress.id);
+
+  // Auto-generate dokumen info hotel saat nomor room terisi dan status makan = Selesai (completed)
+  const effectiveRoom = (updated.room_number || '').trim();
+  const effectiveMeal = updated.meal_status || 'pending';
+  if (effectiveRoom && effectiveMeal === 'completed') {
+    try {
+      const fullItem = await OrderItem.findByPk(orderItemId, {
+        include: [
+          { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }] },
+          { model: Product, as: 'Product', attributes: ['id', 'code', 'name'] },
+          { model: HotelProgress, as: 'HotelProgress', required: false }
+        ]
+      });
+      if (fullItem && fullItem.HotelProgress) {
+        const buf = await buildHotelInfoPdfBuffer(fullItem);
+        const orderNumber = fullItem.Order?.order_number || 'ORD';
+        const fileName = uploadConfig.hotelDocFilename(orderNumber, fullItem.id);
+        const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.HOTEL_DOCS);
+        const filePath = path.join(dir, fileName);
+        fs.writeFileSync(filePath, buf, 'binary');
+        const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.HOTEL_DOCS, fileName);
+        await updated.update({ hotel_document_url: fileUrl });
+        updated = await HotelProgress.findByPk(progress.id);
+      }
+    } catch (e) {
+      // Jangan gagalkan response; dokumen bisa digenerate ulang
+      if (typeof console !== 'undefined' && console.warn) console.warn('Hotel doc generate failed:', e && e.message);
+    }
+  }
+
   res.json({ success: true, data: updated });
 });
 

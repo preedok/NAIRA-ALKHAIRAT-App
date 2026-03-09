@@ -11,7 +11,7 @@ import { Input, Autocomplete, CardSectionHeader, ContentLoading } from '../../..
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
-import { ticketApi } from '../../../services/api';
+import { ticketApi, invoicesApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
@@ -59,6 +59,7 @@ const TicketWorkPage: React.FC = () => {
   const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [downloadingTicketItemId, setDownloadingTicketItemId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
@@ -195,6 +196,34 @@ const TicketWorkPage: React.FC = () => {
   };
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
+
+  /** Unduh dokumen tiket terbit via API (stream dari server) — mengatasi "File wasn't available on site" */
+  const downloadTicketDocument = async (invoiceId: string, orderItemId: string) => {
+    setDownloadingTicketItemId(orderItemId);
+    try {
+      const res = await invoicesApi.getTicketFile(invoiceId, orderItemId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `dokumen-tiket-${orderItemId.slice(-6)}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Dokumen tiket berhasil diunduh', 'success');
+    } catch (e: any) {
+      const msg = e.response?.data?.message || (e.response?.status === 404 ? 'File tidak tersedia di server' : 'Gagal unduh dokumen tiket');
+      showToast(msg, 'error');
+    } finally {
+      setDownloadingTicketItemId(null);
+    }
+  };
 
   const byStatus = dashboard?.by_status || {};
   const totalInvoices = dashboard?.total_invoices ?? 0;
@@ -480,10 +509,19 @@ const TicketWorkPage: React.FC = () => {
                             </label>
                           </div>
                           {uploadingId === item.id && <span className="text-xs text-slate-500">Mengunggah…</span>}
-                          {prog?.ticket_file_url && (
-                            <a href={ticketLink!} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-600 hover:underline inline-flex items-center gap-1.5 font-medium">
-                              <Download className="w-4 h-4" /> Unduh dokumen tiket
-                            </a>
+                          {prog?.ticket_file_url && detailInvoice?.id && (
+                            <button
+                              type="button"
+                              onClick={() => downloadTicketDocument(detailInvoice.id, item.id)}
+                              disabled={downloadingTicketItemId === item.id}
+                              className="text-sm text-emerald-600 hover:underline inline-flex items-center gap-1.5 font-medium bg-transparent border-0 cursor-pointer p-0 disabled:opacity-60"
+                            >
+                              {downloadingTicketItemId === item.id ? (
+                                <><RefreshCw className="w-4 h-4 animate-spin" /> Mengunduh…</>
+                              ) : (
+                                <><Download className="w-4 h-4" /> Unduh dokumen tiket</>
+                              )}
+                            </button>
                           )}
                         </div>
                       )}

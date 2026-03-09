@@ -11,7 +11,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { Input, Autocomplete, ContentLoading, NominalDisplay } from '../../../components/common';
-import { visaApi } from '../../../services/api';
+import { visaApi, invoicesApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
@@ -57,6 +57,7 @@ const VisaWorkPage: React.FC = () => {
   const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [downloadingVisaItemId, setDownloadingVisaItemId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
@@ -197,6 +198,34 @@ const VisaWorkPage: React.FC = () => {
   };
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
+
+  /** Unduh dokumen visa terbit via API (stream dari server) — mengatasi "File wasn't available on site" */
+  const downloadVisaDocument = async (invoiceId: string, orderItemId: string) => {
+    setDownloadingVisaItemId(orderItemId);
+    try {
+      const res = await invoicesApi.getVisaFile(invoiceId, orderItemId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `dokumen-visa-${orderItemId.slice(-6)}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Dokumen visa berhasil diunduh', 'success');
+    } catch (e: any) {
+      const msg = e.response?.data?.message || (e.response?.status === 404 ? 'File tidak tersedia di server' : 'Gagal unduh dokumen visa');
+      showToast(msg, 'error');
+    } finally {
+      setDownloadingVisaItemId(null);
+    }
+  };
 
   const byStatus = dashboard?.by_status || {};
   const totalInvoices = dashboard?.total_invoices ?? 0;
@@ -402,7 +431,6 @@ const VisaWorkPage: React.FC = () => {
                 const d = detailDraft[item.id] ?? { status: prog?.status || 'document_received' };
                 const status = d.status ?? prog?.status ?? 'document_received';
                 const manifestLink = fileUrl(item.manifest_file_url);
-                const visaDocLink = fileUrl(prog?.visa_file_url);
                 const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Visa';
                 return (
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -506,12 +534,21 @@ const VisaWorkPage: React.FC = () => {
                               Set status Terbit & kirim notifikasi
                             </label>
                           </div>
-                          {prog?.visa_file_url && (
+                          {prog?.visa_file_url && detailInvoice?.id && (
                             <div className="mt-3 pt-3 border-t border-slate-100">
                               <p className="text-xs font-medium text-slate-500 mb-1">Dokumen terunggah</p>
-                              <a href={visaDocLink!} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:underline">
-                                <Download className="w-4 h-4" /> Unduh dokumen visa
-                              </a>
+                              <button
+                                type="button"
+                                onClick={() => downloadVisaDocument(detailInvoice.id, item.id)}
+                                disabled={downloadingVisaItemId === item.id}
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:underline bg-transparent border-0 cursor-pointer p-0 disabled:opacity-60"
+                              >
+                                {downloadingVisaItemId === item.id ? (
+                                  <><RefreshCw className="w-4 h-4 animate-spin" /> Mengunduh…</>
+                                ) : (
+                                  <><Download className="w-4 h-4" /> Unduh dokumen visa</>
+                                )}
+                              </button>
                             </div>
                           )}
                           {prog?.issued_at && (

@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, Bank, InvoiceStatusHistory, OrderRevision } = require('../models');
-const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, isOwnerRole } = require('../constants');
+const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, isOwnerRole, ROLES } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
 const { enrichBranchWithLocation } = require('../utils/locationMaster');
@@ -18,6 +18,10 @@ function isKoordinatorRole(role) {
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const archiver = require('archiver');
 const { buildInvoicePdfBuffer, getEffectiveStatusLabel } = require('../utils/invoicePdf');
+const { buildHotelInfoPdfBuffer } = require('../utils/hotelPdf');
+const { buildVisaSlipPdfBuffer } = require('../utils/visaSlipPdf');
+const { buildTicketSlipPdfBuffer } = require('../utils/ticketSlipPdf');
+const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 const { SUBDIRS, getDir, UPLOAD_ROOT, invoiceFilename, toUrlPath } = require('../config/uploads');
 const uploadConfig = require('../config/uploads');
 const { sendInvoiceCreatedEmail, sendPaymentReceivedEmail } = require('../utils/emailService');
@@ -1310,7 +1314,7 @@ const getPdf = asyncHandler(async (req, res) => {
 const getArchive = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'visa_file_url'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'ticket_file_url'] }] }] },
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }, { model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value', 'meta'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'hotel_document_url', 'check_in_date', 'check_out_date', 'check_in_time', 'check_out_time', 'notes'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at', 'notes'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at', 'notes'] }, { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'bus_ticket_info', 'arrival_status', 'departure_status', 'return_status', 'notes'] }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
@@ -1470,6 +1474,81 @@ const getArchive = asyncHandler(async (req, res) => {
     archive.file(filePath, { name: `07_Jamaah_${String(idx + 1).padStart(2, '0')}_${filename}` });
   });
 
+  // 08_Hotel_* : slip/dokumen info hotel (file tersimpan atau generate on-the-fly setelah penetapan room + selesai makan)
+  let hotelIdx = 0;
+  for (const item of orderItems) {
+    if ((item.type || '').toLowerCase() !== 'hotel') continue;
+    const prog = item.HotelProgress;
+    if (!prog) continue;
+    const url = (prog.hotel_document_url || '').trim();
+    const hasRoom = !!((prog.room_number || '').trim());
+    const mealDone = (prog.meal_status || '').toLowerCase() === 'completed';
+    if (url) {
+      const filePath = resolveUploadPath(url.startsWith('/') ? url : `uploads/${url}`);
+      if (filePath && fs.existsSync(filePath)) {
+        hotelIdx += 1;
+        archive.file(filePath, { name: `08_Hotel_${String(hotelIdx).padStart(2, '0')}_${path.basename(filePath)}` });
+        continue;
+      }
+    }
+    if (hasRoom && mealDone) {
+      try {
+        const buf = await buildHotelInfoPdfBuffer(item);
+        hotelIdx += 1;
+        const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
+        const name = `08_Hotel_${String(hotelIdx).padStart(2, '0')}_Slip_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+        archive.append(buf, { name });
+      } catch (e) {
+        logger.warn('Archive hotel slip generate failed:', e && e.message);
+      }
+    }
+  }
+
+  // 09_Slip_Visa_* : slip informasi visa (generate on-the-fly)
+  let visaSlipIdx = 0;
+  for (const item of orderItems) {
+    if ((item.type || '').toLowerCase() !== 'visa') continue;
+    try {
+      const buf = await buildVisaSlipPdfBuffer(item);
+      visaSlipIdx += 1;
+      const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
+      const name = `09_Slip_Visa_${String(visaSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+      archive.append(buf, { name });
+    } catch (e) {
+      logger.warn('Archive visa slip generate failed:', e && e.message);
+    }
+  }
+
+  // 10_Slip_Tiket_* : slip informasi tiket (generate on-the-fly)
+  let tiketSlipIdx = 0;
+  for (const item of orderItems) {
+    if ((item.type || '').toLowerCase() !== 'ticket') continue;
+    try {
+      const buf = await buildTicketSlipPdfBuffer(item);
+      tiketSlipIdx += 1;
+      const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
+      const name = `10_Slip_Tiket_${String(tiketSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+      archive.append(buf, { name });
+    } catch (e) {
+      logger.warn('Archive ticket slip generate failed:', e && e.message);
+    }
+  }
+
+  // 11_Slip_Bus_* : slip informasi bus (generate on-the-fly)
+  let busSlipIdx = 0;
+  for (const item of orderItems) {
+    if ((item.type || '').toLowerCase() !== 'bus') continue;
+    try {
+      const buf = await buildBusSlipPdfBuffer(item);
+      busSlipIdx += 1;
+      const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
+      const name = `11_Slip_Bus_${String(busSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+      archive.append(buf, { name });
+    } catch (e) {
+      logger.warn('Archive bus slip generate failed:', e && e.message);
+    }
+  }
+
   const readmeLines = [
     `Arsip Dokumen Invoice: ${invNum}`,
     `Owner: ${ownerName}`,
@@ -1483,6 +1562,10 @@ const getArchive = asyncHandler(async (req, res) => {
     '- 05_Visa_* : Dokumen visa terbit (upload divisi visa)',
     '- 06_Tiket_* : Dokumen tiket terbit (upload divisi tiket)',
     '- 07_Jamaah_* : File data jamaah (jika ada)',
+    '- 08_Hotel_* : Slip/info hotel (auto setelah penetapan room + selesai makan)',
+    '- 09_Slip_Visa_* : Slip informasi visa',
+    '- 10_Slip_Tiket_* : Slip informasi tiket',
+    '- 11_Slip_Bus_* : Slip informasi bus',
     '',
     'Dibuat dari menu Detail Invoice.'
   ];
@@ -1633,7 +1716,7 @@ function getReleasableAmount(invoice) {
  * Cek apakah user boleh mengakses invoice untuk reallocation (sumber atau target).
  */
 async function canAccessInvoiceForReallocation(invoiceId, user) {
-  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'owner_id', 'branch_id'] });
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'owner_id', 'branch_id', 'order_id'] });
   if (!invoice) return { ok: false, message: 'Invoice tidak ditemukan' };
   if (isOwnerRole(user.role) && invoice.owner_id !== user.id) return { ok: false, message: 'Bukan invoice Anda' };
   if (isKoordinatorRole(user.role)) {
@@ -1645,6 +1728,86 @@ async function canAccessInvoiceForReallocation(invoiceId, user) {
   }
   return { ok: true, invoice };
 }
+
+/** Resolve URL relatif upload (/uploads/xxx) ke path absolut di server */
+function resolveUploadFilePath(url) {
+  if (!url || typeof url !== 'string') return null;
+  const u = url.replace(/\\/g, '/').trim();
+  if (/^https?:\/\//i.test(u)) return null;
+  const norm = u.replace(/^\/?uploads\/?/i, '').replace(/^\/+/, '');
+  if (!norm) return null;
+  return path.join(UPLOAD_ROOT, norm);
+}
+
+/**
+ * GET /api/v1/invoices/:id/order-items/:orderItemId/ticket-file
+ * Unduh dokumen tiket terbit (ZIP/RAR) — stream dari server agar path konsisten.
+ */
+const getTicketFile = asyncHandler(async (req, res) => {
+  let access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok && (req.user.role === ROLES.TIKET_KOORDINATOR || req.user.role === ROLES.SUPER_ADMIN)) {
+    const inv = await Invoice.findByPk(req.params.id, { attributes: ['id', 'order_id'], include: [{ model: Order, as: 'Order', attributes: ['branch_id'] }] });
+    if (inv?.Order?.branch_id) {
+      const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+      if (req.user.branch_id === inv.Order.branch_id || (branchIds && branchIds.length > 0 && branchIds.includes(inv.Order.branch_id))) {
+        access = { ok: true, invoice: await Invoice.findByPk(req.params.id, { attributes: ['id', 'owner_id', 'branch_id', 'order_id'] }) };
+      }
+    }
+  }
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const invoice = access.invoice;
+  const orderItem = await OrderItem.findOne({
+    where: { id: req.params.orderItemId, order_id: invoice.order_id },
+    include: [{ model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'ticket_file_url'] }]
+  });
+  if (!orderItem || !orderItem.TicketProgress || !orderItem.TicketProgress.ticket_file_url) {
+    return res.status(404).json({ success: false, message: 'Dokumen tiket tidak ditemukan' });
+  }
+  const filePath = resolveUploadFilePath(orderItem.TicketProgress.ticket_file_url);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File tidak tersedia di server' });
+  }
+  const filename = path.basename(filePath);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+/**
+ * GET /api/v1/invoices/:id/order-items/:orderItemId/visa-file
+ * Unduh dokumen visa terbit — stream dari server agar path konsisten.
+ */
+const getVisaFile = asyncHandler(async (req, res) => {
+  let access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok && (req.user.role === ROLES.VISA_KOORDINATOR || req.user.role === ROLES.SUPER_ADMIN)) {
+    const inv = await Invoice.findByPk(req.params.id, { attributes: ['id', 'order_id'], include: [{ model: Order, as: 'Order', attributes: ['branch_id'] }] });
+    if (inv?.Order?.branch_id) {
+      const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+      if (req.user.branch_id === inv.Order.branch_id || (branchIds && branchIds.length > 0 && branchIds.includes(inv.Order.branch_id))) {
+        access = { ok: true, invoice: await Invoice.findByPk(req.params.id, { attributes: ['id', 'owner_id', 'branch_id', 'order_id'] }) };
+      }
+    }
+  }
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const invoice = access.invoice;
+  const orderItem = await OrderItem.findOne({
+    where: { id: req.params.orderItemId, order_id: invoice.order_id },
+    include: [{ model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'visa_file_url'] }]
+  });
+  if (!orderItem || !orderItem.VisaProgress || !orderItem.VisaProgress.visa_file_url) {
+    return res.status(404).json({ success: false, message: 'Dokumen visa tidak ditemukan' });
+  }
+  const filePath = resolveUploadFilePath(orderItem.VisaProgress.visa_file_url);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File tidak tersedia di server' });
+  }
+  const filename = path.basename(filePath);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
 
 /**
  * POST /api/v1/invoices/reallocate-payments
@@ -1905,5 +2068,7 @@ module.exports = {
   getReleasable,
   getStatusHistory,
   getOrderRevisions,
-  sendPaymentReceivedNotificationEmail
+  sendPaymentReceivedNotificationEmail,
+  getTicketFile,
+  getVisaFile
 };

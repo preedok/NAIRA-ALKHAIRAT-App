@@ -19,6 +19,8 @@ router.get('/:id/archive', invoiceController.getArchive);
 router.get('/:id/status-history', invoiceController.getStatusHistory);
 router.get('/:id/order-revisions', invoiceController.getOrderRevisions);
 router.get('/:id/payment-proofs/:proofId/file', paymentProofController.getFile);
+router.get('/:id/order-items/:orderItemId/ticket-file', invoiceController.getTicketFile);
+router.get('/:id/order-items/:orderItemId/visa-file', invoiceController.getVisaFile);
 router.get('/:id/releasable', invoiceController.getReleasable);
 router.get('/:id', invoiceController.getById);
 router.patch('/:id/unblock', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.unblock);
