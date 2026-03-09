@@ -296,7 +296,7 @@ export default function OwnerAIChatPage() {
               <h1 style={{
                 margin: 0, fontSize: 16, fontWeight: 700,
                 color: '#0f172a', letterSpacing: '-0.02em',
-              }}>Asisten AI</h1>
+              }}>Bintang AI</h1>
               <span style={{
                 fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
                 color: '#059669',
@@ -357,7 +357,7 @@ export default function OwnerAIChatPage() {
               <h2 style={{
                 margin: '0 0 8px', fontSize: 22, fontWeight: 700,
                 color: '#0f172a', letterSpacing: '-0.03em',
-              }}>Mulai percakapan</h2>
+              }}>Mulai percakapan Bareng Bintang AI</h2>
               <p style={{
                 margin: '0 0 28px', fontSize: 13, color: '#64748b',
                 maxWidth: 320, lineHeight: 1.7,
