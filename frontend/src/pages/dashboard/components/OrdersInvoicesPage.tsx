@@ -2123,11 +2123,72 @@ const OrdersInvoicesPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Rincian item order sesuai tipe produk (workflow masing-masing) */}
+                        {/* Rincian item order sesuai tipe produk (workflow masing-masing). Satu product hotel + banyak tipe kamar + tanggal sama = satu baris, detail di Deskripsi. */}
                         {(() => {
-                          const orderItems = viewInvoice?.Order?.OrderItems || [];
-                          if (orderItems.length === 0) return null;
+                          const rawItems = viewInvoice?.Order?.OrderItems || [];
+                          if (rawItems.length === 0) return null;
                           const ROOM_CAP: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+                          const ROOM_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+                          /** Gabung item hotel yang sama product + check_in + check_out jadi satu baris; isi Deskripsi dengan breakdown tipe kamar. */
+                          const orderItems: any[] = (() => {
+                            const hotelKey = (it: any) => {
+                              const meta = it.meta && typeof it.meta === 'object' ? it.meta : {};
+                              const pid = it.product_ref_id || it.product_id || '';
+                              const ci = (meta.check_in || '').toString().slice(0, 10);
+                              const co = (meta.check_out || '').toString().slice(0, 10);
+                              return `${pid}|${ci}|${co}`;
+                            };
+                            const groups = new Map<string, any[]>();
+                            rawItems.forEach((it: any) => {
+                              if ((it.type || '').toLowerCase() !== 'hotel') return;
+                              const key = hotelKey(it);
+                              if (!groups.has(key)) groups.set(key, []);
+                              groups.get(key)!.push(it);
+                            });
+                            const seenHotelKeys = new Set<string>();
+                            const result: any[] = [];
+                            rawItems.forEach((it: any) => {
+                              if ((it.type || '').toLowerCase() !== 'hotel') {
+                                result.push(it);
+                                return;
+                              }
+                              const key = hotelKey(it);
+                              if (seenHotelKeys.has(key)) return;
+                              seenHotelKeys.add(key);
+                              const items = groups.get(key) || [];
+                              if (items.length === 0) return;
+                              const first = items[0];
+                              if (items.length === 1) {
+                                result.push(first);
+                                return;
+                              }
+                              const meta0 = first.meta && typeof first.meta === 'object' ? first.meta : {};
+                              const ci = meta0.check_in ? formatDate(meta0.check_in) : '';
+                              const co = meta0.check_out ? formatDate(meta0.check_out) : '';
+                              const nights = meta0.nights != null ? Number(meta0.nights) : 0;
+                              const roomParts = items.map((it2: any) => {
+                                const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
+                                const rt = (m.room_type || 'quad').toString().toLowerCase();
+                                const q = it2.quantity != null ? Number(it2.quantity) : 1;
+                                return `${ROOM_LABELS[rt] || rt} × ${q}`;
+                              });
+                              const descLine = `Check-in: ${ci}, Check-out: ${co}.${nights ? ` ${nights} malam.` : ''} ${roomParts.join(', ')}.`;
+                              const totalSub = items.reduce((s: number, it2: any) => s + (Number(it2.subtotal) || 0), 0);
+                              const totalQty = items.reduce((s: number, it2: any) => s + (it2.quantity != null ? Number(it2.quantity) : 1), 0);
+                              result.push({
+                                ...first,
+                                id: first.id + '_merged',
+                                _merged: true,
+                                _mergedDesc: descLine,
+                                _mergedSubtotal: totalSub,
+                                _mergedQty: totalQty,
+                                _mergedNights: nights,
+                                quantity: totalQty,
+                                subtotal: totalSub
+                              });
+                            });
+                            return result;
+                          })();
                           const getItemDesc = (item: any) => {
                             const t = (item.type || item.product_type || '').toLowerCase();
                             const meta = item.meta || {};
@@ -2198,10 +2259,11 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const name = item.Product?.name || item.product_name || `${item.type || 'Item'} ${idx + 1}`;
                                       const typeKey = (item.type || item.product_type) as string;
                                       const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
-                                      const desc = getItemDesc(item);
-                                      const qty = item.quantity != null ? item.quantity : 1;
+                                      const desc = item._mergedDesc != null ? item._mergedDesc : getItemDesc(item);
+                                      const isMerged = !!item._merged;
+                                      const qty = isMerged ? (item._mergedQty ?? item.quantity ?? 1) : (item.quantity != null ? item.quantity : 1);
                                       const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
-                                      const nights = meta.nights != null ? Number(meta.nights) : 0;
+                                      const nights = isMerged ? (item._mergedNights ?? meta.nights ?? 0) : (meta.nights != null ? Number(meta.nights) : 0);
                                       const cur = (item.unit_price_currency || 'IDR').toUpperCase();
                                       const toIdr = (v: number) => cur === 'SAR' ? v * sarToIdr : cur === 'USD' ? v * usdToIdr : v;
                                       const ROOM_CAP_TBL = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>;
@@ -2214,14 +2276,14 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const withMeal = !!(meta.meal || meta.with_meal);
                                       const roomPart = typeKey === 'hotel' && nights > 0 ? roomUnitIdr * qty * nights : 0;
                                       let mealPart = typeKey === 'hotel' && nights > 0 && mealUnitIdr > 0 ? mealUnitIdr * totalOrang * nights : 0;
-                                      const rawSubtotal = item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * (typeKey === 'hotel' && nights > 0 ? qty * nights : qty);
-                                      if (typeKey === 'hotel' && withMeal && nights > 0 && totalOrang > 0 && mealUnitIdr <= 0 && roomPart > 0 && rawSubtotal > roomPart) {
+                                      const rawSubtotal = isMerged ? (item._mergedSubtotal ?? Number(item.subtotal) ?? 0) : (item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * (typeKey === 'hotel' && nights > 0 ? qty * nights : qty));
+                                      if (!isMerged && typeKey === 'hotel' && withMeal && nights > 0 && totalOrang > 0 && mealUnitIdr <= 0 && roomPart > 0 && rawSubtotal > roomPart) {
                                         mealPart = rawSubtotal - roomPart;
                                         mealUnitIdr = mealPart / (totalOrang * nights);
                                       }
-                                      const hasHotelBreakdown = typeKey === 'hotel' && nights > 0 && (roomUnitIdr > 0 || mealUnitIdr > 0);
+                                      const hasHotelBreakdown = !isMerged && typeKey === 'hotel' && nights > 0 && (roomUnitIdr > 0 || mealUnitIdr > 0);
                                       const subtotalFromBreakdown = hasHotelBreakdown ? roomPart + mealPart : 0;
-                                      const subtotal = subtotalFromBreakdown > 0 ? subtotalFromBreakdown : rawSubtotal;
+                                      const subtotal = isMerged ? rawSubtotal : (subtotalFromBreakdown > 0 ? subtotalFromBreakdown : rawSubtotal);
                                       const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? (item.subtotal != null ? Number(item.subtotal) : 0) / (typeKey === 'hotel' && nights > 0 ? qty * nights : qty) : 0);
                                       const unitPriceIdr = cur === 'SAR' ? unitPrice * sarToIdr : cur === 'USD' ? unitPrice * usdToIdr : unitPrice;
                                       const sarUsdLine = (amountIdr: number) => (
@@ -2235,7 +2297,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words min-w-0 whitespace-pre-line">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{typeKey === 'hotel' && nights > 0 ? `${qty} × ${nights}` : qty}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {hasHotelBreakdown ? (
+                                            {isMerged ? '–' : hasHotelBreakdown ? (
                                               <>
                                                 <div><NominalDisplay amount={roomUnitIdr} currency="IDR" /></div>
                                                 {sarUsdLine(roomUnitIdr)}
@@ -2248,7 +2310,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                             )}
                                           </td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {hasHotelBreakdown ? (mealUnitIdr > 0 ? (
+                                            {isMerged ? '–' : hasHotelBreakdown ? (mealUnitIdr > 0 ? (
                                               <>
                                                 <div><NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>
                                                 {sarUsdLine(mealUnitIdr)}
