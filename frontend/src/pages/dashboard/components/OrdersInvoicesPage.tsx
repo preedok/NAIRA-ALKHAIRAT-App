@@ -2223,6 +2223,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const subtotalFromBreakdown = hasHotelBreakdown ? roomPart + mealPart : 0;
                                       const subtotal = subtotalFromBreakdown > 0 ? subtotalFromBreakdown : rawSubtotal;
                                       const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? (item.subtotal != null ? Number(item.subtotal) : 0) / (typeKey === 'hotel' && nights > 0 ? qty * nights : qty) : 0);
+                                      const unitPriceIdr = cur === 'SAR' ? unitPrice * sarToIdr : cur === 'USD' ? unitPrice * usdToIdr : unitPrice;
+                                      const sarUsdLine = (amountIdr: number) => (
+                                        <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={amountIdr / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={amountIdr / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                      );
                                       return (
                                         <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50 align-top">
                                           <td className="py-2 px-2 text-slate-600 align-top">{idx + 1}</td>
@@ -2231,21 +2235,37 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words min-w-0 whitespace-pre-line">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{typeKey === 'hotel' && nights > 0 ? `${qty} × ${nights}` : qty}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {hasHotelBreakdown ? <NominalDisplay amount={roomUnitIdr} currency="IDR" /> : <><div><NominalDisplay amount={unitPrice} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5">≈ SAR / USD</div></>}
+                                            {hasHotelBreakdown ? (
+                                              <>
+                                                <div><NominalDisplay amount={roomUnitIdr} currency="IDR" /></div>
+                                                {sarUsdLine(roomUnitIdr)}
+                                              </>
+                                            ) : (
+                                              <>
+                                                <div><NominalDisplay amount={unitPriceIdr} currency="IDR" /></div>
+                                                {sarUsdLine(unitPriceIdr)}
+                                              </>
+                                            )}
                                           </td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {hasHotelBreakdown ? (mealUnitIdr > 0 ? <NominalDisplay amount={mealUnitIdr} currency="IDR" /> : '–') : '–'}
+                                            {hasHotelBreakdown ? (mealUnitIdr > 0 ? (
+                                              <>
+                                                <div><NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>
+                                                {sarUsdLine(mealUnitIdr)}
+                                              </>
+                                            ) : '–') : '–'}
                                           </td>
                                           <td className="py-2 px-2 text-right font-medium tabular-nums align-top">
                                             {hasHotelBreakdown && (roomPart > 0 || mealPart > 0) ? (
                                               <div className="text-xs">
                                                 <div className="font-semibold text-slate-800"><NominalDisplay amount={subtotal} currency="IDR" /></div>
+                                                {sarUsdLine(subtotal)}
                                                 <div className="text-slate-500 mt-1">Perhitungan subtotal: {mealPart > 0 ? <>Kamar <NominalDisplay amount={roomPart} currency="IDR" showCurrency={false} /> + Makan <NominalDisplay amount={mealPart} currency="IDR" showCurrency={false} /> = <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} /></> : <>Kamar <NominalDisplay amount={roomPart} currency="IDR" showCurrency={false} /> = <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} /></>}</div>
                                               </div>
                                             ) : (
                                               <>
                                                 <div><NominalDisplay amount={subtotal} currency="IDR" /></div>
-                                                <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={subtotal / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={subtotal / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                                {sarUsdLine(subtotal)}
                                               </>
                                             )}
                                           </td>

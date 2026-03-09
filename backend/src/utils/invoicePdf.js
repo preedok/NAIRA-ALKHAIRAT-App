@@ -483,24 +483,28 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       doc.fontSize(9).fillColor('#334155');
       const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);
       doc.text(qtyLabel, x(3), qtyY, { width: w(3) });
-      // Kolom 4: Harga Satuan Kamar (pisah)
+      // Kolom 4: Harga Satuan Kamar (pisah) + SAR/USD lengkap
       if (unitPriceBreakdownLines.length > 0) {
         doc.fontSize(8).fillColor('#334155');
         doc.text(formatIDR(hotelRoomUnitIdr), x(4), y + 4, { width: w(4) });
+        doc.fontSize(7).fillColor('#64748b');
+        const roomSarUsd = idrToSarUsd(hotelRoomUnitIdr, rates);
+        doc.text(`${formatSAR(roomSarUsd.sar)}  |  ${formatUSD(roomSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
       } else {
         doc.text(formatIDR(unitPriceIdr), x(4), y + 4, { width: w(4) });
-      }
-      if (unitPriceBreakdownLines.length === 0) {
         doc.fontSize(7).fillColor('#64748b');
         doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
       }
-      // Kolom 5: Harga Satuan Makan (pisah)
+      // Kolom 5: Harga Satuan Makan (pisah) + SAR/USD lengkap
       doc.fontSize(9).fillColor('#334155');
       if (unitPriceBreakdownLines.length > 0) {
         doc.fontSize(8).fillColor('#334155');
         doc.text(hotelMealUnitIdr > 0 ? formatIDR(hotelMealUnitIdr) : '–', x(5), y + 4, { width: w(5) });
-        doc.fontSize(7).fillColor('#64748b');
-        doc.text('', x(5), y + 14, { width: w(5) });
+        if (hotelMealUnitIdr > 0) {
+          doc.fontSize(7).fillColor('#64748b');
+          const mealSarUsd = idrToSarUsd(hotelMealUnitIdr, rates);
+          doc.text(`${formatSAR(mealSarUsd.sar)}  |  ${formatUSD(mealSarUsd.usd)}`, x(5), y + 14, { width: w(5) });
+        }
       } else {
         doc.text('–', x(5), y + 4, { width: w(5) });
       }
