@@ -37,6 +37,8 @@ import { getProductListOwnerId } from '../../../utils/productHelpers';
 
 const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
 const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+/** Kuota tersisa ≤ ini dianggap "hampir penuh"; admin pusat bisa tambah kuota di kalender untuk full dan hampir penuh */
+const ALMOST_FULL_THRESHOLD = 3;
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
 
 /** Room breakdown: quantity & price per type */
@@ -1019,11 +1021,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Legenda:</span>
                       <span className="inline-flex items-center gap-2">
                         <span className="w-6 h-5 rounded bg-emerald-200 border border-emerald-300" />
-                        <span className="text-sm text-slate-700">Tipe ada kamar kosong</span>
+                        <span className="text-sm text-slate-700">Tersedia</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-6 h-5 rounded bg-amber-200 border border-amber-300" />
+                        <span className="text-sm text-slate-700">Hampir penuh (≤{ALMOST_FULL_THRESHOLD} kamar)</span>
                       </span>
                       <span className="inline-flex items-center gap-2">
                         <span className="w-6 h-5 rounded bg-red-200 border border-red-300" />
-                        <span className="text-sm text-slate-700">Tipe full</span>
+                        <span className="text-sm text-slate-700">Full</span>
                       </span>
                       <span className="inline-flex items-center gap-2">
                         <span className="w-6 h-5 rounded bg-slate-100 border border-slate-200" />
@@ -1034,7 +1040,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       {canAddHotel && (
                         <>
                           <span className="text-slate-300">|</span>
-                          <span className="text-xs text-emerald-600">Tanggal full: klik <Plus className="w-3 h-3 inline" /> di sel untuk tambah jumlah kamar</span>
+                          <span className="text-xs text-emerald-600">Admin: klik <Plus className="w-3 h-3 inline" /> di sel full/hampir penuh untuk tambah kuota langsung</span>
                         </>
                       )}
                     </div>
@@ -1043,7 +1049,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                       <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
                         <h4 className="text-sm font-semibold text-slate-800">Ketersediaan 30 hari</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">Tanggal + jumlah tersedia per tipe kamar. Hijau = ada kosong, merah = full.</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Tanggal + jumlah tersedia per tipe. Hijau = tersedia, kuning = hampir penuh, merah = full. Admin pusat bisa tambah kuota di sel full/hampir penuh.</p>
                       </div>
                       <div className="overflow-auto max-h-[min(60vh,420px)]">
                         <table className="w-full text-sm">
@@ -1062,6 +1068,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                               const rec = noSeason ? null : (day as Record<string, { total?: number; booked?: number; available?: number }> | undefined);
                               const getAvail = (rt: string) => (rec && rec[rt] != null ? (rec[rt]?.available ?? 0) : 0);
                               const hasAvailable = !noSeason && rec && ROOM_TYPES.some((rt) => getAvail(rt) > 0);
+                              const hasAlmostFull = !noSeason && rec && ROOM_TYPES.some((rt) => { const av = getAvail(rt); return av > 0 && av <= ALMOST_FULL_THRESHOLD; });
+                              const allFull = !noSeason && rec && ROOM_TYPES.every((rt) => getAvail(rt) <= 0);
                               const seasonId = !noSeason && day ? (day as { seasonId?: string }).seasonId : undefined;
                               const seasonName = !noSeason && day ? (day as { seasonName?: string }).seasonName : undefined;
                               const d = new Date(dateStr + 'T12:00:00');
@@ -1087,9 +1095,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                       className={`inline-flex flex-col items-center justify-center rounded-xl border-2 min-w-[76px] py-2 px-2 ${
                                         noSeason
                                           ? 'bg-slate-50 border-slate-200 text-slate-400'
-                                          : hasAvailable
-                                            ? 'bg-emerald-50 border-emerald-200'
-                                            : 'bg-red-50 border-red-200'
+                                          : allFull
+                                            ? 'bg-red-50 border-red-200'
+                                            : hasAlmostFull
+                                              ? 'bg-amber-50 border-amber-200'
+                                              : 'bg-emerald-50 border-emerald-200'
                                       }`}
                                     >
                                       <span className="text-[10px] uppercase tracking-wide text-slate-500">{d.toLocaleDateString('id-ID', { month: 'short' })}</span>
@@ -1103,14 +1113,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                       return <td key={rt} className="py-2 px-2 text-center align-middle text-slate-400">—</td>;
                                     }
                                     const isFull = a <= 0;
-                                    const showAddBtn = canAddHotel && isFull && seasonId;
+                                    const isAlmostFull = a > 0 && a <= ALMOST_FULL_THRESHOLD;
+                                    const showAddBtn = canAddHotel && (isFull || isAlmostFull) && seasonId;
+                                    const cellBg = isFull ? 'bg-red-100 text-red-800' : isAlmostFull ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800';
                                     return (
                                       <td key={rt} className="py-2 px-2 text-center align-middle">
                                         <div className="inline-flex items-center justify-center gap-1">
                                           <span
-                                            className={`inline-flex items-center justify-center min-w-[44px] py-1.5 px-2 rounded-lg font-semibold tabular-nums text-sm ${
-                                              a > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                                            }`}
+                                            className={`inline-flex items-center justify-center min-w-[44px] py-1.5 px-2 rounded-lg font-semibold tabular-nums text-sm ${cellBg}`}
                                           >
                                             {a > 0 ? a : 'Full'}
                                           </span>
@@ -1118,8 +1128,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                             <button
                                               type="button"
                                               onClick={(e) => { e.stopPropagation(); openAddQty(); }}
-                                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors shrink-0"
-                                              title="Tambah jumlah kamar"
+                                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors shrink-0"
+                                              title="Tambah kuota (full/hampir penuh)"
                                             >
                                               <Plus className="w-3.5 h-3.5" />
                                             </button>
