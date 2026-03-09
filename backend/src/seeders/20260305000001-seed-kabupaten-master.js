@@ -28,6 +28,14 @@ function fetchJson(url) {
 
 module.exports = {
   async up(queryInterface) {
+    const [existing] = await queryInterface.sequelize.query(
+      'SELECT 1 FROM kabupaten LIMIT 1'
+    );
+    if (existing && existing.length > 0) {
+      console.log('[seed kabupaten-master] Tabel kabupaten sudah berisi data. Skip.');
+      return;
+    }
+
     const [provinces] = await queryInterface.sequelize.query(
       'SELECT id, kode FROM provinsi ORDER BY kode'
     );

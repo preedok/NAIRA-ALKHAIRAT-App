@@ -19,6 +19,8 @@
     "seed:accounting:undo": "sequelize-cli db:seed:undo --seed 20250217000010-accounting-defaults.js",
     "seed:banks": "sequelize-cli db:seed --seed 20260301000001-master-banks.js",
     "seed:banks:undo": "sequelize-cli db:seed:undo --seed 20260301000001-master-banks.js",
+    "seed:kabupaten": "sequelize-cli db:seed --seed 20260305000001-seed-kabupaten-master.js",
+    "seed:kabupaten:undo": "sequelize-cli db:seed:undo --seed 20260305000001-seed-kabupaten-master.js",
     "seed:workflow-koordinator": "node scripts/seed-workflow-koordinator-users.js",
     "set-passwords": "node scripts/set-all-passwords.js",
     "db:create": "sequelize-cli db:create",

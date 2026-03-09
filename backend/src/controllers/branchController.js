@@ -2,7 +2,6 @@ const asyncHandler = require('express-async-handler');
 const { Branch, Wilayah, Provinsi, Kabupaten } = require('../models');
 const { ROLES } = require('../constants');
 const { Op } = require('sequelize');
-const { getKabupatenByProvince } = require('../utils/indonesiaApi');
 
 const ALLOWED_SORT = ['code', 'name', 'city', 'region', 'manager_name', 'is_active', 'created_at'];
 
@@ -79,22 +78,14 @@ const listKabupaten = asyncHandler(async (req, res) => {
     const nameKey = (provinsiName || '').trim().toLowerCase();
     provinsiIds = (allProv || []).filter((p) => (p.name || '').trim().toLowerCase() === nameKey).map((p) => p.id);
   }
-  let fromDb = [];
+  let data = [];
   if (provinsiIds.length > 0) {
-    fromDb = await Kabupaten.findAll({
+    const fromDb = await Kabupaten.findAll({
       where: { provinsi_id: { [Op.in]: provinsiIds } },
       attributes: ['id', 'kode', 'nama'],
       order: [['kode', 'ASC']]
     });
-  }
-  let data;
-  if (fromDb.length > 0) {
     data = fromDb.map((k) => ({ id: k.id, kode: k.kode, nama: k.nama, name: k.nama }));
-  } else {
-    const fromApi = await getKabupatenByProvince(kode || provinceId);
-    data = Array.isArray(fromApi)
-      ? fromApi.map((k) => ({ id: k.id || k.kode, kode: k.kode || k.id, nama: k.nama || k.name || '', name: k.nama || k.name || '' }))
-      : [];
   }
   res.json({ success: true, data });
 });
@@ -102,7 +93,7 @@ const listKabupaten = asyncHandler(async (req, res) => {
 /**
  * GET /branches/kabupaten-for-owner
  * Returns all kabupaten with provinsi_id, provinsi_nama, wilayah_id, wilayah_nama for Add User (owner) dropdown.
- * Data dari master kabupaten di DB; fallback ke API jika kosong.
+ * Data dari master kabupaten di DB saja (isi via seeder seed:kabupaten).
  */
 const listKabupatenForOwner = asyncHandler(async (req, res) => {
   const fromDb = await Kabupaten.findAll({
@@ -116,44 +107,17 @@ const listKabupatenForOwner = asyncHandler(async (req, res) => {
     }],
     order: [['kode', 'ASC']]
   });
-  if (fromDb.length > 0) {
-    const result = fromDb.map((k) => ({
-      id: k.id,
-      kode: k.kode,
-      nama: k.nama,
-      provinsi_id: k.Provinsi.id,
-      provinsi_nama: k.Provinsi.name,
-      wilayah_id: k.Provinsi.wilayah_id,
-      wilayah_nama: k.Provinsi.Wilayah ? k.Provinsi.Wilayah.name : null
-    }));
-    return res.json({ success: true, data: result });
-  }
-  const provinsi = await Provinsi.findAll({
-    attributes: ['id', 'kode', 'name', 'wilayah_id'],
-    include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }],
-    order: [['kode', 'ASC']]
-  });
-  const result = [];
-  for (const p of provinsi) {
-    let kabList = [];
-    try {
-      kabList = await getKabupatenByProvince(p.kode);
-    } catch (e) {
-      // skip province if external API fails
-    }
-    const wilayahName = p.Wilayah ? p.Wilayah.name : null;
-    for (const k of kabList) {
-      result.push({
+  const result = fromDb.length > 0
+    ? fromDb.map((k) => ({
         id: k.id,
-        kode: k.kode || k.id,
-        nama: k.nama || k.name || '',
-        provinsi_id: p.id,
-        provinsi_nama: p.name,
-        wilayah_id: p.wilayah_id,
-        wilayah_nama: wilayahName
-      });
-    }
-  }
+        kode: k.kode,
+        nama: k.nama,
+        provinsi_id: k.Provinsi.id,
+        provinsi_nama: k.Provinsi.name,
+        wilayah_id: k.Provinsi.wilayah_id,
+        wilayah_nama: k.Provinsi.Wilayah ? k.Provinsi.Wilayah.name : null
+      }))
+    : [];
   res.json({ success: true, data: result });
 });
 
