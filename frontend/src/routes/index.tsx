@@ -33,6 +33,7 @@ import SettingsPage from '../pages/dashboard/components/SettingsPage';
 import ProfilePage from '../pages/dashboard/components/ProfilePage';
 import KoordinatorOwnersPage from '../pages/dashboard/components/KoordinatorOwnersPage';
 import OwnerActivationPage from '../pages/dashboard/owner/OwnerActivationPage';
+import OwnerAIChatPage from '../pages/dashboard/owner/OwnerAIChatPage';
 import OrdersInvoicesPage from '../pages/dashboard/components/OrdersInvoicesPage';
 import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
@@ -74,6 +75,10 @@ const router = createBrowserRouter([
           {
             path: 'owner-activation',
             element: <OwnerActivationPage />
+          },
+          {
+            path: 'ai-chat',
+            element: <OwnerAIChatPage />
           },
           {
             path: 'owner/mou',

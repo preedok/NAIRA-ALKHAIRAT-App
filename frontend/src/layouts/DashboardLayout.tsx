@@ -25,7 +25,8 @@ import {
   Calendar,
   DollarSign,
   Wallet,
-  ShoppingCart
+  ShoppingCart,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { OrderDraftProvider } from '../contexts/OrderDraftContext';
@@ -46,6 +47,12 @@ const menuItems: MenuItem[] = [
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
     roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling']
+  },
+  {
+    title: 'Asisten AI',
+    icon: <Sparkles className="w-5 h-5" />,
+    path: '/dashboard/ai-chat',
+    roles: ['owner_mou', 'owner_non_mou']
   },
   {
     title: 'Owners Wilayah',

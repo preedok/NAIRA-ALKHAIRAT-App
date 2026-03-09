@@ -1060,6 +1060,40 @@ export const ownersApi = {
   getMyBalance: () => api.get<{ success: boolean; data: { balance: number; transactions: Array<{ id: string; amount: number; type: string; reference_type?: string; reference_id?: string; notes?: string; created_at: string }> } }>('/owners/me/balance')
 };
 
+/** Item draft order dari AI chat (untuk "Isi ke Form Order"). */
+export interface AiChatOrderDraftItem {
+  type: 'hotel' | 'visa' | 'ticket' | 'bus' | 'handling' | 'package';
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price_idr: number;
+  meta?: {
+    check_in?: string;
+    check_out?: string;
+    room_type?: string;
+    with_meal?: boolean;
+    room_unit_price?: number;
+    meal_unit_price?: number;
+    travel_date?: string;
+    bandara?: string;
+    trip_type?: string;
+    departure_date?: string;
+    return_date?: string;
+    route_type?: string;
+    bus_type?: string;
+    [k: string]: unknown;
+  };
+}
+
+export const aiChatApi = {
+  /** Konteks untuk owner: produk, kurs (untuk tampilan/loading). Hanya untuk role owner. */
+  getContext: () =>
+    api.get<{ success: boolean; data: { rates: { SAR_TO_IDR: number; USD_TO_IDR: number }; branch_id: string | null; product_count: number; product_preview: Array<{ id: string; name: string; type: string; code: string; price_idr: number | null; price_sar: string | null; price_usd: string | null }> } }>('/ai-chat/context'),
+  /** Kirim pesan ke AI; history opsional untuk konteks percakapan. Mengembalikan reply + order_draft jika AI mengeluarkan ORDER_DRAFT. */
+  chat: (body: { message: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }) =>
+    api.post<{ success: boolean; reply: string; order_draft?: { items: AiChatOrderDraftItem[] } }>('/ai-chat', body)
+};
+
 export interface KoordinatorDashboardData {
   orders: { total: number; by_status: Record<string, number> };
   orders_recent: any[];

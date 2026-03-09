@@ -29,6 +29,8 @@ interface OrderDraftContextType {
   addItem: (item: OrderDraftItemInput) => void;
   removeItem: (id: string) => void;
   clear: () => void;
+  /** Set draft dari AI chat: clear lalu isi dengan items (untuk "Isi ke Form Order"). */
+  setDraftItems: (items: OrderDraftItemInput[]) => void;
 }
 
 const OrderDraftContext = createContext<OrderDraftContextType | undefined>(undefined);
@@ -55,12 +57,22 @@ export const OrderDraftProvider: React.FC<{ children: ReactNode }> = ({ children
     setItems([]);
   }, []);
 
+  const setDraftItems = useCallback((inputs: OrderDraftItemInput[]) => {
+    const newItems: OrderDraftItem[] = (inputs || []).map((item) => ({
+      ...item,
+      id: `draft-${uid()}`,
+      room_breakdown: item.room_breakdown?.map((l) => ({ ...l, id: l.id || `rl-${uid()}` })) ?? (item.type === 'hotel' ? [{ id: `rl-${uid()}`, room_type: 'quad', quantity: item.quantity || 1, unit_price: item.unit_price_idr, with_meal: false }] : undefined)
+    }));
+    setItems(newItems);
+  }, []);
+
   const value: OrderDraftContextType = {
     items,
     count: items.length,
     addItem,
     removeItem,
-    clear
+    clear,
+    setDraftItems
   };
 
   return <OrderDraftContext.Provider value={value}>{children}</OrderDraftContext.Provider>;

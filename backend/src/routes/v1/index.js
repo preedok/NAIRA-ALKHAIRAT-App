@@ -27,6 +27,7 @@ router.use('/auth', require('./auth'));
 router.use('/public', require('./public'));
 router.use('/notifications', require('./notifications'));
 router.use('/owners', require('./owners'));
+router.use('/ai-chat', require('./aiChat'));
 router.use('/branches', require('./branches'));
 router.use('/orders', require('./orders'));
 router.use('/invoices', require('./invoices'));

@@ -9,7 +9,8 @@ import {
   MapPin,
   Bell,
   FileText,
-  Eye
+  Eye,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
@@ -199,8 +200,17 @@ const OwnerDashboard: React.FC = () => {
 
       {/* Quick Actions - full width */}
       <Card className="travel-card">
-        <CardSectionHeader title="Aksi Cepat" subtitle="Pesan baru, paket, invoice, lacak." className="mb-4" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+        <CardSectionHeader title="Aksi Cepat" subtitle="Pesan baru, paket, invoice, lacak, asisten AI." className="mb-4" />
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/ai-chat')}
+            className="w-full flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 border-primary-200 bg-primary-50/50 hover:border-primary-400 hover:bg-primary-100/50 transition-all active:scale-[0.98]"
+          >
+            <Sparkles className="w-6 h-6 text-primary-600" />
+            <span className="text-sm font-medium text-stone-700">Asisten AI</span>
+            <span className="text-xs text-stone-500">Tanya & nego, isi order</span>
+          </button>
           <button
             type="button"
             onClick={() => navigate('/dashboard/orders-invoices')}
