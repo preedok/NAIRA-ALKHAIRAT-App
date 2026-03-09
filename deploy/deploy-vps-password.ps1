@@ -42,6 +42,7 @@ cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
 cd $APP_PATH/backend && npm ci && (npm run migrate 2>/dev/null || true)
 (npm run seed:kabupaten 2>/dev/null || true)
+# seed:kabupaten = isi master kabupaten/kota dari API data-indonesia (jika tabel masih kosong)
 node scripts/set-all-passwords.js 2>/dev/null || true
 pm2 delete bgg-backend 2>/dev/null || true
 cd $APP_PATH/backend && pm2 start src/server.js --name bgg-backend

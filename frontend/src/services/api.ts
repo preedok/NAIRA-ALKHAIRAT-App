@@ -478,6 +478,7 @@ export interface KabupatenForOwnerItem {
   wilayah_nama: string | null;
 }
 
+/** Master lokasi: wilayah, provinsi, kabupaten/kota dari API (database master). Jangan pakai data dummy. */
 export const branchesApi = {
   list: (params?: { limit?: number; page?: number; include_inactive?: string; search?: string; region?: string; provinsi_id?: string; wilayah_id?: string; city?: string; is_active?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get<{ success: boolean; data: Branch[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/branches', { params }),
   listPublic: (params?: { search?: string; region?: string; limit?: number }) => api.get<{ success: boolean; data: Branch[] }>('/branches/public', { params }),

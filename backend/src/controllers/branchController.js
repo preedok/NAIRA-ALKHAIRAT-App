@@ -1,3 +1,8 @@
+/**
+ * Branch & master lokasi (wilayah, provinsi, kabupaten/kota).
+ * Semua data wilayah, provinsi, kabupaten/kota dari database master saja (tabel wilayah, provinsi, kabupaten).
+ * Isi master: migration 20250217000004 (wilayah + provinsi), seeder seed:kabupaten (kabupaten/kota).
+ */
 const asyncHandler = require('express-async-handler');
 const { Branch, Wilayah, Provinsi, Kabupaten } = require('../models');
 const { ROLES } = require('../constants');
@@ -5,6 +10,7 @@ const { Op } = require('sequelize');
 
 const ALLOWED_SORT = ['code', 'name', 'city', 'region', 'manager_name', 'is_active', 'created_at'];
 
+/** GET /branches/provinces — data dari tabel provinsi (master DB). */
 const listProvinces = asyncHandler(async (req, res) => {
   const { wilayah_id: qWilayahId } = req.query;
   const where = {};
@@ -36,6 +42,7 @@ const listProvinces = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
+/** GET /branches/wilayah — data dari tabel wilayah (master DB). */
 const listWilayah = asyncHandler(async (req, res) => {
   const wilayah = await Wilayah.findAll({
     attributes: ['id', 'name'],
@@ -51,6 +58,7 @@ const listWilayah = asyncHandler(async (req, res) => {
   res.json({ success: true, data });
 });
 
+/** GET /branches/kabupaten/:provinceId — data dari tabel kabupaten (master DB). */
 const listKabupaten = asyncHandler(async (req, res) => {
   const { provinceId } = req.params;
   if (!provinceId) return res.status(400).json({ success: false, message: 'Province ID required' });
