@@ -265,12 +265,7 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
     return ids.length ? { branch_id: { [Op.in]: ids } } : { branch_id: { [Op.in]: [] } };
   }
   if (wilayah_id) {
-    const branches = await Branch.findAll({
-      where: { is_active: true },
-      attributes: ['id'],
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }]
-    });
-    const ids = branches.map(b => b.id);
+    const ids = await getBranchIdsForWilayah(wilayah_id);
     return ids.length ? { branch_id: { [Op.in]: ids } } : { branch_id: { [Op.in]: [] } };
   }
   return {};

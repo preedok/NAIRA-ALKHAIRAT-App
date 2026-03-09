@@ -1,17 +1,51 @@
-const { Branch, Provinsi } = require('../models');
+const { Op } = require('sequelize');
+const { Branch, Provinsi, Wilayah, Kabupaten } = require('../models');
+
+/**
+ * Resolve branch_id untuk filter wilayah (dinamis: nama wilayah + fallback via kabupaten/kota).
+ * Dipakai agar filter Wilayah menampilkan data sesuai kota/provinsi yang ada di order.
+ * - Resolve semua id wilayah dengan nama sama (duplikat nama).
+ * - Cari cabang lewat Branch->Provinsi.wilayah_id.
+ * - Fallback: cabang yang code-nya = kode kabupaten/kota di wilayah tersebut.
+ */
+async function getBranchIdsForWilayahDynamic(wilayahId) {
+  if (!wilayahId) return [];
+  const wid = String(wilayahId).trim();
+  const wilayahRow = await Wilayah.findByPk(wid, { attributes: ['id', 'name'] });
+  const wilayahIds = [];
+  if (wilayahRow && wilayahRow.name) {
+    const allWilayah = await Wilayah.findAll({ attributes: ['id', 'name'], raw: true });
+    const nameKey = (wilayahRow.name || '').trim().toLowerCase();
+    wilayahIds.push(...(allWilayah || []).filter((w) => (w.name || '').trim().toLowerCase() === nameKey).map((w) => w.id));
+  }
+  if (wilayahIds.length === 0) wilayahIds.push(wid);
+
+  let branches = await Branch.findAll({
+    where: { is_active: true },
+    attributes: ['id'],
+    include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id: { [Op.in]: wilayahIds } } }]
+  });
+  let ids = branches.map((b) => b.id);
+  if (ids.length === 0 && wilayahIds.length > 0) {
+    const kabupatenInWilayah = await Kabupaten.findAll({
+      attributes: ['kode'],
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id: { [Op.in]: wilayahIds } } }]
+    });
+    const kodes = (kabupatenInWilayah || []).map((k) => k.kode).filter(Boolean);
+    if (kodes.length > 0) {
+      const branchesByCode = await Branch.findAll({ where: { code: { [Op.in]: kodes }, is_active: true }, attributes: ['id'] });
+      ids = branchesByCode.map((b) => b.id);
+    }
+  }
+  return ids;
+}
 
 /**
  * Mengembalikan array branch_id untuk scope wilayah (semua cabang di wilayah tersebut).
- * Jika wilayahId null, return [].
+ * Menggunakan getBranchIdsForWilayahDynamic agar dinamis (nama + fallback kabupaten).
  */
 async function getBranchIdsForWilayah(wilayahId) {
-  if (!wilayahId) return [];
-  const branches = await Branch.findAll({
-    attributes: ['id'],
-    include: [{ model: Provinsi, as: 'Provinsi', where: { wilayah_id: wilayahId }, required: true }],
-    raw: false
-  });
-  return branches.map(b => b.id);
+  return getBranchIdsForWilayahDynamic(wilayahId);
 }
 
 /**
@@ -43,4 +77,4 @@ async function invoiceInKoordinatorWilayah(invoice, wilayahId) {
   return false;
 }
 
-module.exports = { getBranchIdsForWilayah, branchBelongsToWilayah, invoiceInKoordinatorWilayah };
+module.exports = { getBranchIdsForWilayah, getBranchIdsForWilayahDynamic, branchBelongsToWilayah, invoiceInKoordinatorWilayah };
