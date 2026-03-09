@@ -16,7 +16,7 @@ const visaStatusLabel = (s) => ({
 
 /**
  * @param {object} item - OrderItem dengan Product, VisaProgress (Order bisa dari opts)
- * @param {object} [opts] - { order, invoice } agar No. Order & Pemesan selalu terisi
+ * @param {object} [opts] - { order, invoice } agar No. Invoice & Pemesan selalu terisi
  * @returns {Promise<Buffer>}
  */
 async function buildVisaSlipPdfBuffer(item, opts = {}) {
@@ -24,7 +24,7 @@ async function buildVisaSlipPdfBuffer(item, opts = {}) {
   const Product = item.Product || {};
   const prog = item.VisaProgress || {};
   const inv = opts.invoice || {};
-  const orderNumber = (Order.order_number || '').trim() || (inv.Order && inv.Order.order_number) || inv.order_number || '–';
+  const invoiceNumber = (inv.invoice_number || '').trim() || '–';
   const productName = (Product.name || Product.code || 'Visa').trim() || 'Visa';
   const quantity = item.quantity != null ? Number(item.quantity) : 1;
   const status = visaStatusLabel(prog.status);
@@ -49,12 +49,12 @@ async function buildVisaSlipPdfBuffer(item, opts = {}) {
     y += 28;
 
     doc.fontSize(10).fillColor('#475569');
-    doc.text(`Order: ${orderNumber}  |  Produk: ${productName}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`, margin, y, { width: pageWidth });
+    doc.text(`Invoice: ${invoiceNumber}  |  Produk: ${productName}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`, margin, y, { width: pageWidth });
     y += 24;
 
     doc.fontSize(11).fillColor('#0f172a');
     const rows = [
-      ['No. Order', orderNumber],
+      ['No. Invoice', invoiceNumber],
       ['Produk / Paket Visa', productName],
       ['Pemesan (Owner)', ownerName],
       ['Jumlah', String(quantity)],

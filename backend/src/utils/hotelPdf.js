@@ -18,15 +18,17 @@ const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Tri
 
 /**
  * @param {object} item - OrderItem dengan Order, Product, HotelProgress
+ * @param {object} [opts] - { invoice } agar No. Invoice terisi
  * @returns {Promise<Buffer>}
  */
-async function buildHotelInfoPdfBuffer(item) {
+async function buildHotelInfoPdfBuffer(item, opts = {}) {
   const Order = item.Order || {};
   const Product = item.Product || {};
   const prog = item.HotelProgress || {};
   const meta = (item.meta && typeof item.meta === 'object') ? item.meta : {};
+  const inv = opts.invoice || {};
 
-  const orderNumber = Order.order_number || '–';
+  const invoiceNumber = (inv.invoice_number || '').trim() || '–';
   const productName = Product.name || Product.code || 'Hotel';
   const roomType = roomTypeLabel(meta.room_type || meta.roomType);
   const quantity = item.quantity != null ? Number(item.quantity) : 1;
@@ -57,12 +59,12 @@ async function buildHotelInfoPdfBuffer(item) {
     y += 28;
 
     doc.fontSize(10).fillColor('#475569');
-    doc.text(`Order: ${orderNumber}  |  Produk: ${productName}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`, margin, y, { width: pageWidth });
+    doc.text(`Invoice: ${invoiceNumber}  |  Produk: ${productName}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`, margin, y, { width: pageWidth });
     y += 24;
 
     doc.fontSize(11).fillColor('#0f172a');
     const rows = [
-      ['No. Order', orderNumber],
+      ['No. Invoice', invoiceNumber],
       ['Produk / Paket Hotel', productName],
       ['Pemesan (Owner)', ownerName],
       ['Tipe Kamar', roomType],

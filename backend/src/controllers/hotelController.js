@@ -533,7 +533,7 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   const branchIds = await getHotelBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
 
-  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id', 'invoice_number'] });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
 
@@ -547,9 +547,9 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   });
   if (!item) return res.status(404).json({ success: false, message: 'Item hotel tidak ditemukan' });
 
-  const buf = await buildHotelInfoPdfBuffer(item);
-  const orderNumber = item.Order?.order_number || 'ORD';
-  const filename = `Slip_Hotel_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  const buf = await buildHotelInfoPdfBuffer(item, { invoice: { invoice_number: invoice.invoice_number } });
+  const invNum = (invoice.invoice_number || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
+  const filename = `Slip_Hotel_${invNum}_${String(orderItemId).slice(-6)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');

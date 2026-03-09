@@ -465,7 +465,7 @@ const VisaWorkPage: React.FC = () => {
                     .map((item: any) => {
                       const prog = item.VisaProgress;
                       const order = detailInvoice?.Order;
-                      const orderNumber = order?.order_number ?? '–';
+                      const invoiceNumber = detailInvoice?.invoice_number ?? '–';
                       const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Visa';
                       const ownerName = order?.User?.name || order?.User?.company_name || '–';
                       const statusLabel = STATUS_OPTIONS.find((s: { value: string }) => s.value === (prog?.status || ''))?.label ?? prog?.status ?? '–';
@@ -476,7 +476,7 @@ const VisaWorkPage: React.FC = () => {
                         <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Slip Informasi Visa</p>
                           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                            <div><dt className="text-slate-500">No. Order</dt><dd className="font-medium text-slate-900">{orderNumber}</dd></div>
+                            <div><dt className="text-slate-500">No. Invoice</dt><dd className="font-medium text-slate-900">{invoiceNumber}</dd></div>
                             <div><dt className="text-slate-500">Produk / Paket Visa</dt><dd className="font-medium text-slate-900">{productName}</dd></div>
                             <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
                             <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>

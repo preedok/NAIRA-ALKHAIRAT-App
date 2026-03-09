@@ -1495,7 +1495,7 @@ const getArchive = asyncHandler(async (req, res) => {
     if (hasRoom && mealDone) {
       try {
         const itemWithOrder = { ...(item.get ? item.get({ plain: true }) : item), Order: order || item.Order };
-        const buf = await buildHotelInfoPdfBuffer(itemWithOrder);
+        const buf = await buildHotelInfoPdfBuffer(itemWithOrder, slipOpts);
         hotelIdx += 1;
         const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
         const name = `08_Hotel_${String(hotelIdx).padStart(2, '0')}_Slip_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
