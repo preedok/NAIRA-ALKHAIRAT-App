@@ -548,7 +548,10 @@ const create = asyncHandler(async (req, res) => {
   }
 
   const full = await Order.findByPk(order.id, {
-    include: [{ model: OrderItem, as: 'OrderItems' }]
+    include: [
+      { model: OrderItem, as: 'OrderItems' },
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: false }
+    ]
   });
   res.status(201).json({ success: true, data: full });
 });

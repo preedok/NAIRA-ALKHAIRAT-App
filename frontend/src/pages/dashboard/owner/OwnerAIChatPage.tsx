@@ -264,7 +264,7 @@ export default function OwnerAIChatPage() {
     navigate('/dashboard/orders/new');
   };
 
-  /** Buat order + invoice otomatis dari draft AI; muncul di Daftar Invoice. */
+  /** Setelah sepakat: buat order + invoice otomatis dari draft AI; muncul di Daftar Invoice (get invoice). */
   const createOrderAndInvoiceFromDraft = async (draft: { items: AiChatOrderDraftItem[] }) => {
     const payloadItems = draftToOrderCreatePayload(draft.items).filter((i) => i.product_id && i.quantity > 0);
     if (payloadItems.length === 0) {
@@ -274,10 +274,12 @@ export default function OwnerAIChatPage() {
     }
     try {
       const res = await ordersApi.create({ items: payloadItems });
-      const orderId = (res.data as { data?: { id?: string } })?.data?.id;
+      const createdOrder = (res.data as { data?: { Invoice?: { id: string; invoice_number?: string } } })?.data;
+      const invoiceId = createdOrder?.Invoice?.id;
       orderDraft.clear();
-      showToast('Order dan invoice berhasil dibuat. Muncul di Daftar Invoice.', 'success');
-      navigate('/dashboard/orders-invoices', { state: { refreshList: true } });
+      showToast('Order dan invoice berhasil dibuat sesuai obrolan. Muncul di Daftar Invoice.', 'success');
+      const query = invoiceId ? `?invoice_id=${invoiceId}` : '?tab=invoices';
+      navigate(`/dashboard/orders-invoices${query}`, { state: { refreshList: true } });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
         || (err as { message?: string })?.message
