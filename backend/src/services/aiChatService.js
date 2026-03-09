@@ -177,6 +177,25 @@ async function buildContextForOwner(ownerId) {
     }
     const priceSar = priceIdr != null ? (priceIdr / sarToIdr).toFixed(2) : null;
     const priceUsd = priceIdr != null ? (priceIdr / usdToIdr).toFixed(2) : null;
+    const meta = (p.meta && typeof p.meta === 'object') ? p.meta : {};
+    let meal_price_idr = null;
+    let meal_price_sar = null;
+    let meal_price_usd = null;
+    if (p.type === 'hotel' && meta.meal_price != null && Number(meta.meal_price) > 0) {
+      const mealInRef = Number(meta.meal_price);
+      const refCur = (meta.currency || 'IDR').toString().toUpperCase();
+      if (refCur === 'IDR') {
+        meal_price_idr = mealInRef;
+      } else if (refCur === 'SAR') {
+        meal_price_idr = mealInRef * sarToIdr;
+      } else if (refCur === 'USD') {
+        meal_price_idr = mealInRef * usdToIdr;
+      } else {
+        meal_price_idr = mealInRef;
+      }
+      meal_price_sar = meal_price_idr != null ? (meal_price_idr / sarToIdr).toFixed(2) : null;
+      meal_price_usd = meal_price_idr != null ? (meal_price_idr / usdToIdr).toFixed(2) : null;
+    }
     productSummaries.push({
       id: p.id,
       name: p.name,
@@ -184,7 +203,69 @@ async function buildContextForOwner(ownerId) {
       type: p.type,
       price_idr: priceIdr,
       price_sar: priceSar,
-      price_usd: priceUsd
+      price_usd: priceUsd,
+      meal_price_idr: meal_price_idr,
+      meal_price_sar: meal_price_sar,
+      meal_price_usd: meal_price_usd
+    });
+  }
+
+  // Fallback harga makan hotel: dari ProductPrice (with_meal - room_only) jika meta.meal_price belum diatur
+  const hotelIdsWithoutMeal = productSummaries.filter(ps => ps.type === 'hotel' && (ps.meal_price_idr == null || ps.meal_price_idr === 0)).map(ps => ps.id);
+  if (hotelIdsWithoutMeal.length > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const prices = await ProductPrice.findAll({
+      where: {
+        product_id: { [Op.in]: hotelIdsWithoutMeal },
+        branch_id: null,
+        owner_id: null,
+        [Op.and]: [
+          { [Op.or]: [{ effective_from: null }, { effective_from: { [Op.lte]: today } }] },
+          { [Op.or]: [{ effective_until: null }, { effective_until: { [Op.gte]: today } }] }
+        ]
+      },
+      attributes: ['product_id', 'amount', 'currency', 'meta'],
+      raw: true
+    });
+    const mealByProduct = {};
+    prices.forEach(pr => {
+      const mid = pr.product_id;
+      const rt = (pr.meta && pr.meta.room_type) ? pr.meta.room_type : 'quad';
+      const withMeal = !!(pr.meta && pr.meta.with_meal);
+      const amount = parseFloat(pr.amount) || 0;
+      const cur = (pr.currency || 'IDR').toUpperCase();
+      if (!mealByProduct[mid]) mealByProduct[mid] = { roomOnly: {}, withMeal: {}, currency: {} };
+      if (withMeal) {
+        mealByProduct[mid].withMeal[rt] = amount;
+        mealByProduct[mid].currency[rt] = cur;
+      } else {
+        mealByProduct[mid].roomOnly[rt] = amount;
+      }
+    });
+    hotelIdsWithoutMeal.forEach(id => {
+      const entry = mealByProduct[id];
+      if (!entry) return;
+      const rts = ['quad', 'triple', 'double', 'single', 'quint'];
+      let mealInRef = null;
+      let cur = 'IDR';
+      for (const rt of rts) {
+        const withM = entry.withMeal[rt];
+        const roomO = entry.roomOnly[rt];
+        if (withM != null && roomO != null && withM > roomO) {
+          mealInRef = withM - roomO;
+          cur = (entry.currency && entry.currency[rt]) || 'IDR';
+          break;
+        }
+      }
+      if (mealInRef != null && mealInRef > 0) {
+        const ps = productSummaries.find(s => s.id === id);
+        if (ps) {
+          const toIdr = cur === 'SAR' ? sarToIdr : cur === 'USD' ? usdToIdr : 1;
+          ps.meal_price_idr = Math.round(mealInRef * toIdr);
+          ps.meal_price_sar = (ps.meal_price_idr / sarToIdr).toFixed(2);
+          ps.meal_price_usd = (ps.meal_price_idr / usdToIdr).toFixed(2);
+        }
+      }
     });
   }
 
@@ -211,7 +292,17 @@ async function buildContextForOwner(ownerId) {
     if (ps.price_idr != null) prices.push(`${Math.round(ps.price_idr).toLocaleString('id-ID')} IDR`);
     if (ps.price_sar != null) prices.push(`${ps.price_sar} SAR`);
     if (ps.price_usd != null) prices.push(`${ps.price_usd} USD`);
-    return `- ${ps.type} | id: ${ps.id} | ${ps.name} (${ps.code}) | ${prices.join(' / ') || 'harga sesuai permintaan'}`;
+    let line = `- ${ps.type} | id: ${ps.id} | ${ps.name} (${ps.code}) | Harga kamar: ${prices.join(' / ') || 'sesuai permintaan'}`;
+    if (ps.type === 'hotel' && (ps.meal_price_idr != null || ps.meal_price_sar != null || ps.meal_price_usd != null)) {
+      const mealParts = [];
+      if (ps.meal_price_idr != null) mealParts.push(`${Math.round(ps.meal_price_idr).toLocaleString('id-ID')} IDR`);
+      if (ps.meal_price_sar != null) mealParts.push(`${ps.meal_price_sar} SAR`);
+      if (ps.meal_price_usd != null) mealParts.push(`${ps.meal_price_usd} USD`);
+      line += ` | Harga makan (per orang per hari): ${mealParts.join(' / ')}`;
+    } else if (ps.type === 'hotel') {
+      line += ' | Harga makan: (belum diatur di data produk)';
+    }
+    return line;
   }).join('\n');
 
   const invoiceLines = recentInvoices.length
@@ -282,7 +373,7 @@ Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
 Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
 
-Daftar produk aktif — setiap baris berisi harga dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id di ORDER_DRAFT). Saat menyebut harga produk, tampilkan selalu ketiga mata uang: IDR, SAR, USD.
+Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id di ORDER_DRAFT). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
 ${productLines}
 
 Ringkasan owner: ${ownerOrders} order, ${ownerInvoicesCount} invoice.
@@ -301,7 +392,7 @@ Penjelasan: Angka di atas = minimal kamar kosong per tipe untuk setiap hari dala
 
 Alur (semua data hanya dari database di atas):
 1. Jawab pertanyaan hanya dari data di atas. Untuk "hotel X tanggal A–B": gunakan blok "Ketersediaan kamar hotel" sebagai sumber utama; jika hotel X ada dan punya angka kamar (quad/double dll), jawab "tersedia" dengan menyebut jumlah per tipe; jangan katakan "tidak tersedia karena tidak ada booking" — tidak ada booking = kamar kosong. Jika hotel tidak ada di daftar ketersediaan atau tertulis tidak ada musim, baru katakan tidak ada datanya.
-2. Nego harga: gunakan harga dari daftar produk. Boleh tawarkan diskon wajar (misalnya 2–5%) dan sebutkan angka final (IDR/SAR/USD) sampai owner setuju.
+2. Nego harga: gunakan harga dari daftar produk. Diskon nego MAKSIMAL 2% saja. Jika owner minta diskon lebih dari 2%, tolak dengan sopan dan tawarkan maksimal 2%. Sebutkan angka final (IDR/SAR/USD) sampai owner setuju.
 3. Setelah sepakat, minta daftar pesanan lengkap: produk, jumlah, tanggal (check_in/check_out hotel, departure/return tiket, travel_date visa/bus).
 4. Setelah daftar pesanan lengkap, keluarkan blok ORDER_DRAFT. product_id dan product_name WAJIB copy persis dari baris daftar produk di atas (satu per satu sesuai yang dipesan). Jangan mengarang UUID atau nama.
 `;
@@ -323,9 +414,9 @@ function buildSystemPrompt(contextText) {
   return `Kamu adalah asisten AI canggih Bintang Global Group (BGG) untuk partner/owner travel. Profesional, ramah, dan sangat membantu.
 
 KEMAMPUAN:
-1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, periode kalender (60 hari), booking hotel (pesanan yang sudah ada), dan KETERSEDIAAN KAMAR DARI KALENDER (inventori minus booking, per tipe kamar). Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka (quad: N, double: M dll), artinya hotel TERSEEDIA untuk periode tersebut—jangan jawab "tidak tersedia karena tidak ada booking" (tidak ada booking = kamar kosong). Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
+1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk (harga kamar + untuk hotel: harga makan per orang per hari dalam IDR, SAR, USD), periode kalender, booking hotel, dan ketersediaan kamar. Saat menampilkan harga: selalu IDR, SAR, USD. Untuk hotel: selalu sebutkan harga kamar DAN harga makan jika ada; jika harga makan tertulis "(belum diatur di data produk)", jangan jawab "belum tersedia informasi"—jawab bahwa harga makan untuk hotel tersebut belum diatur di data produk dan bisa ditanyakan ke admin. Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka, artinya hotel TERSEEDIA; jangan katakan "tidak tersedia karena tidak ada booking". Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
 2. NEGOSIASI HARGA: Berikan penawaran dari daftar produk. Jika owner minta diskon atau nego:
-   - Tawarkan nego dalam batas wajar (misalnya diskon 2–5%, atau bundling).
+   - Diskon nego MAKSIMAL 2% saja. Jika owner minta diskon lebih dari 2%, tolak dengan sopan: "Maaf, diskon maksimal yang dapat kami berikan 2%." Jangan setuju diskon di atas 2%.
    - WAJIB sebutkan harga dalam tiga mata uang: IDR, SAR, dan USD (jangan hanya IDR). Contoh: "Harga untuk [produk]: [X] IDR / [Y] SAR / [Z] USD."
    - Konfirmasi: "Kita sepakat di [angka] [mata uang] untuk [item]?"
 3. SETELAH SEPAKAT: Minta owner menyebutkan daftar pesanan lengkap:
@@ -416,9 +507,12 @@ function validateOrderDraftAgainstDb(orderDraft, productSummaries) {
     .filter(item => item && byId.has(item.product_id))
     .map(item => {
       const fromDb = byId.get(item.product_id);
+      const dbPrice = fromDb.price_idr != null ? Number(fromDb.price_idr) : 0;
       const negotiatedPrice = Number(item.unit_price_idr);
-      // Harga dari nego (obrolan); jika tidak ada atau 0, pakai harga dari DB
-      const unit_price_idr = (negotiatedPrice > 0 && Number.isFinite(negotiatedPrice)) ? negotiatedPrice : (fromDb.price_idr != null ? Number(fromDb.price_idr) : 0);
+      // Harga dari nego; diskon maksimal 2% — jika nego lebih dari 2%, pakai harga minimal (98% dari DB)
+      const minAllowed = dbPrice > 0 ? Math.round(dbPrice * 0.98) : 0;
+      let unit_price_idr = (negotiatedPrice > 0 && Number.isFinite(negotiatedPrice)) ? negotiatedPrice : dbPrice;
+      if (dbPrice > 0 && unit_price_idr < minAllowed) unit_price_idr = minAllowed;
       return {
         type: fromDb.type,
         product_id: fromDb.id,
