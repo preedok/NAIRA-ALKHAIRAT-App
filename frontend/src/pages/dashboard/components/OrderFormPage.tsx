@@ -590,7 +590,7 @@ const OrderFormPage: React.FC = () => {
         for(const l of r.room_breakdown){
           if(l.quantity<=0||!l.room_type) continue;
           const meal=l.with_meal??false;
-          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
@@ -599,7 +599,7 @@ const OrderFormPage: React.FC = () => {
           out.push(item);
         }
       } else if(r.type==='hotel'&&r.room_type){
-        const meta:Record<string,unknown>={room_type:r.room_type}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+        const meta:Record<string,unknown>={room_type:r.room_type,room_unit_price:r.unit_price??0,meal_unit_price:0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;

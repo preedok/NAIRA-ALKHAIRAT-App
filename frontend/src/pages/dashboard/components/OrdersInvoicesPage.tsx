@@ -2191,22 +2191,56 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
                                       const desc = getItemDesc(item);
                                       const qty = item.quantity != null ? item.quantity : 1;
-                                      const subtotal = item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * qty;
-                                      const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? subtotal / qty : 0);
+                                      const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
+                                      const nights = meta.nights != null ? Number(meta.nights) : 0;
+                                      const cur = (item.unit_price_currency || 'IDR').toUpperCase();
+                                      const toIdr = (v: number) => cur === 'SAR' ? v * sarToIdr : cur === 'USD' ? v * usdToIdr : v;
+                                      const roomUnit = meta.room_unit_price != null ? Number(meta.room_unit_price) : NaN;
+                                      const mealUnit = meta.meal_unit_price != null ? Number(meta.meal_unit_price) : NaN;
+                                      const hasHotelBreakdown = typeKey === 'hotel' && nights > 0 && (Number.isFinite(roomUnit) || Number.isFinite(mealUnit));
+                                      const ROOM_CAP = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>;
+                                      const capacity = ROOM_CAP[String(meta.room_type || '').toLowerCase()] ?? 1;
+                                      const totalOrang = qty * capacity;
+                                      const roomUnitIdr = Number.isFinite(roomUnit) ? toIdr(roomUnit) : 0;
+                                      const mealUnitIdr = Number.isFinite(mealUnit) ? toIdr(mealUnit) : 0;
+                                      const roomPart = hasHotelBreakdown ? roomUnitIdr * qty * nights : 0;
+                                      const mealPart = hasHotelBreakdown && mealUnitIdr > 0 ? mealUnitIdr * totalOrang * nights : 0;
+                                      const subtotalFromBreakdown = hasHotelBreakdown ? roomPart + mealPart : 0;
+                                      const subtotal = subtotalFromBreakdown > 0 ? subtotalFromBreakdown : (item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * (typeKey === 'hotel' && nights > 0 ? qty * nights : qty));
+                                      const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? (item.subtotal != null ? Number(item.subtotal) : 0) / (typeKey === 'hotel' && nights > 0 ? qty * nights : qty) : 0);
                                       return (
                                         <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50 align-top">
                                           <td className="py-2 px-2 text-slate-600 align-top">{idx + 1}</td>
                                           <td className="py-2 px-2 font-medium text-slate-700 align-top">{typeLabel}</td>
                                           <td className="py-2 px-2 text-slate-900 align-top">{name}</td>
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
-                                          <td className="py-2 px-2 text-right tabular-nums align-top">{qty}</td>
+                                          <td className="py-2 px-2 text-right tabular-nums align-top">{typeKey === 'hotel' && nights > 0 ? `${qty} × ${nights}` : qty}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            <div><NominalDisplay amount={unitPrice} currency="IDR" /></div>
-                                            <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={unitPrice / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={unitPrice / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                            {hasHotelBreakdown ? (
+                                              <>
+                                                <div className="text-xs"><span className="text-slate-500">Harga Satuan Kamar:</span> <NominalDisplay amount={roomUnitIdr} currency="IDR" /></div>
+                                                {mealUnitIdr > 0 && <div className="text-xs mt-0.5"><span className="text-slate-500">Harga Satuan Makan:</span> <NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>}
+                                                <div className="text-xs text-slate-500 mt-0.5">≈ SAR / USD</div>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <div><NominalDisplay amount={unitPrice} currency="IDR" /></div>
+                                                <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={unitPrice / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={unitPrice / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                              </>
+                                            )}
                                           </td>
                                           <td className="py-2 px-2 text-right font-medium tabular-nums align-top">
-                                            <div><NominalDisplay amount={subtotal} currency="IDR" /></div>
-                                            <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={subtotal / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={subtotal / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                            {hasHotelBreakdown && (roomPart > 0 || mealPart > 0) ? (
+                                              <div className="text-xs">
+                                                <div className="font-semibold text-slate-800"><NominalDisplay amount={subtotal} currency="IDR" /></div>
+                                                <div className="text-slate-500 mt-1">Perhitungan subtotal: {mealPart > 0 ? <>Kamar <NominalDisplay amount={roomPart} currency="IDR" showCurrency={false} /> + Makan <NominalDisplay amount={mealPart} currency="IDR" showCurrency={false} /> = <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} /></> : <>Kamar <NominalDisplay amount={roomPart} currency="IDR" showCurrency={false} /> = <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} /></>}</div>
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <div><NominalDisplay amount={subtotal} currency="IDR" /></div>
+                                                <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={subtotal / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={subtotal / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                              </>
+                                            )}
                                           </td>
                                         </tr>
                                       );
@@ -2446,7 +2480,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
               {detailTab === 'payments' && (
                 <div className="space-y-6">
-                  <p className="text-sm text-slate-600">Setelah bukti bayar diverifikasi, invoice otomatis update: persen terbayar, sisa tagihan, dan status (partial_paid / paid).</p>
+                  <p className="text-sm text-slate-600">Setiap kartu di bawah = satu bukti transfer. Status verifikasi dan verifikator (sama seperti di Riwayat Status) tercantum di setiap kartu. Setelah bukti diverifikasi, invoice otomatis update: persen terbayar, sisa tagihan, dan status.</p>
                   {paymentProofs.length === 0 ? (
                     <div className="text-center py-14 rounded-2xl border border-slate-200 bg-white shadow-sm">
                       <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
@@ -2497,10 +2531,12 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <span className="text-xs text-slate-500">≈ <NominalDisplay amount={parseFloat(p.amount) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={parseFloat(p.amount) / usdToIdr} currency="USD" /></span>
                                   </>
                                 )}
-                                <Badge variant={ps.variant}>{ps.label}</Badge>
-                                {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
-                                  <span className="text-xs text-slate-600">Diverifikasi oleh: <strong>{(p as any).VerifiedBy.name}</strong></span>
-                                )}
+                                <span className="inline-flex flex-col gap-0.5">
+                                  <Badge variant={ps.variant}>{ps.label}</Badge>
+                                  {ps.status === 'verified' && (p as any).VerifiedBy?.name && (
+                                    <span className="text-xs text-slate-600">oleh: <strong className="text-slate-800">{(p as any).VerifiedBy.name}</strong></span>
+                                  )}
+                                </span>
                                 {p.created_at && (
                                   <span className="text-xs text-slate-500">
                                     Tanggal upload bukti: {formatDate(p.created_at)} · Jam: {new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}

@@ -46,7 +46,7 @@ function getNights(checkIn, checkOut) {
 
 function pickDiffMeta(type, meta) {
   const m = meta && typeof meta === 'object' ? meta : {};
-  if (type === ORDER_ITEM_TYPE.HOTEL) return { room_type: m.room_type ?? null, with_meal: m.with_meal ?? m.meal ?? false, check_in: m.check_in ?? null, check_out: m.check_out ?? null };
+  if (type === ORDER_ITEM_TYPE.HOTEL) return { room_type: m.room_type ?? null, with_meal: m.with_meal ?? m.meal ?? false, check_in: m.check_in ?? null, check_out: m.check_out ?? null, room_unit_price: m.room_unit_price ?? null, meal_unit_price: m.meal_unit_price ?? null };
   if (type === ORDER_ITEM_TYPE.TICKET) return { bandara: m.bandara ?? null, trip_type: m.trip_type ?? null, departure_date: m.departure_date ?? null, return_date: m.return_date ?? null };
   if (type === ORDER_ITEM_TYPE.BUS) return { travel_date: m.travel_date ?? null, route_type: m.route_type ?? null, bus_type: m.bus_type ?? null, trip_type: m.trip_type ?? null };
   if (type === ORDER_ITEM_TYPE.VISA) return { travel_date: m.travel_date ?? null };
