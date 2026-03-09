@@ -90,18 +90,17 @@ const MessageBubble = ({ msg, isNew }: { msg: ChatMessage; isNew: boolean }) => 
         maxWidth: '72%',
         background: isUser
           ? 'linear-gradient(135deg, #10b981, #059669)'
-          : 'rgba(30,41,59,0.85)',
-        backdropFilter: 'blur(12px)',
-        color: isUser ? '#fff' : '#e2e8f0',
+          : '#ffffff',
+        color: isUser ? '#fff' : '#334155',
         borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
         padding: '12px 16px',
         fontSize: 14,
         lineHeight: 1.65,
         whiteSpace: 'pre-wrap',
         boxShadow: isUser
-          ? '0 4px 20px rgba(16,185,129,0.3)'
-          : '0 4px 20px rgba(0,0,0,0.25)',
-        border: isUser ? 'none' : '1px solid rgba(255,255,255,0.07)',
+          ? '0 4px 16px rgba(16,185,129,0.3)'
+          : '0 1px 3px rgba(0,0,0,0.08)',
+        border: isUser ? 'none' : '1px solid #e2e8f0',
         letterSpacing: '0.01em',
       }}>
         {msg.content}
@@ -147,6 +146,7 @@ export default function OwnerAIChatPage() {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   };
 
+  /** Isi draft ke form order lalu navigate ke Buat invoice baru (orders/new). Saat user klik Simpan di form → invoice terbit di daftar. */
   const applyDraftAndNavigate = (draft: { items: AiChatOrderDraftItem[] }) => {
     const mapped = draft.items.map(mapAiDraftToOrderDraftItem).filter((i) => i.product_id && i.quantity > 0);
     if (mapped.length === 0) {
@@ -181,7 +181,7 @@ export default function OwnerAIChatPage() {
       });
       if (data?.order_draft?.items?.length) {
         setLastOrderDraft(data.order_draft);
-        // Otomatis isi form order dan navigate; saat user klik Simpan/Order di form → invoice terbit di daftar
+        // Setelah obrolan selesai + dapat order draft → data otomatis masuk ke form dan navigate ke Buat invoice baru
         applyDraftAndNavigate(data.order_draft);
       }
     } catch (e: unknown) {
@@ -245,55 +245,40 @@ export default function OwnerAIChatPage() {
         .send-btn:active:not(:disabled) { transform: scale(0.96); }
         .send-btn:disabled { opacity:.4; cursor:not-allowed; }
         .chat-input:focus { outline:none; border-color:rgba(16,185,129,0.6) !important; box-shadow: 0 0 0 3px rgba(16,185,129,0.12) !important; }
-        .msg-area::-webkit-scrollbar { width:4px }
-        .msg-area::-webkit-scrollbar-track { background:transparent }
-        .msg-area::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:4px }
+        .msg-area::-webkit-scrollbar { width:6px }
+        .msg-area::-webkit-scrollbar-track { background:#f1f5f9 }
+        .msg-area::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px }
         .draft-item { transition: background .15s; }
         .draft-item:hover { background: rgba(16,185,129,0.08) !important; }
         .apply-btn:hover { background: linear-gradient(135deg,#059669,#047857) !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,0.4) !important; }
       `}</style>
 
-      {/* Wrapper: negatif margin supaya card fullscreen tanpa jarak (keluar dari padding layout) */}
+      {/* Wrapper: card dengan jarak, tidak fullscreen */}
       <div
-        className="chat-page-wrapper -mt-2 -mx-4 -mb-4 sm:-mt-3 sm:-mx-6 sm:-mb-6"
-        style={{ height: 'calc(100vh - 3.5rem)', minHeight: 'calc(100vh - 3.5rem)' }}
+        className="chat-page-wrapper max-w-4xl mx-auto py-4 sm:py-6"
+        style={{ minHeight: 520, maxHeight: 'calc(100vh - 6rem)' }}
       >
       <div className="chat-page" style={{
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: 'calc(100vh - 3.5rem)',
-        background: 'linear-gradient(160deg, #0a0f1e 0%, #0f172a 40%, #0d1f1a 100%)',
-        borderRadius: 0,
+        minHeight: 480,
+        maxHeight: 'calc(100vh - 6rem)',
+        background: '#ffffff',
+        borderRadius: 16,
         overflow: 'hidden',
         position: 'relative',
-        boxShadow: 'none',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)',
+        border: '1px solid #e2e8f0',
       }}>
-
-        {/* Ambient BG orbs */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0,
-        }}>
-          <div style={{
-            position: 'absolute', top: -80, right: -80, width: 360, height: 360,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: 80, left: -60, width: 280, height: 280,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 70%)',
-          }} />
-        </div>
 
         {/* ── HEADER ── */}
         <div style={{
           position: 'relative', zIndex: 2,
           display: 'flex', alignItems: 'center', gap: 14,
           padding: '16px 20px',
-          background: 'rgba(255,255,255,0.03)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          background: '#f8fafc',
+          borderBottom: '1px solid #e2e8f0',
         }}>
           {/* Logo mark */}
           <div style={{
@@ -301,28 +286,20 @@ export default function OwnerAIChatPage() {
             background: 'linear-gradient(135deg, #10b981 0%, #059669 60%, #0d9488 100%)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 20, flexShrink: 0,
-            boxShadow: '0 4px 16px rgba(16,185,129,0.4)',
-            position: 'relative',
+            boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
           }}>
             🤖
-            {/* pulse ring */}
-            <div style={{
-              position: 'absolute', inset: -4, borderRadius: 18,
-              border: '2px solid rgba(16,185,129,0.4)',
-              animation: 'pulse-ring 2s ease-out infinite',
-            }} />
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <h1 style={{
                 margin: 0, fontSize: 16, fontWeight: 700,
-                color: '#f1f5f9', letterSpacing: '-0.02em',
+                color: '#0f172a', letterSpacing: '-0.02em',
               }}>Asisten AI</h1>
               <span style={{
                 fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-                background: 'linear-gradient(90deg, #10b981, #06b6d4)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                color: '#059669',
                 textTransform: 'uppercase',
               }}>PRO</span>
             </div>
@@ -339,14 +316,14 @@ export default function OwnerAIChatPage() {
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '6px 12px', borderRadius: 100,
             background: 'rgba(16,185,129,0.1)',
-            border: '1px solid rgba(16,185,129,0.2)',
+            border: '1px solid rgba(16,185,129,0.25)',
           }}>
             <div style={{
               width: 7, height: 7, borderRadius: '50%',
               background: '#10b981',
               animation: 'shimmer 2s ease-in-out infinite',
             }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#10b981', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#059669', letterSpacing: '0.04em' }}>
               AKTIF
             </span>
           </div>
@@ -358,6 +335,7 @@ export default function OwnerAIChatPage() {
           padding: '24px 20px',
           display: 'flex', flexDirection: 'column', gap: 18,
           position: 'relative', zIndex: 1,
+          background: '#fafafa',
         }}>
           {isEmpty && (
             <div style={{
@@ -369,16 +347,16 @@ export default function OwnerAIChatPage() {
               {/* Hero icon */}
               <div style={{
                 width: 80, height: 80, borderRadius: 28,
-                background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(6,182,212,0.15))',
-                border: '1px solid rgba(16,185,129,0.25)',
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))',
+                border: '1px solid rgba(16,185,129,0.2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 36, marginBottom: 20,
-                boxShadow: '0 8px 32px rgba(16,185,129,0.2)',
+                boxShadow: '0 4px 20px rgba(16,185,129,0.15)',
               }}>✨</div>
 
               <h2 style={{
                 margin: '0 0 8px', fontSize: 22, fontWeight: 700,
-                color: '#f1f5f9', letterSpacing: '-0.03em',
+                color: '#0f172a', letterSpacing: '-0.03em',
               }}>Mulai percakapan</h2>
               <p style={{
                 margin: '0 0 28px', fontSize: 13, color: '#64748b',
@@ -391,11 +369,11 @@ export default function OwnerAIChatPage() {
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, width: '100%', maxWidth: 400,
               }}>
-                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                <span style={{ fontSize: 10, color: '#475569', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   Coba tanya
                 </span>
-                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
               </div>
 
               {/* Chips */}
@@ -408,9 +386,9 @@ export default function OwnerAIChatPage() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: 7,
                       padding: '9px 14px', borderRadius: 100,
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.09)',
-                      color: '#94a3b8', fontSize: 12, fontWeight: 500,
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
+                      color: '#475569', fontSize: 12, fontWeight: 500,
                       cursor: 'pointer', transition: 'all .2s ease',
                       fontFamily: 'Sora, sans-serif',
                       animation: `fadeUp .4s ease ${i * 0.07}s both`,
@@ -435,11 +413,11 @@ export default function OwnerAIChatPage() {
             }}>
               <Avatar role="assistant" />
               <div style={{
-                background: 'rgba(30,41,59,0.85)',
-                border: '1px solid rgba(255,255,255,0.07)',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
                 borderRadius: '18px 18px 18px 4px',
                 padding: '12px 18px',
-                backdropFilter: 'blur(12px)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
               }}>
                 <TypingDots />
               </div>
@@ -453,8 +431,8 @@ export default function OwnerAIChatPage() {
           <div style={{
             position: 'relative', zIndex: 2,
             margin: '0 16px',
-            background: 'rgba(16,185,129,0.08)',
-            border: '1px solid rgba(16,185,129,0.2)',
+            background: '#ecfdf5',
+            border: '1px solid #a7f3d0',
             borderRadius: 16,
             padding: '14px 16px',
             marginBottom: 0,
@@ -463,10 +441,10 @@ export default function OwnerAIChatPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16 }}>📦</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#10b981' }}>Draft Order Siap</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>Draft Order Siap</span>
               </div>
               <span style={{
-                fontSize: 10, fontWeight: 600, color: '#064e3b',
+                fontSize: 10, fontWeight: 600, color: '#047857',
                 background: 'rgba(16,185,129,0.2)', padding: '2px 8px', borderRadius: 100,
               }}>{lastOrderDraft.items.length} item</span>
             </div>
@@ -475,10 +453,10 @@ export default function OwnerAIChatPage() {
               <div key={i} className="draft-item" style={{
                 display: 'flex', justifyContent: 'space-between',
                 padding: '5px 8px', borderRadius: 8,
-                fontSize: 12, color: '#94a3b8',
+                fontSize: 12, color: '#475569',
               }}>
                 <span>{item.product_name} × {item.quantity}</span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#e2e8f0', fontWeight: 500 }}>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#334155', fontWeight: 500 }}>
                   {((Number(item.unit_price_idr) || 0) * (item.quantity || 1)).toLocaleString('id-ID')} IDR
                 </span>
               </div>
@@ -504,7 +482,7 @@ export default function OwnerAIChatPage() {
               }}
             >
               <span>🛒</span>
-              Isi ke Form Order (terbitkan invoice)
+              Buka Buat invoice baru
               <span style={{ fontSize: 16 }}>→</span>
             </button>
           </div>
@@ -514,14 +492,13 @@ export default function OwnerAIChatPage() {
         <div style={{
           position: 'relative', zIndex: 2,
           padding: '16px',
-          background: 'rgba(255,255,255,0.02)',
-          backdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
+          background: '#ffffff',
+          borderTop: '1px solid #e2e8f0',
         }}>
           <div style={{
             display: 'flex', gap: 10, alignItems: 'flex-end',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
             borderRadius: 18,
             padding: '8px 8px 8px 16px',
             transition: 'border-color .2s',
@@ -541,7 +518,7 @@ export default function OwnerAIChatPage() {
                 flex: 1, minHeight: 48, maxHeight: 120,
                 background: 'transparent', border: '1px solid transparent',
                 resize: 'none', outline: 'none',
-                color: '#e2e8f0', fontSize: 14,
+                color: '#334155', fontSize: 14,
                 fontFamily: 'Sora, sans-serif',
                 lineHeight: 1.6,
                 caretColor: '#10b981',
@@ -556,7 +533,7 @@ export default function OwnerAIChatPage() {
                 width: 44, height: 44, borderRadius: 13, flexShrink: 0,
                 background: input.trim()
                   ? 'linear-gradient(135deg, #10b981, #059669)'
-                  : 'rgba(255,255,255,0.06)',
+                  : '#e2e8f0',
                 border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 18, transition: 'all .2s ease',
@@ -575,7 +552,7 @@ export default function OwnerAIChatPage() {
           </div>
           <p style={{
             margin: '8px 0 0', textAlign: 'center',
-            fontSize: 10, color: '#334155',
+            fontSize: 10, color: '#64748b',
             letterSpacing: '0.03em',
           }}>
             Shift+Enter untuk baris baru · AI dapat membuat kesalahan, harap verifikasi
