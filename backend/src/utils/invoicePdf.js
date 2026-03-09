@@ -59,6 +59,8 @@ const hotelProgressStatusLabel = (s) => ({
   completed: 'Selesai'
 }[String(s).toLowerCase()] || s || '-');
 const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '-');
+/** Kapasitas orang per kamar per tipe (untuk hitung jumlah orang dari kamar) */
+const ROOM_CAPACITY = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
 const tripTypeLabel = (tt) => ({ one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' }[String(tt || '')] || tt || '');
 const busRouteLabel = (r) => ({ full_route: 'Full rute (Mekkah–Madinah)', bandara_makkah: 'Bandara–Mekkah', bandara_madinah: 'Bandara–Madinah', bandara_madinah_only: 'Bandara–Madinah saja', hotel_makkah_madinah: 'Hotel Mekkah–Madinah', hotel_madinah_makkah: 'Hotel Madinah–Mekkah' }[String(r || '')] || r || '');
 const busTypeLabel = (b) => ({ besar: 'Bus besar', menengah_hiace: 'Hiace', kecil: 'Mobil kecil' }[String(b || '')] || b || '');
@@ -358,8 +360,10 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
         if (parts.length) mealLine = parts.join('  |  ');
         if (withMeal && nights > 0 && qtyRooms > 0) {
-          const totalMalam = qtyRooms * nights;
-          calcLine = `Perhitungan: ${qtyRooms} kamar × ${nights} malam = ${totalMalam} malam (paket makan: Ya)`;
+          const capacity = ROOM_CAPACITY[String(roomType || '').toLowerCase()] ?? 1;
+          const totalOrang = qtyRooms * capacity;
+          const totalOrangMalam = totalOrang * nights;
+          calcLine = `Perhitungan: ${totalOrang} orang × ${nights} malam = ${totalOrangMalam} (paket makan: Ya)`;
         } else if (withMeal) {
           calcLine = 'Perhitungan: paket makan termasuk dalam harga.';
         }
