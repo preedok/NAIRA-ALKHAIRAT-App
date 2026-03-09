@@ -16,6 +16,7 @@ type Conversation = {
 };
 
 const STORAGE_KEY = 'bgg_ai_chat_conversations';
+const ACTIVE_ID_KEY = 'bgg_ai_chat_active_id';
 
 function loadConversationsFromStorage(userId: string): Conversation[] {
   try {
@@ -28,9 +29,27 @@ function loadConversationsFromStorage(userId: string): Conversation[] {
   }
 }
 
+function loadActiveConversationId(userId: string): string | null {
+  try {
+    const id = localStorage.getItem(`${ACTIVE_ID_KEY}_${userId}`);
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
 function saveConversationsToStorage(userId: string, list: Conversation[]) {
   try {
     localStorage.setItem(`${STORAGE_KEY}_${userId}`, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+function saveActiveConversationId(userId: string, id: string | null) {
+  try {
+    if (id) localStorage.setItem(`${ACTIVE_ID_KEY}_${userId}`, id);
+    else localStorage.removeItem(`${ACTIVE_ID_KEY}_${userId}`);
   } catch {
     // ignore
   }
@@ -207,10 +226,22 @@ export default function OwnerAIChatPage() {
   const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const userId = user?.id ?? '';
 
-  // Load conversations from localStorage on mount
+  // Load conversations + restore active conversation on mount (setelah refresh / kembali dari menu lain)
   useEffect(() => {
     if (!isOwner || !userId) return;
-    setConversations(loadConversationsFromStorage(userId));
+    const loaded = loadConversationsFromStorage(userId);
+    setConversations(loaded);
+    const savedActiveId = loadActiveConversationId(userId);
+    if (loaded.length > 0) {
+      const toSelect = savedActiveId && loaded.some((c) => c.id === savedActiveId)
+        ? loaded.find((c) => c.id === savedActiveId)!
+        : loaded[0];
+      setActiveConversationId(toSelect.id);
+      setMessages(toSelect.messages);
+    } else {
+      setActiveConversationId(null);
+      setMessages([]);
+    }
   }, [isOwner, userId]);
 
   useEffect(() => {
@@ -226,6 +257,12 @@ export default function OwnerAIChatPage() {
     if (!userId || conversations.length === 0) return;
     saveConversationsToStorage(userId, conversations);
   }, [userId, conversations]);
+
+  // Simpan obrolan aktif agar setelah refresh/pindah menu tetap terbuka obrolan yang sama
+  useEffect(() => {
+    if (!userId) return;
+    saveActiveConversationId(userId, activeConversationId);
+  }, [userId, activeConversationId]);
 
   const startNewConversation = () => {
     setActiveConversationId(null);
