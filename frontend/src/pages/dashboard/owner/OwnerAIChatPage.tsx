@@ -117,6 +117,7 @@ const suggestedPrompts = [
   { icon: '✈️', label: 'Tiket CGK round trip' },
   { icon: '🕌', label: 'Hotel Mekkah 4 malam + makan' },
   { icon: '📦', label: 'Draft: 2 kamar quad + visa 10' },
+  { icon: '📄', label: 'Setuju, buatkan invoice dari pesanan ini' },
 ];
 
 // ─── Components ─────────────────────────────────────────────────────────

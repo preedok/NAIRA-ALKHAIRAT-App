@@ -424,6 +424,8 @@ export const invoicesApi = {
   getTicketFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/ticket-file`, { responseType: 'blob' }),
   /** Unduh dokumen visa terbit via API — file di-stream dari server */
   getVisaFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/visa-file`, { responseType: 'blob' }),
+  /** Unduh file manifest jamaah via API (sama seperti invoice/visa/tiket) */
+  getManifestFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/manifest-file`, { responseType: 'blob' }),
   allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body),
   /** Pemindahan dana: banyak sumber -> banyak penerima. Body: { transfers: [{ source_invoice_id, target_invoice_id, amount }], notes? } */
   reallocatePayments: (body: { transfers: Array<{ source_invoice_id: string; target_invoice_id: string; amount: number }>; notes?: string }) =>

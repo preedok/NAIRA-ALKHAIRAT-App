@@ -1314,7 +1314,7 @@ const getPdf = asyncHandler(async (req, res) => {
 const getArchive = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }, { model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value', 'meta'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_out_date', 'check_in_time', 'check_out_time', 'notes'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at', 'notes'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at', 'notes'] }, { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'bus_ticket_info', 'arrival_status', 'departure_status', 'return_status', 'notes'] }] }] },
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }, { model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value', 'meta'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_out_date', 'check_in_time', 'check_out_time', 'notes', 'hotel_document_url'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at', 'notes'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at', 'notes'] }, { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'bus_ticket_info', 'arrival_status', 'departure_status', 'return_status', 'notes'] }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
@@ -1383,6 +1383,16 @@ const getArchive = asyncHandler(async (req, res) => {
     archive.append(buf, { name: entryName });
   }
 
+  // Helper: URL relatif (/uploads/xxx atau xxx) -> path absolut (abaikan http/https). Dipakai untuk arsip dan manifest/visa/tiket.
+  const resolveUploadPath = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const u = url.replace(/\\/g, '/').trim();
+    if (/^https?:\/\//i.test(u)) return null;
+    const norm = u.replace(/^\/?uploads\/?/i, '').replace(/^\/+/, '');
+    if (!norm) return null;
+    return path.join(UPLOAD_ROOT, norm);
+  };
+
   const proofDir = uploadConfig.getDir(uploadConfig.SUBDIRS.PAYMENT_PROOFS);
   const proofs = invoice.PaymentProofs || [];
   proofs.forEach((proof, idx) => {
@@ -1391,9 +1401,10 @@ const getArchive = asyncHandler(async (req, res) => {
     const match = url.replace(/\\/g, '/').match(/payment-proofs\/?(.+)$/i);
     const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : path.basename(url);
     if (!filename) return;
-    const filePath = path.join(proofDir, filename);
-    if (fs.existsSync(filePath)) {
-      archive.file(filePath, { name: `02_Bukti_Bayar_${String(idx + 1).padStart(2, '0')}_${filename}` });
+    let filePath = path.join(proofDir, filename);
+    if (!fs.existsSync(filePath)) filePath = resolveUploadPath(url.startsWith('/') ? url : `uploads/${url}`);
+    if (filePath && fs.existsSync(filePath)) {
+      archive.file(filePath, { name: `02_Bukti_Bayar_${String(idx + 1).padStart(2, '0')}_${path.basename(filePath)}` });
     }
   });
 
@@ -1405,21 +1416,12 @@ const getArchive = asyncHandler(async (req, res) => {
     const match = url.replace(/\\/g, '/').match(/refund-proofs\/?(.+)$/i);
     const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : path.basename(url);
     if (!filename) return;
-    const filePath = path.join(refundDir, filename);
-    if (fs.existsSync(filePath)) {
-      archive.file(filePath, { name: `03_Bukti_Refund_${String(idx + 1).padStart(2, '0')}_${filename}` });
+    let filePath = path.join(refundDir, filename);
+    if (!fs.existsSync(filePath)) filePath = resolveUploadPath(url.startsWith('/') ? url : `uploads/${url}`);
+    if (filePath && fs.existsSync(filePath)) {
+      archive.file(filePath, { name: `03_Bukti_Refund_${String(idx + 1).padStart(2, '0')}_${path.basename(filePath)}` });
     }
   });
-
-  // Helper: URL relatif (/uploads/xxx atau xxx) -> path absolut (abaikan http/https)
-  const resolveUploadPath = (url) => {
-    if (!url || typeof url !== 'string') return null;
-    const u = url.replace(/\\/g, '/').trim();
-    if (/^https?:\/\//i.test(u)) return null;
-    const norm = u.replace(/^\/?uploads\/?/i, '').replace(/^\/+/, '');
-    if (!norm) return null;
-    return path.join(UPLOAD_ROOT, norm);
-  };
 
   const order = invoice.Order;
   const orderItems = (order && order.OrderItems) || [];
@@ -1777,6 +1779,32 @@ const getTicketFile = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/invoices/:id/order-items/:orderItemId/manifest-file
+ * Unduh file manifest jamaah (upload owner/tim invoice) — stream dari server seperti invoice/visa/tiket.
+ */
+const getManifestFile = asyncHandler(async (req, res) => {
+  const access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const invoice = access.invoice;
+  const orderItem = await OrderItem.findOne({
+    where: { id: req.params.orderItemId, order_id: invoice.order_id },
+    attributes: ['id', 'manifest_file_url', 'type']
+  });
+  if (!orderItem || !orderItem.manifest_file_url || !(orderItem.manifest_file_url || '').trim()) {
+    return res.status(404).json({ success: false, message: 'File manifest tidak ditemukan' });
+  }
+  const filePath = resolveUploadFilePath((orderItem.manifest_file_url || '').trim());
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File tidak tersedia di server' });
+  }
+  const filename = path.basename(filePath);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+/**
  * GET /api/v1/invoices/:id/order-items/:orderItemId/visa-file
  * Unduh dokumen visa terbit — stream dari server agar path konsisten.
  */
@@ -2072,5 +2100,6 @@ module.exports = {
   getOrderRevisions,
   sendPaymentReceivedNotificationEmail,
   getTicketFile,
-  getVisaFile
+  getVisaFile,
+  getManifestFile
 };
