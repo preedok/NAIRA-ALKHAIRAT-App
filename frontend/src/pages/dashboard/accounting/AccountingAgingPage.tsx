@@ -55,7 +55,7 @@ const AccountingAgingPage: React.FC = () => {
   const [provinsiList, setProvinsiList] = useState<{ id: string; name: string; wilayah_id?: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; code: string; name: string }[]>([]);
   const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [selectedBucketTab, setSelectedBucketTab] = useState<BucketTab>('all');
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [detailTab, setDetailTab] = useState<'invoice' | 'payments'>('invoice');

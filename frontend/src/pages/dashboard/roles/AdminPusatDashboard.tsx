@@ -314,7 +314,7 @@ const AdminPusatDashboard: React.FC = () => {
   const [modalPreset, setModalPreset] = useState<Record<string, string>>({});
   const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
   const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);

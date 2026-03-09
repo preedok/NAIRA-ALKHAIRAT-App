@@ -294,15 +294,18 @@ const TicketWorkPage: React.FC = () => {
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">
         <CardSectionHeader icon={<Ticket className="w-6 h-6" />} title="Daftar Invoice Tiket" subtitle="Invoice dengan item tiket. Filter menurut status invoice & progress." className="mb-4" />
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
-          <div className="flex-1 min-w-0 sm:min-w-[200px]">
-            <Input label="Cari (Invoice / Order / Owner)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="No. invoice, order, owner..." icon={<Search className="w-4 h-4" />} fullWidth />
-          </div>
-          <div className="sm:w-48">
-            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
-          </div>
-          <div className="sm:w-48">
-            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
+        <div className="mb-6 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
+          <p className="text-sm font-medium text-slate-600 mb-3">Pengaturan Filter</p>
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+            <div className="flex-1 min-w-0 sm:min-w-[220px]">
+              <Input label="Cari (Invoice / Order / Owner)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="No. invoice, order, owner..." icon={<Search className="w-4 h-4" />} fullWidth />
+            </div>
+            <div className="w-full sm:w-52 min-w-0">
+              <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_STATUS }, ...Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))]} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
+            </div>
+            <div className="w-full sm:w-52 min-w-0">
+              <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_PROGRESS }, ...STATUS_OPTIONS]} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">

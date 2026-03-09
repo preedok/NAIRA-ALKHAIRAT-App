@@ -198,7 +198,7 @@ const AccountingDashboard: React.FC = () => {
   const [modalPreset, setModalPreset] = useState<Record<string, string>>({});
   const [wilayahList, setWilayahList] = useState<{ id: string; name: string }[]>([]);
   const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);

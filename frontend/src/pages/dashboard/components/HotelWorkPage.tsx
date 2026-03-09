@@ -350,38 +350,41 @@ const HotelWorkPage: React.FC = () => {
           subtitle={`${filteredInvoices.length} invoice. Filter menurut lokasi hotel, status invoice & progress.`}
           className="mb-4"
         />
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setFilterHotelLocation('')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === '' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            Semua
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterHotelLocation('makkah')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === 'makkah' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            Hotel Mekkah
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterHotelLocation('madinah')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === 'madinah' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            Hotel Madinah
-          </button>
-        </div>
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
-          <div className="flex-1 min-w-0 sm:min-w-[200px]">
-            <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
+        <div className="mb-6 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
+          <p className="text-sm font-medium text-slate-600 mb-3">Pengaturan Filter</p>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setFilterHotelLocation('')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === '' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              Semua
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterHotelLocation('makkah')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === 'makkah' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              Hotel Mekkah
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterHotelLocation('madinah')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterHotelLocation === 'madinah' ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              Hotel Madinah
+            </button>
           </div>
-          <div className="sm:w-44">
-            <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
-          </div>
-          <div className="sm:w-44">
-            <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={STATUS_OPTIONS} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+            <div className="flex-1 min-w-0 sm:min-w-[220px]">
+              <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
+            </div>
+            <div className="w-full sm:w-52 min-w-0">
+              <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_STATUS }, ...Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))]} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
+            </div>
+            <div className="w-full sm:w-52 min-w-0">
+              <Autocomplete label="Status Progress" value={filterProgressStatus} onChange={setFilterProgressStatus} options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_PROGRESS }, ...STATUS_OPTIONS]} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS} />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">

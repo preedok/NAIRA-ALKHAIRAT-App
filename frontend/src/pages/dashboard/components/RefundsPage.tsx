@@ -28,7 +28,7 @@ const RefundsPage: React.FC = () => {
   const [stats, setStats] = useState<RefundStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [ownerIdFilter, setOwnerIdFilter] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');

@@ -373,7 +373,9 @@ const BusWorkPage: React.FC = () => {
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">
         <CardSectionHeader icon={<Bus className="w-6 h-6" />} title="Daftar Invoice Bus" subtitle="Invoice dengan item bus. Filter menurut status invoice, tiket, kedatangan, keberangkatan, kepulangan." className="mb-4" />
-        <div className="mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
+        <div className="mb-6 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
+          <p className="text-sm font-medium text-slate-600 mb-3">Pengaturan Filter</p>
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
           <div className="flex-1 min-w-0 sm:min-w-[180px]">
             <Input
               label="Cari"
@@ -440,6 +442,7 @@ const BusWorkPage: React.FC = () => {
               fullWidth
             />
           </div>
+        </div>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
           {loading ? (

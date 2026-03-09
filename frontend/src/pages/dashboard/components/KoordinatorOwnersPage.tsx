@@ -42,7 +42,7 @@ const KoordinatorOwnersPage: React.FC = () => {
   const [branchesForFilter, setBranchesForFilter] = useState<{ id: string; code: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterWilayahId, setFilterWilayahId] = useState<string>('');
   const [filterBranchId, setFilterBranchId] = useState<string>('');
