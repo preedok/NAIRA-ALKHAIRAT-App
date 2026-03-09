@@ -1,13 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Send, Loader2, Sparkles, ShoppingCart, ArrowRight, Bot, User } from 'lucide-react';
+import { Send, Loader2, Sparkles, ShoppingCart, ArrowRight, Bot, User, MessageSquare } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import type { OrderDraftItemInput } from '../../../contexts/OrderDraftContext';
 import { aiChatApi, type AiChatOrderDraftItem } from '../../../services/api';
-import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import PageHeader from '../../../components/common/PageHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
 import { useToast } from '../../../contexts/ToastContext';
 
@@ -108,56 +106,63 @@ const OwnerAIChatPage: React.FC = () => {
   const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   if (!isOwner) {
     return (
-      <div className="p-4">
-        <p className="text-stone-600">Halaman ini hanya untuk role Owner.</p>
+      <div className="flex items-center justify-center min-h-[50vh] px-4">
+        <p className="text-slate-600">Halaman ini hanya untuk role Owner.</p>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <PageHeader
-        title="Asisten AI"
-        subtitle="Jawab pertanyaan dari data Anda, nego harga dengan pintar, lalu isi form order otomatis setelah sama-sama sepakat."
-      />
+  const suggestedPrompts = [
+    'Tampilkan daftar produk hotel dan harganya',
+    'Saya butuh penawaran visa 10 orang',
+    'Berapa harga tiket CGK round trip?',
+    'Penawaran hotel Mekkah 4 malam paket makan',
+    'Buatkan draft: 2 kamar quad + visa 10 orang'
+  ];
 
+  return (
+    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[820px] min-h-[520px] mx-auto max-w-4xl">
       {contextLoading && (
-        <div className="flex justify-center py-4">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-50/80 dark:bg-slate-900/80 rounded-2xl z-10">
           <ContentLoading minHeight={80} />
         </div>
       )}
 
-      <Card className="overflow-hidden border-2 border-primary-100 bg-gradient-to-b from-white to-primary-50/30">
-        <div className="px-4 py-3 border-b border-stone-200 bg-white/80 flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-primary-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-stone-900">Bintang Global AI</h3>
-            <p className="text-xs text-stone-500">Berdasarkan data database: produk, invoice, order. Nego harga → daftar pesanan → isi form order otomatis.</p>
-          </div>
+      {/* Header */}
+      <div className="flex-shrink-0 flex items-center gap-4 px-4 py-4 rounded-t-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
+        <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+          <MessageSquare className="w-6 h-6" />
         </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold tracking-tight">Asisten AI</h1>
+          <p className="text-sm text-emerald-100 truncate">Tanya produk & harga, nego, lalu isi form order otomatis</p>
+        </div>
+        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 text-xs font-medium">
+          <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+          Siap
+        </div>
+      </div>
 
-        <div className="min-h-[320px] max-h-[50vh] overflow-y-auto p-4 space-y-4 bg-stone-50/50">
+      {/* Chat area */}
+      <div className="flex-1 overflow-hidden flex flex-col bg-slate-50/70 dark:bg-slate-900/50 rounded-b-2xl border border-slate-200 dark:border-slate-700 border-t-0 shadow-xl">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 scroll-smooth">
           {messages.length === 0 && !loading && (
-            <div className="text-center py-6">
-              <Bot className="w-12 h-12 mx-auto mb-3 text-primary-500" />
-              <p className="font-semibold text-stone-800">Mulai percakapan</p>
-              <p className="text-sm text-stone-600 mt-1 max-w-md mx-auto">Tanyakan produk, harga, atau minta penawaran. Setelah sepakat harga, beri daftar pesanan—AI akan mengisi form order untuk Anda.</p>
-              <p className="text-xs text-stone-500 mt-3 mb-3">Contoh pertanyaan:</p>
+            <div className="flex flex-col items-center justify-center min-h-[280px] text-center px-4">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 mb-5">
+                <Sparkles className="w-10 h-10 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Mulai percakapan</h2>
+              <p className="text-slate-600 dark:text-slate-400 mt-2 max-w-sm text-sm leading-relaxed">
+                Tanyakan produk, harga, atau minta penawaran. Setelah sepakat, beri daftar pesanan—AI akan mengisi form order untuk Anda.
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-4 mb-3 font-medium uppercase tracking-wider">Coba pertanyaan</p>
               <div className="flex flex-wrap justify-center gap-2">
-                {[
-                  'Tampilkan daftar produk hotel dan harganya',
-                  'Saya butuh penawaran visa 10 orang',
-                  'Berapa harga tiket CGK round trip?',
-                  'Penawaran hotel Mekkah 4 malam paket makan',
-                  'Buatkan draft: 2 kamar quad + visa 10 orang'
-                ].map((label) => (
+                {suggestedPrompts.map((label) => (
                   <button
                     key={label}
                     type="button"
                     onClick={() => setInput(label)}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-stone-300 text-stone-700 hover:bg-primary-50 hover:border-primary-300 transition-colors"
+                    className="px-4 py-2.5 rounded-xl text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:shadow-md transition-all duration-200"
                   >
                     {label}
                   </button>
@@ -168,66 +173,68 @@ const OwnerAIChatPage: React.FC = () => {
           {messages.map((m, i) => (
             <div
               key={i}
-              className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}
             >
-              {m.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
-                  <Bot className="w-4 h-4 text-primary-600" />
-                </div>
-              )}
+              <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${
+                m.role === 'user'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+              }`}>
+                {m.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+              </div>
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                className={`max-w-[82%] sm:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
                   m.role === 'user'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-white border border-stone-200 text-stone-800 shadow-sm'
+                    ? 'bg-emerald-600 text-white rounded-br-md'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-bl-md'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
               </div>
-              {m.role === 'user' && (
-                <div className="w-8 h-8 rounded-lg bg-stone-200 flex items-center justify-center flex-shrink-0">
-                  <User className="w-4 h-4 text-stone-600" />
-                </div>
-              )}
             </div>
           ))}
           {loading && (
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-4 h-4 text-primary-600" />
+              <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                <Bot className="w-4 h-4 text-slate-600 dark:text-slate-300" />
               </div>
-              <div className="bg-white border border-stone-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
-                <span className="text-sm text-stone-500">AI sedang menjawab...</span>
+              <div className="rounded-2xl rounded-bl-md px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 flex items-center gap-2 min-w-[140px]">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                <span className="text-sm text-slate-500 dark:text-slate-400">Mengetik...</span>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
+        {/* AI not configured / quota notice */}
         {messages.some((m) => m.role === 'assistant' && m.content.trim() === AI_NOT_CONFIGURED_MSG) && (
-          <div className="px-4 py-3 border-t border-amber-200 bg-amber-50">
-            <p className="text-sm font-medium text-amber-900 mb-1">Asisten AI belum aktif</p>
-            <p className="text-xs text-amber-800 mb-3">Admin server perlu menambahkan <code className="bg-amber-100 px-1 rounded">OPENAI_API_KEY</code> di <code className="bg-amber-100 px-1 rounded">backend/.env</code> pada VPS, lalu restart backend. Dapatkan API key di platform.openai.com.</p>
-            <Button variant="outline" size="sm" className="gap-2 border-amber-400 text-amber-800 hover:bg-amber-100" onClick={() => navigate('/dashboard/orders/new')}>
+          <div className="flex-shrink-0 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">Asisten AI belum aktif</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300/90 mb-3">Tambahkan <code className="bg-amber-200/50 dark:bg-amber-800/50 px-1 rounded">OPENAI_API_KEY</code> di server. Sementara itu:</p>
+            <Button variant="outline" size="sm" className="gap-2 border-amber-400 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30" onClick={() => navigate('/dashboard/orders/new')}>
               <ShoppingCart className="w-4 h-4" />
-              Buat order manual dari form
+              Buat order manual
             </Button>
           </div>
         )}
 
+        {/* Draft order CTA */}
         {lastOrderDraft?.items && lastOrderDraft.items.length > 0 && (
-          <div className="px-4 py-3 border-t border-stone-200 bg-emerald-50/80">
-            <p className="text-sm font-medium text-stone-800 mb-2">Draft order siap diisi ke form</p>
-            <ul className="text-xs text-stone-600 space-y-1 mb-3">
+          <div className="flex-shrink-0 px-4 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-t border-emerald-200 dark:border-emerald-800">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">Draft order siap</p>
+            <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1 mb-4 max-h-20 overflow-y-auto">
               {lastOrderDraft.items.slice(0, 5).map((it, j) => (
-                <li key={j}>
-                  {it.product_name} × {it.quantity} — <span className="font-medium">{Number(it.unit_price_idr || 0).toLocaleString('id-ID')} IDR</span>
+                <li key={j} className="flex justify-between gap-2">
+                  <span>{it.product_name} × {it.quantity}</span>
+                  <span className="font-medium tabular-nums">{Number(it.unit_price_idr || 0).toLocaleString('id-ID')} IDR</span>
                 </li>
               ))}
-              {(lastOrderDraft.items.length > 5) && <li>+ {lastOrderDraft.items.length - 5} item lagi</li>}
+              {lastOrderDraft.items.length > 5 && (
+                <li className="text-slate-500">+ {lastOrderDraft.items.length - 5} item lagi</li>
+              )}
             </ul>
-            <Button variant="primary" size="sm" className="gap-2" onClick={handleApplyToOrder}>
+            <Button variant="primary" size="sm" className="w-full sm:w-auto gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={handleApplyToOrder}>
               <ShoppingCart className="w-4 h-4" />
               Isi ke Form Order
               <ArrowRight className="w-4 h-4" />
@@ -235,8 +242,9 @@ const OwnerAIChatPage: React.FC = () => {
           </div>
         )}
 
-        <div className="p-4 border-t border-stone-200 bg-white">
-          <div className="flex gap-2">
+        {/* Input */}
+        <div className="flex-shrink-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex gap-3 items-end max-w-4xl mx-auto">
             <textarea
               ref={inputRef}
               value={input}
@@ -247,23 +255,22 @@ const OwnerAIChatPage: React.FC = () => {
                   handleSend();
                 }
               }}
-              placeholder="Ketik pertanyaan atau daftar pesanan..."
-              className="flex-1 min-h-[44px] max-h-32 px-4 py-3 rounded-xl border border-stone-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none text-sm"
+              placeholder="Ketik pesan atau daftar pesanan..."
+              className="flex-1 min-h-[48px] max-h-32 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none text-sm transition-shadow"
               rows={2}
               disabled={loading}
             />
-            <Button
+            <button
               type="button"
-              variant="primary"
-              className="shrink-0 h-[44px] px-4"
               onClick={handleSend}
               disabled={loading || !input.trim()}
+              className="flex-shrink-0 w-12 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/40 transition-all"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            </Button>
+            </button>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 };
