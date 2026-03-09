@@ -4,9 +4,11 @@
  * Untuk role owner: jawab pertanyaan dari data DB, nego harga, lalu keluarkan ORDER_DRAFT untuk isi form order otomatis.
  */
 const { Op } = require('sequelize');
+const sequelize = require('../config/sequelize');
 const { Product, ProductPrice, Order, Invoice, OwnerProfile, User, Branch } = require('../models');
 const { getRulesForBranch } = require('../controllers/businessRuleController');
 const { getEffectivePrice } = require('../controllers/productController');
+const { getAvailabilityByDateRange } = require('./hotelAvailabilityService');
 const { ORDER_ITEM_TYPE } = require('../constants');
 
 const ORDER_DRAFT_MARKER = '### ORDER_DRAFT';
@@ -96,6 +98,62 @@ async function buildContextForOwner(ownerId) {
     ? recentInvoices.map(inv => `  ${inv.invoice_number} | ${inv.status} | Total ${parseFloat(inv.total_amount || 0).toLocaleString('id-ID')} IDR | Sisa ${parseFloat(inv.remaining_amount || 0).toLocaleString('id-ID')} IDR`).join('\n')
     : '  (belum ada)';
 
+  // Data booking hotel dari order (untuk jawab pertanyaan ketersediaan / kalender)
+  const today = new Date();
+  const startBooking = new Date(today);
+  startBooking.setDate(startBooking.getDate() - 7);
+  const endBooking = new Date(today);
+  endBooking.setDate(endBooking.getDate() + 90);
+  const startStr = startBooking.toISOString().slice(0, 10);
+  const endStr = endBooking.toISOString().slice(0, 10);
+  let hotelBookingLines = '  (belum ada)';
+  try {
+    const [bookingRows] = await sequelize.query(`
+      SELECT p.name AS product_name, oi.meta->>'check_in' AS check_in, oi.meta->>'check_out' AS check_out, oi.meta->>'room_type' AS room_type, oi.quantity
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id AND o.status != 'cancelled'
+      INNER JOIN products p ON p.id = oi.product_ref_id
+      WHERE oi.type = 'hotel'
+        AND (oi.meta->>'check_in')::date <= :endStr::date
+        AND (oi.meta->>'check_out')::date >= :startStr::date
+      ORDER BY (oi.meta->>'check_in')::date
+      LIMIT 50
+    `, { replacements: { startStr, endStr } });
+    if (bookingRows && bookingRows.length > 0) {
+      hotelBookingLines = bookingRows.map(r => {
+        const rt = (r.room_type || 'quad').toLowerCase();
+        return `  ${r.product_name} | ${r.check_in} s/d ${r.check_out} | ${rt} × ${r.quantity}`;
+      }).join('\n');
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Ketersediaan kamar hotel (14 hari ke depan) per produk hotel
+  const hotelProducts = productSummaries.filter(p => p.type === 'hotel').slice(0, 8);
+  const availStart = today.toISOString().slice(0, 10);
+  const availEnd = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const availabilityLines = [];
+  for (const hp of hotelProducts) {
+    try {
+      const avail = await getAvailabilityByDateRange(hp.id, availStart, availEnd);
+      const parts = [];
+      if (avail.byRoomType && typeof avail.byRoomType === 'object') {
+        for (const [rt, count] of Object.entries(avail.byRoomType)) {
+          if (count != null && Number(count) > 0) parts.push(`${rt}: ${count}`);
+        }
+      }
+      if (parts.length > 0) {
+        availabilityLines.push(`  ${hp.name}: ${parts.join(', ')} kamar tersedia (14 hari ke depan)`);
+      } else {
+        availabilityLines.push(`  ${hp.name}: (cek kalender / tidak ada musim)`);
+      }
+    } catch (e) {
+      availabilityLines.push(`  ${hp.name}: (data tidak tersedia)`);
+    }
+  }
+  const hotelAvailabilityBlock = availabilityLines.length > 0 ? availabilityLines.join('\n') : '  (tidak ada data)';
+
   const contextText = `
 Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
@@ -109,8 +167,14 @@ Order terbaru: ${recentOrders.length ? recentOrders.map(o => o.order_number).joi
 Invoice terbaru (5):
 ${invoiceLines}
 
+Booking hotel dari order (check_in s/d check_out, tipe kamar, qty) — gunakan untuk jawab pertanyaan "apakah hotel X penuh pada tanggal Y" atau "ada pesanan pada tanggal Z":
+${hotelBookingLines}
+
+Ketersediaan kamar hotel (minimal tersedia dalam 14 hari ke depan, per tipe kamar) — gunakan untuk jawab "apakah hotel X tersedia", "berapa kamar tersedia":
+${hotelAvailabilityBlock}
+
 Alur (semua data hanya dari database di atas):
-1. Jawab pertanyaan hanya dari data di atas. Tidak ada data dummy; jika tidak ada di daftar, katakan tidak ada.
+1. Jawab pertanyaan hanya dari data di atas, termasuk ketersediaan hotel dan booking. Untuk pertanyaan "hotel X tanggal A–B": cocokkan dari booking (apakah ada yang overlap) dan dari ketersediaan (sisa kamar). Jika data ada, berikan jawaban jelas; jika tidak ada di daftar, katakan tidak ada datanya.
 2. Nego harga: gunakan harga dari daftar produk. Boleh tawarkan diskon wajar (misalnya 2–5%) dan sebutkan angka final (IDR/SAR/USD) sampai owner setuju.
 3. Setelah sepakat, minta daftar pesanan lengkap: produk, jumlah, tanggal (check_in/check_out hotel, departure/return tiket, travel_date visa/bus).
 4. Setelah daftar pesanan lengkap, keluarkan blok ORDER_DRAFT. product_id dan product_name WAJIB copy persis dari baris daftar produk di atas (satu per satu sesuai yang dipesan). Jangan mengarang UUID atau nama.
@@ -133,7 +197,7 @@ function buildSystemPrompt(contextText) {
   return `Kamu adalah asisten AI canggih Bintang Global Group (BGG) untuk partner/owner travel. Profesional, ramah, dan sangat membantu.
 
 KEMAMPUAN:
-1. JAWAB PERTANYAAN: Jawab apa pun tentang produk umroh/travel, harga, invoice, order, jadwal—HANYA dari data konteks di bawah. Jika tidak ada data, jawab jujur.
+1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, booking hotel (tanggal check-in/out dari order), dan ketersediaan kamar (sisa per tipe) untuk 14 hari ke depan. Gunakan data booking dan ketersediaan itu untuk menjawab pertanyaan seperti "apakah Hotel Makarem tersedia 9–12 Maret" atau "berapa kamar quad tersedia": cocokkan tanggal dengan booking dan angka tersedia. Jika tidak ada data, jawab jujur.
 2. NEGOSIASI HARGA: Berikan penawaran dari daftar produk. Jika owner minta diskon atau nego:
    - Tawarkan nego dalam batas wajar (misalnya diskon 2–5%, atau bundling).
    - Sebutkan angka final yang disepakati dengan jelas (IDR, SAR, dan/atau USD).

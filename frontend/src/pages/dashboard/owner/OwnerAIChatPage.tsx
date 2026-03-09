@@ -253,17 +253,17 @@ export default function OwnerAIChatPage() {
         .apply-btn:hover { background: linear-gradient(135deg,#059669,#047857) !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,0.4) !important; }
       `}</style>
 
-      {/* Wrapper: card besar dengan jarak */}
+      {/* Wrapper: card lebar dan tinggi */}
       <div
-        className="chat-page-wrapper max-w-6xl mx-auto py-4 sm:py-6 px-2 sm:px-4"
-        style={{ minHeight: 720, maxHeight: 'calc(100vh - 4rem)' }}
+        className="chat-page-wrapper w-full max-w-[1600px] mx-auto py-4 sm:py-6 px-2 sm:px-4"
+        style={{ minHeight: 760, maxHeight: 'calc(100vh - 3rem)' }}
       >
       <div className="chat-page" style={{
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: 680,
-        maxHeight: 'calc(100vh - 4rem)',
+        minHeight: 720,
+        maxHeight: 'calc(100vh - 3rem)',
         background: '#ffffff',
         borderRadius: 16,
         overflow: 'hidden',
