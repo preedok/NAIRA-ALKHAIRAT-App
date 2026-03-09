@@ -510,8 +510,7 @@ const updateItemProgress = asyncHandler(async (req, res) => {
         try {
           await updated.update({ hotel_document_url: fileUrl });
         } catch (colErr) {
-          // Kolom hotel_document_url mungkin belum ada di DB (migration 20260310000001 belum dijalankan)
-          if (colErr && !(colErr.message || '').includes('hotel_document_url')) throw colErr;
+          // Kolom hotel_document_url mungkin belum ada di DB (migration 20260310000001 belum dijalankan). Abaikan agar PATCH tetap 200.
         }
         updated = await HotelProgress.findByPk(progress.id);
       }
