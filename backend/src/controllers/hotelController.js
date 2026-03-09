@@ -507,7 +507,12 @@ const updateItemProgress = asyncHandler(async (req, res) => {
         const filePath = path.join(dir, fileName);
         fs.writeFileSync(filePath, buf, 'binary');
         const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.HOTEL_DOCS, fileName);
-        await updated.update({ hotel_document_url: fileUrl });
+        try {
+          await updated.update({ hotel_document_url: fileUrl });
+        } catch (colErr) {
+          // Kolom hotel_document_url mungkin belum ada di DB (migration 20260310000001 belum dijalankan)
+          if (colErr && !(colErr.message || '').includes('hotel_document_url')) throw colErr;
+        }
         updated = await HotelProgress.findByPk(progress.id);
       }
     } catch (e) {

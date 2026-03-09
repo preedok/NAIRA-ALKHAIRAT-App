@@ -17,7 +17,7 @@ const busRouteLabel = (r) => ({
 
 /**
  * @param {object} item - OrderItem dengan Product, BusProgress (Order bisa dari opts)
- * @param {object} [opts] - { order, invoice } agar No. Order & Pemesan selalu terisi
+ * @param {object} [opts] - { order, invoice } agar No. Invoice & Pemesan selalu terisi
  * @returns {Promise<Buffer>}
  */
 async function buildBusSlipPdfBuffer(item, opts = {}) {
@@ -26,7 +26,7 @@ async function buildBusSlipPdfBuffer(item, opts = {}) {
   const prog = item.BusProgress || {};
   const meta = (item.meta && typeof item.meta === 'object') ? item.meta : {};
   const inv = opts.invoice || {};
-  const orderNumber = (Order.order_number || '').trim() || (inv.Order && inv.Order.order_number) || inv.order_number || '–';
+  const invoiceNumber = (inv.invoice_number || '').trim() || '–';
   const productName = (Product.name || Product.code || 'Bus').trim() || 'Bus';
   const quantity = item.quantity != null ? Number(item.quantity) : 1;
   const ownerName = (Order.User && (Order.User.name || Order.User.company_name)) || (inv.User && (inv.User.name || inv.User.company_name)) || '–';
@@ -54,12 +54,12 @@ async function buildBusSlipPdfBuffer(item, opts = {}) {
     y += 28;
 
     doc.fontSize(10).fillColor('#475569');
-    doc.text(`Order: ${orderNumber}  |  Produk: ${productName}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`, margin, y, { width: pageWidth });
+    doc.text(`Invoice: ${invoiceNumber}  |  Produk: ${productName}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`, margin, y, { width: pageWidth });
     y += 24;
 
     doc.fontSize(11).fillColor('#0f172a');
     const rows = [
-      ['No. Order', orderNumber],
+      ['No. Invoice', invoiceNumber],
       ['Produk / Paket Bus', productName],
       ['Pemesan (Owner)', ownerName],
       ['Jumlah', String(quantity)],
