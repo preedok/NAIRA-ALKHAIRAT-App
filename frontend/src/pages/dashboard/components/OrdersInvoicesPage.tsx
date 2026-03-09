@@ -2166,11 +2166,12 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <table className="w-full text-sm table-fixed">
                                   <colgroup>
                                     <col className="w-10" />
-                                    <col className="w-16" />
-                                    <col className="w-[20%]" />
-                                    <col className="w-[32%]" />
                                     <col className="w-14" />
-                                    <col className="w-[22%]" />
+                                    <col className="w-[18%]" />
+                                    <col className="w-[28%]" />
+                                    <col className="w-12" />
+                                    <col className="w-[16%]" />
+                                    <col className="w-[18%]" />
                                   </colgroup>
                                   <thead>
                                     <tr className="border-b border-slate-200">
@@ -2179,6 +2180,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                       <th className="text-left py-2 px-2 font-medium text-slate-600">Produk</th>
                                       <th className="text-left py-2 px-2 font-medium text-slate-600">Deskripsi / Workflow</th>
                                       <th className="text-right py-2 px-2 font-medium text-slate-600">Qty</th>
+                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Harga Satuan</th>
                                       <th className="text-right py-2 px-2 font-medium text-slate-600">Subtotal</th>
                                     </tr>
                                   </thead>
@@ -2190,6 +2192,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const desc = getItemDesc(item);
                                       const qty = item.quantity != null ? item.quantity : 1;
                                       const subtotal = item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * qty;
+                                      const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? subtotal / qty : 0);
                                       return (
                                         <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50 align-top">
                                           <td className="py-2 px-2 text-slate-600 align-top">{idx + 1}</td>
@@ -2197,6 +2200,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-900 align-top">{name}</td>
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{qty}</td>
+                                          <td className="py-2 px-2 text-right tabular-nums align-top">
+                                            <div><NominalDisplay amount={unitPrice} currency="IDR" /></div>
+                                            <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={unitPrice / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={unitPrice / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                          </td>
                                           <td className="py-2 px-2 text-right font-medium tabular-nums align-top">
                                             <div><NominalDisplay amount={subtotal} currency="IDR" /></div>
                                             <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={subtotal / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={subtotal / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
