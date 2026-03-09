@@ -175,8 +175,9 @@ const OrdersInvoicesPage: React.FC = () => {
     return inv.owner_id === user?.id || ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   };
 
+  const showLocationFilters = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
   const fetchBranches = useCallback(async () => {
-    if (!isAdminPusat && !isAccounting && !isInvoiceSaudi) return;
+    if (!showLocationFilters) return;
     try {
       const params: { limit: number; page: number; wilayah_id?: string; provinsi_id?: string } = { limit: 500, page: 1 };
       if (wilayahId) params.wilayah_id = wilayahId;
@@ -186,14 +187,14 @@ const OrdersInvoicesPage: React.FC = () => {
     } catch {
       setBranches([]);
     }
-  }, [isAdminPusat, isAccounting, isInvoiceSaudi, wilayahId, provinsiId]);
+  }, [showLocationFilters, wilayahId, provinsiId]);
 
   useEffect(() => {
-    if (isAdminPusat || isAccounting || isInvoiceSaudi) {
+    if (showLocationFilters) {
       branchesApi.listWilayah().then((r) => { if (r.data.success) setWilayahList(r.data.data || []); }).catch(() => {});
       branchesApi.listProvinces().then((r) => { if (r.data.success) setProvinces(r.data.data || []); }).catch(() => {});
     }
-  }, [isAdminPusat, isAccounting, isInvoiceSaudi]);
+  }, [showLocationFilters]);
 
   useEffect(() => {
     fetchBranches();
@@ -203,7 +204,7 @@ const OrdersInvoicesPage: React.FC = () => {
     const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
     if (!canListOwners) return; // GET /owners untuk admin, accounting, invoice Saudi, koordinator wilayah
     try {
-      const params: { branch_id?: string; wilayah_id?: string } = {};
+      const params: { branch_id?: string; wilayah_id?: string; limit?: number } = { limit: 500 };
       if (branchId) params.branch_id = branchId;
       if (user?.role === 'invoice_koordinator' && user?.wilayah_id) params.wilayah_id = user.wilayah_id;
       const res = await ownersApi.list(params);
@@ -1004,17 +1005,25 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const hasActiveFilters = !!(branchId || wilayahId || provinsiId || filterStatus || filterOwnerId || filterInvoiceNumber.trim() || filterDateFrom || filterDateTo || filterDueStatus || sortBy !== 'created_at' || sortOrder !== 'desc');
 
-  /** Opsi filter Owner: dari API bila ada, else dari unique owner di data invoice (supaya filter selalu punya opsi sesuai data) */
+  /** Opsi filter Owner: gabung dari API + unique owner di data invoice agar semua owner yang punya invoice bisa dipilih dan filter tampil benar */
   const ownerFilterOptions = (() => {
-    if (owners.length > 0) return owners.map((o) => ({ id: o.User?.id || (o as any).user_id || o.id, name: o.User?.name || o.User?.company_name, User: o.User }));
     const map = new Map<string, { id: string; name?: string; User?: { name?: string; company_name?: string } }>();
+    owners.forEach((o) => {
+      const userId = (o as { user_id?: string }).user_id ?? o.User?.id ?? '';
+      const id = String(userId).trim();
+      if (!id) return;
+      const name = o.User?.name || o.User?.company_name;
+      if (!map.has(id)) map.set(id, { id, name, User: o.User });
+    });
     invoices.forEach((inv: any) => {
       const id = inv.owner_id || inv.User?.id || inv.Order?.User?.id;
       if (!id) return;
+      const sid = String(id).trim();
+      if (map.has(sid)) return;
       const name = (inv.User?.name || inv.User?.company_name || inv.Order?.User?.name || inv.Order?.User?.company_name || '').trim() || undefined;
-      if (!map.has(id)) map.set(id, { id, name, User: { name, company_name: inv.User?.company_name || inv.Order?.User?.company_name } });
+      map.set(sid, { id: sid, name, User: { name, company_name: inv.User?.company_name || inv.Order?.User?.company_name } });
     });
-    return Array.from(map.values());
+    return Array.from(map.values()).filter((o) => Boolean(o.id));
   })();
 
   const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
@@ -1134,9 +1143,9 @@ const OrdersInvoicesPage: React.FC = () => {
         <DashboardFilterBar
             variant="page"
             loading={loading}
-            showWilayah={isAdminPusat || isAccounting || isInvoiceSaudi}
-            showProvinsi={false}
-            showBranch={isAdminPusat || isAccounting || isInvoiceSaudi}
+            showWilayah={isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator'}
+            showProvinsi={isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator'}
+            showBranch={isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator'}
             showStatus
             statusType="invoice"
             showOwner
@@ -1176,7 +1185,7 @@ const OrdersInvoicesPage: React.FC = () => {
             onDueStatusChange={setFilterDueStatus}
             onApply={() => {}}
             wilayahList={wilayahList}
-            provinces={provinces}
+            provinces={wilayahId ? provinces.filter((p) => (p as { wilayah_id?: string }).wilayah_id === wilayahId) : provinces}
             branches={branches}
             branchLabel="Cabang"
             branchEmptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG}

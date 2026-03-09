@@ -398,7 +398,7 @@ export const invoicesApi = {
     api.get('/invoices', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   getDraftOrders: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: any[] }>('/invoices/draft-orders', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
-  getSummary: (params?: { status?: string; branch_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
+  getSummary: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
     api.get<{ success: boolean; data: InvoicesSummaryData }>('/invoices/summary', { params }),
   getById: (id: string) => api.get(`/invoices/${id}`),
   getStatusHistory: (id: string) => api.get(`/invoices/${id}/status-history`),
