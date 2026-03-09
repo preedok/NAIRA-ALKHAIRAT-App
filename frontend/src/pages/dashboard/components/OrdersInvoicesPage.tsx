@@ -2127,16 +2127,23 @@ const OrdersInvoicesPage: React.FC = () => {
                         {(() => {
                           const orderItems = viewInvoice?.Order?.OrderItems || [];
                           if (orderItems.length === 0) return null;
+                          const ROOM_CAP: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
                           const getItemDesc = (item: any) => {
                             const t = (item.type || item.product_type || '').toLowerCase();
                             const meta = item.meta || {};
                             if (t === 'hotel') {
                               const ci = meta.check_in ? formatDate(meta.check_in) : '';
                               const co = meta.check_out ? formatDate(meta.check_out) : '';
-                              const nights = meta.nights != null ? meta.nights : 0;
+                              const nights = meta.nights != null ? Number(meta.nights) : 0;
+                              const qty = item.quantity != null ? Number(item.quantity) : 1;
                               const meal = meta.meal || meta.with_meal ? 'Ya' : 'Tidak';
-                              const roomType = meta.room_type ? `Tipe kamar: ${meta.room_type}` : null;
-                              return [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, roomType].filter(Boolean).join(' · ');
+                              const roomType = meta.room_type ? String(meta.room_type) : '';
+                              const cap = ROOM_CAP[roomType.toLowerCase()] ?? 1;
+                              const totalOrang = qty * cap;
+                              const line1 = [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, roomType ? `Tipe kamar: ${roomType}` : null].filter(Boolean).join(' · ');
+                              const line2 = nights > 0 ? `${qty} kamar × ${nights} malam | Paket makan: ${meal} | Tipe kamar: ${roomType || '–'}` : '';
+                              const line3 = (meta.meal || meta.with_meal) && nights > 0 && totalOrang > 0 ? `Perhitungan: ${totalOrang} orang × ${nights} malam = ${totalOrang * nights} (paket makan: Ya)` : '';
+                              return [line1, line2, line3].filter(Boolean).join('\n');
                             }
                             if (t === 'visa') {
                               return meta.travel_date ? `Keberangkatan: ${formatDate(meta.travel_date)}` : '';
@@ -2199,23 +2206,29 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const toIdr = (v: number) => cur === 'SAR' ? v * sarToIdr : cur === 'USD' ? v * usdToIdr : v;
                                       const roomUnit = meta.room_unit_price != null ? Number(meta.room_unit_price) : NaN;
                                       const mealUnit = meta.meal_unit_price != null ? Number(meta.meal_unit_price) : NaN;
-                                      const hasHotelBreakdown = typeKey === 'hotel' && nights > 0 && (Number.isFinite(roomUnit) || Number.isFinite(mealUnit));
-                                      const ROOM_CAP = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>;
-                                      const capacity = ROOM_CAP[String(meta.room_type || '').toLowerCase()] ?? 1;
+                                      const ROOM_CAP_TBL = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>;
+                                      const capacity = ROOM_CAP_TBL[String(meta.room_type || '').toLowerCase()] ?? 1;
                                       const totalOrang = qty * capacity;
-                                      const roomUnitIdr = Number.isFinite(roomUnit) ? toIdr(roomUnit) : 0;
-                                      const mealUnitIdr = Number.isFinite(mealUnit) ? toIdr(mealUnit) : 0;
-                                      const roomPart = hasHotelBreakdown ? roomUnitIdr * qty * nights : 0;
-                                      const mealPart = hasHotelBreakdown && mealUnitIdr > 0 ? mealUnitIdr * totalOrang * nights : 0;
+                                      let roomUnitIdr = Number.isFinite(roomUnit) ? toIdr(roomUnit) : 0;
+                                      let mealUnitIdr = Number.isFinite(mealUnit) ? toIdr(mealUnit) : 0;
+                                      const withMeal = !!(meta.meal || meta.with_meal);
+                                      const roomPart = typeKey === 'hotel' && nights > 0 ? roomUnitIdr * qty * nights : 0;
+                                      let mealPart = typeKey === 'hotel' && nights > 0 && mealUnitIdr > 0 ? mealUnitIdr * totalOrang * nights : 0;
+                                      const rawSubtotal = item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * (typeKey === 'hotel' && nights > 0 ? qty * nights : qty);
+                                      if (typeKey === 'hotel' && withMeal && nights > 0 && totalOrang > 0 && mealUnitIdr <= 0 && roomPart > 0 && rawSubtotal > roomPart) {
+                                        mealPart = rawSubtotal - roomPart;
+                                        mealUnitIdr = mealPart / (totalOrang * nights);
+                                      }
+                                      const hasHotelBreakdown = typeKey === 'hotel' && nights > 0 && (roomUnitIdr > 0 || mealUnitIdr > 0);
                                       const subtotalFromBreakdown = hasHotelBreakdown ? roomPart + mealPart : 0;
-                                      const subtotal = subtotalFromBreakdown > 0 ? subtotalFromBreakdown : (item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * (typeKey === 'hotel' && nights > 0 ? qty * nights : qty));
+                                      const subtotal = subtotalFromBreakdown > 0 ? subtotalFromBreakdown : rawSubtotal;
                                       const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? (item.subtotal != null ? Number(item.subtotal) : 0) / (typeKey === 'hotel' && nights > 0 ? qty * nights : qty) : 0);
                                       return (
                                         <tr key={item.id || idx} className="border-b border-slate-100 hover:bg-slate-50/50 align-top">
                                           <td className="py-2 px-2 text-slate-600 align-top">{idx + 1}</td>
                                           <td className="py-2 px-2 font-medium text-slate-700 align-top">{typeLabel}</td>
                                           <td className="py-2 px-2 text-slate-900 align-top">{name}</td>
-                                          <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
+                                          <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words min-w-0 whitespace-pre-line">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{typeKey === 'hotel' && nights > 0 ? `${qty} × ${nights}` : qty}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
                                             {hasHotelBreakdown ? <NominalDisplay amount={roomUnitIdr} currency="IDR" /> : <><div><NominalDisplay amount={unitPrice} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5">≈ SAR / USD</div></>}

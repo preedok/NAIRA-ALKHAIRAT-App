@@ -384,13 +384,20 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         } else if (withMeal) {
           calcLine = 'Perhitungan: paket makan termasuk dalam harga.';
         }
-        if (nights > 0 && (meta.room_unit_price != null || meta.meal_unit_price != null)) {
+        const roomPart = hotelRoomUnitIdr * qtyRooms * nights;
+        if (nights > 0 && (meta.room_unit_price != null || meta.meal_unit_price != null || (withMeal && roomPart > 0))) {
+          let mealPart = withMeal && hotelMealUnitIdr > 0 ? hotelMealUnitIdr * totalOrang * nights : 0;
+          if (withMeal && hotelMealUnitIdr <= 0 && roomPart > 0 && totalOrang * nights > 0) {
+            const itemSubtotal = parseFloat(String(item.subtotal || 0));
+            if (Number.isFinite(itemSubtotal) && itemSubtotal > roomPart) {
+              mealPart = itemSubtotal - roomPart;
+              hotelMealUnitIdr = mealPart / (totalOrang * nights);
+            }
+          }
           unitPriceBreakdownLines.push(`Harga satuan kamar: ${formatIDR(hotelRoomUnitIdr)}`);
-          if (withMeal && (meta.meal_unit_price != null || hotelMealUnitIdr > 0)) {
+          if (withMeal && hotelMealUnitIdr > 0) {
             unitPriceBreakdownLines.push(`Harga satuan makan: ${formatIDR(hotelMealUnitIdr)}`);
           }
-          const roomPart = hotelRoomUnitIdr * qtyRooms * nights;
-          const mealPart = withMeal && hotelMealUnitIdr > 0 ? hotelMealUnitIdr * totalOrang * nights : 0;
           hotelSubtotalFromFormula = roomPart + mealPart;
           subtotalFormulaLine = mealPart > 0
             ? `Subtotal: (Kamar ${formatIDR(roomPart)}) + (Makan ${formatIDR(mealPart)}) = ${formatIDR(hotelSubtotalFromFormula)}`
