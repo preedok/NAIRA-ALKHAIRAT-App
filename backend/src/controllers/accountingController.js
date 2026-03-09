@@ -905,10 +905,8 @@ const getFinancialReport = asyncHandler(async (req, res) => {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) invWhere.status = { [Op.in]: statuses };
   }
-  // Hanya invoice yang sudah ada pembayaran; tagihan DP (tentative tanpa bayar) tidak dihitung
-  invWhere.paid_amount = { [Op.gt]: 0 };
-  if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...invWhere.paid_amount, [Op.gte]: parseFloat(min_amount) };
-  if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...invWhere.paid_amount, [Op.lte]: parseFloat(max_amount) };
+  if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.gte]: parseFloat(min_amount) };
+  if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.lte]: parseFloat(max_amount) };
 
   const dateCondition = {
     [Op.or]: [
@@ -1085,7 +1083,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
       { issued_at: { [Op.is]: null }, created_at: { [Op.between]: [prevStart, prevEnd] } }
     ]
   };
-  const prevInvWhere = { [Op.and]: [prevDateCondition], paid_amount: { [Op.gt]: 0 } };
+  const prevInvWhere = { [Op.and]: [prevDateCondition] };
   if (Object.keys(branchFilter).length) Object.assign(prevInvWhere, branchFilter);
   if (owner_id) prevInvWhere.owner_id = owner_id;
   if (status) {
@@ -1165,9 +1163,8 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) invWhere.status = { [Op.in]: statuses };
   }
-  invWhere.paid_amount = { [Op.gt]: 0 };
-  if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...invWhere.paid_amount, [Op.gte]: parseFloat(min_amount) };
-  if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...invWhere.paid_amount, [Op.lte]: parseFloat(max_amount) };
+  if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.gte]: parseFloat(min_amount) };
+  if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.lte]: parseFloat(max_amount) };
   const dateCondition = {
     [Op.or]: [
       { issued_at: { [Op.between]: [startDate, endDate] } },
@@ -1288,9 +1285,8 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) invWhere.status = { [Op.in]: statuses };
   }
-  invWhere.paid_amount = { [Op.gt]: 0 };
-  if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...invWhere.paid_amount, [Op.gte]: parseFloat(min_amount) };
-  if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...invWhere.paid_amount, [Op.lte]: parseFloat(max_amount) };
+  if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.gte]: parseFloat(min_amount) };
+  if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.lte]: parseFloat(max_amount) };
   const dateCondition = {
     [Op.or]: [
       { issued_at: { [Op.between]: [startDate, endDate] } },
