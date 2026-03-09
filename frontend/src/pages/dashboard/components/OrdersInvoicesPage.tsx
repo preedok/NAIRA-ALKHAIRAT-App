@@ -12,7 +12,7 @@ import Table from '../../../components/common/Table';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLabel } from '../../../components/common/PaymentProofCell';
-import InvoiceProgressStatusCell, { PROGRESS_LABELS, ROOM_TYPE_LABELS } from '../../../components/common/InvoiceProgressStatusCell';
+import InvoiceProgressStatusCell, { PROGRESS_LABELS, ROOM_TYPE_LABELS, PROGRESS_LABELS_MEAL } from '../../../components/common/InvoiceProgressStatusCell';
 import { InvoiceRefundDocument } from '../../../components/common/InvoiceRefundDocument';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import type { TableColumn } from '../../../types';
@@ -2636,6 +2636,82 @@ const OrdersInvoicesPage: React.FC = () => {
                                   )}
                                 </div>
                               </div>
+                              {/* Slip per item ketika status selesai/terbit */}
+                              {(() => {
+                                const isSlipEligible = (item: any) => {
+                                  if (isHotel) {
+                                    const p = item.HotelProgress;
+                                    const st = (p?.status || '');
+                                    const room = (p?.room_number || '').trim();
+                                    const meal = (p?.meal_status || '');
+                                    return (st === 'completed' || st === 'room_assigned') && !!room && meal === 'completed';
+                                  }
+                                  if (isVisa) return (item.VisaProgress?.status || '') === 'issued';
+                                  if (isTicket) return (item.TicketProgress?.status || '') === 'ticket_issued';
+                                  if (isBus) return (item.BusProgress?.bus_ticket_status || '') === 'issued';
+                                  return false;
+                                };
+                                const slipItems = group.items.filter((item: any) => isSlipEligible(item));
+                                if (slipItems.length === 0) return null;
+                                const ord = viewInvoice?.Order;
+                                const invoiceNum = viewInvoice?.invoice_number ?? '–';
+                                const ownerName = ord?.User?.name || ord?.User?.company_name || '–';
+                                return (
+                                  <div className="border-t border-slate-200 bg-slate-50/50 p-4 space-y-4">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Slip</p>
+                                    {slipItems.map((item: any) => {
+                                      const prog = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : isHotel ? item.HotelProgress : item.BusProgress;
+                                      const productName = item.Product?.name || (item as any).product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
+                                      const statusLabel = isBus ? (BUS_TICKET_LABELS[prog?.bus_ticket_status || ''] || prog?.bus_ticket_status) : (isHotel ? (HOTEL_STATUS_LABELS[prog?.status || ''] || prog?.status) : isVisa ? (VISA_STATUS_LABELS[prog?.status || ''] || prog?.status) : (TICKET_STATUS_LABELS[prog?.status || ''] || prog?.status));
+                                      const mealLabel = isHotel && prog ? (PROGRESS_LABELS_MEAL[prog.meal_status || ''] || prog.meal_status) : null;
+                                      return (
+                                        <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                            <div><dt className="text-slate-500">No. Invoice</dt><dd className="font-medium text-slate-900">{invoiceNum}</dd></div>
+                                            <div><dt className="text-slate-500">Produk</dt><dd className="font-medium text-slate-900">{productName}</dd></div>
+                                            <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
+                                            {isHotel && (
+                                              <>
+                                                <div><dt className="text-slate-500">Tipe Kamar</dt><dd className="font-medium text-slate-900">{ROOM_TYPE_LABELS[(item.meta?.room_type || '').toString()] || item.meta?.room_type || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Jumlah Kamar</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Nomor Kamar</dt><dd className="font-medium text-slate-900">{(prog?.room_number || '').trim() || '–'}</dd></div>
+                                                {mealLabel != null && <div><dt className="text-slate-500">Status Makan</dt><dd className="font-medium text-slate-900">{mealLabel}</dd></div>}
+                                                <div><dt className="text-slate-500">Check-in</dt><dd className="font-medium text-slate-900">{prog?.check_in_date ? formatDate(prog.check_in_date) + ' 16:00' : '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Check-out</dt><dd className="font-medium text-slate-900">{prog?.check_out_date ? formatDate(prog.check_out_date) + ' 12:00' : '–'}</dd></div>
+                                              </>
+                                            )}
+                                            {isVisa && (
+                                              <>
+                                                <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Tanggal Terbit</dt><dd className="font-medium text-slate-900">{prog?.issued_at ? new Date(prog.issued_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–'}</dd></div>
+                                              </>
+                                            )}
+                                            {isTicket && (
+                                              <>
+                                                <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Tipe Perjalanan</dt><dd className="font-medium text-slate-900">{(item.meta?.trip_type || '').toString() || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Tanggal Terbit</dt><dd className="font-medium text-slate-900">{prog?.issued_at ? new Date(prog.issued_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–'}</dd></div>
+                                              </>
+                                            )}
+                                            {isBus && (
+                                              <>
+                                                <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Rute</dt><dd className="font-medium text-slate-900">{(item.meta?.route || item.meta?.bus_route || '').toString() || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Info Tiket Bus</dt><dd className="font-medium text-slate-900">{(prog?.bus_ticket_info || '').trim() || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Kedatangan</dt><dd className="font-medium text-slate-900">{prog?.arrival_status || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Keberangkatan</dt><dd className="font-medium text-slate-900">{prog?.departure_status || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Kepulangan</dt><dd className="font-medium text-slate-900">{prog?.return_status || '–'}</dd></div>
+                                              </>
+                                            )}
+                                            <div><dt className="text-slate-500">Status Progress</dt><dd className="font-medium text-slate-900">{statusLabel || '–'}</dd></div>
+                                            <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{(prog?.notes || '').trim() || '–'}</dd></div>
+                                          </dl>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}
