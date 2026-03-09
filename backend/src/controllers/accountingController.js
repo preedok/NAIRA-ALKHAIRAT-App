@@ -904,6 +904,9 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   if (status) {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) invWhere.status = { [Op.in]: statuses };
+  } else {
+    // Laporan keuangan hanya menghitung invoice yang sudah ada pembayaran (bukan tagihan DP)
+    invWhere.status = { [Op.notIn]: ['tentative'] };
   }
   if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.gte]: parseFloat(min_amount) };
   if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.lte]: parseFloat(max_amount) };
@@ -1089,6 +1092,8 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   if (status) {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) prevInvWhere.status = { [Op.in]: statuses };
+  } else {
+    prevInvWhere.status = { [Op.notIn]: ['tentative'] };
   }
   if (search && String(search).trim()) {
     const q = `%${String(search).trim()}%`;
@@ -1162,6 +1167,8 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
   if (status) {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) invWhere.status = { [Op.in]: statuses };
+  } else {
+    invWhere.status = { [Op.notIn]: ['tentative'] };
   }
   if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.gte]: parseFloat(min_amount) };
   if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.lte]: parseFloat(max_amount) };
@@ -1284,6 +1291,8 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
   if (status) {
     const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length) invWhere.status = { [Op.in]: statuses };
+  } else {
+    invWhere.status = { [Op.notIn]: ['tentative'] };
   }
   if (min_amount != null && min_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.gte]: parseFloat(min_amount) };
   if (max_amount != null && max_amount !== '') invWhere.paid_amount = { ...(invWhere.paid_amount || {}), [Op.lte]: parseFloat(max_amount) };

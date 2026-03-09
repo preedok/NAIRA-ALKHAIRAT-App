@@ -390,7 +390,7 @@ const AccountingFinancialReportPage: React.FC = () => {
       />
 
       <Card className="travel-card min-h-[200px]">
-        <CardSectionHeader icon={<FileText className="w-6 h-6" />} title="Laporan Keuangan" subtitle="Ringkasan, per wilayah, cabang, owner, dan detail invoice." className="mb-4" />
+        <CardSectionHeader icon={<FileText className="w-6 h-6" />} title="Laporan Keuangan" subtitle="Hanya invoice yang sudah ada pembayaran (tagihan DP tidak dihitung). Ringkasan per wilayah, cabang, owner, dan detail invoice." className="mb-4" />
         {loading && !data ? (
           <ContentLoading />
         ) : !loading && !data ? (
@@ -442,8 +442,8 @@ const AccountingFinancialReportPage: React.FC = () => {
                 <Autocomplete label="Jenis Produk" value={productType} onChange={setProductType} options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua produk" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={data.total_revenue > 0 ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · ≈ <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : 'Dari pembayaran terverifikasi'} />
-                <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={data.invoice_count} subtitle="Dalam periode laporan" />
+                <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={data.total_revenue > 0 ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · ≈ <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : 'Hanya invoice dengan pembayaran (bukan tagihan DP)'} />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Jumlah Invoice" value={data.invoice_count} subtitle="Dalam periode laporan (sudah ada pembayaran)" />
                 <StatCard icon={data.invoice_count > 0 ? <TrendingUp className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />} label="Rata-rata per Invoice" value={data.invoice_count > 0 ? <NominalDisplay amount={data.total_revenue / data.invoice_count} currency="IDR" /> : '–'} subtitle={data.invoice_count > 0 ? <>≈ <NominalDisplay amount={(data.total_revenue / data.invoice_count) / sarToIdr} currency="SAR" showCurrency={false} /> · ≈ <NominalDisplay amount={(data.total_revenue / data.invoice_count) / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Calendar className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} />
                 <StatCard icon={<MapPin className="w-5 h-5" />} label="Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
