@@ -210,23 +210,27 @@ async function buildContextForOwner(ownerId) {
     });
   }
 
-  // Fallback harga makan hotel: dari ProductPrice (with_meal - room_only) jika meta.meal_price belum diatur
+  // Fallback harga makan hotel: dari ProductPrice (with_meal - room_only) jika meta.meal_price belum diatur.
+  // Cek harga pusat (branch_id null) dan harga cabang owner (branchId) agar data makan tampil.
   const hotelIdsWithoutMeal = productSummaries.filter(ps => ps.type === 'hotel' && (ps.meal_price_idr == null || ps.meal_price_idr === 0)).map(ps => ps.id);
   if (hotelIdsWithoutMeal.length > 0) {
     const today = new Date().toISOString().slice(0, 10);
+    const whereBase = {
+      product_id: { [Op.in]: hotelIdsWithoutMeal },
+      [Op.or]: [{ branch_id: null }, ...(branchId ? [{ branch_id: branchId }] : [])],
+      owner_id: null,
+      [Op.and]: [
+        { [Op.or]: [{ effective_from: null }, { effective_from: { [Op.lte]: today } }] },
+        { [Op.or]: [{ effective_until: null }, { effective_until: { [Op.gte]: today } }] }
+      ]
+    };
     const prices = await ProductPrice.findAll({
-      where: {
-        product_id: { [Op.in]: hotelIdsWithoutMeal },
-        branch_id: null,
-        owner_id: null,
-        [Op.and]: [
-          { [Op.or]: [{ effective_from: null }, { effective_from: { [Op.lte]: today } }] },
-          { [Op.or]: [{ effective_until: null }, { effective_until: { [Op.gte]: today } }] }
-        ]
-      },
-      attributes: ['product_id', 'amount', 'currency', 'meta'],
+      where: whereBase,
+      attributes: ['product_id', 'amount', 'currency', 'meta', 'branch_id'],
       raw: true
     });
+    // Prioritas: harga cabang (branch_id set) mengoverride harga pusat (branch_id null)
+    prices.sort((a, b) => (a.branch_id ? 1 : 0) - (b.branch_id ? 1 : 0));
     const mealByProduct = {};
     prices.forEach(pr => {
       const mid = pr.product_id;
@@ -376,6 +380,18 @@ Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
 Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id di ORDER_DRAFT). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
 ${productLines}
 
+Harga makan hotel (per orang per hari) — WAJIB gunakan untuk jawab pertanyaan "harga makan", "berapa harga makan", "paket makan":
+${productSummaries.filter(ps => ps.type === 'hotel').map(ps => {
+  if (ps.meal_price_idr != null || ps.meal_price_sar != null || ps.meal_price_usd != null) {
+    const parts = [];
+    if (ps.meal_price_idr != null) parts.push(`${Math.round(ps.meal_price_idr).toLocaleString('id-ID')} IDR`);
+    if (ps.meal_price_sar != null) parts.push(`${ps.meal_price_sar} SAR`);
+    if (ps.meal_price_usd != null) parts.push(`${ps.meal_price_usd} USD`);
+    return `  ${ps.name}: ${parts.join(' / ')}`;
+  }
+  return `  ${ps.name}: (belum diatur di data produk)`;
+}).join('\n')}
+
 Ringkasan owner: ${ownerOrders} order, ${ownerInvoicesCount} invoice.
 Order terbaru: ${recentOrders.length ? recentOrders.map(o => o.order_number).join(', ') : '-'}.
 Invoice terbaru (5):
@@ -414,7 +430,7 @@ function buildSystemPrompt(contextText) {
   return `Kamu adalah asisten AI canggih Bintang Global Group (BGG) untuk partner/owner travel. Profesional, ramah, dan sangat membantu.
 
 KEMAMPUAN:
-1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk (harga kamar + untuk hotel: harga makan per orang per hari dalam IDR, SAR, USD), periode kalender, booking hotel, dan ketersediaan kamar. Saat menampilkan harga: selalu IDR, SAR, USD. Untuk hotel: selalu sebutkan harga kamar DAN harga makan jika ada; jika harga makan tertulis "(belum diatur di data produk)", jangan jawab "belum tersedia informasi"—jawab bahwa harga makan untuk hotel tersebut belum diatur di data produk dan bisa ditanyakan ke admin. Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka, artinya hotel TERSEEDIA; jangan katakan "tidak tersedia karena tidak ada booking". Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
+1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, blok "Harga makan hotel" (per orang per hari per hotel), periode kalender, booking hotel, dan ketersediaan kamar. Untuk pertanyaan "harga makan", "berapa harga makan", "paket makan": WAJIB baca dari blok "Harga makan hotel" di konteks; tampilkan IDR, SAR, USD jika ada; jika tertulis "(belum diatur di data produk)" jawab bahwa harga makan untuk hotel tersebut belum diatur dan bisa ditanyakan ke admin—jangan jawab "tidak ada data". Saat menampilkan harga: selalu IDR, SAR, USD. Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka, artinya hotel TERSEEDIA. Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
 2. NEGOSIASI HARGA: Berikan penawaran dari daftar produk. Jika owner minta diskon atau nego:
    - Diskon nego MAKSIMAL 2% saja. Jika owner minta diskon lebih dari 2%, tolak dengan sopan: "Maaf, diskon maksimal yang dapat kami berikan 2%." Jangan setuju diskon di atas 2%.
    - WAJIB sebutkan harga dalam tiga mata uang: IDR, SAR, dan USD (jangan hanya IDR). Contoh: "Harga untuk [produk]: [X] IDR / [Y] SAR / [Z] USD."
