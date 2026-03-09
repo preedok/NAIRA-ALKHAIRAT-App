@@ -374,7 +374,6 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         const parts = [];
         if (hotelStatus) parts.push(`Status hotel: ${hotelProgressStatusLabel(hotelStatus)}`);
         if (nights > 0) parts.push(`${qtyRooms} kamar × ${nights} malam`);
-        parts.push(`Paket makan: ${withMeal ? 'Ya' : 'Tidak'}`);
         if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);
         if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
         if (parts.length) mealLine = parts.join('  |  ');
