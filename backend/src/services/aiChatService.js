@@ -14,6 +14,126 @@ const { ORDER_ITEM_TYPE } = require('../constants');
 const ORDER_DRAFT_MARKER = '### ORDER_DRAFT';
 const ORDER_DRAFT_END = '```';
 
+/** Bulan Indonesia ke angka (1-12) */
+const BULAN_IDS = {
+  januari: 1, jan: 1, februari: 2, feb: 2, maret: 3, mar: 3, april: 4, apr: 4,
+  mei: 5, juni: 6, jun: 6, juli: 7, jul: 7, agustus: 8, agt: 8, agustus: 8,
+  september: 9, sep: 9, sept: 9, oktober: 10, okt: 10, november: 11, nov: 11,
+  desember: 12, des: 12
+};
+
+/**
+ * Ekstrak rentang tanggal dari teks pertanyaan user (tanpa hardcode/dummy).
+ * Mengenali: "10-15 Maret", "10 Maret - 15 Maret", "tanggal 20 Maret", "2025-03-10 s/d 2025-03-15", "15 April sampai 20 April", dll.
+ * Returns { startStr: 'YYYY-MM-DD', endStr: 'YYYY-MM-DD' } atau null jika tidak ditemukan.
+ */
+function parseDateRangeFromText(text) {
+  if (!text || typeof text !== 'string') return null;
+  const t = text.toLowerCase().trim();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  // ISO range: 2025-03-10 to 2025-03-15 atau 2025-03-10 s/d 2025-03-15
+  const isoRange = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*(?:s\/d|sampai|-|to)\s*(\d{4})-(\d{1,2})-(\d{1,2})/i);
+  if (isoRange) {
+    const [, y1, m1, d1, y2, m2, d2] = isoRange.map(Number);
+    const start = new Date(y1, m1 - 1, d1);
+    const end = new Date(y2, m2 - 1, d2);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+      return {
+        startStr: `${y1}-${String(m1).padStart(2, '0')}-${String(d1).padStart(2, '0')}`,
+        endStr: `${y2}-${String(m2).padStart(2, '0')}-${String(d2).padStart(2, '0')}`
+      };
+    }
+  }
+
+  // Satu tanggal ISO: 2025-03-10
+  const isoSingle = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoSingle) {
+    const [, y, m, d] = isoSingle.map(Number);
+    const d0 = new Date(y, m - 1, d);
+    if (!isNaN(d0.getTime())) {
+      const s = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return { startStr: s, endStr: s };
+    }
+  }
+
+  // Pola: "10-15 Maret" atau "10 - 15 Maret 2025" atau "10 s/d 15 Maret"
+  const rangeBulan = t.match(/(\d{1,2})\s*(?:-|s\/d|sampai)\s*(\d{1,2})\s+(\w+)(?:\s+(\d{4}))?/);
+  if (rangeBulan) {
+    const [, d1, d2, bulanKey, yearPart] = rangeBulan;
+    const bulan = BULAN_IDS[bulanKey.replace(/\s/g, '')];
+    const year = yearPart ? parseInt(yearPart, 10) : currentYear;
+    if (bulan) {
+      const day1 = Math.min(31, Math.max(1, parseInt(d1, 10)));
+      const day2 = Math.min(31, Math.max(1, parseInt(d2, 10)));
+      const start = new Date(year, bulan - 1, day1);
+      const end = new Date(year, bulan - 1, day2);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        if (start > end) [start, end] = [end, start];
+        return {
+          startStr: start.toISOString().slice(0, 10),
+          endStr: end.toISOString().slice(0, 10)
+        };
+      }
+    }
+  }
+
+  // Pola: "10 Maret - 15 Maret" atau "10 Maret 2025 s/d 15 Maret 2025"
+  const twoDatesBulan = t.match(/(\d{1,2})\s+(\w+)(?:\s+(\d{4}))?\s*(?:s\/d|sampai|-)\s*(\d{1,2})\s+(\w+)(?:\s+(\d{4}))?/);
+  if (twoDatesBulan) {
+    const [, d1, bln1, y1, d2, bln2, y2] = twoDatesBulan;
+    const b1 = BULAN_IDS[bln1.replace(/\s/g, '')];
+    const b2 = BULAN_IDS[bln2.replace(/\s/g, '')];
+    const year1 = y1 ? parseInt(y1, 10) : currentYear;
+    const year2 = y2 ? parseInt(y2, 10) : currentYear;
+    if (b1 && b2) {
+      const start = new Date(year1, b1 - 1, Math.min(31, Math.max(1, parseInt(d1, 10))));
+      const end = new Date(year2, b2 - 1, Math.min(31, Math.max(1, parseInt(d2, 10))));
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+        return {
+          startStr: start.toISOString().slice(0, 10),
+          endStr: end.toISOString().slice(0, 10)
+        };
+      }
+    }
+  }
+
+  // Satu tanggal: "10 Maret" atau "tanggal 20 Maret 2025"
+  const singleBulan = t.match(/(?:tanggal\s+)?(\d{1,2})\s+(\w+)(?:\s+(\d{4}))?/);
+  if (singleBulan) {
+    const [, d, bulanKey, yearPart] = singleBulan;
+    const bulan = BULAN_IDS[bulanKey.replace(/\s/g, '')];
+    const year = yearPart ? parseInt(yearPart, 10) : currentYear;
+    if (bulan) {
+      const day = Math.min(31, Math.max(1, parseInt(d, 10)));
+      const date = new Date(year, bulan - 1, day);
+      if (!isNaN(date.getTime())) {
+        const s = date.toISOString().slice(0, 10);
+        return { startStr: s, endStr: s };
+      }
+    }
+  }
+
+  // d/m atau d/m/yyyy: 10/3 atau 10/3/2025, range 10/3-15/3
+  const dmRange = t.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s*(?:-|s\/d|sampai)\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+  if (dmRange) {
+    const [, d1, m1, y1, d2, m2, y2] = dmRange;
+    const year1 = y1 ? parseInt(y1, 10) : currentYear;
+    const year2 = y2 ? parseInt(y2, 10) : currentYear;
+    const start = new Date(year1, parseInt(m1, 10) - 1, Math.min(31, parseInt(d1, 10)));
+    const end = new Date(year2, parseInt(m2, 10) - 1, Math.min(31, parseInt(d2, 10)));
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+      return {
+        startStr: start.toISOString().slice(0, 10),
+        endStr: end.toISOString().slice(0, 10)
+      };
+    }
+  }
+
+  return null;
+}
+
 /**
  * Ambil branch_id untuk owner (dari OwnerProfile).
  */
@@ -162,7 +282,7 @@ Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
 Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
 
-Daftar produk aktif (WAJIB gunakan id persis seperti di bawah untuk product_id di ORDER_DRAFT):
+Daftar produk aktif — setiap baris berisi harga dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id di ORDER_DRAFT). Saat menyebut harga produk, tampilkan selalu ketiga mata uang: IDR, SAR, USD.
 ${productLines}
 
 Ringkasan owner: ${ownerOrders} order, ${ownerInvoicesCount} invoice.
@@ -206,7 +326,7 @@ KEMAMPUAN:
 1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, periode kalender (60 hari), booking hotel (pesanan yang sudah ada), dan KETERSEDIAAN KAMAR DARI KALENDER (inventori minus booking, per tipe kamar). Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka (quad: N, double: M dll), artinya hotel TERSEEDIA untuk periode tersebut—jangan jawab "tidak tersedia karena tidak ada booking" (tidak ada booking = kamar kosong). Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
 2. NEGOSIASI HARGA: Berikan penawaran dari daftar produk. Jika owner minta diskon atau nego:
    - Tawarkan nego dalam batas wajar (misalnya diskon 2–5%, atau bundling).
-   - Sebutkan angka final yang disepakati dengan jelas (IDR, SAR, dan/atau USD).
+   - WAJIB sebutkan harga dalam tiga mata uang: IDR, SAR, dan USD (jangan hanya IDR). Contoh: "Harga untuk [produk]: [X] IDR / [Y] SAR / [Z] USD."
    - Konfirmasi: "Kita sepakat di [angka] [mata uang] untuk [item]?"
 3. SETELAH SEPAKAT: Minta owner menyebutkan daftar pesanan lengkap:
    - Produk apa saja, jumlah, dan tanggal (check-in/check-out hotel, departure/return tiket, travel_date visa/bus).
@@ -282,7 +402,7 @@ ATURAN ITEM:
 - Bus: meta route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
 - Semua product_id HARUS UUID yang ada di daftar produk konteks.
 
-PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Data konteks bersumber dari database; jangan mengarang atau mengasumsikan product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.`;
+PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Saat menyebutkan harga produk (apa pun konteksnya), selalu tampilkan IDR, SAR, dan USD. Jangan mengarang product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.`;
 }
 
 /**
