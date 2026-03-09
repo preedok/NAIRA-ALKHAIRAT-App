@@ -8,6 +8,7 @@ const asyncHandler = require('express-async-handler');
 const { Branch, Wilayah, Provinsi, Kabupaten } = require('../models');
 const { ROLES } = require('../constants');
 const { Op } = require('sequelize');
+const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { resolveFromKota, enrichBranchWithLocation } = require('../utils/locationMaster');
 
 const ALLOWED_SORT = ['code', 'name', 'city', 'region', 'manager_name', 'is_active', 'created_at'];
@@ -187,9 +188,16 @@ const list = asyncHandler(async (req, res) => {
   const sortCol = ALLOWED_SORT.includes(sort_by) ? sort_by : 'code';
   const sortDir = (sort_order || '').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
-  const includeOpt = wilayah_id
-    ? [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: true, where: { wilayah_id }, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-    : [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }];
+  if (wilayah_id) {
+    const branchIdsInWilayah = await getBranchIdsForWilayah(wilayah_id);
+    if (branchIdsInWilayah.length > 0) {
+      where.id = { [Op.in]: branchIdsInWilayah };
+    } else {
+      where.id = { [Op.in]: [] };
+    }
+  }
+
+  const includeOpt = [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name', 'wilayah_id'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }];
   const { count, rows } = await Branch.findAndCountAll({
     where,
     include: includeOpt,

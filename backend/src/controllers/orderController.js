@@ -186,13 +186,13 @@ const list = asyncHandler(async (req, res) => {
   }
 
   if (provinsi_id || wilayah_id) {
-    const branchWhere = { is_active: true };
-    if (provinsi_id) branchWhere.provinsi_id = provinsi_id;
-    const branchOpts = { where: branchWhere, attributes: ['id'] };
+    let branchIds = [];
     if (wilayah_id) {
-      branchOpts.include = [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }];
+      branchIds = await getBranchIdsForWilayah(wilayah_id);
+    } else if (provinsi_id) {
+      const rows = await Branch.findAll({ where: { provinsi_id, is_active: true }, attributes: ['id'] });
+      branchIds = rows.map((r) => r.id);
     }
-    let branchIds = (await Branch.findAll(branchOpts)).map(r => r.id);
     if (isKoordinatorOrInvoiceKoordinator && branchIdsWilayah.length > 0 && branchIds.length > 0) {
       branchIds = branchIds.filter(id => branchIdsWilayah.includes(id));
     }

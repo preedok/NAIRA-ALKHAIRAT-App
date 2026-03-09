@@ -14,6 +14,7 @@ const {
   SystemLog
 } = require('../models');
 const { ORDER_ITEM_TYPE } = require('../constants');
+const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
 /** Build date range from query: date_from, date_to OR period (today|week|month|quarter|year) */
 function buildDateRange(query) {
@@ -51,17 +52,15 @@ function buildDateRange(query) {
   return null;
 }
 
-/** Build branch_id filter from branch_id, provinsi_id, wilayah_id */
+/** Build branch_id filter from branch_id, provinsi_id, wilayah_id (dinamis: resolusi nama wilayah + fallback kabupaten) */
 async function getBranchIdsFilter(branch_id, provinsi_id, wilayah_id) {
   if (branch_id) return [branch_id];
-  const where = { is_active: true };
-  if (provinsi_id) where.provinsi_id = provinsi_id;
-  const opts = { where, attributes: ['id'] };
-  if (wilayah_id) {
-    opts.include = [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }];
+  if (wilayah_id) return getBranchIdsForWilayah(wilayah_id);
+  if (provinsi_id) {
+    const rows = await Branch.findAll({ where: { provinsi_id, is_active: true }, attributes: ['id'] });
+    return rows.map((r) => r.id);
   }
-  const rows = await Branch.findAll(opts);
-  return rows.map((r) => r.id);
+  return [];
 }
 
 /**

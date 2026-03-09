@@ -32,6 +32,7 @@ const {
 const { ROLES, ORDER_ITEM_TYPE, isOwnerRole, OWNER_ROLES } = require('../constants');
 const { getHotelAvailabilityConfig } = require('../services/hotelAvailabilityService');
 const { runFullSync, enrichBranchWithLocation } = require('../utils/locationMaster');
+const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 
 /**
  * POST /api/v1/admin-pusat/sync-location
@@ -94,13 +95,13 @@ const getDashboard = asyncHandler(async (req, res) => {
     }
   }
   if (provinsi_id || wilayah_id) {
-    const branchWhere = { is_active: true };
-    if (provinsi_id) branchWhere.provinsi_id = provinsi_id;
-    const branchOpts = { where: branchWhere, attributes: ['id'] };
-    if (wilayah_id) {
-      branchOpts.include = [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }];
+    let branchIdsForInv = [];
+    if (provinsi_id) {
+      const rows = await Branch.findAll({ where: { provinsi_id, is_active: true }, attributes: ['id'] });
+      branchIdsForInv = rows.map((r) => r.id);
+    } else if (wilayah_id) {
+      branchIdsForInv = await getBranchIdsForWilayah(wilayah_id);
     }
-    const branchIdsForInv = (await Branch.findAll(branchOpts)).map(r => r.id);
     if (branchIdsForInv.length > 0) {
       whereInvoice.branch_id = branch_id ? (branchIdsForInv.includes(branch_id) ? branch_id : 'none') : { [Op.in]: branchIdsForInv };
     } else {
@@ -233,15 +234,13 @@ const listUsers = asyncHandler(async (req, res) => {
     }
   }
   if (branchIds == null && (wilayah_id || provinsi_id)) {
-    const branchWhere = {};
-    if (provinsi_id) branchWhere.provinsi_id = provinsi_id;
-    const branchOpts = { attributes: ['id'] };
     if (wilayah_id && !provinsi_id) {
-      branchOpts.include = [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }];
+      branchIds = await getBranchIdsForWilayah(wilayah_id);
+    } else if (provinsi_id) {
+      const branches = await Branch.findAll({ where: { provinsi_id, is_active: true }, attributes: ['id'] });
+      branchIds = branches.map((b) => b.id);
     }
-    const branches = await Branch.findAll({ where: branchWhere, ...branchOpts });
-    branchIds = branches.map((b) => b.id);
-    if (branchIds.length === 0) branchIds = [null];
+    if (branchIds && branchIds.length === 0) branchIds = [null];
   }
   if (branch_id) {
     branchIds = [branch_id];
