@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
-const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, PaymentReallocation, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi } = require('../models');
+const { Invoice, Order, OrderItem, User, Branch, PaymentProof, Refund, PaymentReallocation, ChartOfAccount, AccountingFiscalYear, AccountingPeriod, AccountMapping, JournalEntryLine, AccountingBankAccount, Bank, Wilayah, Provinsi, Kabupaten } = require('../models');
 const { INVOICE_STATUS } = require('../constants');
 
 /** Atribut PaymentProof tanpa kolom opsional (proof_file_name, proof_file_content_type, proof_file_data) agar kompatibel dengan DB lama */
@@ -124,12 +124,33 @@ async function resolveBranchFilter(branch_id, provinsi_id, wilayah_id, user) {
     return { branch_id: { [Op.in]: [] } };
   }
   if (wilayah_id) {
-    const branches = await Branch.findAll({
+    const wid = String(wilayah_id).trim();
+    if (!wid) return {};
+    const wilayahRow = await Wilayah.findByPk(wid, { attributes: ['id', 'name'] });
+    const wilayahIds = [];
+    if (wilayahRow && wilayahRow.name) {
+      const allWilayah = await Wilayah.findAll({ attributes: ['id', 'name'], raw: true });
+      const nameKey = (wilayahRow.name || '').trim().toLowerCase();
+      wilayahIds.push(...(allWilayah || []).filter((w) => (w.name || '').trim().toLowerCase() === nameKey).map((w) => w.id));
+    }
+    if (wilayahIds.length === 0) wilayahIds.push(wid);
+    let branches = await Branch.findAll({
       where: { is_active: true },
       attributes: ['id'],
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id } }]
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id: { [Op.in]: wilayahIds } } }]
     });
-    const ids = branches.map(b => b.id);
+    let ids = branches.map(b => b.id);
+    if (ids.length === 0 && wilayahIds.length > 0) {
+      const kabupatenInWilayah = await Kabupaten.findAll({
+        attributes: ['kode'],
+        include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id: { [Op.in]: wilayahIds } } }]
+      });
+      const kodes = (kabupatenInWilayah || []).map((k) => k.kode).filter(Boolean);
+      if (kodes.length > 0) {
+        const branchesByCode = await Branch.findAll({ where: { code: { [Op.in]: kodes }, is_active: true }, attributes: ['id'] });
+        ids = branchesByCode.map(b => b.id);
+      }
+    }
     if (ids.length) return { branch_id: { [Op.in]: ids } };
     return { branch_id: { [Op.in]: [] } };
   }
@@ -1248,26 +1269,87 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
     if (!inv.Order?.OrderItems?.length) byProductType.handling += paid;
   });
 
+  const fmtNum = (n) => (typeof n === 'number' && !Number.isNaN(n) ? n : 0);
+  const idrFmt = '#,##0';
+
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Laporan Keuangan', { views: [{ state: 'frozen', ySplit: 1 }] });
-  sheet.columns = [{ header: 'Metric', width: 30 }, { header: 'Nilai', width: 20 }];
+  const sheet = workbook.addWorksheet('Ringkasan', { views: [{ state: 'frozen', ySplit: 1 }] });
+  sheet.columns = [{ header: 'Metric', width: 30 }, { header: 'Nilai', width: 24 }];
   sheet.getRow(1).font = { bold: true };
-  sheet.addRows([
-    ['Periode', `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`],
-    ['Total Pendapatan', totalRevenue],
-    ['Jumlah Invoice', invoices.length],
-    ['', ''],
-    ['Per Wilayah', '']
-  ]);
-  Object.values(byWilayah).forEach(w => sheet.addRow([w.wilayah_name, w.revenue]));
-  sheet.addRows(['', '', ['Per Provinsi', '']]);
-  Object.values(byProvinsi).forEach(p => sheet.addRow([p.provinsi_name, p.revenue]));
-  sheet.addRows(['', '', ['Per Cabang', '']]);
-  Object.values(byBranch).forEach(b => sheet.addRow([b.branch_name, b.revenue]));
-  sheet.addRows(['', '', ['Per Owner', '']]);
-  Object.values(byOwner).forEach(b => sheet.addRow([b.owner_name, b.revenue]));
-  sheet.addRows(['', '', ['Per Jenis Produk', '']]);
-  Object.entries(byProductType).forEach(([k, v]) => sheet.addRow([k.charAt(0).toUpperCase() + k.slice(1), v]));
+  sheet.addRow(['Periode', `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`]);
+  const r2 = sheet.addRow(['Total Pendapatan (IDR)', totalRevenue]);
+  r2.getCell(2).numFmt = idrFmt;
+  const r3 = sheet.addRow(['Jumlah Invoice', invoices.length]);
+  r3.getCell(2).numFmt = '#,##0';
+  sheet.addRow(['', '']);
+  sheet.addRow(['Per Wilayah', '']);
+  Object.values(byWilayah).forEach((w) => {
+    const r = sheet.addRow([w.wilayah_name, fmtNum(w.revenue)]);
+    r.getCell(2).numFmt = idrFmt;
+  });
+  sheet.addRow(['', '']);
+  sheet.addRow(['Per Provinsi', '']);
+  Object.values(byProvinsi).forEach((p) => {
+    const r = sheet.addRow([p.provinsi_name, fmtNum(p.revenue)]);
+    r.getCell(2).numFmt = idrFmt;
+  });
+  sheet.addRow(['', '']);
+  sheet.addRow(['Per Cabang', '']);
+  Object.values(byBranch).forEach((b) => {
+    const r = sheet.addRow([b.branch_name, fmtNum(b.revenue)]);
+    r.getCell(2).numFmt = idrFmt;
+  });
+  sheet.addRow(['', '']);
+  sheet.addRow(['Per Owner', '']);
+  Object.values(byOwner).forEach((b) => {
+    const r = sheet.addRow([b.owner_name, fmtNum(b.revenue)]);
+    r.getCell(2).numFmt = idrFmt;
+  });
+  sheet.addRow(['', '']);
+  sheet.addRow(['Per Jenis Produk', '']);
+  Object.entries(byProductType).forEach(([k, v]) => {
+    const r = sheet.addRow([k.charAt(0).toUpperCase() + k.slice(1), fmtNum(v)]);
+    r.getCell(2).numFmt = idrFmt;
+  });
+
+  const sheetDetail = workbook.addWorksheet('Detail Invoice', { views: [{ state: 'frozen', ySplit: 1 }] });
+  sheetDetail.columns = [
+    { header: 'No. Invoice', width: 22 },
+    { header: 'Owner', width: 20 },
+    { header: 'Perusahaan', width: 20 },
+    { header: 'Cabang', width: 18 },
+    { header: 'Wilayah', width: 16 },
+    { header: 'Provinsi', width: 16 },
+    { header: 'Total (IDR)', width: 16 },
+    { header: 'Dibayar (IDR)', width: 16 },
+    { header: 'Sisa (IDR)', width: 16 },
+    { header: 'Status', width: 14 },
+    { header: 'Tanggal', width: 14 }
+  ];
+  sheetDetail.getRow(1).font = { bold: true };
+  invoices.forEach((inv) => {
+    const totalAmount = fmtNum(parseFloat(inv.total_amount || 0));
+    const paidAmount = fmtNum(parseFloat(inv.paid_amount || 0));
+    const remainingAmount = fmtNum(parseFloat(inv.remaining_amount || 0));
+    const issuedAt = inv.issued_at || inv.created_at;
+    const dateStr = issuedAt ? new Date(issuedAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+    const row = sheetDetail.addRow([
+      inv.invoice_number || '',
+      inv.User?.name || '',
+      inv.User?.company_name || '',
+      inv.Branch?.name || inv.Branch?.code || '',
+      inv.Branch?.Provinsi?.Wilayah?.name || '',
+      inv.Branch?.Provinsi?.name || '',
+      totalAmount,
+      paidAmount,
+      remainingAmount,
+      inv.status || '',
+      dateStr
+    ]);
+    row.getCell(7).numFmt = idrFmt;
+    row.getCell(8).numFmt = idrFmt;
+    row.getCell(9).numFmt = idrFmt;
+  });
 
   const buf = await workbook.xlsx.writeBuffer();
   const now = new Date();
