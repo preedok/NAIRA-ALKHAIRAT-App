@@ -140,12 +140,18 @@ const getDashboard = asyncHandler(async (req, res) => {
  * GET /api/v1/visa/invoices
  * List invoices yang punya item visa (scope cabang/wilayah role visa).
  */
+function parseItemDate(d) {
+  if (!d) return null;
+  const s = typeof d === 'string' ? d.split('T')[0] : (d.toISOString && d.toISOString().slice(0, 10));
+  return s || null;
+}
+
 const listInvoices = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 25 } = req.query;
+  const { status, page = 1, limit = 25, date_from: dateFrom, date_to: dateTo } = req.query;
   const branchIds = await getVisaBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Role visa harus terikat cabang atau wilayah' });
 
-  const orderIdsFromVisa = await OrderItem.findAll({
+  let orderIdsFromVisa = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.VISA },
     attributes: ['order_id'],
     raw: true
@@ -153,6 +159,22 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   if (orderIdsFromVisa.length === 0) {
     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
+  }
+
+  if (dateFrom && dateTo && orderIdsFromVisa.length > 0) {
+    const items = await OrderItem.findAll({
+      where: { order_id: { [Op.in]: orderIdsFromVisa }, type: ORDER_ITEM_TYPE.VISA },
+      attributes: ['order_id', 'meta'],
+      raw: true
+    });
+    const inRange = new Set();
+    for (const oi of items) {
+      const meta = oi.meta || {};
+      const dStr = parseItemDate(meta.travel_date || meta.departure_date);
+      if (dStr && dStr >= dateFrom && dStr <= dateTo) inRange.add(oi.order_id);
+    }
+    orderIdsFromVisa = [...inRange];
+    if (orderIdsFromVisa.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: parseInt(page, 10) || 1, limit: Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500), totalPages: 0 } });
   }
 
   const { DP_PAYMENT_STATUS } = require('../constants');

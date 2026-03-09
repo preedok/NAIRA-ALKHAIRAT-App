@@ -10,11 +10,23 @@ const statusWithDpPaidList = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, 
  * Rekapitulasi pekerjaan role handling: total item handling, per status (pending, in_progress, completed), list pending.
  */
 const getDashboard = asyncHandler(async (req, res) => {
+  const { date_from, date_to } = req.query;
   const refundedInvoiceIds = new Set(
     (await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }))
       .map(r => r.invoice_id)
       .filter(Boolean)
   );
+
+  const orderWhere = {};
+  if (date_from || date_to) {
+    orderWhere.created_at = {};
+    if (date_from) orderWhere.created_at[Op.gte] = new Date(date_from);
+    if (date_to) {
+      const d = new Date(date_to);
+      d.setHours(23, 59, 59, 999);
+      orderWhere.created_at[Op.lte] = d;
+    }
+  }
 
   const orderItemRows = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.HANDLING },
@@ -24,6 +36,7 @@ const getDashboard = asyncHandler(async (req, res) => {
         model: Order,
         as: 'Order',
         attributes: ['id', 'owner_id'],
+        where: Object.keys(orderWhere).length > 0 ? orderWhere : undefined,
         include: [
           { model: User, as: 'User', attributes: ['id', 'name'] },
           { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: false }

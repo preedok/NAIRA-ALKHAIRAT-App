@@ -151,12 +151,18 @@ const getDashboard = asyncHandler(async (req, res) => {
  * GET /api/v1/ticket/invoices
  * List invoice saja yang order-nya punya item tiket (scope cabang role tiket).
  */
+function parseItemDate(d) {
+  if (!d) return null;
+  const s = typeof d === 'string' ? d.split('T')[0] : (d.toISOString && d.toISOString().slice(0, 10));
+  return s || null;
+}
+
 const listInvoices = asyncHandler(async (req, res) => {
-  const { status, page = 1, limit = 25 } = req.query;
+  const { status, page = 1, limit = 25, date_from: dateFrom, date_to: dateTo } = req.query;
   const branchIds = await getTicketBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const orderIdsFromTicket = await OrderItem.findAll({
+  let orderIdsFromTicket = await OrderItem.findAll({
     where: { type: ORDER_ITEM_TYPE.TICKET },
     attributes: ['order_id'],
     raw: true
@@ -164,6 +170,22 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   if (orderIdsFromTicket.length === 0) {
     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
+  }
+
+  if (dateFrom && dateTo && orderIdsFromTicket.length > 0) {
+    const items = await OrderItem.findAll({
+      where: { order_id: { [Op.in]: orderIdsFromTicket }, type: ORDER_ITEM_TYPE.TICKET },
+      attributes: ['order_id', 'meta'],
+      raw: true
+    });
+    const inRange = new Set();
+    for (const oi of items) {
+      const meta = oi.meta || {};
+      const dStr = parseItemDate(meta.departure_date || meta.return_date);
+      if (dStr && dStr >= dateFrom && dStr <= dateTo) inRange.add(oi.order_id);
+    }
+    orderIdsFromTicket = [...inRange];
+    if (orderIdsFromTicket.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: parseInt(page, 10) || 1, limit: Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500), totalPages: 0 } });
   }
 
   // Order yang sudah pembayaran DP: invoice status tentative pun tampil di Daftar Invoice Tiket

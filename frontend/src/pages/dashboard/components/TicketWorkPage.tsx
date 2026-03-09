@@ -21,6 +21,7 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { PROGRESS_STATUS_OPTIONS_TICKET, PROGRESS_LABELS_TICKET } from '../../../components/common/InvoiceProgressStatusCell';
 import Badge from '../../../components/common/Badge';
+import { PROGRESS_DATE_PRESETS, getProgressDateRange, type ProgressDatePresetKey } from '../../../utils/progressDatePresets';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -62,6 +63,7 @@ const TicketWorkPage: React.FC = () => {
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
+  const [filterDatePreset, setFilterDatePreset] = useState<ProgressDatePresetKey>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -93,7 +95,7 @@ const TicketWorkPage: React.FC = () => {
       setInvoices([]);
       setPagination(null);
     }
-  }, [filterInvoiceStatus, page, limit]);
+  }, [filterInvoiceStatus, filterDatePreset, page, limit]);
 
   const refetchAll = useCallback(() => {
     setLoading(true);
@@ -106,7 +108,7 @@ const TicketWorkPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [filterInvoiceStatus]);
+  }, [filterInvoiceStatus, filterDatePreset]);
 
   useEffect(() => {
     if (invoiceIdParam) {
@@ -293,7 +295,22 @@ const TicketWorkPage: React.FC = () => {
 
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">
-        <CardSectionHeader icon={<Ticket className="w-6 h-6" />} title="Daftar Invoice Tiket" subtitle="Invoice dengan item tiket. Filter menurut status invoice & progress." className="mb-4" />
+        <CardSectionHeader icon={<Ticket className="w-6 h-6" />} title="Daftar Invoice Tiket" subtitle={pagination ? `${pagination.total} invoice` : 'Invoice dengan item tiket. Filter menurut tanggal, status invoice & progress.'} className="mb-4" />
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-slate-600">Tanggal item tiket:</span>
+          <div className="flex flex-wrap gap-2">
+            {PROGRESS_DATE_PRESETS.map((opt) => (
+              <button
+                key={opt.value || 'all'}
+                type="button"
+                onClick={() => setFilterDatePreset((opt.value || '') as ProgressDatePresetKey)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDatePreset === (opt.value || '') ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
           <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <Input label="Cari (Invoice / Order / Owner)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="No. invoice, order, owner..." icon={<Search className="w-4 h-4" />} fullWidth />

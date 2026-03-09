@@ -10,6 +10,8 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
+import { PROGRESS_DATE_PRESETS, getProgressDateRange, type ProgressDatePresetKey } from '../../../utils/progressDatePresets';
+import { Autocomplete } from '../../../components/common';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Menunggu',
@@ -31,18 +33,21 @@ const HandlingWorkPage: React.FC = () => {
   const [data, setData] = useState<HandlingDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [filterDatePreset, setFilterDatePreset] = useState<ProgressDatePresetKey>('');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await handlingApi.getDashboard();
+      const range = getProgressDateRange(filterDatePreset);
+      const params = range.date_from && range.date_to ? { date_from: range.date_from, date_to: range.date_to } : undefined;
+      const res = await handlingApi.getDashboard(params);
       if (res.data.success) setData(res.data.data);
     } catch {
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterDatePreset]);
 
   useEffect(() => {
     fetchData();
@@ -69,6 +74,21 @@ const HandlingWorkPage: React.FC = () => {
         right={<AutoRefreshControl onRefresh={fetchData} disabled={loading} size="sm" />}
       />
 
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <span className="text-sm font-medium text-slate-600">Tanggal item handling:</span>
+        <div className="flex flex-wrap gap-2">
+          {PROGRESS_DATE_PRESETS.map((opt) => (
+            <button
+              key={opt.value || 'all'}
+              type="button"
+              onClick={() => setFilterDatePreset((opt.value || '') as ProgressDatePresetKey)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDatePreset === (opt.value || '') ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="p-4">
           <p className="text-sm text-slate-600">Total Order</p>
