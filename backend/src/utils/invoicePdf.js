@@ -510,24 +510,29 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     y += 28;
 
     const payTableTop = y;
-    const pc = [0.025, 0.09, 0.05, 0.12, 0.06, 0.20, 0.20, 0.09, 0.145]; // No, Tgl, Tipe, Jumlah, Mata Uang, Pengirim, Penerima, Status, Verifikasi
-    const px = (i) => margin + pageWidth * pc.slice(0, i).reduce((s, w) => s + w, 0) + 6;
-    const pw = (i) => pageWidth * pc[i] - 10;
-    const headerRowH = 32;
+    const pc = [0.035, 0.11, 0.055, 0.15, 0.06, 0.18, 0.18, 0.12, 0.13]; // No, Tgl, Tipe, Jumlah, Mata Uang, Pengirim, Penerima, Status, Verifikasi (lebar diperlebar agar teks tidak wrap)
+    const px = (i) => margin + pageWidth * pc.slice(0, i).reduce((s, w) => s + w, 0) + 4;
+    const pw = (i) => pageWidth * pc[i] - 8;
+    const headerRowH = 30;
     doc.rect(margin, payTableTop, pageWidth, headerRowH).fillAndStroke('#f1f5f9', '#e2e8f0');
-    doc.fontSize(8).fillColor('#475569').font('Helvetica-Bold');
-    doc.text('No', px(0), payTableTop + 10, { width: pw(0) });
-    doc.text('Tgl Transfer', px(1), payTableTop + 10, { width: pw(1) });
-    doc.text('Tipe', px(2), payTableTop + 10, { width: pw(2) });
-    doc.text('Jumlah Pembayaran', px(3), payTableTop + 10, { width: pw(3) });
-    doc.text('Mata Uang', px(4), payTableTop + 10, { width: pw(4) });
-    doc.text('Pengirim (Bank · Nama · No.Rek)', px(5), payTableTop + 10, { width: pw(5) });
-    doc.text('Penerima (Bank · Nama · No.Rek)', px(6), payTableTop + 10, { width: pw(6) });
-    doc.text('Status', px(7), payTableTop + 10, { width: pw(7) });
-    doc.text('Diverifikasi oleh', px(8), payTableTop + 10, { width: pw(8) });
+    doc.fontSize(7).fillColor('#475569').font('Helvetica-Bold');
+    doc.text('No', px(0), payTableTop + 9, { width: pw(0) });
+    doc.text('Tgl Transfer', px(1), payTableTop + 9, { width: pw(1) });
+    doc.text('Tipe', px(2), payTableTop + 9, { width: pw(2) });
+    doc.text('Jumlah', px(3), payTableTop + 9, { width: pw(3) });
+    doc.text('Mata Uang', px(4), payTableTop + 9, { width: pw(4) });
+    doc.text('Pengirim', px(5), payTableTop + 9, { width: pw(5) });
+    doc.fontSize(6).text('(Bank · Nama · No.Rek)', px(5), payTableTop + 16, { width: pw(5) });
+    doc.fontSize(7).font('Helvetica-Bold');
+    doc.text('Penerima', px(6), payTableTop + 9, { width: pw(6) });
+    doc.fontSize(6).text('(Bank · Nama · No.Rek)', px(6), payTableTop + 16, { width: pw(6) });
+    doc.fontSize(7);
+    doc.text('Status', px(7), payTableTop + 9, { width: pw(7) });
+    doc.text('Diverifikasi oleh', px(8), payTableTop + 9, { width: pw(8) });
     y = payTableTop + headerRowH + 2;
 
-    const dataRowMinH = 36;
+    const dataRowMinH = 32;
+    const cellFontSize = 7;
     proofs.forEach((p, idx) => {
       const currency = (p.payment_currency || 'IDR').toUpperCase();
       const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
@@ -540,7 +545,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       const rec = p.RecipientAccount;
       const recipientStr = rec ? [rec.bank_name, rec.name, rec.account_number].filter(Boolean).join(' · ') || '–' : '–';
       const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '-');
-      doc.fontSize(8).fillColor('#334155').font('Helvetica');
+      doc.fontSize(cellFontSize).fillColor('#334155').font('Helvetica');
       const senderH = doc.heightOfString(String(senderStr), { width: pw(5) });
       const recipientH = doc.heightOfString(String(recipientStr), { width: pw(6) });
       const rowH = Math.max(dataRowMinH, Math.ceil(Math.max(senderH, recipientH)) + 14);
