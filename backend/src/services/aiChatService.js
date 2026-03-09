@@ -129,10 +129,12 @@ async function buildContextForOwner(ownerId) {
     // ignore
   }
 
-  // Ketersediaan kamar hotel (14 hari ke depan) per produk hotel
-  const hotelProducts = productSummaries.filter(p => p.type === 'hotel').slice(0, 8);
+  // Ketersediaan kamar hotel dari KALENDER: 60 hari ke depan (inventori minus booking), semua produk hotel
+  const hotelProducts = productSummaries.filter(p => p.type === 'hotel');
   const availStart = today.toISOString().slice(0, 10);
-  const availEnd = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const availEndDate = new Date(today);
+  availEndDate.setDate(availEndDate.getDate() + 60);
+  const availEnd = availEndDate.toISOString().slice(0, 10);
   const availabilityLines = [];
   for (const hp of hotelProducts) {
     try {
@@ -144,15 +146,16 @@ async function buildContextForOwner(ownerId) {
         }
       }
       if (parts.length > 0) {
-        availabilityLines.push(`  ${hp.name}: ${parts.join(', ')} kamar tersedia (14 hari ke depan)`);
+        availabilityLines.push(`  ${hp.name}: ${parts.join(', ')} kamar (minimal tersedia per hari dalam periode)`);
       } else {
-        availabilityLines.push(`  ${hp.name}: (cek kalender / tidak ada musim)`);
+        availabilityLines.push(`  ${hp.name}: (tidak ada musim/kalender untuk periode ini)`);
       }
     } catch (e) {
       availabilityLines.push(`  ${hp.name}: (data tidak tersedia)`);
     }
   }
   const hotelAvailabilityBlock = availabilityLines.length > 0 ? availabilityLines.join('\n') : '  (tidak ada data)';
+  const calendarPeriodLabel = `Periode kalender ketersediaan: ${availStart} s/d ${availEnd} (60 hari dari hari ini).`;
 
   const contextText = `
 Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
@@ -167,14 +170,17 @@ Order terbaru: ${recentOrders.length ? recentOrders.map(o => o.order_number).joi
 Invoice terbaru (5):
 ${invoiceLines}
 
-Booking hotel dari order (check_in s/d check_out, tipe kamar, qty) — gunakan untuk jawab pertanyaan "apakah hotel X penuh pada tanggal Y" atau "ada pesanan pada tanggal Z":
+${calendarPeriodLabel}
+
+Booking hotel dari order (check_in s/d check_out, tipe kamar, qty) — daftar pesanan yang sudah ada; gunakan untuk jawab "ada pesanan di tanggal X" atau "siapa yang book hotel Y":
 ${hotelBookingLines}
 
-Ketersediaan kamar hotel (minimal tersedia dalam 14 hari ke depan, per tipe kamar) — gunakan untuk jawab "apakah hotel X tersedia", "berapa kamar tersedia":
+Ketersediaan kamar hotel (dari KALENDER: inventori minus booking, 60 hari ke depan) — SUMBER JAWABAN "apakah hotel X tersedia tanggal A–B":
 ${hotelAvailabilityBlock}
+Penjelasan: Angka di atas = minimal kamar kosong per tipe untuk setiap hari dalam periode. Jika hotel tercantum dengan angka (mis. quad: 5), artinya hotel TERSEEDIA untuk rentang tanggal dalam periode; "tidak ada booking" untuk suatu hotel di suatu tanggal justru berarti kamar masih kosong. Jawab "tersedia" jika hotel ada di daftar ketersediaan dengan angka > 0 untuk periode yang ditanya; jawab "tidak ada data" hanya jika hotel tidak ada di daftar atau tertulis "(tidak ada musim/kalender)".
 
 Alur (semua data hanya dari database di atas):
-1. Jawab pertanyaan hanya dari data di atas, termasuk ketersediaan hotel dan booking. Untuk pertanyaan "hotel X tanggal A–B": cocokkan dari booking (apakah ada yang overlap) dan dari ketersediaan (sisa kamar). Jika data ada, berikan jawaban jelas; jika tidak ada di daftar, katakan tidak ada datanya.
+1. Jawab pertanyaan hanya dari data di atas. Untuk "hotel X tanggal A–B": gunakan blok "Ketersediaan kamar hotel" sebagai sumber utama; jika hotel X ada dan punya angka kamar (quad/double dll), jawab "tersedia" dengan menyebut jumlah per tipe; jangan katakan "tidak tersedia karena tidak ada booking" — tidak ada booking = kamar kosong. Jika hotel tidak ada di daftar ketersediaan atau tertulis tidak ada musim, baru katakan tidak ada datanya.
 2. Nego harga: gunakan harga dari daftar produk. Boleh tawarkan diskon wajar (misalnya 2–5%) dan sebutkan angka final (IDR/SAR/USD) sampai owner setuju.
 3. Setelah sepakat, minta daftar pesanan lengkap: produk, jumlah, tanggal (check_in/check_out hotel, departure/return tiket, travel_date visa/bus).
 4. Setelah daftar pesanan lengkap, keluarkan blok ORDER_DRAFT. product_id dan product_name WAJIB copy persis dari baris daftar produk di atas (satu per satu sesuai yang dipesan). Jangan mengarang UUID atau nama.
@@ -197,7 +203,7 @@ function buildSystemPrompt(contextText) {
   return `Kamu adalah asisten AI canggih Bintang Global Group (BGG) untuk partner/owner travel. Profesional, ramah, dan sangat membantu.
 
 KEMAMPUAN:
-1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, booking hotel (tanggal check-in/out dari order), dan ketersediaan kamar (sisa per tipe) untuk 14 hari ke depan. Gunakan data booking dan ketersediaan itu untuk menjawab pertanyaan seperti "apakah Hotel Makarem tersedia 9–12 Maret" atau "berapa kamar quad tersedia": cocokkan tanggal dengan booking dan angka tersedia. Jika tidak ada data, jawab jujur.
+1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, periode kalender (60 hari), booking hotel (pesanan yang sudah ada), dan KETERSEDIAAN KAMAR DARI KALENDER (inventori minus booking, per tipe kamar). Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka (quad: N, double: M dll), artinya hotel TERSEEDIA untuk periode tersebut—jangan jawab "tidak tersedia karena tidak ada booking" (tidak ada booking = kamar kosong). Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
 2. NEGOSIASI HARGA: Berikan penawaran dari daftar produk. Jika owner minta diskon atau nego:
    - Tawarkan nego dalam batas wajar (misalnya diskon 2–5%, atau bundling).
    - Sebutkan angka final yang disepakati dengan jelas (IDR, SAR, dan/atau USD).
