@@ -18,7 +18,7 @@ function isKoordinatorRole(role) {
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const archiver = require('archiver');
 const { buildInvoicePdfBuffer, getEffectiveStatusLabel } = require('../utils/invoicePdf');
-const { SUBDIRS, getDir, invoiceFilename, toUrlPath } = require('../config/uploads');
+const { SUBDIRS, getDir, UPLOAD_ROOT, invoiceFilename, toUrlPath } = require('../config/uploads');
 const uploadConfig = require('../config/uploads');
 const { sendInvoiceCreatedEmail, sendPaymentReceivedEmail } = require('../utils/emailService');
 const logger = require('../config/logger');
@@ -1304,13 +1304,13 @@ const getPdf = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/invoices/:id/archive
- * Download ZIP berisi: invoice PDF (status terkini) + semua bukti bayar (payment proof files).
- * Untuk mengumpulkan dokumen invoice selama proses (tagihan DP, pembayaran DP, lunas, dll).
+ * Download ZIP berisi: invoice PDF per status (dari riwayat: tagihan DP, pembayaran DP, lunas, dll) + bukti bayar + bukti refund.
+ * Urutan: file invoice dari yang terdahulu lalu terbaru, kemudian bukti bayar, lalu bukti refund.
  */
 const getArchive = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }] }] },
+      { model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'visa_file_url'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'ticket_file_url'] }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
@@ -1332,11 +1332,29 @@ const getArchive = asyncHandler(async (req, res) => {
   const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
   data.currency_rates = effectiveRates;
   data.currency_rates_override = effectiveRates;
-  const invoicePdfBuffer = await buildInvoicePdfBuffer(data);
-  const statusLabel = getEffectiveStatusLabel(data);
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
   const invNum = invoice.invoice_number || 'INV';
   const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || 'Owner';
+
+  // Riwayat status invoice (urutan: dari yang terdahulu ke terbaru) untuk generate PDF per tahap
+  const statusHistoryRows = await InvoiceStatusHistory.findAll({
+    where: { invoice_id: invoice.id },
+    order: [['changed_at', 'ASC']],
+    attributes: ['to_status', 'from_status', 'changed_at']
+  });
+  const statusesOrdered = [];
+  const seen = new Set();
+  for (const row of statusHistoryRows) {
+    if (row.from_status && !seen.has(row.from_status)) {
+      statusesOrdered.push(row.from_status);
+      seen.add(row.from_status);
+    }
+    if (row.to_status && !seen.has(row.to_status)) {
+      statusesOrdered.push(row.to_status);
+      seen.add(row.to_status);
+    }
+  }
+  if (statusesOrdered.length === 0) statusesOrdered.push(data.status || invoice.status);
 
   res.setHeader('Content-Type', 'application/zip');
   const zipFileName = `Invoice_${safe(invNum)}_${safe(ownerName)}.zip`;
@@ -1350,7 +1368,16 @@ const getArchive = asyncHandler(async (req, res) => {
   });
   archive.pipe(res);
 
-  archive.append(invoicePdfBuffer, { name: `01_Invoice_${safe(invNum)}_${safe(statusLabel)}.pdf` });
+  const invoiceEntryNames = [];
+  for (let i = 0; i < statusesOrdered.length; i++) {
+    const status = statusesOrdered[i];
+    const dataForStatus = { ...data, status };
+    const label = getEffectiveStatusLabel(dataForStatus);
+    const buf = await buildInvoicePdfBuffer(dataForStatus);
+    const entryName = `01_Invoice_${String(i + 1).padStart(2, '0')}_${safe(invNum)}_${safe(label)}.pdf`;
+    invoiceEntryNames.push(entryName);
+    archive.append(buf, { name: entryName });
+  }
 
   const proofDir = uploadConfig.getDir(uploadConfig.SUBDIRS.PAYMENT_PROOFS);
   const proofs = invoice.PaymentProofs || [];
@@ -1380,16 +1407,82 @@ const getArchive = asyncHandler(async (req, res) => {
     }
   });
 
+  // Helper: URL relatif (/uploads/xxx atau xxx) -> path absolut (abaikan http/https)
+  const resolveUploadPath = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const u = url.replace(/\\/g, '/').trim();
+    if (/^https?:\/\//i.test(u)) return null;
+    const norm = u.replace(/^\/?uploads\/?/i, '').replace(/^\/+/, '');
+    if (!norm) return null;
+    return path.join(UPLOAD_ROOT, norm);
+  };
+
+  const order = invoice.Order;
+  const orderItems = (order && order.OrderItems) || [];
+  let manifestIdx = 0;
+  let visaIdx = 0;
+  let tiketIdx = 0;
+
+  // 04_Manifest_* : file manifest jamaah (upload owner/tim invoice)
+  orderItems.forEach((item) => {
+    const url = (item.manifest_file_url || '').trim();
+    if (!url) return;
+    const filePath = resolveUploadPath(url.startsWith('/') ? url : `uploads/${url}`);
+    if (!filePath || !fs.existsSync(filePath)) return;
+    const filename = path.basename(filePath);
+    const typeLabel = (item.type || 'item').toLowerCase().includes('visa') ? 'Visa' : (item.type || '').toLowerCase().includes('ticket') || (item.type || '').toLowerCase().includes('tiket') ? 'Tiket' : 'Manifest';
+    manifestIdx += 1;
+    archive.file(filePath, { name: `04_Manifest_${String(manifestIdx).padStart(2, '0')}_${typeLabel}_${filename}` });
+  });
+
+  // 05_Visa_* : dokumen visa terbit (upload divisi visa)
+  orderItems.forEach((item) => {
+    const prog = item.VisaProgress;
+    const url = (prog && prog.visa_file_url) ? (prog.visa_file_url || '').trim() : '';
+    if (!url) return;
+    const filePath = resolveUploadPath(url.startsWith('/') ? url : `uploads/${url}`);
+    if (!filePath || !fs.existsSync(filePath)) return;
+    const filename = path.basename(filePath);
+    visaIdx += 1;
+    archive.file(filePath, { name: `05_Visa_${String(visaIdx).padStart(2, '0')}_${filename}` });
+  });
+
+  // 06_Tiket_* : dokumen tiket terbit (upload divisi tiket)
+  orderItems.forEach((item) => {
+    const prog = item.TicketProgress;
+    const url = (prog && prog.ticket_file_url) ? (prog.ticket_file_url || '').trim() : '';
+    if (!url) return;
+    const filePath = resolveUploadPath(url.startsWith('/') ? url : `uploads/${url}`);
+    if (!filePath || !fs.existsSync(filePath)) return;
+    const filename = path.basename(filePath);
+    tiketIdx += 1;
+    archive.file(filePath, { name: `06_Tiket_${String(tiketIdx).padStart(2, '0')}_${filename}` });
+  });
+
+  // 07_Jamaah_* : file data jamaah (ZIP/link dari owner/invoice) jika berupa path file
+  orderItems.forEach((item, idx) => {
+    if ((item.jamaah_data_type || '').toLowerCase() !== 'file') return;
+    const val = (item.jamaah_data_value || '').trim();
+    if (!val) return;
+    const filePath = val.startsWith('/') || /^[a-zA-Z]:\\/.test(val) ? val : resolveUploadPath(val.startsWith('uploads/') ? val : `uploads/${val}`);
+    if (!filePath || !fs.existsSync(filePath)) return;
+    const filename = path.basename(filePath);
+    archive.file(filePath, { name: `07_Jamaah_${String(idx + 1).padStart(2, '0')}_${filename}` });
+  });
+
   const readmeLines = [
     `Arsip Dokumen Invoice: ${invNum}`,
     `Owner: ${ownerName}`,
-    `Status: ${statusLabel}`,
     `Tanggal: ${(invoice.issued_at || invoice.created_at) ? new Date(invoice.issued_at || invoice.created_at).toLocaleString('id-ID') : '-'}`,
     '',
-    'Isi arsip (dokumen dari seluruh proses invoice):',
-    '- 01_Invoice_*.pdf : Invoice PDF (status terkini)',
-    '- 02_Bukti_Bayar_* : Bukti pembayaran (tagihan DP, pembayaran DP, lunas, dll)',
+    'Isi arsip:',
+    ...invoiceEntryNames.map((name, i) => `- ${name} : Invoice PDF (tahap ${i + 1})`),
+    '- 02_Bukti_Bayar_* : Bukti pembayaran (owner/tim invoice)',
     ...refunds.filter((r) => r.proof_file_url).map((r, i) => `- 03_Bukti_Refund_${String(i + 1).padStart(2, '0')}_* : Bukti refund ${i + 1}`),
+    '- 04_Manifest_* : Manifest jamaah (upload owner/tim invoice)',
+    '- 05_Visa_* : Dokumen visa terbit (upload divisi visa)',
+    '- 06_Tiket_* : Dokumen tiket terbit (upload divisi tiket)',
+    '- 07_Jamaah_* : File data jamaah (jika ada)',
     '',
     'Dibuat dari menu Detail Invoice.'
   ];
