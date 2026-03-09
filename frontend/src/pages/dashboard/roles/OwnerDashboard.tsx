@@ -68,7 +68,7 @@ const OwnerDashboard: React.FC = () => {
       subtitle: 'Trip Anda',
       trend: 'up' as const,
       icon: <ShoppingCart className="w-6 h-6" />,
-      color: 'from-emerald-500 to-teal-500'
+      color: 'from-blue-800 to-blue-600'
     },
     {
       title: 'Total Dibayar',
@@ -187,7 +187,7 @@ const OwnerDashboard: React.FC = () => {
             value={stat.value}
             subtitle={stat.subtitle}
             iconClassName={[
-              'bg-emerald-100 text-emerald-600',
+              'bg-blue-100 text-blue-800',
               'bg-sky-100 text-sky-600',
               'bg-violet-100 text-violet-600',
               'bg-amber-100 text-amber-600'
