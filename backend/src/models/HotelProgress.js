@@ -49,7 +49,11 @@ const HotelProgress = sequelize.define('HotelProgress', {
 }, {
   tableName: 'hotel_progress',
   underscored: true,
-  timestamps: true
+  timestamps: true,
+  // Kolom hotel_document_url boleh belum ada di DB (migration 20260310000001). Exclude dari default scope agar query tidak error.
+  defaultScope: {
+    attributes: { exclude: ['hotel_document_url'] }
+  }
 });
 
 module.exports = HotelProgress;

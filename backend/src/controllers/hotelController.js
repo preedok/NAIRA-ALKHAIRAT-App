@@ -519,6 +519,38 @@ const updateItemProgress = asyncHandler(async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+/**
+ * GET /api/v1/hotel/invoices/:id/order-items/:orderItemId/slip
+ * Unduh/tampilkan slip PDF info hotel untuk satu order item. Tampilkan ketika status selesai (completed/room_assigned + meal completed).
+ */
+const getOrderItemSlip = asyncHandler(async (req, res) => {
+  const { id: invoiceId, orderItemId } = req.params;
+  const branchIds = await getHotelBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
+
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+
+  const item = await OrderItem.findOne({
+    where: { id: orderItemId, order_id: invoice.order_id, type: ORDER_ITEM_TYPE.HOTEL },
+    include: [
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }] },
+      { model: Product, as: 'Product', attributes: ['id', 'code', 'name'] },
+      { model: HotelProgress, as: 'HotelProgress', required: false }
+    ]
+  });
+  if (!item) return res.status(404).json({ success: false, message: 'Item hotel tidak ditemukan' });
+
+  const buf = await buildHotelInfoPdfBuffer(item);
+  const orderNumber = item.Order?.order_number || 'ORD';
+  const filename = `Slip_Hotel_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.send(buf);
+});
+
 module.exports = {
   listInvoices,
   getInvoice,
@@ -526,5 +558,6 @@ module.exports = {
   getOrder,
   listProducts,
   getDashboard,
-  updateItemProgress
+  updateItemProgress,
+  getOrderItemSlip
 };

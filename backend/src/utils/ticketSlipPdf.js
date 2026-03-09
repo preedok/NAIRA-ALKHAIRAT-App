@@ -16,21 +16,23 @@ const ticketStatusLabel = (s) => ({
 }[String(s).toLowerCase()] || s || '–');
 
 /**
- * @param {object} item - OrderItem dengan Order, Product, TicketProgress
+ * @param {object} item - OrderItem dengan Product, TicketProgress (Order bisa dari opts)
+ * @param {object} [opts] - { order, invoice } agar No. Order & Pemesan selalu terisi
  * @returns {Promise<Buffer>}
  */
-async function buildTicketSlipPdfBuffer(item) {
-  const Order = item.Order || {};
+async function buildTicketSlipPdfBuffer(item, opts = {}) {
+  const Order = opts.order || item.Order || {};
   const Product = item.Product || {};
   const prog = item.TicketProgress || {};
   const meta = (item.meta && typeof item.meta === 'object') ? item.meta : {};
-  const orderNumber = Order.order_number || '–';
-  const productName = Product.name || Product.code || 'Tiket';
+  const inv = opts.invoice || {};
+  const orderNumber = (Order.order_number || '').trim() || (inv.Order && inv.Order.order_number) || inv.order_number || '–';
+  const productName = (Product.name || Product.code || 'Tiket').trim() || 'Tiket';
   const quantity = item.quantity != null ? Number(item.quantity) : 1;
   const status = ticketStatusLabel(prog.status);
   const issuedAt = prog.issued_at ? formatDateTime(prog.issued_at) : '–';
   const notes = (prog.notes || '').trim() || '–';
-  const ownerName = Order.User ? (Order.User.name || Order.User.company_name) : '–';
+  const ownerName = (Order.User && (Order.User.name || Order.User.company_name)) || (inv.User && (inv.User.name || inv.User.company_name)) || '–';
   const hasDoc = !!(prog.ticket_file_url && prog.ticket_file_url.trim());
   const tripType = meta.trip_type || meta.tripType || '–';
 

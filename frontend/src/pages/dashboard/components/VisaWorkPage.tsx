@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, RefreshCw, Eye, Download, ClipboardList, Inbox, Send, Loader2, Check, CheckCircle, Search, User, MapPin, Play } from 'lucide-react';
+import { FileText, RefreshCw, Eye, Download, ClipboardList, Inbox, Send, Loader2, Check, CheckCircle, Search, User, MapPin, Play, FileSpreadsheet } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
@@ -68,6 +68,11 @@ const VisaWorkPage: React.FC = () => {
   const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
   type VisaStatModal = 'total' | 'item_visa' | 'document_received' | 'submitted' | 'in_process' | 'approved' | 'issued' | null;
   const [statModal, setStatModal] = useState<VisaStatModal>(null);
+  const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
+
+  useEffect(() => {
+    setDetailTab('detail');
+  }, [detailInvoice?.id]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -425,8 +430,67 @@ const VisaWorkPage: React.FC = () => {
               icon={<FileText className="w-5 h-5" />}
               onClose={() => setSearchParams({})}
             />
+            {(() => {
+              const hasSlipEligible = visaItems.some((item: any) => {
+                const prog = item.VisaProgress;
+                const status = detailDraft[item.id]?.status ?? prog?.status ?? '';
+                return status === 'issued';
+              });
+              return (
+                <div className="border-b border-slate-200 bg-slate-50/60 px-6 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab('detail')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${detailTab === 'detail' ? 'border-sky-500 text-sky-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Detail
+                  </button>
+                  {hasSlipEligible && (
+                    <button
+                      type="button"
+                      onClick={() => setDetailTab('slip')}
+                      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${detailTab === 'slip' ? 'border-sky-500 text-sky-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4" /> Slip
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             <ModalBody className="space-y-6 bg-slate-50/30">
-              {visaItems.map((item: any) => {
+              {detailTab === 'slip' ? (
+                <div className="space-y-4">
+                  {visaItems
+                    .filter((item: any) => (detailDraft[item.id]?.status ?? item.VisaProgress?.status ?? '') === 'issued')
+                    .map((item: any) => {
+                      const prog = item.VisaProgress;
+                      const order = detailInvoice?.Order;
+                      const orderNumber = order?.order_number ?? '–';
+                      const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Visa';
+                      const ownerName = order?.User?.name || order?.User?.company_name || '–';
+                      const statusLabel = STATUS_OPTIONS.find((s: { value: string }) => s.value === (prog?.status || ''))?.label ?? prog?.status ?? '–';
+                      const issuedAt = prog?.issued_at ? new Date(prog.issued_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–';
+                      const hasDoc = !!(prog?.visa_file_url && prog.visa_file_url.trim() && prog.visa_file_url !== 'issued-saudi');
+                      const notes = (prog?.notes ?? '').trim() || '–';
+                      return (
+                        <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Slip Informasi Visa</p>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <div><dt className="text-slate-500">No. Order</dt><dd className="font-medium text-slate-900">{orderNumber}</dd></div>
+                            <div><dt className="text-slate-500">Produk / Paket Visa</dt><dd className="font-medium text-slate-900">{productName}</dd></div>
+                            <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
+                            <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                            <div><dt className="text-slate-500">Status Progress</dt><dd className="font-medium text-slate-900">{statusLabel}</dd></div>
+                            <div><dt className="text-slate-500">Tanggal Terbit</dt><dd className="font-medium text-slate-900">{issuedAt}</dd></div>
+                            <div><dt className="text-slate-500">Dokumen Terbit</dt><dd className="font-medium text-slate-900">{hasDoc ? 'Ada (lihat file 05_Visa_*)' : '–'}</dd></div>
+                            <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{notes}</dd></div>
+                          </dl>
+                          <p className="text-xs text-slate-400 mt-3">Slip ini digenerate otomatis. Digabungkan ke arsip invoice (Unduh ZIP).</p>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : visaItems.map((item: any) => {
                 const prog = item.VisaProgress;
                 const d = detailDraft[item.id] ?? { status: prog?.status || 'document_received' };
                 const status = d.status ?? prog?.status ?? 'document_received';
@@ -567,6 +631,7 @@ const VisaWorkPage: React.FC = () => {
                 );
               })}
             </ModalBody>
+            {detailTab === 'detail' && (
             <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
               <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
               <div className="flex items-center gap-2">
@@ -578,6 +643,7 @@ const VisaWorkPage: React.FC = () => {
                 </Button>
               </div>
             </ModalFooter>
+            )}
           </ModalBoxLg>
         )}
       </Modal>

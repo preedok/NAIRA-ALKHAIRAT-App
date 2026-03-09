@@ -59,6 +59,11 @@ const BusWorkPage: React.FC = () => {
   const [detailDraft, setDetailDraft] = useState<Record<string, BusItemDraft>>({});
   type BusStatModal = 'total_order' | 'item_bus' | 'tiket_pending' | 'tiket_issued' | 'kedatangan' | 'keberangkatan' | 'kepulangan' | null;
   const [statModal, setStatModal] = useState<BusStatModal>(null);
+  const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
+
+  useEffect(() => {
+    setDetailTab('detail');
+  }, [detailInvoice?.id]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -524,8 +529,69 @@ const BusWorkPage: React.FC = () => {
               icon={<Bus className="w-5 h-5" />}
               onClose={() => setSearchParams({})}
             />
+            {(() => {
+              const hasSlipEligible = busItems.some((item: any) => (detailDraft[item.id]?.bus_ticket_status ?? item.BusProgress?.bus_ticket_status ?? '') === 'issued');
+              return (
+                <div className="border-b border-slate-200 bg-slate-50/60 px-6 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab('detail')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${detailTab === 'detail' ? 'border-[#0D1A63] text-[#0D1A63] bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Detail
+                  </button>
+                  {hasSlipEligible && (
+                    <button
+                      type="button"
+                      onClick={() => setDetailTab('slip')}
+                      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${detailTab === 'slip' ? 'border-[#0D1A63] text-[#0D1A63] bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4" /> Slip
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             <ModalBody className="space-y-4">
-              {busItems.map((item: any, idx: number) => {
+              {detailTab === 'slip' ? (
+                <div className="space-y-4">
+                  {busItems
+                    .filter((item: any) => (detailDraft[item.id]?.bus_ticket_status ?? item.BusProgress?.bus_ticket_status ?? '') === 'issued')
+                    .map((item: any) => {
+                      const prog = item.BusProgress;
+                      const order = detailInvoice?.Order;
+                      const orderNumber = order?.order_number ?? '–';
+                      const productName = item.Product?.name || (item as any).product_name || 'Item Bus';
+                      const ownerName = order?.User?.name || order?.User?.company_name || '–';
+                      const ticketStatusLabel = TICKET_OPTIONS.find((o: { value: string }) => o.value === (prog?.bus_ticket_status || ''))?.label ?? prog?.bus_ticket_status ?? '–';
+                      const ticketInfo = (prog?.bus_ticket_info ?? detailDraft[item.id]?.bus_ticket_info ?? '').trim() || '–';
+                      const route = (item.meta?.route || '').toString() || '–';
+                      const arrivalLabel = TRIP_OPTIONS.find((o: { value: string }) => o.value === (prog?.arrival_status || ''))?.label ?? prog?.arrival_status ?? '–';
+                      const departureLabel = TRIP_OPTIONS.find((o: { value: string }) => o.value === (prog?.departure_status || ''))?.label ?? prog?.departure_status ?? '–';
+                      const returnLabel = TRIP_OPTIONS.find((o: { value: string }) => o.value === (prog?.return_status || ''))?.label ?? prog?.return_status ?? '–';
+                      const notes = (prog?.notes ?? detailDraft[item.id]?.notes ?? '').trim() || '–';
+                      return (
+                        <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Slip Informasi Bus</p>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <div><dt className="text-slate-500">No. Order</dt><dd className="font-medium text-slate-900">{orderNumber}</dd></div>
+                            <div><dt className="text-slate-500">Produk / Paket Bus</dt><dd className="font-medium text-slate-900">{productName}</dd></div>
+                            <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
+                            <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                            <div><dt className="text-slate-500">Rute</dt><dd className="font-medium text-slate-900">{route}</dd></div>
+                            <div><dt className="text-slate-500">Status Tiket Bus</dt><dd className="font-medium text-slate-900">{ticketStatusLabel}</dd></div>
+                            <div><dt className="text-slate-500">Info Tiket Bus</dt><dd className="font-medium text-slate-900">{ticketInfo}</dd></div>
+                            <div><dt className="text-slate-500">Status Kedatangan</dt><dd className="font-medium text-slate-900">{arrivalLabel}</dd></div>
+                            <div><dt className="text-slate-500">Status Keberangkatan</dt><dd className="font-medium text-slate-900">{departureLabel}</dd></div>
+                            <div><dt className="text-slate-500">Status Kepulangan</dt><dd className="font-medium text-slate-900">{returnLabel}</dd></div>
+                            <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{notes}</dd></div>
+                          </dl>
+                          <p className="text-xs text-slate-400 mt-3">Slip ini digenerate otomatis. Digabungkan ke arsip invoice (Unduh ZIP).</p>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : busItems.map((item: any, idx: number) => {
                 const prog = item.BusProgress;
                 const d = detailDraft[item.id] ?? {
                   bus_ticket_status: prog?.bus_ticket_status || 'pending',
@@ -604,12 +670,14 @@ const BusWorkPage: React.FC = () => {
                 );
               })}
             </ModalBody>
+            {detailTab === 'detail' && (
             <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
               <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
               <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || busItems.length === 0}>
                 {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
               </Button>
             </ModalFooter>
+            )}
           </ModalBoxLg>
         )}
       </Modal>

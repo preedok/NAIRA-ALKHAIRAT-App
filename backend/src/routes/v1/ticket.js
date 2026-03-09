@@ -11,6 +11,7 @@ router.get('/dashboard', ticketController.getDashboard);
 router.get('/export-excel', ticketController.exportExcel);
 router.get('/invoices', ticketController.listInvoices);
 router.get('/invoices/:id', ticketController.getInvoice);
+router.get('/invoices/:id/order-items/:orderItemId/slip', ticketController.getOrderItemSlip);
 router.patch('/order-items/:orderItemId/progress', ticketController.updateItemProgress);
 router.post('/order-items/:orderItemId/upload-ticket', ticketController.uploadTicket);
 

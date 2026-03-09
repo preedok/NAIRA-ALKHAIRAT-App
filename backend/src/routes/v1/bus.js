@@ -15,6 +15,7 @@ router.get('/export-pdf', busController.exportPdf);
 router.get('/orders', busController.listOrders);
 router.get('/orders/:id', busController.getOrder);
 router.get('/products', busController.listProducts);
+router.get('/invoices/:id/order-items/:orderItemId/slip', busController.getOrderItemSlip);
 router.patch('/order-items/:orderItemId/progress', busController.updateItemProgress);
 
 module.exports = router;

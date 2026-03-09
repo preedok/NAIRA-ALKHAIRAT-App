@@ -21,6 +21,7 @@ const {
 const { ORDER_ITEM_TYPE, VISA_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const { buildVisaSlipPdfBuffer } = require('../utils/visaSlipPdf');
 
 async function getVisaBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
@@ -516,11 +517,44 @@ const exportExcel = asyncHandler(async (req, res) => {
   res.end();
 });
 
+/**
+ * GET /api/v1/visa/invoices/:id/order-items/:orderItemId/slip
+ * Tampilkan slip PDF visa untuk satu order item. Tampilkan ketika status terbit (issued).
+ */
+const getOrderItemSlip = asyncHandler(async (req, res) => {
+  const { id: invoiceId, orderItemId } = req.params;
+  const branchIds = await getVisaBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
+
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+
+  const item = await OrderItem.findOne({
+    where: { id: orderItemId, order_id: invoice.order_id, type: ORDER_ITEM_TYPE.VISA },
+    include: [
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }] },
+      { model: Product, as: 'Product', attributes: ['id', 'code', 'name'] },
+      { model: VisaProgress, as: 'VisaProgress', required: false }
+    ]
+  });
+  if (!item) return res.status(404).json({ success: false, message: 'Item visa tidak ditemukan' });
+
+  const buf = await buildVisaSlipPdfBuffer(item);
+  const orderNumber = item.Order?.order_number || 'ORD';
+  const filename = `Slip_Visa_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.send(buf);
+});
+
 module.exports = {
   getDashboard,
   listInvoices,
   getInvoice,
   updateItemProgress,
   uploadVisa,
-  exportExcel
+  exportExcel,
+  getOrderItemSlip
 };

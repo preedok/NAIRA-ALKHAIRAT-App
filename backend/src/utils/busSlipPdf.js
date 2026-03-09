@@ -16,18 +16,20 @@ const busRouteLabel = (r) => ({
 }[String(r).toLowerCase()] || r || '–');
 
 /**
- * @param {object} item - OrderItem dengan Order, Product, BusProgress
+ * @param {object} item - OrderItem dengan Product, BusProgress (Order bisa dari opts)
+ * @param {object} [opts] - { order, invoice } agar No. Order & Pemesan selalu terisi
  * @returns {Promise<Buffer>}
  */
-async function buildBusSlipPdfBuffer(item) {
-  const Order = item.Order || {};
+async function buildBusSlipPdfBuffer(item, opts = {}) {
+  const Order = opts.order || item.Order || {};
   const Product = item.Product || {};
   const prog = item.BusProgress || {};
   const meta = (item.meta && typeof item.meta === 'object') ? item.meta : {};
-  const orderNumber = Order.order_number || '–';
-  const productName = Product.name || Product.code || 'Bus';
+  const inv = opts.invoice || {};
+  const orderNumber = (Order.order_number || '').trim() || (inv.Order && inv.Order.order_number) || inv.order_number || '–';
+  const productName = (Product.name || Product.code || 'Bus').trim() || 'Bus';
   const quantity = item.quantity != null ? Number(item.quantity) : 1;
-  const ownerName = Order.User ? (Order.User.name || Order.User.company_name) : '–';
+  const ownerName = (Order.User && (Order.User.name || Order.User.company_name)) || (inv.User && (inv.User.name || inv.User.company_name)) || '–';
   const ticketStatus = busTicketStatusLabel(prog.bus_ticket_status);
   const ticketInfo = (prog.bus_ticket_info || '').trim() || '–';
   const arrival = busTripStatusLabel(prog.arrival_status);

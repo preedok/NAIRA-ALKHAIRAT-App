@@ -13,6 +13,7 @@ router.get('/invoices/:id', hotelController.getInvoice);
 router.get('/products', hotelController.listProducts);
 router.get('/orders', hotelController.listOrders);
 router.get('/orders/:id', hotelController.getOrder);
+router.get('/invoices/:id/order-items/:orderItemId/slip', hotelController.getOrderItemSlip);
 router.patch('/order-items/:orderItemId/progress', hotelController.updateItemProgress);
 
 module.exports = router;

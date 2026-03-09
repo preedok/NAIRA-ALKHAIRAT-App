@@ -18,6 +18,7 @@ const {
 } = require('../models');
 const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
 /** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role bus = cabang/wilayah. Fallback semua cabang agar tidak 403. */
@@ -608,6 +609,38 @@ const exportPdf = asyncHandler(async (req, res) => {
   doc.end();
 });
 
+/**
+ * GET /api/v1/bus/invoices/:id/order-items/:orderItemId/slip
+ * Tampilkan slip PDF bus untuk satu order item. Tampilkan ketika status terbit (bus_ticket_status issued).
+ */
+const getOrderItemSlip = asyncHandler(async (req, res) => {
+  const { id: invoiceId, orderItemId } = req.params;
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
+
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+
+  const item = await OrderItem.findOne({
+    where: { id: orderItemId, order_id: invoice.order_id, type: ORDER_ITEM_TYPE.BUS },
+    include: [
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }] },
+      { model: Product, as: 'Product', attributes: ['id', 'code', 'name'] },
+      { model: BusProgress, as: 'BusProgress', required: false }
+    ]
+  });
+  if (!item) return res.status(404).json({ success: false, message: 'Item bus tidak ditemukan' });
+
+  const buf = await buildBusSlipPdfBuffer(item);
+  const orderNumber = item.Order?.order_number || 'ORD';
+  const filename = `Slip_Bus_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.send(buf);
+});
+
 module.exports = {
   getDashboard,
   listInvoices,
@@ -617,5 +650,6 @@ module.exports = {
   listProducts,
   updateItemProgress,
   exportExcel,
-  exportPdf
+  exportPdf,
+  getOrderItemSlip
 };

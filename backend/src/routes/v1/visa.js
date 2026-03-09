@@ -11,6 +11,7 @@ router.get('/dashboard', visaController.getDashboard);
 router.get('/export-excel', visaController.exportExcel);
 router.get('/invoices', visaController.listInvoices);
 router.get('/invoices/:id', visaController.getInvoice);
+router.get('/invoices/:id/order-items/:orderItemId/slip', visaController.getOrderItemSlip);
 router.patch('/order-items/:orderItemId/progress', visaController.updateItemProgress);
 router.post('/order-items/:orderItemId/upload-visa', visaController.uploadVisa);
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, ClipboardList, Building2, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText, Play } from 'lucide-react';
+import { RefreshCw, Eye, ClipboardList, Building2, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText, Play, FileSpreadsheet } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
@@ -75,6 +75,11 @@ const HotelWorkPage: React.FC = () => {
   const [detailDraft, setDetailDraft] = useState<Record<string, HotelItemDraft>>({});
   type HotelStatModal = 'total' | 'item_hotel' | 'waiting_confirmation' | 'confirmed' | 'room_assigned' | 'completed' | null;
   const [statModal, setStatModal] = useState<HotelStatModal>(null);
+  const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
+
+  useEffect(() => {
+    setDetailTab('detail');
+  }, [detailInvoice?.id]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -493,8 +498,82 @@ const HotelWorkPage: React.FC = () => {
               icon={<Hotel className="w-5 h-5" />}
               onClose={() => setSearchParams({})}
             />
+            {(() => {
+              const hasSlipEligible = hotelItems.some((item: any) => {
+                const prog = item.HotelProgress;
+                const status = detailDraft[item.id]?.status ?? prog?.status ?? '';
+                const room = (detailDraft[item.id]?.room_number ?? prog?.room_number ?? '').trim();
+                const meal = (detailDraft[item.id]?.meal_status ?? prog?.meal_status ?? '') || '';
+                return (status === 'completed' || status === 'room_assigned') && !!room && meal === 'completed';
+              });
+              return (
+                <div className="border-b border-slate-200 bg-slate-50/60 px-6 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab('detail')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${detailTab === 'detail' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Detail
+                  </button>
+                  {hasSlipEligible && (
+                    <button
+                      type="button"
+                      onClick={() => setDetailTab('slip')}
+                      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${detailTab === 'slip' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4" /> Slip
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             <ModalBody className="space-y-6 bg-slate-50/30">
-              {(() => {
+              {detailTab === 'slip' ? (
+                <div className="space-y-4">
+                  {hotelItems
+                    .filter((item: any) => {
+                      const prog = item.HotelProgress;
+                      const status = detailDraft[item.id]?.status ?? prog?.status ?? '';
+                      const room = (detailDraft[item.id]?.room_number ?? prog?.room_number ?? '').trim();
+                      const meal = (detailDraft[item.id]?.meal_status ?? prog?.meal_status ?? '') || '';
+                      return (status === 'completed' || status === 'room_assigned') && !!room && meal === 'completed';
+                    })
+                    .map((item: any) => {
+                      const prog = item.HotelProgress;
+                      const order = detailInvoice?.Order;
+                      const orderNumber = order?.order_number ?? '–';
+                      const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
+                      const ownerName = order?.User?.name || order?.User?.company_name || '–';
+                      const roomType = ROOM_TYPE_LABELS[(item.meta?.room_type || '').toString()] || (item.meta?.room_type || '–');
+                      const qty = Math.max(1, Number(item.quantity) || 1);
+                      const roomNumber = (detailDraft[item.id]?.room_number ?? prog?.room_number ?? '').trim() || '–';
+                      const statusLabel = STATUS_OPTIONS.find((o: { value: string }) => o.value === (prog?.status || ''))?.label ?? prog?.status ?? '–';
+                      const mealLabel = MEAL_OPTIONS.find((o: { value: string }) => o.value === (prog?.meal_status || ''))?.label ?? prog?.meal_status ?? '–';
+                      const checkIn = formatDate(prog?.check_in_date ?? item.meta?.check_in);
+                      const checkOut = formatDate(prog?.check_out_date ?? item.meta?.check_out);
+                      const notes = (prog?.notes ?? '').trim() || '–';
+                      return (
+                        <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Slip Informasi Hotel</p>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <div><dt className="text-slate-500">No. Order</dt><dd className="font-medium text-slate-900">{orderNumber}</dd></div>
+                            <div><dt className="text-slate-500">Produk / Paket Hotel</dt><dd className="font-medium text-slate-900">{productName}</dd></div>
+                            <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
+                            <div><dt className="text-slate-500">Tipe Kamar</dt><dd className="font-medium text-slate-900">{roomType}</dd></div>
+                            <div><dt className="text-slate-500">Jumlah Kamar</dt><dd className="font-medium text-slate-900">{qty}</dd></div>
+                            <div><dt className="text-slate-500">Nomor Kamar</dt><dd className="font-medium text-slate-900">{roomNumber}</dd></div>
+                            <div><dt className="text-slate-500">Status Progress</dt><dd className="font-medium text-slate-900">{statusLabel}</dd></div>
+                            <div><dt className="text-slate-500">Status Makan</dt><dd className="font-medium text-slate-900">{mealLabel}</dd></div>
+                            <div><dt className="text-slate-500">Check-in</dt><dd className="font-medium text-slate-900">{checkIn} 16:00</dd></div>
+                            <div><dt className="text-slate-500">Check-out</dt><dd className="font-medium text-slate-900">{checkOut} 12:00</dd></div>
+                            <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{notes}</dd></div>
+                          </dl>
+                          <p className="text-xs text-slate-400 mt-3">Slip ini digenerate otomatis. Digabungkan ke arsip invoice (Unduh ZIP).</p>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (() => {
                 if (filterHotelLocation && hotelItems.length === 0) {
                   const label = filterHotelLocation === 'makkah' ? 'Hotel Mekkah' : 'Hotel Madinah';
                   return (
@@ -654,7 +733,7 @@ const HotelWorkPage: React.FC = () => {
                 ));
               })()}
             </ModalBody>
-            {!filterHotelLocation || hotelItems.length > 0 ? (
+            {detailTab === 'detail' && (!filterHotelLocation || hotelItems.length > 0) ? (
               <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
                 <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
                 <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || hotelItems.length === 0}>

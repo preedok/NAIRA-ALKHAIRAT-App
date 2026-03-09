@@ -221,7 +221,9 @@ export const hotelApi = {
   getOrder: (id: string) => api.get(`/hotel/orders/${id}`),
   listProducts: () => api.get('/hotel/products'),
   updateItemProgress: (orderItemId: string, body: { status?: string; room_number?: string; meal_status?: string; check_in_date?: string; check_out_date?: string; notes?: string }) =>
-    api.patch(`/hotel/order-items/${orderItemId}/progress`, body)
+    api.patch(`/hotel/order-items/${orderItemId}/progress`, body),
+  getOrderItemSlip: (invoiceId: string, orderItemId: string) =>
+    api.get(`/hotel/invoices/${invoiceId}/order-items/${orderItemId}/slip`, { responseType: 'blob' })
 };
 
 export const ticketApi = {
@@ -234,7 +236,9 @@ export const ticketApi = {
     if (setStatusIssued) formData.append('set_status_issued', '1');
     return api.post(`/ticket/order-items/${orderItemId}/upload-ticket`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  exportExcel: () => api.get('/ticket/export-excel', { responseType: 'blob' })
+  exportExcel: () => api.get('/ticket/export-excel', { responseType: 'blob' }),
+  getOrderItemSlip: (invoiceId: string, orderItemId: string) =>
+    api.get(`/ticket/invoices/${invoiceId}/order-items/${orderItemId}/slip`, { responseType: 'blob' })
 };
 
 export const visaApi = {
@@ -247,7 +251,9 @@ export const visaApi = {
     if (setStatusIssued) formData.append('set_status_issued', '1');
     return api.post(`/visa/order-items/${orderItemId}/upload-visa`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  exportExcel: () => api.get('/visa/export-excel', { responseType: 'blob' })
+  exportExcel: () => api.get('/visa/export-excel', { responseType: 'blob' }),
+  getOrderItemSlip: (invoiceId: string, orderItemId: string) =>
+    api.get(`/visa/invoices/${invoiceId}/order-items/${orderItemId}/slip`, { responseType: 'blob' })
 };
 
 export const busApi = {
@@ -260,7 +266,9 @@ export const busApi = {
   updateItemProgress: (orderItemId: string, body: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) =>
     api.patch(`/bus/order-items/${orderItemId}/progress`, body),
   exportExcel: () => api.get('/bus/export-excel', { responseType: 'blob' }),
-  exportPdf: () => api.get('/bus/export-pdf', { responseType: 'blob' })
+  exportPdf: () => api.get('/bus/export-pdf', { responseType: 'blob' }),
+  getOrderItemSlip: (invoiceId: string, orderItemId: string) =>
+    api.get(`/bus/invoices/${invoiceId}/order-items/${orderItemId}/slip`, { responseType: 'blob' })
 };
 
 export interface HandlingDashboardData {

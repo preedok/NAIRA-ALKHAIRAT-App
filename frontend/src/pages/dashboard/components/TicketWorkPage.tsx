@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Search, User, MapPin, Play } from 'lucide-react';
+import { RefreshCw, Eye, FileText, Download, ClipboardList, Ticket, Clock, Inbox, Armchair, CalendarCheck, CreditCard, CheckCircle, Search, User, MapPin, Play, FileSpreadsheet } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Checkbox from '../../../components/common/Checkbox';
@@ -70,6 +70,11 @@ const TicketWorkPage: React.FC = () => {
   const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
   type TicketStatModal = 'total' | 'item_ticket' | 'pending' | 'data_received' | 'seat_reserved' | 'booking' | 'payment_airline' | 'ticket_issued' | null;
   const [statModal, setStatModal] = useState<TicketStatModal>(null);
+  const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
+
+  useEffect(() => {
+    setDetailTab('detail');
+  }, [detailInvoice?.id]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -408,8 +413,65 @@ const TicketWorkPage: React.FC = () => {
               icon={<Ticket className="w-5 h-5" />}
               onClose={() => setSearchParams({})}
             />
+            {(() => {
+              const hasSlipEligible = ticketItems.some((item: any) => (detailDraft[item.id]?.status ?? item.TicketProgress?.status ?? '') === 'ticket_issued');
+              return (
+                <div className="border-b border-slate-200 bg-slate-50/60 px-6 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab('detail')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${detailTab === 'detail' ? 'border-emerald-500 text-emerald-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Detail
+                  </button>
+                  {hasSlipEligible && (
+                    <button
+                      type="button"
+                      onClick={() => setDetailTab('slip')}
+                      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${detailTab === 'slip' ? 'border-emerald-500 text-emerald-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4" /> Slip
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             <ModalBody className="space-y-5">
-              {ticketItems.map((item: any) => {
+              {detailTab === 'slip' ? (
+                <div className="space-y-4">
+                  {ticketItems
+                    .filter((item: any) => (detailDraft[item.id]?.status ?? item.TicketProgress?.status ?? '') === 'ticket_issued')
+                    .map((item: any) => {
+                      const prog = item.TicketProgress;
+                      const order = detailInvoice?.Order;
+                      const orderNumber = order?.order_number ?? '–';
+                      const productName = item.Product?.name || (item as any).product_name || 'Item Tiket';
+                      const ownerName = order?.User?.name || order?.User?.company_name || '–';
+                      const statusLabel = STATUS_OPTIONS.find((s: { value: string }) => s.value === (prog?.status || ''))?.label ?? prog?.status ?? '–';
+                      const tripType = (item.meta?.trip_type || '').toString() || '–';
+                      const issuedAt = prog?.issued_at ? new Date(prog.issued_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–';
+                      const hasDoc = !!(prog?.ticket_file_url && prog.ticket_file_url.trim());
+                      const notes = (prog?.notes ?? '').trim() || '–';
+                      return (
+                        <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Slip Informasi Tiket</p>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <div><dt className="text-slate-500">No. Order</dt><dd className="font-medium text-slate-900">{orderNumber}</dd></div>
+                            <div><dt className="text-slate-500">Produk / Paket Tiket</dt><dd className="font-medium text-slate-900">{productName}</dd></div>
+                            <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
+                            <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                            <div><dt className="text-slate-500">Tipe Perjalanan</dt><dd className="font-medium text-slate-900">{tripType}</dd></div>
+                            <div><dt className="text-slate-500">Status Progress</dt><dd className="font-medium text-slate-900">{statusLabel}</dd></div>
+                            <div><dt className="text-slate-500">Tanggal Terbit</dt><dd className="font-medium text-slate-900">{issuedAt}</dd></div>
+                            <div><dt className="text-slate-500">Dokumen Terbit</dt><dd className="font-medium text-slate-900">{hasDoc ? 'Ada (lihat file 06_Tiket_*)' : '–'}</dd></div>
+                            <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{notes}</dd></div>
+                          </dl>
+                          <p className="text-xs text-slate-400 mt-3">Slip ini digenerate otomatis. Digabungkan ke arsip invoice (Unduh ZIP).</p>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : ticketItems.map((item: any) => {
                 const prog = item.TicketProgress;
                 const d = detailDraft[item.id] ?? { status: prog?.status || 'pending' };
                 const status = d.status ?? prog?.status ?? 'pending';
@@ -534,12 +596,14 @@ const TicketWorkPage: React.FC = () => {
                 );
               })}
             </ModalBody>
+            {detailTab === 'detail' && (
             <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
               <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
               <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || ticketItems.length === 0}>
                 {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
               </Button>
             </ModalFooter>
+            )}
           </ModalBoxLg>
         )}
       </Modal>

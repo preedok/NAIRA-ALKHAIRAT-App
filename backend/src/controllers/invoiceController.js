@@ -1423,6 +1423,7 @@ const getArchive = asyncHandler(async (req, res) => {
 
   const order = invoice.Order;
   const orderItems = (order && order.OrderItems) || [];
+  const slipOpts = { order, invoice: invoice.get ? invoice.get({ plain: true }) : invoice };
   let manifestIdx = 0;
   let visaIdx = 0;
   let tiketIdx = 0;
@@ -1493,7 +1494,8 @@ const getArchive = asyncHandler(async (req, res) => {
     }
     if (hasRoom && mealDone) {
       try {
-        const buf = await buildHotelInfoPdfBuffer(item);
+        const itemWithOrder = { ...(item.get ? item.get({ plain: true }) : item), Order: order || item.Order };
+        const buf = await buildHotelInfoPdfBuffer(itemWithOrder);
         hotelIdx += 1;
         const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
         const name = `08_Hotel_${String(hotelIdx).padStart(2, '0')}_Slip_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
@@ -1509,7 +1511,7 @@ const getArchive = asyncHandler(async (req, res) => {
   for (const item of orderItems) {
     if ((item.type || '').toLowerCase() !== 'visa') continue;
     try {
-      const buf = await buildVisaSlipPdfBuffer(item);
+      const buf = await buildVisaSlipPdfBuffer(item, slipOpts);
       visaSlipIdx += 1;
       const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
       const name = `09_Slip_Visa_${String(visaSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
@@ -1524,7 +1526,7 @@ const getArchive = asyncHandler(async (req, res) => {
   for (const item of orderItems) {
     if ((item.type || '').toLowerCase() !== 'ticket') continue;
     try {
-      const buf = await buildTicketSlipPdfBuffer(item);
+      const buf = await buildTicketSlipPdfBuffer(item, slipOpts);
       tiketSlipIdx += 1;
       const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
       const name = `10_Slip_Tiket_${String(tiketSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
@@ -1539,7 +1541,7 @@ const getArchive = asyncHandler(async (req, res) => {
   for (const item of orderItems) {
     if ((item.type || '').toLowerCase() !== 'bus') continue;
     try {
-      const buf = await buildBusSlipPdfBuffer(item);
+      const buf = await buildBusSlipPdfBuffer(item, slipOpts);
       busSlipIdx += 1;
       const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
       const name = `11_Slip_Bus_${String(busSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;

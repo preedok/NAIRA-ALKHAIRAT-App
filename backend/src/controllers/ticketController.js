@@ -21,6 +21,7 @@ const {
 const { ORDER_ITEM_TYPE, TICKET_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const { buildTicketSlipPdfBuffer } = require('../utils/ticketSlipPdf');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
 /** Scope cabang: super_admin = semua cabang, koordinator = wilayah, tiket_koordinator = cabang/wilayah. Jika belum terikat, fallback semua cabang agar tidak 403. */
@@ -543,11 +544,44 @@ const exportExcel = asyncHandler(async (req, res) => {
   res.end();
 });
 
+/**
+ * GET /api/v1/ticket/invoices/:id/order-items/:orderItemId/slip
+ * Tampilkan slip PDF tiket untuk satu order item. Tampilkan ketika status tiket terbit (ticket_issued).
+ */
+const getOrderItemSlip = asyncHandler(async (req, res) => {
+  const { id: invoiceId, orderItemId } = req.params;
+  const branchIds = await getTicketBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
+
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+
+  const item = await OrderItem.findOne({
+    where: { id: orderItemId, order_id: invoice.order_id, type: ORDER_ITEM_TYPE.TICKET },
+    include: [
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }] },
+      { model: Product, as: 'Product', attributes: ['id', 'code', 'name'] },
+      { model: TicketProgress, as: 'TicketProgress', required: false }
+    ]
+  });
+  if (!item) return res.status(404).json({ success: false, message: 'Item tiket tidak ditemukan' });
+
+  const buf = await buildTicketSlipPdfBuffer(item);
+  const orderNumber = item.Order?.order_number || 'ORD';
+  const filename = `Slip_Tiket_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.send(buf);
+});
+
 module.exports = {
   getDashboard,
   listInvoices,
   getInvoice,
   updateItemProgress,
   uploadTicket,
-  exportExcel
+  exportExcel,
+  getOrderItemSlip
 };
