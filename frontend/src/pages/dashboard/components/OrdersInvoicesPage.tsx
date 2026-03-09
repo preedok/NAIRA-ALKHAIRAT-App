@@ -2197,7 +2197,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-900 align-top">{name}</td>
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{qty}</td>
-                                          <td className="py-2 px-2 text-right font-medium tabular-nums align-top"><NominalDisplay amount={subtotal} currency="IDR" /></td>
+                                          <td className="py-2 px-2 text-right font-medium tabular-nums align-top">
+                                            <div><NominalDisplay amount={subtotal} currency="IDR" /></div>
+                                            <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={subtotal / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={subtotal / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
+                                          </td>
                                         </tr>
                                       );
                                     })}
