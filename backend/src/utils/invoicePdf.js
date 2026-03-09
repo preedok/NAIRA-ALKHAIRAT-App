@@ -287,8 +287,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
 
   // ---- Tabel Item: No | Tipe | Deskripsi | Qty | Harga Satuan | Subtotal ----
   y = checkNewPage(doc, y, margin, 140);
-  doc.fontSize(11).fillColor('#0f172a').text('Rincian Barang / Jasa', margin, y);
-  y += 20;
+  doc.fontSize(12).fillColor('#0f172a').font('Helvetica-Bold').text('Rincian Barang / Jasa', margin, y);
+  y += 22;
 
   const tableTop = y;
   // Kolom: No, Tipe, Deskripsi, Qty, Harga Satuan, Subtotal — lebar cukup agar header & isi tidak terpotong
@@ -503,47 +503,51 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   // ---- Rincian Pembayaran (jumlah pembayaran per bukti) ----
   const proofs = (data.PaymentProofs || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
   if (proofs.length > 0) {
-    y = checkNewPage(doc, y, margin, 100);
-    doc.fontSize(11).fillColor('#0f172a').text('Rincian Pembayaran', margin, y);
-    y += 6;
-    doc.fontSize(9).fillColor('#64748b').text('Jumlah pembayaran per bukti transfer beserta status verifikasi.', margin, y);
-    y += 18;
+    y = checkNewPage(doc, y, margin, 120);
+    doc.fontSize(12).fillColor('#0f172a').font('Helvetica-Bold').text('Rincian Pembayaran', margin, y);
+    y += 20;
+    doc.fontSize(9).fillColor('#64748b').font('Helvetica').text('Jumlah pembayaran per bukti transfer beserta status verifikasi.', margin, y);
+    y += 28;
 
     const payTableTop = y;
-    const pc = [0.04, 0.14, 0.08, 0.18, 0.10, 0.18, 0.12, 0.16]; // No, Tgl Transfer, Tipe, Jumlah Pembayaran, Mata Uang, Bank, Status, Verifikasi
+    const pc = [0.03, 0.11, 0.06, 0.14, 0.08, 0.28, 0.10, 0.20]; // No, Tgl Transfer, Tipe, Jumlah, Mata Uang, Bank/Rec, Status, Verifikasi (Bank diperlebar)
     const px = (i) => margin + pageWidth * pc.slice(0, i).reduce((s, w) => s + w, 0) + 6;
     const pw = (i) => pageWidth * pc[i] - 10;
-    doc.rect(margin, payTableTop, pageWidth, 20).fillAndStroke('#f1f5f9', '#e2e8f0');
+    const headerRowH = 32;
+    doc.rect(margin, payTableTop, pageWidth, headerRowH).fillAndStroke('#f1f5f9', '#e2e8f0');
     doc.fontSize(8).fillColor('#475569').font('Helvetica-Bold');
-    doc.text('No', px(0), payTableTop + 6, { width: pw(0) });
-    doc.text('Tgl Transfer', px(1), payTableTop + 6, { width: pw(1) });
-    doc.text('Tipe', px(2), payTableTop + 6, { width: pw(2) });
-    doc.text('Jumlah Pembayaran', px(3), payTableTop + 6, { width: pw(3) });
-    doc.text('Mata Uang', px(4), payTableTop + 6, { width: pw(4) });
-    doc.text('Bank / Rekening', px(5), payTableTop + 6, { width: pw(5) });
-    doc.text('Status', px(6), payTableTop + 6, { width: pw(6) });
-    doc.text('Diverifikasi oleh', px(7), payTableTop + 6, { width: pw(7) });
-    y = payTableTop + 22;
+    doc.text('No', px(0), payTableTop + 10, { width: pw(0) });
+    doc.text('Tgl Transfer', px(1), payTableTop + 10, { width: pw(1) });
+    doc.text('Tipe', px(2), payTableTop + 10, { width: pw(2) });
+    doc.text('Jumlah Pembayaran', px(3), payTableTop + 10, { width: pw(3) });
+    doc.text('Mata Uang', px(4), payTableTop + 10, { width: pw(4) });
+    doc.text('Bank / Rekening', px(5), payTableTop + 10, { width: pw(5) });
+    doc.text('Status', px(6), payTableTop + 10, { width: pw(6) });
+    doc.text('Diverifikasi oleh', px(7), payTableTop + 10, { width: pw(7) });
+    y = payTableTop + headerRowH + 2;
 
+    const dataRowMinH = 32;
     proofs.forEach((p, idx) => {
-      y = checkNewPage(doc, y, margin, 22);
       const currency = (p.payment_currency || 'IDR').toUpperCase();
       const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
         ? formatAmount(p.amount_original, currency)
         : formatIDR(parseFloat(p.amount || 0));
       const bank = [p.bank_name, p.account_number].filter(Boolean).join(' ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '-');
       const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '-');
-      doc.rect(margin, y - 3, pageWidth, 18).stroke('#f1f5f9');
       doc.fontSize(8).fillColor('#334155').font('Helvetica');
-      doc.text(String(idx + 1), px(0), y + 2, { width: pw(0) });
-      doc.text(formatDate(p.transfer_date), px(1), y + 2, { width: pw(1) });
-      doc.text(paymentTypeLabel(p.payment_type), px(2), y + 2, { width: pw(2) });
-      doc.text(amountDisplay, px(3), y + 2, { width: pw(3) });
-      doc.text(currency || 'IDR', px(4), y + 2, { width: pw(4) });
-      doc.text(String(bank).slice(0, 24), px(5), y + 2, { width: pw(5) });
-      doc.text(verifiedStatusLabel(p.verified_status), px(6), y + 2, { width: pw(6) });
-      doc.text(verifier, px(7), y + 2, { width: pw(7) });
-      y += 20;
+      const bankH = doc.heightOfString(String(bank), { width: pw(5) });
+      const rowH = Math.max(dataRowMinH, Math.ceil(bankH) + 14);
+      y = checkNewPage(doc, y, margin, rowH + 4);
+      doc.rect(margin, y - 2, pageWidth, rowH).stroke('#f1f5f9');
+      doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
+      doc.text(formatDate(p.transfer_date), px(1), y + 8, { width: pw(1) });
+      doc.text(paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
+      doc.text(amountDisplay, px(3), y + 8, { width: pw(3) });
+      doc.text(currency || 'IDR', px(4), y + 8, { width: pw(4) });
+      doc.text(String(bank), px(5), y + 8, { width: pw(5) });
+      doc.text(verifiedStatusLabel(p.verified_status), px(6), y + 8, { width: pw(6) });
+      doc.text(verifier, px(7), y + 8, { width: pw(7) });
+      y += rowH + 2;
     });
     y += 8;
     doc.fontSize(9).fillColor(colors.accent).font('Helvetica-Bold');
@@ -556,9 +560,9 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const terms = Array.isArray(data.terms) ? data.terms : (data.terms ? [data.terms] : []);
   if (terms.length > 0 || (data.notes && String(data.notes).trim())) {
     y = checkNewPage(doc, y, margin, 80);
-    doc.fontSize(10).fillColor('#475569').text('Ketentuan & Catatan', margin, y);
-    y += 14;
-    doc.fontSize(9).fillColor('#64748b');
+    doc.fontSize(11).fillColor('#0f172a').font('Helvetica-Bold').text('Ketentuan & Catatan', margin, y);
+    y += 20;
+    doc.fontSize(9).fillColor('#64748b').font('Helvetica');
     const termsWidth = pageWidth - 24;
     terms.forEach((t) => {
       const line = `• ${String(t)}`;
