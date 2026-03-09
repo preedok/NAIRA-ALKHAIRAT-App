@@ -688,8 +688,8 @@ export default function OwnerAIChatPage() {
           <div style={{
             position: 'relative', zIndex: 2,
             margin: '0 16px',
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: '#eef2ff',
+            border: '1px solid #a5b4fc',
             borderRadius: 16,
             padding: '14px 16px',
             marginBottom: 0,
