@@ -293,8 +293,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   y += 22;
 
   const tableTop = y;
-  // Kolom: No, Tipe, Deskripsi, Qty, Harga Satuan, Subtotal — lebar cukup agar header & isi tidak terpotong
-  const colW = [0.04, 0.07, 0.30, 0.07, 0.26, 0.26];
+  // Kolom: No, Tipe, Deskripsi, Qty, Harga Satuan Kamar, Harga Satuan Makan, Subtotal (pisah kamar/makan; subtotal gabungan)
+  const colW = [0.04, 0.06, 0.24, 0.06, 0.18, 0.18, 0.24];
   const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 6;
   const w = (i) => pageWidth * colW[i] - 12;
   const headerRowH = 36;
@@ -308,11 +308,14 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.text('Tipe', x(1), tableTop + 8, { width: w(1) });
   doc.text('Deskripsi', x(2), tableTop + 8, { width: w(2) });
   doc.text('Qty', x(3), tableTop + 8, { width: w(3) });
-  doc.text('Harga Satuan', x(4), tableTop + 6, { width: w(4) });
-  doc.fontSize(7).font('Helvetica').text('(IDR · SAR · USD)', x(4), tableTop + 18, { width: w(4) });
+  doc.text('Harga Satuan Kamar', x(4), tableTop + 6, { width: w(4) });
+  doc.fontSize(7).font('Helvetica').text('(IDR)', x(4), tableTop + 18, { width: w(4) });
   doc.fontSize(9).font('Helvetica-Bold');
-  doc.text('Subtotal', x(5), tableTop + 6, { width: w(5) });
-  doc.fontSize(7).font('Helvetica').text('(IDR · SAR · USD)', x(5), tableTop + 18, { width: w(5) });
+  doc.text('Harga Satuan Makan', x(5), tableTop + 6, { width: w(5) });
+  doc.fontSize(7).font('Helvetica').text('(IDR)', x(5), tableTop + 18, { width: w(5) });
+  doc.fontSize(9).font('Helvetica-Bold');
+  doc.text('Subtotal (gabungan)', x(6), tableTop + 6, { width: w(6) });
+  doc.fontSize(7).font('Helvetica').text('(IDR · SAR · USD)', x(6), tableTop + 18, { width: w(6) });
   doc.fontSize(9).font('Helvetica-Bold');
   y = tableTop + headerRowH;
 
@@ -440,14 +443,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       const dateHeight = dateLine ? doc.heightOfString(dateLine, { width: w(2) }) : 0;
       const mealHeight = mealLine ? doc.heightOfString(mealLine, { width: w(2) }) : 0;
       const calcHeight = calcLine ? doc.heightOfString(calcLine, { width: w(2) }) : 0;
-      const breakdownHeight = unitPriceBreakdownLines.length ? unitPriceBreakdownLines.length * (doc.heightOfString('X', { width: w(2) }) + 2) : 0;
-      const subtotalFormulaHeight = subtotalFormulaLine ? doc.heightOfString(subtotalFormulaLine, { width: w(2) }) : 0;
-      const extraBlockGap = (unitPriceBreakdownLines.length || subtotalFormulaLine ? 1 : 0) * descBlockGap;
+      const subtotalFormulaHeight = subtotalFormulaLine ? doc.heightOfString(subtotalFormulaLine, { width: w(6) }) : 0;
       doc.fontSize(9);
       const priceBlockH = 22;
       const rowH = Math.max(
         dataRowHMin,
-        Math.ceil(descHeight) + descBlockGap + Math.ceil(dateHeight) + (dateLine && (mealLine || calcLine) ? descBlockGap : 0) + Math.ceil(mealHeight) + (mealLine && calcLine ? descBlockGap : 0) + Math.ceil(calcHeight) + (calcLine && (unitPriceBreakdownLines.length || subtotalFormulaLine) ? descBlockGap : 0) + breakdownHeight + (subtotalFormulaLine ? descBlockGap + Math.ceil(subtotalFormulaHeight) : 0) + extraBlockGap + priceBlockH
+        Math.ceil(descHeight) + descBlockGap + Math.ceil(dateHeight) + (dateLine && (mealLine || calcLine) ? descBlockGap : 0) + Math.ceil(mealHeight) + (mealLine && calcLine ? descBlockGap : 0) + Math.ceil(calcHeight) + (calcLine && subtotalFormulaLine ? descBlockGap : 0) + (subtotalFormulaLine ? 8 + Math.ceil(subtotalFormulaHeight) : 0) + priceBlockH
       );
       y = checkNewPage(doc, y, margin, rowH + 6);
       doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
@@ -469,36 +470,41 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       if (calcLine) {
         doc.fontSize(7).fillColor('#0f766e');
         doc.text(calcLine, x(2), blockY, { width: w(2) });
-        blockY += Math.ceil(calcHeight) + (unitPriceBreakdownLines.length || subtotalFormulaLine ? descBlockGap : 0);
-      }
-      unitPriceBreakdownLines.forEach((line) => {
-        doc.fontSize(7).fillColor('#0f766e');
-        doc.text(line, x(2), blockY, { width: w(2) });
-        blockY += 10;
-      });
-      if (subtotalFormulaLine) {
-        doc.fontSize(7).fillColor('#0d9488');
-        doc.text(subtotalFormulaLine, x(2), blockY, { width: w(2) });
+        blockY += Math.ceil(calcHeight) + (subtotalFormulaLine ? descBlockGap : 0);
       }
       doc.fontSize(9).fillColor('#334155');
       const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);
       doc.text(qtyLabel, x(3), qtyY, { width: w(3) });
+      // Kolom 4: Harga Satuan Kamar (pisah)
       if (unitPriceBreakdownLines.length > 0) {
         doc.fontSize(8).fillColor('#334155');
-        doc.text(`Kamar: ${formatIDR(hotelRoomUnitIdr)}`, x(4), y + 4, { width: w(4) });
-        if (hotelMealUnitIdr > 0) doc.text(`Makan: ${formatIDR(hotelMealUnitIdr)}`, x(4), y + 14, { width: w(4) });
-        doc.fontSize(7).fillColor('#64748b');
-        doc.text(`${formatSAR(idrToSarUsd(hotelRoomUnitIdr + hotelMealUnitIdr, rates).sar)}  |  ${formatUSD(idrToSarUsd(hotelRoomUnitIdr + hotelMealUnitIdr, rates).usd)}`, x(4), y + (hotelMealUnitIdr > 0 ? 24 : 16), { width: w(4) });
+        doc.text(formatIDR(hotelRoomUnitIdr), x(4), y + 4, { width: w(4) });
       } else {
         doc.text(formatIDR(unitPriceIdr), x(4), y + 4, { width: w(4) });
+      }
+      if (unitPriceBreakdownLines.length === 0) {
         doc.fontSize(7).fillColor('#64748b');
-        doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 16, { width: w(4) });
+        doc.text(`${formatSAR(unitSarUsd.sar)}  |  ${formatUSD(unitSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
+      }
+      // Kolom 5: Harga Satuan Makan (pisah)
+      doc.fontSize(9).fillColor('#334155');
+      if (unitPriceBreakdownLines.length > 0) {
+        doc.fontSize(8).fillColor('#334155');
+        doc.text(hotelMealUnitIdr > 0 ? formatIDR(hotelMealUnitIdr) : '–', x(5), y + 4, { width: w(5) });
+        doc.fontSize(7).fillColor('#64748b');
+        doc.text('', x(5), y + 14, { width: w(5) });
+      } else {
+        doc.text('–', x(5), y + 4, { width: w(5) });
       }
       doc.fontSize(9).fillColor('#334155');
-      doc.fontSize(9).fillColor('#334155');
-      doc.text(formatIDR(subtotalVal), x(5), y + 4, { width: w(5) });
+      // Kolom 6: Subtotal (gabungan) + rumus
+      doc.text(formatIDR(subtotalVal), x(6), y + 4, { width: w(6) });
       doc.fontSize(7).fillColor('#64748b');
-      doc.text(`${formatSAR(subSarUsd.sar)}  |  ${formatUSD(subSarUsd.usd)}`, x(5), y + 16, { width: w(5) });
+      doc.text(`${formatSAR(subSarUsd.sar)}  |  ${formatUSD(subSarUsd.usd)}`, x(6), y + 14, { width: w(6) });
+      if (subtotalFormulaLine) {
+        doc.fontSize(6).fillColor('#0d9488');
+        doc.text(subtotalFormulaLine, x(6), y + 24, { width: w(6) });
+      }
       doc.fontSize(9).fillColor('#334155');
       y += rowH;
     });
@@ -512,12 +518,13 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     doc.text('Layanan Umroh', x(2), y + 6, { width: w(2) });
     doc.text('1', x(3), y + 6, { width: w(3) });
     doc.text(formatIDR(totalAmount), x(4), y + 4, { width: w(4) });
+    doc.text('–', x(5), y + 4, { width: w(5) });
     doc.fontSize(7).fillColor('#64748b');
-    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(4), y + 16, { width: w(4) });
+    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(4), y + 14, { width: w(4) });
     doc.fontSize(9).fillColor('#334155');
-    doc.text(formatIDR(totalAmount), x(5), y + 4, { width: w(5) });
+    doc.text(formatIDR(totalAmount), x(6), y + 4, { width: w(6) });
     doc.fontSize(7).fillColor('#64748b');
-    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(5), y + 16, { width: w(5) });
+    doc.text(`${formatSAR(totalSarUsd.sar)}  |  ${formatUSD(totalSarUsd.usd)}`, x(6), y + 14, { width: w(6) });
     doc.fontSize(9).fillColor('#334155');
     y += emptyRowH;
   }

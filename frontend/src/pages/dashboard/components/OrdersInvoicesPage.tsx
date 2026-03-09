@@ -2166,12 +2166,13 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <table className="w-full text-sm table-fixed">
                                   <colgroup>
                                     <col className="w-10" />
-                                    <col className="w-14" />
-                                    <col className="w-[18%]" />
-                                    <col className="w-[28%]" />
                                     <col className="w-12" />
                                     <col className="w-[16%]" />
-                                    <col className="w-[18%]" />
+                                    <col className="w-[24%]" />
+                                    <col className="w-10" />
+                                    <col className="w-[14%]" />
+                                    <col className="w-[14%]" />
+                                    <col className="w-[16%]" />
                                   </colgroup>
                                   <thead>
                                     <tr className="border-b border-slate-200">
@@ -2180,8 +2181,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                       <th className="text-left py-2 px-2 font-medium text-slate-600">Produk</th>
                                       <th className="text-left py-2 px-2 font-medium text-slate-600">Deskripsi / Workflow</th>
                                       <th className="text-right py-2 px-2 font-medium text-slate-600">Qty</th>
-                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Harga Satuan</th>
-                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Subtotal</th>
+                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Harga Satuan Kamar</th>
+                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Harga Satuan Makan</th>
+                                      <th className="text-right py-2 px-2 font-medium text-slate-600">Subtotal (gabungan)</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2216,18 +2218,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words whitespace-normal min-w-0">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{typeKey === 'hotel' && nights > 0 ? `${qty} × ${nights}` : qty}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {hasHotelBreakdown ? (
-                                              <>
-                                                <div className="text-xs"><span className="text-slate-500">Harga Satuan Kamar:</span> <NominalDisplay amount={roomUnitIdr} currency="IDR" /></div>
-                                                {mealUnitIdr > 0 && <div className="text-xs mt-0.5"><span className="text-slate-500">Harga Satuan Makan:</span> <NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>}
-                                                <div className="text-xs text-slate-500 mt-0.5">≈ SAR / USD</div>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <div><NominalDisplay amount={unitPrice} currency="IDR" /></div>
-                                                <div className="text-xs text-slate-500 mt-0.5">≈ <NominalDisplay amount={unitPrice / sarToIdr} currency="SAR" showCurrency={false} /> SAR · ≈ <NominalDisplay amount={unitPrice / usdToIdr} currency="USD" showCurrency={false} /> USD</div>
-                                              </>
-                                            )}
+                                            {hasHotelBreakdown ? <NominalDisplay amount={roomUnitIdr} currency="IDR" /> : <><div><NominalDisplay amount={unitPrice} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5">≈ SAR / USD</div></>}
+                                          </td>
+                                          <td className="py-2 px-2 text-right tabular-nums align-top">
+                                            {hasHotelBreakdown ? (mealUnitIdr > 0 ? <NominalDisplay amount={mealUnitIdr} currency="IDR" /> : '–') : '–'}
                                           </td>
                                           <td className="py-2 px-2 text-right font-medium tabular-nums align-top">
                                             {hasHotelBreakdown && (roomPart > 0 || mealPart > 0) ? (
