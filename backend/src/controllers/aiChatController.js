@@ -2,7 +2,8 @@ const asyncHandler = require('express-async-handler');
 const {
   buildContextForOwner,
   buildSystemPrompt,
-  callChat
+  callChat,
+  validateOrderDraftAgainstDb
 } = require('../services/aiChatService');
 
 /**
@@ -44,7 +45,7 @@ const chat = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Pesan wajib diisi' });
   }
 
-  const { contextText, branchId } = await buildContextForOwner(ownerId);
+  const { contextText, productSummaries } = await buildContextForOwner(ownerId);
   const systemPrompt = buildSystemPrompt(contextText);
 
   const messages = (Array.isArray(history) ? history : [])
@@ -55,10 +56,13 @@ const chat = asyncHandler(async (req, res) => {
 
   const { reply, order_draft } = await callChat(messages, systemPrompt);
 
+  // Hanya kirim order_draft yang product_id-nya valid (ada di DB)
+  const sanitizedDraft = order_draft ? validateOrderDraftAgainstDb(order_draft, productSummaries) : null;
+
   res.json({
     success: true,
     reply,
-    order_draft: order_draft || undefined
+    order_draft: sanitizedDraft || undefined
   });
 });
 

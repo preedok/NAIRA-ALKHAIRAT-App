@@ -1,6 +1,7 @@
 /**
- * AI Chat Service - Konteks dari DB, panggil LLM, parse order_draft dari respons.
- * Untuk role owner: jawab pertanyaan, nego harga, dan setelah sepakat isi form order.
+ * AI Chat Service - Semua data dari database (produk, harga, order, invoice, kurs).
+ * Tidak ada hardcode atau data dummy: konteks dibangun dari Product, Order, Invoice, OwnerProfile, business rules.
+ * Untuk role owner: jawab pertanyaan dari data DB, nego harga, lalu keluarkan ORDER_DRAFT untuk isi form order otomatis.
  */
 const { Op } = require('sequelize');
 const { Product, ProductPrice, Order, Invoice, OwnerProfile, User, Branch } = require('../models');
@@ -32,6 +33,7 @@ async function buildContextForOwner(ownerId) {
   const rules = branchId ? await getRulesForBranch(branchId) : {};
   const cr = rules.currency_rates || {};
   const rates = typeof cr === 'object' ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return {}; } })() : {});
+  // Kurs dari business rules (DB); fallback hanya jika rules kosong
   const sarToIdr = rates.SAR_TO_IDR != null ? Number(rates.SAR_TO_IDR) : 4200;
   const usdToIdr = rates.USD_TO_IDR != null ? Number(rates.USD_TO_IDR) : 15500;
 
@@ -107,11 +109,11 @@ Order terbaru: ${recentOrders.length ? recentOrders.map(o => o.order_number).joi
 Invoice terbaru (5):
 ${invoiceLines}
 
-Alur yang harus kamu ikuti:
-1. Jawab pertanyaan apa pun tentang produk, harga, invoice, order, jadwal, berdasarkan data di atas saja.
-2. Untuk permintaan harga/penawaran: berikan harga dari daftar produk. Kamu boleh menawarkan nego (diskon dalam batas wajar, misalnya beberapa persen) dan sebutkan angka jelas (IDR/SAR/USD) sampai owner setuju.
-3. Setelah harga disepakati, minta owner menyebutkan daftar pesanan lengkap: produk apa, jumlah, tanggal (check_in/check_out hotel, departure/return tiket, travel_date visa/bus).
-4. Setelah owner memberikan daftar pesanan lengkap, kamu WAJIB mengeluarkan blok ORDER_DRAFT di akhir balasan (format JSON persis seperti di bawah), dengan product_id yang HARUS diambil dari daftar produk di atas. Jangan mengarang UUID.
+Alur (semua data hanya dari database di atas):
+1. Jawab pertanyaan hanya dari data di atas. Tidak ada data dummy; jika tidak ada di daftar, katakan tidak ada.
+2. Nego harga: gunakan harga dari daftar produk. Boleh tawarkan diskon wajar (misalnya 2–5%) dan sebutkan angka final (IDR/SAR/USD) sampai owner setuju.
+3. Setelah sepakat, minta daftar pesanan lengkap: produk, jumlah, tanggal (check_in/check_out hotel, departure/return tiket, travel_date visa/bus).
+4. Setelah daftar pesanan lengkap, keluarkan blok ORDER_DRAFT. product_id dan product_name WAJIB copy persis dari baris daftar produk di atas (satu per satu sesuai yang dipesan). Jangan mengarang UUID atau nama.
 `;
 
   return {
@@ -208,7 +210,36 @@ ATURAN ITEM:
 - Tiket: meta bandara (BTH/CGK/SBY/UPG), trip_type (one_way/return_only/round_trip), departure_date, return_date jika round_trip.
 - Visa: meta travel_date.
 - Bus: meta route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
-- Semua product_id HARUS UUID yang ada di daftar produk konteks.`;
+- Semua product_id HARUS UUID yang ada di daftar produk konteks.
+
+PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Data konteks bersumber dari database; jangan mengarang atau mengasumsikan product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.`;
+}
+
+/**
+ * Validasi order_draft: hanya item dengan product_id yang ada di daftar produk DB.
+ * Nama produk dan tipe diambil dari data DB, bukan dari AI (menghindari data karangan).
+ */
+function validateOrderDraftAgainstDb(orderDraft, productSummaries) {
+  if (!orderDraft || !Array.isArray(orderDraft.items) || !Array.isArray(productSummaries)) return null;
+  const byId = new Map(productSummaries.map(p => [p.id, p]));
+  const validItems = orderDraft.items
+    .filter(item => item && byId.has(item.product_id))
+    .map(item => {
+      const fromDb = byId.get(item.product_id);
+      const negotiatedPrice = Number(item.unit_price_idr);
+      // Harga dari nego (obrolan); jika tidak ada atau 0, pakai harga dari DB
+      const unit_price_idr = (negotiatedPrice > 0 && Number.isFinite(negotiatedPrice)) ? negotiatedPrice : (fromDb.price_idr != null ? Number(fromDb.price_idr) : 0);
+      return {
+        type: fromDb.type,
+        product_id: fromDb.id,
+        product_name: fromDb.name,
+        quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
+        unit_price_idr,
+        meta: item.meta && typeof item.meta === 'object' ? item.meta : {}
+      };
+    });
+  if (validItems.length === 0) return null;
+  return { items: validItems };
 }
 
 /**
@@ -302,6 +333,7 @@ module.exports = {
   buildSystemPrompt,
   parseOrderDraftFromResponse,
   stripOrderDraftFromReply,
+  validateOrderDraftAgainstDb,
   callChat,
   getOwnerBranchId
 };
