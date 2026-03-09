@@ -13,6 +13,9 @@ import { useToast } from '../../../contexts/ToastContext';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
+/** Pesan backend ketika OPENAI_API_KEY belum diset di server */
+const AI_NOT_CONFIGURED_MSG = 'AI belum dikonfigurasi. Silakan set OPENAI_API_KEY di lingkungan server. Untuk sementara, Anda bisa langsung membuat order dari menu Invoice → Buat Order.';
+
 /** Map AI order_draft item ke OrderDraftItemInput untuk form order (lengkap: meta + room_breakdown dengan room/meal price) */
 function mapAiDraftToOrderDraftItem(ai: AiChatOrderDraftItem): OrderDraftItemInput {
   const meta = ai.meta || {};
@@ -201,6 +204,17 @@ const OwnerAIChatPage: React.FC = () => {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {messages.some((m) => m.role === 'assistant' && m.content.trim() === AI_NOT_CONFIGURED_MSG) && (
+          <div className="px-4 py-3 border-t border-amber-200 bg-amber-50">
+            <p className="text-sm font-medium text-amber-900 mb-1">Asisten AI belum aktif</p>
+            <p className="text-xs text-amber-800 mb-3">Admin server perlu menambahkan <code className="bg-amber-100 px-1 rounded">OPENAI_API_KEY</code> di <code className="bg-amber-100 px-1 rounded">backend/.env</code> pada VPS, lalu restart backend. Dapatkan API key di platform.openai.com.</p>
+            <Button variant="outline" size="sm" className="gap-2 border-amber-400 text-amber-800 hover:bg-amber-100" onClick={() => navigate('/dashboard/orders/new')}>
+              <ShoppingCart className="w-4 h-4" />
+              Buat order manual dari form
+            </Button>
+          </div>
+        )}
 
         {lastOrderDraft?.items && lastOrderDraft.items.length > 0 && (
           <div className="px-4 py-3 border-t border-stone-200 bg-emerald-50/80">
