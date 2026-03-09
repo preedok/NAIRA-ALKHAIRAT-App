@@ -338,6 +338,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       const desc = (item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`).toString();
       let dateLine = '';
       let mealLine = '';
+      let calcLine = '';
       if (itemType === 'hotel') {
         const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
         const ci = meta.check_in ? formatDateShort(meta.check_in) : null;
@@ -356,6 +357,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);
         if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
         if (parts.length) mealLine = parts.join('  |  ');
+        if (withMeal && nights > 0 && qtyRooms > 0) {
+          const totalMalam = qtyRooms * nights;
+          calcLine = `Perhitungan: ${qtyRooms} kamar × ${nights} malam = ${totalMalam} malam (paket makan: Ya)`;
+        } else if (withMeal) {
+          calcLine = 'Perhitungan: paket makan termasuk dalam harga.';
+        }
       } else if (itemType === 'visa') {
         const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
         const travelDate = meta.travel_date ? formatDateShort(meta.travel_date) : null;
@@ -402,11 +409,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       doc.fontSize(7);
       const dateHeight = dateLine ? doc.heightOfString(dateLine, { width: w(2) }) : 0;
       const mealHeight = mealLine ? doc.heightOfString(mealLine, { width: w(2) }) : 0;
+      const calcHeight = calcLine ? doc.heightOfString(calcLine, { width: w(2) }) : 0;
       doc.fontSize(9);
       const priceBlockH = 22;
       const rowH = Math.max(
         dataRowHMin,
-        Math.ceil(descHeight) + descBlockGap + Math.ceil(dateHeight) + (dateLine && mealLine ? descBlockGap : 0) + Math.ceil(mealHeight) + descBlockGap + priceBlockH
+        Math.ceil(descHeight) + descBlockGap + Math.ceil(dateHeight) + (dateLine && (mealLine || calcLine) ? descBlockGap : 0) + Math.ceil(mealHeight) + (mealLine && calcLine ? descBlockGap : 0) + Math.ceil(calcHeight) + descBlockGap + priceBlockH
       );
       y = checkNewPage(doc, y, margin, rowH + 6);
       doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
@@ -423,6 +431,11 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       if (mealLine) {
         doc.fontSize(7).fillColor('#64748b');
         doc.text(mealLine, x(2), blockY, { width: w(2) });
+        blockY += Math.ceil(mealHeight) + (calcLine ? descBlockGap : 0);
+      }
+      if (calcLine) {
+        doc.fontSize(7).fillColor('#0f766e');
+        doc.text(calcLine, x(2), blockY, { width: w(2) });
       }
       doc.fontSize(9).fillColor('#334155');
       const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);
