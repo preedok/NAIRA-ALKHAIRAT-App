@@ -510,7 +510,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     y += 28;
 
     const payTableTop = y;
-    const pc = [0.03, 0.11, 0.06, 0.14, 0.08, 0.28, 0.10, 0.20]; // No, Tgl Transfer, Tipe, Jumlah, Mata Uang, Bank/Rec, Status, Verifikasi (Bank diperlebar)
+    const pc = [0.025, 0.09, 0.05, 0.12, 0.06, 0.20, 0.20, 0.09, 0.145]; // No, Tgl, Tipe, Jumlah, Mata Uang, Pengirim, Penerima, Status, Verifikasi
     const px = (i) => margin + pageWidth * pc.slice(0, i).reduce((s, w) => s + w, 0) + 6;
     const pw = (i) => pageWidth * pc[i] - 10;
     const headerRowH = 32;
@@ -521,22 +521,29 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     doc.text('Tipe', px(2), payTableTop + 10, { width: pw(2) });
     doc.text('Jumlah Pembayaran', px(3), payTableTop + 10, { width: pw(3) });
     doc.text('Mata Uang', px(4), payTableTop + 10, { width: pw(4) });
-    doc.text('Bank / Rekening', px(5), payTableTop + 10, { width: pw(5) });
-    doc.text('Status', px(6), payTableTop + 10, { width: pw(6) });
-    doc.text('Diverifikasi oleh', px(7), payTableTop + 10, { width: pw(7) });
+    doc.text('Pengirim (Bank · Nama · No.Rek)', px(5), payTableTop + 10, { width: pw(5) });
+    doc.text('Penerima (Bank · Nama · No.Rek)', px(6), payTableTop + 10, { width: pw(6) });
+    doc.text('Status', px(7), payTableTop + 10, { width: pw(7) });
+    doc.text('Diverifikasi oleh', px(8), payTableTop + 10, { width: pw(8) });
     y = payTableTop + headerRowH + 2;
 
-    const dataRowMinH = 32;
+    const dataRowMinH = 36;
     proofs.forEach((p, idx) => {
       const currency = (p.payment_currency || 'IDR').toUpperCase();
       const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
         ? formatAmount(p.amount_original, currency)
         : formatIDR(parseFloat(p.amount || 0));
-      const bank = [p.bank_name, p.account_number].filter(Boolean).join(' ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '-');
+      const senderBank = p.bank_name || p.Bank?.name || '';
+      const senderName = p.sender_account_name || '';
+      const senderNo = p.sender_account_number || p.account_number || '';
+      const senderStr = [senderBank, senderName, senderNo].filter(Boolean).join(' · ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '–');
+      const rec = p.RecipientAccount;
+      const recipientStr = rec ? [rec.bank_name, rec.name, rec.account_number].filter(Boolean).join(' · ') || '–' : '–';
       const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '-');
       doc.fontSize(8).fillColor('#334155').font('Helvetica');
-      const bankH = doc.heightOfString(String(bank), { width: pw(5) });
-      const rowH = Math.max(dataRowMinH, Math.ceil(bankH) + 14);
+      const senderH = doc.heightOfString(String(senderStr), { width: pw(5) });
+      const recipientH = doc.heightOfString(String(recipientStr), { width: pw(6) });
+      const rowH = Math.max(dataRowMinH, Math.ceil(Math.max(senderH, recipientH)) + 14);
       y = checkNewPage(doc, y, margin, rowH + 4);
       doc.rect(margin, y - 2, pageWidth, rowH).stroke('#f1f5f9');
       doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
@@ -544,9 +551,10 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       doc.text(paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
       doc.text(amountDisplay, px(3), y + 8, { width: pw(3) });
       doc.text(currency || 'IDR', px(4), y + 8, { width: pw(4) });
-      doc.text(String(bank), px(5), y + 8, { width: pw(5) });
-      doc.text(verifiedStatusLabel(p.verified_status), px(6), y + 8, { width: pw(6) });
-      doc.text(verifier, px(7), y + 8, { width: pw(7) });
+      doc.text(String(senderStr), px(5), y + 8, { width: pw(5) });
+      doc.text(String(recipientStr), px(6), y + 8, { width: pw(6) });
+      doc.text(verifiedStatusLabel(p.verified_status), px(7), y + 8, { width: pw(7) });
+      doc.text(verifier, px(8), y + 8, { width: pw(8) });
       y += rowH + 2;
     });
     y += 8;
