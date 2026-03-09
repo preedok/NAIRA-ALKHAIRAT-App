@@ -150,13 +150,15 @@ function getColorsForStatusLabel(statusLabel) {
 function formatAmount(amount, currency) {
   const n = parseFloat(amount || 0);
   if (!currency || currency === 'IDR') return formatIDR(n);
-  if (currency === 'SAR') return `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n)} SAR`;
-  if (currency === 'USD') return `$${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(n)}`;
-  return `${n} ${currency}`;
+  if (currency === 'SAR') return formatSAR(n);
+  if (currency === 'USD') return formatUSD(n);
+  return `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} ${currency}`;
 }
 
-const formatSAR = (n) => `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n || 0)} SAR`;
-const formatUSD = (n) => `$${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)}`;
+/** Format SAR lengkap: pemisah ribuan + 2 desimal + label SAR */
+const formatSAR = (n) => `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)} SAR`;
+/** Format USD lengkap: pemisah ribuan + 2 desimal + label USD */
+const formatUSD = (n) => `${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)} USD`;
 
 /** Konversi IDR ke SAR dan USD dari currency_rates (SAR_TO_IDR, USD_TO_IDR) */
 function idrToSarUsd(idr, currencyRates) {
