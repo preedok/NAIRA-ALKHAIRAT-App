@@ -265,18 +265,36 @@ async function callChat(messages, systemPrompt) {
     ...messages
   ];
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    messages: fullMessages,
-    temperature: 0.7,
-    max_tokens: 2048
-  });
+  try {
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: fullMessages,
+      temperature: 0.7,
+      max_tokens: 2048
+    });
 
-  const content = completion?.choices?.[0]?.message?.content || '';
-  const orderDraft = parseOrderDraftFromResponse(content);
-  const reply = stripOrderDraftFromReply(content);
+    const content = completion?.choices?.[0]?.message?.content || '';
+    const orderDraft = parseOrderDraftFromResponse(content);
+    const reply = stripOrderDraftFromReply(content);
 
-  return { reply: reply || 'Maaf, tidak ada respons.', order_draft: orderDraft };
+    return { reply: reply || 'Maaf, tidak ada respons.', order_draft: orderDraft };
+  } catch (err) {
+    const status = err?.status || err?.response?.status;
+    const msg = err?.message || String(err);
+    if (status === 429 || /quota|billing|exceeded|rate limit/i.test(msg)) {
+      return {
+        reply: 'Kuota penggunaan OpenAI saat ini habis atau melebihi batas. Silakan periksa billing dan paket di https://platform.openai.com/account/billing. Untuk sementara, Anda bisa membuat order langsung dari menu Invoice → Buat Order.',
+        order_draft: null
+      };
+    }
+    if (status === 401 || /invalid.*api.*key|authentication/i.test(msg)) {
+      return {
+        reply: 'API key OpenAI tidak valid atau kedaluwarsa. Silakan periksa OPENAI_API_KEY di pengaturan server.',
+        order_draft: null
+      };
+    }
+    throw err;
+  }
 }
 
 module.exports = {
