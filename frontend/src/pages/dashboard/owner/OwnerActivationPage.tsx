@@ -151,8 +151,8 @@ const OwnerActivationPage: React.FC = () => {
           --text-dim: #64748b;
           --danger: #dc2626;
           --danger-dim: rgba(220,38,38,0.08);
-          --success: #059669;
-          --success-dim: rgba(5,150,105,0.1);
+          --success: #1e40af;
+          --success-dim: rgba(30,64,175,0.1);
           --amber: #d97706;
 
           font-family: 'DM Sans', sans-serif;
