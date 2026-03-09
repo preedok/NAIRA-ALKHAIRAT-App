@@ -8,6 +8,51 @@ import { useToast } from '../../../contexts/ToastContext';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
+type Conversation = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  updatedAt: string;
+};
+
+const STORAGE_KEY = 'bgg_ai_chat_conversations';
+
+function loadConversationsFromStorage(userId: string): Conversation[] {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY}_${userId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveConversationsToStorage(userId: string, list: Conversation[]) {
+  try {
+    localStorage.setItem(`${STORAGE_KEY}_${userId}`, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+function makeTitleFromMessages(messages: ChatMessage[]): string {
+  const firstUser = messages.find((m) => m.role === 'user');
+  if (firstUser?.content) {
+    const t = firstUser.content.trim().slice(0, 42);
+    return t + (firstUser.content.length > 42 ? '…' : '');
+  }
+  return 'Obrolan baru';
+}
+
+function formatConversationDate(updatedAt: string): string {
+  const d = new Date(updatedAt);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+}
+
 /** Map item draft dari AI ke OrderDraftItemInput untuk form order */
 function mapAiDraftToOrderDraftItem(ai: AiChatOrderDraftItem): OrderDraftItemInput {
   const meta = ai.meta || {};
@@ -115,6 +160,8 @@ export default function OwnerAIChatPage() {
   const navigate = useNavigate();
   const orderDraft = useOrderDraft();
   const { showToast } = useToast();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -126,6 +173,13 @@ export default function OwnerAIChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const userId = user?.id ?? '';
+
+  // Load conversations from localStorage on mount
+  useEffect(() => {
+    if (!isOwner || !userId) return;
+    setConversations(loadConversationsFromStorage(userId));
+  }, [isOwner, userId]);
 
   useEffect(() => {
     if (isOwner) {
@@ -134,6 +188,26 @@ export default function OwnerAIChatPage() {
       setContextLoading(false);
     }
   }, [isOwner]);
+
+  // Persist conversations when they change
+  useEffect(() => {
+    if (!userId || conversations.length === 0) return;
+    saveConversationsToStorage(userId, conversations);
+  }, [userId, conversations]);
+
+  const startNewConversation = () => {
+    setActiveConversationId(null);
+    setMessages([]);
+    setLastOrderDraft(null);
+    setNewIdx(null);
+  };
+
+  const selectConversation = (conv: Conversation) => {
+    setActiveConversationId(conv.id);
+    setMessages(conv.messages);
+    setLastOrderDraft(null);
+    setNewIdx(null);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -165,29 +239,65 @@ export default function OwnerAIChatPage() {
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = '48px';
     const userMsg: ChatMessage = { role: 'user', content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setNewIdx(messages.length);
+    const historyBeforeSend = [...messages, userMsg];
+    setMessages(historyBeforeSend);
+    setNewIdx(historyBeforeSend.length - 1);
     setLoading(true);
     setLastOrderDraft(null);
+    const currentActiveId = activeConversationId;
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
       const res = await aiChatApi.chat({ message: text, history });
       const data = res.data as { success?: boolean; reply?: string; order_draft?: { items: AiChatOrderDraftItem[] } };
       const reply = data?.reply ?? 'Maaf, tidak ada respons.';
-      setMessages((prev) => {
-        const next: ChatMessage[] = [...prev, { role: 'assistant', content: reply }];
-        setNewIdx(next.length - 1);
-        return next;
+      const nextMessages: ChatMessage[] = [...historyBeforeSend, { role: 'assistant', content: reply }];
+      setNewIdx(nextMessages.length - 1);
+      setMessages(nextMessages);
+      const now = new Date().toISOString();
+      setConversations((list) => {
+        if (currentActiveId) {
+          return list.map((c) =>
+            c.id === currentActiveId
+              ? { ...c, messages: nextMessages, title: makeTitleFromMessages(nextMessages), updatedAt: now }
+              : c
+          );
+        }
+        const newConv: Conversation = {
+          id: `conv_${Date.now()}`,
+          title: makeTitleFromMessages(nextMessages),
+          messages: nextMessages,
+          updatedAt: now,
+        };
+        setActiveConversationId(newConv.id);
+        return [newConv, ...list];
       });
       if (data?.order_draft?.items?.length) {
         setLastOrderDraft(data.order_draft);
-        // Setelah obrolan selesai + dapat order draft → data otomatis masuk ke form dan navigate ke Buat invoice baru
         applyDraftAndNavigate(data.order_draft);
       }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
       const msg = err?.response?.data?.message || err?.message || 'Gagal mengirim. Periksa koneksi.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
+      const nextMessages: ChatMessage[] = [...historyBeforeSend, { role: 'assistant', content: `⚠️ ${msg}` }];
+      setMessages(nextMessages);
+      const now = new Date().toISOString();
+      setConversations((list) => {
+        if (currentActiveId) {
+          return list.map((c) =>
+            c.id === currentActiveId
+              ? { ...c, messages: nextMessages, title: makeTitleFromMessages(nextMessages), updatedAt: now }
+              : c
+          );
+        }
+        const newConv: Conversation = {
+          id: `conv_${Date.now()}`,
+          title: makeTitleFromMessages(nextMessages),
+          messages: nextMessages,
+          updatedAt: now,
+        };
+        setActiveConversationId(newConv.id);
+        return [newConv, ...list];
+      });
       showToast(msg, 'error');
     } finally {
       setLoading(false);
@@ -253,15 +363,106 @@ export default function OwnerAIChatPage() {
         .apply-btn:hover { background: linear-gradient(135deg,#059669,#047857) !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,0.4) !important; }
       `}</style>
 
-      {/* Wrapper: card lebar dan tinggi */}
+      {/* Layout: sidebar rekap + area chat */}
       <div
         className="chat-page-wrapper w-full max-w-[1600px] mx-auto py-4 sm:py-6 px-2 sm:px-4"
-        style={{ minHeight: 760, maxHeight: 'calc(100vh - 3rem)' }}
+        style={{ minHeight: 760, maxHeight: 'calc(100vh - 3rem)', display: 'flex', gap: 16 }}
       >
+        {/* ── SIDEBAR REKAP OBROLAN ── */}
+        <aside style={{
+          width: 260,
+          flexShrink: 0,
+          background: '#ffffff',
+          borderRadius: 16,
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          maxHeight: 'calc(100vh - 3rem)',
+        }}>
+          <div style={{
+            padding: '14px 16px',
+            borderBottom: '1px solid #e2e8f0',
+            background: '#f8fafc',
+            fontSize: 12,
+            fontWeight: 700,
+            color: '#475569',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}>
+            Rekap obrolan
+          </div>
+          <button
+            type="button"
+            onClick={startNewConversation}
+            style={{
+              margin: 10,
+              padding: '10px 14px',
+              borderRadius: 12,
+              border: '1px dashed #cbd5e1',
+              background: 'rgba(16,185,129,0.06)',
+              color: '#059669',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all .2s',
+            }}
+          >
+            <span>+</span>
+            Obrolan baru
+          </button>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 10px' }}>
+            {conversations.length === 0 && (
+              <p style={{ fontSize: 12, color: '#94a3b8', padding: 12, margin: 0 }}>
+                Belum ada obrolan. Mulai dengan mengirim pesan.
+              </p>
+            )}
+            {conversations.map((conv) => (
+              <button
+                key={conv.id}
+                type="button"
+                onClick={() => selectConversation(conv)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  marginBottom: 6,
+                  borderRadius: 12,
+                  border: '1px solid transparent',
+                  background: activeConversationId === conv.id ? 'rgba(16,185,129,0.12)' : 'transparent',
+                  color: activeConversationId === conv.id ? '#047857' : '#334155',
+                  fontSize: 12,
+                  lineHeight: 1.4,
+                  cursor: 'pointer',
+                  transition: 'all .15s',
+                }}
+              >
+                <div style={{
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  marginBottom: 2,
+                }}>
+                  {conv.title}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                  {formatConversationDate(conv.updatedAt)} · {conv.messages.length} pesan
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
       <div className="chat-page" style={{
+        flex: 1,
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
         minHeight: 720,
         maxHeight: 'calc(100vh - 3rem)',
         background: '#ffffff',
