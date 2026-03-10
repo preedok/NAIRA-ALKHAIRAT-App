@@ -10,7 +10,6 @@ import {
   XCircle,
   ShoppingCart,
   Calendar,
-  ArrowLeft,
   Eye
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
@@ -188,7 +187,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       .then(([configRes, seasonsRes, productRes]) => {
         const configData = (configRes.data as { data?: { mode: 'global' | 'per_season'; global_room_inventory?: Record<string, number> } })?.data;
         if (configData) {
-          setHotelAvailabilityMode(configData.mode || 'per_season');
+          setHotelAvailabilityMode('global');
           setGlobalRoomInventory(configData.global_room_inventory || { single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
         }
         setSeasonsList((seasonsRes.data as { data?: HotelSeason[] })?.data ?? []);
@@ -226,8 +225,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         setQuantityModalPriceForm({
           currency: refCur,
           meal_price: mealPrice,
-          meal_price_type: (meta.meal_price_type as 'per_day' | 'per_trip') || 'per_day',
-          room_price_type: (meta.room_price_type as 'per_day' | 'per_lasten') || 'per_day',
+          meal_price_type: 'per_day',
+          room_price_type: 'per_day',
           pricing_mode: pricingMode,
           single_price: singlePrice || (rooms.single?.price ?? 0),
           rooms
@@ -512,8 +511,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           ...existingMeta,
           currency: pf.currency,
           meal_price: pf.meal_price,
-          meal_price_type: pf.meal_price_type,
-          room_price_type: pf.room_price_type,
+          meal_price_type: 'per_day',
+          room_price_type: 'per_day',
           pricing_mode: pf.pricing_mode,
           room_types: ROOM_TYPES
         }
@@ -932,6 +931,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         align="right"
                         items={[
                           ...(canEditProduct ? [{ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => handleOpenEdit(hotel) }] : []),
+                          ...(canAddHotel ? [{ id: 'seasons', label: 'Pengaturan Jumlah Kamar', icon: <Bed className="w-4 h-4" />, onClick: () => handleOpenUnifiedQuantityAndSeasonsModal(hotel) }] : []),
                           ...(canAddHotel ? [{ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteHotel(hotel), danger: true }] : []),
                         ].filter(Boolean) as ActionsMenuItem[]}
                       />
@@ -1390,66 +1390,23 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         </Modal>
       )}
 
-      {/* (Nonaktif) Modal Pengaturan Jumlah Kamar & Musim tidak dipakai lagi */}
-      {false && seasonsModalHotel && (
+      {/* Modal: Pengaturan Jumlah Kamar (tanpa opsi per musim / per trip / per lasten) */}
+      {seasonsModalHotel && (
         <Modal open onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
           <ModalBoxLg>
             <ModalHeader
-              title="Pengaturan Jumlah Kamar & Musim"
-              subtitle={seasonsModalHotel!.name}
-              icon={<Calendar className="w-5 h-5" />}
+              title="Pengaturan Jumlah Kamar"
+              subtitle={seasonsModalHotel.name}
+              icon={<Bed className="w-5 h-5" />}
               onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}
             />
 
             <ModalBody className="p-6 overflow-y-auto flex-1">
-              {/* Pilihan: Semua jumlah kamar (satu set tiap bulan) vs Per musim */}
               {hotelAvailabilityConfigLoading ? (
                 <p className="text-sm text-slate-500 mb-5">{CONTENT_LOADING_MESSAGE}</p>
               ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 mb-6">
-                  <h3 className="text-sm font-semibold text-slate-800 mb-3">Cara atur kuota kamar</h3>
-                  <p className="text-xs text-slate-500 mb-4">Pilih salah satu: <strong>Semua jumlah kamar</strong> (satu set untuk setiap bulan, open di semua tanggal) atau <strong>Per musim</strong> (kuota per periode saja).</p>
-                  <div className="flex flex-wrap gap-6 mb-4">
-                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-btn hover:bg-btn-light transition-colors">
-                      <input
-                        type="radio"
-                        name="hotel-availability-mode"
-                        checked={hotelAvailabilityMode === 'global'}
-                        onChange={() => setHotelAvailabilityMode('global')}
-                        className="mt-1 text-[#0D1A63] focus:ring-btn"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-slate-800 block">Semua jumlah kamar</span>
-                        <span className="text-xs text-slate-500">Satu set jumlah kamar dipakai untuk setiap bulan. Open di semua tanggal; tidak perlu mengisi musim.</span>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 bg-white p-3 flex-1 min-w-[200px] hover:border-btn hover:bg-btn-light transition-colors">
-                      <input
-                        type="radio"
-                        name="hotel-availability-mode"
-                        checked={hotelAvailabilityMode === 'per_season'}
-                        onChange={async () => {
-                          setHotelAvailabilityMode('per_season');
-                          if (!seasonsModalHotel) return;
-                          setHotelAvailabilityConfigSaving(true);
-                          try {
-                            await adminPusatApi.setHotelAvailabilityConfig(seasonsModalHotel.id, { availability_mode: 'per_season' });
-                            showToast('Pengaturan per musim disimpan', 'success');
-                          } catch {
-                            setHotelAvailabilityMode('global');
-                          } finally {
-                            setHotelAvailabilityConfigSaving(false);
-                          }
-                        }}
-                        className="mt-1 text-[#0D1A63] focus:ring-btn"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-slate-800 block">Per musim</span>
-                        <span className="text-xs text-slate-500">Kuota kamar diatur per periode (musim). Isi daftar musim dan inventori per musim di bawah.</span>
-                      </div>
-                    </label>
-                  </div>
-                  {hotelAvailabilityMode === 'global' && (() => {
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+                  {(() => {
                     const qCurr = CURRENCY_OPTIONS.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCY_OPTIONS[0];
                     const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
                     const pf = quantityModalPriceForm;
@@ -1487,13 +1444,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                            <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan</h3>
-                            <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-2">
-                              <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_day' }))}
-                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
-                              <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, meal_price_type: 'per_trip' }))}
-                                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.meal_price_type === 'per_trip' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per trip</button>
-                            </div>
+                            <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan (per hari)</h3>
                             <PriceCurrencyField
                               label="Harga Makan per Kamar"
                               value={pf.meal_price || 0}
@@ -1525,13 +1476,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             />
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                            <h3 className="text-sm font-semibold text-slate-800">Harga Kamar</h3>
+                            <h3 className="text-sm font-semibold text-slate-800">Harga Kamar (per hari)</h3>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-2">Satuan</label>
-                              <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
-                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_day' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
-                              </div>
                               <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
                               <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
@@ -1598,208 +1544,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   })()}
                 </div>
               )}
-
-              {hotelAvailabilityMode === 'per_season' && (inventoryForSeason ? (
-                /* View: Atur inventori untuk satu musim */
-                <div className="space-y-5">
-                  <button
-                    type="button"
-                    onClick={() => setInventoryForSeason(null)}
-                    className="flex items-center gap-2 text-sm font-medium text-[#0D1A63] hover:text-[#0D1A63]"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Kembali ke daftar musim
-                  </button>
-                  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-slate-800">Inventori kamar</h3>
-                      <span className="px-3 py-1 rounded-full bg-btn-light text-[#0D1A63] text-sm font-medium">
-                        {inventoryForSeason!.seasonName}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-4">Jumlah kamar per tipe untuk periode musim ini. Ketersediaan per tanggal dihitung realtime dari order.</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                      {ROOM_TYPES.map((rt) => (
-                        <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">{ROOM_TYPE_LABELS[rt] ?? rt}</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={inventoryInputs[rt] !== undefined && inventoryInputs[rt] !== null ? inventoryInputs[rt] : String(inventoryRows.find((r) => r.room_type === rt)?.total_rooms ?? 0)}
-                            onChange={(e) => setInventoryInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
-                            onBlur={() => {
-                              const raw = inventoryInputs[rt];
-                              const n = raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0);
-                              setInventoryRows((prev) => prev.map((r) => r.room_type === rt ? { ...r, total_rooms: n } : r));
-                              setInventoryInputs((prev) => ({ ...prev, [rt]: String(n) }));
-                            }}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-btn focus:border-btn"
-                            placeholder="0"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <Button className="mt-4" size="sm" disabled={inventorySaving} onClick={async () => {
-                      if (!seasonsModalHotel || !inventoryForSeason) return;
-                      setInventorySaving(true);
-                      try {
-                        const list = ROOM_TYPES.map((rt) => {
-                          const raw = inventoryInputs[rt];
-                          const total_rooms = raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0);
-                          return { room_type: rt, total_rooms };
-                        });
-                        await adminPusatApi.setSeasonInventory(seasonsModalHotel.id, inventoryForSeason.seasonId, { inventory: list });
-                        showToast('Inventori disimpan', 'success');
-                        const res = await adminPusatApi.listSeasons(seasonsModalHotel.id);
-                        setSeasonsList((res.data as { data?: HotelSeason[] })?.data ?? []);
-                        setInventoryForSeason(null);
-                        setSeasonsModalHotel(null);
-                      } catch (err: unknown) {
-                        const e = err as { response?: { data?: { message?: string } } };
-                        showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
-                      } finally {
-                        setInventorySaving(false);
-                      }
-                    }}>
-                      {inventorySaving ? 'Menyimpan…' : 'Simpan Inventori'}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                /* View: Daftar musim + form tambah musim */
-                <>
-                  <p className="text-sm text-slate-600 mb-5">Buat periode musim (tanggal mulai–selesai) lalu atur jumlah kamar per tipe. Ketersediaan per tanggal dihitung otomatis dari order.</p>
-
-                  {/* Form tambah musim */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 mb-6">
-                    <h3 className="text-sm font-semibold text-slate-800 mb-4">Tambah musim baru</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                      <div className="sm:col-span-4">
-                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Nama musim</label>
-                        <input
-                          placeholder="Contoh: Ramadhan 2026"
-                          value={seasonForm.name}
-                          onChange={(e) => setSeasonForm((f) => ({ ...f, name: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
-                        />
-                      </div>
-                      <div className="sm:col-span-3">
-                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Tanggal mulai</label>
-                        <input
-                          type="date"
-                          value={seasonForm.start_date}
-                          onChange={(e) => setSeasonForm((f) => ({ ...f, start_date: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
-                        />
-                      </div>
-                      <div className="sm:col-span-3">
-                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Tanggal selesai</label>
-                        <input
-                          type="date"
-                          value={seasonForm.end_date}
-                          onChange={(e) => setSeasonForm((f) => ({ ...f, end_date: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <Button
-                          size="sm"
-                          className="w-full"
-                          disabled={seasonSaving || !seasonForm.name.trim() || !seasonForm.start_date || !seasonForm.end_date}
-                          onClick={async () => {
-                            if (!seasonsModalHotel) return;
-                            setSeasonSaving(true);
-                            try {
-                              await adminPusatApi.createSeason(seasonsModalHotel.id, { name: seasonForm.name.trim(), start_date: seasonForm.start_date, end_date: seasonForm.end_date });
-                              showToast('Musim ditambah', 'success');
-                              setSeasonForm({ name: '', start_date: '', end_date: '' });
-                              const res = await adminPusatApi.listSeasons(seasonsModalHotel.id);
-                              setSeasonsList((res.data as { data?: HotelSeason[] })?.data ?? []);
-                            } catch (err: unknown) {
-                              const e = err as { response?: { data?: { message?: string } } };
-                              showToast(e.response?.data?.message || 'Gagal menambah musim', 'error');
-                            } finally {
-                              setSeasonSaving(false);
-                            }
-                          }}
-                        >
-                          {seasonSaving ? 'Menambah…' : 'Tambah'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Daftar musim — hanya dipakai ketika pilihan "Per musim" */}
-                  <p className="text-xs text-slate-500 mb-2">Dengan pilihan per musim, hanya tanggal yang masuk dalam periode musim di bawah yang memiliki kuota. Tanggal di luar periode tidak tersedia.</p>
-                  <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                      <h3 className="text-sm font-semibold text-slate-800">Daftar musim</h3>
-                    </div>
-                    {seasonsList.length === 0 ? (
-                      <div className="py-12 px-4 text-center">
-                        <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                        <p className="text-slate-500 text-sm">Belum ada musim.</p>
-                        <p className="text-slate-400 text-xs mt-1">Isi form di atas lalu klik Tambah untuk membuat musim pertama.</p>
-                      </div>
-                    ) : (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-100/80 border-b border-slate-200">
-                            <th className="text-left py-3 px-4 font-medium text-slate-600">Nama</th>
-                            <th className="text-left py-3 px-4 font-medium text-slate-600">Periode</th>
-                            <th className="text-right py-3 px-4 font-medium text-slate-600 sticky right-0 z-10 bg-slate-100/80 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {seasonsList.map((s) => (
-                            <tr key={s.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
-                              <td className="py-3 px-4 font-medium text-slate-800">{s.name}</td>
-                              <td className="py-3 px-4 text-slate-600">{s.start_date} — {s.end_date}</td>
-                              <td className="py-3 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="!py-1.5 !px-3 text-xs"
-                                    onClick={() => {
-                                      setInventoryForSeason({ seasonId: s.id, seasonName: s.name });
-                                      const existing = (s as { RoomInventory?: { room_type: string; total_rooms: number }[] }).RoomInventory ?? [];
-                                      const rows = ROOM_TYPES.map((rt) => ({ room_type: rt, total_rooms: existing.find((r) => r.room_type === rt)?.total_rooms ?? 0 }));
-                                      setInventoryRows(rows);
-                                      setInventoryInputs(ROOM_TYPES.reduce<Record<string, string>>((acc, rt) => { acc[rt] = String(rows.find((r) => r.room_type === rt)?.total_rooms ?? 0); return acc; }, {}));
-                                    }}
-                                  >
-                                    Atur inventori
-                                  </Button>
-                                  {canAddHotel && (
-                                    <button
-                                      type="button"
-                                      className="text-red-600 hover:text-red-700 text-xs font-medium py-1.5 px-2 rounded-lg hover:bg-red-50"
-                                      onClick={async () => {
-                                        if (!window.confirm('Hapus musim ini? Data inventori akan ikut terhapus.')) return;
-                                        try {
-                                          await adminPusatApi.deleteSeason(seasonsModalHotel!.id, s.id);
-                                          setSeasonsList((prev) => prev.filter((x) => x.id !== s.id));
-                                          showToast('Musim dihapus', 'success');
-                                        } catch (err: unknown) {
-                                          const e = err as { response?: { data?: { message?: string } } };
-                                          showToast(e.response?.data?.message || 'Gagal hapus musim', 'error');
-                                        }
-                                      }}
-                                    >
-                                      Hapus
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </>
-              ))}
             </ModalBody>
           </ModalBoxLg>
         </Modal>
