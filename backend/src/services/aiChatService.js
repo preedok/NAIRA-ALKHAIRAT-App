@@ -1,7 +1,7 @@
 /**
  * AI Chat Service - Semua data dari database (produk, harga, order, invoice, kurs).
  * Tidak ada hardcode atau data dummy: konteks dibangun dari Product, Order, Invoice, OwnerProfile, business rules.
- * Untuk role owner: jawab pertanyaan dari data DB, nego harga, lalu keluarkan ORDER_DRAFT untuk isi form order otomatis.
+ * Untuk role owner: jawab pertanyaan dari data DB, nego harga; saat owner minta buatkan invoice sistem otomatis buat order dan invoice dari obrolan.
  */
 const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
@@ -377,7 +377,7 @@ Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
 Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
 
-Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id di ORDER_DRAFT). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
+Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id saat menyebut produk). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
 ${productLines}
 
 Harga makan hotel (per orang per hari) — WAJIB gunakan untuk jawab pertanyaan "harga makan", "berapa harga makan", "paket makan":
@@ -410,7 +410,7 @@ Alur (semua data hanya dari database di atas):
 1. Jawab pertanyaan hanya dari data di atas. Untuk "hotel X tanggal A–B": gunakan blok "Ketersediaan kamar hotel" sebagai sumber utama; jika hotel X ada dan punya angka kamar (quad/double dll), jawab "tersedia" dengan menyebut jumlah per tipe; jangan katakan "tidak tersedia karena tidak ada booking" — tidak ada booking = kamar kosong. Jika hotel tidak ada di daftar ketersediaan atau tertulis tidak ada musim, baru katakan tidak ada datanya.
 2. Nego harga: gunakan harga dari daftar produk. Diskon nego MAKSIMAL 2% saja. Jika owner minta diskon lebih dari 2%, tolak dengan sopan dan tawarkan maksimal 2%. Sebutkan angka final (IDR/SAR/USD) sampai owner setuju.
 3. Setelah sepakat, minta daftar pesanan lengkap: produk, jumlah, tanggal (check_in/check_out hotel, departure/return tiket, travel_date visa/bus).
-4. Setelah daftar pesanan lengkap, keluarkan blok ORDER_DRAFT. product_id dan product_name WAJIB copy persis dari baris daftar produk di atas (satu per satu sesuai yang dipesan). Jangan mengarang UUID atau nama.
+4. Setelah daftar pesanan lengkap dan owner minta "buatkan invoice" atau "setuju", balas singkat bahwa invoice akan diproses; sistem akan otomatis membuat order dan invoice dari data obrolan.
 `;
 
   return {
@@ -424,7 +424,7 @@ Alur (semua data hanya dari database di atas):
 
 /**
  * System prompt untuk asisten AI owner.
- * AI menjawab dari data DB, nego harga dengan pintar, lalu minta daftar order dan keluarkan ORDER_DRAFT untuk isi form.
+ * AI menjawab dari data DB, nego harga; saat owner minta buatkan invoice sistem otomatis buat order dan invoice dari obrolan.
  */
 function buildSystemPrompt(contextText) {
   return `Kamu adalah asisten AI canggih Bintang Global Group (BGG) untuk partner/owner travel. Profesional, ramah, dan sangat membantu.
@@ -438,81 +438,20 @@ KEMAMPUAN:
 3. SETELAH SEPAKAT: Minta owner menyebutkan daftar pesanan lengkap:
    - Produk apa saja, jumlah, dan tanggal (check-in/check-out hotel, departure/return tiket, travel_date visa/bus).
    - Contoh: "Silakan sebutkan: hotel berapa kamar, tipe apa, check-in/out; visa berapa orang, travel date; tiket dari bandara mana, tanggal berangkat/pulang; bus jenis apa, tanggal."
-4. SETELAH DAFTAR PESANAN LENGKAP: Kamu WAJIB mengeluarkan blok ORDER_DRAFT di akhir balasan (format JSON persis di bawah) agar sistem bisa mengisi form order otomatis. Gunakan product_id persis dari daftar produk di konteks (copy UUID); jangan mengarang.
-5. TRIGGER "BUATKAN INVOICE" / "BUATKAN": Jika owner sudah menyetujui pesanan (atau kamu sudah merangkum detail pemesanan) dan owner berkata "buatkan invoice", "buat invoice", "buatkan", "buatkan invoice nya", "create invoice", "buatkan order", "setuju buatkan", "buatkan orderannya", atau sejenisnya—Kamu WAJIB langsung mengeluarkan blok ORDER_DRAFT di balasan yang SAMA. PENTING: JANGAN tulis kalimat seperti "Baik, berikut adalah ORDER_DRAFT untuk pesanan Anda" atau "Sekarang saya akan mengeluarkan blok ORDER_DRAFT" tanpa benar-benar menulis blok JSON-nya—sistem hanya membaca teks yang dimulai dengan ### ORDER_DRAFT diikuti baris baru lalu \`\`\`json lalu isi JSON lalu \`\`\`. Tanpa blok itu, invoice tidak akan terbuat. Format balasan: paling banyak satu kalimat singkat (mis. "Invoice akan diproses.") lalu baris baru lalu LANGSUNG blok ### ORDER_DRAFT dan JSON lengkap. Jangan janji "akan mengeluarkan"—langsung keluarkan.
+4. KETIKA OWNER MINTA "BUATKAN INVOICE" / "SETUJU" / "BUATKAN": Jika owner sudah menyetujui pesanan dan berkata "buatkan invoice", "buat invoice", "buatkan", "setuju", "buatkan invoice nya", "create invoice", "buatkan order", "setuju buatkan", "buatkan orderannya", atau sejenisnya—balas singkat dan ramah bahwa invoice akan diproses (mis. "Baik, invoice akan segera diproses dan muncul di Daftar Invoice dengan tagihan DP lengkap."). Sistem akan otomatis membuat order dan invoice dari data obrolan; tidak perlu mengeluarkan blok atau JSON apa pun.
 
 KONTEKS DATA (hanya gunakan ini):
 ${contextText}
 
-FORMAT ORDER_DRAFT (wajib; tulis di akhir balasan ketika deal + daftar pesanan sudah lengkap):
-${ORDER_DRAFT_MARKER}
-\`\`\`json
-{
-  "items": [
-    {
-      "type": "hotel",
-      "product_id": "uuid-dari-daftar-produk-hotel",
-      "product_name": "Nama Hotel",
-      "quantity": 2,
-      "unit_price_idr": 5000000,
-      "meta": {
-        "check_in": "YYYY-MM-DD",
-        "check_out": "YYYY-MM-DD",
-        "room_type": "quad",
-        "with_meal": true,
-        "room_unit_price": 4000000,
-        "meal_unit_price": 1000000
-      }
-    },
-    {
-      "type": "visa",
-      "product_id": "uuid-dari-daftar-produk-visa",
-      "product_name": "Nama Visa",
-      "quantity": 10,
-      "unit_price_idr": 2500000,
-      "meta": { "travel_date": "YYYY-MM-DD" }
-    },
-    {
-      "type": "ticket",
-      "product_id": "uuid-dari-daftar-produk-tiket",
-      "product_name": "Tiket Bandara",
-      "quantity": 10,
-      "unit_price_idr": 15000000,
-      "meta": {
-        "bandara": "CGK",
-        "trip_type": "round_trip",
-        "departure_date": "YYYY-MM-DD",
-        "return_date": "YYYY-MM-DD"
-      }
-    },
-    {
-      "type": "bus",
-      "product_id": "uuid-dari-daftar-produk-bus",
-      "product_name": "Bus Saudi",
-      "quantity": 1,
-      "unit_price_idr": 35000000,
-      "meta": {
-        "route_type": "full_route",
-        "bus_type": "besar",
-        "trip_type": "round_trip",
-        "travel_date": "YYYY-MM-DD"
-      }
-    }
-  ]
-}
-\`\`\`
-
-ATURAN ITEM:
+ATURAN ITEM (untuk jawaban tentang pesanan):
 - type: hotel | visa | ticket | bus | handling | package.
-- Hotel: meta wajib check_in, check_out, room_type (single/double/triple/quad/quint), with_meal (boolean). Jika ada breakdown kamar+makan, isi room_unit_price dan meal_unit_price (IDR) di meta.
-- Tiket: meta bandara (BTH/CGK/SBY/UPG), trip_type (one_way/return_only/round_trip), departure_date, return_date jika round_trip.
-- Visa: meta travel_date.
-- Bus: meta route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
+- Hotel: check_in, check_out, room_type (single/double/triple/quad/quint), with_meal (boolean).
+- Tiket: bandara (BTH/CGK/SBY/UPG), trip_type (one_way/return_only/round_trip), departure_date, return_date.
+- Visa: travel_date.
+- Bus: route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
 - Semua product_id HARUS UUID yang ada di daftar produk konteks.
 
-PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Saat menyebutkan harga produk (apa pun konteksnya), selalu tampilkan IDR, SAR, dan USD. Jangan mengarang product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.
-
-KETIKA OWNER MINTA "BUATKAN" / "BUATKAN INVOICE": Jangan balas dengan "Baik, berikut adalah ORDER_DRAFT..." atau "Sekarang saya akan mengeluarkan..." — langsung tulis blok ORDER_DRAFT (baris ### ORDER_DRAFT, baris \`\`\`json, isi JSON sesuai pesanan yang sudah disepakati, baris \`\`\`). Sistem otomatis create order dan invoice hanya jika blok ini ada di respons. Maksimal satu kalimat di atas blok (contoh: "Invoice akan diproses.") lalu langsung blok.`;
+PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Saat menyebutkan harga produk (apa pun konteksnya), selalu tampilkan IDR, SAR, dan USD. Jangan mengarang product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.`;
 }
 
 /**
@@ -580,6 +519,79 @@ function stripOrderDraftFromReply(text) {
 }
 
 /**
+ * Ekstrak pesanan yang disepakati dari obrolan via AI. Dipanggil ketika user minta "buatkan invoice".
+ * Mengembalikan { items } dengan format order_draft (type, product_id, quantity, unit_price_idr, meta) atau null.
+ */
+async function extractOrderFromConversation(messages, contextText) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || String(apiKey).trim() === '') return null;
+
+  const systemPrompt = `Kamu ekstraktor pesanan. Dari percakapan di bawah, ekstrak pesanan yang sudah disepakati (produk, jumlah, harga, tanggal).
+
+Kembalikan HANYA satu objek JSON valid (tanpa teks lain, tanpa markdown, tanpa \`\`\`):
+{"items": [{"type": "hotel", "product_id": "<uuid dari daftar produk>", "quantity": 2, "unit_price_idr": 5000000, "meta": {"check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD", "room_type": "quad", "with_meal": true}}, ...]}
+
+Aturan:
+- product_id WAJIB UUID persis dari daftar produk di konteks (jangan mengarang).
+- type: hotel | visa | ticket | bus | handling | package.
+- Hotel: meta wajib check_in, check_out, room_type (single/double/triple/quad/quint), with_meal (boolean). Boleh tambah room_unit_price, meal_unit_price (IDR) di meta.
+- Tiket: meta bandara (BTH/CGK/SBY/UPG), trip_type (one_way/return_only/round_trip), departure_date, return_date jika round_trip.
+- Visa: meta travel_date.
+- Bus: meta route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
+- unit_price_idr: harga per unit dalam IDR sesuai yang disepakati di obrolan.
+
+KONTEKS (daftar produk + harga):
+${contextText}`;
+
+  try {
+    const OpenAI = require('openai').default;
+    const openai = new OpenAI({ apiKey: apiKey.trim() });
+    const fullMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ];
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: fullMessages,
+      temperature: 0.2,
+      max_tokens: 2048
+    });
+    const content = completion?.choices?.[0]?.message?.content || '';
+    const parsed = parseJsonFromText(content);
+    if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) return parsed;
+    return null;
+  } catch (e) {
+    console.error('extractOrderFromConversation error:', e?.message || e);
+    return null;
+  }
+}
+
+/** Ambil objek JSON dari teks (blok ```json ... ``` atau objek { ... } pertama). */
+function parseJsonFromText(text) {
+  if (!text || typeof text !== 'string') return null;
+  const t = text.trim();
+  const jsonBlock = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonBlock) {
+    try {
+      return JSON.parse(jsonBlock[1].trim());
+    } catch (_) {}
+  }
+  const firstBrace = t.indexOf('{');
+  if (firstBrace === -1) return null;
+  let depth = 0;
+  let end = -1;
+  for (let i = firstBrace; i < t.length; i++) {
+    if (t[i] === '{') depth++;
+    else if (t[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end === -1) return null;
+  try {
+    return JSON.parse(t.slice(firstBrace, end + 1));
+  } catch (_) {}
+  return null;
+}
+
+/**
  * Panggil OpenAI Chat Completion. Mengembalikan { reply, order_draft? }.
  */
 async function callChat(messages, systemPrompt) {
@@ -638,5 +650,6 @@ module.exports = {
   stripOrderDraftFromReply,
   validateOrderDraftAgainstDb,
   callChat,
+  extractOrderFromConversation,
   getOwnerBranchId
 };

@@ -3,8 +3,10 @@ const {
   buildContextForOwner,
   buildSystemPrompt,
   callChat,
-  validateOrderDraftAgainstDb
+  validateOrderDraftAgainstDb,
+  extractOrderFromConversation
 } = require('../services/aiChatService');
+const { createOrderAndInvoiceFromItemsForOwner } = require('./orderController');
 
 /**
  * GET /api/v1/ai-chat/context
@@ -45,7 +47,7 @@ const chat = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Pesan wajib diisi' });
   }
 
-  const { contextText, productSummaries } = await buildContextForOwner(ownerId);
+  const { contextText, productSummaries, branchId } = await buildContextForOwner(ownerId);
   const systemPrompt = buildSystemPrompt(contextText);
 
   const messages = (Array.isArray(history) ? history : [])
@@ -54,15 +56,46 @@ const chat = asyncHandler(async (req, res) => {
     .map(m => ({ role: m.role, content: m.content }));
   messages.push({ role: 'user', content: userMessage });
 
-  const { reply, order_draft } = await callChat(messages, systemPrompt);
+  const { reply } = await callChat(messages, systemPrompt);
 
-  // Hanya kirim order_draft yang product_id-nya valid (ada di DB)
-  const sanitizedDraft = order_draft ? validateOrderDraftAgainstDb(order_draft, productSummaries) : null;
+  let createdInvoice = null;
+  const isCreateInvoiceRequest = /buatkan|buat\s*invoice|create\s*invoice|setuju|buatkan\s*invoice/i.test(userMessage);
+  if (isCreateInvoiceRequest && branchId) {
+    const extracted = await extractOrderFromConversation(messages, contextText);
+    const sanitizedDraft = extracted ? validateOrderDraftAgainstDb(extracted, productSummaries) : null;
+    if (sanitizedDraft && sanitizedDraft.items && sanitizedDraft.items.length > 0) {
+      const itemsForCreate = sanitizedDraft.items.map((it) => ({
+        type: it.type,
+        product_id: it.product_id,
+        quantity: it.quantity,
+        unit_price: it.unit_price_idr,
+        currency: 'IDR',
+        meta: it.meta || {},
+        check_in: it.meta?.check_in,
+        check_out: it.meta?.check_out,
+        room_type: it.meta?.room_type,
+        meal: it.meta?.with_meal ?? it.meta?.meal
+      }));
+      try {
+        const { order, invoice } = await createOrderAndInvoiceFromItemsForOwner({
+          ownerId,
+          branchId,
+          items: itemsForCreate,
+          createdByUserId: req.user.id
+        });
+        if (invoice) {
+          createdInvoice = { id: invoice.id, invoice_number: invoice.invoice_number };
+        }
+      } catch (err) {
+        console.error('AI chat create order/invoice failed:', err?.message || err);
+      }
+    }
+  }
 
   res.json({
     success: true,
     reply,
-    order_draft: sanitizedDraft || undefined
+    ...(createdInvoice && { created_invoice: createdInvoice })
   });
 });
 

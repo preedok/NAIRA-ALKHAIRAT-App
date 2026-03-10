@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import type { OrderDraftItemInput } from '../../../contexts/OrderDraftContext';
-import { aiChatApi, ordersApi, type AiChatOrderDraftItem } from '../../../services/api';
+import { aiChatApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
@@ -70,64 +69,6 @@ function formatConversationDate(updatedAt: string): string {
   const sameDay = d.toDateString() === now.toDateString();
   if (sameDay) return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
-}
-
-/**
- * Konversi draft AI ke payload POST /orders (items) agar order + invoice otomatis dibuat.
- * Backend auto-create invoice bila save_as_draft tidak true.
- */
-function draftToOrderCreatePayload(aiItems: AiChatOrderDraftItem[]): { product_id: string; type: string; quantity: number; unit_price: number; currency: string; check_in?: string; check_out?: string; room_type?: string; meal?: boolean; meta?: Record<string, unknown> }[] {
-  const out: { product_id: string; type: string; quantity: number; unit_price: number; currency: string; check_in?: string; check_out?: string; room_type?: string; meal?: boolean; meta?: Record<string, unknown> }[] = [];
-  for (const ai of aiItems) {
-    if (!ai?.product_id || !ai.type) continue;
-    const qty = Math.max(1, Number(ai.quantity) || 1);
-    const unitPrice = Number(ai.unit_price_idr) || 0;
-    const meta = (ai.meta && typeof ai.meta === 'object' ? ai.meta : {}) as Record<string, unknown>;
-    const base: Record<string, unknown> = {
-      product_id: ai.product_id,
-      type: ai.type,
-      quantity: qty,
-      unit_price: unitPrice,
-      currency: 'IDR',
-      meta: { ...meta },
-    };
-    if (ai.type === 'hotel') {
-      const roomType = (meta.room_type as string) || 'quad';
-      (base as Record<string, unknown>).check_in = meta.check_in ?? undefined;
-      (base as Record<string, unknown>).check_out = meta.check_out ?? undefined;
-      (base as Record<string, unknown>).room_type = roomType;
-      (base as Record<string, unknown>).meal = Boolean(meta.with_meal ?? meta.meal);
-    }
-    out.push(base as { product_id: string; type: string; quantity: number; unit_price: number; currency: string; check_in?: string; check_out?: string; room_type?: string; meal?: boolean; meta?: Record<string, unknown> });
-  }
-  return out;
-}
-
-/** Map item draft dari AI ke OrderDraftItemInput untuk form order */
-function mapAiDraftToOrderDraftItem(ai: AiChatOrderDraftItem): OrderDraftItemInput {
-  const meta = ai.meta || {};
-  const qty = Math.max(1, Number(ai.quantity) || 1);
-  const unitIdr = Number(ai.unit_price_idr) || 0;
-  const roomUnit = meta.room_unit_price != null ? Number(meta.room_unit_price) : unitIdr;
-  const base: OrderDraftItemInput = {
-    type: ai.type as OrderDraftItemInput['type'],
-    product_id: ai.product_id,
-    product_name: ai.product_name,
-    quantity: qty,
-    unit_price_idr: unitIdr,
-    check_in: meta.check_in as string | undefined,
-    check_out: meta.check_out as string | undefined,
-    meta: Object.keys(meta).length ? (meta as Record<string, unknown>) : undefined,
-  };
-  if (ai.type === 'hotel' && (meta.room_type != null || meta.with_meal !== undefined)) {
-    base.room_breakdown = [{
-      room_type: (meta.room_type as string) || 'quad',
-      quantity: qty,
-      unit_price: roomUnit,
-      with_meal: Boolean(meta.with_meal),
-    }];
-  }
-  return base;
 }
 
 const suggestedPrompts = [
@@ -216,7 +157,6 @@ export default function OwnerAIChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [lastOrderDraft, setLastOrderDraft] = useState<{ items: AiChatOrderDraftItem[] } | null>(null);
   const [newIdx, setNewIdx] = useState<number | null>(null);
   const [contextLoading, setContextLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -267,14 +207,12 @@ export default function OwnerAIChatPage() {
   const startNewConversation = () => {
     setActiveConversationId(null);
     setMessages([]);
-    setLastOrderDraft(null);
     setNewIdx(null);
   };
 
   const selectConversation = (conv: Conversation) => {
     setActiveConversationId(conv.id);
     setMessages(conv.messages);
-    setLastOrderDraft(null);
     setNewIdx(null);
   };
 
@@ -289,44 +227,6 @@ export default function OwnerAIChatPage() {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   };
 
-  /** Isi draft ke form order lalu navigate ke Buat invoice baru (fallback jika auto-create gagal). */
-  const applyDraftAndNavigate = (draft: { items: AiChatOrderDraftItem[] }) => {
-    const mapped = draft.items.map(mapAiDraftToOrderDraftItem).filter((i) => i.product_id && i.quantity > 0);
-    if (mapped.length === 0) {
-      showToast('Draft order tidak valid.', 'error');
-      return;
-    }
-    orderDraft.clear();
-    orderDraft.setDraftItems(mapped);
-    showToast('Draft order diisi ke form. Klik Simpan untuk menerbitkan invoice.', 'success');
-    navigate('/dashboard/orders/new');
-  };
-
-  /** Setelah sepakat: buat order + invoice otomatis dari draft AI; muncul di Daftar Invoice (get invoice). */
-  const createOrderAndInvoiceFromDraft = async (draft: { items: AiChatOrderDraftItem[] }) => {
-    const payloadItems = draftToOrderCreatePayload(draft.items).filter((i) => i.product_id && i.quantity > 0);
-    if (payloadItems.length === 0) {
-      showToast('Draft order tidak valid untuk dibuat otomatis.', 'error');
-      setLastOrderDraft(draft);
-      return;
-    }
-    try {
-      const res = await ordersApi.create({ items: payloadItems });
-      const createdOrder = (res.data as { data?: { Invoice?: { id: string; invoice_number?: string } } })?.data;
-      const invoiceId = createdOrder?.Invoice?.id;
-      orderDraft.clear();
-      showToast('Order dan invoice berhasil dibuat sesuai obrolan. Muncul di Daftar Invoice.', 'success');
-      const query = invoiceId ? `?invoice_id=${invoiceId}` : '?tab=invoices';
-      navigate(`/dashboard/orders-invoices${query}`, { state: { refreshList: true } });
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
-        || (err as { message?: string })?.message
-        || 'Gagal membuat order. Coba buka form dan simpan manual.';
-      showToast(msg, 'error');
-      setLastOrderDraft(draft);
-    }
-  };
-
   const handleSend = async () => {
     const text = input.trim();
     if (!text || loading) return;
@@ -337,12 +237,15 @@ export default function OwnerAIChatPage() {
     setMessages(historyBeforeSend);
     setNewIdx(historyBeforeSend.length - 1);
     setLoading(true);
-    setLastOrderDraft(null);
     const currentActiveId = activeConversationId;
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
       const res = await aiChatApi.chat({ message: text, history });
-      const data = res.data as { success?: boolean; reply?: string; order_draft?: { items: AiChatOrderDraftItem[] } };
+      const data = res.data as {
+        success?: boolean;
+        reply?: string;
+        created_invoice?: { id: string; invoice_number?: string };
+      };
       const reply = data?.reply ?? 'Maaf, tidak ada respons.';
       const nextMessages: ChatMessage[] = [...historyBeforeSend, { role: 'assistant', content: reply }];
       setNewIdx(nextMessages.length - 1);
@@ -365,9 +268,15 @@ export default function OwnerAIChatPage() {
         setActiveConversationId(newConv.id);
         return [newConv, ...list];
       });
-      if (data?.order_draft?.items?.length) {
-        setLastOrderDraft(data.order_draft);
-        await createOrderAndInvoiceFromDraft(data.order_draft);
+      if (data?.created_invoice?.id) {
+        orderDraft.clear();
+        showToast(
+          'Order dan invoice berhasil dibuat sesuai obrolan. Muncul di Daftar Invoice dengan tagihan DP lengkap.',
+          'success'
+        );
+        navigate(`/dashboard/orders-invoices?invoice_id=${data.created_invoice.id}`, {
+          state: { refreshList: true },
+        });
       }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -720,68 +629,6 @@ export default function OwnerAIChatPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* ── DRAFT CTA (jika AI mengembalikan order_draft; biasanya auto-navigate, ini fallback) ── */}
-        {lastOrderDraft?.items && lastOrderDraft.items.length > 0 && (
-          <div style={{
-            position: 'relative', zIndex: 2,
-            margin: '0 16px',
-            background: '#eef2ff',
-            border: '1px solid #a5b4fc',
-            borderRadius: 16,
-            padding: '14px 16px',
-            marginBottom: 0,
-            animation: 'fadeUp .4s ease',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16 }}>📦</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>Draft Order Siap</span>
-              </div>
-              <span style={{
-                fontSize: 10, fontWeight: 600, color: '#1e40af',
-                background: 'rgba(30,58,138,0.2)', padding: '2px 8px', borderRadius: 100,
-              }}>{lastOrderDraft.items.length} item</span>
-            </div>
-
-            {lastOrderDraft.items.slice(0, 5).map((item, i) => (
-              <div key={i} className="draft-item" style={{
-                display: 'flex', justifyContent: 'space-between',
-                padding: '5px 8px', borderRadius: 8,
-                fontSize: 12, color: '#475569',
-              }}>
-                <span>{item.product_name} × {item.quantity}</span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#334155', fontWeight: 500 }}>
-                  {((Number(item.unit_price_idr) || 0) * (item.quantity || 1)).toLocaleString('id-ID')} IDR
-                </span>
-              </div>
-            ))}
-            {lastOrderDraft.items.length > 5 && (
-              <div style={{ fontSize: 11, color: '#64748b', padding: '4px 8px' }}>+ {lastOrderDraft.items.length - 5} item lagi</div>
-            )}
-
-            <button
-              type="button"
-              className="apply-btn"
-              onClick={() => applyDraftAndNavigate(lastOrderDraft)}
-              style={{
-                marginTop: 12, width: '100%',
-                background: 'linear-gradient(135deg, #1e3a8a, #2563eb)',
-                border: 'none', borderRadius: 12,
-                padding: '11px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                color: '#fff', fontSize: 13, fontWeight: 700,
-                cursor: 'pointer', transition: 'all .2s ease',
-                fontFamily: 'Sora, sans-serif',
-                boxShadow: '0 4px 16px rgba(30,58,138,0.3)',
-              }}
-            >
-              <span>🛒</span>
-              Buka Buat invoice baru
-              <span style={{ fontSize: 16 }}>→</span>
-            </button>
-          </div>
-        )}
 
         {/* ── INPUT BAR ── */}
         <div style={{

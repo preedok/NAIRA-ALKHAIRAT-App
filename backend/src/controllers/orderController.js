@@ -251,6 +251,204 @@ async function visaRequiresHotel(items) {
 }
 
 /**
+ * Buat order + invoice dari items (dipanggil dari AI chat saat owner minta buatkan invoice).
+ * @param {{ ownerId: string, branchId: string, items: Array, createdByUserId: string }} params
+ * items format: [{ type, product_id, quantity, unit_price, currency?, meta?, check_in?, check_out?, room_type?, meal? }]
+ * @returns {Promise<{ order: import('../models').Order, invoice: import('../models').Invoice|null }>}
+ */
+async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items, createdByUserId }) {
+  const finalBranchId = branchId && String(branchId).trim().length >= 10 ? String(branchId).trim() : null;
+  if (!finalBranchId || !ownerId) {
+    const err = new Error('Branch dan owner wajib.');
+    err.code = 'VALIDATION';
+    throw err;
+  }
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    const err = new Error('Item invoice wajib');
+    err.code = 'VALIDATION';
+    throw err;
+  }
+
+  const rules = await getRulesForBranch(finalBranchId);
+  const hasHotel = items.some(i => i.type === ORDER_ITEM_TYPE.HOTEL);
+  const visaNeedsHotel = await visaRequiresHotel(items);
+  if (visaNeedsHotel && !hasHotel) {
+    const err = new Error('Visa wajib bersama hotel');
+    err.code = 'VALIDATION';
+    throw err;
+  }
+
+  let ratesForCreate = null;
+  const cr = rules.currency_rates;
+  const crObj = typeof cr === 'object' && cr != null ? cr : (typeof cr === 'string' ? (() => { try { return JSON.parse(cr); } catch (e) { return null; } })() : null);
+  if (crObj && (typeof crObj.SAR_TO_IDR === 'number' || typeof crObj.USD_TO_IDR === 'number')) {
+    ratesForCreate = {
+      SAR_TO_IDR: typeof crObj.SAR_TO_IDR === 'number' ? crObj.SAR_TO_IDR : 4200,
+      USD_TO_IDR: typeof crObj.USD_TO_IDR === 'number' ? crObj.USD_TO_IDR : 15500
+    };
+  }
+  if (!ratesForCreate) ratesForCreate = { SAR_TO_IDR: 4200, USD_TO_IDR: 15500 };
+
+  let subtotal = 0;
+  let totalJamaah = 0;
+  const orderItems = [];
+
+  for (const it of items) {
+    if (it.type === ORDER_ITEM_TYPE.TICKET) {
+      const bandara = it.meta?.bandara;
+      if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
+        const err = new Error('Item tiket wajib pilih bandara (BTH, CGK, SBY, atau UPG)');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+      if (it.meta?.trip_type && !TICKET_TRIP_TYPES.includes(it.meta.trip_type)) {
+        const err = new Error('trip_type tiket harus one_way, return_only, atau round_trip');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+      const tripType = it.meta?.trip_type || 'round_trip';
+      if (tripType === 'round_trip' && (!it.meta?.departure_date || !it.meta?.return_date)) {
+        const err = new Error('Tiket pulang pergi wajib isi tanggal keberangkatan dan tanggal kepulangan');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+      if (tripType === 'one_way' && !it.meta?.departure_date) {
+        const err = new Error('Tiket pergi saja wajib isi tanggal keberangkatan');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+      if (tripType === 'return_only' && !it.meta?.return_date) {
+        const err = new Error('Tiket pulang saja wajib isi tanggal kepulangan');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+    }
+    if (it.type === ORDER_ITEM_TYPE.BUS) {
+      if (it.meta?.trip_type && !BUS_TRIP_TYPES.includes(it.meta.trip_type)) {
+        const err = new Error('Trip type bus harus one_way, return_only, atau round_trip (pulang pergi)');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+    }
+    const qty = parseInt(it.quantity, 10) || 1;
+    const itemCurrency = (it.currency && ['IDR', 'SAR', 'USD'].includes(String(it.currency).toUpperCase())) ? String(it.currency).toUpperCase() : 'IDR';
+    let unitPrice = parseFloat(it.unit_price);
+    if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+      const productId = it.product_id;
+      if (!productId) {
+        const err = new Error('product_id atau unit_price wajib per item');
+        err.code = 'VALIDATION';
+        throw err;
+      }
+      unitPrice = await getEffectivePrice(productId, finalBranchId, ownerId, it.meta || {}, itemCurrency);
+      if (unitPrice == null) {
+        const err = new Error(`Harga tidak ditemukan untuk product ${productId}`);
+        err.code = 'VALIDATION';
+        throw err;
+      }
+    }
+    const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
+    const checkIn = it.check_in || it.meta?.check_in;
+    const checkOut = it.check_out || it.meta?.check_out;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && (it.room_type || it.meta?.room_type)) {
+      const rt = it.room_type || it.meta?.room_type;
+      if (checkIn && checkOut) {
+        const avail = await checkAvailability(it.product_id, rt, checkIn, checkOut, qty, null);
+        if (!avail.ok) {
+          const err = new Error(avail.message || 'Kamar tidak tersedia untuk tanggal yang dipilih');
+          err.code = 'VALIDATION';
+          throw err;
+        }
+      }
+    }
+    let st;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+      const nights = getNights(checkIn, checkOut);
+      const multiplier = nights > 0 ? nights : 1;
+      st = qty * unitPriceIdr * multiplier;
+    } else {
+      st = qty * unitPriceIdr;
+    }
+    subtotal += st;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.room_type || it.meta?.room_type) && ROOM_CAPACITY[it.room_type || it.meta?.room_type] != null) {
+      totalJamaah += qty * ROOM_CAPACITY[it.room_type || it.meta?.room_type];
+    }
+    if (it.type === ORDER_ITEM_TYPE.BUS) {
+      totalJamaah += qty;
+    }
+    const meta = {
+      room_type: it.room_type || it.meta?.room_type,
+      meal: it.meal ?? it.meta?.with_meal ?? it.meta?.meal,
+      ...(it.meta || {})
+    };
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_in || it.meta?.check_in)) meta.check_in = it.check_in || it.meta.check_in;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && (it.check_out || it.meta?.check_out)) meta.check_out = it.check_out || it.meta.check_out;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+      const nights = getNights(checkIn, checkOut);
+      if (nights > 0) meta.nights = nights;
+    }
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+    if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
+    orderItems.push({
+      type: it.type,
+      product_ref_id: it.product_id,
+      product_ref_type: 'product',
+      quantity: qty,
+      unit_price: unitPrice,
+      unit_price_currency: itemCurrency,
+      subtotal: st,
+      manifest_file_url: it.manifest_file_url || null,
+      meta
+    });
+  }
+
+  const hasBusItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS);
+  const totalBusPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+  const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
+  const penaltyPerPack = parseFloat(rules.bus_penalty_idr) || 500000;
+  const penaltyAmount = hasBusItems && totalBusPacks < minPack ? Math.max(0, (minPack - totalBusPacks) * penaltyPerPack) : 0;
+
+  let ratesPayload = {};
+  const crForPayload = typeof rules.currency_rates === 'object' && rules.currency_rates != null
+    ? rules.currency_rates
+    : (typeof rules.currency_rates === 'string' ? (() => { try { return JSON.parse(rules.currency_rates); } catch (e) { return null; } })() : null);
+  if (crForPayload && (crForPayload.SAR_TO_IDR != null || crForPayload.USD_TO_IDR != null)) {
+    ratesPayload = { currency_rates_override: crForPayload };
+  }
+
+  const order = await Order.create({
+    order_number: generateOrderNumber(),
+    owner_id: ownerId,
+    branch_id: finalBranchId,
+    total_jamaah: totalJamaah,
+    subtotal,
+    penalty_amount: penaltyAmount,
+    total_amount: subtotal + penaltyAmount,
+    status: 'draft',
+    created_by: createdByUserId,
+    notes: null,
+    ...ratesPayload
+  });
+
+  for (const it of orderItems) {
+    await OrderItem.create({ ...it, order_id: order.id });
+  }
+
+  const orderForInvoice = await Order.findByPk(order.id, {
+    attributes: ['id', 'order_number', 'owner_id', 'branch_id', 'total_amount', 'currency_rates_override']
+  });
+  let invoice = null;
+  try {
+    invoice = await createInvoiceForOrder(orderForInvoice, {});
+  } catch (invErr) {
+    console.error('Auto-create invoice after order create (AI flow) failed:', invErr);
+  }
+
+  return { order, invoice };
+}
+
+/**
  * POST /api/v1/orders
  * Items: [{ product_id, type, quantity, unit_price (optional - resolved if not sent), room_type?, meal?, meta? }]
  * Validasi: visa wajib hotel dari product.meta.require_hotel; bus min pack penalty from business rules.
@@ -1230,4 +1428,4 @@ const uploadJamaahData = [
   })
 ];
 
-module.exports = { list, create, getById, update, destroy, sendOrderResult, uploadJamaahData };
+module.exports = { list, create, getById, update, destroy, sendOrderResult, uploadJamaahData, createOrderAndInvoiceFromItemsForOwner };
