@@ -39,7 +39,6 @@ import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
 import AccountingAgingPage from '../pages/dashboard/accounting/AccountingAgingPage';
 import AccountingChartOfAccountsPage from '../pages/dashboard/accounting/AccountingChartOfAccountsPage';
-import AccountingPurchasingPage from '../pages/dashboard/accounting/AccountingPurchasingPage';
 
 const router = createBrowserRouter([
   {
@@ -237,26 +236,6 @@ const router = createBrowserRouter([
           {
             path: 'accounting/aging',
             element: <AccountingAgingPage />
-          },
-          {
-            path: 'accounting/purchasing',
-            element: <AccountingPurchasingPage />
-          },
-          {
-            path: 'accounting/purchasing/suppliers',
-            element: <Navigate to="/dashboard/accounting/purchasing?tab=suppliers" replace />
-          },
-          {
-            path: 'accounting/purchasing/orders',
-            element: <Navigate to="/dashboard/accounting/purchasing?tab=orders" replace />
-          },
-          {
-            path: 'accounting/purchasing/invoices',
-            element: <Navigate to="/dashboard/accounting/purchasing?tab=invoices" replace />
-          },
-          {
-            path: 'accounting/purchasing/payments',
-            element: <Navigate to="/dashboard/accounting/purchasing?tab=payments" replace />
           },
           {
             path: '*',

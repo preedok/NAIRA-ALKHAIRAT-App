@@ -3,7 +3,6 @@ const router = express.Router();
 const { auth, requireRole } = require('../../middleware/auth');
 const { ROLES } = require('../../constants');
 const accountingController = require('../../controllers/accountingController');
-const purchaseController = require('../../controllers/purchaseController');
 
 router.use(auth);
 
@@ -55,36 +54,5 @@ router.get('/invoices', accountingController.listInvoices);
 router.get('/orders', accountingController.listOrders);
 router.get('/financial-report', accountingController.getFinancialReport);
 router.post('/payments/:id/reconcile', accountingController.reconcilePayment);
-
-// Modul Pembelian (Purchasing) - ringkasan per product
-router.get('/purchasing/summary', purchaseController.getPurchasingSummary);
-router.delete('/purchasing/by-product/:product_id', purchaseController.deletePurchasingByProduct);
-router.get('/suppliers', purchaseController.listSuppliers);
-router.get('/suppliers/:id', purchaseController.getSupplier);
-router.post('/suppliers', purchaseController.createSupplier);
-router.patch('/suppliers/:id', purchaseController.updateSupplier);
-router.delete('/suppliers/:id', purchaseController.deleteSupplier);
-
-router.get('/purchase-orders', purchaseController.listPurchaseOrders);
-router.get('/purchase-orders/:id/proof', purchaseController.getPurchaseOrderProofFile);
-router.get('/purchase-orders/:id', purchaseController.getPurchaseOrder);
-router.post('/purchase-orders', purchaseController.uploadPurchaseOrderProof, purchaseController.createPurchaseOrder);
-router.patch('/purchase-orders/:id', purchaseController.updatePurchaseOrder);
-router.delete('/purchase-orders/:id', purchaseController.deletePurchaseOrder);
-router.post('/purchase-orders/:id/submit', purchaseController.submitPurchaseOrder);
-router.post('/purchase-orders/:id/approve', purchaseController.approvePurchaseOrder);
-
-router.get('/purchase-invoices', purchaseController.listPurchaseInvoices);
-router.get('/purchase-invoices/:id/proof', purchaseController.getPurchaseInvoiceProofFile);
-router.get('/purchase-invoices/:id', purchaseController.getPurchaseInvoice);
-router.post('/purchase-invoices', purchaseController.uploadPurchaseInvoiceProof, purchaseController.createPurchaseInvoice);
-router.patch('/purchase-invoices/:id', purchaseController.updatePurchaseInvoice);
-router.delete('/purchase-invoices/:id', purchaseController.deletePurchaseInvoice);
-router.post('/purchase-invoices/:id/post', purchaseController.postPurchaseInvoice);
-
-router.get('/purchase-payments', purchaseController.listPurchasePayments);
-router.get('/purchase-payments/:id', purchaseController.getPurchasePayment);
-router.post('/purchase-payments', purchaseController.createPurchasePayment);
-router.post('/purchase-payments/:id/post', purchaseController.postPurchasePayment);
 
 module.exports = router;

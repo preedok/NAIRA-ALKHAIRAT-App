@@ -25,7 +25,6 @@ import {
   Calendar,
   DollarSign,
   Wallet,
-  ShoppingCart,
   Sparkles
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -150,12 +149,6 @@ const menuItems: MenuItem[] = [
     title: 'Piutang (AR)',
     icon: <BarChart3 className="w-5 h-5" />,
     path: '/dashboard/accounting/aging',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Pembelian',
-    icon: <ShoppingCart className="w-5 h-5" />,
-    path: '/dashboard/accounting/purchasing',
     roles: ['role_accounting']
   },
   {
@@ -298,8 +291,6 @@ const DashboardLayout: React.FC = () => {
   useEffect(() => {
     if (location.pathname.startsWith('/dashboard/products')) {
       setExpandedMenuPath('/dashboard/products');
-    } else if (location.pathname.startsWith('/dashboard/accounting/purchasing')) {
-      setExpandedMenuPath('/dashboard/accounting/purchasing');
     }
   }, [location.pathname]);
 
