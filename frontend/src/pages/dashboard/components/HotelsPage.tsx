@@ -932,7 +932,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         align="right"
                         items={[
                           ...(canEditProduct ? [{ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => handleOpenEdit(hotel) }] : []),
-                          ...(canAddHotel ? [{ id: 'seasons', label: 'Jumlah Kamar & Musim', icon: <Bed className="w-4 h-4" />, onClick: () => handleOpenUnifiedQuantityAndSeasonsModal(hotel) }] : []),
                           ...(canAddHotel ? [{ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteHotel(hotel), danger: true }] : []),
                         ].filter(Boolean) as ActionsMenuItem[]}
                       />
@@ -963,7 +962,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const popupCurrency = (hotel?.currency || hotel?.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
         const popupCurrInfo = CURRENCY_OPTIONS.find((c) => c.id === popupCurrency) || CURRENCY_OPTIONS[0];
         const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');
-        const roomPriceTypeLabel = hotel?.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : 'Per hari';
+        const roomPriceTypeLabel = 'Per hari';
         const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
         const isSinglePrice = hotel?.meta?.pricing_mode === 'single';
         const singlePriceValue = isSinglePrice ? (Number(hotel?.price_branch ?? hotel?.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
@@ -972,7 +971,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             <ModalBoxLg className="relative">
               <ModalHeader
                 title="Ketersediaan per tanggal"
-                subtitle={<>{(hotel?.name ?? 'Hotel')} — data realtime per tipe kamar{availData && typeof availData === 'object' && availData.availability_mode && <span className="block mt-1">Mengikuti: <span className="font-medium">{availData.availability_mode === 'global' ? 'Semua jumlah kamar' : 'Per musim'}</span></span>}</>}
+                subtitle={<>{(hotel?.name ?? 'Hotel')} — data realtime per tipe kamar</>}
                 icon={<Calendar className="w-5 h-5" />}
                 onClose={() => setAvailabilityPopupHotelId(null)}
               />
@@ -1012,7 +1011,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   <div className="py-16 text-center rounded-2xl bg-slate-50 border border-slate-200">
                     <Calendar className="w-14 h-14 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-600 font-medium">Belum ada data per tanggal</p>
-                    <p className="text-slate-400 text-sm mt-1">Atur di <strong>Jumlah Kamar & Musim</strong>: pilih Semua jumlah kamar atau Per musim, lalu isi jumlah kamar.</p>
+                    <p className="text-slate-400 text-sm mt-1">Ketersediaan dihitung otomatis dari booking order pada periode yang dipilih.</p>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -1391,13 +1390,13 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         </Modal>
       )}
 
-      {/* Modal terpadu: Jumlah Kamar & Musim (Pengaturan Jumlah + Data per Musim) */}
-      {seasonsModalHotel && (
+      {/* (Nonaktif) Modal Pengaturan Jumlah Kamar & Musim tidak dipakai lagi */}
+      {false && seasonsModalHotel && (
         <Modal open onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
           <ModalBoxLg>
             <ModalHeader
               title="Pengaturan Jumlah Kamar & Musim"
-              subtitle={seasonsModalHotel.name}
+              subtitle={seasonsModalHotel!.name}
               icon={<Calendar className="w-5 h-5" />}
               onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}
             />
@@ -1532,8 +1531,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                               <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-3">
                                 <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_day' }))}
                                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_day' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per hari</button>
-                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, room_price_type: 'per_lasten' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${pf.room_price_type === 'per_lasten' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per lasten</button>
                               </div>
                               <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
                               <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
@@ -1617,7 +1614,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-semibold text-slate-800">Inventori kamar</h3>
                       <span className="px-3 py-1 rounded-full bg-btn-light text-[#0D1A63] text-sm font-medium">
-                        {inventoryForSeason.seasonName}
+                        {inventoryForSeason!.seasonName}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mb-4">Jumlah kamar per tipe untuk periode musim ini. Ketersediaan per tanggal dihitung realtime dari order.</p>
