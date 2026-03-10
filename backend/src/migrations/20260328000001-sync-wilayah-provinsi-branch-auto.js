@@ -9,7 +9,7 @@
 module.exports = {
   async up(queryInterface) {
     const path = require('path');
-    const { runFullSync } = require(path.join(__dirname, '../../utils/locationMaster'));
+    const { runFullSync } = require(path.join(__dirname, '../utils/locationMaster'));
     try {
       await runFullSync();
     } catch (err) {
