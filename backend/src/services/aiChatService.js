@@ -9,7 +9,7 @@ const { Product, ProductPrice, Order, Invoice, OwnerProfile, User, Branch } = re
 const { getRulesForBranch } = require('../controllers/businessRuleController');
 const { getEffectivePrice } = require('../controllers/productController');
 const { getAvailabilityByDateRange } = require('./hotelAvailabilityService');
-const { ORDER_ITEM_TYPE, BUSINESS_RULE_KEYS } = require('../constants');
+const { ORDER_ITEM_TYPE, BUSINESS_RULE_KEYS, ROOM_CAPACITY } = require('../constants');
 
 const ORDER_DRAFT_MARKER = '### ORDER_DRAFT';
 const ORDER_DRAFT_END = '```';
@@ -391,6 +391,7 @@ Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
 Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
 Tipe akun: ${isMouOwner ? `Owner MOU (harga di bawah sudah termasuk diskon ${mouDiscountPercent}%)` : 'Owner Non-MOU (harga standar)'}. WAJIB gunakan hanya harga dari daftar ini; jangan mengarang atau mengubah angka.
+Kapasitas tipe kamar hotel (orang/kamar): single=${ROOM_CAPACITY?.single ?? 1}, double=${ROOM_CAPACITY?.double ?? 2}, triple=${ROOM_CAPACITY?.triple ?? 3}, quad=${ROOM_CAPACITY?.quad ?? 4}, quint=${ROOM_CAPACITY?.quint ?? 5}.
 
 Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id saat menyebut produk). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
 ${productLines}
@@ -446,14 +447,20 @@ function buildSystemPrompt(contextText) {
 
 KEMAMPUAN:
 1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, blok "Harga makan hotel" (per orang per hari per hotel), periode kalender, booking hotel, dan ketersediaan kamar. Untuk pertanyaan "harga makan", "berapa harga makan", "paket makan": WAJIB baca dari blok "Harga makan hotel" di konteks; tampilkan IDR, SAR, USD jika ada; jika tertulis "(belum diatur di data produk)" jawab bahwa harga makan untuk hotel tersebut belum diatur dan bisa ditanyakan ke admin—jangan jawab "tidak ada data". Saat menampilkan harga: selalu IDR, SAR, USD. Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka, artinya hotel TERSEEDIA. Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
-2. NEGOSIASI HARGA: Harga HANYA dari daftar produk di konteks (sudah sesuai tipe owner: MOU dapat diskon, Non-MOU harga standar). Jangan mengarang atau mengubah angka. Jika owner minta diskon atau nego:
+2. PEMBAGIAN KAMAR OTOMATIS (untuk hotel): Jika owner menyebut JUMLAH ORANG/JAMAAH + hotel + tanggal check-in/out, tapi belum menentukan pembagian kamar:
+   - Gunakan "Kapasitas tipe kamar" di konteks dan "Ketersediaan kamar hotel" untuk hotel tersebut pada periode yang diminta.
+   - Buat rekomendasi pembagian kamar yang memenuhi semua orang, TANPA melebihi ketersediaan per room_type.
+   - Prioritas: minimalkan jumlah kamar (pilih kapasitas lebih besar dulu: quint→quad→triple→double→single), tapi jika tipe besar tidak tersedia, gunakan kombinasi yang tersedia.
+   - Jika lebih dari satu kombinasi memungkinkan, berikan 2–3 opsi dan minta owner memilih (mis. opsi hemat kamar vs opsi lebih nyaman).
+   - Outputkan hasil dengan format jelas, contoh: "Untuk 9 orang: 1 quad + 1 triple + 1 double (total 3 kamar)" dan tanyakan konfirmasi.
+3. NEGOSIASI HARGA: Harga HANYA dari daftar produk di konteks (sudah sesuai tipe owner: MOU dapat diskon, Non-MOU harga standar). Jangan mengarang atau mengubah angka. Jika owner minta diskon atau nego:
    - Diskon nego MAKSIMAL 2% saja dari harga yang tercantum di konteks. Jika owner minta diskon lebih dari 2%, tolak dengan sopan: "Maaf, diskon maksimal yang dapat kami berikan 2%." Jangan setuju diskon di atas 2%.
    - WAJIB sebutkan harga dalam tiga mata uang: IDR, SAR, dan USD (ambil persis dari daftar konteks). Contoh: "Harga untuk [produk]: [X] IDR / [Y] SAR / [Z] USD."
    - Konfirmasi: "Kita sepakat di [angka] [mata uang] untuk [item]?"
-3. SETELAH SEPAKAT: Minta owner menyebutkan daftar pesanan lengkap:
+4. SETELAH SEPAKAT: Minta owner menyebutkan daftar pesanan lengkap:
    - Produk apa saja, jumlah, dan tanggal (check-in/check-out hotel, departure/return tiket, travel_date visa/bus).
    - Contoh: "Silakan sebutkan: hotel berapa kamar, tipe apa, check-in/out; visa berapa orang, travel date; tiket dari bandara mana, tanggal berangkat/pulang; bus jenis apa, tanggal."
-4. KETIKA OWNER MINTA "BUATKAN INVOICE" / "SETUJU" / "BUATKAN": Jika owner sudah menyetujui pesanan dan berkata "buatkan invoice", "buat invoice", "buatkan", "setuju", "buatkan invoice nya", "create invoice", "buatkan order", "setuju buatkan", "buatkan orderannya", atau sejenisnya—balas singkat dan ramah bahwa invoice akan diproses (mis. "Baik, invoice akan segera diproses dan muncul di Daftar Invoice dengan tagihan DP lengkap."). Sistem akan otomatis membuat order dan invoice dari data obrolan; tidak perlu mengeluarkan blok atau JSON apa pun.
+5. KETIKA OWNER MINTA "BUATKAN INVOICE" / "SETUJU" / "BUATKAN": Jika owner sudah menyetujui pesanan dan berkata "buatkan invoice", "buat invoice", "buatkan", "setuju", "buatkan invoice nya", "create invoice", "buatkan order", "setuju buatkan", "buatkan orderannya", atau sejenisnya—balas singkat dan ramah bahwa invoice akan diproses (mis. "Baik, invoice akan segera diproses dan muncul di Daftar Invoice dengan tagihan DP lengkap."). Sistem akan otomatis membuat order dan invoice dari data obrolan; tidak perlu mengeluarkan blok atau JSON apa pun.
 
 KONTEKS DATA (hanya gunakan ini):
 ${contextText}

@@ -367,6 +367,35 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       });
       const totalSub = group.reduce((s, it2) => s + (parseFloat(String(it2.subtotal || 0)) || 0), 0);
       const totalQty = group.reduce((s, it2) => s + (it2.quantity != null ? Number(it2.quantity) : 1), 0);
+      // Breakdown subtotal kamar vs makan untuk baris gabungan (agar Harga Satuan Makan & Subtotal gabungan konsisten).
+      let mergedRoomSub = 0;
+      let mergedMealSub = 0;
+      let mergedOrangNights = 0;
+      group.forEach((it2) => {
+        const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
+        const q = it2.quantity != null ? Number(it2.quantity) : 1;
+        const rt = (m.room_type || 'quad').toString().toLowerCase();
+        const cap = ROOM_CAPACITY[String(rt)] ?? 1;
+        const totalOrang = q * cap;
+        const cur2 = (it2.unit_price_currency || 'IDR').toUpperCase();
+        const toIdr2 = (v) => (cur2 === 'SAR' ? v * s2i : cur2 === 'USD' ? v * u2i : v);
+        const roomUnitRaw2 = m.room_unit_price != null ? parseFloat(m.room_unit_price) : (it2.unit_price != null ? parseFloat(it2.unit_price) : 0);
+        const mealUnitRaw2 = m.meal_unit_price != null ? parseFloat(m.meal_unit_price) : NaN;
+        const roomUnitIdr2 = Number.isFinite(roomUnitRaw2) ? toIdr2(roomUnitRaw2) : 0;
+        let mealUnitIdr2 = Number.isFinite(mealUnitRaw2) ? toIdr2(mealUnitRaw2) : 0;
+        const withMeal2 = m.meal === true || m.with_meal === true;
+        const roomPart2 = nights > 0 ? roomUnitIdr2 * q * nights : 0;
+        let mealPart2 = (withMeal2 && nights > 0 && mealUnitIdr2 > 0) ? mealUnitIdr2 * totalOrang * nights : 0;
+        const itemSubtotal2 = parseFloat(String(it2.subtotal || 0)) || 0;
+        if (withMeal2 && nights > 0 && mealUnitIdr2 <= 0 && roomPart2 > 0 && itemSubtotal2 > roomPart2 && (totalOrang * nights) > 0) {
+          mealPart2 = itemSubtotal2 - roomPart2;
+          mealUnitIdr2 = mealPart2 / (totalOrang * nights);
+        }
+        mergedRoomSub += roomPart2 > 0 ? roomPart2 : Math.max(0, itemSubtotal2 - mealPart2);
+        mergedMealSub += mealPart2 > 0 ? mealPart2 : 0;
+        if (withMeal2 && nights > 0 && (totalOrang * nights) > 0) mergedOrangNights += (totalOrang * nights);
+      });
+      const mergedMealUnitIdr = mergedOrangNights > 0 ? (mergedMealSub / mergedOrangNights) : 0;
       result.push({
         ...first,
         _merged: true,
@@ -375,6 +404,10 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         _mergedSubtotal: totalSub,
         _mergedQty: totalQty,
         _mergedNights: nights,
+        _mergedRoomSubtotal: mergedRoomSub,
+        _mergedMealSubtotal: mergedMealSub,
+        _mergedMealUnitIdr: mergedMealUnitIdr,
+        _mergedOrangNights: mergedOrangNights,
         quantity: totalQty,
         subtotal: totalSub
       });
@@ -429,7 +462,17 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         const roomUnitRaw = meta.room_unit_price != null ? parseFloat(meta.room_unit_price) : (item.unit_price != null ? parseFloat(item.unit_price) : NaN);
         const mealUnitRaw = meta.meal_unit_price != null ? parseFloat(meta.meal_unit_price) : NaN;
         if (Number.isFinite(roomUnitRaw)) hotelRoomUnitIdr = toIdr(roomUnitRaw);
-        if (Number.isFinite(mealUnitRaw)) hotelMealUnitIdr = toIdr(mealUnitRaw);
+        // Prioritas: hasil breakdown merged (lebih akurat) → fallback meta item pertama
+        if (item._mergedMealUnitIdr != null && parseFloat(String(item._mergedMealUnitIdr)) > 0) hotelMealUnitIdr = parseFloat(String(item._mergedMealUnitIdr));
+        else if (Number.isFinite(mealUnitRaw)) hotelMealUnitIdr = toIdr(mealUnitRaw);
+        const mergedRoomSub = parseFloat(String(item._mergedRoomSubtotal || 0)) || 0;
+        const mergedMealSub = parseFloat(String(item._mergedMealSubtotal || 0)) || 0;
+        if (mergedRoomSub > 0 || mergedMealSub > 0) {
+          hotelSubtotalFromFormula = mergedRoomSub + mergedMealSub;
+          subtotalFormulaLine = mergedMealSub > 0
+            ? `Subtotal: (Kamar ${formatIDR(mergedRoomSub)}) + (Makan ${formatIDR(mergedMealSub)}) = ${formatIDR(hotelSubtotalFromFormula)}`
+            : `Subtotal: Kamar ${formatIDR(mergedRoomSub)} = ${formatIDR(hotelSubtotalFromFormula)}`;
+        }
       } else if (itemType === 'hotel') {
         const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
         const ci = meta.check_in ? formatDateShort(meta.check_in) : null;
@@ -512,7 +555,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       const cur = (item.unit_price_currency || 'IDR').toUpperCase();
       const unitPriceIdr = cur === 'SAR' ? unitPrice * s2i : cur === 'USD' ? unitPrice * u2i : unitPrice;
       let subtotalVal = isMerged ? (parseFloat(String(item._mergedSubtotal ?? item.subtotal ?? 0)) || 0) : parseFloat(String(item.subtotal || 0));
-      if (!isMerged && itemType === 'hotel' && hotelSubtotalFromFormula > 0) {
+      if (itemType === 'hotel' && hotelSubtotalFromFormula > 0) {
         subtotalVal = hotelSubtotalFromFormula;
       } else if (!Number.isFinite(subtotalVal) || subtotalVal <= 0) {
         subtotalVal = unitPriceIdr * effectiveQty;

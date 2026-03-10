@@ -2217,6 +2217,36 @@ const OrdersInvoicesPage: React.FC = () => {
                               const descLine = `Check-in: ${ci}, Check-out: ${co}.${nights ? ` ${nights} malam.` : ''} ${roomParts.join(', ')}.`;
                               const totalSub = items.reduce((s: number, it2: any) => s + (Number(it2.subtotal) || 0), 0);
                               const totalQty = items.reduce((s: number, it2: any) => s + (it2.quantity != null ? Number(it2.quantity) : 1), 0);
+                              // Hitung breakdown subtotal kamar vs makan untuk baris gabungan (agar kolom harga makan & subtotal gabungan konsisten).
+                              // Jika meta.meal_unit_price tidak ada, estimasi dari (subtotal - roomPart) per item.
+                              let mergedRoomSub = 0;
+                              let mergedMealSub = 0;
+                              let mergedOrangNights = 0; // total (orang × malam) untuk menghitung harga satuan makan rata-rata
+                              items.forEach((it2: any) => {
+                                const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
+                                const q = it2.quantity != null ? Number(it2.quantity) : 1;
+                                const rt = (m.room_type || 'quad').toString().toLowerCase();
+                                const cap = ROOM_CAP[rt] ?? 1;
+                                const totalOrang = q * cap;
+                                const cur = (it2.unit_price_currency || 'IDR').toUpperCase();
+                                const toIdr = (v: number) => cur === 'SAR' ? v * sarToIdr : cur === 'USD' ? v * usdToIdr : v;
+                                const roomUnitRaw = m.room_unit_price != null ? Number(m.room_unit_price) : (Number(it2.unit_price) || 0);
+                                const mealUnitRaw = m.meal_unit_price != null ? Number(m.meal_unit_price) : NaN;
+                                const roomUnitIdr = Number.isFinite(roomUnitRaw) ? toIdr(roomUnitRaw) : 0;
+                                let mealUnitIdr = Number.isFinite(mealUnitRaw) ? toIdr(mealUnitRaw) : 0;
+                                const withMeal = !!(m.meal || m.with_meal);
+                                const roomPart = nights > 0 ? roomUnitIdr * q * nights : 0;
+                                let mealPart = (withMeal && nights > 0 && mealUnitIdr > 0) ? mealUnitIdr * totalOrang * nights : 0;
+                                const itemSubtotal = Number(it2.subtotal) || 0;
+                                if (withMeal && nights > 0 && mealUnitIdr <= 0 && roomPart > 0 && itemSubtotal > roomPart && (totalOrang * nights) > 0) {
+                                  mealPart = itemSubtotal - roomPart;
+                                  mealUnitIdr = mealPart / (totalOrang * nights);
+                                }
+                                mergedRoomSub += roomPart > 0 ? roomPart : Math.max(0, itemSubtotal - mealPart);
+                                mergedMealSub += mealPart > 0 ? mealPart : 0;
+                                if (withMeal && nights > 0 && (totalOrang * nights) > 0) mergedOrangNights += (totalOrang * nights);
+                              });
+                              const mergedMealUnitIdr = mergedOrangNights > 0 ? (mergedMealSub / mergedOrangNights) : 0;
                               result.push({
                                 ...first,
                                 id: first.id + '_merged',
@@ -2225,6 +2255,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                 _mergedSubtotal: totalSub,
                                 _mergedQty: totalQty,
                                 _mergedNights: nights,
+                                _mergedRoomSubtotal: mergedRoomSub,
+                                _mergedMealSubtotal: mergedMealSub,
+                                _mergedMealUnitIdr: mergedMealUnitIdr,
+                                _mergedOrangNights: mergedOrangNights,
                                 quantity: totalQty,
                                 subtotal: totalSub
                               });
@@ -2319,13 +2353,24 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const roomPart = typeKey === 'hotel' && nights > 0 ? roomUnitIdr * qty * nights : 0;
                                       let mealPart = typeKey === 'hotel' && nights > 0 && mealUnitIdr > 0 ? mealUnitIdr * totalOrang * nights : 0;
                                       const rawSubtotal = isMerged ? (item._mergedSubtotal ?? Number(item.subtotal) ?? 0) : (item.subtotal != null ? Number(item.subtotal) : (Number(item.unit_price) || 0) * (typeKey === 'hotel' && nights > 0 ? qty * nights : qty));
+                                      // Untuk baris gabungan: gunakan hasil breakdown dari proses merge (jika ada)
+                                      const mergedMealUnitIdr = isMerged && item._mergedMealUnitIdr != null ? Number(item._mergedMealUnitIdr) : 0;
+                                      const mergedMealSub = isMerged && item._mergedMealSubtotal != null ? Number(item._mergedMealSubtotal) : 0;
+                                      const mergedRoomSub = isMerged && item._mergedRoomSubtotal != null ? Number(item._mergedRoomSubtotal) : 0;
+                                      if (isMerged && typeKey === 'hotel') {
+                                        if (mergedMealUnitIdr > 0) mealUnitIdr = mergedMealUnitIdr;
+                                        mealPart = mergedMealSub > 0 ? mergedMealSub : 0;
+                                        // roomPart untuk merged tidak akurat jika beda tipe kamar; pakai hasil merge.
+                                        // tetap dipakai untuk tampilan perhitungan subtotal.
+                                      }
                                       if (!isMerged && typeKey === 'hotel' && withMeal && nights > 0 && totalOrang > 0 && mealUnitIdr <= 0 && roomPart > 0 && rawSubtotal > roomPart) {
                                         mealPart = rawSubtotal - roomPart;
                                         mealUnitIdr = mealPart / (totalOrang * nights);
                                       }
                                       const hasHotelBreakdown = !isMerged && typeKey === 'hotel' && nights > 0 && (roomUnitIdr > 0 || mealUnitIdr > 0);
-                                      const subtotalFromBreakdown = hasHotelBreakdown ? roomPart + mealPart : 0;
-                                      const subtotal = isMerged ? rawSubtotal : (subtotalFromBreakdown > 0 ? subtotalFromBreakdown : rawSubtotal);
+                                      const hasMergedBreakdown = isMerged && typeKey === 'hotel' && ((mergedRoomSub > 0) || (mergedMealSub > 0));
+                                      const subtotalFromBreakdown = hasHotelBreakdown ? roomPart + mealPart : (hasMergedBreakdown ? (mergedRoomSub + mergedMealSub) : 0);
+                                      const subtotal = (subtotalFromBreakdown > 0 ? subtotalFromBreakdown : rawSubtotal);
                                       const unitPrice = item.unit_price != null ? Number(item.unit_price) : (qty > 0 ? (item.subtotal != null ? Number(item.subtotal) : 0) / (typeKey === 'hotel' && nights > 0 ? qty * nights : qty) : 0);
                                       const unitPriceIdr = cur === 'SAR' ? unitPrice * sarToIdr : cur === 'USD' ? unitPrice * usdToIdr : unitPrice;
                                       const sarUsdLine = (amountIdr: number) => (
@@ -2375,11 +2420,25 @@ const OrdersInvoicesPage: React.FC = () => {
                                             ) : '–') : '–'}
                                           </td>
                                           <td className="py-2 px-2 text-right font-medium tabular-nums align-top">
-                                            {hasHotelBreakdown && (roomPart > 0 || mealPart > 0) ? (
+                                            {(hasHotelBreakdown || hasMergedBreakdown) && ((isMerged ? (mergedRoomSub + mergedMealSub) : (roomPart + mealPart)) > 0) ? (
                                               <div className="text-xs">
                                                 <div className="font-semibold text-slate-800"><NominalDisplay amount={subtotal} currency="IDR" /></div>
                                                 {sarUsdLine(subtotal)}
-                                                <div className="text-slate-500 mt-1">Perhitungan subtotal: {mealPart > 0 ? <>Kamar <NominalDisplay amount={roomPart} currency="IDR" showCurrency={false} /> + Makan <NominalDisplay amount={mealPart} currency="IDR" showCurrency={false} /> = <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} /></> : <>Kamar <NominalDisplay amount={roomPart} currency="IDR" showCurrency={false} /> = <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} /></>}</div>
+                                                <div className="text-slate-500 mt-1">
+                                                  Perhitungan subtotal:{' '}
+                                                  {(isMerged ? mergedMealSub : mealPart) > 0 ? (
+                                                    <>
+                                                      Kamar <NominalDisplay amount={isMerged ? mergedRoomSub : roomPart} currency="IDR" showCurrency={false} /> + Makan{' '}
+                                                      <NominalDisplay amount={isMerged ? mergedMealSub : mealPart} currency="IDR" showCurrency={false} /> ={' '}
+                                                      <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} />
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      Kamar <NominalDisplay amount={isMerged ? mergedRoomSub : roomPart} currency="IDR" showCurrency={false} /> ={' '}
+                                                      <NominalDisplay amount={subtotal} currency="IDR" showCurrency={false} />
+                                                    </>
+                                                  )}
+                                                </div>
                                               </div>
                                             ) : (
                                               <>
