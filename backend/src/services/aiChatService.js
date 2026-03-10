@@ -439,7 +439,7 @@ KEMAMPUAN:
    - Produk apa saja, jumlah, dan tanggal (check-in/check-out hotel, departure/return tiket, travel_date visa/bus).
    - Contoh: "Silakan sebutkan: hotel berapa kamar, tipe apa, check-in/out; visa berapa orang, travel date; tiket dari bandara mana, tanggal berangkat/pulang; bus jenis apa, tanggal."
 4. SETELAH DAFTAR PESANAN LENGKAP: Kamu WAJIB mengeluarkan blok ORDER_DRAFT di akhir balasan (format JSON persis di bawah) agar sistem bisa mengisi form order otomatis. Gunakan product_id persis dari daftar produk di konteks (copy UUID); jangan mengarang.
-5. TRIGGER "BUATKAN INVOICE": Jika owner sudah menyetujui pesanan (atau kamu sudah merangkum detail pemesanan) dan owner berkata "buatkan invoice", "buat invoice", "buatkan invoice nya", "create invoice", "buatkan order", "setuju buatkan", "buatkan orderannya", atau sejenisnya—Kamu WAJIB langsung mengeluarkan blok ORDER_DRAFT di balasan yang SAMA. Jangan hanya menulis teks seperti "Berikut ORDER_DRAFT untuk pemesanan Anda" tanpa blok JSON-nya. Sistem hanya bisa membuat invoice otomatis jika blok ### ORDER_DRAFT dan JSON-nya benar-benar ada di akhir balasanmu. Satu baris teks ringkas (mis. "Baik, invoice akan dibuat dari pesanan ini.") lalu LANGSUNG diikuti blok ORDER_DRAFT.
+5. TRIGGER "BUATKAN INVOICE" / "BUATKAN": Jika owner sudah menyetujui pesanan (atau kamu sudah merangkum detail pemesanan) dan owner berkata "buatkan invoice", "buat invoice", "buatkan", "buatkan invoice nya", "create invoice", "buatkan order", "setuju buatkan", "buatkan orderannya", atau sejenisnya—Kamu WAJIB langsung mengeluarkan blok ORDER_DRAFT di balasan yang SAMA. PENTING: JANGAN tulis kalimat seperti "Baik, berikut adalah ORDER_DRAFT untuk pesanan Anda" atau "Sekarang saya akan mengeluarkan blok ORDER_DRAFT" tanpa benar-benar menulis blok JSON-nya—sistem hanya membaca teks yang dimulai dengan ### ORDER_DRAFT diikuti baris baru lalu \`\`\`json lalu isi JSON lalu \`\`\`. Tanpa blok itu, invoice tidak akan terbuat. Format balasan: paling banyak satu kalimat singkat (mis. "Invoice akan diproses.") lalu baris baru lalu LANGSUNG blok ### ORDER_DRAFT dan JSON lengkap. Jangan janji "akan mengeluarkan"—langsung keluarkan.
 
 KONTEKS DATA (hanya gunakan ini):
 ${contextText}
@@ -511,7 +511,8 @@ ATURAN ITEM:
 - Semua product_id HARUS UUID yang ada di daftar produk konteks.
 
 PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Saat menyebutkan harga produk (apa pun konteksnya), selalu tampilkan IDR, SAR, dan USD. Jangan mengarang product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.
-KETIKA OWNER MINTA "BUATKAN INVOICE" / "BUAT INVOICE": Wajib sertakan blok ORDER_DRAFT (### ORDER_DRAFT lalu baris baru lalu \`\`\`json lalu JSON lalu \`\`\`) di akhir balasan—tanpa blok ini sistem tidak bisa membuat invoice; jangan hanya menjelaskan bahwa ORDER_DRAFT akan dikeluarkan.`;
+
+KETIKA OWNER MINTA "BUATKAN" / "BUATKAN INVOICE": Jangan balas dengan "Baik, berikut adalah ORDER_DRAFT..." atau "Sekarang saya akan mengeluarkan..." — langsung tulis blok ORDER_DRAFT (baris ### ORDER_DRAFT, baris \`\`\`json, isi JSON sesuai pesanan yang sudah disepakati, baris \`\`\`). Sistem otomatis create order dan invoice hanya jika blok ini ada di respons. Maksimal satu kalimat di atas blok (contoh: "Invoice akan diproses.") lalu langsung blok.`;
 }
 
 /**
