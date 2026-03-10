@@ -498,6 +498,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const handleSaveQuantityFromUnifiedModal = async () => {
     const hotel = seasonsModalHotel;
     if (!hotel) return;
+    const isFullboard = (hotel.meta as Record<string, unknown>)?.meal_plan === 'fullboard';
     const parseQty = (v: string | undefined) => Math.max(0, parseInt(String(v || ''), 10) || 0);
     const totalQty = ROOM_TYPES.reduce((s, rt) => s + parseQty(quantityForm[rt]), 0);
     const roomMeta: Record<string, number> = {};
@@ -510,7 +511,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         meta: {
           ...existingMeta,
           currency: pf.currency,
-          meal_price: pf.meal_price,
+          meal_price: isFullboard ? 0 : pf.meal_price,
           meal_price_type: 'per_day',
           room_price_type: 'per_day',
           pricing_mode: pf.pricing_mode,
@@ -536,28 +537,42 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         });
       }
       for (const { roomType, price } of pricesToCreate) {
-        const tripleRoom = fillFromSource(pf.currency, price, currencyRates);
-        await productsApi.createPrice({
-          product_id: hotel.id,
-          branch_id: null,
-          owner_id: null,
-          amount_idr: tripleRoom.idr,
-          amount_sar: tripleRoom.sar,
-          amount_usd: tripleRoom.usd,
-          reference_currency: pf.currency,
-          meta: { room_type: roomType, with_meal: false }
-        });
-        const tripleWithMeal = fillFromSource(pf.currency, price + pf.meal_price, currencyRates);
-        await productsApi.createPrice({
-          product_id: hotel.id,
-          branch_id: null,
-          owner_id: null,
-          amount_idr: tripleWithMeal.idr,
-          amount_sar: tripleWithMeal.sar,
-          amount_usd: tripleWithMeal.usd,
-          reference_currency: pf.currency,
-          meta: { room_type: roomType, with_meal: true }
-        });
+        if (isFullboard) {
+          const fullboardAmount = fillFromSource(pf.currency, price, currencyRates);
+          await productsApi.createPrice({
+            product_id: hotel.id,
+            branch_id: null,
+            owner_id: null,
+            amount_idr: fullboardAmount.idr,
+            amount_sar: fullboardAmount.sar,
+            amount_usd: fullboardAmount.usd,
+            reference_currency: pf.currency,
+            meta: { room_type: roomType, with_meal: true }
+          });
+        } else {
+          const tripleRoom = fillFromSource(pf.currency, price, currencyRates);
+          await productsApi.createPrice({
+            product_id: hotel.id,
+            branch_id: null,
+            owner_id: null,
+            amount_idr: tripleRoom.idr,
+            amount_sar: tripleRoom.sar,
+            amount_usd: tripleRoom.usd,
+            reference_currency: pf.currency,
+            meta: { room_type: roomType, with_meal: false }
+          });
+          const tripleWithMeal = fillFromSource(pf.currency, price + pf.meal_price, currencyRates);
+          await productsApi.createPrice({
+            product_id: hotel.id,
+            branch_id: null,
+            owner_id: null,
+            amount_idr: tripleWithMeal.idr,
+            amount_sar: tripleWithMeal.sar,
+            amount_usd: tripleWithMeal.usd,
+            reference_currency: pf.currency,
+            meta: { room_type: roomType, with_meal: true }
+          });
+        }
       }
 
       await adminPusatApi.setProductAvailability(hotel.id, { quantity: totalQty, meta: { room_types: roomMeta } });
@@ -1443,38 +1458,46 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           </div>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                            <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan (per hari)</h3>
-                            <PriceCurrencyField
-                              label="Harga Makan per Kamar"
-                              value={pf.meal_price || 0}
-                              currency={pf.currency}
-                              onChange={(value, newCur) => {
-                                setQuantityModalPriceForm((f) => {
-                                  if (newCur === f.currency) return { ...f, meal_price: value };
-                                  const conv = (x: number) => {
-                                    const t = fillFromSource(f.currency, x, currencyRates);
-                                    return newCur === 'IDR' ? t.idr : newCur === 'SAR' ? t.sar : t.usd;
-                                  };
-                                  return {
-                                    ...f,
-                                    currency: newCur,
-                                    meal_price: value,
-                                    single_price: conv(f.single_price || 0),
-                                    rooms: {
-                                      single: { ...f.rooms.single, price: conv(f.rooms.single?.price ?? 0) },
-                                      double: { ...f.rooms.double, price: conv(f.rooms.double?.price ?? 0) },
-                                      triple: { ...f.rooms.triple, price: conv(f.rooms.triple?.price ?? 0) },
-                                      quad: { ...f.rooms.quad, price: conv(f.rooms.quad?.price ?? 0) },
-                                      quint: { ...f.rooms.quint, price: conv(f.rooms.quint?.price ?? 0) }
-                                    }
-                                  };
-                                });
-                              }}
-                              rates={currencyRates}
-                              showConversions
-                            />
-                          </div>
+                          {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && (
+                            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                              <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan (per hari)</h3>
+                              <PriceCurrencyField
+                                label="Harga Makan per Kamar"
+                                value={pf.meal_price || 0}
+                                currency={pf.currency}
+                                onChange={(value, newCur) => {
+                                  setQuantityModalPriceForm((f) => {
+                                    if (newCur === f.currency) return { ...f, meal_price: value };
+                                    const conv = (x: number) => {
+                                      const t = fillFromSource(f.currency, x, currencyRates);
+                                      return newCur === 'IDR' ? t.idr : newCur === 'SAR' ? t.sar : t.usd;
+                                    };
+                                    return {
+                                      ...f,
+                                      currency: newCur,
+                                      meal_price: value,
+                                      single_price: conv(f.single_price || 0),
+                                      rooms: {
+                                        single: { ...f.rooms.single, price: conv(f.rooms.single?.price ?? 0) },
+                                        double: { ...f.rooms.double, price: conv(f.rooms.double?.price ?? 0) },
+                                        triple: { ...f.rooms.triple, price: conv(f.rooms.triple?.price ?? 0) },
+                                        quad: { ...f.rooms.quad, price: conv(f.rooms.quad?.price ?? 0) },
+                                        quint: { ...f.rooms.quint, price: conv(f.rooms.quint?.price ?? 0) }
+                                      }
+                                    };
+                                  });
+                                }}
+                                rates={currencyRates}
+                                showConversions
+                              />
+                            </div>
+                          )}
+                          {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan === 'fullboard' && (
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm space-y-2">
+                              <h3 className="text-sm font-semibold text-slate-800">Fullboard</h3>
+                              <p className="text-xs text-slate-600">Harga kamar sudah termasuk makan. Tidak perlu mengisi harga makan terpisah.</p>
+                            </div>
+                          )}
                           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                             <h3 className="text-sm font-semibold text-slate-800">Harga Kamar (per hari)</h3>
                             <div>

@@ -240,20 +240,28 @@ const list = asyncHandler(async (req, res) => {
         const generalPricesHotel = prices.filter(pr => !pr.branch_id && !pr.owner_id);
         const rooms = {};
         const byRoomRefCur = (rt, withMeal) => generalPricesHotel.find(pr => pr.meta?.room_type === rt && (!!pr.meta?.with_meal) === withMeal && pr.currency === refCur);
-        let mealPriceInRef = base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null;
-        ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
-          const priceRow = byRoomRefCur(rt, false);
-          const priceWithMeal = byRoomRefCur(rt, true);
-          if (mealPriceInRef == null && priceRow && priceWithMeal) {
-            mealPriceInRef = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
-          }
-        });
+        const isFullboard = base.meta && base.meta.meal_plan === 'fullboard';
+        let mealPriceInRef = isFullboard ? 0 : (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null);
+        if (!isFullboard) {
+          ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
+            const priceRow = byRoomRefCur(rt, false);
+            const priceWithMeal = byRoomRefCur(rt, true);
+            if (mealPriceInRef == null && priceRow && priceWithMeal) {
+              mealPriceInRef = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
+            }
+          });
+        }
         const mealToSubtract = mealPriceInRef ?? (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : 0);
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
           const priceRow = byRoomRefCur(rt, false);
           const priceWithMeal = byRoomRefCur(rt, true);
-          const basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
+          let basePrice;
+          if (isFullboard) {
+            basePrice = priceWithMeal ? parseFloat(priceWithMeal.amount) : 0;
+          } else {
+            basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
+          }
           rooms[rt] = { quantity: qty, price: applyMou(basePrice) };
         });
         base.room_breakdown = rooms;
