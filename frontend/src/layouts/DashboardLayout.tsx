@@ -38,8 +38,8 @@ import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
-// Semua submenu Products tampil untuk setiap role yang punya akses Products. Accounting hak akses sama seperti admin_pusat.
-const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling', 'owner_mou', 'owner_non_mou'];
+// Semua submenu Products tampil untuk setiap role yang punya akses Products. Owner tidak melihat menu Products (lihat produk via Asisten AI / Invoice).
+const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling'];
 
 const menuItems: MenuItem[] = [
   {
