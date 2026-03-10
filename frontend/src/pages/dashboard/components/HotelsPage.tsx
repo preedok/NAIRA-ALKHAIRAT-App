@@ -834,7 +834,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 </td>
                 <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {(() => {
+                  {hotel.meta?.meal_plan === 'fullboard' ? (
+                    <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Per hari jadi free</span></>
+                  ) : (() => {
                     const t = getPriceTripleForTable(tripleMeal.idr, tripleMeal.sar, tripleMeal.usd);
                     if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-400 text-xs block">{mealType}</span></>;
                     return (

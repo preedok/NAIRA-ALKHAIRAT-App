@@ -1023,7 +1023,8 @@ const OrderFormPage: React.FC = () => {
                                     {isFullboardHotel(hProd) ? (
                                       <>
                                         <label className={labelClass}>Harga makan / malam</label>
-                                        <p className="text-sm text-slate-600 py-2">Termasuk (fullboard)</p>
+                                        <p className="text-sm font-medium text-slate-700 tabular-nums">–</p>
+                                        <p className="text-xs text-slate-500 mt-0.5">Per hari jadi free</p>
                                       </>
                                     ) : canEditPrice ? (
                                       line.with_meal ? (
