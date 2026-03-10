@@ -9,7 +9,7 @@ const { Product, ProductPrice, Order, Invoice, OwnerProfile, User, Branch } = re
 const { getRulesForBranch } = require('../controllers/businessRuleController');
 const { getEffectivePrice } = require('../controllers/productController');
 const { getAvailabilityByDateRange } = require('./hotelAvailabilityService');
-const { ORDER_ITEM_TYPE } = require('../constants');
+const { ORDER_ITEM_TYPE, BUSINESS_RULE_KEYS } = require('../constants');
 
 const ORDER_DRAFT_MARKER = '### ORDER_DRAFT';
 const ORDER_DRAFT_END = '```';
@@ -273,6 +273,20 @@ async function buildContextForOwner(ownerId) {
     });
   }
 
+  // Terapkan diskon MOU ke harga makan hotel (sama seperti getEffectivePrice): owner MOU dapat diskon, non-MOU tidak.
+  const ownerProfile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
+  const isMouOwner = !!(ownerProfile && ownerProfile.is_mou_owner);
+  const mouDiscountPercent = (rules && (rules.mou_discount_percent != null || rules[BUSINESS_RULE_KEYS?.MOU_DISCOUNT_PERCENT] != null)) ? (Number(rules.mou_discount_percent) || Number(rules[BUSINESS_RULE_KEYS?.MOU_DISCOUNT_PERCENT]) || 0) : 10;
+  if (isMouOwner && branchId && mouDiscountPercent > 0) {
+    productSummaries.forEach(ps => {
+      if (ps.type === 'hotel' && ps.meal_price_idr != null && ps.meal_price_idr > 0) {
+        ps.meal_price_idr = Math.round(ps.meal_price_idr * (1 - mouDiscountPercent / 100) * 100) / 100;
+        ps.meal_price_sar = (ps.meal_price_idr / sarToIdr).toFixed(2);
+        ps.meal_price_usd = (ps.meal_price_idr / usdToIdr).toFixed(2);
+      }
+    });
+  }
+
   const ownerOrders = await Order.count({ where: { owner_id: ownerId } });
   const ownerInvoicesCount = await Invoice.count({ where: { owner_id: ownerId } });
   const recentOrders = await Order.findAll({
@@ -376,6 +390,7 @@ async function buildContextForOwner(ownerId) {
 Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
 Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
+Tipe akun: ${isMouOwner ? `Owner MOU (harga di bawah sudah termasuk diskon ${mouDiscountPercent}%)` : 'Owner Non-MOU (harga standar)'}. WAJIB gunakan hanya harga dari daftar ini; jangan mengarang atau mengubah angka.
 
 Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id saat menyebut produk). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
 ${productLines}
@@ -431,9 +446,9 @@ function buildSystemPrompt(contextText) {
 
 KEMAMPUAN:
 1. JAWAB PERTANYAAN: Jawab apa pun tentang produk, harga, invoice, order, jadwal, dan ketersediaan hotel—HANYA dari data konteks di bawah. Konteks berisi: daftar produk, blok "Harga makan hotel" (per orang per hari per hotel), periode kalender, booking hotel, dan ketersediaan kamar. Untuk pertanyaan "harga makan", "berapa harga makan", "paket makan": WAJIB baca dari blok "Harga makan hotel" di konteks; tampilkan IDR, SAR, USD jika ada; jika tertulis "(belum diatur di data produk)" jawab bahwa harga makan untuk hotel tersebut belum diatur dan bisa ditanyakan ke admin—jangan jawab "tidak ada data". Saat menampilkan harga: selalu IDR, SAR, USD. Untuk "apakah hotel X tersedia tanggal A–B": baca dari blok "Ketersediaan kamar hotel"; jika hotel X tercantum dengan angka, artinya hotel TERSEEDIA. Hanya katakan "tidak ada data" jika hotel tidak ada di daftar ketersediaan atau tertulis "(tidak ada musim/kalender)".
-2. NEGOSIASI HARGA: Berikan penawaran dari daftar produk. Jika owner minta diskon atau nego:
-   - Diskon nego MAKSIMAL 2% saja. Jika owner minta diskon lebih dari 2%, tolak dengan sopan: "Maaf, diskon maksimal yang dapat kami berikan 2%." Jangan setuju diskon di atas 2%.
-   - WAJIB sebutkan harga dalam tiga mata uang: IDR, SAR, dan USD (jangan hanya IDR). Contoh: "Harga untuk [produk]: [X] IDR / [Y] SAR / [Z] USD."
+2. NEGOSIASI HARGA: Harga HANYA dari daftar produk di konteks (sudah sesuai tipe owner: MOU dapat diskon, Non-MOU harga standar). Jangan mengarang atau mengubah angka. Jika owner minta diskon atau nego:
+   - Diskon nego MAKSIMAL 2% saja dari harga yang tercantum di konteks. Jika owner minta diskon lebih dari 2%, tolak dengan sopan: "Maaf, diskon maksimal yang dapat kami berikan 2%." Jangan setuju diskon di atas 2%.
+   - WAJIB sebutkan harga dalam tiga mata uang: IDR, SAR, dan USD (ambil persis dari daftar konteks). Contoh: "Harga untuk [produk]: [X] IDR / [Y] SAR / [Z] USD."
    - Konfirmasi: "Kita sepakat di [angka] [mata uang] untuk [item]?"
 3. SETELAH SEPAKAT: Minta owner menyebutkan daftar pesanan lengkap:
    - Produk apa saja, jumlah, dan tanggal (check-in/check-out hotel, departure/return tiket, travel_date visa/bus).
@@ -451,35 +466,51 @@ ATURAN ITEM (untuk jawaban tentang pesanan):
 - Bus: route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
 - Semua product_id HARUS UUID yang ada di daftar produk konteks.
 
-PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Saat menyebutkan harga produk (apa pun konteksnya), selalu tampilkan IDR, SAR, dan USD. Jangan mengarang product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.`;
+PENTING: Semua informasi (produk, harga, nama, kurs) HANYA dari data konteks di atas. Harga di konteks sudah final untuk tipe owner (MOU = sudah diskon, Non-MOU = standar)—gunakan angka itu saja; jangan mengarang atau mengubah. Saat menyebutkan harga produk, selalu tampilkan IDR, SAR, dan USD dari daftar. Jangan mengarang product_id, nama produk, atau angka harga. Jika owner menanyakan produk/harga yang tidak ada di daftar, katakan tidak ada datanya.`;
+}
+
+/**
+ * Resolve product dari productSummaries: by UUID, lalu by name/code (case-insensitive, contains).
+ */
+function resolveProduct(item, byId, productSummaries) {
+  if (item.product_id && byId.has(item.product_id)) return byId.get(item.product_id);
+  const nameOrCode = (item.product_name || item.name || '').toString().trim().toLowerCase();
+  if (!nameOrCode) return null;
+  const match = productSummaries.find(
+    p => p.name && p.name.toLowerCase().includes(nameOrCode) ||
+      (p.code && p.code.toLowerCase().includes(nameOrCode)) ||
+      nameOrCode.includes((p.name || '').toLowerCase()) ||
+      (p.code && nameOrCode.includes(p.code.toLowerCase()))
+  );
+  return match || null;
 }
 
 /**
  * Validasi order_draft: hanya item dengan product_id yang ada di daftar produk DB.
- * Nama produk dan tipe diambil dari data DB, bukan dari AI (menghindari data karangan).
+ * Jika product_id tidak cocok, coba resolve by product_name/code.
  */
 function validateOrderDraftAgainstDb(orderDraft, productSummaries) {
   if (!orderDraft || !Array.isArray(orderDraft.items) || !Array.isArray(productSummaries)) return null;
   const byId = new Map(productSummaries.map(p => [p.id, p]));
-  const validItems = orderDraft.items
-    .filter(item => item && byId.has(item.product_id))
-    .map(item => {
-      const fromDb = byId.get(item.product_id);
-      const dbPrice = fromDb.price_idr != null ? Number(fromDb.price_idr) : 0;
-      const negotiatedPrice = Number(item.unit_price_idr);
-      // Harga dari nego; diskon maksimal 2% — jika nego lebih dari 2%, pakai harga minimal (98% dari DB)
-      const minAllowed = dbPrice > 0 ? Math.round(dbPrice * 0.98) : 0;
-      let unit_price_idr = (negotiatedPrice > 0 && Number.isFinite(negotiatedPrice)) ? negotiatedPrice : dbPrice;
-      if (dbPrice > 0 && unit_price_idr < minAllowed) unit_price_idr = minAllowed;
-      return {
-        type: fromDb.type,
-        product_id: fromDb.id,
-        product_name: fromDb.name,
-        quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
-        unit_price_idr,
-        meta: item.meta && typeof item.meta === 'object' ? item.meta : {}
-      };
+  const validItems = [];
+  for (const item of orderDraft.items) {
+    if (!item) continue;
+    const fromDb = resolveProduct(item, byId, productSummaries);
+    if (!fromDb) continue;
+    const dbPrice = fromDb.price_idr != null ? Number(fromDb.price_idr) : 0;
+    const negotiatedPrice = Number(item.unit_price_idr);
+    const minAllowed = dbPrice > 0 ? Math.round(dbPrice * 0.98) : 0;
+    let unit_price_idr = (negotiatedPrice > 0 && Number.isFinite(negotiatedPrice)) ? negotiatedPrice : dbPrice;
+    if (dbPrice > 0 && unit_price_idr < minAllowed) unit_price_idr = minAllowed;
+    validItems.push({
+      type: fromDb.type,
+      product_id: fromDb.id,
+      product_name: fromDb.name,
+      quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
+      unit_price_idr,
+      meta: item.meta && typeof item.meta === 'object' ? item.meta : {}
     });
+  }
   if (validItems.length === 0) return null;
   return { items: validItems };
 }
@@ -526,21 +557,23 @@ async function extractOrderFromConversation(messages, contextText) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || String(apiKey).trim() === '') return null;
 
-  const systemPrompt = `Kamu ekstraktor pesanan. Dari percakapan di bawah, ekstrak pesanan yang sudah disepakati (produk, jumlah, harga, tanggal).
+  const systemPrompt = `Kamu ekstraktor pesanan. Dari percakapan di bawah, ekstrak SEMUA pesanan yang sudah disepakati (produk, jumlah, harga, tanggal). WAJIB kembalikan objek JSON dengan array items.
 
 Kembalikan HANYA satu objek JSON valid (tanpa teks lain, tanpa markdown, tanpa \`\`\`):
-{"items": [{"type": "hotel", "product_id": "<uuid dari daftar produk>", "quantity": 2, "unit_price_idr": 5000000, "meta": {"check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD", "room_type": "quad", "with_meal": true}}, ...]}
+{"items": [{"type": "hotel", "product_id": "<uuid persis dari konteks>", "product_name": "Nama Produk", "quantity": 2, "unit_price_idr": 5000000, "meta": {"check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD", "room_type": "quad", "with_meal": true}}, ...]}
 
 Aturan:
-- product_id WAJIB UUID persis dari daftar produk di konteks (jangan mengarang).
+- product_id: copy UUID persis dari baris "id: <uuid>" di konteks. Jika tidak yakin, isi product_name dengan nama produk persis seperti di daftar.
+- product_name: nama produk seperti di konteks (untuk fallback). WAJIB isi jika ada produk disebut di obrolan.
 - type: hotel | visa | ticket | bus | handling | package.
-- Hotel: meta wajib check_in, check_out, room_type (single/double/triple/quad/quint), with_meal (boolean). Boleh tambah room_unit_price, meal_unit_price (IDR) di meta.
-- Tiket: meta bandara (BTH/CGK/SBY/UPG), trip_type (one_way/return_only/round_trip), departure_date, return_date jika round_trip.
+- Hotel: meta wajib check_in, check_out (format YYYY-MM-DD), room_type (single/double/triple/quad/quint), with_meal (boolean).
+- Tiket: meta bandara, trip_type, departure_date, return_date jika round_trip.
 - Visa: meta travel_date.
-- Bus: meta route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
-- unit_price_idr: harga per unit dalam IDR sesuai yang disepakati di obrolan.
+- Bus: meta route_type, bus_type, trip_type, travel_date.
+- unit_price_idr: harga per unit IDR yang disepakati di obrolan (angka saja).
+- Tanggal: selalu format YYYY-MM-DD (misal 10 Maret 2025 = 2025-03-10).
 
-KONTEKS (daftar produk + harga):
+KONTEKS (daftar produk — gunakan id dan nama dari sini):
 ${contextText}`;
 
   try {
@@ -553,7 +586,7 @@ ${contextText}`;
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: fullMessages,
-      temperature: 0.2,
+      temperature: 0,
       max_tokens: 2048
     });
     const content = completion?.choices?.[0]?.message?.content || '';

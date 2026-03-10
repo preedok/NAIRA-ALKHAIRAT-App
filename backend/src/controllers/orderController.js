@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof, PaymentReallocation } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, PaymentProof, PaymentReallocation, InvoiceFile, sequelize } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
 const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS, isOwnerRole } = require('../constants');
 const { getEffectivePrice } = require('./productController');
@@ -1083,6 +1083,29 @@ const destroy = asyncHandler(async (req, res) => {
     if (targetInv.owner_id !== order.owner_id) return res.status(400).json({ success: false, message: 'Invoice tujuan harus milik owner yang sama' });
     const targetStatus = (targetInv.status || '').toLowerCase();
     if (targetStatus === 'canceled' || targetStatus === 'cancelled' || targetStatus === 'cancelled_refund') return res.status(400).json({ success: false, message: 'Invoice tujuan tidak boleh yang sudah dibatalkan' });
+  }
+
+  // Jika masih tagihan DP (belum ada pembayaran): hapus data (delete), bukan sekadar ubah status.
+  if (inv && paidAmount === 0) {
+    const orderItemIds = (await OrderItem.findAll({ where: { order_id: order.id }, attributes: ['id'], raw: true })).map(r => r.id);
+    await sequelize.transaction(async (tx) => {
+      await PaymentReallocation.destroy({ where: { [Op.or]: [{ source_invoice_id: inv.id }, { target_invoice_id: inv.id }] }, transaction: tx });
+      await PaymentProof.destroy({ where: { invoice_id: inv.id }, transaction: tx });
+      await InvoiceFile.destroy({ where: { invoice_id: inv.id }, transaction: tx });
+      await InvoiceStatusHistory.destroy({ where: { invoice_id: inv.id }, transaction: tx });
+      await Refund.update({ invoice_id: null, order_id: null }, { where: { [Op.or]: [{ invoice_id: inv.id }, { order_id: order.id }] }, transaction: tx });
+      await OrderRevision.destroy({ where: { order_id: order.id }, transaction: tx });
+      if (orderItemIds.length > 0) {
+        await HotelProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIds } }, transaction: tx });
+        await VisaProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIds } }, transaction: tx });
+        await TicketProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIds } }, transaction: tx });
+        await BusProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIds } }, transaction: tx });
+      }
+      await OrderItem.destroy({ where: { order_id: order.id }, transaction: tx });
+      await Invoice.destroy({ where: { id: inv.id }, transaction: tx });
+      await Order.destroy({ where: { id: order.id }, transaction: tx });
+    });
+    return res.json({ success: true, message: 'Order dan invoice telah dihapus (belum ada pembayaran DP).', data: { deleted: true } });
   }
 
   let refund = null;

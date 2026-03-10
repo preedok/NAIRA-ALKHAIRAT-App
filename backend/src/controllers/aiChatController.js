@@ -59,9 +59,12 @@ const chat = asyncHandler(async (req, res) => {
   const { reply } = await callChat(messages, systemPrompt);
 
   let createdInvoice = null;
-  const isCreateInvoiceRequest = /buatkan|buat\s*invoice|create\s*invoice|setuju|buatkan\s*invoice/i.test(userMessage);
+  const isCreateInvoiceRequest = /buatkan\s*(invoice|invocenya|invice|order)?|buat\s*(invoice|order)|create\s*invoice|setuju\s*(buatkan)?|invoice\s*nya|proses\s*invoice|buatkan\s*order|buat\s*orderannya/i.test(userMessage.trim());
   if (isCreateInvoiceRequest && branchId) {
-    const extracted = await extractOrderFromConversation(messages, contextText);
+    let extracted = await extractOrderFromConversation(messages, contextText);
+    if (!extracted?.items?.length && messages.length > 1) {
+      extracted = await extractOrderFromConversation(messages, contextText);
+    }
     const sanitizedDraft = extracted ? validateOrderDraftAgainstDb(extracted, productSummaries) : null;
     if (sanitizedDraft && sanitizedDraft.items && sanitizedDraft.items.length > 0) {
       const itemsForCreate = sanitizedDraft.items.map((it) => ({
@@ -90,11 +93,23 @@ const chat = asyncHandler(async (req, res) => {
         console.error('AI chat create order/invoice failed:', err?.message || err);
       }
     }
+    if (!createdInvoice) {
+      if (!extracted?.items?.length) {
+        console.warn('AI chat: extractOrderFromConversation returned no items');
+      } else if (!sanitizedDraft?.items?.length) {
+        console.warn('AI chat: validateOrderDraftAgainstDb rejected all items');
+      }
+    }
+  }
+
+  let finalReply = reply;
+  if (isCreateInvoiceRequest && !createdInvoice && branchId) {
+    finalReply = 'Maaf, invoice belum bisa dibuat dari obrolan ini. Pastikan Anda sudah menyebutkan: nama produk, jumlah/kamar, dan tanggal (check-in/check-out untuk hotel). Silakan tulis ulang ringkasan pesanan lalu kirim lagi "buatkan invoice".';
   }
 
   res.json({
     success: true,
-    reply,
+    reply: finalReply,
     ...(createdInvoice && { created_invoice: createdInvoice })
   });
 });
