@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import { aiChatApi } from '../../../services/api';
@@ -216,6 +217,22 @@ export default function OwnerAIChatPage() {
     setNewIdx(null);
   };
 
+  const deleteConversation = (convId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConversations((list) => {
+      const next = list.filter((c) => c.id !== convId);
+      if (activeConversationId === convId) {
+        const nextActive = next[0];
+        setActiveConversationId(nextActive?.id ?? null);
+        setMessages(nextActive?.messages ?? []);
+        setNewIdx(null);
+      }
+      return next;
+    });
+    showToast('Obrolan dihapus.', 'success');
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
@@ -425,38 +442,78 @@ export default function OwnerAIChatPage() {
               </p>
             )}
             {conversations.map((conv) => (
-              <button
+              <div
                 key={conv.id}
-                type="button"
-                onClick={() => selectConversation(conv)}
                 style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '10px 12px',
+                  display: 'flex',
+                  alignItems: 'stretch',
+                  gap: 4,
                   marginBottom: 6,
                   borderRadius: 12,
                   border: '1px solid transparent',
                   background: activeConversationId === conv.id ? 'rgba(30,58,138,0.12)' : 'transparent',
-                  color: activeConversationId === conv.id ? '#1e40af' : '#334155',
-                  fontSize: 12,
-                  lineHeight: 1.4,
-                  cursor: 'pointer',
-                  transition: 'all .15s',
+                  overflow: 'hidden',
                 }}
               >
-                <div style={{
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  marginBottom: 2,
-                }}>
-                  {conv.title}
-                </div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                  {formatConversationDate(conv.updatedAt)} · {conv.messages.length} pesan
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => selectConversation(conv)}
+                  style={{
+                    flex: 1,
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: activeConversationId === conv.id ? '#1e40af' : '#334155',
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                    cursor: 'pointer',
+                    transition: 'all .15s',
+                  }}
+                >
+                  <div style={{
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    marginBottom: 2,
+                  }}>
+                    {conv.title}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                    {formatConversationDate(conv.updatedAt)} · {conv.messages.length} pesan
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => deleteConversation(conv.id, e)}
+                  title="Hapus obrolan"
+                  style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 36,
+                    padding: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    borderRadius: 8,
+                    transition: 'color .15s, background .15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239,68,68,0.1)';
+                    e.currentTarget.style.color = '#dc2626';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#94a3b8';
+                  }}
+                >
+                  <Trash2 style={{ width: 16, height: 16 }} />
+                </button>
+              </div>
             ))}
           </div>
         </aside>

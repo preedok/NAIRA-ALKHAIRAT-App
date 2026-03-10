@@ -1109,8 +1109,17 @@ const OrdersInvoicesPage: React.FC = () => {
   const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
   const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
   const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList });
-  /** Total invoice: gunakan total_amount_idr & total_amount_sar dari BE agar sama dengan form order & backend. */
+  /** Dibatalkan dan belum ada pembayaran → Total & Sisa tampil 0. */
+  const isCancelledNoPayment = (inv: any) => {
+    const st = (inv?.status || '').toLowerCase();
+    if (st !== 'canceled' && st !== 'cancelled' && st !== 'cancelled_refund') return false;
+    const paidFromProofs = (inv?.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
+    const paid = parseFloat(inv?.paid_amount || 0) || paidFromProofs;
+    return paid <= 0;
+  };
+  /** Total invoice: gunakan total_amount_idr & total_amount_sar dari BE; 0 jika dibatalkan dan belum bayar. */
   const invoiceTotalTriple = (inv: any) => {
+    if (isCancelledNoPayment(inv)) return { idr: 0, sar: 0, usd: 0 };
     const idr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
     const sar = inv?.total_amount_sar != null ? parseFloat(inv.total_amount_sar) : idr / sarToIdrList;
     return { idr, sar, usd: idr / usdToIdrList };
@@ -1336,6 +1345,7 @@ const OrdersInvoicesPage: React.FC = () => {
               return parseFloat(inv.paid_amount || 0) || paidFromProofs;
             };
             const getRemaining = (inv: any) => {
+              if (isCancelledNoPayment(inv)) return 0;
               const totalInv = parseFloat(inv.total_amount || 0);
               return Math.max(0, totalInv - getPaid(inv));
             };
@@ -1373,10 +1383,11 @@ const OrdersInvoicesPage: React.FC = () => {
                         data={filteredList}
                         emptyMessage="Tidak ada invoice dalam kategori ini."
                         renderRow={(inv: any) => {
-                          const totalInv = parseFloat(inv.total_amount || 0);
+                          const zeroOut = isCancelledNoPayment(inv);
+                          const totalInv = zeroOut ? 0 : parseFloat(inv.total_amount || 0);
                           const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                           const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                          const remaining = Math.max(0, totalInv - paid);
+                          const remaining = zeroOut ? 0 : Math.max(0, totalInv - paid);
                           const totalTriple = invoiceTotalTriple(inv);
                           return (
                             <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
@@ -1425,10 +1436,11 @@ const OrdersInvoicesPage: React.FC = () => {
                         data={byStatusList}
                         emptyMessage="Tidak ada invoice dengan status ini."
                         renderRow={(inv: any) => {
-                          const totalInv = parseFloat(inv.total_amount || 0);
+                          const zeroOut = isCancelledNoPayment(inv);
+                          const totalInv = zeroOut ? 0 : parseFloat(inv.total_amount || 0);
                           const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                           const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                          const remaining = Math.max(0, totalInv - paid);
+                          const remaining = zeroOut ? 0 : Math.max(0, totalInv - paid);
                           const totalTriple = invoiceTotalTriple(inv);
                           return (
                             <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
@@ -1576,6 +1588,10 @@ const OrdersInvoicesPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
                       {(() => {
+                        if (isCancelledNoPayment(inv)) {
+                          const t = amountTriple(0);
+                          return <><div><NominalDisplay amount={0} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
+                        }
                         const totalInv = parseFloat(inv.total_amount || 0);
                         const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                         const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
@@ -2007,13 +2023,14 @@ const OrdersInvoicesPage: React.FC = () => {
               {detailTab === 'invoice' && (
                 <div className="space-y-6">
                   {(() => {
-                    const totalInvIdr = viewInvoice.total_amount_idr != null ? Number(viewInvoice.total_amount_idr) : Number(viewInvoice.total_amount) || 0;
-                    const totalInvSar = viewInvoice.total_amount_sar != null ? Number(viewInvoice.total_amount_sar) : totalInvIdr / sarToIdr;
+                    const zeroOut = isCancelledNoPayment(viewInvoice);
+                    const totalInvIdr = zeroOut ? 0 : (viewInvoice.total_amount_idr != null ? Number(viewInvoice.total_amount_idr) : Number(viewInvoice.total_amount) || 0);
+                    const totalInvSar = zeroOut ? 0 : (viewInvoice.total_amount_sar != null ? Number(viewInvoice.total_amount_sar) : totalInvIdr / sarToIdr);
                     const totalInv = totalInvIdr;
                     const paidFromProofs = (viewInvoice?.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                     const paidFromInvoice = Number(viewInvoice.paid_amount) || 0;
                     const displayPaid = paidFromInvoice > 0 ? paidFromInvoice : paidFromProofs;
-                    const displayRemaining = Math.max(0, totalInv - displayPaid);
+                    const displayRemaining = zeroOut ? 0 : Math.max(0, totalInv - displayPaid);
                     const kesBreakdown = (viewInvoice?.PaymentProofs || []).filter((pr: any) => pr.payment_location === 'saudi' && pr.amount_original != null && pr.payment_currency && pr.payment_currency !== 'IDR');
                     const kesSar = kesBreakdown.filter((pr: any) => pr.payment_currency === 'SAR').reduce((s: number, pr: any) => s + Number(pr.amount_original || 0), 0);
                     const kesUsd = kesBreakdown.filter((pr: any) => pr.payment_currency === 'USD').reduce((s: number, pr: any) => s + Number(pr.amount_original || 0), 0);
@@ -2322,7 +2339,17 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <td className="py-2 px-2 text-slate-600 text-xs align-top leading-relaxed break-words min-w-0 whitespace-pre-line">{desc || '–'}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">{typeKey === 'hotel' && nights > 0 ? `${qty} × ${nights}` : qty}</td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {isMerged ? '–' : hasHotelBreakdown ? (
+                                            {isMerged ? (roomUnitIdr > 0 ? (
+                                              <>
+                                                <div><NominalDisplay amount={roomUnitIdr} currency="IDR" /></div>
+                                                {sarUsdLine(roomUnitIdr)}
+                                              </>
+                                            ) : unitPriceIdr > 0 ? (
+                                              <>
+                                                <div><NominalDisplay amount={unitPriceIdr} currency="IDR" /></div>
+                                                {sarUsdLine(unitPriceIdr)}
+                                              </>
+                                            ) : '–') : hasHotelBreakdown ? (
                                               <>
                                                 <div><NominalDisplay amount={roomUnitIdr} currency="IDR" /></div>
                                                 {sarUsdLine(roomUnitIdr)}
@@ -2335,7 +2362,12 @@ const OrdersInvoicesPage: React.FC = () => {
                                             )}
                                           </td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {isMerged ? '–' : hasHotelBreakdown ? (mealUnitIdr > 0 ? (
+                                            {isMerged ? (mealUnitIdr > 0 ? (
+                                              <>
+                                                <div><NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>
+                                                {sarUsdLine(mealUnitIdr)}
+                                              </>
+                                            ) : '–') : hasHotelBreakdown ? (mealUnitIdr > 0 ? (
                                               <>
                                                 <div><NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>
                                                 {sarUsdLine(mealUnitIdr)}
