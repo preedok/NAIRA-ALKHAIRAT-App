@@ -135,6 +135,7 @@ const OrderFormPage: React.FC = () => {
   const [ownerSel,    setOwnerSel]   = useState('');
   const [hotelAvailability, setHotelAvailability] = useState<Record<string, { byRoomType: Record<string, number> } | 'loading' | null>>({});
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
+  const [waiveBusPenalty, setWaiveBusPenalty] = useState(false);
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
 
   const isOwner      = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
@@ -305,6 +306,8 @@ const OrderFormPage: React.FC = () => {
     }
     initialOrderItemKeysRef.current = keys;
     setItems(rows.length?rows:[newRow()]);
+    const visaPacks = rows.filter((r:OrderItemRow)=>r.type==='visa').reduce((s:number,r:OrderItemRow)=>s+Math.max(0,r.quantity),0);
+    if(isEdit&&order&&Number(order.penalty_amount)===0&&visaPacks>0&&visaPacks<35) setWaiveBusPenalty(true);
   },[orderId,order,products,rates.SAR_TO_IDR,rates.USD_TO_IDR]);
 
   /* fetch availability for hotel rows that have product_id + check_in + check_out */
@@ -637,9 +640,8 @@ const OrderFormPage: React.FC = () => {
   };
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
   const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
-  const busPenaltyIDR=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack
-    ?busPenaltyRule.bus_penalty_idr
-    :0;
+  const wouldHaveBusPenalty=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack;
+  const busPenaltyIDR=!waiveBusPenalty&&wouldHaveBusPenalty?busPenaltyRule.bus_penalty_idr:0;
 
   /* submit */
   const latestRates = { SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 };
@@ -758,7 +760,7 @@ const OrderFormPage: React.FC = () => {
     const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,...ratesPayload})
+      ordersApi.update(orderId,{items:payload,...ratesPayload,...(waiveBusPenalty?{waive_bus_penalty:true}:{})})
         .then(()=>{ showToast('Invoice diperbarui. Tagihan ikut diperbarui.','success'); navigate('/dashboard/orders-invoices', { state: { refreshList: true } }); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal memperbarui','error'))
         .finally(()=>setSaving(false));
@@ -766,6 +768,7 @@ const OrderFormPage: React.FC = () => {
       const body:Record<string,any>={items:payload,...ratesPayload};
       if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
+      if(waiveBusPenalty) body.waive_bus_penalty=true;
       ordersApi.create(body)
         .then(()=>{ orderDraft.clear(); showToast('Invoice dibuat.','success'); navigate('/dashboard/orders-invoices',{state:{refreshList:true}}); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal membuat invoice','error'))
@@ -796,7 +799,7 @@ const OrderFormPage: React.FC = () => {
     const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,...ratesPayload})
+      ordersApi.update(orderId,{items:payload,...ratesPayload,...(waiveBusPenalty?{waive_bus_penalty:true}:{})})
         .then(()=>{ showToast('Draft disimpan. Invoice belum diterbitkan.','success'); setSaving(false); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menyimpan draft','error'))
         .finally(()=>setSaving(false));
@@ -804,6 +807,7 @@ const OrderFormPage: React.FC = () => {
       const body:Record<string,any>={items:payload,save_as_draft:true,...ratesPayload};
       if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
+      if(waiveBusPenalty) body.waive_bus_penalty=true;
       ordersApi.create(body)
         .then((res:any)=>{
           orderDraft.clear();
@@ -1374,6 +1378,17 @@ const OrderFormPage: React.FC = () => {
                       </div>
                     );
                   })}
+                  {items.some(r=>r.type==='visa')&&(
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
+                      <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
+                      {wouldHaveBusPenalty ? (
+                        <span className="text-amber-800"> Penalti bus: <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> (karena &lt; {busPenaltyRule.bus_min_pack} pack).</span>
+                      ) : (
+                        <span className="text-slate-600"> Penalti bus tidak berlaku.</span>
+                      )}
+                      <p className="text-xs text-slate-600 mt-1">Centang &quot;Tanpa penalti bus (pakai bus Hiace saja)&quot; di Ringkasan untuk hapus penalti.</p>
+                    </div>
+                  )}
                   <Button type="button" variant="outline" onClick={addRow} className="w-full py-4 rounded-xl border-2 border-dashed border-[#0D1A63]/40 bg-[#0D1A63]/5 text-[#0D1A63] hover:border-[#0D1A63] hover:bg-[#0D1A63]/10 transition-colors text-base font-semibold shadow-sm">
                     <Plus size={20} className="mr-2 inline shrink-0"/> Tambah item pemesanan
                   </Button>
@@ -1443,10 +1458,16 @@ const OrderFormPage: React.FC = () => {
                 <p className="text-xs text-slate-500">Pembayaran USD</p>
               </div>
             </div>
-            {busPenaltyIDR>0&&(
+            {(wouldHaveBusPenalty||waiveBusPenalty)&&items.some(r=>r.type==='visa')&&(
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
-                <p className="text-amber-800 font-medium">Penalti bus: visa {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
-                <p className="text-slate-600 text-xs mt-0.5">Bus besar include dengan visa. Jika visa &lt; {busPenaltyRule.bus_min_pack} pack: <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></p>
+                <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
+                <p className="text-slate-600 text-xs mt-0.5">
+                  {wouldHaveBusPenalty ? <>Penalti bus: <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> (karena visa &lt; 35 pack)</> : 'Penalti bus tidak berlaku (pakai bus Hiace saja).'}
+                </p>
+                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                  <input type="checkbox" checked={waiveBusPenalty} onChange={(e)=>setWaiveBusPenalty(e.target.checked)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
+                  <span className="text-sm text-slate-700">Tanpa penalti bus (pakai bus Hiace saja)</span>
+                </label>
               </div>
             )}
             <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">
