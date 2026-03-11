@@ -12,6 +12,9 @@ const {
   Product,
   ProductPrice,
   BusProgress,
+  VisaProgress,
+  TicketProgress,
+  HotelProgress,
   Invoice,
   Refund,
   PaymentReallocation,
@@ -230,11 +233,15 @@ const listInvoices = asyncHandler(async (req, res) => {
           {
             model: OrderItem,
             as: 'OrderItems',
-            where: { type: ORDER_ITEM_TYPE.BUS },
+            where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
             required: false,
+            attributes: ['id', 'type', 'quantity', 'product_ref_id', 'meta'],
             include: [
-              { model: BusProgress, as: 'BusProgress', required: false },
-              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }
+              { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] },
+              { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
+              { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at'] },
+              { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_in_time', 'check_out_date', 'check_out_time'] },
+              { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type', 'meta'], required: false }
             ]
           }
         ]
