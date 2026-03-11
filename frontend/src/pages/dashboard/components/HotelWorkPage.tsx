@@ -36,6 +36,9 @@ const MEAL_OPTIONS = PROGRESS_STATUS_OPTIONS_MEAL;
 
 const ROOM_TYPE_LABELS = ROOM_TYPE_LABELS_SHARED;
 
+/** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang) */
+const ROOM_CAPACITY: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+
 const formatDate = (d: string | null | undefined) => {
   if (!d) return '–';
   try {
@@ -484,7 +487,25 @@ const HotelWorkPage: React.FC = () => {
                       {invStatusLabel}
                     </Badge>
                   </td>
-                  <td className="px-6 py-4 text-center font-semibold text-slate-900 tabular-nums align-top">{hotelCount}</td>
+                  <td className="px-6 py-4 align-top">
+                    <div className="text-center min-w-[120px]">
+                      <p className="font-semibold text-slate-900 tabular-nums">{hotelCount} item</p>
+                      <div className="text-xs text-slate-600 mt-1 space-y-0.5 text-left">
+                        {hotelItemsList.map((item: any) => {
+                          const rt = item.room_type || item.meta?.room_type || '';
+                          const qty = Math.max(0, parseInt(String(item.quantity || 0), 10) || 0);
+                          const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;
+                          const orang = qty * cap;
+                          const label = ROOM_TYPE_LABELS[rt] || rt || '–';
+                          return (
+                            <p key={item.id} className="leading-tight">
+                              {qty} {label}{cap > 0 ? ` (${orang} org)` : ''}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap align-top">{checkInDisplay}</td>
                   <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap align-top">{checkOutDisplay}</td>
                   <td className="px-6 py-4 text-slate-600 text-sm align-top">{progressSummary}</td>
