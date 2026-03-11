@@ -121,22 +121,22 @@ export function InvoiceNumberCell({
         </span>
       )}
       {!compact && showBaruAndPerubahan && !isDraftRow(inv) && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="flex flex-col gap-y-1">
           {statusLabel ? (
             <span className="text-xs text-slate-600" title="Status invoice">
               Status: {statusLabel}
             </span>
           ) : null}
           {isNewInvoice(inv) && (
-            <Badge variant="success" className="text-xs">
+            <Badge variant="success" className="text-xs w-fit">
               Baru
             </Badge>
           )}
-          {changeDateStr && (
+          {changeDateStr ? (
             <span className="text-xs text-slate-600" title="Perubahan form order">
               Perubahan {changeDateStr}
             </span>
-          )}
+          ) : null}
         </div>
       )}
     </div>
