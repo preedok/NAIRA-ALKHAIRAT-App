@@ -21,7 +21,7 @@ const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
-/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role bus = cabang/wilayah. Fallback semua cabang agar tidak 403. */
+/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role bus = wilayah dulu (sama seperti invoice) baru cabang. Agar role bus lihat invoice yang sama dengan role invoice dalam satu wilayah. */
 async function getBusBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
     const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
@@ -31,10 +31,20 @@ async function getBusBranchIds(user) {
     const ids = await getBranchIdsForWilayah(user.wilayah_id);
     if (ids.length > 0) return ids;
   }
-  if (user.branch_id) return [user.branch_id];
   if (user.wilayah_id) {
     const ids = await getBranchIdsForWilayah(user.wilayah_id);
     if (ids.length > 0) return ids;
+  }
+  if (user.branch_id) {
+    const branch = await Branch.findByPk(user.branch_id, {
+      attributes: ['id', 'provinsi_id'],
+      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['wilayah_id'], required: false }]
+    });
+    if (branch && branch.Provinsi && branch.Provinsi.wilayah_id) {
+      const ids = await getBranchIdsForWilayah(branch.Provinsi.wilayah_id);
+      if (ids.length > 0) return ids;
+    }
+    return [user.branch_id];
   }
   const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
   return branches.map(b => b.id);
