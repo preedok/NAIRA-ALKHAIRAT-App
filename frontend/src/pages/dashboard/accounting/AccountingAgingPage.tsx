@@ -23,10 +23,48 @@ import { useToast } from '../../../contexts/ToastContext';
 
 const API_BASE = process.env.REACT_APP_API_URL?.replace(/\/api\/v1\/?$/, '') || '';
 
-/** URL file untuk preview/download (uploads) */
+/** URL file untuk preview/download (uploads) — hindari dipakai untuk bukti bayar; gunakan API stream */
 const getFileUrl = (path: string) => {
   if (!path || path === 'issued-saudi') return null;
   return path.startsWith('http') ? path : `${API_BASE}${path}`;
+};
+
+/** Preview bukti bayar via API (stream) agar file selalu tersedia */
+const PaymentProofPreview: React.FC<{ invoiceId: string; proof: any }> = ({ invoiceId, proof }) => {
+  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+  const ref = React.useRef<string | null>(null);
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(proof?.proof_file_url || '');
+  React.useEffect(() => {
+    if (!proof?.proof_file_url || proof.proof_file_url === 'issued-saudi') return;
+    let cancelled = false;
+    invoicesApi.getPaymentProofFile(invoiceId, proof.id)
+      .then((r) => {
+        if (cancelled) return;
+        if (ref.current) URL.revokeObjectURL(ref.current);
+        const url = URL.createObjectURL(r.data as Blob);
+        ref.current = url;
+        setBlobUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (ref.current) {
+        URL.revokeObjectURL(ref.current);
+        ref.current = null;
+      }
+    };
+  }, [invoiceId, proof?.id, proof?.proof_file_url]);
+  if (!proof?.proof_file_url || proof.proof_file_url === 'issued-saudi') {
+    return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Pembayaran via Saudi (issued by role invoice)</div>;
+  }
+  if (!blobUrl) return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Memuat...</div>;
+  return isImage ? (
+    <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="block">
+      <img src={blobUrl} alt="Bukti bayar" className="max-w-full max-h-72 object-contain rounded-lg border border-slate-200" />
+    </a>
+  ) : (
+    <iframe src={blobUrl} title={'Bukti bayar ' + proof.payment_type} className="w-full h-72 border border-slate-200 rounded-lg bg-white" />
+  );
 };
 
 const INVOICE_STATUS_OPTIONS = Object.keys(INVOICE_STATUS_LABELS).sort();
@@ -248,6 +286,28 @@ const AccountingAgingPage: React.FC = () => {
       showToast(e.response?.data?.message || 'Gagal', 'error');
     } finally {
       setVerifyingId(null);
+    }
+  };
+
+  const downloadProofFile = async (invoiceId: string, proof: { id: string; proof_file_url?: string }) => {
+    if (!proof?.proof_file_url || proof.proof_file_url === 'issued-saudi') return;
+    try {
+      const res = await invoicesApi.getPaymentProofFile(invoiceId, proof.id);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `bukti-bayar-${proof.id.slice(-6)}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Bukti bayar berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh', 'error');
     }
   };
 
@@ -651,10 +711,9 @@ const AccountingAgingPage: React.FC = () => {
                   ) : (
                     <div className="space-y-4">
                       {paymentProofs.map((p: any) => {
-                        const fileUrl = getFileUrl(p.proof_file_url);
-                        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(p.proof_file_url || '');
                         const ps = getProofStatus(p);
                         const isPending = ps.status === 'pending';
+                        const hasFile = p.proof_file_url && p.proof_file_url !== 'issued-saudi';
                         return (
                           <div key={p.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
@@ -665,10 +724,10 @@ const AccountingAgingPage: React.FC = () => {
                                 {p.bank_name && <span className="text-sm text-slate-600">{p.bank_name}</span>}
                               </div>
                               <div className="flex items-center gap-2">
-                                {fileUrl && (
-                                  <a href={fileUrl} download target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-emerald-600 hover:underline">
+                                {hasFile && (
+                                  <Button size="sm" variant="outline" onClick={() => downloadProofFile(viewInvoice.id, p)} className="inline-flex items-center gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50">
                                     <Download className="w-4 h-4" /> Unduh
-                                  </a>
+                                  </Button>
                                 )}
                                 {isPending && canVerify && (
                                   <>
@@ -683,15 +742,7 @@ const AccountingAgingPage: React.FC = () => {
                               </div>
                             </div>
                             <div className="p-4 bg-slate-50 min-h-[280px]">
-                              {!fileUrl || p.proof_file_url === 'issued-saudi' ? (
-                                <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Pembayaran via Saudi (issued by role invoice)</div>
-                              ) : isImage ? (
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block">
-                                  <img src={fileUrl} alt="Bukti bayar" className="max-w-full max-h-72 object-contain rounded-lg border border-slate-200" />
-                                </a>
-                              ) : (
-                                <iframe src={fileUrl} title={'Bukti bayar ' + p.payment_type} className="w-full h-72 border border-slate-200 rounded-lg bg-white" />
-                              )}
+                              <PaymentProofPreview invoiceId={viewInvoice.id} proof={p} />
                             </div>
                           </div>
                         );

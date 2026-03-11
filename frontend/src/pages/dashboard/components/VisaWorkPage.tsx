@@ -61,6 +61,7 @@ const VisaWorkPage: React.FC = () => {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [downloadingVisaItemId, setDownloadingVisaItemId] = useState<string | null>(null);
   const [downloadingJamaahItemId, setDownloadingJamaahItemId] = useState<string | null>(null);
+  const [downloadingManifestItemId, setDownloadingManifestItemId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
@@ -226,6 +227,31 @@ const VisaWorkPage: React.FC = () => {
       showToast(e.response?.data?.message || 'Gagal unduh file', 'error');
     } finally {
       setDownloadingJamaahItemId(null);
+    }
+  };
+
+  /** Unduh file manifest via API (stream dari server) — mengatasi 404 direct URL */
+  const downloadManifestFile = async (invoiceId: string, orderItemId: string) => {
+    setDownloadingManifestItemId(orderItemId);
+    try {
+      const res = await invoicesApi.getManifestFile(invoiceId, orderItemId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `manifest-${orderItemId.slice(-6)}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('File manifest berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh manifest', 'error');
+    } finally {
+      setDownloadingManifestItemId(null);
     }
   };
 
@@ -519,7 +545,6 @@ const VisaWorkPage: React.FC = () => {
                 const prog = item.VisaProgress;
                 const d = detailDraft[item.id] ?? { status: prog?.status || 'document_received' };
                 const status = d.status ?? prog?.status ?? 'document_received';
-                const manifestLink = fileUrl(item.manifest_file_url);
                 const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Visa';
                 return (
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -573,10 +598,11 @@ const VisaWorkPage: React.FC = () => {
                               </Button>
                             )}
                           </div>
-                        ) : item.manifest_file_url ? (
-                          <a href={manifestLink!} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:underline">
-                            <Download className="w-4 h-4" /> Unduh manifest (legacy)
-                          </a>
+                        ) : item.manifest_file_url && detailInvoice?.id ? (
+                          <Button type="button" size="sm" variant="secondary" disabled={downloadingManifestItemId === item.id} onClick={() => downloadManifestFile(detailInvoice.id, item.id)} className="inline-flex items-center gap-1.5">
+                            {downloadingManifestItemId === item.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {downloadingManifestItemId === item.id ? 'Mengunduh...' : 'Unduh manifest'}
+                          </Button>
                         ) : (
                           <p className="text-sm text-amber-600">Data jamaah belum diupload oleh owner (ZIP atau link di form invoice).</p>
                         )}
