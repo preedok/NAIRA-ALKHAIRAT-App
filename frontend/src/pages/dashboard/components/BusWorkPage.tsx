@@ -19,8 +19,8 @@ import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { PROGRESS_STATUS_OPTIONS_BUS } from '../../../components/common/InvoiceProgressStatusCell';
-import { ProgressDateFilterSection, DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
-import { getProgressDateRange, filterInvoicesByDateRange, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
+import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { getProgressDateRange, filterInvoicesByDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
 const TICKET_OPTIONS = PROGRESS_STATUS_OPTIONS_BUS;
@@ -328,12 +328,6 @@ const BusWorkPage: React.FC = () => {
         }
       />
 
-      <ProgressDateFilterSection
-        value={filterDateRange}
-        onChange={setFilterDateRange}
-        title="Filter data menurut tanggal invoice (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)"
-      />
-
       <DivisionStatCardsWithModal
         stats={divisionStats}
         invoices={dateFilteredInvoices}
@@ -398,7 +392,15 @@ const BusWorkPage: React.FC = () => {
       <Card className="travel-card overflow-visible">
         <CardSectionHeader icon={<Bus className="w-6 h-6" />} title="Daftar Invoice Bus" subtitle="Invoice dengan item bus. Filter menurut status invoice, tiket, kedatangan, keberangkatan, kepulangan." className="mb-4" />
         <div className="mb-6 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
-          <p className="text-sm font-medium text-slate-600 mb-3">Pengaturan Filter</p>
+          <p className="text-sm font-semibold text-slate-700 mb-1">Pengaturan Filter</p>
+          <p className="text-xs text-slate-500 mb-3">Filter data menurut tanggal invoice (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {PROGRESS_DATE_RANGE_OPTIONS.map((opt) => (
+              <button key={opt.value || 'all'} type="button" onClick={() => setFilterDateRange(opt.value)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDateRange === opt.value ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap sm:items-end">
           <div className="flex-1 min-w-0 sm:min-w-[180px]">
             <Input

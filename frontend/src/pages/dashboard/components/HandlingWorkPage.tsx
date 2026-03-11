@@ -10,8 +10,8 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
-import { ProgressDateFilterSection, DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
-import { getProgressDateRange, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
+import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Menunggu',
@@ -96,12 +96,6 @@ const HandlingWorkPage: React.FC = () => {
         right={<AutoRefreshControl onRefresh={fetchData} disabled={loading} size="sm" />}
       />
 
-      <ProgressDateFilterSection
-        value={filterDateRange}
-        onChange={setFilterDateRange}
-        title="Filter data menurut tanggal item handling (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)"
-      />
-
       <DivisionStatCardsWithModal
         stats={divisionStats}
         invoices={invoiceLikeList}
@@ -112,6 +106,17 @@ const HandlingWorkPage: React.FC = () => {
       />
 
       <Card>
+        <div className="mb-4 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-1">Pengaturan Filter</p>
+          <p className="text-xs text-slate-500 mb-3">Filter data menurut tanggal (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)</p>
+          <div className="flex flex-wrap gap-2">
+            {PROGRESS_DATE_RANGE_OPTIONS.map((opt) => (
+              <button key={opt.value || 'all'} type="button" onClick={() => setFilterDateRange(opt.value)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDateRange === opt.value ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           {loading ? (
             <ContentLoading />
