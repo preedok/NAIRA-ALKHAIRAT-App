@@ -452,6 +452,8 @@ const BusPage: React.FC<BusPageProps> = ({
                                   product_id: p.id,
                                   product_name: p.name,
                                   unit_price_idr: priceIdr,
+                                  unit_price: priceIdr,
+                                  price_currency: 'IDR',
                                   quantity: 1
                                 });
                                 showToast('Bus ditambahkan ke order. Buka menu Order untuk lengkapi tipe perjalanan & tanggal.', 'success');

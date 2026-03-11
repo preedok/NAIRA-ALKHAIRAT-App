@@ -243,6 +243,8 @@ const HandlingPage: React.FC = () => {
       product_id: row.id,
       product_name: row.name,
       unit_price_idr: priceIdr,
+      unit_price: priceIdr,
+      price_currency: 'IDR',
       quantity: 1
     });
     showToast('Handling ditambahkan ke order.', 'success');

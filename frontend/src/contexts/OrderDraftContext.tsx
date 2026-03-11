@@ -9,6 +9,10 @@ export interface OrderDraftItem {
   product_name: string;
   /** Harga per unit dalam IDR (form order hitung total dari sini) */
   unit_price_idr: number;
+  /** Harga per unit sesuai mata uang produk (untuk tampilan awal di form) */
+  unit_price?: number;
+  /** Mata uang harga (SAR/USD/IDR) sesuai produk */
+  price_currency?: 'SAR' | 'USD' | 'IDR';
   quantity: number;
   /** Untuk hotel: breakdown kamar (satu line quad default kalau tidak ada) */
   room_breakdown?: { id: string; room_type: string; quantity: number; unit_price: number; with_meal?: boolean }[];

@@ -671,6 +671,8 @@ const PackagesPage: React.FC = () => {
                             product_id: pkg.id,
                             product_name: pkg.name,
                             unit_price_idr: idr,
+                            unit_price: idr,
+                            price_currency: 'IDR',
                             quantity: 1
                           });
                           showToast('Paket ditambahkan ke order. Klik "Buat order" untuk lanjut.', 'success');

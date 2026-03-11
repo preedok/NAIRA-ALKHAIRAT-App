@@ -353,6 +353,8 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
       product_id: p.id,
       product_name: `${p.name} (${bandaraName})`,
       unit_price_idr: priceIdr,
+      unit_price: priceIdr,
+      price_currency: 'IDR',
       quantity: 1,
       meta: { bandara: bandaraCode, trip_type: 'round_trip' }
     });

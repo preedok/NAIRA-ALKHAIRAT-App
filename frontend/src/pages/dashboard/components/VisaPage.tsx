@@ -467,7 +467,18 @@ const VisaPage: React.FC<VisaPageProps> = ({
                               size="sm"
                               className="p-2"
                               onClick={() => {
-                                addDraftItem({ type: 'visa', product_id: p.id, product_name: p.name, unit_price_idr: Number(priceIdr) || 0, quantity: 1 });
+                                const curRaw = (p.meta?.currency || p.currency || 'IDR').toString().toUpperCase();
+                                const priceCurrency = (curRaw === 'SAR' || curRaw === 'USD' || curRaw === 'IDR') ? curRaw : 'IDR';
+                                const unitPrice = priceCurrency === 'SAR' ? (Number(triple.sar) || 0) : priceCurrency === 'USD' ? (Number(triple.usd) || 0) : (Number(priceIdr) || 0);
+                                addDraftItem({
+                                  type: 'visa',
+                                  product_id: p.id,
+                                  product_name: p.name,
+                                  unit_price_idr: Number(priceIdr) || 0,
+                                  unit_price: unitPrice,
+                                  price_currency: priceCurrency as any,
+                                  quantity: 1
+                                });
                                 showToast('Visa ditambahkan ke order.', 'success');
                               }}
                               title="Tambah ke order"

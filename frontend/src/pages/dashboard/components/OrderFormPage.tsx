@@ -227,14 +227,18 @@ const OrderFormPage: React.FC = () => {
     if(orderId||loadingOrd||orderDraft.items.length===0||appliedDraftRef.current) return;
     appliedDraftRef.current=true;
     const rows:OrderItemRow[]=orderDraft.items.map(d=>{
-      const room_breakdown=d.room_breakdown?.map(l=>({ id:l.id||`rl-${uid()}`, room_type:(l.room_type||'quad') as RoomTypeId, quantity:l.quantity||1, unit_price:l.unit_price||d.unit_price_idr, with_meal:!!l.with_meal }));
+      const draftCur = ((d as any).price_currency as DisplayCurrency | undefined) || undefined;
+      const draftUnit = ((d as any).unit_price != null ? Number((d as any).unit_price) : NaN);
+      const fallbackUnit = Number.isFinite(draftUnit) ? draftUnit : d.unit_price_idr;
+      const room_breakdown=d.room_breakdown?.map(l=>({ id:l.id||`rl-${uid()}`, room_type:(l.room_type||'quad') as RoomTypeId, quantity:l.quantity||1, unit_price:l.unit_price||fallbackUnit, with_meal:!!l.with_meal }));
       return {
         id:d.id,
         type:d.type as ItemType,
         product_id:d.product_id,
         product_name:d.product_name,
         quantity:d.quantity||1,
-        unit_price:d.unit_price_idr,
+        unit_price:fallbackUnit,
+        price_currency: draftCur,
         room_breakdown: d.type==='hotel'?room_breakdown:undefined,
         check_in:d.check_in,
         check_out:d.check_out,
@@ -1181,7 +1185,14 @@ const OrderFormPage: React.FC = () => {
                                     <span className="text-xs font-medium text-slate-600 py-2 px-3 rounded-lg bg-slate-100">Fullboard (termasuk makan)</span>
                                   ) : (
                                     <Button type="button" variant={line.with_meal?'primary':'outline'} size="sm" className="rounded-xl"
-                                      onClick={()=>{ if(locked) return; updLine(row.id,line.id,{with_meal:!(line.with_meal??false),meal_unit_price:(!(line.with_meal??false))?toCurrencyFromSAR(getMealPriceSar(hProd),rowCur(row)):0}); }}>
+                                      onClick={()=>{ 
+                                        // Di mode Auto (jumlah orang), tipe kamar & qty dikunci, tapi toggle makan tetap boleh.
+                                        const nextWithMeal = !(line.with_meal ?? false);
+                                        updLine(row.id, line.id, {
+                                          with_meal: nextWithMeal,
+                                          meal_unit_price: nextWithMeal ? toCurrencyFromSAR(getMealPriceSar(hProd), rowCur(row)) : 0
+                                        }); 
+                                      }}>
                                       <Utensils size={14} className="mr-1.5"/> Makan
                                     </Button>
                                   )}
