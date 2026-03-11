@@ -233,6 +233,29 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         );
       })
     });
+  } else if (visaItems.length > 0) {
+    const order = inv?.Order;
+    const waive = order?.waive_bus_penalty === true;
+    const penalty = Number(order?.penalty_amount) || 0;
+    sections.push({
+      title: 'Bus',
+      nodes: [
+        <div key="bus-include" className="rounded border border-amber-100 bg-amber-50/80 p-1.5 text-xs">
+          {waive ? (
+            <span className="text-slate-700">Bus Hiace (tanpa penalti) · 1 unit</span>
+          ) : (
+            <>
+              <span className="font-medium text-slate-800">Bus include (dengan visa)</span>
+              {penalty > 0 ? (
+                <div className="text-amber-800 mt-0.5">Penalti bus: Rp {(penalty / 1e6).toFixed(0)} jt</div>
+              ) : (
+                <div className="text-slate-600 mt-0.5">Min 35 pack visa; jika kurang kena penalti atau centang pakai Hiace</div>
+              )}
+            </>
+          )}
+        </div>
+      ]
+    });
   }
 
   if (handlingItems.length > 0) {
