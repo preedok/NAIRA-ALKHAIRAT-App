@@ -453,10 +453,12 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       let hotelSubtotalFromFormula = 0;
       let hotelRoomUnitIdr = 0;
       let hotelMealUnitIdr = 0;
+      let hotelWithMeal = false;
       if (isMerged) {
         dateLine = item._mergedDateLine || '';
         mealLine = item._mergedMealLine || '';
         const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
+        hotelWithMeal = meta.meal === true || meta.with_meal === true;
         const cur = (item.unit_price_currency || 'IDR').toUpperCase();
         const toIdr = (v) => (cur === 'SAR' ? v * s2i : cur === 'USD' ? v * u2i : v);
         const roomUnitRaw = meta.room_unit_price != null ? parseFloat(meta.room_unit_price) : (item.unit_price != null ? parseFloat(item.unit_price) : NaN);
@@ -479,6 +481,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         const co = meta.check_out ? formatDateShort(meta.check_out) : null;
         if (ci || co) dateLine = `Check-in: ${ci || '-'}, Check-out: ${co || '-'}`;
         const withMeal = meta.meal === true || meta.with_meal === true;
+        hotelWithMeal = withMeal;
         const mealStatus = item.HotelProgress?.meal_status;
         const hotelStatus = item.HotelProgress?.status;
         const roomType = meta.room_type;
@@ -638,11 +641,11 @@ function renderInvoicePdf(doc, data, logoBuffer) {
           const mealSarUsd = idrToSarUsd(hotelMealUnitIdr, rates);
           doc.text(`${formatSAR(mealSarUsd.sar)}  |  ${formatUSD(mealSarUsd.usd)}`, x(5), y + 14, { width: w(5) });
         } else {
-          doc.text('–', x(5), y + 4, { width: w(5) });
+          doc.text(hotelWithMeal ? 'Gratis' : '–', x(5), y + 4, { width: w(5) });
         }
       } else if (unitPriceBreakdownLines.length > 0) {
         doc.fontSize(8).fillColor('#334155');
-        doc.text(hotelMealUnitIdr > 0 ? formatIDR(hotelMealUnitIdr) : '–', x(5), y + 4, { width: w(5) });
+        doc.text(hotelMealUnitIdr > 0 ? formatIDR(hotelMealUnitIdr) : (hotelWithMeal ? 'Gratis' : '–'), x(5), y + 4, { width: w(5) });
         if (hotelMealUnitIdr > 0) {
           doc.fontSize(7).fillColor('#64748b');
           const mealSarUsd = idrToSarUsd(hotelMealUnitIdr, rates);

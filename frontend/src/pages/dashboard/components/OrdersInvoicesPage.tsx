@@ -2452,7 +2452,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                             )}
                                           </td>
                                           <td className="py-2 px-2 text-right tabular-nums align-top">
-                                            {isMerged ? (mealUnitIdr > 0 ? (
+                                            {(typeKey === 'hotel' && withMeal && mealUnitIdr <= 0) ? (
+                                              <div className="text-xs font-semibold text-emerald-700">Gratis</div>
+                                            ) : isMerged ? (mealUnitIdr > 0 ? (
                                               <>
                                                 <div><NominalDisplay amount={mealUnitIdr} currency="IDR" /></div>
                                                 {sarUsdLine(mealUnitIdr)}
