@@ -641,7 +641,8 @@ const OrderFormPage: React.FC = () => {
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
   const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
   const wouldHaveBusPenalty=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack;
-  const busPenaltyIDR=!waiveBusPenalty&&wouldHaveBusPenalty?busPenaltyRule.bus_penalty_idr:0;
+  const busPenaltyShortfall=wouldHaveBusPenalty?busPenaltyRule.bus_min_pack-totalVisaPacks:0;
+  const busPenaltyIDR=!waiveBusPenalty&&busPenaltyShortfall>0?busPenaltyShortfall*busPenaltyRule.bus_penalty_idr:0;
 
   /* submit */
   const latestRates = { SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 };
@@ -1382,7 +1383,7 @@ const OrderFormPage: React.FC = () => {
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
                       <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
                       {wouldHaveBusPenalty ? (
-                        <span className="text-amber-800"> Penalti bus: <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> (karena &lt; {busPenaltyRule.bus_min_pack} pack).</span>
+                        <span className="text-amber-800"> Kurang {busPenaltyShortfall} pack dari min {busPenaltyRule.bus_min_pack} → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" />.</span>
                       ) : (
                         <span className="text-slate-600"> Penalti bus tidak berlaku.</span>
                       )}
@@ -1462,7 +1463,7 @@ const OrderFormPage: React.FC = () => {
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
                 <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
                 <p className="text-slate-600 text-xs mt-0.5">
-                  {wouldHaveBusPenalty ? <>Penalti bus: <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> (karena visa &lt; 35 pack)</> : 'Penalti bus tidak berlaku (pakai bus Hiace saja).'}
+                  {wouldHaveBusPenalty ? <>Kurang {busPenaltyShortfall} pack → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></> : 'Penalti bus tidak berlaku (pakai bus Hiace saja).'}
                 </p>
                 <label className="flex items-center gap-2 mt-2 cursor-pointer">
                   <input type="checkbox" checked={waiveBusPenalty} onChange={(e)=>setWaiveBusPenalty(e.target.checked)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />

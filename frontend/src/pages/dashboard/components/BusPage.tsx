@@ -406,7 +406,7 @@ const BusPage: React.FC<BusPageProps> = ({
                                 <span className="text-slate-700 font-medium tabular-nums">{t.idrText}</span>
                                 <span className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</span>
                                 <span className="text-xs text-slate-400">per orang</span>
-                                <span className="text-xs text-amber-700 mt-0.5">Include dengan visa. Jika visa &lt; {busPenaltyRule.bus_min_pack} pack: penalti <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /></span>
+                                <span className="text-xs text-amber-700 mt-0.5">Include dengan visa. Jika visa &lt; {busPenaltyRule.bus_min_pack} pack: penalti <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> per pack (kekurangan dari {busPenaltyRule.bus_min_pack})</span>
                               </div>
                             );
                           })()

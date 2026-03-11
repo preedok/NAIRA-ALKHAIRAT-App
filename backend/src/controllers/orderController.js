@@ -408,8 +408,9 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
   const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-  const penaltyFlatIdr = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = !waiveBusPenalty && hasVisaItems && totalVisaPacks < minPack ? penaltyFlatIdr : 0;
+  const penaltyPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
+  const shortfall = hasVisaItems && totalVisaPacks < minPack ? minPack - totalVisaPacks : 0;
+  const penaltyAmount = !waiveBusPenalty && shortfall > 0 ? shortfall * penaltyPerPackIdr : 0;
 
   let ratesPayload = {};
   const crForPayload = typeof rules.currency_rates === 'object' && rules.currency_rates != null
@@ -668,8 +669,9 @@ const create = asyncHandler(async (req, res) => {
   const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-  const penaltyFlatIdr = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = !waiveBusPenaltyCreate && hasVisaItems && totalVisaPacks < minPack ? penaltyFlatIdr : 0;
+  const penaltyPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
+  const shortfallCreate = hasVisaItems && totalVisaPacks < minPack ? minPack - totalVisaPacks : 0;
+  const penaltyAmount = !waiveBusPenaltyCreate && shortfallCreate > 0 ? shortfallCreate * penaltyPerPackIdr : 0;
 
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
@@ -987,8 +989,9 @@ const update = asyncHandler(async (req, res) => {
     const totalVisaPacksUpdate = items.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
     const rulesUpdate = await getRulesForBranch(order.branch_id);
     const minPackUpdate = parseInt(rulesUpdate.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-    const penaltyFlatIdrUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
-    const penaltyAmountUpdate = !waiveBusPenaltyUpdate && hasVisaItemsUpdate && totalVisaPacksUpdate < minPackUpdate ? penaltyFlatIdrUpdate : 0;
+    const penaltyPerPackIdrUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
+    const shortfallUpdate = hasVisaItemsUpdate && totalVisaPacksUpdate < minPackUpdate ? minPackUpdate - totalVisaPacksUpdate : 0;
+    const penaltyAmountUpdate = !waiveBusPenaltyUpdate && shortfallUpdate > 0 ? shortfallUpdate * penaltyPerPackIdrUpdate : 0;
     await order.update({
       subtotal,
       total_jamaah: totalJamaah,
