@@ -110,6 +110,22 @@ async function ensureInvoicesCurrencyRatesSnapshotColumn(db) {
   }
 }
 
+/** Ensure orders has waive_bus_penalty column (tanpa penalti bus = pakai 1 Hiace) */
+async function ensureOrdersWaiveBusPenaltyColumn(db) {
+  try {
+    const [rows] = await db.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'waive_bus_penalty'
+      LIMIT 1
+    `);
+    if (rows && rows.length > 0) return;
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS waive_bus_penalty BOOLEAN NOT NULL DEFAULT false');
+    logger.info('orders: added column waive_bus_penalty');
+  } catch (e) {
+    logger.warn('ensureOrdersWaiveBusPenaltyColumn:', e.message);
+  }
+}
+
 /** Ensure owner_profiles has is_mou_owner column (MOU vs non-MOU owner) */
 async function ensureOwnerProfilesIsMouOwnerColumn(db) {
   try {
@@ -163,6 +179,7 @@ sequelize.sync({ alter })
   .then(() => ensureUsersLastLoginColumns(sequelize))
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
+  .then(() => ensureOrdersWaiveBusPenaltyColumn(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
   .then(async () => {
