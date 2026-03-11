@@ -304,6 +304,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const descLineGap = 5;
   const descBlockGap = 6;
   const rates = getRates(data);
+  const s2i = (rates && rates.SAR_TO_IDR != null) ? rates.SAR_TO_IDR : 4200;
+  const u2i = (rates && rates.USD_TO_IDR != null) ? rates.USD_TO_IDR : 15500;
   doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke(colors.header, colors.stroke);
   doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
   doc.text('No', x(0), tableTop + 8, { width: w(0) });
@@ -436,8 +438,6 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const ticketDeparture = hotelCheckIn && hasTicketOrVisa ? new Date(hotelCheckIn) : null;
   if (ticketDeparture) ticketDeparture.setDate(ticketDeparture.getDate() - 1);
 
-  const s2i = (rates && rates.SAR_TO_IDR != null) ? rates.SAR_TO_IDR : 4200;
-  const u2i = (rates && rates.USD_TO_IDR != null) ? rates.USD_TO_IDR : 15500;
   doc.fillColor('#334155').font('Helvetica');
   if (displayItems.length > 0) {
     displayItems.forEach((item, i) => {
