@@ -60,7 +60,7 @@ const BusDashboard: React.FC = () => {
       {(totalOrders > 0 || totalItems > 0) && (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
-            <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={totalOrders} subtitle="Invoice dengan item bus" onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+            <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={totalOrders} subtitle="Invoice dengan item bus atau visa (bus include)" onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
             <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={totalItems} subtitle="Total item di cabang" onClick={() => navigate('/dashboard/progress-bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           </div>
           <div>

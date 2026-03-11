@@ -42,21 +42,31 @@ async function getBusBranchIds(user) {
 
 /**
  * GET /api/v1/bus/dashboard
- * Rekapitulasi pekerjaan bus: total order, item bus, per status tiket/kedatangan/keberangkatan/kepulangan.
+ * Rekapitulasi pekerjaan bus: total order (bus + visa), item bus, per status tiket/kedatangan/keberangkatan/kepulangan.
+ * Order visa ikut dihitung karena bus besar include dengan visa.
  */
 const getDashboard = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const orderIds = await OrderItem.findAll({
-    where: { type: ORDER_ITEM_TYPE.BUS },
-    attributes: ['order_id'],
-    raw: true
-  }).then(rows => [...new Set(rows.map(r => r.order_id))]);
+  const [busRows, visaRows] = await Promise.all([
+    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
+    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
+  ]);
+  const orderIdsFromBus = [...new Set(busRows.map(r => r.order_id))];
+  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...new Set(visaRows.map(r => r.order_id))])];
 
-  // Hanya order yang sudah ada pembayaran DP (sama seperti list Invoice/Progress bus)
+  // Total order (untuk tampilan): order dengan bus ATAU visa yang sudah DP, dalam scope cabang
+  const ordersRelevant = await Order.findAll({
+    where: { id: orderIdsRelevant, branch_id: { [Op.in]: branchIds }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
+    attributes: ['id'],
+    raw: true
+  });
+  const totalOrdersRelevant = ordersRelevant.length;
+
+  // Detail (item bus, tiket, kedatangan, dll): hanya order yang punya item bus
   const orders = await Order.findAll({
-    where: { id: orderIds, branch_id: { [Op.in]: branchIds }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
+    where: { id: orderIdsFromBus, branch_id: { [Op.in]: branchIds }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
     include: [
       { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false },
       { model: User, as: 'User', attributes: ['id', 'name'] },
@@ -113,7 +123,8 @@ const getDashboard = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      total_orders: orders.length,
+      total_orders: totalOrdersRelevant,
+      total_orders_with_bus_only: orders.length,
       total_bus_items: totalBusItems,
       bus_ticket: { pending: ticketPending, issued: ticketIssued },
       arrival: arrivalCounts,
