@@ -24,6 +24,7 @@ const SettingsPage: React.FC = () => {
   const [form, setForm] = useState<{
     company_name: string;
     company_address: string;
+    registration_deposit_idr: string | number;
     SAR_TO_IDR: string | number;
     USD_TO_IDR: string | number;
     mou_discount_percent: string | number;
@@ -33,6 +34,7 @@ const SettingsPage: React.FC = () => {
   }>({
     company_name: '',
     company_address: '',
+    registration_deposit_idr: 25000000,
     SAR_TO_IDR: 4200,
     USD_TO_IDR: 15500,
     mou_discount_percent: 10,
@@ -59,6 +61,7 @@ const SettingsPage: React.FC = () => {
             ...f,
             company_name: data.company_name ?? f.company_name,
             company_address: data.company_address ?? f.company_address,
+            registration_deposit_idr: data.registration_deposit_idr ?? f.registration_deposit_idr,
             SAR_TO_IDR: currency.SAR_TO_IDR ?? f.SAR_TO_IDR,
             USD_TO_IDR: currency.USD_TO_IDR ?? f.USD_TO_IDR,
             mou_discount_percent: data.mou_discount_percent ?? f.mou_discount_percent,
@@ -89,12 +92,19 @@ const SettingsPage: React.FC = () => {
     if (!canEdit) return;
     setSaving(true);
     try {
+      const depositIdr = typeof form.registration_deposit_idr === 'string'
+        ? parseInt(String(form.registration_deposit_idr).replace(/\D/g, ''), 10)
+        : Number(form.registration_deposit_idr);
       await businessRulesApi.set({
         rules: {
           company_name: form.company_name,
-          company_address: form.company_address
+          company_address: form.company_address,
+          registration_deposit_idr: Number.isFinite(depositIdr) && depositIdr >= 0 ? depositIdr : 25000000
         }
       });
+      if (Number.isFinite(depositIdr) && depositIdr >= 0) {
+        setForm((f) => ({ ...f, registration_deposit_idr: depositIdr }));
+      }
       showToast('Pengaturan general disimpan', 'success');
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
@@ -202,7 +212,7 @@ const SettingsPage: React.FC = () => {
             <>
               {activeTab === 'general' && (
                 <Card className="travel-card">
-                  <CardSectionHeader title="General" subtitle="Nama perusahaan dan alamat." className="mb-6" />
+                  <CardSectionHeader title="General" subtitle="Nama perusahaan, alamat, dan nominal pendaftaran Owner MOU." className="mb-6" />
                   <div className="space-y-6">
                     <Input
                       label="Nama Perusahaan"
@@ -218,6 +228,17 @@ const SettingsPage: React.FC = () => {
                       disabled={!canEdit}
                       rows={3}
                     />
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                      <Input
+                        label="Biaya pendaftaran Owner MOU (IDR)"
+                        type="text"
+                        value={typeof form.registration_deposit_idr === 'number' ? String(form.registration_deposit_idr) : form.registration_deposit_idr}
+                        onChange={(e) => setForm((f) => ({ ...f, registration_deposit_idr: e.target.value }))}
+                        disabled={!canEdit}
+                        placeholder="25000000"
+                      />
+                      <p className="text-xs text-slate-600 mt-1">Nominal ini otomatis terisi di form pendaftaran Owner MOU. Calon owner bisa mengubah sebelum submit jika perlu.</p>
+                    </div>
                     {canEdit && (
                       <Button variant="primary" onClick={handleSaveGeneral} disabled={saving}>
                         <Save className="w-5 h-5 mr-2" />

@@ -4,6 +4,21 @@ const { ROLES } = require('../constants');
 const { BUSINESS_RULES, BUSINESS_RULE_KEYS } = require('../constants');
 const { recalcProductPricesByRates } = require('../services/recalcProductPricesByRates');
 
+/**
+ * GET /api/v1/business-rules/public
+ * Nilai yang boleh diakses tanpa login (mis. halaman pendaftaran owner MOU).
+ * Mengembalikan registration_deposit_idr dari global rules.
+ */
+const getPublic = asyncHandler(async (req, res) => {
+  const global = await BusinessRuleConfig.findAll({ where: { branch_id: null, wilayah_id: null }, raw: true });
+  const globalMap = {};
+  global.forEach(r => { globalMap[r.key] = r.value; });
+  const registration_deposit_idr = globalMap[BUSINESS_RULE_KEYS.REGISTRATION_DEPOSIT_IDR] != null
+    ? parseInt(globalMap[BUSINESS_RULE_KEYS.REGISTRATION_DEPOSIT_IDR], 10)
+    : BUSINESS_RULES.REGISTRATION_DEPOSIT_IDR;
+  res.json({ success: true, data: { registration_deposit_idr: Number.isFinite(registration_deposit_idr) ? registration_deposit_idr : BUSINESS_RULES.REGISTRATION_DEPOSIT_IDR } });
+});
+
 const DEFAULTS = {
   [BUSINESS_RULE_KEYS.BUS_MIN_PACK]: BUSINESS_RULES.BUS_MIN_PACK,
   [BUSINESS_RULE_KEYS.BUS_PENALTY_IDR]: 500000,
@@ -148,4 +163,4 @@ async function getRulesForBranch(branchId) {
   return result;
 }
 
-module.exports = { get, set, DEFAULTS, getRulesForBranch };
+module.exports = { get, getPublic, set, DEFAULTS, getRulesForBranch };

@@ -5,7 +5,7 @@ import {
   MapPin, FileText, Globe, ArrowRight, Upload,
   CheckCircle, AlertCircle, ChevronDown, Search, X,
 } from 'lucide-react';
-import { ownersApi, branchesApi, type Branch } from '../../services/api';
+import { ownersApi, branchesApi, businessRulesApi, type Branch } from '../../services/api';
 import { validateEmail } from '../../utils';
 import { AUTOCOMPLETE_PILIH } from '../../utils/constants';
 import Input from '../../components/common/Input';
@@ -318,6 +318,21 @@ const RegisterPage: React.FC = () => {
       .finally(() => setBranchLoad(false));
   }, []);
 
+  useEffect(() => {
+    if (ownerType === 'mou') {
+      businessRulesApi.getPublic()
+        .then(res => {
+          if (res.data?.success && res.data?.data?.registration_deposit_idr != null) {
+            const amount = Number(res.data.data.registration_deposit_idr);
+            if (Number.isFinite(amount) && amount > 0) {
+              setForm(f => ({ ...f, registration_payment_amount: String(amount) }));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [ownerType]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: value }));
@@ -602,7 +617,7 @@ const RegisterPage: React.FC = () => {
                             placeholder="Contoh: 25000000"
                           />
                         </div>
-                        <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Biaya MoU pendaftaran: Rp 25.000.000</p>
+                        <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Nominal default dari Settings. Dapat diubah oleh Admin Pusat di menu Settings.</p>
                       </div>
                       <div>
                         <span className="rg-label req">Bukti bayar MoU</span>

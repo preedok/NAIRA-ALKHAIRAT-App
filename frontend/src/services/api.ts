@@ -185,6 +185,8 @@ export const productsApi = {
 
 export const businessRulesApi = {
   get: (params?: { branch_id?: string; wilayah_id?: string }) => api.get('/business-rules', { params }),
+  /** Nilai untuk halaman publik (tanpa auth), mis. nominal default pendaftaran Owner MOU */
+  getPublic: () => api.get<{ success: boolean; data: { registration_deposit_idr: number } }>('/business-rules/public'),
   set: (body: { branch_id?: string; wilayah_id?: string; rules: object }) => api.put('/business-rules', body)
 };
 
