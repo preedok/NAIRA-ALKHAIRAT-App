@@ -890,19 +890,32 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       title="Klik untuk lihat tanggal dengan kamar tersedia"
                     >
                       <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(avail.byRoomType).map(([rt, n]) => (
-                          <div
-                            key={rt}
-                            className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[56px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
-                          >
-                            <p className="text-[10px] font-medium text-slate-500 uppercase capitalize">{rt}</p>
-                            {n === 0 ? (
-                              <p className="text-xs font-bold text-red-600">Penuh</p>
-                            ) : (
-                              <p className="text-xs font-bold text-emerald-600 tabular-nums">{n}</p>
-                            )}
-                          </div>
-                        ))}
+                        {Object.entries(avail.byRoomType).map(([rt, n]) => {
+                          const isFullboard = hotel.meta?.meal_plan === 'fullboard';
+                          const isPerTypePrice = hotel.meta?.pricing_mode === 'per_type';
+                          const showPriceHere = isFullboard && isPerTypePrice;
+                          const rtEntry = breakdown[rt as keyof typeof breakdown];
+                          const priceVal = typeof rtEntry === 'object' && rtEntry != null && 'price' in rtEntry ? Number((rtEntry as { price?: number }).price) : 0;
+                          const tripleRt = fillFromSource(cur, priceVal, currencyRates);
+                          const tRt = getPriceTripleForTable(tripleRt.idr, tripleRt.sar, tripleRt.usd);
+                          const priceLabel = showPriceHere && tRt.hasPrice ? (cur === 'SAR' ? tRt.sarText : cur === 'USD' ? tRt.usdText : tRt.idrText) : null;
+                          return (
+                            <div
+                              key={rt}
+                              className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[56px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
+                            >
+                              <p className="text-[10px] font-medium text-slate-500 uppercase capitalize">{rt}</p>
+                              {n === 0 ? (
+                                <p className="text-xs font-bold text-red-600">Penuh</p>
+                              ) : (
+                                <p className="text-xs font-bold text-emerald-600 tabular-nums">{n}</p>
+                              )}
+                              {priceLabel != null && (
+                                <p className="text-[10px] text-slate-600 mt-0.5 tabular-nums">{priceLabel}</p>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                       <p className="text-[10px] text-slate-500 mt-1.5 group-hover:text-emerald-600">Klik untuk lihat per tanggal →</p>
                     </button>
