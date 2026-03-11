@@ -37,3 +37,5 @@ export { default as ProgressDateFilterSection, getProgressDateRange } from './Pr
 export type { ProgressDateFilterSectionProps } from './ProgressDateFilterSection';
 export { default as DivisionStatCardsWithModal } from './DivisionStatCardsWithModal';
 export type { DivisionStatItem, DivisionStatCardsWithModalProps } from './DivisionStatCardsWithModal';
+export { ProgressInvoiceTableRow } from './ProgressInvoiceTableRow';
+export type { ProgressInvoiceTableRowProps } from './ProgressInvoiceTableRow';

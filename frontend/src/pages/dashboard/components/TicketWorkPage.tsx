@@ -14,17 +14,25 @@ import StatCard from '../../../components/common/StatCard';
 import { ticketApi, invoicesApi, ordersApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
+import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER, PROGRESS_INVOICE_TABLE_COLUMNS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../../utils';
 import { NominalDisplay } from '../../../components/common';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { PROGRESS_STATUS_OPTIONS_TICKET, PROGRESS_LABELS_TICKET } from '../../../components/common/InvoiceProgressStatusCell';
 import Badge from '../../../components/common/Badge';
-import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { DivisionStatCardsWithModal, type DivisionStatItem, ProgressInvoiceTableRow } from '../../../components/common';
 import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+
+const formatDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '–');
+const formatDateWithTime = (d: string | null | undefined, time: string | null | undefined) => {
+  const dateStr = formatDate(d);
+  if (dateStr === '–') return '–';
+  const t = (time || '').trim();
+  return t ? `${dateStr}, ${t}` : dateStr;
+};
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
 const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_TICKET;
@@ -55,6 +63,7 @@ const TicketWorkPage: React.FC = () => {
   const qParam = searchParams.get('q');
   const { showToast } = useToast();
 
+  const [currencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
   const [dashboard, setDashboard] = useState<TicketDashboardData | null>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -361,17 +370,6 @@ const TicketWorkPage: React.FC = () => {
     );
   }, [dateFilteredInvoices]);
 
-  const tableColumns: TableColumn[] = [
-    { id: 'invoice', label: 'No. Invoice', align: 'left' },
-    { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'company', label: 'Perusahaan', align: 'left' },
-    { id: 'total', label: 'Total', align: 'right' },
-    { id: 'status_invoice', label: 'Status Invoice', align: 'left' },
-    { id: 'items', label: 'Item Tiket', align: 'right' },
-    { id: 'status', label: 'Status Progress', align: 'left' },
-    { id: 'action', label: 'Aksi', align: 'left' }
-  ];
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -420,47 +418,20 @@ const TicketWorkPage: React.FC = () => {
             <ContentLoading />
           ) : (
             <Table
-              columns={tableColumns}
+              columns={PROGRESS_INVOICE_TABLE_COLUMNS as TableColumn[]}
               data={filteredInvoices}
-              renderRow={(inv: any) => {
-                const o = inv.Order;
-                const orderItems = o?.OrderItems || [];
-                const ticketCount = orderItems.filter((i: any) => i.type === 'ticket').length;
-                const firstStatus = orderItems.find((i: any) => i.type === 'ticket')?.TicketProgress?.status || 'pending';
-                const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
-                const statusLabel = getEffectiveInvoiceStatusLabel(inv);
-                const statusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant(inv);
-                return (
-                  <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 align-top">
-                      <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showDpPayment order={o} />
-                    </td>
-                    <td className="px-6 py-4 text-slate-700 align-top">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                    <td className="px-6 py-4 text-slate-700 align-top text-sm">
-                      <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
-                      <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900 align-top"><NominalDisplay amount={totalIdr} currency="IDR" /></td>
-                    <td className="px-6 py-4 align-top">
-                      <Badge variant={statusBadgeVariant}>
-                        {statusLabel}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-800 align-top">{ticketCount}</td>
-                    <td className="px-6 py-4 align-top">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium ${RECAP_STATUS_COLORS[firstStatus] || 'bg-slate-100 text-slate-600'}`}>
-                        {RECAP_STATUS_ICONS[firstStatus]}
-                        {STATUS_OPTIONS.find(s => s.value === firstStatus)?.label ?? firstStatus}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 align-top">
-                      <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
-                        <Eye className="w-4 h-4 mr-1" /> Detail
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              }}
+              renderRow={(inv: any) => (
+                <ProgressInvoiceTableRow
+                  key={inv.id}
+                  inv={inv}
+                  currencyRates={currencyRates}
+                  formatDate={formatDate}
+                  formatDateWithTime={formatDateWithTime}
+                  onViewDetail={(i) => setSearchParams({ invoice: i.id })}
+                  getStatusLabel={getEffectiveInvoiceStatusLabel}
+                  getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+                />
+              )}
               emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item tiket' : 'Tidak ada hasil untuk filter ini'}
               emptyDescription={invoices.length === 0 ? 'Buat order & invoice dari menu Invoice terlebih dahulu.' : 'Coba ubah kata kunci atau status progress.'}
               stickyActionsColumn

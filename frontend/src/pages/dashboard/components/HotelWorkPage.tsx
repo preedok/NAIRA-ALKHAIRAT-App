@@ -13,13 +13,13 @@ import { Input, Autocomplete, Textarea, ContentLoading, NominalDisplay } from '.
 import type { TableColumn } from '../../../types';
 import { hotelApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER, PROGRESS_INVOICE_TABLE_COLUMNS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 import { PROGRESS_STATUS_OPTIONS_HOTEL, PROGRESS_STATUS_OPTIONS_MEAL, ROOM_TYPE_LABELS as ROOM_TYPE_LABELS_SHARED } from '../../../components/common/InvoiceProgressStatusCell';
-import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { DivisionStatCardsWithModal, type DivisionStatItem, ProgressInvoiceTableRow } from '../../../components/common';
 import { getProgressDateRange, filterInvoicesByDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
@@ -341,19 +341,7 @@ const HotelWorkPage: React.FC = () => {
   }, [dateFilteredInvoices]);
 
 
-  const tableColumns: TableColumn[] = [
-    { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-    { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'company', label: 'Perusahaan', align: 'left' },
-    { id: 'total', label: 'Total', align: 'right' },
-    { id: 'invoice_status', label: 'Status Invoice', align: 'left' },
-    { id: 'hotel_count', label: 'Jml Item Hotel', align: 'center' },
-    { id: 'check_in', label: 'Check-in', align: 'left' },
-    { id: 'check_out', label: 'Check-out', align: 'left' },
-    { id: 'progress_summary', label: 'Status Progress', align: 'left' },
-    { id: 'actions', label: 'Aksi', align: 'center' }
-  ];
-
+  const [currencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
   const hasHotelInvoices = filteredInvoices.length > 0;
 
   return (
@@ -440,7 +428,7 @@ const HotelWorkPage: React.FC = () => {
           </div>
         ) : (
           <Table
-            columns={tableColumns}
+            columns={PROGRESS_INVOICE_TABLE_COLUMNS as TableColumn[]}
             data={filteredInvoices}
             emptyMessage="Tidak ada invoice sesuai filter"
             stickyActionsColumn
@@ -452,78 +440,18 @@ const HotelWorkPage: React.FC = () => {
               onPageChange: (p) => setPage(p),
               onLimitChange: (l) => { setLimit(l); setPage(1); }
             } : undefined}
-            renderRow={(inv: any) => {
-              const o = inv.Order;
-              const orderItems = o?.OrderItems || [];
-              const allHotelItems = orderItems.filter((i: any) => i.type === 'hotel');
-              /** Sesuai tab: hanya item Mekkah, hanya Madinah, atau semuanya */
-              const hotelItemsList = filterHotelLocation
-                ? allHotelItems.filter((i: any) => getHotelItemLocation(i) === filterHotelLocation)
-                : allHotelItems;
-              const hotelCount = hotelItemsList.length;
-              const statusCounts: Record<string, number> = {};
-              hotelItemsList.forEach((i: any) => {
-                const st = i.HotelProgress?.status || 'waiting_confirmation';
-                statusCounts[st] = (statusCounts[st] || 0) + 1;
-              });
-              const summaryParts = STATUS_OPTIONS.filter(s => (statusCounts[s.value] || 0) > 0).map(s => `${statusCounts[s.value]} ${s.label}`);
-              const progressSummary = summaryParts.length ? summaryParts.join(', ') : '–';
-              const invStatusLabel = getEffectiveInvoiceStatusLabel(inv);
-              const statusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant(inv);
-              const firstHotel = hotelItemsList[0];
-              const checkInDate = firstHotel?.HotelProgress?.check_in_date ?? firstHotel?.meta?.check_in;
-              const checkOutDate = firstHotel?.HotelProgress?.check_out_date ?? firstHotel?.meta?.check_out;
-              const checkInTime = firstHotel?.HotelProgress?.check_in_time ?? firstHotel?.meta?.check_in_time ?? '16:00';
-              const checkOutTime = firstHotel?.HotelProgress?.check_out_time ?? firstHotel?.meta?.check_out_time ?? '12:00';
-              const checkInDisplay = formatDateWithTime(checkInDate, checkInTime);
-              const checkOutDisplay = formatDateWithTime(checkOutDate, checkOutTime);
-              const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
-              return (
-                <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 align-top">
-                    <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showDpPayment order={inv.Order} />
-                  </td>
-                  <td className="px-6 py-4 text-slate-700 text-sm align-top">{inv.User?.name ?? inv.User?.company_name ?? o?.User?.name ?? '–'}</td>
-                  <td className="px-6 py-4 text-slate-700 align-top text-sm">
-                    <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
-                    <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-slate-900 align-top"><NominalDisplay amount={totalIdr} currency="IDR" /></td>
-                  <td className="px-6 py-4 align-top">
-                    <Badge variant={statusBadgeVariant}>
-                      {invStatusLabel}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="text-center min-w-[120px]">
-                      <p className="font-semibold text-slate-900 tabular-nums">{hotelCount} item</p>
-                      <div className="text-xs text-slate-600 mt-1 space-y-0.5 text-left">
-                        {hotelItemsList.map((item: any) => {
-                          const rt = item.room_type || item.meta?.room_type || '';
-                          const qty = Math.max(0, parseInt(String(item.quantity || 0), 10) || 0);
-                          const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;
-                          const orang = qty * cap;
-                          const label = ROOM_TYPE_LABELS[rt] || rt || '–';
-                          return (
-                            <p key={item.id} className="leading-tight">
-                              {qty} {label}{cap > 0 ? ` (${orang} org)` : ''}
-                            </p>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap align-top">{checkInDisplay}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap align-top">{checkOutDisplay}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm align-top">{progressSummary}</td>
-                  <td className="px-6 py-4 sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] align-top">
-                    <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })} className="rounded-xl">
-                      <Eye className="w-4 h-4 mr-1" /> Detail
-                    </Button>
-                  </td>
-                </tr>
-              );
-            }}
+            renderRow={(inv: any) => (
+              <ProgressInvoiceTableRow
+                key={inv.id}
+                inv={inv}
+                currencyRates={currencyRates}
+                formatDate={formatDate}
+                formatDateWithTime={formatDateWithTime}
+                onViewDetail={(i) => setSearchParams({ invoice: i.id })}
+                getStatusLabel={getEffectiveInvoiceStatusLabel}
+                getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+              />
+            )}
           />
           )}
         </div>

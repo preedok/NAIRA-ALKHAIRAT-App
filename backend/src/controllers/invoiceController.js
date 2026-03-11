@@ -321,8 +321,15 @@ const list = asyncHandler(async (req, res) => {
       const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((hotelRows || []).map((r) => r.order_id))];
     } else if (req.user.role === 'role_bus') {
-      const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
-      orderIdsByType = [...new Set((busRows || []).map((r) => r.order_id))];
+      const [busRows, visaRows] = await Promise.all([
+        OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
+        OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
+      ]);
+      const orderIdsFromBus = [...new Set((busRows || []).map((r) => r.order_id))];
+      const orderIdsFromVisa = [...new Set((visaRows || []).map((r) => r.order_id))];
+      const waiveOrders = await Order.findAll({ where: { waive_bus_penalty: true }, attributes: ['id'], raw: true });
+      const orderIdsWaive = (waiveOrders || []).map((o) => o.id);
+      orderIdsByType = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa, ...orderIdsWaive])];
     } else if (req.user.role === 'handling') {
       const handlingRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HANDLING }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((handlingRows || []).map((r) => r.order_id))];
@@ -719,8 +726,15 @@ const getSummary = asyncHandler(async (req, res) => {
       const hotelRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HOTEL }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((hotelRows || []).map((r) => r.order_id))];
     } else if (req.user.role === 'role_bus') {
-      const busRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true });
-      orderIdsByType = [...new Set((busRows || []).map((r) => r.order_id))];
+      const [busRows, visaRows] = await Promise.all([
+        OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
+        OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
+      ]);
+      const orderIdsFromBus = [...new Set((busRows || []).map((r) => r.order_id))];
+      const orderIdsFromVisa = [...new Set((visaRows || []).map((r) => r.order_id))];
+      const waiveOrders = await Order.findAll({ where: { waive_bus_penalty: true }, attributes: ['id'], raw: true });
+      const orderIdsWaive = (waiveOrders || []).map((o) => o.id);
+      orderIdsByType = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa, ...orderIdsWaive])];
     } else if (req.user.role === 'handling') {
       const handlingRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HANDLING }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((handlingRows || []).map((r) => r.order_id))];

@@ -16,8 +16,13 @@ const {
   Refund,
   VisaProgress,
   Notification,
-  PaymentReallocation
+  PaymentReallocation,
+  PaymentProof,
+  Bank,
+  AccountingBankAccount,
+  OwnerProfile
 } = require('../models');
+const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const { ORDER_ITEM_TYPE, VISA_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVOICE_STATUS } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
@@ -183,12 +188,13 @@ const listInvoices = asyncHandler(async (req, res) => {
     where,
     include: [
       { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] },
-      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+      { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at'],
+        attributes: ['id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'currency_rates_override'],
         include: [
           { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {

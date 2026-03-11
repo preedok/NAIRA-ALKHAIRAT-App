@@ -14,12 +14,12 @@ import { Input, Autocomplete, Textarea, ContentLoading, NominalDisplay } from '.
 import type { TableColumn } from '../../../types';
 import { busApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, PROGRESS_INVOICE_TABLE_COLUMNS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { PROGRESS_STATUS_OPTIONS_BUS } from '../../../components/common/InvoiceProgressStatusCell';
-import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { DivisionStatCardsWithModal, type DivisionStatItem, ProgressInvoiceTableRow } from '../../../components/common';
 import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
@@ -36,10 +36,19 @@ const INVOICE_STATUS_FILTER_OPTIONS = [
   ...Object.entries(INVOICE_STATUS_LABELS).map(([value, label]) => ({ value, label }))
 ];
 
+const formatDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '–');
+const formatDateWithTime = (d: string | null | undefined, time: string | null | undefined) => {
+  const dateStr = formatDate(d);
+  if (dateStr === '–') return '–';
+  const t = (time || '').trim();
+  return t ? `${dateStr}, ${t}` : dateStr;
+};
+
 const BusWorkPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const invoiceIdParam = searchParams.get('invoice');
   const { showToast } = useToast();
+  const [currencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
 
   const [dashboard, setDashboard] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -493,16 +502,7 @@ const BusWorkPage: React.FC = () => {
             <ContentLoading />
           ) : (
           <Table
-            columns={[
-              { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
-              { id: 'owner', label: 'Owner', align: 'left' },
-              { id: 'company', label: 'Perusahaan', align: 'left' },
-              { id: 'total', label: 'Total', align: 'right' },
-              { id: 'status_invoice', label: 'Status Invoice', align: 'left' },
-              { id: 'item_bus', label: 'Item Bus', align: 'right' },
-              { id: 'status_tiket', label: 'Status Tiket', align: 'left' },
-              { id: 'actions', label: 'Aksi', align: 'left' }
-            ] as TableColumn[]}
+            columns={PROGRESS_INVOICE_TABLE_COLUMNS as TableColumn[]}
             data={filteredInvoices}
             emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item bus' : 'Tidak ada hasil untuk filter ini'}
             emptyDescription={invoices.length === 0 ? 'Buat order & invoice dari menu Order/Invoice terlebih dahulu.' : 'Ubah filter atau kata kunci pencarian.'}
@@ -516,44 +516,18 @@ const BusWorkPage: React.FC = () => {
               onPageChange: (p) => setPage(p),
               onLimitChange: (l) => { setLimit(l); setPage(1); }
             } : undefined}
-            renderRow={(inv: any) => {
-              const o = inv.Order;
-              const orderItems = o?.OrderItems || [];
-              const busCount = orderItems.filter((i: any) => i.type === 'bus').length;
-              const firstTicketStatus = orderItems.find((i: any) => i.type === 'bus')?.BusProgress?.bus_ticket_status || 'pending';
-              const totalIdr = inv?.total_amount_idr != null ? parseFloat(inv.total_amount_idr) : parseFloat(inv?.total_amount || 0);
-              const statusLabel = getEffectiveInvoiceStatusLabel(inv);
-              const statusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant(inv);
-              return (
-                <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 align-top">
-                    <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showDpPayment order={inv.Order} />
-                  </td>
-                  <td className="px-6 py-4 text-slate-700 align-top">{inv.User?.name ?? o?.User?.name ?? '–'}</td>
-                  <td className="px-6 py-4 text-slate-700 align-top text-sm">
-                    <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
-                    <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-slate-900 align-top"><NominalDisplay amount={totalIdr} currency="IDR" /></td>
-                  <td className="px-6 py-4 align-top">
-                    <Badge variant={statusBadgeVariant}>
-                      {statusLabel}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium tabular-nums align-top">{busCount}</td>
-                  <td className="px-6 py-4 align-top">
-                    <Badge variant={firstTicketStatus === 'issued' ? 'success' : 'warning'}>
-                      {TICKET_OPTIONS.find(s => s.value === firstTicketStatus)?.label ?? firstTicketStatus}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <Button size="sm" variant="outline" onClick={() => setSearchParams({ invoice: inv.id })}>
-                      <Eye className="w-4 h-4 mr-1" /> Detail
-                    </Button>
-                  </td>
-                </tr>
-              );
-            }}
+            renderRow={(inv: any) => (
+              <ProgressInvoiceTableRow
+                key={inv.id}
+                inv={inv}
+                currencyRates={currencyRates}
+                formatDate={formatDate}
+                formatDateWithTime={formatDateWithTime}
+                onViewDetail={(i) => setSearchParams({ invoice: i.id })}
+                getStatusLabel={getEffectiveInvoiceStatusLabel}
+                getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+              />
+            )}
           />
           )}
         </div>

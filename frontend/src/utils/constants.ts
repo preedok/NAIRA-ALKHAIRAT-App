@@ -144,6 +144,21 @@ export const INVOICE_TABLE_COLUMN_INVOICE = { id: 'invoice_number', label: 'No. 
 /** Definisi kolom "Bukti Bayar" untuk tabel – seragam di semua halaman yang menampilkan daftar invoice. */
 export const INVOICE_TABLE_COLUMN_PROOF = { id: 'proof', label: 'Bukti Bayar', align: 'left' as const };
 
+/** Kolom tabel invoice untuk menu Progress (Visa, Tiket, Hotel, Bus, Handling) – sama dengan menu Invoice. */
+export const PROGRESS_INVOICE_TABLE_COLUMNS = [
+  { id: 'invoice_number', label: 'No. Invoice', align: 'left' as const },
+  { id: 'owner', label: 'Owner', align: 'left' as const },
+  { id: 'owner_type', label: 'Tipe Owner', align: 'left' as const },
+  { id: 'company_wilayah', label: 'Perusahaan', align: 'left' as const },
+  { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' as const },
+  { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' as const },
+  { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' as const },
+  { id: 'status_progress', label: 'Status Progress', align: 'left' as const },
+  INVOICE_TABLE_COLUMN_PROOF,
+  { id: 'date', label: 'Tgl', align: 'left' as const },
+  { id: 'actions', label: 'Aksi', align: 'center' as const }
+];
+
 export const INVOICE_STATUS_COLORS: Record<string, string> = {
   draft: 'default',
   tentative: 'default',

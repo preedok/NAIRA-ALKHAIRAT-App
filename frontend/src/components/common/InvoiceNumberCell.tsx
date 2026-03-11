@@ -90,7 +90,6 @@ export function InvoiceNumberCell({
 
   const changeDate = getOrderChangeDate(inv);
   const changeDateStr = changeDate ? formatDateAndTimeForChange(changeDate.toISOString()) : '';
-  const statusLabel = inv.status && statusLabels[inv.status] ? statusLabels[inv.status] : (inv.status || '');
   const o = order ?? inv.Order;
   const showDp = showDpPayment && o?.dp_payment_status === 'pembayaran_dp' && (inv.dp_amount != null || inv.paid_amount != null);
   const paidForDp = parseFloat(String(inv.paid_amount || 0)) || 0;
@@ -122,11 +121,6 @@ export function InvoiceNumberCell({
       )}
       {!compact && showBaruAndPerubahan && !isDraftRow(inv) && (
         <div className="flex flex-col gap-y-1">
-          {statusLabel ? (
-            <span className="text-xs text-slate-600" title="Status invoice">
-              Status: {statusLabel}
-            </span>
-          ) : null}
           {isNewInvoice(inv) && (
             <Badge variant="success" className="text-xs w-fit">
               Baru
