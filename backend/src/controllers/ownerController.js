@@ -608,6 +608,7 @@ const activate = asyncHandler(async (req, res) => {
       message: 'Owner Non-MOU berhasil diaktifkan. Berikan password baru kepada owner (tidak ada surat MOU).',
       data: {
         owner_status: OWNER_STATUS.ACTIVE,
+        user_id: user.id,
         generated_password: newPassword,
         mou_generated_url: null,
         email_sent: false
@@ -623,6 +624,7 @@ const activate = asyncHandler(async (req, res) => {
       : 'Owner berhasil diaktifkan. Password baru dan MOU telah digenerate. Email tidak terkirim (periksa konfigurasi SMTP). Berikan password dan link MOU kepada owner.',
     data: {
       owner_status: OWNER_STATUS.ACTIVE,
+      user_id: user.id,
       generated_password: newPassword,
       mou_generated_url,
       email_sent: emailSent
@@ -636,6 +638,17 @@ function resolveRegistrationPaymentPath(urlPath) {
   const norm = urlPath.replace(/\\/g, '/').trim().replace(/^\/+/, '');
   const withoutUploads = norm.replace(/^uploads\/?/i, '');
   const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.REGISTRATION_PAYMENT);
+  const filename = path.basename(withoutUploads);
+  if (!filename) return null;
+  return path.join(dir, filename);
+}
+
+/** Resolve URL path (/uploads/mou/xxx) ke path absolut file */
+function resolveMouPath(urlPath) {
+  if (!urlPath || typeof urlPath !== 'string') return null;
+  const norm = urlPath.replace(/\\/g, '/').trim().replace(/^\/+/, '');
+  const withoutUploads = norm.replace(/^uploads\/?/i, '');
+  const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.MOU);
   const filename = path.basename(withoutUploads);
   if (!filename) return null;
   return path.join(dir, filename);
@@ -680,6 +693,38 @@ const getRegistrationPaymentFile = asyncHandler(async (req, res) => {
   fs.createReadStream(filePath).pipe(res);
 });
 
+/**
+ * GET /api/v1/owners/:id/mou-file?type=generated|signed
+ * Stream file MOU (generated at activation or signed upload) so nginx/static 404 is avoided.
+ * type=generated (default) -> mou_generated_url, type=signed -> mou_signed_url.
+ */
+const getMouFile = asyncHandler(async (req, res) => {
+  const ownerId = req.params.id === 'me' ? req.user.id : req.params.id;
+  const type = (req.query.type || 'generated').toLowerCase() === 'signed' ? 'signed' : 'generated';
+  const profile = await OwnerProfile.findOne({
+    where: { user_id: ownerId },
+    attributes: ['id', 'user_id', 'mou_generated_url', 'mou_signed_url']
+  });
+  const urlPath = type === 'signed' ? profile?.mou_signed_url : profile?.mou_generated_url;
+  if (!profile || !urlPath) {
+    return res.status(404).json({ success: false, message: 'File MOU tidak ditemukan' });
+  }
+  const canAccess = req.params.id === 'me'
+    ? req.user.id === ownerId
+    : req.user.id === ownerId || [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR].includes(req.user.role);
+  if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
+
+  const filePath = resolveMouPath(urlPath);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada di server' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  const downloadName = path.basename(filePath);
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `inline; filename="${downloadName.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
 module.exports = {
   register,
   uploadRegistrationPayment,
@@ -687,6 +732,7 @@ module.exports = {
   getMyProfile,
   getMyBalance,
   getRegistrationPaymentFile,
+  getMouFile,
   getStats,
   list,
   getById,

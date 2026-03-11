@@ -19,6 +19,8 @@ import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { PROGRESS_STATUS_OPTIONS_BUS } from '../../../components/common/InvoiceProgressStatusCell';
+import { ProgressDateFilterSection, DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { getProgressDateRange, filterInvoicesByDateRange, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
 const TICKET_OPTIONS = PROGRESS_STATUS_OPTIONS_BUS;
@@ -44,6 +46,7 @@ const BusWorkPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterTicketStatus, setFilterTicketStatus] = useState<string>('');
   const [filterArrival, setFilterArrival] = useState<string>('');
@@ -57,8 +60,6 @@ const BusWorkPage: React.FC = () => {
   const filterChangedOnce = useRef(false);
   type BusItemDraft = { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string };
   const [detailDraft, setDetailDraft] = useState<Record<string, BusItemDraft>>({});
-  type BusStatModal = 'total_order' | 'item_bus' | 'tiket_pending' | 'tiket_issued' | 'kedatangan' | 'keberangkatan' | 'kepulangan' | null;
-  const [statModal, setStatModal] = useState<BusStatModal>(null);
   const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
 
   useEffect(() => {
@@ -95,8 +96,40 @@ const BusWorkPage: React.FC = () => {
     Promise.all([fetchDashboard(), fetchInvoices()]).finally(() => setLoading(false));
   }, [fetchDashboard, fetchInvoices]);
 
+  const dateRange = getProgressDateRange(filterDateRange);
+  const dateFilteredInvoices = useMemo(() => filterInvoicesByDateRange(invoices, dateRange), [invoices, dateRange]);
+
+  const busStatsFromDateFiltered = useMemo(() => {
+    let totalItems = 0;
+    let ticketPending = 0;
+    let ticketIssued = 0;
+    let arrivalCompleted = 0;
+    let departureCompleted = 0;
+    let returnCompleted = 0;
+    dateFilteredInvoices.forEach((inv: any) => {
+      (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').forEach((i: any) => {
+        totalItems += 1;
+        const bp = i.BusProgress || {};
+        if ((bp.bus_ticket_status || 'pending') === 'pending') ticketPending += 1;
+        if (bp.bus_ticket_status === 'issued') ticketIssued += 1;
+        if (bp.arrival_status === 'completed') arrivalCompleted += 1;
+        if (bp.departure_status === 'completed') departureCompleted += 1;
+        if (bp.return_status === 'completed') returnCompleted += 1;
+      });
+    });
+    return { totalItems, ticketPending, ticketIssued, arrivalCompleted, departureCompleted, returnCompleted };
+  }, [dateFilteredInvoices]);
+
+  const totalInvoices = dateFilteredInvoices.length;
+  const totalItems = busStatsFromDateFiltered.totalItems;
+  const ticketPending = busStatsFromDateFiltered.ticketPending;
+  const ticketIssued = busStatsFromDateFiltered.ticketIssued;
+  const arrivalCompleted = busStatsFromDateFiltered.arrivalCompleted;
+  const departureCompleted = busStatsFromDateFiltered.departureCompleted;
+  const returnCompleted = busStatsFromDateFiltered.returnCompleted;
+
   const filteredInvoices = useMemo(() => {
-    let list = invoices;
+    let list = dateFilteredInvoices;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       list = list.filter((inv: any) => {
@@ -134,7 +167,27 @@ const BusWorkPage: React.FC = () => {
       });
     }
     return list;
-  }, [invoices, searchQuery, filterTicketStatus, filterArrival, filterDeparture, filterReturn]);
+  }, [dateFilteredInvoices, searchQuery, filterTicketStatus, filterArrival, filterDeparture, filterReturn]);
+
+  const divisionStats = useMemo((): DivisionStatItem[] => [
+    { id: 'total_order', label: 'Total Order', value: totalInvoices, icon: <ClipboardList className="w-5 h-5" />, iconClassName: 'bg-[#0D1A63] text-white', modalTitle: 'Daftar Invoice – Total Order' },
+    { id: 'item_bus', label: 'Item Bus', value: totalItems, icon: <Bus className="w-5 h-5" />, iconClassName: 'bg-slate-100 text-slate-600', modalTitle: 'Daftar Invoice – Item Bus' },
+    { id: 'tiket_pending', label: 'Tiket Pending', value: ticketPending, icon: <Ticket className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600', modalTitle: 'Daftar Invoice – Tiket Pending' },
+    { id: 'tiket_issued', label: 'Tiket Terbit', value: ticketIssued, icon: <Ticket className="w-5 h-5" />, iconClassName: 'bg-emerald-100 text-emerald-600', modalTitle: 'Daftar Invoice – Tiket Terbit' },
+    { id: 'kedatangan', label: 'Kedatangan', value: arrivalCompleted, icon: <MapPin className="w-5 h-5" />, iconClassName: 'bg-sky-100 text-sky-600', modalTitle: 'Daftar Invoice – Kedatangan' },
+    { id: 'keberangkatan', label: 'Keberangkatan', value: departureCompleted, icon: <Plane className="w-5 h-5" />, iconClassName: 'bg-violet-100 text-violet-600', modalTitle: 'Daftar Invoice – Keberangkatan' },
+    { id: 'kepulangan', label: 'Kepulangan', value: returnCompleted, icon: <RotateCcw className="w-5 h-5" />, iconClassName: 'bg-teal-100 text-teal-600', modalTitle: 'Daftar Invoice – Kepulangan' }
+  ], [totalInvoices, totalItems, ticketPending, ticketIssued, arrivalCompleted, departureCompleted, returnCompleted]);
+
+  const getFilteredInvoicesForStat = useCallback((statId: string) => {
+    if (statId === 'total_order' || statId === 'item_bus') return dateFilteredInvoices;
+    if (statId === 'tiket_pending') return dateFilteredInvoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.bus_ticket_status || 'pending') === 'pending'));
+    if (statId === 'tiket_issued') return dateFilteredInvoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.bus_ticket_status || '') === 'issued'));
+    if (statId === 'kedatangan') return dateFilteredInvoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.arrival_status || 'pending') === 'completed'));
+    if (statId === 'keberangkatan') return dateFilteredInvoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.departure_status || 'pending') === 'completed'));
+    if (statId === 'kepulangan') return dateFilteredInvoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.return_status || 'pending') === 'completed'));
+    return dateFilteredInvoices;
+  }, [dateFilteredInvoices]);
 
   const handleExport = useCallback(async (type: 'excel' | 'pdf') => {
     setExporting(type);
@@ -251,15 +304,7 @@ const BusWorkPage: React.FC = () => {
     }
   };
 
-  const totalInvoices = dashboard?.total_orders ?? invoices.length;
-  const totalItems = dashboard?.total_bus_items ?? 0;
   const hasBusInvoices = invoices.length > 0;
-
-  const ticketPending = dashboard?.bus_ticket?.pending ?? 0;
-  const ticketIssued = dashboard?.bus_ticket?.issued ?? 0;
-  const arrival = dashboard?.arrival ?? { pending: 0, scheduled: 0, completed: 0 };
-  const departure = dashboard?.departure ?? { pending: 0, scheduled: 0, completed: 0 };
-  const returnStat = dashboard?.return ?? { pending: 0, scheduled: 0, completed: 0 };
   const pendingList = dashboard?.pending_list ?? [];
   const completionTotal = totalItems > 0 ? Math.round(((totalItems - pendingList.length) / totalItems) * 100) : 0;
 
@@ -283,46 +328,20 @@ const BusWorkPage: React.FC = () => {
         }
       />
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
-        <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Order" value={loading ? '–' : totalInvoices} iconClassName="bg-[#0D1A63] text-white" onClick={() => setStatModal('total_order')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_order')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<Bus className="w-5 h-5" />} label="Item Bus" value={loading ? '–' : totalItems} iconClassName="bg-slate-100 text-slate-600" onClick={() => setStatModal('item_bus')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('item_bus')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Pending" value={loading ? '–' : ticketPending} iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('tiket_pending')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('tiket_pending')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<Ticket className="w-5 h-5" />} label="Tiket Terbit" value={loading ? '–' : ticketIssued} iconClassName="bg-emerald-100 text-emerald-600" onClick={() => setStatModal('tiket_issued')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('tiket_issued')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<MapPin className="w-5 h-5" />} label="Kedatangan" value={loading ? '–' : (arrival.completed ?? 0)} subtitle={`P ${arrival.pending ?? 0} · T ${arrival.scheduled ?? 0}`} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('kedatangan')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('kedatangan')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<Plane className="w-5 h-5" />} label="Keberangkatan" value={loading ? '–' : (departure.completed ?? 0)} subtitle={`P ${departure.pending ?? 0} · T ${departure.scheduled ?? 0}`} iconClassName="bg-violet-100 text-violet-600" onClick={() => setStatModal('keberangkatan')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('keberangkatan')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        <StatCard icon={<RotateCcw className="w-5 h-5" />} label="Kepulangan" value={loading ? '–' : (returnStat.completed ?? 0)} subtitle={`P ${returnStat.pending ?? 0} · T ${returnStat.scheduled ?? 0}`} iconClassName="bg-teal-100 text-teal-600" onClick={() => setStatModal('kepulangan')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('kepulangan')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-      </div>
+      <ProgressDateFilterSection
+        value={filterDateRange}
+        onChange={setFilterDateRange}
+        title="Filter data menurut tanggal invoice (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)"
+      />
 
-      {/* Modal daftar invoice per stat */}
-      {statModal && (
-        <Modal open onClose={() => setStatModal(null)}>
-          <ModalBoxLg>
-            <ModalHeader title={statModal === 'total_order' ? 'Daftar Invoice – Total Order' : statModal === 'item_bus' ? 'Daftar Invoice – Item Bus' : statModal === 'tiket_pending' ? 'Daftar Invoice – Tiket Pending' : statModal === 'tiket_issued' ? 'Daftar Invoice – Tiket Terbit' : statModal === 'kedatangan' ? 'Daftar Invoice – Kedatangan' : statModal === 'keberangkatan' ? 'Daftar Invoice – Keberangkatan' : 'Daftar Invoice – Kepulangan'} onClose={() => setStatModal(null)} />
-            <ModalBody>
-              {(() => {
-                const list = statModal === 'tiket_pending' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.bus_ticket_status || 'pending') === 'pending')) : statModal === 'tiket_issued' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.bus_ticket_status || '') === 'issued')) : statModal === 'kedatangan' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.arrival_status || 'pending') === 'completed')) : statModal === 'keberangkatan' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.departure_status || 'pending') === 'completed')) : statModal === 'kepulangan' ? invoices.filter((inv: any) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'bus').some((i: any) => (i.BusProgress?.return_status || 'pending') === 'completed')) : invoices;
-                const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'status', label: 'Status' }];
-                return (
-                  <Table
-                    columns={cols}
-                    data={list}
-                    emptyMessage="Tidak ada invoice"
-                    renderRow={(row: any) => (
-                      <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
-                        <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
-                        <td className="py-2 px-4 text-sm"><NominalDisplay amount={row.total_amount ?? 0} currency="IDR" /></td>
-                        <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
-                      </tr>
-                    )}
-                  />
-                );
-              })()}
-            </ModalBody>
-          </ModalBoxLg>
-        </Modal>
-      )}
+      <DivisionStatCardsWithModal
+        stats={divisionStats}
+        invoices={dateFilteredInvoices}
+        getFilteredInvoices={getFilteredInvoicesForStat}
+        loading={loading}
+        getStatusLabel={getEffectiveInvoiceStatusLabel}
+        getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+      />
 
       {/* Progress ring / summary */}
       {totalItems > 0 && (

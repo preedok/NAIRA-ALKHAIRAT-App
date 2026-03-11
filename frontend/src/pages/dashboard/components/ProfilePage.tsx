@@ -3,14 +3,11 @@ import { Save, FileText, Download, ExternalLink, Shield, Building2, User, CheckC
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { authApi, ownersApi, type OwnerProfile } from '../../../services/api';
-import { API_BASE_URL } from '../../../utils/constants';
 import { CONTENT_LOADING_MESSAGE, AutoRefreshControl } from '../../../components/common';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Input from '../../../components/common/Input';
 import { ROLE_NAMES } from '../../../types';
-
-const UPLOAD_BASE = (API_BASE_URL || '').replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 
 const formatDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
@@ -64,9 +61,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const mouUrl = ownerProfile?.mou_generated_url
-    ? `${UPLOAD_BASE.replace(/\/$/, '')}${ownerProfile.mou_generated_url.startsWith('/') ? '' : '/'}${ownerProfile.mou_generated_url}`
-    : '';
+  const hasMou = !!ownerProfile?.mou_generated_url;
 
   const isOwnerMou = user?.role === 'owner_mou';
   const tabs = [
@@ -213,7 +208,7 @@ const ProfilePage: React.FC = () => {
                       <div className="w-10 h-10 border-2 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
                       <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                     </div>
-                  ) : mouUrl ? (
+                  ) : hasMou ? (
                     <div className="space-y-6">
                       <div className="flex items-center gap-5 p-5 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/80">
                         <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center shadow-sm">
@@ -234,15 +229,41 @@ const ProfilePage: React.FC = () => {
                         <Button
                           type="button"
                           variant="primary"
-                          onClick={() => window.open(mouUrl, '_blank')}
+                          onClick={async () => {
+                            try {
+                              const res = await ownersApi.getMouFile('me', 'generated');
+                              const blob = res.data as unknown as Blob;
+                              const url = URL.createObjectURL(blob);
+                              window.open(url, '_blank', 'noopener');
+                            } catch {
+                              showToast('Gagal membuka file MOU', 'error');
+                            }
+                          }}
                           icon={<ExternalLink size={18} />}
                         >
                           Buka di Tab Baru
                         </Button>
-                        <a href={mouUrl} download className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-emerald-200 text-emerald-700 font-semibold text-sm hover:bg-emerald-50 transition-colors">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await ownersApi.getMouFile('me', 'generated');
+                              const blob = res.data as unknown as Blob;
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = 'MOU.pdf';
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            } catch {
+                              showToast('Gagal unduh file MOU', 'error');
+                            }
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-emerald-200 text-emerald-700 font-semibold text-sm hover:bg-emerald-50 transition-colors"
+                        >
                           <Download size={18} />
                           Unduh PDF
-                        </a>
+                        </button>
                       </div>
                     </div>
                   ) : (

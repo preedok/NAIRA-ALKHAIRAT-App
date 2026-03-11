@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { HandHelping, Eye, ChevronRight, Loader2 } from 'lucide-react';
+import { HandHelping, Eye, ChevronRight, Loader2, Clock, CheckCircle } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -10,8 +10,8 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
-import { PROGRESS_DATE_PRESETS, getProgressDateRange, type ProgressDatePresetKey } from '../../../utils/progressDatePresets';
-import { Autocomplete } from '../../../components/common';
+import { ProgressDateFilterSection, DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { getProgressDateRange, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Menunggu',
@@ -33,13 +33,13 @@ const HandlingWorkPage: React.FC = () => {
   const [data, setData] = useState<HandlingDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [filterDatePreset, setFilterDatePreset] = useState<ProgressDatePresetKey>('');
+  const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const range = getProgressDateRange(filterDatePreset);
-      const params = range.date_from && range.date_to ? { date_from: range.date_from, date_to: range.date_to } : undefined;
+      const range = getProgressDateRange(filterDateRange);
+      const params = range ? { date_from: range.date_from, date_to: range.date_to } : undefined;
       const res = await handlingApi.getDashboard(params);
       if (res.data.success) setData(res.data.data);
     } catch {
@@ -47,7 +47,7 @@ const HandlingWorkPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterDatePreset]);
+  }, [filterDateRange]);
 
   useEffect(() => {
     fetchData();
@@ -66,6 +66,28 @@ const HandlingWorkPage: React.FC = () => {
   const pendingList = data?.pending_list ?? [];
   const byStatus = data?.by_status ?? {};
 
+  const invoiceLikeList = useMemo(() => pendingList.map((row: any) => ({
+    id: row.invoice_id || row.order_item_id || row.order_id,
+    invoice_number: row.invoice_number || row.order_number || '–',
+    total_amount: row.total_amount ?? 0,
+    status: row.status || 'pending',
+    Order: { User: { name: row.owner_name || '–' } }
+  })), [pendingList]);
+
+  const divisionStats: DivisionStatItem[] = useMemo(() => [
+    { id: 'total_orders', label: 'Total Order', value: data?.total_orders ?? 0, icon: <HandHelping className="w-5 h-5" />, iconClassName: 'bg-slate-100 text-slate-600', modalTitle: 'Daftar – Total Order' },
+    { id: 'total_items', label: 'Total Item Handling', value: data?.total_handling_items ?? 0, icon: <HandHelping className="w-5 h-5" />, iconClassName: 'bg-sky-100 text-sky-600', modalTitle: 'Daftar – Total Item Handling' },
+    { id: 'pending_progress', label: 'Menunggu / Dalam Proses', value: (byStatus.pending ?? 0) + (byStatus.in_progress ?? 0), icon: <Clock className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600', modalTitle: 'Daftar – Menunggu / Dalam Proses' },
+    { id: 'completed', label: 'Selesai', value: byStatus.completed ?? 0, icon: <CheckCircle className="w-5 h-5" />, iconClassName: 'bg-emerald-100 text-emerald-600', modalTitle: 'Daftar – Selesai' }
+  ], [data?.total_orders, data?.total_handling_items, byStatus]);
+
+  const getFilteredForStat = useCallback((statId: string) => {
+    if (statId === 'total_orders' || statId === 'total_items') return invoiceLikeList;
+    if (statId === 'pending_progress') return invoiceLikeList.filter((r: any) => r.status === 'pending' || r.status === 'in_progress');
+    if (statId === 'completed') return invoiceLikeList.filter((r: any) => r.status === 'completed');
+    return invoiceLikeList;
+  }, [invoiceLikeList]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -74,39 +96,20 @@ const HandlingWorkPage: React.FC = () => {
         right={<AutoRefreshControl onRefresh={fetchData} disabled={loading} size="sm" />}
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <span className="text-sm font-medium text-slate-600">Tanggal item handling:</span>
-        <div className="flex flex-wrap gap-2">
-          {PROGRESS_DATE_PRESETS.map((opt) => (
-            <button
-              key={opt.value || 'all'}
-              type="button"
-              onClick={() => setFilterDatePreset((opt.value || '') as ProgressDatePresetKey)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDatePreset === (opt.value || '') ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Total Order</p>
-          <p className="text-2xl font-semibold text-slate-900">{data?.total_orders ?? 0}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Total Item Handling</p>
-          <p className="text-2xl font-semibold text-slate-900">{data?.total_handling_items ?? 0}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Menunggu / Dalam Proses</p>
-          <p className="text-2xl font-semibold text-amber-600">{(byStatus.pending ?? 0) + (byStatus.in_progress ?? 0)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-600">Selesai</p>
-          <p className="text-2xl font-semibold text-emerald-600">{byStatus.completed ?? 0}</p>
-        </Card>
-      </div>
+      <ProgressDateFilterSection
+        value={filterDateRange}
+        onChange={setFilterDateRange}
+        title="Filter data menurut tanggal item handling (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)"
+      />
+
+      <DivisionStatCardsWithModal
+        stats={divisionStats}
+        invoices={invoiceLikeList}
+        getFilteredInvoices={getFilteredForStat}
+        loading={loading}
+        getStatusLabel={(row: any) => row.status === 'completed' ? 'Selesai' : row.status === 'in_progress' ? 'Dalam Proses' : 'Menunggu'}
+        getStatusBadgeVariant={(row: any) => (row.status === 'completed' ? 'success' : row.status === 'in_progress' ? 'warning' : 'default') as 'default' | 'success' | 'warning' | 'error' | 'info'}
+      />
 
       <Card>
         <div className="overflow-x-auto rounded-xl border border-slate-200">

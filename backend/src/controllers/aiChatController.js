@@ -59,8 +59,13 @@ const chat = asyncHandler(async (req, res) => {
   const { reply } = await callChat(messages, systemPrompt);
 
   let createdInvoice = null;
+  /** Alasan invoice tidak terbentuk: no_branch | no_items | validation_failed | create_error */
+  let createInvoiceFailureReason = null;
   const isCreateInvoiceRequest = /buatkan\s*(invoice|invocenya|invice|order)?|buat\s*(invoice|order)|create\s*invoice|setuju\s*(buatkan)?|invoice\s*nya|proses\s*invoice|buatkan\s*order|buat\s*orderannya/i.test(userMessage.trim());
-  if (isCreateInvoiceRequest && branchId) {
+
+  if (isCreateInvoiceRequest && !branchId) {
+    createInvoiceFailureReason = 'no_branch';
+  } else if (isCreateInvoiceRequest && branchId) {
     let extracted = await extractOrderFromConversation(messages, contextText);
     if (!extracted?.items?.length && messages.length > 1) {
       extracted = await extractOrderFromConversation(messages, contextText);
@@ -88,23 +93,39 @@ const chat = asyncHandler(async (req, res) => {
         });
         if (invoice) {
           createdInvoice = { id: invoice.id, invoice_number: invoice.invoice_number };
+        } else {
+          createInvoiceFailureReason = 'create_error';
         }
       } catch (err) {
         console.error('AI chat create order/invoice failed:', err?.message || err);
+        createInvoiceFailureReason = 'create_error';
       }
-    }
-    if (!createdInvoice) {
+    } else {
       if (!extracted?.items?.length) {
         console.warn('AI chat: extractOrderFromConversation returned no items');
+        createInvoiceFailureReason = 'no_items';
       } else if (!sanitizedDraft?.items?.length) {
         console.warn('AI chat: validateOrderDraftAgainstDb rejected all items');
+        createInvoiceFailureReason = 'validation_failed';
+      } else {
+        createInvoiceFailureReason = 'no_items';
       }
     }
   }
 
   let finalReply = reply;
-  if (isCreateInvoiceRequest && !createdInvoice && branchId) {
-    finalReply = 'Maaf, invoice belum bisa dibuat dari obrolan ini. Pastikan Anda sudah menyebutkan: nama produk, jumlah/kamar, dan tanggal (check-in/check-out untuk hotel). Silakan tulis ulang ringkasan pesanan lalu kirim lagi "buatkan invoice".';
+  if (isCreateInvoiceRequest && !createdInvoice) {
+    if (createInvoiceFailureReason === 'no_branch') {
+      finalReply = 'Invoice belum bisa dibuat karena cabang Anda belum ditetapkan oleh Admin. Silakan hubungi Admin Pusat untuk penetapan cabang terlebih dahulu. Setelah cabang ditetapkan, Anda bisa minta "buatkan invoice" lagi.';
+    } else if (createInvoiceFailureReason === 'no_items') {
+      finalReply = 'Maaf, invoice belum bisa dibuat dari obrolan ini. Pastikan Anda sudah menyebutkan: nama produk, jumlah/kamar, dan tanggal (check-in/check-out untuk hotel, travel_date untuk visa/tiket). Silakan tulis ulang ringkasan pesanan lalu kirim lagi "buatkan invoice".';
+    } else if (createInvoiceFailureReason === 'validation_failed') {
+      finalReply = 'Maaf, data pesanan tidak valid atau produk tidak ditemukan di sistem. Pastikan nama produk dan tanggal sesuai katalog. Silakan coba lagi atau buat order lewat menu Form Order.';
+    } else if (createInvoiceFailureReason === 'create_error') {
+      finalReply = 'Terjadi kesalahan saat membuat invoice. Silakan coba lagi atau buat order lewat menu Form Order / Daftar Invoice.';
+    } else {
+      finalReply = 'Maaf, invoice belum bisa dibuat dari obrolan ini. Pastikan Anda sudah menyebutkan: nama produk, jumlah/kamar, dan tanggal. Silakan tulis ulang ringkasan pesanan lalu kirim lagi "buatkan invoice".';
+    }
   }
 
   res.json({

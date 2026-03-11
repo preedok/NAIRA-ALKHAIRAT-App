@@ -19,6 +19,8 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 import { PROGRESS_STATUS_OPTIONS_HOTEL, PROGRESS_STATUS_OPTIONS_MEAL, ROOM_TYPE_LABELS as ROOM_TYPE_LABELS_SHARED } from '../../../components/common/InvoiceProgressStatusCell';
+import { ProgressDateFilterSection, DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { getProgressDateRange, filterInvoicesByDateRange, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
 const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_HOTEL;
@@ -63,6 +65,7 @@ const HotelWorkPage: React.FC = () => {
   const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
   /** Tab filter lokasi hotel: '' = Semua, 'makkah' = Hotel Mekkah, 'madinah' = Hotel Madinah */
@@ -73,8 +76,6 @@ const HotelWorkPage: React.FC = () => {
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   type HotelItemDraft = { status?: string; room_number?: string; meal_status?: string; notes?: string };
   const [detailDraft, setDetailDraft] = useState<Record<string, HotelItemDraft>>({});
-  type HotelStatModal = 'total' | 'item_hotel' | 'waiting_confirmation' | 'confirmed' | 'room_assigned' | 'completed' | null;
-  const [statModal, setStatModal] = useState<HotelStatModal>(null);
   const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
 
   useEffect(() => {
@@ -239,12 +240,27 @@ const HotelWorkPage: React.FC = () => {
       return acc;
     }, []);
   }, [hotelItems]);
-  const byStatus = dashboard?.by_status ?? { waiting_confirmation: 0, confirmed: 0, room_assigned: 0, completed: 0 };
-  const totalInvoices = dashboard?.total_orders ?? 0;
-  const totalItems = dashboard?.total_hotel_items ?? 0;
+  const dateRange = getProgressDateRange(filterDateRange);
+  const dateFilteredInvoices = useMemo(() => filterInvoicesByDateRange(invoices, dateRange), [invoices, dateRange]);
+
+  const byStatus = useMemo(() => {
+    const out: Record<string, number> = {};
+    dateFilteredInvoices.forEach((inv: any) => {
+      (inv.Order?.OrderItems || [])
+        .filter((i: any) => i.type === 'hotel')
+        .forEach((i: any) => {
+          const s = i.HotelProgress?.status || 'waiting_confirmation';
+          out[s] = (out[s] || 0) + 1;
+        });
+    });
+    return out;
+  }, [dateFilteredInvoices]);
+
+  const totalInvoices = dateFilteredInvoices.length;
+  const totalItems = dateFilteredInvoices.reduce((sum, inv: any) => sum + (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'hotel').length, 0);
 
   const filteredInvoices = useMemo(() => {
-    let list = invoices;
+    let list = dateFilteredInvoices;
     const q = (filterSearch || '').trim().toLowerCase();
     if (q) {
       list = list.filter((inv: any) => {
@@ -267,7 +283,30 @@ const HotelWorkPage: React.FC = () => {
       });
     }
     return list;
-  }, [invoices, filterSearch, filterProgressStatus, filterHotelLocation]);
+  }, [dateFilteredInvoices, filterSearch, filterProgressStatus, filterHotelLocation]);
+
+  const divisionStats = useMemo((): DivisionStatItem[] => {
+    const firstRow: DivisionStatItem[] = [
+      { id: 'total', label: 'Total Invoice', value: totalInvoices, icon: <ClipboardList className="w-5 h-5" />, iconClassName: 'bg-slate-100 text-slate-600', modalTitle: 'Daftar Invoice – Total Invoice' },
+      { id: 'item_hotel', label: 'Total Item Hotel', value: totalItems, icon: <Building2 className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600', modalTitle: 'Daftar Invoice – Item Hotel' }
+    ];
+    const rest = STATUS_OPTIONS.map((opt) => ({
+      id: opt.value,
+      label: opt.label,
+      value: byStatus[opt.value] ?? 0,
+      icon: opt.value === 'waiting_confirmation' ? <ListChecks className="w-5 h-5" /> : opt.value === 'confirmed' ? <Hotel className="w-5 h-5" /> : opt.value === 'room_assigned' ? <DoorOpen className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />,
+      iconClassName: 'bg-slate-100 text-slate-600',
+      modalTitle: `Daftar Invoice – ${opt.label}`
+    }));
+    return [...firstRow, ...rest];
+  }, [totalInvoices, totalItems, byStatus]);
+
+  const getFilteredInvoicesForStat = useCallback((statId: string) => {
+    if (statId === 'total' || statId === 'item_hotel') return dateFilteredInvoices;
+    return dateFilteredInvoices.filter((inv: any) =>
+      (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'hotel').some((i: any) => (i.HotelProgress?.status || 'waiting_confirmation') === statId)
+    );
+  }, [dateFilteredInvoices]);
 
 
   const tableColumns: TableColumn[] = [
@@ -293,59 +332,21 @@ const HotelWorkPage: React.FC = () => {
         right={<AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />}
       />
 
-      {/* Stat cards */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" onClick={() => setStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-          <StatCard icon={<Building2 className="w-5 h-5" />} label="Total Item Hotel" value={loading ? '–' : totalItems} iconClassName="bg-amber-100 text-amber-600" onClick={() => setStatModal('item_hotel')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('item_hotel')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Per Status Progress</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {STATUS_OPTIONS.map((opt) => (
-              <StatCard
-                key={opt.value}
-                icon={opt.value === 'waiting_confirmation' ? <ListChecks className="w-5 h-5" /> : opt.value === 'confirmed' ? <Hotel className="w-5 h-5" /> : opt.value === 'room_assigned' ? <DoorOpen className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
-                label={opt.label}
-                value={loading ? '–' : (byStatus[opt.value] ?? 0)}
-                onClick={() => setStatModal(opt.value as HotelStatModal)}
-                action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal(opt.value as HotelStatModal)}><Eye className="w-4 h-4" /> Lihat</Button></div>}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+      <ProgressDateFilterSection
+        value={filterDateRange}
+        onChange={setFilterDateRange}
+        title="Filter data menurut tanggal invoice (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)"
+      />
 
-      {/* Modal daftar invoice per stat */}
-      {statModal && (
-        <Modal open onClose={() => setStatModal(null)}>
-          <ModalBoxLg>
-            <ModalHeader title={statModal === 'total' ? 'Daftar Invoice – Total Invoice' : statModal === 'item_hotel' ? 'Daftar Invoice – Item Hotel' : `Daftar Invoice – ${STATUS_OPTIONS.find(o => o.value === statModal)?.label ?? statModal}`} onClose={() => setStatModal(null)} />
-            <ModalBody>
-              {(() => {
-                const hasStatus = (inv: any, s: string) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'hotel').some((i: any) => (i.HotelProgress?.status || '') === s);
-                const list = statModal === 'total' || statModal === 'item_hotel' ? invoices : invoices.filter((inv: any) => hasStatus(inv, statModal));
-                const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'status', label: 'Status' }];
-                return (
-                  <Table
-                    columns={cols}
-                    data={list}
-                    emptyMessage="Tidak ada invoice"
-                    renderRow={(row: any) => (
-                      <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
-                        <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
-                        <td className="py-2 px-4 text-sm"><NominalDisplay amount={row.total_amount ?? 0} currency="IDR" /></td>
-                        <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
-                      </tr>
-                    )}
-                  />
-                );
-              })()}
-            </ModalBody>
-          </ModalBoxLg>
-        </Modal>
-      )}
+      <DivisionStatCardsWithModal
+        stats={divisionStats}
+        invoices={dateFilteredInvoices}
+        getFilteredInvoices={getFilteredInvoicesForStat}
+        loading={loading}
+        perStatusLabel="Per Status Progress"
+        getStatusLabel={getEffectiveInvoiceStatusLabel}
+        getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+      />
 
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">

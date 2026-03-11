@@ -21,6 +21,8 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 import { PROGRESS_STATUS_OPTIONS_VISA, PROGRESS_LABELS_VISA } from '../../../components/common/InvoiceProgressStatusCell';
+import { ProgressDateFilterSection, DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import { getProgressDateRange, filterInvoicesByDateRange, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -59,6 +61,7 @@ const VisaWorkPage: React.FC = () => {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [downloadingVisaItemId, setDownloadingVisaItemId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
+  const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
   const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
@@ -66,8 +69,6 @@ const VisaWorkPage: React.FC = () => {
   const [limit, setLimit] = useState(25);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [detailDraft, setDetailDraft] = useState<Record<string, { status?: string }>>({});
-  type VisaStatModal = 'total' | 'item_visa' | 'document_received' | 'submitted' | 'in_process' | 'approved' | 'issued' | null;
-  const [statModal, setStatModal] = useState<VisaStatModal>(null);
   const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
 
   useEffect(() => {
@@ -232,12 +233,27 @@ const VisaWorkPage: React.FC = () => {
     }
   };
 
-  const byStatus = dashboard?.by_status || {};
-  const totalInvoices = dashboard?.total_invoices ?? 0;
-  const totalItems = dashboard?.total_visa_items ?? 0;
+  const dateRange = getProgressDateRange(filterDateRange);
+  const dateFilteredInvoices = useMemo(() => filterInvoicesByDateRange(invoices, dateRange), [invoices, dateRange]);
+
+  const byStatus = useMemo(() => {
+    const out: Record<string, number> = {};
+    dateFilteredInvoices.forEach((inv: any) => {
+      (inv.Order?.OrderItems || [])
+        .filter((i: any) => i.type === 'visa')
+        .forEach((i: any) => {
+          const s = i.VisaProgress?.status || 'document_received';
+          out[s] = (out[s] || 0) + 1;
+        });
+    });
+    return out;
+  }, [dateFilteredInvoices]);
+
+  const totalInvoices = dateFilteredInvoices.length;
+  const totalItems = dateFilteredInvoices.reduce((sum, inv: any) => sum + (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'visa').length, 0);
 
   const filteredInvoices = useMemo(() => {
-    let list = invoices;
+    let list = dateFilteredInvoices;
     const q = (filterSearch || '').trim().toLowerCase();
     if (q) {
       list = list.filter((inv: any) => {
@@ -254,7 +270,30 @@ const VisaWorkPage: React.FC = () => {
       });
     }
     return list;
-  }, [invoices, filterSearch, filterProgressStatus]);
+  }, [dateFilteredInvoices, filterSearch, filterProgressStatus]);
+
+  const divisionStats = useMemo((): DivisionStatItem[] => {
+    const firstRow: DivisionStatItem[] = [
+      { id: 'total', label: 'Total Invoice', value: totalInvoices, icon: <ClipboardList className="w-5 h-5" />, iconClassName: 'bg-slate-100 text-slate-600', modalTitle: 'Daftar Invoice – Total Invoice' },
+      { id: 'item_visa', label: 'Total Item Visa', value: totalItems, icon: <FileText className="w-5 h-5" />, iconClassName: 'bg-sky-100 text-sky-600', modalTitle: 'Daftar Invoice – Item Visa' }
+    ];
+    const rest = STATUS_OPTIONS.map((opt) => ({
+      id: opt.value,
+      label: RECAP_STATUS_LABELS[opt.value] || opt.label,
+      value: byStatus[opt.value] ?? 0,
+      icon: STATUS_ICONS[opt.value] || <FileText className="w-5 h-5" />,
+      iconClassName: STATUS_CARD_COLORS[opt.value] || 'bg-slate-100 text-slate-600',
+      modalTitle: `Daftar Invoice – ${RECAP_STATUS_LABELS[opt.value] || opt.value}`
+    }));
+    return [...firstRow, ...rest];
+  }, [totalInvoices, totalItems, byStatus]);
+
+  const getFilteredInvoicesForStat = useCallback((statId: string) => {
+    if (statId === 'total' || statId === 'item_visa') return dateFilteredInvoices;
+    return dateFilteredInvoices.filter((inv: any) =>
+      (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'visa').some((i: any) => (i.VisaProgress?.status || 'document_received') === statId)
+    );
+  }, [dateFilteredInvoices]);
 
   const tableColumns: TableColumn[] = [
     { id: 'invoice', label: 'No. Invoice', align: 'left' },
@@ -275,59 +314,21 @@ const VisaWorkPage: React.FC = () => {
         right={<AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />}
       />
 
-      {/* Stat cards */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={loading ? '–' : totalInvoices} iconClassName="bg-slate-100 text-slate-600" onClick={() => setStatModal('total')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-          <StatCard icon={<FileText className="w-5 h-5" />} label="Total Item Visa" value={loading ? '–' : totalItems} iconClassName="bg-sky-100 text-sky-600" onClick={() => setStatModal('item_visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('item_visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Per Status Progress</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {STATUS_OPTIONS.map((opt) => (
-              <StatCard
-                key={opt.value}
-                icon={STATUS_ICONS[opt.value] || <FileText className="w-5 h-5" />}
-                label={RECAP_STATUS_LABELS[opt.value] || opt.label}
-                value={loading ? '–' : (byStatus[opt.value] ?? 0)}
-                onClick={() => setStatModal(opt.value as VisaStatModal)}
-                action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal(opt.value as VisaStatModal)}><Eye className="w-4 h-4" /> Lihat</Button></div>}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+      <ProgressDateFilterSection
+        value={filterDateRange}
+        onChange={setFilterDateRange}
+        title="Filter data menurut tanggal invoice (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)"
+      />
 
-      {/* Modal daftar invoice per stat */}
-      {statModal && (
-        <Modal open onClose={() => setStatModal(null)}>
-          <ModalBoxLg>
-            <ModalHeader title={statModal === 'total' ? 'Daftar Invoice – Total Invoice' : statModal === 'item_visa' ? 'Daftar Invoice – Item Visa' : `Daftar Invoice – ${RECAP_STATUS_LABELS[statModal] || statModal}`} onClose={() => setStatModal(null)} />
-            <ModalBody>
-              {(() => {
-                const hasStatus = (inv: any, s: string) => (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'visa').some((i: any) => (i.VisaProgress?.status || '') === s);
-                const list = statModal === 'total' || statModal === 'item_visa' ? invoices : invoices.filter((inv: any) => hasStatus(inv, statModal));
-                const cols: TableColumn[] = [{ id: 'invoice_number', label: 'No. Invoice' }, { id: 'owner', label: 'Owner' }, { id: 'total', label: 'Total' }, { id: 'status', label: 'Status' }];
-                return (
-                  <Table
-                    columns={cols}
-                    data={list}
-                    emptyMessage="Tidak ada invoice"
-                    renderRow={(row: any) => (
-                      <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
-                        <td className="py-2 px-4 text-sm">{row.Order?.User?.name ?? row.User?.name ?? '–'}</td>
-                        <td className="py-2 px-4 text-sm"><NominalDisplay amount={row.total_amount ?? 0} currency="IDR" /></td>
-                        <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
-                      </tr>
-                    )}
-                  />
-                );
-              })()}
-            </ModalBody>
-          </ModalBoxLg>
-        </Modal>
-      )}
+      <DivisionStatCardsWithModal
+        stats={divisionStats}
+        invoices={dateFilteredInvoices}
+        getFilteredInvoices={getFilteredInvoicesForStat}
+        loading={loading}
+        perStatusLabel="Per Status Progress"
+        getStatusLabel={getEffectiveInvoiceStatusLabel}
+        getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+      />
 
       {/* Filter + Table card — layout konsisten dengan halaman lain */}
       <Card className="travel-card overflow-visible">

@@ -41,10 +41,12 @@ router.use(auth);
 router.get('/me', requireRole(...OWNER_ROLES), ownerController.getMyProfile);
 router.get('/me/balance', requireRole(...OWNER_ROLES), ownerController.getMyBalance);
 router.get('/me/registration-payment-file', requireRole(...OWNER_ROLES), ownerController.getRegistrationPaymentFile);
+router.get('/me/mou-file', requireRole(...OWNER_ROLES), ownerController.getMouFile);
 router.post('/upload-registration-payment', requireRole(...OWNER_ROLES), uploadRegPayment.single('file'), ownerController.uploadRegistrationPayment);
 router.post('/upload-mou', requireRole(...OWNER_ROLES), upload.single('mou_file'), ownerController.uploadMou);
 
 router.get('/:id/registration-payment-file', ownerController.getRegistrationPaymentFile);
+router.get('/:id/mou-file', ownerController.getMouFile);
 router.get('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.list);
 router.get('/stats', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.getStats);
 router.get('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.getById);

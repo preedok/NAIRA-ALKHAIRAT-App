@@ -995,11 +995,13 @@ export const ownersApi = {
     api.patch<{ success: boolean; message?: string; data?: { owner_status: string } }>(`/owners/${id}/verify-registration-payment`, body),
   assignBranch: (ownerId: string, branchId: string) => api.patch(`/owners/${ownerId}/assign-branch`, { branch_id: branchId }),
   verifyDeposit: (ownerId: string) => api.patch(`/owners/${ownerId}/verify-deposit`),
-  activate: (ownerId: string, body?: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`, body || {}),
+  activate: (ownerId: string, body?: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; user_id?: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`, body || {}),
   updateProfile: (profileId: string, body: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; data: OwnerProfile }>(`/owners/${profileId}`, body),
   getMyBalance: () => api.get<{ success: boolean; data: { balance: number; transactions: Array<{ id: string; amount: number; type: string; reference_type?: string; reference_id?: string; notes?: string; created_at: string }> } }>('/owners/me/balance'),
   /** Stream file bukti bayar pendaftaran (untuk preview; hindari 404 direct /uploads/). */
-  getRegistrationPaymentFile: (ownerId: string) => api.get(`/owners/${ownerId}/registration-payment-file`, { responseType: 'blob' })
+  getRegistrationPaymentFile: (ownerId: string) => api.get(`/owners/${ownerId}/registration-payment-file`, { responseType: 'blob' }),
+  /** Stream file MOU (generated or signed) agar tidak 404. */
+  getMouFile: (ownerId: string, type?: 'generated' | 'signed') => api.get(`/owners/${ownerId}/mou-file${type ? `?type=${type}` : ''}`, { responseType: 'blob' })
 };
 
 /** Item draft order dari AI chat (untuk "Isi ke Form Order"). */

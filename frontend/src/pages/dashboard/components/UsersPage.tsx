@@ -77,7 +77,7 @@ const UsersPage: React.FC = () => {
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
   const [regPaymentFileBlobUrl, setRegPaymentFileBlobUrl] = useState<string | null>(null);
   const [regPaymentFileLoading, setRegPaymentFileLoading] = useState(false);
-  const [activateResult, setActivateResult] = useState<{ password: string; mouUrl?: string | null } | null>(null);
+  const [activateResult, setActivateResult] = useState<{ password: string; userId?: string; mouUrl?: string | null } | null>(null);
   const [activateModal, setActivateModal] = useState<{ profileId: string; isMouOwner: boolean; userRole?: 'owner_mou' | 'owner_non_mou' } | null>(null);
   const [mouTargetUser, setMouTargetUser] = useState<UserListItem | null>(null);
   const [mouCheckValue, setMouCheckValue] = useState(false);
@@ -406,7 +406,7 @@ const UsersPage: React.FC = () => {
       const res = await ownersApi.activate(profileId, typeof isMouOwner === 'boolean' ? { is_mou_owner: isMouOwner } : undefined);
       const data = res.data?.data;
       if (data?.generated_password != null) {
-        setActivateResult({ password: data.generated_password, mouUrl: data.mou_generated_url ?? null });
+        setActivateResult({ password: data.generated_password, userId: data.user_id, mouUrl: data.mou_generated_url ?? null });
       } else {
         showToast('Owner berhasil diaktifkan', 'success');
       }
@@ -1062,10 +1062,25 @@ const UsersPage: React.FC = () => {
                     <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(activateResult.password); showToast('Disalin', 'success'); }}>Salin</Button>
                   </div>
                 </div>
-                {activateResult.mouUrl && (
+                {activateResult.mouUrl && activateResult.userId && (
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Surat MoU</label>
-                    <a href={`${UPLOAD_BASE}${activateResult.mouUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline text-sm">Unduh / Buka MoU (PDF)</a>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await ownersApi.getMouFile(activateResult.userId!, 'generated');
+                          const blob = res.data as unknown as Blob;
+                          const url = URL.createObjectURL(blob);
+                          window.open(url, '_blank', 'noopener');
+                        } catch {
+                          showToast('Gagal membuka file MOU', 'error');
+                        }
+                      }}
+                      className="text-primary-600 hover:underline text-sm"
+                    >
+                      Unduh / Buka MoU (PDF)
+                    </button>
                   </div>
                 )}
               </div>

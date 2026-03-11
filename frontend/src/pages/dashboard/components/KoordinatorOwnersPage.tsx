@@ -60,7 +60,7 @@ const KoordinatorOwnersPage: React.FC = () => {
   const [verifyRegPaymentProfile, setVerifyRegPaymentProfile] = useState<any | null>(null);
   const [verifyRegPaymentRejectReason, setVerifyRegPaymentRejectReason] = useState('');
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
-  const [activateResult, setActivateResult] = useState<{ password: string; mouUrl: string } | null>(null);
+  const [activateResult, setActivateResult] = useState<{ password: string; userId?: string; mouUrl: string } | null>(null);
 
   const isInvoiceKoordinator = user?.role === 'invoice_koordinator';
   const canAssignOrActivate = isInvoiceKoordinator;
@@ -245,8 +245,8 @@ const KoordinatorOwnersPage: React.FC = () => {
     try {
       const res = await ownersApi.activate(profileId);
       const data = res.data?.data;
-      if (data?.generated_password != null && data?.mou_generated_url) {
-        setActivateResult({ password: data.generated_password, mouUrl: data.mou_generated_url });
+      if (data?.generated_password != null) {
+        setActivateResult({ password: data.generated_password, userId: data.user_id, mouUrl: data.mou_generated_url || '' });
       } else {
         showToast('Owner berhasil diaktifkan.', 'success');
       }
@@ -587,12 +587,27 @@ const KoordinatorOwnersPage: React.FC = () => {
                   <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(activateResult.password); showToast('Disalin', 'success'); }}>Salin</Button>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Surat MoU</label>
-                <a href={`${UPLOAD_BASE}${activateResult.mouUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline text-sm">
-                  Unduh / Buka MoU (PDF)
-                </a>
-              </div>
+              {activateResult.mouUrl && activateResult.userId && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Surat MoU</label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await ownersApi.getMouFile(activateResult.userId!, 'generated');
+                        const blob = res.data as unknown as Blob;
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank', 'noopener');
+                      } catch {
+                        showToast('Gagal membuka file MOU', 'error');
+                      }
+                    }}
+                    className="text-primary-600 hover:underline text-sm"
+                  >
+                    Unduh / Buka MoU (PDF)
+                  </button>
+                </div>
+              )}
             </div>
             </ModalBody>
             <ModalFooter>
