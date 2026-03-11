@@ -21,9 +21,13 @@ const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
-/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role bus = wilayah dulu (sama seperti invoice) baru cabang. Agar role bus lihat invoice yang sama dengan role invoice dalam satu wilayah. */
+/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role_bus = semua cabang (sama seperti menu Invoice yang tidak filter cabang untuk role_bus; order visa = bus include). */
 async function getBusBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
+    const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+    return branches.map(b => b.id);
+  }
+  if (user.role === ROLES.ROLE_BUS) {
     const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
     return branches.map(b => b.id);
   }
@@ -149,41 +153,53 @@ const getDashboard = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/bus/invoices
- * List invoice yang punya order bus ATAU order visa (bus besar include dengan visa; order visa tetap relevan untuk menu bus/penalti).
- * Scope cabang role bus. Sama pola dengan visa/ticket.
+ * List invoice yang punya order bus ATAU order visa (bus besar include dengan visa) ATAU waive_bus_penalty.
+ * Ambil dulu semua invoice dalam scope cabang + status, lalu filter order yang punya visa/bus/waive + sudah DP.
  */
 const listInvoices = asyncHandler(async (req, res) => {
   const { status, page = 1, limit = 25 } = req.query;
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const [busRows, visaRows, ordersWaive] = await Promise.all([
-    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
-    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true }),
-    Order.findAll({ where: { waive_bus_penalty: true, branch_id: { [Op.in]: branchIds } }, attributes: ['id'], raw: true })
-  ]);
-  const orderIdsFromBus = [...new Set(busRows.map(r => r.order_id))];
-  const orderIdsFromVisa = [...new Set(visaRows.map(r => r.order_id))];
-  const orderIdsWaiveBusPenalty = (ordersWaive || []).map(r => r.id).filter(Boolean);
-  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa, ...orderIdsWaiveBusPenalty])];
-
-  if (orderIdsRelevant.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
-
   const { DP_PAYMENT_STATUS } = require('../constants');
-  const ordersWithDpPaid = await Order.findAll({
-    where: { id: orderIdsRelevant, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
-    attributes: ['id'],
-    raw: true
-  }).then(rows => rows.map(r => r.id));
-  const where = { order_id: ordersWithDpPaid.length ? { [Op.in]: ordersWithDpPaid } : { [Op.in]: [] }, branch_id: { [Op.in]: branchIds } };
   const statusesForProgress = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
-  if (status && statusesForProgress.includes(status)) {
-    where.status = status;
-  } else {
-    where.status = { [Op.in]: statusesForProgress };
-  }
-  // Progress: jangan tampilkan invoice yang sudah dibatalkan atau sudah direfund (hanya nilai enum yang ada di DB)
   const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
+
+  const whereInv = { branch_id: { [Op.in]: branchIds }, status: status ? (statusesForProgress.includes(status) ? status : { [Op.in]: statusesForProgress }) : { [Op.in]: statusesForProgress } };
+  if (refundedInvoiceIds.length > 0) whereInv.id = { [Op.notIn]: refundedInvoiceIds };
+  whereInv[Op.and] = whereInv[Op.and] || [];
+  whereInv[Op.and].push({ status: { [Op.notIn]: [INVOICE_STATUS.CANCELED, INVOICE_STATUS.CANCELLED_REFUND] } });
+
+  const allInScope = await Invoice.findAll({
+    where: whereInv,
+    attributes: ['id', 'order_id'],
+    include: [{ model: Order, as: 'Order', attributes: ['id', 'dp_payment_status'], required: true }],
+    raw: false
+  });
+
+  const orderIdsWithDp = [];
+  for (const inv of allInScope || []) {
+    const order = inv.Order || inv.get?.('Order');
+    if (order && String(order.dp_payment_status || '') === DP_PAYMENT_STATUS.PEMBAYARAN_DP) orderIdsWithDp.push(inv.order_id);
+  }
+  if (orderIdsWithDp.length === 0) {
+    return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: parseInt(limit, 10) || 25, totalPages: 0 } });
+  }
+
+  const [orderItems, ordersWaive] = await Promise.all([
+    OrderItem.findAll({ where: { order_id: { [Op.in]: orderIdsWithDp } }, attributes: ['order_id', 'type'], raw: true }),
+    Order.findAll({ where: { id: { [Op.in]: orderIdsWithDp }, waive_bus_penalty: true }, attributes: ['id'], raw: true })
+  ]);
+  const orderIdsVisaOrBus = [...new Set((orderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.VISA || i.type === ORDER_ITEM_TYPE.BUS).map(i => i.order_id))];
+  const orderIdsWaive = (ordersWaive || []).map(r => r.id).filter(Boolean);
+  const orderIdsRelevant = [...new Set([...orderIdsVisaOrBus, ...orderIdsWaive])];
+  if (orderIdsRelevant.length === 0) {
+    return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: parseInt(limit, 10) || 25, totalPages: 0 } });
+  }
+
+  const where = { order_id: { [Op.in]: orderIdsRelevant }, branch_id: { [Op.in]: branchIds } };
+  if (status && statusesForProgress.includes(status)) where.status = status;
+  else where.status = { [Op.in]: statusesForProgress };
   if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
   where[Op.and] = where[Op.and] || [];
   where[Op.and].push({ status: { [Op.notIn]: [INVOICE_STATUS.CANCELED, INVOICE_STATUS.CANCELLED_REFUND] } });
