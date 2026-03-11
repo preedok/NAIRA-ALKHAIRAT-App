@@ -75,6 +75,8 @@ const UsersPage: React.FC = () => {
   const [verifyRegPaymentUser, setVerifyRegPaymentUser] = useState<UserListItem | null>(null);
   const [verifyRegPaymentReject, setVerifyRegPaymentReject] = useState('');
   const [verifyingRegPayment, setVerifyingRegPayment] = useState(false);
+  const [regPaymentFileBlobUrl, setRegPaymentFileBlobUrl] = useState<string | null>(null);
+  const [regPaymentFileLoading, setRegPaymentFileLoading] = useState(false);
   const [activateResult, setActivateResult] = useState<{ password: string; mouUrl?: string | null } | null>(null);
   const [activateModal, setActivateModal] = useState<{ profileId: string; isMouOwner: boolean; userRole?: 'owner_mou' | 'owner_non_mou' } | null>(null);
   const [mouTargetUser, setMouTargetUser] = useState<UserListItem | null>(null);
@@ -460,6 +462,29 @@ const UsersPage: React.FC = () => {
   useEffect(() => {
     setPage(1);
   }, [kabupatenId, wilayahId, provinsiId, tabFilter]);
+
+  useEffect(() => {
+    if (!verifyRegPaymentUser?.id || !verifyRegPaymentUser?.registration_payment_proof_url) {
+      setRegPaymentFileBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setRegPaymentFileLoading(false);
+      return;
+    }
+    setRegPaymentFileBlobUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setRegPaymentFileLoading(true);
+    ownersApi.getRegistrationPaymentFile(verifyRegPaymentUser.id)
+      .then((res) => {
+        const blob = res.data as unknown as Blob;
+        setRegPaymentFileBlobUrl(URL.createObjectURL(blob));
+      })
+      .catch(() => setRegPaymentFileBlobUrl(null))
+      .finally(() => setRegPaymentFileLoading(false));
+  }, [verifyRegPaymentUser?.id, verifyRegPaymentUser?.registration_payment_proof_url]);
 
   const filteredUsers = users.filter((user: UserListItem) => {
     const matchesSearch =
@@ -877,9 +902,6 @@ const UsersPage: React.FC = () => {
       <Modal open={!!verifyRegPaymentUser} onClose={() => { setVerifyRegPaymentUser(null); setVerifyRegPaymentReject(''); }}>
         {verifyRegPaymentUser && (() => {
           const proofPath = verifyRegPaymentUser.registration_payment_proof_url;
-          const proofUrl = proofPath
-            ? `${(UPLOAD_BASE || '').replace(/\/$/, '')}${proofPath.startsWith('/') ? '' : '/'}${proofPath}`
-            : '';
           return (
             <ModalBox>
               <ModalHeader
@@ -903,14 +925,22 @@ const UsersPage: React.FC = () => {
                 {proofPath ? (
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-2">Bukti bayar yang diupload owner</label>
-                    <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50 min-h-[240px]">
-                      <iframe
-                        title="Bukti bayar yang diupload owner"
-                        src={proofUrl}
-                        className="w-full h-[360px] min-h-[240px] border-0"
-                      />
-                    </div>
-                    <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline mt-1 inline-block">Buka dokumen di tab baru</a>
+                    {regPaymentFileLoading ? (
+                      <div className="border border-slate-200 rounded-lg bg-slate-50 min-h-[240px] flex items-center justify-center text-slate-500">Memuat dokumen...</div>
+                    ) : regPaymentFileBlobUrl ? (
+                      <>
+                        <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50 min-h-[240px]">
+                          <iframe
+                            title="Bukti bayar yang diupload owner"
+                            src={regPaymentFileBlobUrl}
+                            className="w-full h-[360px] min-h-[240px] border-0"
+                          />
+                        </div>
+                        <a href={regPaymentFileBlobUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline mt-1 inline-block">Buka dokumen di tab baru</a>
+                      </>
+                    ) : (
+                      <div className="text-sm text-amber-600">Gagal memuat file. Coba tutup dan buka lagi.</div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-600">

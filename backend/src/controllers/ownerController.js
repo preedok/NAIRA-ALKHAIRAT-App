@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 const { Op } = require('sequelize');
 const { User, OwnerProfile, Branch, OwnerBalanceTransaction } = require('../models');
 const { ROLES, OWNER_STATUS, MOU_REGISTRATION_FEE_IDR, isOwnerRole } = require('../constants');
@@ -629,12 +630,63 @@ const activate = asyncHandler(async (req, res) => {
   });
 });
 
+/** Resolve URL path (/uploads/registration-payment/xxx) ke path absolut file */
+function resolveRegistrationPaymentPath(urlPath) {
+  if (!urlPath || typeof urlPath !== 'string') return null;
+  const norm = urlPath.replace(/\\/g, '/').trim().replace(/^\/+/, '');
+  const withoutUploads = norm.replace(/^uploads\/?/i, '');
+  const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.REGISTRATION_PAYMENT);
+  const filename = path.basename(withoutUploads);
+  if (!filename) return null;
+  return path.join(dir, filename);
+}
+
+const MIME_BY_EXT = {
+  '.pdf': 'application/pdf',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp'
+};
+
+/**
+ * GET /api/v1/owners/:id/registration-payment-file
+ * Stream file bukti bayar pendaftaran (agar tidak 404 saat nginx/static path beda).
+ * Akses: Admin/Koordinator untuk user id, atau owner untuk id sendiri.
+ */
+const getRegistrationPaymentFile = asyncHandler(async (req, res) => {
+  const ownerId = req.params.id === 'me' ? req.user.id : req.params.id;
+  const profile = await OwnerProfile.findOne({
+    where: { user_id: ownerId },
+    attributes: ['id', 'user_id', 'registration_payment_proof_url']
+  });
+  if (!profile || !profile.registration_payment_proof_url) {
+    return res.status(404).json({ success: false, message: 'File tidak ditemukan' });
+  }
+  const canAccess = req.params.id === 'me'
+    ? req.user.id === ownerId
+    : req.user.id === ownerId || [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR].includes(req.user.role);
+  if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
+
+  const filePath = resolveRegistrationPaymentPath(profile.registration_payment_proof_url);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File tidak ada di server' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
+  const downloadName = path.basename(filePath);
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `inline; filename="${downloadName.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
 module.exports = {
   register,
   uploadRegistrationPayment,
   uploadMou,
   getMyProfile,
   getMyBalance,
+  getRegistrationPaymentFile,
   getStats,
   list,
   getById,

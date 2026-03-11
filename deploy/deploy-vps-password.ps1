@@ -19,7 +19,7 @@ $tar = Join-Path $env:TEMP "bgg-app-deploy.tar"
 if (Test-Path $tar) { Remove-Item $tar -Force }
 
 Write-Host "Membuat arsip (exclude node_modules, .git)..." -ForegroundColor Cyan
-& tar -c -f $tar --exclude=node_modules --exclude=.git .
+& tar -c -f $tar --exclude=node_modules --exclude=.git --exclude=uploads .
 if ($LASTEXITCODE -ne 0) { Write-Host "Gagal membuat tar" -ForegroundColor Red; exit 1 }
 
 Write-Host "Upload ke VPS..." -ForegroundColor Cyan

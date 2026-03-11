@@ -698,14 +698,23 @@ const OwnerActivationPage: React.FC = () => {
                   </div>
                   {isMouOwner && profile?.registration_payment_proof_url && (
                     <div style={{ marginTop: 20 }}>
-                      <a
-                        href={profile.registration_payment_proof_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await ownersApi.getRegistrationPaymentFile('me');
+                            const blob = res.data as unknown as Blob;
+                            const url = URL.createObjectURL(blob);
+                            window.open(url, '_blank', 'noopener');
+                          } catch {
+                            window.open(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/owners/me/registration-payment-file`, '_blank');
+                          }
+                        }}
                         className="oap-view-link"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit', color: 'inherit', textDecoration: 'underline' }}
                       >
                         <ExternalLinkIcon /> Lihat Bukti yang Diupload
-                      </a>
+                      </button>
                     </div>
                   )}
                   {(isMouOwner
