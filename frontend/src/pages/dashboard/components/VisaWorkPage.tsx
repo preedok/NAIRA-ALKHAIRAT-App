@@ -22,7 +22,7 @@ import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant }
 import Badge from '../../../components/common/Badge';
 import { PROGRESS_STATUS_OPTIONS_VISA, PROGRESS_LABELS_VISA } from '../../../components/common/InvoiceProgressStatusCell';
 import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
-import { getProgressDateRange, filterInvoicesByDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
+import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
@@ -284,7 +284,25 @@ const VisaWorkPage: React.FC = () => {
   };
 
   const dateRange = getProgressDateRange(filterDateRange);
-  const dateFilteredInvoices = useMemo(() => filterInvoicesByDateRange(invoices, dateRange), [invoices, dateRange]);
+  const dateFilteredInvoices = useMemo(() => {
+    if (!dateRange) return invoices;
+    const from = dateRange.date_from;
+    const to = dateRange.date_to;
+    return invoices.filter((inv: any) => {
+      // Prioritas: tanggal layanan visa = travel_date di meta item visa
+      const items = (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'visa');
+      const dates = items
+        .map((it: any) => {
+          const meta = it?.meta && typeof it.meta === 'object' ? it.meta : {};
+          const raw = (meta.travel_date || meta.departure_date || '').toString();
+          const d = raw.slice(0, 10);
+          return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+        })
+        .filter(Boolean) as string[];
+      const serviceDate = dates.length ? dates.sort()[0] : (inv.issued_at || inv.created_at || '').toString().slice(0, 10);
+      return serviceDate >= from && serviceDate <= to;
+    });
+  }, [invoices, dateRange]);
 
   const byStatus = useMemo(() => {
     const out: Record<string, number> = {};
@@ -384,7 +402,7 @@ const VisaWorkPage: React.FC = () => {
         />
         <div className="mb-6 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
           <p className="text-sm font-semibold text-slate-700 mb-1">Pengaturan Filter</p>
-          <p className="text-xs text-slate-500 mb-3">Filter data menurut tanggal invoice (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)</p>
+          <p className="text-xs text-slate-500 mb-3">Filter data menurut tanggal keberangkatan visa (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)</p>
           <div className="flex flex-wrap gap-2 mb-4">
             {PROGRESS_DATE_RANGE_OPTIONS.map((opt) => (
               <button
