@@ -62,6 +62,7 @@ const BUS_TYPE_LABELS: Record<string, string> = {
 
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
+type HotelRoomInputMode = 'manual' | 'pax';
 
 type DisplayCurrency = 'SAR' | 'IDR' | 'USD';
 
@@ -413,6 +414,93 @@ const OrderFormPage: React.FC = () => {
   const setMealLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updLine(rowId,lineId,{meal_unit_price:toRowCurrency(idr,row),meal_unit_price_currency:rowCur(row)}); };
   const getMealPriceSar=(p:ProductOption|undefined):number=>{ if(!p) return 0; if((p.meta?.meal_plan as string)==='fullboard') return 0; const raw=(p.meta?.meal_price as number)??0; const cur=(p.currency||'IDR').toUpperCase(); return cur==='SAR'?raw:cur==='USD'?raw*u2iR/s2i:raw/s2i; };
   const isFullboardHotel=(p:ProductOption|undefined):boolean=>!!(p?.meta?.meal_plan==='fullboard');
+
+  const roomCap = (rt: RoomTypeId) => ROOM_TYPES.find((t) => t.id === rt)?.cap ?? 0;
+
+  /** Generate kombinasi tipe kamar terbaik (min kamar, lalu prefer kamar besar) dengan batas ketersediaan jika tersedia. */
+  const bestRoomCombo = useCallback((pax: number, roomTypes: RoomTypeId[], availability?: Record<string, number>) => {
+    const target = Math.max(0, Math.floor(pax || 0));
+    if (!target) return {} as Record<RoomTypeId, number>;
+    const types = [...roomTypes].sort((a, b) => roomCap(b) - roomCap(a)); // besar dulu untuk tie-break
+
+    type State = { rooms: number; score: number; combo: Record<RoomTypeId, number> };
+    const dp: Array<State | null> = Array(target + 1).fill(null);
+    dp[0] = { rooms: 0, score: 0, combo: {} as Record<RoomTypeId, number> };
+
+    for (const rt of types) {
+      const cap = roomCap(rt);
+      if (!cap) continue;
+      const maxAvailRaw = availability && typeof availability[rt] === 'number' ? Math.max(0, Math.floor(availability[rt])) : undefined;
+      const maxNeeded = Math.ceil(target / cap);
+      const maxK = Math.min(maxNeeded, maxAvailRaw ?? maxNeeded);
+
+      // bounded knapsack update (copy dp each type)
+      const next = dp.slice();
+      for (let s = 0; s <= target; s++) {
+        const cur = dp[s];
+        if (!cur) continue;
+        for (let k = 1; k <= maxK; k++) {
+          const ns = s + k * cap;
+          if (ns > target) break;
+          const candRooms = cur.rooms + k;
+          const candScore = cur.score + k * cap * cap; // prefer room besar jika rooms sama
+          const prev = next[ns];
+          if (!prev || candRooms < prev.rooms || (candRooms === prev.rooms && candScore > prev.score)) {
+            next[ns] = {
+              rooms: candRooms,
+              score: candScore,
+              combo: { ...(cur.combo || {}), [rt]: (cur.combo?.[rt] || 0) + k }
+            };
+          }
+        }
+      }
+      for (let i = 0; i <= target; i++) dp[i] = next[i];
+    }
+
+    // fallback (harusnya selalu bisa karena ada single), tapi jaga-jaga
+    if (!dp[target]) return { single: target } as unknown as Record<RoomTypeId, number>;
+    return dp[target]!.combo;
+  }, []);
+
+  const applyAutoHotelRooms = useCallback((rowId: string, pax: number) => {
+    setItems((prev) => prev.map((r) => {
+      if (r.id !== rowId || r.type !== 'hotel') return r;
+      const prod = products.find((p) => p.type === 'hotel' && p.id === r.product_id);
+      if (!prod) return r;
+
+      const rb = (prod.room_breakdown ?? prod.prices_by_room ?? {}) as Record<string, any>;
+      const productRoomTypes = Object.keys(rb).filter(Boolean) as RoomTypeId[];
+      const avail = (hotelAvailability[rowId] && typeof hotelAvailability[rowId] === 'object')
+        ? (hotelAvailability[rowId] as { byRoomType: Record<string, number> }).byRoomType
+        : undefined;
+      const allowed = productRoomTypes.filter((rt) => !avail || (avail[rt] ?? 0) > 0);
+      const usedTypes = allowed.length ? allowed : productRoomTypes;
+
+      const combo = bestRoomCombo(pax, usedTypes, avail);
+      const rowCurrency = rowCur(r);
+      const fullboard = isFullboardHotel(prod);
+      const withMealDefault = fullboard ? true : !!(r.room_breakdown || []).find((l) => l.with_meal)?.with_meal;
+      const mealPSar = getMealPriceSar(prod);
+
+      const lines: HotelRoomLine[] = Object.entries(combo)
+        .filter(([, qty]) => (qty || 0) > 0)
+        .sort(([a], [b]) => roomCap(b as RoomTypeId) - roomCap(a as RoomTypeId))
+        .map(([rtRaw, qty]) => {
+          const rt = rtRaw as RoomTypeId;
+          const withMeal = fullboard ? true : withMealDefault;
+          const roomOnlySar = hrp(prod, rt, false);
+          const withMealSar = hrp(prod, rt, true);
+          const roomP = toCurrencyFromSAR(roomOnlySar, rowCurrency);
+          const mealP = toCurrencyFromSAR(mealPSar, rowCurrency);
+          const unitP = fullboard ? toCurrencyFromSAR(withMealSar, rowCurrency) : (withMeal ? toCurrencyFromSAR(withMealSar, rowCurrency) : roomP);
+          const mealUnit = withMeal && !fullboard ? mealP : 0;
+          return { id: `rl-${uid()}`, room_type: rt, quantity: qty as number, unit_price: unitP, meal_unit_price: mealUnit, with_meal: withMeal };
+        });
+
+      const meta = { ...(r.meta || {}), hotel_room_input_mode: 'pax' as HotelRoomInputMode, hotel_pax: Math.max(0, Math.floor(pax || 0)) };
+      return { ...r, meta, room_breakdown: lines.length ? lines : (r.room_breakdown || []) };
+    }));
+  }, [products, hotelAvailability, bestRoomCombo, isFullboardHotel, getMealPriceSar]);
 
   /* mutations */
   const addRow   =()=>setItems(p=>[...p,newRow()]);
@@ -988,21 +1076,82 @@ const OrderFormPage: React.FC = () => {
                                   )}
                                 </div>
                               </div>
+                              {(() => {
+                                const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
+                                const pax = Number(row.meta?.hotel_pax ?? 0) || 0;
+                                return (
+                                  <div className="rounded-lg bg-slate-50/60 border border-slate-100 p-3">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Input kamar</p>
+                                    <div className="flex flex-wrap items-end gap-2">
+                                      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'manual', hotel_pax: undefined } })}
+                                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'manual' ? 'bg-[#0D1A63] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                                        >
+                                          Pilih tipe kamar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextPax = Math.max(0, Math.floor(rowPax(row) || pax || 0));
+                                            updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'pax', hotel_pax: nextPax } });
+                                            if (nextPax > 0) applyAutoHotelRooms(row.id, nextPax);
+                                          }}
+                                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'pax' ? 'bg-[#0D1A63] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                                        >
+                                          Masukkan jumlah orang
+                                        </button>
+                                      </div>
+
+                                      {mode === 'pax' && (
+                                        <div className="min-w-[140px] w-44">
+                                          <Input
+                                            label="Jumlah orang"
+                                            type="number"
+                                            min={0}
+                                            value={String(Math.max(0, Math.floor(pax || 0)))}
+                                            onChange={(e) => {
+                                              const v = e.target.value;
+                                              const n = v === '' ? 0 : Math.max(0, Math.floor(parseInt(v, 10) || 0));
+                                              updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'pax', hotel_pax: n } });
+                                              if (n > 0) applyAutoHotelRooms(row.id, n);
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {mode === 'pax' && (
+                                        <p className="text-xs text-slate-500 pb-2.5">
+                                          Sistem akan otomatis memilih kombinasi kamar terbaik{hotelAvailability[row.id] && typeof hotelAvailability[row.id] === 'object' ? ' (sesuai ketersediaan)' : ''}.
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
                               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipe kamar & harga</p>
                               {(row.room_breakdown||[]).map(line=>(
                                 <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-slate-50/60 border border-slate-100">
+                                  {(() => {
+                                    const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
+                                    const locked = mode === 'pax';
+                                    const rowPaxTotal = rowPax(row);
+                                    return (
+                                      <>
                                   <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
-                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hrp(hProd,rt,false); const withMealSar=hrp(hProd,rt,true); const unitP=rt?(fullboard?toCurrencyFromSAR(withMealSar,cur):toCurrencyFromSAR(withMeal?withMealSar:roomOnlySar,cur)):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
+                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hrp(hProd,rt,false); const withMealSar=hrp(hProd,rt,true); const unitP=rt?(fullboard?toCurrencyFromSAR(withMealSar,cur):toCurrencyFromSAR(withMeal?withMealSar:roomOnlySar,cur)):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
                                   </div>
                                   <div className="w-16 min-w-[60px]">
-                                    <Input label="Jumlah" type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
+                                    <Input label="Jumlah" type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ if(locked) return; const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
                                   </div>
                                   <div className="flex items-center gap-1.5 text-slate-500 text-sm pb-2.5"><Users size={14} className="text-slate-400"/>{Math.max(0,line.quantity)*rCap(line.room_type||undefined)} jamaah</div>
                                   {isFullboardHotel(hProd) ? (
                                     <span className="text-xs font-medium text-slate-600 py-2 px-3 rounded-lg bg-slate-100">Fullboard (termasuk makan)</span>
                                   ) : (
                                     <Button type="button" variant={line.with_meal?'primary':'outline'} size="sm" className="rounded-xl"
-                                      onClick={()=>updLine(row.id,line.id,{with_meal:!(line.with_meal??false),meal_unit_price:(!(line.with_meal??false))?toCurrencyFromSAR(getMealPriceSar(hProd),rowCur(row)):0})}>
+                                      onClick={()=>{ if(locked) return; updLine(row.id,line.id,{with_meal:!(line.with_meal??false),meal_unit_price:(!(line.with_meal??false))?toCurrencyFromSAR(getMealPriceSar(hProd),rowCur(row)):0}); }}>
                                       <Utensils size={14} className="mr-1.5"/> Makan
                                     </Button>
                                   )}
@@ -1059,9 +1208,15 @@ const OrderFormPage: React.FC = () => {
                                       return <><p className="text-sm font-bold text-slate-900 tabular-nums">{perNightLabel}</p><p className="text-xs text-slate-500 mt-0.5">Isi check-in & check-out untuk total</p></>;
                                     })()}
                                   </div>
-                                  <Button type="button" variant="ghost" size="sm" onClick={()=>removeLine(row.id,line.id)} className="text-slate-500 hover:text-red-600">
+                                  <Button type="button" variant="ghost" size="sm" onClick={()=>{ if(locked) return; removeLine(row.id,line.id); }} className="text-slate-500 hover:text-red-600">
                                     <Trash2 size={14}/>
                                   </Button>
+                                  {locked && rowPaxTotal > 0 && (
+                                    <span className="text-xs text-slate-400 pb-2.5">Auto</span>
+                                  )}
+                                  </>
+                                    );
+                                  })()}
                                 </div>
                               ))}
                               {row.check_in && row.check_out && (row.room_breakdown?.length ?? 0) > 0 && getNights(row.check_in, row.check_out) > 0 && (
@@ -1083,9 +1238,11 @@ const OrderFormPage: React.FC = () => {
                                   })}
                                 </div>
                               )}
-                              <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="w-full border-2 border-dashed border-slate-200 rounded-lg text-slate-600 hover:border-[#0D1A63]/50 hover:bg-[#0D1A63]/5 text-sm py-2">
-                                <Plus size={14} className="mr-1"/> Tambah tipe kamar
-                              </Button>
+                              {(((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode) === 'manual' && (
+                                <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="w-full border-2 border-dashed border-slate-200 rounded-lg text-slate-600 hover:border-[#0D1A63]/50 hover:bg-[#0D1A63]/5 text-sm py-2">
+                                  <Plus size={14} className="mr-1"/> Tambah tipe kamar
+                                </Button>
+                              )}
                             </>
                           ) : (
                             <div className="rounded-lg bg-slate-50/60 border border-slate-100 p-3">
