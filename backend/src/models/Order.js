@@ -85,7 +85,12 @@ const Order = sequelize.define('Order', {
   },
   total_amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
   total_amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
-  order_updated_at: { type: DataTypes.DATE, allowNull: true }
+  order_updated_at: { type: DataTypes.DATE, allowNull: true },
+  waive_bus_penalty: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Jika true: tanpa penalti bus, 1 Hiace ditambah otomatis, tampil di progress bus'
+  }
 }, {
   tableName: 'orders',
   underscored: true,

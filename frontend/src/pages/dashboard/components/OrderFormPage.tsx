@@ -306,8 +306,11 @@ const OrderFormPage: React.FC = () => {
     }
     initialOrderItemKeysRef.current = keys;
     setItems(rows.length?rows:[newRow()]);
-    const visaPacks = rows.filter((r:OrderItemRow)=>r.type==='visa').reduce((s:number,r:OrderItemRow)=>s+Math.max(0,r.quantity),0);
-    if(isEdit&&order&&Number(order.penalty_amount)===0&&visaPacks>0&&visaPacks<35) setWaiveBusPenalty(true);
+    if (order.waive_bus_penalty != null) setWaiveBusPenalty(!!order.waive_bus_penalty);
+    else {
+      const visaPacks = rows.filter((r:OrderItemRow)=>r.type==='visa').reduce((s:number,r:OrderItemRow)=>s+Math.max(0,r.quantity),0);
+      if(isEdit&&order&&Number(order.penalty_amount)===0&&visaPacks>0&&visaPacks<35) setWaiveBusPenalty(true);
+    }
   },[orderId,order,products,rates.SAR_TO_IDR,rates.USD_TO_IDR]);
 
   /* fetch availability for hotel rows that have product_id + check_in + check_out */
@@ -1466,8 +1469,17 @@ const OrderFormPage: React.FC = () => {
                   {wouldHaveBusPenalty ? <>Kurang {busPenaltyShortfall} pack → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></> : 'Penalti bus tidak berlaku (pakai bus Hiace saja).'}
                 </p>
                 <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                  <input type="checkbox" checked={waiveBusPenalty} onChange={(e)=>setWaiveBusPenalty(e.target.checked)} className="rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-                  <span className="text-sm text-slate-700">Tanpa penalti bus (pakai bus Hiace saja)</span>
+                  <input
+                    type="checkbox"
+                    checked={waiveBusPenalty}
+                    onChange={(e)=>{
+                      const checked=e.target.checked;
+                      setWaiveBusPenalty(checked);
+                      if(!checked) setItems(prev=>prev.filter(r=>!(r.type==='bus'&&(r.meta as { auto_hiace_waive?: boolean })?.auto_hiace_waive)));
+                    }}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className="text-sm text-slate-700">Tanpa penalti bus (pakai bus Hiace saja) — 1 Hiace qty 1 dihitung &amp; tampil di progress bus</span>
                 </label>
               </div>
             )}
