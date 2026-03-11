@@ -2132,10 +2132,17 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
                                       <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
                                         <div className="flex gap-2 items-end">
-                                          <Input label="Alokasikan ke invoice ini" type="number" min={1} max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} placeholder="Jumlah (IDR)" className="flex-1 min-w-0" />
+                                          <Input label="Alokasikan ke invoice ini" type="number" min={1} max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount || 0))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} placeholder="Jumlah (IDR)" className="flex-1 min-w-0" />
                                           <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
-                                            const amt = parseFloat(allocateAmount);
+                                            const remaining = parseFloat(viewInvoice.remaining_amount || 0) || 0;
+                                            const balance = ownerBalance ?? 0;
+                                            let amt = parseFloat(allocateAmount);
                                             if (!Number.isFinite(amt) || amt <= 0) return;
+                                            amt = Math.min(amt, balance, remaining);
+                                            if (amt <= 0) {
+                                              showToast('Jumlah tidak valid atau sisa tagihan/saldo tidak cukup', 'error');
+                                              return;
+                                            }
                                             setAllocating(true);
                                             try {
                                               await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
@@ -2143,6 +2150,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                               setAllocateAmount('');
                                               fetchInvoiceDetail(viewInvoice.id);
                                               fetchOwnerBalance();
+                                              fetchInvoices();
                                             } catch (e: any) {
                                               showToast(e.response?.data?.message || 'Gagal alokasi', 'error');
                                             } finally { setAllocating(false); }

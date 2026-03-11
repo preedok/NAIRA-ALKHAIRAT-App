@@ -1200,6 +1200,7 @@ const handleOverpaid = asyncHandler(async (req, res) => {
  * POST /api/v1/invoices/:id/allocate-balance
  * Owner (atau invoice koordinator): alokasikan saldo ke tagihan invoice.
  * Body: { amount: number }. Mengurangi saldo owner dan menambah paid_amount invoice.
+ * Setelah alokasi, order.dp_payment_status disinkronkan agar tampil "Pembayaran DP" di Progress/Invoice.
  */
 const allocateBalance = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id);
@@ -1227,20 +1228,26 @@ const allocateBalance = asyncHandler(async (req, res) => {
   if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
   else if (newPaid >= (parseFloat(invoice.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
 
-  await profile.update({ balance: newBalance });
-  await updateInvoiceWithAudit(invoice, { paid_amount: newPaid, remaining_amount: newRemaining, status: newStatus }, { changedBy: req.user.id, reason: 'allocate_balance', meta: { amount: allocateAmount } });
-  await OwnerBalanceTransaction.create({
-    owner_id: invoice.owner_id,
-    amount: -allocateAmount,
-    type: 'allocation',
-    reference_type: 'invoice',
-    reference_id: invoice.id,
-    notes: `Alokasi ke invoice ${invoice.invoice_number}. Saldo -${allocateAmount.toLocaleString('id-ID')}`
+  await sequelize.transaction(async (tx) => {
+    await profile.update({ balance: newBalance }, { transaction: tx });
+    await updateInvoiceWithAudit(invoice, { paid_amount: newPaid, remaining_amount: newRemaining, status: newStatus }, { changedBy: req.user.id, reason: 'allocate_balance', meta: { amount: allocateAmount }, transaction: tx });
+    await OwnerBalanceTransaction.create({
+      owner_id: invoice.owner_id,
+      amount: -allocateAmount,
+      type: 'allocation',
+      reference_type: 'invoice',
+      reference_id: invoice.id,
+      notes: `Alokasi ke invoice ${invoice.invoice_number}. Saldo -${allocateAmount.toLocaleString('id-ID')}`
+    }, { transaction: tx });
   });
+
+  // Sinkronkan status DP order agar tampil "Pembayaran DP" di menu Progress / Invoice
+  const invReload = await Invoice.findByPk(invoice.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
+  if (invReload) await updateOrderDpStatusFromInvoice(invReload);
 
   const full = await Invoice.findByPk(invoice.id, {
     include: [
-      { model: Order, as: 'Order', attributes: ['id', 'owner_id'] },
+      { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'dp_payment_status', 'dp_percentage_paid'] },
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
     ]
   });
