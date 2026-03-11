@@ -59,12 +59,14 @@ const getDashboard = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const [busRows, visaRows] = await Promise.all([
+  const [busRows, visaRows, ordersWaive] = await Promise.all([
     OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
-    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
+    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true }),
+    Order.findAll({ where: { waive_bus_penalty: true, branch_id: { [Op.in]: branchIds } }, attributes: ['id'], raw: true })
   ]);
   const orderIdsFromBus = [...new Set(busRows.map(r => r.order_id))];
-  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...new Set(visaRows.map(r => r.order_id))])];
+  const orderIdsWaive = (ordersWaive || []).map(r => r.id).filter(Boolean);
+  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...visaRows.map(r => r.order_id), ...orderIdsWaive])];
 
   // Total order (untuk tampilan): order dengan bus ATAU visa yang sudah DP, dalam scope cabang
   const ordersRelevant = await Order.findAll({
@@ -155,13 +157,15 @@ const listInvoices = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const [busRows, visaRows] = await Promise.all([
+  const [busRows, visaRows, ordersWaive] = await Promise.all([
     OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
-    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
+    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true }),
+    Order.findAll({ where: { waive_bus_penalty: true, branch_id: { [Op.in]: branchIds } }, attributes: ['id'], raw: true })
   ]);
   const orderIdsFromBus = [...new Set(busRows.map(r => r.order_id))];
   const orderIdsFromVisa = [...new Set(visaRows.map(r => r.order_id))];
-  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa])];
+  const orderIdsWaiveBusPenalty = (ordersWaive || []).map(r => r.id).filter(Boolean);
+  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa, ...orderIdsWaiveBusPenalty])];
 
   if (orderIdsRelevant.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
 
