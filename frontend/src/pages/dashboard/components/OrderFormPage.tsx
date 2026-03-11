@@ -1079,38 +1079,61 @@ const OrderFormPage: React.FC = () => {
                               {(() => {
                                 const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
                                 const pax = Number(row.meta?.hotel_pax ?? 0) || 0;
+                                const paxVal = Math.max(0, Math.floor(pax || 0));
                                 return (
-                                  <div className="rounded-lg bg-slate-50/60 border border-slate-100 p-3">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Input kamar</p>
-                                    <div className="flex flex-wrap items-end gap-2">
-                                      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'manual', hotel_pax: undefined } })}
-                                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'manual' ? 'bg-[#0D1A63] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                                        >
-                                          Pilih tipe kamar
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const nextPax = Math.max(0, Math.floor(rowPax(row) || pax || 0));
-                                            updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'pax', hotel_pax: nextPax } });
-                                            if (nextPax > 0) applyAutoHotelRooms(row.id, nextPax);
-                                          }}
-                                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'pax' ? 'bg-[#0D1A63] text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                                        >
-                                          Masukkan jumlah orang
-                                        </button>
+                                  <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-900">Input kamar</p>
+                                        <p className="text-xs text-slate-500 mt-0.5">Pilih cara input kamar: manual atau otomatis berdasarkan jumlah orang.</p>
                                       </div>
+                                      {mode === 'pax' && paxVal > 0 && (
+                                        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-100">
+                                          Auto aktif
+                                        </span>
+                                      )}
+                                    </div>
 
-                                      {mode === 'pax' && (
-                                        <div className="min-w-[140px] w-44">
+                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'manual', hotel_pax: undefined } })}
+                                        className={`text-left rounded-2xl p-4 border transition-all ${
+                                          mode === 'manual'
+                                            ? 'border-[#0D1A63]/40 ring-2 ring-[#0D1A63]/20 bg-[#0D1A63]/5'
+                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        <p className="text-sm font-semibold text-slate-900">Pilih tipe kamar</p>
+                                        <p className="text-xs text-slate-500 mt-1">Anda tentukan sendiri tipe kamar & jumlahnya.</p>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextPax = Math.max(0, Math.floor(rowPax(row) || paxVal || 0));
+                                          updateRow(row.id, { meta: { ...(row.meta || {}), hotel_room_input_mode: 'pax', hotel_pax: nextPax } });
+                                          if (nextPax > 0) applyAutoHotelRooms(row.id, nextPax);
+                                        }}
+                                        className={`text-left rounded-2xl p-4 border transition-all ${
+                                          mode === 'pax'
+                                            ? 'border-[#0D1A63]/40 ring-2 ring-[#0D1A63]/20 bg-[#0D1A63]/5'
+                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        <p className="text-sm font-semibold text-slate-900">Masukkan jumlah orang</p>
+                                        <p className="text-xs text-slate-500 mt-1">Sistem otomatis memilih kombinasi kamar terbaik.</p>
+                                      </button>
+                                    </div>
+
+                                    {mode === 'pax' && (
+                                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                        <div className="sm:col-span-1">
                                           <Input
                                             label="Jumlah orang"
                                             type="number"
                                             min={0}
-                                            value={String(Math.max(0, Math.floor(pax || 0)))}
+                                            value={String(paxVal)}
                                             onChange={(e) => {
                                               const v = e.target.value;
                                               const n = v === '' ? 0 : Math.max(0, Math.floor(parseInt(v, 10) || 0));
@@ -1119,27 +1142,34 @@ const OrderFormPage: React.FC = () => {
                                             }}
                                           />
                                         </div>
-                                      )}
-
-                                      {mode === 'pax' && (
-                                        <p className="text-xs text-slate-500 pb-2.5">
-                                          Sistem akan otomatis memilih kombinasi kamar terbaik{hotelAvailability[row.id] && typeof hotelAvailability[row.id] === 'object' ? ' (sesuai ketersediaan)' : ''}.
-                                        </p>
-                                      )}
-                                    </div>
+                                        <div className="sm:col-span-2">
+                                          <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                                            Sistem akan otomatis memilih kombinasi kamar terbaik
+                                            {hotelAvailability[row.id] && typeof hotelAvailability[row.id] === 'object' ? ' (sesuai ketersediaan)' : ''}.
+                                            {paxVal === 0 && <span className="block text-xs text-slate-500 mt-1">Isi jumlah orang untuk menampilkan rekomendasi tipe kamar.</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })()}
 
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipe kamar & harga</p>
-                              {(row.room_breakdown||[]).map(line=>(
-                                <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-slate-50/60 border border-slate-100">
-                                  {(() => {
-                                    const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
-                                    const locked = mode === 'pax';
-                                    const rowPaxTotal = rowPax(row);
-                                    return (
-                                      <>
+                              {(() => {
+                                const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
+                                const paxVal = Math.max(0, Math.floor(Number(row.meta?.hotel_pax ?? 0) || 0));
+                                const showRoomLines = mode === 'manual' || (mode === 'pax' && paxVal > 0);
+                                if (!showRoomLines) return null;
+                                return (
+                                  <>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipe kamar & harga</p>
+                                    {(row.room_breakdown||[]).map(line=>(
+                                      <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
+                                        {(() => {
+                                          const locked = mode === 'pax';
+                                          const rowPaxTotal = rowPax(row);
+                                          return (
+                                            <>
                                   <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
                                     <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hrp(hProd,rt,false); const withMealSar=hrp(hProd,rt,true); const unitP=rt?(fullboard?toCurrencyFromSAR(withMealSar,cur):toCurrencyFromSAR(withMeal?withMealSar:roomOnlySar,cur)):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
                                   </div>
@@ -1214,12 +1244,21 @@ const OrderFormPage: React.FC = () => {
                                   {locked && rowPaxTotal > 0 && (
                                     <span className="text-xs text-slate-400 pb-2.5">Auto</span>
                                   )}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    ))}
                                   </>
-                                    );
-                                  })()}
-                                </div>
-                              ))}
-                              {row.check_in && row.check_out && (row.room_breakdown?.length ?? 0) > 0 && getNights(row.check_in, row.check_out) > 0 && (
+                                );
+                              })()}
+                              {(() => {
+                                const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
+                                const paxVal = Math.max(0, Math.floor(Number(row.meta?.hotel_pax ?? 0) || 0));
+                                const showRoomLines = mode === 'manual' || (mode === 'pax' && paxVal > 0);
+                                if (!showRoomLines) return null;
+                                if (!row.check_in || !row.check_out || (row.room_breakdown?.length ?? 0) === 0 || getNights(row.check_in, row.check_out) <= 0) return null;
+                                return (
                                 <div className="rounded-lg bg-slate-100/80 border border-slate-200 p-3 text-sm text-slate-700 space-y-1">
                                   <p className="font-semibold text-slate-800 text-xs">Hitungan (harga/malam × malam × kamar)</p>
                                   {(row.room_breakdown||[]).filter(l=>l.quantity>0&&l.room_type).map(line=>{
@@ -1237,7 +1276,8 @@ const OrderFormPage: React.FC = () => {
                                     );
                                   })}
                                 </div>
-                              )}
+                                );
+                              })()}
                               {(((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode) === 'manual' && (
                                 <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="w-full border-2 border-dashed border-slate-200 rounded-lg text-slate-600 hover:border-[#0D1A63]/50 hover:bg-[#0D1A63]/5 text-sm py-2">
                                   <Plus size={14} className="mr-1"/> Tambah tipe kamar
