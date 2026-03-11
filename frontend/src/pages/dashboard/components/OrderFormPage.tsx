@@ -55,7 +55,7 @@ const BUS_ROUTE_LABELS: Record<string, string> = {
 type BusType = 'besar' | 'menengah_hiace' | 'kecil';
 const BUS_KIND_TO_TYPE: Record<string, BusType> = { bus: 'besar', hiace: 'menengah_hiace' };
 const BUS_TYPE_LABELS: Record<string, string> = {
-  besar: 'Bus Besar (min 35 orang, penalti jika kurang)',
+  besar: 'Bus besar (include dengan visa)',
   menengah_hiace: 'Bus Menengah (HIACE)',
   kecil: 'Mobil Kecil',
 };
@@ -184,7 +184,7 @@ const OrderFormPage: React.FC = () => {
     }).catch(() => setOwnerMeProfile(null));
   }, [isOwner, user?.id]);
 
-  // Kurs SAR & USD + aturan bus (min pack, penalty per pack) dari business rules.
+  // Kurs SAR & USD + aturan bus (penalti flat jika visa < 35 pack) dari business rules.
   useEffect(()=>{
     const params = branchId ? { branch_id: branchId } : undefined;
     businessRulesApi.get(params).then(r=>{
@@ -329,14 +329,22 @@ const OrderFormPage: React.FC = () => {
 
   /* helpers */
   const byType=(type:ItemType)=> type==='package'?products.filter(p=>p.is_package):products.filter(p=>!p.is_package&&p.type===type);
+  /** Bus yang bisa dipesan: hanya Hiace. Bus besar sudah include dengan visa. */
+  const busProductsOrderable=()=>byType('bus').filter((p:ProductOption)=>(p.meta as { bus_kind?: string })?.bus_kind==='hiace');
+  /** Daftar produk untuk baris: hotel by location, bus hanya Hiace, lain byType. */
+  const productListForRow=(row:OrderItemRow)=>{
+    if(row.type==='hotel') return hotelProductsByLocation(row.meta?.hotel_location as string);
+    if(row.type==='bus') return busProductsOrderable();
+    return byType(row.type);
+  };
   /** Untuk hotel: produk yang lokasinya cocok dengan filter (meta.location = madinah | makkah). Jika lokasi kosong, tampilkan semua hotel. */
   const hotelProductsByLocation=(location?:string)=>{
     const hotels=byType('hotel');
     if(!location) return hotels;
     return hotels.filter(p=>(p.meta as { location?: string })?.location===location);
   };
-  /** Hanya tipe yang punya produk di data — agar dropdown Tipe hanya tampil pilihan yang tersedia */
-  const availableItemTypes = ITEM_TYPES.filter((t) => byType(t.id).length > 0);
+  /** Hanya tipe yang punya produk di data — agar dropdown Tipe hanya tampil pilihan yang tersedia. Bus: hanya tampil jika ada produk Hiace. */
+  const availableItemTypes = ITEM_TYPES.filter((t) => t.id === 'bus' ? busProductsOrderable().length > 0 : byType(t.id).length > 0);
   /** Mata uang dari data produk (tanpa hardcode); fallback IDR jika belum ada produk */
   const currencyOptionsFromProducts = React.useMemo(() => {
     const set = new Set<string>();
@@ -628,9 +636,9 @@ const OrderFormPage: React.FC = () => {
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
-  const totalBusPacks=items.filter(r=>r.type==='bus').reduce((s,r)=>s+Math.max(0,r.quantity),0);
-  const busPenaltyIDR=totalBusPacks>0&&totalBusPacks<busPenaltyRule.bus_min_pack
-    ?(busPenaltyRule.bus_min_pack-totalBusPacks)*busPenaltyRule.bus_penalty_idr
+  const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
+  const busPenaltyIDR=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack
+    ?busPenaltyRule.bus_penalty_idr
     :0;
 
   /* submit */
@@ -1009,9 +1017,9 @@ const OrderFormPage: React.FC = () => {
                             <Autocomplete
                               label="Produk"
                               value={row.product_id}
-                              onChange={v=>{ const list = row.type==='hotel' ? hotelProductsByLocation(row.meta?.hotel_location as string) : byType(row.type); const p=list.find(x=>x.id===v); updateRow(row.id,{product_id:v,product_name:p?.name??'',unit_price:p?effP(p):0}); }}
-                              options={(row.type==='hotel' ? hotelProductsByLocation(row.meta?.hotel_location as string) : byType(row.type)).map(p=>({value:p.id,label:`${p.name} (${p.code})`}))}
-                              emptyLabel={row.type==='hotel' && !row.meta?.hotel_location ? "— Pilih lokasi dulu —" : "— Pilih produk —"}
+                              onChange={v=>{ const list = productListForRow(row); const p=list.find(x=>x.id===v); updateRow(row.id,{product_id:v,product_name:p?.name??'',unit_price:p?effP(p):0}); }}
+                              options={productListForRow(row).map(p=>({value:p.id,label:`${p.name} (${p.code})`}))}
+                              emptyLabel={row.type==='hotel' && !row.meta?.hotel_location ? "— Pilih lokasi dulu —" : row.type==='bus' ? "— Hanya Hiace —" : "— Pilih produk —"}
                             />
                           </div>
                           {canEditPrice && (
@@ -1437,8 +1445,8 @@ const OrderFormPage: React.FC = () => {
             </div>
             {busPenaltyIDR>0&&(
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
-                <p className="text-amber-800 font-medium">Penalti bus: {totalBusPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
-                <p className="text-slate-600 text-xs mt-0.5">{busPenaltyRule.bus_min_pack - totalBusPacks} pack × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></p>
+                <p className="text-amber-800 font-medium">Penalti bus: visa {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
+                <p className="text-slate-600 text-xs mt-0.5">Bus besar include dengan visa. Jika visa &lt; {busPenaltyRule.bus_min_pack} pack: <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></p>
               </div>
             )}
             <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">

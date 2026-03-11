@@ -60,8 +60,8 @@ const emptyPricesByTrip = (): RoutePricesByTrip => ({
 });
 
 const BUS_KIND_LABELS: Record<BusKind, string> = {
-  bus: 'Bus (min 35 orang, penalti jika kurang)',
-  hiace: 'Hiace (harga per mobil, tanpa penalti)'
+  bus: 'Bus besar (include dengan visa, tidak bisa dipesan terpisah)',
+  hiace: 'Hiace (harga per mobil, bisa ditambah ke order)'
 };
 
 type BusPageProps = {
@@ -406,7 +406,7 @@ const BusPage: React.FC<BusPageProps> = ({
                                 <span className="text-slate-700 font-medium tabular-nums">{t.idrText}</span>
                                 <span className="text-xs text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</span>
                                 <span className="text-xs text-slate-400">per orang</span>
-                                <span className="text-xs text-amber-700 mt-0.5">Penalti: <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" />/pack yang kurang (min {busPenaltyRule.bus_min_pack} pack)</span>
+                                <span className="text-xs text-amber-700 mt-0.5">Include dengan visa. Jika visa &lt; {busPenaltyRule.bus_min_pack} pack: penalti <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /></span>
                               </div>
                             );
                           })()
@@ -438,7 +438,7 @@ const BusPage: React.FC<BusPageProps> = ({
                       {canShowProductActions && (
                       <td className="py-2 px-4 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                         <div className="flex items-center justify-end gap-1 flex-wrap">
-                          {canAddToOrder && (
+                          {canAddToOrder && isHiace && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -472,6 +472,11 @@ const BusPage: React.FC<BusPageProps> = ({
                             >
                               <ShoppingCart className="w-4 h-4" />
                             </Button>
+                          )}
+                          {canAddToOrder && !isHiace && (
+                            <span className="text-xs text-slate-500 italic" title="Bus besar sudah include dengan visa. Hanya Hiace dapat ditambah ke order.">
+                              Include dengan visa
+                            </span>
                           )}
                           {isPusat && (
                             <ActionsMenu

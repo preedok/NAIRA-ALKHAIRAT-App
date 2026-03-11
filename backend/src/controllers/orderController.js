@@ -403,11 +403,12 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     });
   }
 
-  const hasBusItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS);
-  const totalBusPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+  // Penalti bus: bus besar sudah include dengan visa. Jika visa < 35 pack → penalti flat (Rp 500.000).
+  const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
+  const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-  const penaltyPerPack = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = hasBusItems && totalBusPacks < minPack ? Math.max(0, (minPack - totalBusPacks) * penaltyPerPack) : 0;
+  const penaltyFlatIdr = parseFloat(rules.bus_penalty_idr) || 500000;
+  const penaltyAmount = hasVisaItems && totalVisaPacks < minPack ? penaltyFlatIdr : 0;
 
   let ratesPayload = {};
   const crForPayload = typeof rules.currency_rates === 'object' && rules.currency_rates != null
@@ -530,6 +531,18 @@ const create = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Item invoice wajib' });
   }
 
+  // Validasi: hanya bus Hiace yang boleh dipesan. Bus besar sudah include dengan visa.
+  const busProductIds = [...new Set(items.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).map((i) => i.product_id).filter(Boolean))];
+  if (busProductIds.length > 0) {
+    const busProducts = await Product.findAll({ where: { id: busProductIds }, attributes: ['id', 'meta'], raw: true });
+    for (const p of busProducts) {
+      const meta = typeof p.meta === 'string' ? (() => { try { return JSON.parse(p.meta); } catch (e) { return {}; } })() : (p.meta || {});
+      if (meta.bus_kind !== 'hiace') {
+        return res.status(400).json({ success: false, message: 'Hanya bus Hiace yang dapat dipesan. Bus besar sudah include dengan visa.' });
+      }
+    }
+  }
+
   const rules = await getRulesForBranch(finalBranchId);
   const hasHotel = items.some(i => i.type === ORDER_ITEM_TYPE.HOTEL);
   const visaNeedsHotel = await visaRequiresHotel(items);
@@ -649,12 +662,12 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
-  // Penalti bus: hanya jika order ada item bus; minimal 35 pack, jika kurang maka penalty per pack yang kurang
-  const hasBusItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS);
-  const totalBusPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+  // Penalti bus: bus besar sudah include dengan visa. Jika visa < 35 pack → penalti flat Rp 500.000.
+  const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
+  const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-  const penaltyPerPack = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = hasBusItems && totalBusPacks < minPack ? Math.max(0, (minPack - totalBusPacks) * penaltyPerPack) : 0;
+  const penaltyFlatIdr = parseFloat(rules.bus_penalty_idr) || 500000;
+  const penaltyAmount = hasVisaItems && totalVisaPacks < minPack ? penaltyFlatIdr : 0;
 
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
@@ -828,6 +841,16 @@ const update = asyncHandler(async (req, res) => {
     if (visaNeedsHotel && !hasHotel) {
       return res.status(400).json({ success: false, message: 'Visa wajib bersama hotel' });
     }
+    const busProductIdsUpdate = [...new Set(items.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).map((i) => i.product_id).filter(Boolean))];
+    if (busProductIdsUpdate.length > 0) {
+      const busProductsUpdate = await Product.findAll({ where: { id: busProductIdsUpdate }, attributes: ['id', 'meta'], raw: true });
+      for (const p of busProductsUpdate) {
+        const meta = typeof p.meta === 'string' ? (() => { try { return JSON.parse(p.meta); } catch (e) { return {}; } })() : (p.meta || {});
+        if (meta.bus_kind !== 'hiace') {
+          return res.status(400).json({ success: false, message: 'Hanya bus Hiace yang dapat dipesan. Bus besar sudah include dengan visa.' });
+        }
+      }
+    }
 
     const totalsBefore = {
       subtotal: parseFloat(order.subtotal) || 0,
@@ -956,13 +979,13 @@ const update = asyncHandler(async (req, res) => {
         ...itemRatesPayload
       });
     }
-    // Penalti bus: hanya jika order ada item bus; minimal 35 pack, jika kurang maka penalty per pack yang kurang
-    const hasBusItemsUpdate = items.some((i) => i.type === ORDER_ITEM_TYPE.BUS);
-    const totalBusPacks = items.filter((i) => i.type === ORDER_ITEM_TYPE.BUS).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+    // Penalti bus: bus besar sudah include dengan visa. Jika visa < 35 pack → penalti flat Rp 500.000.
+    const hasVisaItemsUpdate = items.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
+    const totalVisaPacksUpdate = items.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
     const rulesUpdate = await getRulesForBranch(order.branch_id);
     const minPackUpdate = parseInt(rulesUpdate.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-    const penaltyPerPackUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
-    const penaltyAmountUpdate = hasBusItemsUpdate && totalBusPacks < minPackUpdate ? Math.max(0, (minPackUpdate - totalBusPacks) * penaltyPerPackUpdate) : 0;
+    const penaltyFlatIdrUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
+    const penaltyAmountUpdate = hasVisaItemsUpdate && totalVisaPacksUpdate < minPackUpdate ? penaltyFlatIdrUpdate : 0;
     await order.update({
       subtotal,
       total_jamaah: totalJamaah,
