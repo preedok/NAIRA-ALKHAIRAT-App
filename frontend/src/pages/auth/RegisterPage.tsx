@@ -615,9 +615,11 @@ const RegisterPage: React.FC = () => {
                             value={form.registration_payment_amount}
                             onChange={handleChange}
                             placeholder="Contoh: 25000000"
+                            readOnly
+                            style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}
                           />
                         </div>
-                        <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Nominal default dari Settings. Dapat diubah oleh Admin Pusat di menu Settings.</p>
+                        <p style={{ fontSize:11, color:MUTED, marginTop:6 }}>Nominal dari Settings. Hanya Admin Pusat yang dapat mengubah di menu Settings.</p>
                       </div>
                       <div>
                         <span className="rg-label req">Bukti bayar MoU</span>
