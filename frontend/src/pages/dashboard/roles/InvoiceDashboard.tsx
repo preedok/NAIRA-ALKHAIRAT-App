@@ -49,6 +49,9 @@ const formatDateWithTime = (d: string | null | undefined, time: string | null | 
   return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
 };
 
+const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+const ROOM_CAPACITY: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+
 const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
 
 const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
@@ -405,21 +408,46 @@ const InvoiceDashboard: React.FC = () => {
                   {(() => {
                     const hotelItems = (inv.Order?.OrderItems || []).filter((i: any) => (i.type || i.product_type) === 'hotel');
                     if (hotelItems.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+                    const getCheckInOut = (item: any) => {
+                      const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
+                      const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
+                      return { ci, co };
+                    };
+                    type HotelGroup = { key: string; name: string; items: any[] };
+                    const hotelGroups = (hotelItems as any[]).reduce((acc: HotelGroup[], item: any) => {
+                      const pid = String(item.product_ref_id || item.product_id || '');
+                      const { ci, co } = getCheckInOut(item);
+                      const key = `${pid}|${ci}|${co}`;
+                      const name = item.Product?.name || item.product_name || 'Hotel';
+                      const existing = acc.find((g: HotelGroup) => g.key === key);
+                      if (existing) existing.items.push(item);
+                      else acc.push({ key, name, items: [item] });
+                      return acc;
+                    }, [] as HotelGroup[]);
                     return (
                       <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
-                        {hotelItems.map((item: any, idx: number) => {
-                          const name = item.Product?.name || item.product_name || 'Hotel';
-                          const status = labelsHotel[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
-                          const mealStatus = item.HotelProgress?.meal_status;
+                        {hotelGroups.map((group: HotelGroup) => {
+                          const first = group.items[0];
+                          const status = labelsHotel[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
+                          const mealStatus = first?.HotelProgress?.meal_status;
                           const mealLabel = mealStatus ? (mealLabels[mealStatus] || mealStatus) : null;
-                          const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
-                          const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
+                          const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
+                          const checkOut = formatDateWithTime(first?.HotelProgress?.check_out_date ?? first?.meta?.check_out, first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time ?? '12:00');
+                          const roomLines = group.items.map((item: any) => {
+                            const rt = item.room_type || item.meta?.room_type || '';
+                            const qty = Math.max(0, parseInt(String(item.quantity ?? 0), 10) || 0);
+                            const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;
+                            const orang = qty * cap;
+                            const label = ROOM_TYPE_LABELS[rt] || rt || '–';
+                            return `${qty} ${label}${cap > 0 ? ` (${orang} org)` : ''}`;
+                          });
                           return (
-                            <div key={item.id || idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
+                            <div key={group.key} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                               <div className="flex flex-wrap items-baseline gap-1">
-                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
+                                <span className="font-medium text-slate-800 truncate max-w-[140px]" title={group.name}>{group.name}:</span>
                                 <span className={status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
                               </div>
+                              {roomLines.length > 0 && <div className="text-slate-700 pl-0.5 text-xs">{roomLines.join(', ')}</div>}
                               {mealLabel != null && <div className="text-slate-600 pl-0.5 text-xs">Status makan: {mealLabel}</div>}
                               <div className="text-slate-500 pl-0.5"><span>CI {checkIn}</span><span className="mx-1">·</span><span>CO {checkOut}</span></div>
                             </div>

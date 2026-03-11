@@ -69,6 +69,9 @@ export const ROOM_TYPE_LABELS: Record<string, string> = {
   quint: 'Quint'
 };
 
+/** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang) */
+const ROOM_CAPACITY: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+
 const BUS_TRIP_LABELS: Record<string, string> = {
   one_way: 'Pergi saja',
   return_only: 'Pulang saja',
@@ -126,10 +129,12 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         const name = item.Product?.name || item.product_name || 'Visa';
         const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
         const depDate = formatDate(item.meta?.travel_date ?? null);
+        const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
         return (
-          <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
             <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
             <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
+            {qty > 1 && <span className="text-slate-600 ml-1">· {qty} org</span>}
             {depDate ? <div className="text-slate-500 mt-0.5">Tgl {depDate}</div> : null}
           </div>
         );
@@ -147,10 +152,12 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         const dep = formatDate(item.meta?.departure_date ?? null);
         const ret = formatDate(item.meta?.return_date ?? null);
         const dateLine = tripType === 'one_way' ? `Berangkat ${dep}` : tripType === 'return_only' ? `Pulang ${ret}` : `Berangkat ${dep} · Pulang ${ret}`;
+        const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
         return (
-          <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
             <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
             <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
+            {qty > 1 && <span className="text-slate-600 ml-1">· {qty} tiket</span>}
             {dateLine ? <div className="text-slate-500 mt-0.5">{dateLine}</div> : null}
           </div>
         );
@@ -159,19 +166,44 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
   }
 
   if (hotelItems.length > 0) {
+    const getCheckInOut = (item: any) => {
+      const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
+      const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
+      return { ci, co };
+    };
+    type HotelGroup = { key: string; name: string; items: any[] };
+    const hotelGroups = (hotelItems as any[]).reduce((acc: HotelGroup[], item: any) => {
+      const pid = String(item.product_ref_id || item.product_id || '');
+      const { ci, co } = getCheckInOut(item);
+      const key = `${pid}|${ci}|${co}`;
+      const name = item.Product?.name || item.product_name || 'Hotel';
+      const existing = acc.find((g: HotelGroup) => g.key === key);
+      if (existing) existing.items.push(item);
+      else acc.push({ key, name, items: [item] });
+      return acc;
+    }, [] as HotelGroup[]);
     sections.push({
       title: 'Hotel',
-      nodes: hotelItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Hotel';
-        const status = PROGRESS_LABELS_HOTEL[item.HotelProgress?.status] || item.HotelProgress?.status || 'Menunggu konfirmasi';
-        const mealStatus = item.HotelProgress?.meal_status;
+      nodes: hotelGroups.map((group: HotelGroup) => {
+        const first = group.items[0];
+        const status = PROGRESS_LABELS_HOTEL[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
+        const mealStatus = first?.HotelProgress?.meal_status;
         const mealLabel = mealStatus ? (PROGRESS_LABELS_MEAL[mealStatus] || mealStatus) : null;
-        const checkIn = formatDateWithTime(item.HotelProgress?.check_in_date ?? item.meta?.check_in, item.HotelProgress?.check_in_time ?? item.meta?.check_in_time ?? '16:00');
-        const checkOut = formatDateWithTime(item.HotelProgress?.check_out_date ?? item.meta?.check_out, item.HotelProgress?.check_out_time ?? item.meta?.check_out_time ?? '12:00');
+        const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
+        const checkOut = formatDateWithTime(first?.HotelProgress?.check_out_date ?? first?.meta?.check_out, first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time ?? '12:00');
+        const roomLines = group.items.map((item: any) => {
+          const rt = item.room_type || item.meta?.room_type || '';
+          const qty = Math.max(0, parseInt(String(item.quantity ?? 0), 10) || 0);
+          const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;
+          const orang = qty * cap;
+          const label = ROOM_TYPE_LABELS[rt] || rt || '–';
+          return `${qty} ${label}${cap > 0 ? ` (${orang} org)` : ''}`;
+        });
         return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
+          <div key={group.key} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+            <span className="font-medium text-slate-800" title={group.name}>{group.name}:</span>{' '}
             <span className={status === 'Selesai' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{status}</span>
+            {roomLines.length > 0 && <div className="text-slate-700 mt-0.5">{roomLines.join(', ')}</div>}
             {mealLabel != null && <div className="text-slate-600 mt-0.5">Makan: {mealLabel}</div>}
             <div className="text-slate-500 mt-0.5">CI {checkIn} · CO {checkOut}</div>
           </div>
@@ -190,9 +222,10 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
         const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
         const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
-        const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel].filter(Boolean).join(' · ');
+        const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
+        const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel, qty > 1 ? `${qty} unit` : null].filter(Boolean).join(' · ');
         return (
-          <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
             <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
             <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
             {metaLine ? <div className="text-slate-500 mt-0.5">{metaLine}</div> : null}
@@ -207,9 +240,9 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
       title: 'Handling',
       nodes: handlingItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Handling';
-        const qty = Math.max(0, item.quantity ?? 1);
+        const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
         return (
-          <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
             <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className="text-slate-600">Qty {qty}</span>
           </div>
         );
@@ -222,9 +255,9 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
       title: 'Paket',
       nodes: packageItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Paket';
-        const qty = Math.max(0, item.quantity ?? 1);
+        const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
         return (
-          <div key={idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
             <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className="text-slate-600">Qty {qty}</span>
           </div>
         );

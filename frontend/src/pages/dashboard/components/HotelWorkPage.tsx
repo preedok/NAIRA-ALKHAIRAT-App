@@ -232,14 +232,21 @@ const HotelWorkPage: React.FC = () => {
     if (!filterHotelLocation) return hotelItemsAll;
     return hotelItemsAll.filter((item: any) => getHotelItemLocation(item) === filterHotelLocation);
   }, [hotelItemsAll, filterHotelLocation, getHotelItemLocation]);
+  const getHotelItemCheckInOut = (item: any) => {
+    const ci = (item?.HotelProgress?.check_in_date ?? item?.meta?.check_in ?? '').toString().slice(0, 10);
+    const co = (item?.HotelProgress?.check_out_date ?? item?.meta?.check_out ?? '').toString().slice(0, 10);
+    return { ci, co };
+  };
   type HotelGroup = { key: string; productName: string; items: any[] };
   const hotelByProduct = useMemo<HotelGroup[]>(() => {
     return hotelItems.reduce((acc: HotelGroup[], item: any) => {
       const pid = String(item.product_ref_id || item.product_id || '');
+      const { ci, co } = getHotelItemCheckInOut(item);
+      const key = `${pid}|${ci}|${co}`;
       const name = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
-      const existing = acc.find((g) => g.key === pid);
+      const existing = acc.find((g) => g.key === key);
       if (existing) existing.items.push(item);
-      else acc.push({ key: pid || item.id, productName: name, items: [item] });
+      else acc.push({ key: key || item.id, productName: name, items: [item] });
       return acc;
     }, []);
   }, [hotelItems]);
@@ -629,13 +636,18 @@ const HotelWorkPage: React.FC = () => {
                     </div>
                   );
                 }
+                const getCheckInOutKey = (it: any) => {
+                  const ci = (it?.HotelProgress?.check_in_date ?? it?.meta?.check_in ?? '').toString().slice(0, 10);
+                  const co = (it?.HotelProgress?.check_out_date ?? it?.meta?.check_out ?? '').toString().slice(0, 10);
+                  return `${it.product_ref_id || it.product_id || ''}|${ci}|${co}`;
+                };
                 type HotelGroup = { key: string; productName: string; items: any[] };
                 const hotelByProduct: HotelGroup[] = hotelItems.reduce((acc: HotelGroup[], item: any) => {
-                  const pid = String(item.product_ref_id || item.product_id || '');
+                  const key = getCheckInOutKey(item);
                   const name = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
-                  const existing = acc.find((g) => g.key === pid);
+                  const existing = acc.find((g) => g.key === key);
                   if (existing) existing.items.push(item);
-                  else acc.push({ key: pid || item.id, productName: name, items: [item] });
+                  else acc.push({ key: key || item.id, productName: name, items: [item] });
                   return acc;
                 }, []);
 
