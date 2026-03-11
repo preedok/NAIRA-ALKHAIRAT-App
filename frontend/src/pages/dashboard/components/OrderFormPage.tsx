@@ -385,13 +385,11 @@ const OrderFormPage: React.FC = () => {
     const fallbackGeneral=p.price_general_sar ?? (p.price_general_idr ?? 0)/s2i;
     const fallbackAnyRoom=Object.values(rb).find((v:unknown)=>typeof v==='object'&&v!==null&&'price' in (v as object)&&Number((v as {price?:unknown}).price)>0);
     const anyRoomPrice=fallbackAnyRoom?Number((fallbackAnyRoom as {price:number}).price):0;
-    const cur=(p.currency||'IDR').toUpperCase();
+    const cur=((p.currency ?? (p.meta as { currency?: string } | undefined)?.currency) || 'IDR').toUpperCase();
     const toSar=(x:number)=>cur==='SAR'?x:cur==='USD'?x*u2iR/s2i:x/s2i;
-    /* Harga dari room_breakdown/prices_by_room: jika sangat besar (>= 50k) dianggap IDR dan dikonversi ke SAR; selain itu ikuti product.currency */
     const rawRoom = rtPrice>0 ? rtPrice : (anyRoomPrice>0 ? anyRoomPrice : 0);
-    const roomSar = rawRoom > 0
-      ? (rawRoom >= 50000 ? rawRoom / s2i : toSar(rawRoom))
-      : fallbackGeneral;
+    // Harga pokok mengikuti currency produk. Kurs hanya mempengaruhi konversi tampilan, bukan nilai pokok.
+    const roomSar = rawRoom > 0 ? toSar(rawRoom) : fallbackGeneral;
     return meal ? roomSar + toSar((p.meta?.meal_price as number|undefined)??0) : roomSar;
   };
   const hasDpPayment = isEdit && order?.dp_payment_status === 'pembayaran_dp';
