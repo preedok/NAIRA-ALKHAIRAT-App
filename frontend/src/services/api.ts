@@ -212,7 +212,10 @@ export const ordersApi = {
   uploadJamaahData: (orderId: string, itemId: string, data: FormData | { jamaah_data_link: string }) =>
     data instanceof FormData
       ? api.post(`/orders/${orderId}/items/${itemId}/jamaah-data`, data, { headers: { 'Content-Type': 'multipart/form-data' } })
-      : api.post(`/orders/${orderId}/items/${itemId}/jamaah-data`, data)
+      : api.post(`/orders/${orderId}/items/${itemId}/jamaah-data`, data),
+  /** Unduh file data jamaah (stream dari server, hindari 404 direct URL) */
+  getJamaahFile: (orderId: string, itemId: string) =>
+    api.get(`/orders/${orderId}/items/${itemId}/jamaah-file`, { responseType: 'blob' })
 };
 
 export const hotelApi = {

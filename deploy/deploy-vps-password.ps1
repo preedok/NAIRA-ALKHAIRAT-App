@@ -35,7 +35,7 @@ cp -a backend/.env backend/.env.bak 2>/dev/null || true
 cp -a frontend/.env.production frontend/.env.production.bak 2>/dev/null || true
 tar xf bgg-app-deploy.tar
 rm -f bgg-app-deploy.tar
-mkdir -p $APP_PATH/uploads/mou $APP_PATH/uploads/registration-payment $APP_PATH/uploads/payment-proofs $APP_PATH/uploads/refund-proofs $APP_PATH/uploads/ticket-docs $APP_PATH/uploads/visa-docs $APP_PATH/uploads/hotel-docs $APP_PATH/uploads/manifest/visa $APP_PATH/uploads/manifest/ticket
+mkdir -p $APP_PATH/uploads/mou $APP_PATH/uploads/registration-payment $APP_PATH/uploads/payment-proofs $APP_PATH/uploads/refund-proofs $APP_PATH/uploads/ticket-docs $APP_PATH/uploads/visa-docs $APP_PATH/uploads/hotel-docs $APP_PATH/uploads/jamaah-data $APP_PATH/uploads/manifest/visa $APP_PATH/uploads/manifest/ticket
 rm -f frontend/src/pages/dashboard/superadmin/SuperAdminUsersStatusPage.tsx
 rm -f frontend/src/pages/dashboard/accounting/AccountingPurchasingPage.tsx frontend/src/pages/dashboard/accounting/AccountingPurchasingSuppliersPage.tsx frontend/src/pages/dashboard/accounting/AccountingPurchasingOrdersPage.tsx frontend/src/pages/dashboard/accounting/AccountingPurchasingInvoicesPage.tsx frontend/src/pages/dashboard/accounting/AccountingPurchasingPaymentsPage.tsx
 rm -rf frontend/src/pages/dashboard/rms

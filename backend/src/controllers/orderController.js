@@ -1451,4 +1451,52 @@ const uploadJamaahData = [
   })
 ];
 
-module.exports = { list, create, getById, update, destroy, sendOrderResult, uploadJamaahData, createOrderAndInvoiceFromItemsForOwner };
+/** Resolve URL path (/uploads/jamaah-data/xxx) ke path absolut file */
+function resolveJamaahDataPath(urlPath) {
+  if (!urlPath || typeof urlPath !== 'string') return null;
+  const norm = urlPath.replace(/\\/g, '/').trim().replace(/^\/+/, '');
+  const withoutUploads = norm.replace(/^uploads\/?/i, '');
+  const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.JAMAAH_DATA);
+  const filename = path.basename(withoutUploads.replace(/^jamaah-data\/?/i, ''));
+  if (!filename) return null;
+  return path.join(dir, filename);
+}
+
+const MIME_JAMAAH = {
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.zip': 'application/zip'
+};
+
+/**
+ * GET /api/v1/orders/:orderId/items/:itemId/jamaah-file
+ * Stream file data jamaah (Excel/ZIP) agar unduh tidak 404.
+ */
+const getJamaahFile = asyncHandler(async (req, res) => {
+  const { orderId, itemId } = req.params;
+  const order = await Order.findByPk(orderId, { attributes: ['id', 'owner_id'], include: [{ model: OrderItem, as: 'OrderItems', where: { id: itemId }, required: true, attributes: ['id', 'jamaah_data_type', 'jamaah_data_value'] }] });
+  if (!order || !order.OrderItems || order.OrderItems.length === 0) {
+    return res.status(404).json({ success: false, message: 'Order item tidak ditemukan' });
+  }
+  const item = order.OrderItems[0];
+  if ((item.jamaah_data_type || '').toLowerCase() !== 'file' || !item.jamaah_data_value) {
+    return res.status(404).json({ success: false, message: 'File data jamaah tidak tersedia' });
+  }
+  const canAccess = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
+    ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'visa_koordinator', 'tiket_koordinator'].includes(req.user.role);
+  if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
+
+  const filePath = resolveJamaahDataPath(item.jamaah_data_value);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File tidak ada di server' });
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_JAMAAH[ext] || 'application/octet-stream';
+  const downloadName = path.basename(filePath);
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+module.exports = { list, create, getById, update, destroy, sendOrderResult, uploadJamaahData, getJamaahFile, createOrderAndInvoiceFromItemsForOwner };

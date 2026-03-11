@@ -11,7 +11,7 @@ import { Input, Autocomplete, CardSectionHeader, ContentLoading } from '../../..
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
-import { ticketApi, invoicesApi } from '../../../services/api';
+import { ticketApi, invoicesApi, ordersApi } from '../../../services/api';
 import type { TicketDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
@@ -62,6 +62,7 @@ const TicketWorkPage: React.FC = () => {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [downloadingTicketItemId, setDownloadingTicketItemId] = useState<string | null>(null);
+  const [downloadingJamaahItemId, setDownloadingJamaahItemId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
@@ -204,6 +205,29 @@ const TicketWorkPage: React.FC = () => {
   };
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
+
+  /** Unduh file data jamaah via API (stream dari server) — mengatasi "File wasn't available on site" */
+  const downloadJamaahFile = async (orderId: string, itemId: string, urlPath?: string) => {
+    setDownloadingJamaahItemId(itemId);
+    try {
+      const res = await ordersApi.getJamaahFile(orderId, itemId);
+      const blob = res.data as Blob;
+      const name = (urlPath && typeof urlPath === 'string' ? urlPath.replace(/^.*\//, '') : null) || `data-jamaah-${itemId.slice(-6)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('File data jamaah berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh file', 'error');
+    } finally {
+      setDownloadingJamaahItemId(null);
+    }
+  };
 
   /** Unduh dokumen tiket terbit via API (stream dari server) — mengatasi "File wasn't available on site" */
   const downloadTicketDocument = async (invoiceId: string, orderItemId: string) => {
@@ -518,9 +542,17 @@ const TicketWorkPage: React.FC = () => {
                                 <Download className="w-4 h-4" /> Buka link
                               </a>
                             ) : (
-                              <a href={fileUrl(item.jamaah_data_value) ?? '#'} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5 font-medium">
-                                <Download className="w-4 h-4" /> Unduh file ZIP
-                              </a>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={downloadingJamaahItemId === item.id}
+                                onClick={() => detailInvoice?.Order?.id && downloadJamaahFile(detailInvoice.Order.id, item.id, item.jamaah_data_value)}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                {downloadingJamaahItemId === item.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                {downloadingJamaahItemId === item.id ? 'Mengunduh...' : 'Unduh file'}
+                              </Button>
                             )}
                           </div>
                         ) : item.manifest_file_url ? (

@@ -128,6 +128,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [payCurrencySaudi, setPayCurrencySaudi] = useState<'SAR' | 'USD' | 'IDR'>('SAR');
   const [payAmountSaudi, setPayAmountSaudi] = useState<string>('');
   const [uploadingJamaahItemId, setUploadingJamaahItemId] = useState<string | null>(null);
+  const [downloadingJamaahItemId, setDownloadingJamaahItemId] = useState<string | null>(null);
   const [jamaahLinkInput, setJamaahLinkInput] = useState<Record<string, string>>({});
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelTargetInv, setCancelTargetInv] = useState<any | null>(null);
@@ -842,6 +843,29 @@ const OrdersInvoicesPage: React.FC = () => {
       showToast(e.response?.data?.message || 'Gagal mengunggah data jamaah', 'error');
     } finally {
       setUploadingJamaahItemId(null);
+    }
+  };
+
+  /** Unduh file data jamaah via API (stream dari server) — mengatasi "File wasn't available on site" */
+  const downloadJamaahFile = async (orderId: string, itemId: string, urlPath?: string) => {
+    setDownloadingJamaahItemId(itemId);
+    try {
+      const res = await ordersApi.getJamaahFile(orderId, itemId);
+      const blob = res.data as Blob;
+      const name = (urlPath && typeof urlPath === 'string' ? urlPath.replace(/^.*\//, '') : null) || `data-jamaah-${itemId.slice(-6)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('File data jamaah berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh file', 'error');
+    } finally {
+      setDownloadingJamaahItemId(null);
     }
   };
 
@@ -1738,10 +1762,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
                                       <LinkIcon className="w-4 h-4" /> Buka link
                                     </a>
-                                  ) : fileUrl ? (
-                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
-                                      <Download className="w-4 h-4" /> Unduh file
-                                    </a>
+                                  ) : uploadDocInvoice?.order_id ? (
+                                    <Button type="button" size="sm" variant="secondary" disabled={downloadingJamaahItemId === group.firstItem.id} onClick={() => downloadJamaahFile(uploadDocInvoice.order_id, group.firstItem.id, item.jamaah_data_value)} className="inline-flex items-center gap-1.5">
+                                      {downloadingJamaahItemId === group.firstItem.id ? 'Mengunduh…' : <><Download className="w-4 h-4" /> Unduh file</>}
+                                    </Button>
                                   ) : (
                                     <span className="text-sm text-slate-500">File tersimpan</span>
                                   )}
@@ -1786,7 +1810,6 @@ const OrdersInvoicesPage: React.FC = () => {
                         <p className="text-sm text-slate-600">Upload data paspor (ZIP) atau masukkan link Google Drive.</p>
                         {visaItems.map((item: any) => {
                           const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
-                          const fileUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
                           return (
                             <div key={item.id} className="rounded-xl border border-slate-200 bg-sky-50/30 p-4 space-y-3">
                               <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -1799,10 +1822,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
                                       <LinkIcon className="w-4 h-4" /> Buka link
                                     </a>
-                                  ) : fileUrl ? (
-                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
-                                      <Download className="w-4 h-4" /> Unduh file
-                                    </a>
+                                  ) : uploadDocInvoice?.order_id ? (
+                                    <Button type="button" size="sm" variant="secondary" disabled={downloadingJamaahItemId === item.id} onClick={() => downloadJamaahFile(uploadDocInvoice.order_id, item.id, item.jamaah_data_value)} className="inline-flex items-center gap-1.5">
+                                      {downloadingJamaahItemId === item.id ? 'Mengunduh…' : <><Download className="w-4 h-4" /> Unduh file</>}
+                                    </Button>
                                   ) : (
                                     <span className="text-sm text-slate-500">File tersimpan</span>
                                   )}
@@ -1876,10 +1899,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
                                       <LinkIcon className="w-4 h-4" /> Buka link
                                     </a>
-                                  ) : fileUrl ? (
-                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
-                                      <Download className="w-4 h-4" /> Unduh file
-                                    </a>
+                                  ) : uploadDocInvoice?.order_id ? (
+                                    <Button type="button" size="sm" variant="secondary" disabled={downloadingJamaahItemId === item.id} onClick={() => downloadJamaahFile(uploadDocInvoice.order_id, item.id, item.jamaah_data_value)} className="inline-flex items-center gap-1.5">
+                                      {downloadingJamaahItemId === item.id ? 'Mengunduh…' : <><Download className="w-4 h-4" /> Unduh file</>}
+                                    </Button>
                                   ) : (
                                     <span className="text-sm text-slate-500">File tersimpan</span>
                                   )}
@@ -2855,7 +2878,6 @@ const OrdersInvoicesPage: React.FC = () => {
                           const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
                           const status = isBus ? (progress?.bus_ticket_status ? (BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status) : 'Pending') : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : 'Menunggu data'));
                           const hasJamaah = itemWithJamaah.jamaah_data_type && itemWithJamaah.jamaah_data_value;
-                          const jamaahUrl = itemWithJamaah.jamaah_data_type === 'link' ? itemWithJamaah.jamaah_data_value : itemWithJamaah.jamaah_data_value ? getFileUrl(itemWithJamaah.jamaah_data_value) : null;
                           const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
                           const typeIcon = isVisa ? <FileText className="w-4 h-4" /> : isTicket ? <Plane className="w-4 h-4" /> : isHotel ? <Package className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />;
                           const typeBg = isVisa ? 'bg-sky-100 text-sky-600' : isTicket ? 'bg-[#0D1A63]/10 text-[#0D1A63]' : isHotel ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600';
@@ -2884,10 +2906,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <a href={itemWithJamaah.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
                                             <LinkIcon className="w-3.5 h-3.5" /> Link
                                           </a>
-                                        ) : jamaahUrl ? (
-                                          <a href={jamaahUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
-                                            <Download className="w-3.5 h-3.5" /> File
-                                          </a>
+                                        ) : viewInvoice?.Order?.id ? (
+                                          <button type="button" onClick={() => downloadJamaahFile(viewInvoice.Order.id, itemWithJamaah.id, itemWithJamaah.jamaah_data_value)} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0" disabled={!!downloadingJamaahItemId}>
+                                            {downloadingJamaahItemId === itemWithJamaah.id ? 'Mengunduh…' : <><Download className="w-3.5 h-3.5" /> File</>}
+                                          </button>
                                         ) : (
                                           <span className="inline-flex items-center gap-1"><Download className="w-3.5 h-3.5" /> File diunggah</span>
                                         )}

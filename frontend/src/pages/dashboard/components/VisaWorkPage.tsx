@@ -11,7 +11,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { Input, Autocomplete, ContentLoading, NominalDisplay } from '../../../components/common';
-import { visaApi, invoicesApi } from '../../../services/api';
+import { visaApi, invoicesApi, ordersApi } from '../../../services/api';
 import type { VisaDashboardData } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { API_BASE_URL, INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
@@ -60,6 +60,7 @@ const VisaWorkPage: React.FC = () => {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [downloadingVisaItemId, setDownloadingVisaItemId] = useState<string | null>(null);
+  const [downloadingJamaahItemId, setDownloadingJamaahItemId] = useState<string | null>(null);
   const [uploadSetIssued, setUploadSetIssued] = useState<Record<string, boolean>>({});
   const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
@@ -204,6 +205,29 @@ const VisaWorkPage: React.FC = () => {
   };
 
   const fileUrl = (path: string | undefined) => path ? (path.startsWith('http') ? path : `${UPLOAD_BASE}${path}`) : null;
+
+  /** Unduh file data jamaah via API (stream dari server) — mengatasi "File wasn't available on site" */
+  const downloadJamaahFile = async (orderId: string, itemId: string, urlPath?: string) => {
+    setDownloadingJamaahItemId(itemId);
+    try {
+      const res = await ordersApi.getJamaahFile(orderId, itemId);
+      const blob = res.data as Blob;
+      const name = (urlPath && typeof urlPath === 'string' ? urlPath.replace(/^.*\//, '') : null) || `data-jamaah-${itemId.slice(-6)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('File data jamaah berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh file', 'error');
+    } finally {
+      setDownloadingJamaahItemId(null);
+    }
+  };
 
   /** Unduh dokumen visa terbit via API (stream dari server) — mengatasi "File wasn't available on site" */
   const downloadVisaDocument = async (invoiceId: string, orderItemId: string) => {
@@ -536,9 +560,17 @@ const VisaWorkPage: React.FC = () => {
                                 <Download className="w-4 h-4" /> Link Google Drive
                               </a>
                             ) : (
-                              <a href={fileUrl(item.jamaah_data_value) ?? '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:text-sky-700 hover:underline rounded-lg px-3 py-2 bg-sky-50 border border-sky-100">
-                                <Download className="w-4 h-4" /> Unduh file ZIP
-                              </a>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={downloadingJamaahItemId === item.id}
+                                onClick={() => detailInvoice?.Order?.id && downloadJamaahFile(detailInvoice.Order.id, item.id, item.jamaah_data_value)}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                {downloadingJamaahItemId === item.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                {downloadingJamaahItemId === item.id ? 'Mengunduh...' : 'Unduh file'}
+                              </Button>
                             )}
                           </div>
                         ) : item.manifest_file_url ? (
