@@ -57,12 +57,14 @@ interface HotelOptionForVisa {
   name: string;
   code?: string;
   currency?: string;
-  meta?: { location?: string; meal_price?: number; currency?: string } | null;
+  meta?: { location?: string; meal_price?: number; currency?: string; meal_plan?: string } | null;
   price_branch?: number | null;
   price_general?: number | null;
   room_breakdown?: Record<string, { quantity?: number; price?: number }>;
   prices_by_room?: Record<string, { quantity?: number; price?: number }>;
 }
+
+const LOCATION_LABELS: Record<string, string> = { makkah: 'Mekkah', madinah: 'Madinah' };
 
 type VisaPageProps = {
   embedInProducts?: boolean;
@@ -214,6 +216,17 @@ const VisaPage: React.FC<VisaPageProps> = ({
       .catch(() => setHotelListForVisa([]))
       .finally(() => setLoadingHotelsForVisa(false));
   }, [visaRequireHotelVisa, user]);
+
+  const hotelsByLocationForVisa = React.useMemo(() => {
+    const list = hotelListForVisa;
+    const byLoc: { makkah: HotelOptionForVisa[]; madinah: HotelOptionForVisa[] } = { makkah: [], madinah: [] };
+    list.forEach((h) => {
+      const loc = (h.meta?.location ?? '').toString().toLowerCase();
+      if (loc === 'madinah') byLoc.madinah.push(h);
+      else byLoc.makkah.push(h);
+    });
+    return byLoc;
+  }, [hotelListForVisa]);
 
   const refetchAll = useCallback(() => {
     fetchVisaProducts();
@@ -639,39 +652,98 @@ const VisaPage: React.FC<VisaPageProps> = ({
         </div>
       )}
 
-      {/* Modal: Visa wajib hotel — pilih hotel lalu lanjut ke form order */}
+      {/* Modal: Visa wajib hotel — pilih hotel (Mekkah / Madinah) lalu lanjut ke form order */}
       <Modal open={!!visaRequireHotelVisa} onClose={() => setVisaRequireHotelVisa(null)}>
-        <ModalBox className="max-w-lg">
+        <ModalBox className="max-w-2xl">
           <ModalHeader
             title="Visa wajib hotel"
-            subtitle={visaRequireHotelVisa ? `"${visaRequireHotelVisa.name}" memerlukan hotel. Pilih hotel di bawah, lalu lanjut ke form order.` : ''}
+            subtitle={visaRequireHotelVisa ? `"${visaRequireHotelVisa.name}" memerlukan hotel. Pilih satu hotel di bawah (Mekkah atau Madinah), lalu lanjut ke form order.` : ''}
             icon={<Hotel className="w-5 h-5 text-amber-600" />}
             onClose={() => setVisaRequireHotelVisa(null)}
           />
-          <ModalBody className="max-h-[60vh] overflow-y-auto">
+          <ModalBody className="max-h-[65vh] overflow-y-auto">
             {loadingHotelsForVisa ? (
               <ContentLoading />
             ) : hotelListForVisa.length === 0 ? (
               <p className="text-slate-600 text-sm py-4">Tidak ada hotel tersedia. Hubungi admin untuk mengaktifkan produk hotel.</p>
             ) : (
-              <ul className="space-y-2">
-                {hotelListForVisa.map((h) => (
-                  <li key={h.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedHotelIdForVisa(selectedHotelIdForVisa === h.id ? null : h.id)}
-                      className={`w-full text-left rounded-xl border-2 p-3 transition-all ${
-                        selectedHotelIdForVisa === h.id ? 'border-[#0D1A63] bg-[#0D1A63]/5' : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <span className="font-medium text-slate-900 block">{h.name}</span>
-                      <span className="text-xs text-slate-500 mt-0.5 block">
-                        {h.meta?.location ? `Lokasi: ${String(h.meta.location)}` : ''} {h.code ? ` · ${h.code}` : ''}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-6">
+                {(['makkah', 'madinah'] as const).map((locKey) => {
+                  const hotels = hotelsByLocationForVisa[locKey];
+                  const label = LOCATION_LABELS[locKey] ?? locKey;
+                  if (!hotels.length) return null;
+                  return (
+                    <div key={locKey}>
+                      <h4 className="text-sm font-semibold text-slate-800 uppercase tracking-wide mb-3 flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#0D1A63]/10 text-[#0D1A63] text-xs">{hotels.length}</span>
+                        Hotel {label}
+                      </h4>
+                      <ul className="space-y-3">
+                        {hotels.map((h) => {
+                          const cur = (h.currency || h.meta?.currency || 'IDR').toString().toUpperCase();
+                          const priceCur = (cur === 'SAR' || cur === 'USD' || cur === 'IDR') ? cur : 'IDR';
+                          const breakdown = h.room_breakdown || h.prices_by_room || {};
+                          const roomTypes: Array<'single'|'double'|'triple'|'quad'|'quint'> = ['single', 'double', 'triple', 'quad', 'quint'];
+                          const firstRoom = roomTypes.find((rt) => {
+                            const entry = breakdown[rt];
+                            const p = typeof entry === 'object' && entry != null && 'price' in entry ? Number((entry as { price?: number }).price) : 0;
+                            return p > 0;
+                          });
+                          const repPrice = firstRoom
+                            ? (Number((breakdown[firstRoom] as { price?: number })?.price) || Number(h.price_branch ?? h.price_general ?? 0))
+                            : Number(h.price_branch ?? h.price_general ?? 0);
+                          const mealPriceRaw = Number(h.meta?.meal_price ?? 0) || 0;
+                          const isFullboard = (h.meta?.meal_plan as string) === 'fullboard';
+                          const roomTriple = fillFromSource(priceCur as 'IDR'|'SAR'|'USD', repPrice, currencyRates);
+                          const mealTriple = fillFromSource(priceCur as 'IDR'|'SAR'|'USD', mealPriceRaw, currencyRates);
+                          const roomT = getPriceTripleForTable(roomTriple.idr, roomTriple.sar, roomTriple.usd);
+                          const mealT = getPriceTripleForTable(mealTriple.idr, mealTriple.sar, mealTriple.usd);
+                          const selected = selectedHotelIdForVisa === h.id;
+                          return (
+                            <li key={h.id}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedHotelIdForVisa(selected ? null : h.id)}
+                                className={`w-full text-left rounded-xl border-2 p-4 transition-all ${
+                                  selected ? 'border-[#0D1A63] bg-[#0D1A63]/5 ring-1 ring-[#0D1A63]/20' : 'border-slate-200 hover:border-slate-300 bg-white'
+                                }`}
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <span className="font-semibold text-slate-900 block">{h.name}</span>
+                                    <span className="text-xs text-slate-500 mt-0.5 block">
+                                      {h.code ? `${h.code} · ` : ''}Lokasi: {label}
+                                    </span>
+                                    <span className="text-xs text-slate-500 mt-0.5 block">
+                                      Tipe: {isFullboard ? 'Fullboard' : 'Room only'}
+                                    </span>
+                                  </div>
+                                  <div className="text-right min-w-[140px]">
+                                    <div className="text-xs text-slate-500 mb-1">Kamar (per kamar/hari)</div>
+                                    <div className="text-sm font-medium text-slate-800 tabular-nums">{roomT.idrText}</div>
+                                    <div className="text-[11px] text-slate-500"><span className="text-slate-400">SAR:</span> {roomT.sarText} <span className="text-slate-400 ml-1">USD:</span> {roomT.usdText}</div>
+                                    <div className="text-xs text-slate-500 mt-1.5">Makan (per orang/hari)</div>
+                                    {isFullboard ? (
+                                      <div className="text-xs font-semibold text-emerald-700">Gratis</div>
+                                    ) : mealT.hasPrice ? (
+                                      <>
+                                        <div className="text-sm font-medium text-slate-800 tabular-nums">{mealT.idrText}</div>
+                                        <div className="text-[11px] text-slate-500"><span className="text-slate-400">SAR:</span> {mealT.sarText} <span className="text-slate-400 ml-1">USD:</span> {mealT.usdText}</div>
+                                      </>
+                                    ) : (
+                                      <div className="text-xs text-slate-400">–</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </ModalBody>
           <ModalFooter>
