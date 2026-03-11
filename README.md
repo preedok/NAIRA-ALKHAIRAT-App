@@ -2,14 +2,14 @@
 
 Platform manajemen terintegrasi untuk layanan umroh: hotel, visa, tiket, bus, paket, invoice, dan multi-role (Admin Pusat, Admin Koordinator, Invoice/Visa/Tiket Koordinator, Hotel, Bus, Accounting, Owner).
 
-**Stack:** Backend (Node.js + Express + PostgreSQL), Frontend (React), Mobile (React Native Android), Landing Page (terintegrasi).
+**Stack:** Backend (Node.js + Express + PostgreSQL), Frontend (React), Landing Page (terintegrasi).
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies (root + backend + frontend + mobile)
+# 1. Install dependencies (root + backend + frontend)
 npm run install:all
 
 # 2. Buat database PostgreSQL (nama: db_bgg_group)
@@ -32,7 +32,6 @@ npm start
 ```
 
 - **Landing page** (untuk tamu): buka http://localhost:3000 — Daftar Partner / Masuk.
-- **Mobile (Owner):** `cd mobile` lalu `npm start` dan `npm run android` (emulator/device).
 
 ---
 
@@ -42,7 +41,6 @@ npm start
 |-------------|-----|
 | `backend/`  | REST API (Express, Sequelize, PostgreSQL), migrate, seed, script clear data |
 | `frontend/` | React app (dashboard + landing page) |
-| `mobile/`   | React Native app (Owner) — Android |
 | `docs/`     | Dokumentasi proses bisnis, arsitektur, workflow |
 | Root        | `PENAWARAN_HARGA.html`, `SURAT_KONTRAK_KERJASAMA.html`, script generate PDF |
 
@@ -52,12 +50,11 @@ npm start
 
 | Perintah | Keterangan |
 |----------|------------|
-| `npm run install:all` | Install dependency root + backend + frontend + mobile |
-| `npm start` | Jalankan backend + frontend (tanpa mobile) |
+| `npm run install:all` | Install dependency root + backend + frontend |
+| `npm start` | Jalankan backend + frontend |
 | `npm run dev` | Backend + frontend (development, dengan db:migrate pre-run) |
 | `npm run start:backend` | Backend saja |
 | `npm run start:frontend` | Frontend saja |
-| `npm run start:mobile` | Metro (mobile) |
 | `npm run db:migrate` | Jalankan migrasi (backend) |
 | `npm run db:update` | Migrate + sync + seed (backend) |
 | `npm run migrate` | Sama dengan db:migrate |
@@ -118,7 +115,7 @@ Buka file `.html` di browser; untuk PDF bisa Print → Save as PDF atau pakai sc
 | **Invoice / Visa / Tiket Koordinator** | Order & invoice dalam wilayah; proses visa/tiket |
 | **Role Hotel / Role Bus** | Pekerjaan hotel, bus (scope cabang/wilayah) |
 | **Role Accounting** | Laporan keuangan, aging, rekening koran |
-| **Owner** | Order & invoice milik sendiri; akses mobile |
+| **Owner** | Order & invoice milik sendiri |
 
 ---
 
@@ -126,7 +123,6 @@ Buka file `.html` di browser; untuk PDF bisa Print → Save as PDF atau pakai sc
 
 - Node.js ≥ 18
 - PostgreSQL
-- (Mobile) Android Studio / SDK untuk build Android
 
 ---
 

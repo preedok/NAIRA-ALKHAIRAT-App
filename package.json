@@ -4,12 +4,10 @@
   "description": "Enterprise B2B Platform for Umroh Services - Bintang Global Group",
   "main": "index.js",
   "scripts": {
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install --legacy-peer-deps && cd ../mobile && npm install && cd ..",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install --legacy-peer-deps && cd ..",
     "start": "concurrently -n be,fe \"npm run start:backend\" \"npm run start:frontend\"",
     "start:backend": "cd backend && npm start",
     "start:frontend": "cd frontend && node --max-old-space-size=8192 node_modules/react-scripts/bin/react-scripts.js start",
-    "start:mobile": "cd mobile && npm start",
-    "start:android": "node scripts/run-android.js",
     "predev": "cross-env NODE_ENV=development npm run db:migrate",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",

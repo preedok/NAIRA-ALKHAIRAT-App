@@ -126,7 +126,7 @@ const getDashboard = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/bus/invoices
- * List invoice yang punya order bus (sumber data sama dengan menu Invoice: hanya invoice yang order-nya ada item bus).
+ * List invoice yang punya order bus ATAU order visa (bus besar include dengan visa; order visa tetap relevan untuk menu bus/penalti).
  * Scope cabang role bus. Sama pola dengan visa/ticket.
  */
 const listInvoices = asyncHandler(async (req, res) => {
@@ -134,17 +134,19 @@ const listInvoices = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
 
-  const orderIdsFromBus = await OrderItem.findAll({
-    where: { type: ORDER_ITEM_TYPE.BUS },
-    attributes: ['order_id'],
-    raw: true
-  }).then(rows => [...new Set(rows.map(r => r.order_id))]);
+  const [busRows, visaRows] = await Promise.all([
+    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.BUS }, attributes: ['order_id'], raw: true }),
+    OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
+  ]);
+  const orderIdsFromBus = [...new Set(busRows.map(r => r.order_id))];
+  const orderIdsFromVisa = [...new Set(visaRows.map(r => r.order_id))];
+  const orderIdsRelevant = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa])];
 
-  if (orderIdsFromBus.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
+  if (orderIdsRelevant.length === 0) return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
 
   const { DP_PAYMENT_STATUS } = require('../constants');
   const ordersWithDpPaid = await Order.findAll({
-    where: { id: orderIdsFromBus, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
+    where: { id: orderIdsRelevant, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
     attributes: ['id'],
     raw: true
   }).then(rows => rows.map(r => r.id));
@@ -181,7 +183,7 @@ const listInvoices = asyncHandler(async (req, res) => {
             model: OrderItem,
             as: 'OrderItems',
             where: { type: ORDER_ITEM_TYPE.BUS },
-            required: true,
+            required: false,
             include: [
               { model: BusProgress, as: 'BusProgress', required: false },
               { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }

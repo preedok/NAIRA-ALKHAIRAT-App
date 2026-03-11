@@ -1,5 +1,0 @@
-#!/bin/sh
-APP_HOME=$( cd -P "$( dirname "$0" )" > /dev/null && pwd )
-JAVACMD=java
-test -n "$JAVA_HOME" && JAVACMD="$JAVA_HOME/bin/java"
-exec "$JAVACMD" -Dfile.encoding=UTF-8 -Xmx64m -Xms64m -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" $*
