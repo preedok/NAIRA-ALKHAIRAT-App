@@ -233,18 +233,24 @@ const HandlingPage: React.FC = () => {
   };
 
   const handleAddToOrder = (row: HandlingProduct) => {
-    const priceIdr = row.price_general_idr ?? 0;
-    if (priceIdr <= 0) {
+    const idr = Number(row.price_general_idr) || 0;
+    const sar = Number(row.price_general_sar) || 0;
+    const usd = Number(row.price_general_usd) || 0;
+    const curRaw = (row as { meta?: { currency?: string }; currency?: string }).meta?.currency || row.currency || (sar > 0 ? 'SAR' : usd > 0 ? 'USD' : 'IDR');
+    const priceCurrency = (curRaw === 'SAR' || curRaw === 'USD' || curRaw === 'IDR') ? curRaw : 'IDR';
+    const baseInCur = priceCurrency === 'SAR' ? sar : priceCurrency === 'USD' ? usd : idr;
+    if (baseInCur <= 0) {
       showToast('Produk ini belum memiliki harga. Hubungi admin.', 'error');
       return;
     }
+    const unit_price_idr = priceCurrency === 'IDR' ? baseInCur : Math.round(fillFromSource(priceCurrency as 'SAR' | 'USD', baseInCur, currencyRates).idr) || 0;
     addDraftItem({
       type: 'handling',
       product_id: row.id,
       product_name: row.name,
-      unit_price_idr: priceIdr,
-      unit_price: priceIdr,
-      price_currency: 'IDR',
+      unit_price_idr,
+      unit_price: baseInCur,
+      price_currency: priceCurrency as 'IDR' | 'SAR' | 'USD',
       quantity: 1
     });
     showToast('Handling ditambahkan ke order.', 'success');

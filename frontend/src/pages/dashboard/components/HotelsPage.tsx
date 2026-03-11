@@ -922,24 +922,39 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         size="sm"
                         className="p-2"
                         onClick={() => {
-                          const base = Number(hotel.price_branch ?? hotel.price_general ?? 0);
                           const cur = (hotel.currency || (hotel.meta as any)?.currency || 'IDR').toString().toUpperCase();
                           const priceCurrency = (cur === 'SAR' || cur === 'USD' || cur === 'IDR') ? cur : 'IDR';
                           const hotelLocRaw = (hotel.meta as any)?.location;
                           const hotel_location = hotelLocRaw ? String(hotelLocRaw).toLowerCase() : undefined;
                           const s2i = currencyRates.SAR_TO_IDR ?? 4200;
                           const u2i = currencyRates.USD_TO_IDR ?? 15500;
-                          const unit_price_idr = priceCurrency === 'SAR' ? base * s2i : priceCurrency === 'USD' ? base * u2i : base;
+                          const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
+                          const roomTypes: Array<'single'|'double'|'triple'|'quad'|'quint'> = ['single', 'double', 'triple', 'quad', 'quint'];
+                          const firstRoomWithPrice = roomTypes.find((rt) => {
+                            const entry = breakdown[rt];
+                            const p = typeof entry === 'object' && entry != null && 'price' in entry ? Number((entry as { price?: number }).price) : typeof entry === 'number' ? entry : 0;
+                            return p > 0;
+                          });
+                          const repPrice = firstRoomWithPrice
+                            ? (Number((breakdown[firstRoomWithPrice] as { price?: number })?.price) || Number(hotel.price_branch ?? hotel.price_general ?? 0))
+                            : Number(hotel.price_branch ?? hotel.price_general ?? 0);
+                          const mealPriceRaw = Number((hotel.meta as any)?.meal_price ?? 0) || 0;
+                          const roomTriple = fillFromSource(priceCurrency as 'IDR'|'SAR'|'USD', repPrice, currencyRates);
+                          const mealTriple = fillFromSource(priceCurrency as 'IDR'|'SAR'|'USD', mealPriceRaw, currencyRates);
+                          const unitPriceInCur = priceCurrency === 'SAR' ? roomTriple.sar : priceCurrency === 'USD' ? roomTriple.usd : roomTriple.idr;
+                          const mealPriceInCur = priceCurrency === 'SAR' ? mealTriple.sar : priceCurrency === 'USD' ? mealTriple.usd : mealTriple.idr;
+                          const unit_price_idr = priceCurrency === 'SAR' ? unitPriceInCur * s2i : priceCurrency === 'USD' ? unitPriceInCur * u2i : unitPriceInCur;
+                          const defaultRoomType = firstRoomWithPrice ?? 'quad';
                           addDraftItem({
                             type: 'hotel',
                             product_id: hotel.id,
                             product_name: hotel.name,
                             unit_price_idr,
-                            unit_price: base,
+                            unit_price: unitPriceInCur,
                             price_currency: priceCurrency as any,
                             quantity: 1,
                             meta: hotel_location ? { hotel_location } : undefined,
-                            room_breakdown: [{ room_type: 'quad', quantity: 1, unit_price: base, with_meal: false }]
+                            room_breakdown: [{ room_type: defaultRoomType, quantity: 1, unit_price: unitPriceInCur, with_meal: false, meal_unit_price: mealPriceInCur }]
                           });
                           showToast('Hotel ditambahkan ke order. Isi tanggal check-in/out di form order.', 'success');
                         }}

@@ -15,7 +15,7 @@ export interface OrderDraftItem {
   price_currency?: 'SAR' | 'USD' | 'IDR';
   quantity: number;
   /** Untuk hotel: breakdown kamar (satu line quad default kalau tidak ada) */
-  room_breakdown?: { id: string; room_type: string; quantity: number; unit_price: number; with_meal?: boolean }[];
+  room_breakdown?: { id: string; room_type: string; quantity: number; unit_price: number; with_meal?: boolean; meal_unit_price?: number }[];
   check_in?: string;
   check_out?: string;
   /** Untuk tiket: { bandara: 'BTH'|'CGK'|'SBY'|'UPG' }; untuk hotel/order: check_in, check_out, room_type, dll */
@@ -24,7 +24,7 @@ export interface OrderDraftItem {
 
 /** Input untuk addItem: id dan room_breakdown[].id opsional */
 export type OrderDraftItemInput = Omit<OrderDraftItem, 'id' | 'room_breakdown'> & {
-  room_breakdown?: { id?: string; room_type: string; quantity: number; unit_price: number; with_meal?: boolean }[];
+  room_breakdown?: { id?: string; room_type: string; quantity: number; unit_price: number; with_meal?: boolean; meal_unit_price?: number }[];
 };
 
 interface OrderDraftContextType {

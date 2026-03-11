@@ -469,13 +469,19 @@ const VisaPage: React.FC<VisaPageProps> = ({
                               onClick={() => {
                                 const curRaw = (p.meta?.currency || p.currency || 'IDR').toString().toUpperCase();
                                 const priceCurrency = (curRaw === 'SAR' || curRaw === 'USD' || curRaw === 'IDR') ? curRaw : 'IDR';
-                                const unitPrice = priceCurrency === 'SAR' ? (Number(triple.sar) || 0) : priceCurrency === 'USD' ? (Number(triple.usd) || 0) : (Number(priceIdr) || 0);
+                                const priceIdrNum = Number(priceIdr) || 0;
+                                const baseInCur = priceCurrency === 'SAR'
+                                  ? (Number((p as { price_general_sar?: number }).price_general_sar) || triple.sar)
+                                  : priceCurrency === 'USD'
+                                    ? (Number((p as { price_general_usd?: number }).price_general_usd) || triple.usd)
+                                    : priceIdrNum;
+                                const unit_price_idr = priceCurrency === 'IDR' ? baseInCur : fillFromSource(priceCurrency as 'IDR'|'SAR'|'USD', baseInCur, currencyRates).idr;
                                 addDraftItem({
                                   type: 'visa',
                                   product_id: p.id,
                                   product_name: p.name,
-                                  unit_price_idr: Number(priceIdr) || 0,
-                                  unit_price: unitPrice,
+                                  unit_price_idr: Math.round(unit_price_idr) || 0,
+                                  unit_price: baseInCur,
                                   price_currency: priceCurrency as any,
                                   quantity: 1
                                 });

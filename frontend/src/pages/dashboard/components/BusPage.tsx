@@ -447,13 +447,22 @@ const BusPage: React.FC<BusPageProps> = ({
                                 const priceIdr = isHiace
                                   ? (p.meta?.price_per_vehicle_idr ?? p.price_general_idr ?? 0)
                                   : getPriceForTrip(p, (p.meta?.trip_type as BusTripType) || 'round_trip');
+                                const triple = fillFromSource('IDR', priceIdr, currencyRates);
+                                const curRaw = (p.meta?.price_currency as string) || (p.currency as string) || 'IDR';
+                                const priceCurrency = (curRaw === 'SAR' || curRaw === 'USD' || curRaw === 'IDR') ? curRaw : 'IDR';
+                                const baseInCur = priceCurrency === 'SAR'
+                                  ? (Number(p.price_general_sar) || triple.sar)
+                                  : priceCurrency === 'USD'
+                                    ? (Number(p.price_general_usd) || triple.usd)
+                                    : priceIdr;
+                                const unit_price_idr = priceCurrency === 'IDR' ? baseInCur : Math.round(fillFromSource(priceCurrency as 'SAR' | 'USD', baseInCur, currencyRates).idr) || 0;
                                 addDraftItem({
                                   type: 'bus',
                                   product_id: p.id,
                                   product_name: p.name,
-                                  unit_price_idr: priceIdr,
-                                  unit_price: priceIdr,
-                                  price_currency: 'IDR',
+                                  unit_price_idr: unit_price_idr,
+                                  unit_price: baseInCur,
+                                  price_currency: priceCurrency as 'IDR' | 'SAR' | 'USD',
                                   quantity: 1
                                 });
                                 showToast('Bus ditambahkan ke order. Buka menu Order untuk lengkapi tipe perjalanan & tanggal.', 'success');

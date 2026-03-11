@@ -662,17 +662,27 @@ const PackagesPage: React.FC = () => {
                         size="sm"
                         className="p-2"
                         onClick={() => {
-                          // Pakai harga setelah diskon jika ada diskon, otherwise harga normal
-                          const idr = discountPercent > 0 && priceAfterIdr != null && priceAfterIdr > 0
-                            ? priceAfterIdr
-                            : basePriceIdr;
+                          const cur = (pkg.price_general_sar != null && Number(pkg.price_general_sar) > 0)
+                            ? 'SAR'
+                            : (pkg.price_general_usd != null && Number(pkg.price_general_usd) > 0)
+                              ? 'USD'
+                              : 'IDR';
+                          const baseInCur = cur === 'SAR'
+                            ? (Number(pkg.price_general_sar) || fromIDR(basePriceIdr, currencyRates).sar)
+                            : cur === 'USD'
+                              ? (Number(pkg.price_general_usd) || fromIDR(basePriceIdr, currencyRates).usd)
+                              : basePriceIdr;
+                          const finalInCur = discountPercent > 0 && baseInCur > 0
+                            ? baseInCur * (1 - discountPercent / 100)
+                            : baseInCur;
+                          const unit_price_idr = cur === 'IDR' ? Math.round(finalInCur) : Math.round(fillFromSource(cur, finalInCur, currencyRates).idr) || 0;
                           addDraftItem({
                             type: 'package',
                             product_id: pkg.id,
                             product_name: pkg.name,
-                            unit_price_idr: idr,
-                            unit_price: idr,
-                            price_currency: 'IDR',
+                            unit_price_idr,
+                            unit_price: finalInCur,
+                            price_currency: cur as 'IDR' | 'SAR' | 'USD',
                             quantity: 1
                           });
                           showToast('Paket ditambahkan ke order. Klik "Buat order" untuk lanjut.', 'success');

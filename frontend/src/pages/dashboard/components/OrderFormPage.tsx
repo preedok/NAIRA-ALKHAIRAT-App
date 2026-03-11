@@ -230,7 +230,7 @@ const OrderFormPage: React.FC = () => {
       const draftCur = ((d as any).price_currency as DisplayCurrency | undefined) || undefined;
       const draftUnit = ((d as any).unit_price != null ? Number((d as any).unit_price) : NaN);
       const fallbackUnit = Number.isFinite(draftUnit) ? draftUnit : d.unit_price_idr;
-      const room_breakdown=d.room_breakdown?.map(l=>({ id:l.id||`rl-${uid()}`, room_type:(l.room_type||'quad') as RoomTypeId, quantity:l.quantity||1, unit_price:l.unit_price||fallbackUnit, with_meal:!!l.with_meal }));
+      const room_breakdown=d.room_breakdown?.map(l=>{ const line=(l as { meal_unit_price?: number }); return { id:l.id||`rl-${uid()}`, room_type:(l.room_type||'quad') as RoomTypeId, quantity:l.quantity||1, unit_price:l.unit_price||fallbackUnit, with_meal:!!l.with_meal, ...(typeof line.meal_unit_price==='number'?{ meal_unit_price: line.meal_unit_price }:{}) }; });
       return {
         id:d.id,
         type:d.type as ItemType,
