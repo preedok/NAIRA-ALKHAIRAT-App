@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet, Calendar, Trash2, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -48,6 +49,19 @@ interface VisaProduct {
   price_general?: number | null;
   price_branch?: number | null;
   currency?: string;
+}
+
+/** Hotel product ringkas untuk modal pilih hotel (visa wajib hotel) */
+interface HotelOptionForVisa {
+  id: string;
+  name: string;
+  code?: string;
+  currency?: string;
+  meta?: { location?: string; meal_price?: number; currency?: string } | null;
+  price_branch?: number | null;
+  price_general?: number | null;
+  room_breakdown?: Record<string, { quantity?: number; price?: number }>;
+  prices_by_room?: Record<string, { quantity?: number; price?: number }>;
 }
 
 type VisaPageProps = {
@@ -113,7 +127,13 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const [debouncedSearchName, setDebouncedSearchName] = useState('');
   const lastFilterKeyRef = useRef<string>('');
   const tableSectionRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const { addItem: addDraftItem } = useOrderDraft();
+  /** Modal: visa wajib hotel — user harus pilih hotel dulu baru lanjut ke form */
+  const [visaRequireHotelVisa, setVisaRequireHotelVisa] = useState<VisaProduct | null>(null);
+  const [hotelListForVisa, setHotelListForVisa] = useState<HotelOptionForVisa[]>([]);
+  const [loadingHotelsForVisa, setLoadingHotelsForVisa] = useState(false);
+  const [selectedHotelIdForVisa, setSelectedHotelIdForVisa] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchName(searchName), 350);
@@ -177,9 +197,97 @@ const VisaPage: React.FC<VisaPageProps> = ({
       .finally(() => setVisaSeasonsLoading(false));
   }, [visaSeasonsProduct?.id]);
 
+  useEffect(() => {
+    if (!visaRequireHotelVisa) {
+      setHotelListForVisa([]);
+      setSelectedHotelIdForVisa(null);
+      return;
+    }
+    setLoadingHotelsForVisa(true);
+    const ownerId = getProductListOwnerId(user);
+    productsApi.list({ type: 'hotel', with_prices: 'true', include_inactive: 'false', limit: 300, ...(ownerId ? { owner_id: ownerId } : {}) })
+      .then((res) => {
+        const data = (res.data as { data?: HotelOptionForVisa[] })?.data ?? [];
+        setHotelListForVisa(Array.isArray(data) ? data : []);
+        setSelectedHotelIdForVisa(null);
+      })
+      .catch(() => setHotelListForVisa([]))
+      .finally(() => setLoadingHotelsForVisa(false));
+  }, [visaRequireHotelVisa, user]);
+
   const refetchAll = useCallback(() => {
     fetchVisaProducts();
   }, [fetchVisaProducts]);
+
+  const handleConfirmVisaWithHotel = useCallback(() => {
+    const visa = visaRequireHotelVisa;
+    const hotelId = selectedHotelIdForVisa;
+    if (!visa || !hotelId) {
+      showToast('Pilih hotel terlebih dahulu.', 'error');
+      return;
+    }
+    const hotel = hotelListForVisa.find((h) => h.id === hotelId);
+    if (!hotel) {
+      showToast('Hotel tidak ditemukan.', 'error');
+      return;
+    }
+    const cur = (hotel.currency || (hotel.meta as { currency?: string })?.currency || 'IDR').toString().toUpperCase();
+    const priceCurrency = (cur === 'SAR' || cur === 'USD' || cur === 'IDR') ? cur : 'IDR';
+    const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
+    const roomTypes: Array<'single'|'double'|'triple'|'quad'|'quint'> = ['single', 'double', 'triple', 'quad', 'quint'];
+    const firstRoomWithPrice = roomTypes.find((rt) => {
+      const entry = breakdown[rt];
+      const p = typeof entry === 'object' && entry != null && 'price' in entry ? Number((entry as { price?: number }).price) : typeof entry === 'number' ? entry : 0;
+      return p > 0;
+    });
+    const repPrice = firstRoomWithPrice
+      ? (Number((breakdown[firstRoomWithPrice] as { price?: number })?.price) || Number(hotel.price_branch ?? hotel.price_general ?? 0))
+      : Number(hotel.price_branch ?? hotel.price_general ?? 0);
+    const mealPriceRaw = Number((hotel.meta as { meal_price?: number })?.meal_price ?? 0) || 0;
+    const roomTriple = fillFromSource(priceCurrency as 'IDR'|'SAR'|'USD', repPrice, currencyRates);
+    const mealTriple = fillFromSource(priceCurrency as 'IDR'|'SAR'|'USD', mealPriceRaw, currencyRates);
+    const unitPriceInCur = priceCurrency === 'SAR' ? roomTriple.sar : priceCurrency === 'USD' ? roomTriple.usd : roomTriple.idr;
+    const mealPriceInCur = priceCurrency === 'SAR' ? mealTriple.sar : priceCurrency === 'USD' ? mealTriple.usd : mealTriple.idr;
+    const s2i = currencyRates.SAR_TO_IDR ?? 4200;
+    const u2i = currencyRates.USD_TO_IDR ?? 15500;
+    const unit_price_idr_hotel = priceCurrency === 'SAR' ? unitPriceInCur * s2i : priceCurrency === 'USD' ? unitPriceInCur * u2i : unitPriceInCur;
+    const defaultRoomType = firstRoomWithPrice ?? 'quad';
+    const hotel_location = hotel.meta?.location ? String(hotel.meta.location).toLowerCase() : undefined;
+    addDraftItem({
+      type: 'hotel',
+      product_id: hotel.id,
+      product_name: hotel.name,
+      unit_price_idr: unit_price_idr_hotel,
+      unit_price: unitPriceInCur,
+      price_currency: priceCurrency as 'SAR'|'USD'|'IDR',
+      quantity: 1,
+      meta: hotel_location ? { hotel_location } : undefined,
+      room_breakdown: [{ room_type: defaultRoomType, quantity: 1, unit_price: unitPriceInCur, with_meal: false, meal_unit_price: mealPriceInCur }]
+    });
+    const priceIdrNum = Number(visa.price_general_idr ?? (visa.currency === 'IDR' || !visa.currency ? visa.price_general ?? visa.price_branch : null) ?? 0) || 0;
+    const tripleVisa = fillFromSource('IDR', priceIdrNum, currencyRates);
+    const curVisa = (visa.meta?.currency || visa.currency || 'IDR').toString().toUpperCase();
+    const priceCurVisa = (curVisa === 'SAR' || curVisa === 'USD' || curVisa === 'IDR') ? curVisa : 'IDR';
+    const baseInCurVisa = priceCurVisa === 'SAR'
+      ? (Number((visa as { price_general_sar?: number }).price_general_sar) || tripleVisa.sar)
+      : priceCurVisa === 'USD'
+        ? (Number((visa as { price_general_usd?: number }).price_general_usd) || tripleVisa.usd)
+        : priceIdrNum;
+    const unit_price_idr_visa = priceCurVisa === 'IDR' ? baseInCurVisa : fillFromSource(priceCurVisa as 'IDR'|'SAR'|'USD', baseInCurVisa, currencyRates).idr;
+    addDraftItem({
+      type: 'visa',
+      product_id: visa.id,
+      product_name: visa.name,
+      unit_price_idr: Math.round(unit_price_idr_visa) || 0,
+      unit_price: baseInCurVisa,
+      price_currency: priceCurVisa as 'SAR'|'USD'|'IDR',
+      quantity: 1
+    });
+    setVisaRequireHotelVisa(null);
+    setSelectedHotelIdForVisa(null);
+    showToast('Visa dan hotel ditambahkan. Mengalihkan ke form order.', 'success');
+    navigate('/dashboard/orders/new');
+  }, [visaRequireHotelVisa, selectedHotelIdForVisa, hotelListForVisa, currencyRates, addDraftItem, showToast, navigate]);
 
   const handleDeleteVisa = async (p: VisaProduct) => {
     if (!window.confirm(`Hapus produk visa "${p.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
@@ -467,6 +575,10 @@ const VisaPage: React.FC<VisaPageProps> = ({
                               size="sm"
                               className="p-2"
                               onClick={() => {
+                                if (requireHotel) {
+                                  setVisaRequireHotelVisa(p);
+                                  return;
+                                }
                                 const curRaw = (p.meta?.currency || p.currency || 'IDR').toString().toUpperCase();
                                 const priceCurrency = (curRaw === 'SAR' || curRaw === 'USD' || curRaw === 'IDR') ? curRaw : 'IDR';
                                 const priceIdrNum = Number(priceIdr) || 0;
@@ -526,6 +638,54 @@ const VisaPage: React.FC<VisaPageProps> = ({
         </Card>
         </div>
       )}
+
+      {/* Modal: Visa wajib hotel — pilih hotel lalu lanjut ke form order */}
+      <Modal open={!!visaRequireHotelVisa} onClose={() => setVisaRequireHotelVisa(null)}>
+        <ModalBox className="max-w-lg">
+          <ModalHeader
+            title="Visa wajib hotel"
+            subtitle={visaRequireHotelVisa ? `"${visaRequireHotelVisa.name}" memerlukan hotel. Pilih hotel di bawah, lalu lanjut ke form order.` : ''}
+            icon={<Hotel className="w-5 h-5 text-amber-600" />}
+            onClose={() => setVisaRequireHotelVisa(null)}
+          />
+          <ModalBody className="max-h-[60vh] overflow-y-auto">
+            {loadingHotelsForVisa ? (
+              <ContentLoading />
+            ) : hotelListForVisa.length === 0 ? (
+              <p className="text-slate-600 text-sm py-4">Tidak ada hotel tersedia. Hubungi admin untuk mengaktifkan produk hotel.</p>
+            ) : (
+              <ul className="space-y-2">
+                {hotelListForVisa.map((h) => (
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHotelIdForVisa(selectedHotelIdForVisa === h.id ? null : h.id)}
+                      className={`w-full text-left rounded-xl border-2 p-3 transition-all ${
+                        selectedHotelIdForVisa === h.id ? 'border-[#0D1A63] bg-[#0D1A63]/5' : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <span className="font-medium text-slate-900 block">{h.name}</span>
+                      <span className="text-xs text-slate-500 mt-0.5 block">
+                        {h.meta?.location ? `Lokasi: ${String(h.meta.location)}` : ''} {h.code ? ` · ${h.code}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" onClick={() => setVisaRequireHotelVisa(null)}>Batal</Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmVisaWithHotel}
+              disabled={!selectedHotelIdForVisa || loadingHotelsForVisa}
+            >
+              Pilih hotel & lanjut ke form order
+            </Button>
+          </ModalFooter>
+        </ModalBox>
+      </Modal>
 
       {/* Modal: Tambah produk visa */}
       <Modal open={showAddVisaModal} onClose={() => !addVisaSaving && setShowAddVisaModal(false)}>
