@@ -925,6 +925,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           const base = Number(hotel.price_branch ?? hotel.price_general ?? 0);
                           const cur = (hotel.currency || (hotel.meta as any)?.currency || 'IDR').toString().toUpperCase();
                           const priceCurrency = (cur === 'SAR' || cur === 'USD' || cur === 'IDR') ? cur : 'IDR';
+                          const hotelLocRaw = (hotel.meta as any)?.location;
+                          const hotel_location = hotelLocRaw ? String(hotelLocRaw).toLowerCase() : undefined;
                           const s2i = currencyRates.SAR_TO_IDR ?? 4200;
                           const u2i = currencyRates.USD_TO_IDR ?? 15500;
                           const unit_price_idr = priceCurrency === 'SAR' ? base * s2i : priceCurrency === 'USD' ? base * u2i : base;
@@ -936,6 +938,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             unit_price: base,
                             price_currency: priceCurrency as any,
                             quantity: 1,
+                            meta: hotel_location ? { hotel_location } : undefined,
                             room_breakdown: [{ room_type: 'quad', quantity: 1, unit_price: base, with_meal: false }]
                           });
                           showToast('Hotel ditambahkan ke order. Isi tanggal check-in/out di form order.', 'success');
