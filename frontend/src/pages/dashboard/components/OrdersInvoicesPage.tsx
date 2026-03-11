@@ -2145,9 +2145,23 @@ const OrdersInvoicesPage: React.FC = () => {
                                             }
                                             setAllocating(true);
                                             try {
-                                              await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
+                                              const res = await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
                                               showToast(`Saldo Rp ${amt.toLocaleString('id-ID')} berhasil dialokasikan`, 'success');
                                               setAllocateAmount('');
+                                              const updated = (res.data as any)?.data;
+                                              if (updated && updated.id === viewInvoice.id) {
+                                                setViewInvoice((prev: any) => {
+                                                  if (!prev || prev.id !== updated.id) return prev;
+                                                  return {
+                                                    ...prev,
+                                                    paid_amount: updated.paid_amount,
+                                                    remaining_amount: updated.remaining_amount,
+                                                    status: updated.status,
+                                                    Order: prev.Order ? { ...prev.Order, ...updated.Order } : updated.Order
+                                                  };
+                                                });
+                                                setOwnerBalance((b) => Math.max(0, (b ?? 0) - amt));
+                                              }
                                               fetchInvoiceDetail(viewInvoice.id);
                                               fetchOwnerBalance();
                                               fetchInvoices();
