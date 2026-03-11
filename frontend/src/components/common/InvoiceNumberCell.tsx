@@ -28,6 +28,15 @@ export type InvoiceNumberCellInv = {
 const formatDateForChange = (d: string | Date | null): string =>
   d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
+/** Tanggal + jam untuk teks "Perubahan" (contoh: 12 Mar 2026, 14:30). */
+const formatDateAndTimeForChange = (d: string | Date | null): string => {
+  if (!d) return '';
+  const date = new Date(d);
+  const dateStr = date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${dateStr}, ${timeStr}`;
+};
+
 /** Baru: invoice diterbitkan/dibuat dalam 24 jam terakhir (bukan draft). */
 export function isNewInvoice(inv: InvoiceNumberCellInv | null | undefined): boolean {
   if (!inv || inv.status === 'draft' || inv.is_draft_order) return false;
@@ -80,7 +89,8 @@ export function InvoiceNumberCell({
   if (!inv) return <span className="text-slate-400">–</span>;
 
   const changeDate = getOrderChangeDate(inv);
-  const changeDateStr = changeDate ? formatDateForChange(changeDate.toISOString()) : '';
+  const changeDateStr = changeDate ? formatDateAndTimeForChange(changeDate.toISOString()) : '';
+  const statusLabel = inv.status && statusLabels[inv.status] ? statusLabels[inv.status] : (inv.status || '');
   const o = order ?? inv.Order;
   const showDp = showDpPayment && o?.dp_payment_status === 'pembayaran_dp' && (inv.dp_amount != null || inv.paid_amount != null);
   const paidForDp = parseFloat(String(inv.paid_amount || 0)) || 0;
@@ -111,7 +121,12 @@ export function InvoiceNumberCell({
         </span>
       )}
       {!compact && showBaruAndPerubahan && !isDraftRow(inv) && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {statusLabel ? (
+            <span className="text-xs text-slate-600" title="Status invoice">
+              Status: {statusLabel}
+            </span>
+          ) : null}
           {isNewInvoice(inv) && (
             <Badge variant="success" className="text-xs">
               Baru

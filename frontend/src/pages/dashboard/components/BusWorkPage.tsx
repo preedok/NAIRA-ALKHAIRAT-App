@@ -594,7 +594,11 @@ const BusWorkPage: React.FC = () => {
             <ModalBody className="space-y-4">
               {detailTab === 'slip' ? (
                 <div className="space-y-4">
-                  {busItems
+                  {busItems.length === 0 ? (
+                    <p className="text-sm text-slate-600 rounded-lg bg-amber-50 border border-amber-100 p-4">
+                      Invoice ini <strong>bus include (dengan visa)</strong> atau penalti bus. Tidak ada item bus untuk slip.
+                    </p>
+                  ) : busItems
                     .filter((item: any) => (detailDraft[item.id]?.bus_ticket_status ?? item.BusProgress?.bus_ticket_status ?? '') === 'issued')
                     .map((item: any) => {
                       const prog = item.BusProgress;
@@ -630,6 +634,10 @@ const BusWorkPage: React.FC = () => {
                       );
                     })}
                 </div>
+              ) : busItems.length === 0 ? (
+                <p className="text-sm text-slate-600 rounded-lg bg-amber-50 border border-amber-100 p-4">
+                  Invoice ini <strong>bus include (dengan visa)</strong> atau penalti bus. Tidak ada item bus untuk di-progress (tiket, kedatangan, keberangkatan, kepulangan).
+                </p>
               ) : busItems.map((item: any, idx: number) => {
                 const prog = item.BusProgress;
                 const d = detailDraft[item.id] ?? {

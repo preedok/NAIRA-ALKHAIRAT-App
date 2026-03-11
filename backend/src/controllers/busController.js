@@ -311,8 +311,12 @@ const getInvoice = asyncHandler(async (req, res) => {
   });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
-  const busItems = (invoice.Order?.OrderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.BUS);
-  if (busItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item bus' });
+  const orderItems = invoice.Order?.OrderItems || [];
+  const busItems = orderItems.filter(i => i.type === ORDER_ITEM_TYPE.BUS);
+  const hasVisa = orderItems.some(i => i.type === ORDER_ITEM_TYPE.VISA);
+  const waiveBusPenalty = !!invoice.Order?.waive_bus_penalty;
+  const busRelevant = busItems.length > 0 || hasVisa || waiveBusPenalty;
+  if (!busRelevant) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item bus' });
 
   const data = invoice.get ? invoice.get({ plain: true }) : invoice;
   (data?.Order?.OrderItems || []).forEach((oi) => {
