@@ -209,7 +209,7 @@ const AccountingDashboard: React.FC = () => {
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setError(null);   
     try {
       const params: Record<string, string> = {};
       if (branchId) params.branch_id = branchId;
