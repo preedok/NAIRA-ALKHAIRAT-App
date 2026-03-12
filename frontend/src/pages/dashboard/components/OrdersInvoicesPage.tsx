@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive, Bus
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -821,6 +821,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const TICKET_STATUS_LABELS = PROGRESS_LABELS.ticket;
   const HOTEL_STATUS_LABELS = PROGRESS_LABELS.hotel;
   const BUS_TICKET_LABELS = PROGRESS_LABELS.bus;
+  const BUS_INCLUDE_STATUS_LABELS: Record<string, string> = { pending: 'Pending', di_proses: 'Di proses', terbit: 'Terbit' };
 
   const handleUploadJamaahData = async (orderId: string, itemId: string, file: File | null, link: string) => {
     if (!file && !link?.trim()) {
@@ -2497,6 +2498,28 @@ const OrdersInvoicesPage: React.FC = () => {
                                         </tr>
                                       );
                                     })}
+                                    {(() => {
+                                      const order = viewInvoice?.Order;
+                                      const raw = viewInvoice?.Order?.OrderItems || [];
+                                      const hasVisa = raw.some((i: any) => (i.type || i.product_type) === 'visa');
+                                      const hasBusItems = raw.some((i: any) => (i.type || i.product_type) === 'bus');
+                                      if (!hasVisa || hasBusItems) return null;
+                                      const penalty = Number(order?.penalty_amount) || 0;
+                                      const waive = !!order?.waive_bus_penalty;
+                                      const desc = waive ? 'Tanpa penalti (Hiace)' : (penalty > 0 ? `Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt (visa < 35 pack)` : 'Termasuk dengan visa');
+                                      return (
+                                        <tr className="border-b border-slate-100 bg-amber-50/50">
+                                          <td className="py-2 px-2 text-slate-600 align-top">{orderItems.length + 1}</td>
+                                          <td className="py-2 px-2 font-medium text-slate-700 align-top">Bus</td>
+                                          <td className="py-2 px-2 text-slate-900 align-top">Bus include (dengan visa)</td>
+                                          <td className="py-2 px-2 text-slate-600 text-xs align-top">{desc}</td>
+                                          <td className="py-2 px-2 text-right tabular-nums align-top">–</td>
+                                          <td className="py-2 px-2 text-right align-top">–</td>
+                                          <td className="py-2 px-2 text-right align-top">–</td>
+                                          <td className="py-2 px-2 text-right align-top">{penalty > 0 && !waive ? <NominalDisplay amount={penalty} currency="IDR" /> : '–'}</td>
+                                        </tr>
+                                      );
+                                    })()}
                                   </tbody>
                                 </table>
                               </div>
@@ -2834,14 +2857,18 @@ const OrdersInvoicesPage: React.FC = () => {
 
               {detailTab === 'progress' && (
                 <div className="space-y-6">
-                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus). Diupdate oleh divisi Visa, Tiket, dan Hotel.</p>
+                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus). Diupdate oleh divisi Visa, Tiket, Hotel, dan Bus.</p>
                   {(() => {
                     const order = viewInvoice?.Order;
                     const items = (order?.OrderItems || []).filter((i: any) => {
                       const t = (i.type || i.product_type);
                       return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus';
                     });
-                    if (items.length === 0) {
+                    const hasVisaItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'visa');
+                    const hasBusItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'bus');
+                    const waiveBus = !!order?.waive_bus_penalty;
+                    const isBusInclude = (hasVisaItems || waiveBus) && !hasBusItems;
+                    if (items.length === 0 && !isBusInclude) {
                       return (
                         <div className="text-center py-14 rounded-2xl border border-slate-200 bg-white shadow-sm">
                           <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
@@ -2865,11 +2892,42 @@ const OrdersInvoicesPage: React.FC = () => {
                       }
                       groupsMap.get(key)!.items.push(item);
                     }
+                    if (isBusInclude) {
+                      groupsMap.set('bus-include', { key: 'bus-include', productLabel: 'Bus include (dengan visa)', type: 'bus_include', items: [] });
+                    }
                     const groups = Array.from(groupsMap.values());
                     return (
                       <div className="space-y-4">
                         {groups.map((group) => {
                           const first = group.items[0];
+                          const isBusInclude = group.type === 'bus_include';
+                          if (isBusInclude) {
+                            const o = viewInvoice?.Order as any;
+                            const arrivalStatus = o?.bus_include_arrival_status || 'pending';
+                            const returnStatus = o?.bus_include_return_status || 'pending';
+                            const arrivalLabel = BUS_INCLUDE_STATUS_LABELS[arrivalStatus] || arrivalStatus;
+                            const returnLabel = BUS_INCLUDE_STATUS_LABELS[returnStatus] || returnStatus;
+                            return (
+                              <div key={group.key} className="rounded-xl border border-amber-200 bg-amber-50/50 shadow-sm overflow-hidden">
+                                <div className="flex items-start gap-4 p-4">
+                                  <div className="p-2.5 rounded-xl shrink-0 bg-amber-100 text-amber-700">
+                                    <Bus className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 min-w-0 space-y-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-semibold text-slate-900">Bus include (dengan visa)</span>
+                                      <Badge variant="info" className="shrink-0">Divisi Bus</Badge>
+                                    </div>
+                                    <dl className="text-sm text-slate-700 space-y-1">
+                                      <div><span className="font-medium">Kedatangan:</span> {arrivalLabel}</div>
+                                      <div><span className="font-medium">Kepulangan:</span> {returnLabel}</div>
+                                    </dl>
+                                    <p className="text-xs text-slate-500">Diupdate oleh divisi Bus (menu Progress → Bus).</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
                           const itemWithJamaah = group.items.find((i: any) => i.jamaah_data_type && i.jamaah_data_value) || first;
                           const itemWithManifest = (group.type === 'ticket' || group.type === 'visa') ? group.items.find((i: any) => i.manifest_file_url) || first : first;
                           const isVisa = group.type === 'visa';

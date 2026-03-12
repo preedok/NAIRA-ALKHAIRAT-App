@@ -42,6 +42,9 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Serve uploads under /api/v1/uploads so Nginx proxy to backend serves files (avoid 404 on /uploads)
+app.use('/api/v1/uploads', express.static(UPLOAD_ROOT));
+
 app.use('/api/v1', require('./routes/v1'));
 
 app.use((req, res) => {

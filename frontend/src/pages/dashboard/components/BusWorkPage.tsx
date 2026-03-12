@@ -742,7 +742,7 @@ const BusWorkPage: React.FC = () => {
                   const arrivalTerbit = arrivalStatus === 'terbit';
                   const returnTerbit = returnStatus === 'terbit';
                   const o = detailInvoice?.Order as any;
-                  const uploadBase = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
+                  const uploadsBase = (API_BASE_URL.startsWith('http') ? API_BASE_URL : (typeof window !== 'undefined' ? window.location.origin : '') + API_BASE_URL).replace(/\/?$/, '') + '/uploads/';
                   const arrivalFileUrl = o?.bus_include_arrival_ticket_file_url;
                   const returnFileUrl = o?.bus_include_return_ticket_file_url;
                   return (
@@ -781,7 +781,7 @@ const BusWorkPage: React.FC = () => {
                               <label className="block text-sm font-medium text-slate-700 mb-1">Upload file tiket kedatangan</label>
                               <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-[#0D1A63] file:text-white file:text-sm" disabled={updatingId === ORDER_BUS_INCLUDE_KEY || uploadingTicketFile !== null} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadBusIncludeTicketFile(f, 'arrival'); e.target.value = ''; }} />
                               {uploadingTicketFile === 'arrival' && <p className="text-xs text-amber-600 mt-1">Mengupload...</p>}
-                              {arrivalFileUrl && <p className="text-xs text-slate-600 mt-2">File: <a href={arrivalFileUrl.startsWith('http') ? arrivalFileUrl : `${uploadBase}${arrivalFileUrl}`} target="_blank" rel="noopener noreferrer" className="text-[#0D1A63] underline">Unduh file tiket kedatangan</a></p>}
+                              {arrivalFileUrl && <p className="text-xs text-slate-600 mt-2">File: <a href={arrivalFileUrl.startsWith('http') ? arrivalFileUrl : `${uploadsBase}${arrivalFileUrl.replace(/^\/uploads/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#0D1A63] underline">Unduh file tiket kedatangan</a></p>}
                             </div>
                           </>
                         )}
@@ -806,7 +806,7 @@ const BusWorkPage: React.FC = () => {
                               <label className="block text-sm font-medium text-slate-700 mb-1">Upload file tiket kepulangan</label>
                               <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-[#0D1A63] file:text-white file:text-sm" disabled={updatingId === ORDER_BUS_INCLUDE_KEY || uploadingTicketFile !== null} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadBusIncludeTicketFile(f, 'return'); e.target.value = ''; }} />
                               {uploadingTicketFile === 'return' && <p className="text-xs text-amber-600 mt-1">Mengupload...</p>}
-                              {returnFileUrl && <p className="text-xs text-slate-600 mt-2">File: <a href={returnFileUrl.startsWith('http') ? returnFileUrl : `${uploadBase}${returnFileUrl}`} target="_blank" rel="noopener noreferrer" className="text-[#0D1A63] underline">Unduh file tiket kepulangan</a></p>}
+                              {returnFileUrl && <p className="text-xs text-slate-600 mt-2">File: <a href={returnFileUrl.startsWith('http') ? returnFileUrl : `${uploadsBase}${returnFileUrl.replace(/^\/uploads/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[#0D1A63] underline">Unduh file tiket kepulangan</a></p>}
                             </div>
                           </>
                         )}
