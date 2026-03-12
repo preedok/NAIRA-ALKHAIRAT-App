@@ -699,7 +699,9 @@ const getRegistrationPaymentFile = asyncHandler(async (req, res) => {
  * type=generated (default) -> mou_generated_url, type=signed -> mou_signed_url.
  */
 const getMouFile = asyncHandler(async (req, res) => {
-  const ownerId = req.params.id === 'me' ? req.user.id : req.params.id;
+  const isMe = req.params.id === 'me' || req.params.id == null;
+  const ownerId = isMe ? (req.user && req.user.id) : req.params.id;
+  if (!ownerId) return res.status(401).json({ success: false, message: 'Unauthorized' });
   const type = (req.query.type || 'generated').toLowerCase() === 'signed' ? 'signed' : 'generated';
   const profile = await OwnerProfile.findOne({
     where: { user_id: ownerId },
@@ -709,9 +711,9 @@ const getMouFile = asyncHandler(async (req, res) => {
   if (!profile || !urlPath) {
     return res.status(404).json({ success: false, message: 'File MOU tidak ditemukan' });
   }
-  const canAccess = req.params.id === 'me'
-    ? req.user.id === ownerId
-    : req.user.id === ownerId || [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR].includes(req.user.role);
+  const canAccess = isMe
+    ? req.user && req.user.id === ownerId
+    : req.user && (req.user.id === ownerId || [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR].includes(req.user.role));
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
 
   const filePath = resolveMouPath(urlPath);

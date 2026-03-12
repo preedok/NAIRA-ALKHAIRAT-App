@@ -26,6 +26,7 @@ import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveIn
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import type { TableColumn } from '../../../types';
 import { ORDER_STATUS_LABELS, INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 
 /** Modal daftar order dengan filter lengkap */
 const OrderListModal: React.FC<{
@@ -294,7 +295,7 @@ const InvoiceListModalAdmin: React.FC<{
                 </td>
                 <td className="px-4 py-3 align-top">{<NominalDisplay amount={parseFloat(inv.total_amount || 0)} currency="IDR" />}</td>
                 <td className="px-4 py-3 text-emerald-600 align-top">{<NominalDisplay amount={parseFloat(inv.paid_amount || 0)} currency="IDR" />}</td>
-                <td className="px-4 py-3 align-top">{<NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" />}</td>
+                <td className="px-4 py-3 align-top">{<NominalDisplay amount={getDisplayRemaining(inv)} currency="IDR" />}</td>
                 <td className="px-4 py-3 align-top"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge></td>
               </tr>
             )}

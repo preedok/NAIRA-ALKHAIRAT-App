@@ -10,7 +10,8 @@ import {
   Bell,
   FileText,
   Eye,
-  Sparkles
+  Sparkles,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Card from '../../../components/common/Card';
@@ -24,6 +25,7 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { NominalDisplay } from '../../../components/common';
 import { INVOICE_STATUS_LABELS as INVOICE_STATUS_LABELS_GLOBAL } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
@@ -35,22 +37,28 @@ const OwnerDashboard: React.FC = () => {
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ownerProfile, setOwnerProfile] = useState<{ mou_generated_url?: string } | null>(null);
+  const [balanceData, setBalanceData] = useState<{ balance: number; transactions: Array<{ id: string; amount: number; type: string; notes?: string; created_at: string }> } | null>(null);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryRes, listRes, meRes] = await Promise.all([
+      const [summaryRes, listRes, meRes, balanceRes] = await Promise.all([
         invoicesApi.getSummary({}),
         invoicesApi.list({ limit: 10, sort_by: 'created_at', sort_order: 'desc' }),
-        ownersApi.getMe().catch(() => ({ data: { success: false, data: undefined } }))
+        ownersApi.getMe().catch(() => ({ data: { success: false, data: undefined } })),
+        ownersApi.getMyBalance().catch(() => ({ data: { success: false, data: undefined } }))
       ]);
       if (summaryRes.data.success && summaryRes.data.data) setSummary(summaryRes.data.data);
       if (listRes.data.success && Array.isArray(listRes.data.data)) setRecentInvoices(listRes.data.data);
       const meData = (meRes.data as { success?: boolean; data?: { mou_generated_url?: string } } | undefined)?.data;
       if (meData) setOwnerProfile(meData);
+      const bal = (balanceRes.data as { success?: boolean; data?: { balance: number; transactions: any[] } } | undefined)?.data;
+      if (bal) setBalanceData({ balance: bal.balance ?? 0, transactions: bal.transactions ?? [] });
+      else setBalanceData(null);
     } catch {
       setSummary(null);
       setRecentInvoices([]);
+      setBalanceData(null);
     } finally {
       setLoading(false);
     }
@@ -98,7 +106,8 @@ const OwnerDashboard: React.FC = () => {
 
   const hasSpecialPrice = user?.has_special_price || false;
 
-  const pendingPayments = recentInvoices.filter((inv) => parseFloat(inv.remaining_amount || 0) > 0);
+  const isLunas = (inv: any) => (inv.status || '').toLowerCase() === 'paid' || parseFloat(inv.remaining_amount || 0) <= 0;
+  const pendingPayments = recentInvoices.filter((inv) => !isLunas(inv));
   const INVOICE_STATUS_LABELS: Record<string, string> = {
     tentative: 'Tagihan DP',
     partial_paid: 'Pembayaran DP',
@@ -197,6 +206,48 @@ const OwnerDashboard: React.FC = () => {
           />
         ))}
       </div>
+
+      {/* Saldo Akun */}
+      <Card className="travel-card border-emerald-200 bg-emerald-50/50">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+              <Wallet className="w-6 h-6 text-emerald-700" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-stone-900">Saldo Akun</h3>
+              <p className="text-sm text-stone-600 mt-0.5">Dana dari pembatalan order. Bisa dialokasikan ke tagihan invoice atau dipakai untuk pesanan.</p>
+              {loading ? (
+                <p className="text-stone-500 mt-2">Memuat...</p>
+              ) : (
+                <p className="text-2xl font-bold text-emerald-700 mt-2"><NominalDisplay amount={balanceData?.balance ?? 0} currency="IDR" /></p>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')} className="gap-1">
+              <Receipt className="w-4 h-4" />
+              Alokasi ke Invoice
+            </Button>
+          </div>
+        </div>
+        {balanceData && balanceData.transactions.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-emerald-200/80">
+            <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Riwayat terakhir</p>
+            <ul className="space-y-2 max-h-32 overflow-y-auto">
+              {balanceData.transactions.slice(0, 5).map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-2 text-sm py-1">
+                  <span className="text-stone-600 truncate flex-1 min-w-0">{t.notes || (Number(t.amount) >= 0 ? 'Kredit' : 'Debit')}</span>
+                  <span className={`shrink-0 font-medium ${Number(t.amount) >= 0 ? 'text-emerald-600' : 'text-stone-700'}`}>
+                    {Number(t.amount) >= 0 ? '+' : ''}<NominalDisplay amount={Math.abs(Number(t.amount))} currency="IDR" />
+                  </span>
+                  <span className="text-stone-400 text-xs shrink-0">{formatDate(t.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
 
       {/* Quick Actions - full width */}
       <Card className="travel-card">
@@ -336,7 +387,7 @@ const OwnerDashboard: React.FC = () => {
                       )}
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-600">Sisa</span>
-                        <span className="font-bold text-red-600"><NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" /></span>
+                        <span className="font-bold text-red-600"><NominalDisplay amount={getDisplayRemaining(inv)} currency="IDR" /></span>
                       </div>
                     </div>
                     {due && (
@@ -345,9 +396,11 @@ const OwnerDashboard: React.FC = () => {
                         {urgent && daysLeft !== null && <Badge variant="error" size="sm">{daysLeft} hari</Badge>}
                       </div>
                     )}
-                    <Button variant="primary" size="sm" className="w-full mt-3" onClick={() => navigate('/dashboard/orders-invoices')}>
-                      Upload Bukti Bayar
-                    </Button>
+                    {!isLunas(inv) && (
+                      <Button variant="primary" size="sm" className="w-full mt-3" onClick={() => navigate('/dashboard/orders-invoices')}>
+                        Upload Bukti Bayar
+                      </Button>
+                    )}
                   </div>
                 );
               })

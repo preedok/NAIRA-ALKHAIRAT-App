@@ -37,6 +37,7 @@ import {
 import { InvoiceStatusRefundCell } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -616,7 +617,7 @@ const ReportsPage: React.FC = () => {
                     <td className="py-3 px-4 text-right align-top">
                       <InvoiceStatusRefundCell inv={inv} currencyRates={currencyRates} align="right" />
                     </td>
-                    <td className="py-3 px-4 text-right text-slate-700">{<NominalDisplay amount={parseFloat(inv.remaining_amount) || 0} currency="IDR" />}</td>
+                    <td className="py-3 px-4 text-right text-slate-700">{<NominalDisplay amount={getDisplayRemaining(inv)} currency="IDR" />}</td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700">{inv.issued_at || inv.created_at ? new Date(inv.issued_at || inv.created_at).toLocaleDateString('id-ID') : '–'}</td>
                   </tr>
                 )}

@@ -21,6 +21,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
 import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem, type BankItem } from '../../../services/api';
 
 /** Konfigurasi icon untuk card Per Status Invoice (StatCard pakai satu warna) */
@@ -1412,7 +1413,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           const totalInv = zeroOut ? 0 : parseFloat(inv.total_amount || 0);
                           const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                           const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                          const remaining = zeroOut ? 0 : Math.max(0, totalInv - paid);
+                          const remaining = getDisplayRemaining(inv);
                           const totalTriple = invoiceTotalTriple(inv);
                           return (
                             <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
@@ -1465,7 +1466,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           const totalInv = zeroOut ? 0 : parseFloat(inv.total_amount || 0);
                           const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                           const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                          const remaining = zeroOut ? 0 : Math.max(0, totalInv - paid);
+                          const remaining = getDisplayRemaining(inv);
                           const totalTriple = invoiceTotalTriple(inv);
                           return (
                             <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
@@ -1613,14 +1614,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right text-red-600 font-medium align-top">
                       {(() => {
-                        if (isCancelledNoPayment(inv)) {
-                          const t = amountTriple(0);
-                          return <><div><NominalDisplay amount={0} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
-                        }
-                        const totalInv = parseFloat(inv.total_amount || 0);
-                        const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
-                        const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                        const remaining = Math.max(0, totalInv - paid);
+                        const remaining = getDisplayRemaining(inv);
                         const t = amountTriple(remaining);
                         return <><div><NominalDisplay amount={remaining} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
                       })()}

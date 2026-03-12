@@ -9,6 +9,7 @@ import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, type InvoiceForStatusRefund } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
@@ -909,8 +910,11 @@ const AccountingFinancialReportPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right align-top">
-                      <div><NominalDisplay amount={Number(inv.remaining_amount) || 0} currency="IDR" /></div>
-                      {(() => { const t = amountTriple(Number(inv.remaining_amount) || 0); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
+                      {(() => {
+                        const rem = getDisplayRemaining(inv);
+                        const t = amountTriple(rem);
+                        return <><div><NominalDisplay amount={rem} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
+                      })()}
                     </td>
                     <td className="py-3 px-4 align-top">{formatDate(inv.issued_at ?? null)}</td>
                     <td className="py-3 px-4 align-top">

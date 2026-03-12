@@ -19,6 +19,7 @@ import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveIn
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel } from '../../../components/common/PaymentProofCell';
 import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { useToast } from '../../../contexts/ToastContext';
 
 const API_BASE = process.env.REACT_APP_API_URL?.replace(/\/api\/v1\/?$/, '') || '';
@@ -511,7 +512,7 @@ const AccountingAgingPage: React.FC = () => {
                             <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
                             <td className="py-2 px-4 text-sm">{row.User?.name ?? row.User?.company_name ?? '–'}</td>
                             <td className="py-2 px-4 text-sm"><NominalDisplay amount={parseFloat(row.total_amount || 0)} currency="IDR" /></td>
-                            <td className="py-2 px-4 text-sm"><NominalDisplay amount={parseFloat(row.remaining_amount || 0)} currency="IDR" /></td>
+                            <td className="py-2 px-4 text-sm"><NominalDisplay amount={getDisplayRemaining(row)} currency="IDR" /></td>
                             <td className="py-2 px-4"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(row)}>{getEffectiveInvoiceStatusLabel(row)}</Badge></td>
                           </tr>
                         )}
@@ -560,7 +561,7 @@ const AccountingAgingPage: React.FC = () => {
                   <td className="py-3 px-4 text-right align-top">
                     <InvoiceStatusRefundCell inv={inv} align="right" />
                   </td>
-                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top"><NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" /></td>
+                  <td className="py-3 px-4 text-right text-red-600 font-medium align-top"><NominalDisplay amount={getDisplayRemaining(inv)} currency="IDR" /></td>
                   <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>
                   <td className="py-3 px-4 text-center align-top">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
                   <td className="py-3 px-4 align-top">
@@ -662,7 +663,7 @@ const AccountingAgingPage: React.FC = () => {
                         <div className="flex justify-between"><dt className="text-slate-600">Total</dt><dd className="font-semibold"><NominalDisplay amount={parseFloat(viewInvoice.total_amount || 0)} currency="IDR" /></dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">DP ({viewInvoice.dp_percentage || 0}%)</dt><dd className="font-semibold"><NominalDisplay amount={parseFloat(viewInvoice.dp_amount || 0)} currency="IDR" /></dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Dibayar</dt><dd className="font-semibold text-emerald-600"><NominalDisplay amount={parseFloat(viewInvoice.paid_amount || 0)} currency="IDR" /></dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Sisa</dt><dd className="font-semibold text-red-600"><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">Sisa</dt><dd className="font-semibold text-red-600"><NominalDisplay amount={getDisplayRemaining(viewInvoice)} currency="IDR" /></dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Tgl Invoice</dt><dd>{formatDate(viewInvoice.issued_at || viewInvoice.created_at)}</dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Jatuh Tempo DP</dt><dd>{formatDate(viewInvoice.due_date_dp)}</dd></div>
                       </dl>

@@ -10,6 +10,7 @@ import Table from '../../../components/common/Table';
 import { accountingApi, branchesApi, invoicesApi, type AccountingDashboardData, type ProvinceItem } from '../../../services/api';
 import { NominalDisplay } from '../../../components/common';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import type { TableColumn } from '../../../types';
@@ -177,7 +178,7 @@ const InvoiceListModal: React.FC<{
                   </td>
                   <td className="px-4 py-3 text-right align-top"><NominalDisplay amount={parseFloat((inv.total_amount_idr ?? inv.total_amount) || 0)} currency="IDR" /></td>
                   <td className="px-4 py-3 text-right text-blue-600 align-top"><NominalDisplay amount={parseFloat(inv.paid_amount || 0)} currency="IDR" /></td>
-                  <td className="px-4 py-3 text-right align-top"><NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" /></td>
+                  <td className="px-4 py-3 text-right align-top"><NominalDisplay amount={getDisplayRemaining(inv)} currency="IDR" /></td>
                   <td className="px-4 py-3 align-top"><Badge variant={statusBadgeVariant}>{statusLabel}</Badge></td>
                 </tr>
               );
@@ -483,7 +484,7 @@ const AccountingDashboard: React.FC = () => {
                     <td className="py-3 pr-4">{inv.Branch?.name ?? '-'}</td>
                     <td className="py-3 pr-4"><NominalDisplay amount={parseFloat(inv.total_amount || 0)} currency="IDR" /></td>
                     <td className="py-3 pr-4 text-blue-600"><NominalDisplay amount={parseFloat(inv.paid_amount || 0)} currency="IDR" /></td>
-                    <td className="py-3 pr-4"><NominalDisplay amount={parseFloat(inv.remaining_amount || 0)} currency="IDR" /></td>
+                    <td className="py-3 pr-4"><NominalDisplay amount={getDisplayRemaining(inv)} currency="IDR" /></td>
                     <td className="py-3"><Badge variant={getEffectiveInvoiceStatusBadgeVariant(inv)}>{getEffectiveInvoiceStatusLabel(inv)}</Badge></td>
                   </tr>
                 )}

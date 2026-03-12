@@ -194,7 +194,7 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
               <div className="text-xs text-slate-500">
                 <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
-              <div className="text-xs text-violet-600 mt-0.5">Dana masuk ke saldo akun owner</div>
+              <div className="text-xs text-violet-600 mt-0.5">Dana masuk ke saldo akun owner. Sisa tagihan: Rp 0.</div>
             </>
           );
         })()
@@ -208,7 +208,7 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
               <div className="text-xs text-slate-500">
                 <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
-              <div className="text-xs text-amber-600 mt-0.5">Dana dipindahkan ke invoice lain</div>
+              <div className="text-xs text-amber-600 mt-0.5">Dana dipindahkan ke invoice lain. Sisa tagihan: Rp 0.</div>
             </>
           );
         })()
@@ -233,6 +233,7 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
       ) : (
         (() => {
           const t = amountTriple(paid);
+          const isLunas = totalInv > 0 && paid >= totalInv;
           return (
             <>
               <div className="text-[#0D1A63] font-medium"><NominalDisplay amount={paid} currency="IDR" /></div>
@@ -240,6 +241,7 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
                 <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
               {pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}
+              {isLunas && <div className="text-xs text-emerald-600 mt-0.5">Lunas. Sisa tagihan: Rp 0.</div>}
             </>
           );
         })()

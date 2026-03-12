@@ -12,7 +12,7 @@ import { PaymentProofCell } from './PaymentProofCell';
 import InvoiceProgressStatusCell, { type ProgressSectionKey } from './InvoiceProgressStatusCell';
 import NominalDisplay from './NominalDisplay';
 import { INVOICE_STATUS_LABELS } from '../../utils/constants';
-import { invoiceTotalTriple, amountTriple, isCancelledNoPayment } from '../../utils/invoiceTableHelpers';
+import { invoiceTotalTriple, amountTriple, isCancelledNoPayment, getDisplayRemaining } from '../../utils/invoiceTableHelpers';
 
 const isDraftRow = (inv: any) => {
   const st = (inv?.status || '').toLowerCase();
@@ -48,18 +48,7 @@ export function ProgressInvoiceTableRow({
   const statusLabel = getStatusLabel(inv);
   const statusBadgeVariant = getStatusBadgeVariant(inv);
 
-  let remaining = 0;
-  if (!isCancelledNoPayment(inv)) {
-    const totalInv = parseFloat(inv?.total_amount || 0);
-    const paidFromProofs = (inv?.PaymentProofs || []).filter(
-      (p: any) =>
-        p.payment_location === 'saudi' ||
-        p.verified_status === 'verified' ||
-        (p.verified_at && p.verified_status !== 'rejected')
-    ).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
-    const paid = parseFloat(inv?.paid_amount || 0) || paidFromProofs;
-    remaining = Math.max(0, totalInv - paid);
-  }
+  const remaining = getDisplayRemaining(inv);
   const remainingTriple = amountTriple(remaining, sarToIdr, usdToIdr);
 
   return (

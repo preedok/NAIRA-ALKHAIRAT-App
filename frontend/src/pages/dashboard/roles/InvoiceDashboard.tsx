@@ -29,6 +29,7 @@ import { PaymentProofCell } from '../../../components/common/PaymentProofCell';
 import { NominalDisplay } from '../../../components/common';
 import type { TableColumn } from '../../../types';
 import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../utils/constants';
+import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { invoicesApi, businessRulesApi } from '../../../services/api';
 import type { InvoicesSummaryData } from '../../../services/api';
 
@@ -262,7 +263,7 @@ const InvoiceDashboard: React.FC = () => {
                       const totalInv = parseFloat(inv.total_amount || 0);
                       const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
                       const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-                      const remaining = Math.max(0, totalInv - paid);
+                      const remaining = getDisplayRemaining(inv);
                       const tRem = amountTriple(remaining);
                       const totalTriple = invoiceTotalTriple(inv);
                       return (
@@ -331,7 +332,7 @@ const InvoiceDashboard: React.FC = () => {
             const totalInv = parseFloat(inv.total_amount || 0);
             const paidFromProofs = (inv.PaymentProofs || []).filter((p: any) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at && p.verified_status !== 'rejected')).reduce((s: number, p: any) => s + (parseFloat(p.amount) || 0), 0);
             const paid = parseFloat(inv.paid_amount || 0) || paidFromProofs;
-            const remaining = Math.max(0, totalInv - paid);
+            const remaining = getDisplayRemaining(inv);
             const t = amountTriple(remaining);
             const totalTriple = invoiceTotalTriple(inv);
             const labelsVisa: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
