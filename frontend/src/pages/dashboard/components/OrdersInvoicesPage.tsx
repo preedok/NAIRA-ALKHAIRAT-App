@@ -2503,7 +2503,8 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const raw = viewInvoice?.Order?.OrderItems || [];
                                       const hasVisa = raw.some((i: any) => (i.type || i.product_type) === 'visa');
                                       const hasBusItems = raw.some((i: any) => (i.type || i.product_type) === 'bus');
-                                      if (!hasVisa || hasBusItems) return null;
+                                      const hasBusInclude = (hasVisa || (Number(order?.penalty_amount) > 0) || !!order?.waive_bus_penalty) && !hasBusItems;
+                                      if (!hasBusInclude) return null;
                                       const penalty = Number(order?.penalty_amount) || 0;
                                       const waive = !!order?.waive_bus_penalty;
                                       const desc = waive ? 'Tanpa penalti (Hiace)' : (penalty > 0 ? `Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt (visa < 35 pack)` : 'Termasuk dengan visa');

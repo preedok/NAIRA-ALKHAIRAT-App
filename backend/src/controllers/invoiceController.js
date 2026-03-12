@@ -1028,8 +1028,10 @@ const getById = asyncHandler(async (req, res) => {
   }
   if (req.user.role === 'role_bus') {
     const order = invoice.Order || await Order.findByPk(invoice.order_id, { include: [{ model: OrderItem, as: 'OrderItems', attributes: ['type'] }] });
-    const hasBus = (order?.OrderItems || []).some((it) => it.type === 'bus');
-    if (!hasBus) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item bus' });
+    const orderItems = order?.OrderItems || [];
+    const hasBus = orderItems.some((it) => it.type === 'bus');
+    const hasVisa = orderItems.some((it) => it.type === 'visa');
+    if (!hasBus && !hasVisa) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item bus atau visa (bus include)' });
   }
   await ensureBlockedStatus(invoice);
   // Sinkronkan paid_amount dari jumlah semua bukti terverifikasi (KES otomatis terverifikasi + transfer yang dikonfirmasi)

@@ -414,6 +414,22 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         subtotal: totalSub
       });
     });
+    // Baris sintetis: Bus include (dengan visa) bila order punya visa dan tidak ada item bus
+    const hasVisa = items.some((it) => (it.type || '').toLowerCase() === 'visa');
+    const hasBusItems = items.some((it) => (it.type || '').toLowerCase() === 'bus');
+    if (hasVisa && !hasBusItems && data.Order) {
+      const penalty = parseFloat(String(data.Order.penalty_amount || 0)) || 0;
+      const waive = !!(data.Order.waive_bus_penalty);
+      const desc = waive ? 'Tanpa penalti (Hiace)' : (penalty > 0 ? `Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt (visa < 35 pack)` : 'Termasuk dengan visa');
+      result.push({
+        _busInclude: true,
+        type: 'bus',
+        penalty_amount: penalty,
+        waive_bus_penalty: waive,
+        _busIncludeDesc: desc,
+        subtotal: penalty > 0 && !waive ? penalty : 0
+      });
+    }
     return result;
   })();
 
@@ -441,6 +457,35 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.fillColor('#334155').font('Helvetica');
   if (displayItems.length > 0) {
     displayItems.forEach((item, i) => {
+      if (item._busInclude) {
+        const rowH = dataRowHMin;
+        y = checkNewPage(doc, y, margin, rowH + 6);
+        doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
+        doc.fillColor('#334155').fontSize(9);
+        doc.text(String(i + 1), x(0), y + 6, { width: w(0) });
+        doc.text('Bus', x(1), y + 6, { width: w(1) });
+        doc.text('Bus include (dengan visa)', x(2), y + 4, { width: w(2) });
+        if (item._busIncludeDesc) {
+          doc.fontSize(7).fillColor('#64748b');
+          doc.text(item._busIncludeDesc, x(2), y + 18, { width: w(2) });
+        }
+        doc.fontSize(9).fillColor('#334155');
+        doc.text('–', x(3), y + 6, { width: w(3) });
+        doc.text('–', x(4), y + 6, { width: w(4) });
+        doc.text('–', x(5), y + 6, { width: w(5) });
+        const subVal = item.subtotal > 0 ? item.subtotal : 0;
+        if (subVal > 0) {
+          doc.text(formatIDR(subVal), x(6), y + 4, { width: w(6) });
+          const subSarUsd = idrToSarUsd(subVal, rates);
+          doc.fontSize(7).fillColor('#64748b');
+          doc.text(`${formatSAR(subSarUsd.sar)}  |  ${formatUSD(subSarUsd.usd)}`, x(6), y + 14, { width: w(6) });
+        } else {
+          doc.text('–', x(6), y + 6, { width: w(6) });
+        }
+        doc.fontSize(9).fillColor('#334155');
+        y += rowH;
+        return;
+      }
       const itemType = (item.type || '').toLowerCase();
       const isMerged = !!item._merged;
       const desc = (item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`).toString();

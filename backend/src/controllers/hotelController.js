@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice, HotelProgress, Invoice, Refund, PaymentReallocation, PaymentProof, Bank, AccountingBankAccount, OwnerProfile } = require('../models');
+const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice, VisaProgress, TicketProgress, HotelProgress, BusProgress, Invoice, Refund, PaymentReallocation, PaymentProof, Bank, AccountingBankAccount, OwnerProfile } = require('../models');
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
@@ -123,7 +123,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'owner_id', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'currency_rates_override'],
+        attributes: ['id', 'owner_id', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'currency_rates_override', 'penalty_amount', 'waive_bus_penalty', 'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time', 'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'],
         include: [
           {
             model: OrderItem,
@@ -143,6 +143,31 @@ const listInvoices = asyncHandler(async (req, res) => {
     offset
   });
 
+  const orderIdsFromInvoices = [...new Set((invoices || []).map((i) => i.order_id).filter(Boolean))];
+  let orderItemsByOrderId = {};
+  if (orderIdsFromInvoices.length > 0) {
+    const allItemTypes = [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE];
+    const fullItems = await OrderItem.findAll({
+      where: { order_id: orderIdsFromInvoices, type: { [Op.in]: allItemTypes } },
+      include: [
+        { model: VisaProgress, as: 'VisaProgress', required: false },
+        { model: TicketProgress, as: 'TicketProgress', required: false },
+        { model: HotelProgress, as: 'HotelProgress', required: false },
+        { model: BusProgress, as: 'BusProgress', required: false },
+        { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type', 'meta'], required: false }
+      ],
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta']
+    });
+    fullItems.forEach((it) => {
+      const oid = it.order_id;
+      if (!orderItemsByOrderId[oid]) orderItemsByOrderId[oid] = [];
+      const plain = it.get ? it.get({ plain: true }) : it;
+      plain.product_name = (plain.Product && plain.Product.name) ? plain.Product.name : null;
+      plain.product_type = plain.type || (plain.Product && plain.Product.type) || null;
+      orderItemsByOrderId[oid].push(plain);
+    });
+  }
+
   // Attach hotel_location ke tiap item hotel (dari Product.meta.location atau infer dari nama) agar filter tab Mekkah/Madinah jalan
   const inferLocationFromName = (name) => {
     if (!name || typeof name !== 'string') return '';
@@ -153,7 +178,9 @@ const listInvoices = asyncHandler(async (req, res) => {
   };
   let data = invoices.map((inv) => {
     const plain = inv.get ? inv.get({ plain: true }) : inv;
-    (plain.Order?.OrderItems || []).forEach((oi) => {
+    const fullItems = orderItemsByOrderId[plain.order_id] || [];
+    if (plain.Order) plain.Order.OrderItems = fullItems;
+    (fullItems || []).filter((oi) => (oi.type || '').toLowerCase() === 'hotel').forEach((oi) => {
       let loc = (oi.Product?.meta && oi.Product.meta.location != null) ? String(oi.Product.meta.location).trim() : '';
       if (!loc) loc = inferLocationFromName(oi.Product?.name);
       oi.hotel_location = loc ? loc.toLowerCase() : '';

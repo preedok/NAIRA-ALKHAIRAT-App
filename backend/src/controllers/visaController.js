@@ -15,6 +15,9 @@ const {
   Invoice,
   Refund,
   VisaProgress,
+  TicketProgress,
+  HotelProgress,
+  BusProgress,
   Notification,
   PaymentReallocation,
   PaymentProof,
@@ -194,7 +197,7 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'currency_rates_override'],
+        attributes: ['id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'currency_rates_override', 'penalty_amount', 'waive_bus_penalty', 'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time', 'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'],
         include: [
           { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {
@@ -215,6 +218,34 @@ const listInvoices = asyncHandler(async (req, res) => {
     offset,
     distinct: true
   });
+
+  const orderIdsFromInvoices = [...new Set((invoices || []).map((i) => i.order_id).filter(Boolean))];
+  let orderItemsByOrderId = {};
+  if (orderIdsFromInvoices.length > 0) {
+    const allItemTypes = [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE];
+    const fullItems = await OrderItem.findAll({
+      where: { order_id: orderIdsFromInvoices, type: { [Op.in]: allItemTypes } },
+      include: [
+        { model: VisaProgress, as: 'VisaProgress', required: false },
+        { model: TicketProgress, as: 'TicketProgress', required: false },
+        { model: HotelProgress, as: 'HotelProgress', required: false },
+        { model: BusProgress, as: 'BusProgress', required: false },
+        { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type', 'meta'], required: false }
+      ],
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta']
+    });
+    fullItems.forEach((it) => {
+      const oid = it.order_id;
+      if (!orderItemsByOrderId[oid]) orderItemsByOrderId[oid] = [];
+      const plain = it.get ? it.get({ plain: true }) : it;
+      plain.product_name = (plain.Product && plain.Product.name) ? plain.Product.name : null;
+      plain.product_type = plain.type || (plain.Product && plain.Product.type) || null;
+      orderItemsByOrderId[oid].push(plain);
+    });
+  }
+  for (const inv of invoices || []) {
+    if (inv.Order) inv.Order.setDataValue('OrderItems', orderItemsByOrderId[inv.order_id] || []);
+  }
 
   const invoiceIds = (invoices || []).map((i) => i.id).filter(Boolean);
   if (invoiceIds.length > 0) {
