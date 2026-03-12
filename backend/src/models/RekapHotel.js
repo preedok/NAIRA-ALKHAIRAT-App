@@ -33,8 +33,8 @@ const RekapHotel = sequelize.define('RekapHotel', {
   },
   // --- order_list / ledger (HOTEL MEKKAH/MADINAH spreadsheet) ---
   // TNTV, DFNT, CLIENT, HOTEL MEKKAH/MADINAH, IN, OUT, TOTAL HARI, D/T/Q/Qn/Hx, Room, Pax, Meal Plan, Status, Voucher, Keterangan, Invoice Clerk
-  tentative: { type: DataTypes.STRING(60), allowNull: true, comment: 'TNTV' },
-  definite: { type: DataTypes.STRING(60), allowNull: true, comment: 'DFNT' },
+  tentative: { type: DataTypes.STRING(200), allowNull: true, comment: 'TNTV' },
+  definite: { type: DataTypes.STRING(200), allowNull: true, comment: 'DFNT' },
   client: { type: DataTypes.STRING(200), allowNull: true },
   paket: { type: DataTypes.STRING(120), allowNull: true },
   hotel_makkah: { type: DataTypes.STRING(200), allowNull: true, comment: 'HOTEL MEKKAH' },

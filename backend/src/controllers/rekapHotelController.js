@@ -4,18 +4,41 @@ const { RekapHotel } = require('../models');
 
 /**
  * GET /api/v1/rekap-hotel
- * List dengan filter: source_type, period_name, season_year, client, location, status, paket_type, bandara.
+ * List dengan filter: period_name, time_range (semua|hari_ini|2_hari|...|sebulan), search.
  */
+function getTimeRangeDates(timeRange) {
+  if (!timeRange || timeRange === 'semua') return null;
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const toYMD = (d) => d.toISOString().slice(0, 10);
+  const start = toYMD(today);
+  let endDate = new Date(today);
+  const days = {
+    hari_ini: 0,
+    '2_hari': 2,
+    '3_hari': 3,
+    '4_hari': 4,
+    '5_hari': 5,
+    '6_hari': 6,
+    '7_hari': 7,
+    seminggu: 7,
+    dua_minggu: 14,
+    tiga_minggu: 21,
+    sebulan: 30
+  };
+  const add = days[timeRange];
+  if (add == null) return null;
+  endDate.setUTCDate(endDate.getUTCDate() + add);
+  return { start, end: toYMD(endDate) };
+}
+
 const list = asyncHandler(async (req, res) => {
   const {
     page = 1,
     limit = 50,
-    source_type,
     period_name,
-    season_year,
-    client,
-    location,
-    status,
+    year_month,
+    time_range,
     paket_type,
     bandara,
     search,
@@ -28,14 +51,28 @@ const list = asyncHandler(async (req, res) => {
   const offset = (pg - 1) * lim;
 
   const where = {};
-  if (source_type && source_type.trim()) where.source_type = source_type.trim();
   if (period_name && period_name.trim()) where.period_name = { [Op.iLike]: `%${period_name.trim()}%` };
-  if (season_year && season_year.trim()) where.season_year = season_year.trim();
-  if (location && location.trim()) where.location = { [Op.iLike]: location.trim() };
-  if (status && status.trim()) where.status = { [Op.iLike]: status.trim() };
   if (paket_type && paket_type.trim()) where.paket_type = { [Op.iLike]: `%${paket_type.trim()}%` };
   if (bandara && bandara.trim()) where.bandara = { [Op.iLike]: bandara.trim() };
-  if (client && client.trim()) where.client = { [Op.iLike]: `%${client.trim()}%` };
+
+  let monthStart = null;
+  let monthEnd = null;
+  if (year_month && /^\d{4}-\d{2}$/.test(String(year_month).trim())) {
+    const [y, m] = String(year_month).trim().split('-');
+    monthStart = `${y}-${m}-01`;
+    const lastDay = new Date(parseInt(y, 10), parseInt(m, 10), 0);
+    monthEnd = `${y}-${m}-${String(lastDay.getDate()).padStart(2, '0')}`;
+  }
+
+  const range = getTimeRangeDates(time_range);
+  const rangeStart = range ? range.start : null;
+  const rangeEnd = range ? range.end : null;
+
+  const start = monthStart && rangeStart ? (monthStart > rangeStart ? monthStart : rangeStart) : (monthStart || rangeStart);
+  const end = monthEnd && rangeEnd ? (monthEnd < rangeEnd ? monthEnd : rangeEnd) : (monthEnd || rangeEnd);
+  if (start && end) {
+    where.check_in = { [Op.and]: [{ [Op.gte]: start }, { [Op.lte]: end }] };
+  }
 
   if (search && search.trim()) {
     const s = `%${search.trim()}%`;

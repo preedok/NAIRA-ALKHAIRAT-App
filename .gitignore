@@ -6,6 +6,7 @@ logs/
 .DS_Store
 uploads/
 temp/
+backend/data/
 coverage/
 dist/
 build/

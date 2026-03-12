@@ -22,38 +22,42 @@ import type { TableColumn } from '../../../types';
 import { rekapHotelApi, type RekapHotelRecord } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 
-const SOURCE_TYPES = [
-  { value: 'order_list', label: 'Order List (MADINAH/MAKKAH/HAJI)' },
-  { value: 'allotment', label: 'Allotment (1447)' },
-  { value: 'period_list', label: 'Period List (RAMADHAN)' }
+const TIME_RANGE_OPTIONS = [
+  { value: '', label: 'Semua' },
+  { value: 'hari_ini', label: 'Hari ini' },
+  { value: '2_hari', label: '2 hari lagi' },
+  { value: '3_hari', label: '3 hari' },
+  { value: '4_hari', label: '4 hari' },
+  { value: '5_hari', label: '5 hari' },
+  { value: '6_hari', label: '6 hari' },
+  { value: '7_hari', label: '7 hari' },
+  { value: 'seminggu', label: 'Seminggu' },
+  { value: 'dua_minggu', label: 'Dua minggu' },
+  { value: 'tiga_minggu', label: 'Tiga minggu' },
+  { value: 'sebulan', label: 'Sebulan' }
 ];
+
+type TabId = 'makkah' | 'madinah';
 
 const RekapHotelPage: React.FC = () => {
   const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState<TabId>('makkah');
   const [list, setList] = useState<RekapHotelRecord[]>([]);
-  const [options, setOptions] = useState<{ period_names: string[]; season_years: string[]; locations: string[]; statuses: string[]; paket_types: string[]; bandaras: string[] } | null>(null);
+  const [options, setOptions] = useState<{ period_names: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number }>({ total: 0, page: 1, limit: 50, totalPages: 1 });
   const [showFilters, setShowFilters] = useState(true);
   const [filters, setFilters] = useState<{
-    source_type: string;
-    period_name: string;
-    season_year: string;
-    client: string;
-    location: string;
-    status: string;
+    year_month: string;
+    time_range: string;
     paket_type: string;
     bandara: string;
     search: string;
     sort_by: string;
     sort_order: 'ASC' | 'DESC';
   }>({
-    source_type: '',
-    period_name: '',
-    season_year: '',
-    client: '',
-    location: '',
-    status: '',
+    year_month: '',
+    time_range: '',
     paket_type: '',
     bandara: '',
     search: '',
@@ -84,12 +88,9 @@ const RekapHotelPage: React.FC = () => {
         sort_by: filters.sort_by,
         sort_order: filters.sort_order
       };
-      if (filters.source_type) params.source_type = filters.source_type;
-      if (filters.period_name) params.period_name = filters.period_name;
-      if (filters.season_year) params.season_year = filters.season_year;
-      if (filters.client) params.client = filters.client;
-      if (filters.location) params.location = filters.location;
-      if (filters.status) params.status = filters.status;
+      params.period_name = activeTab === 'makkah' ? 'MAKKAH' : 'MADINAH';
+      if (filters.year_month) params.year_month = filters.year_month;
+      if (filters.time_range) params.time_range = filters.time_range;
       if (filters.paket_type) params.paket_type = filters.paket_type;
       if (filters.bandara) params.bandara = filters.bandara;
       if (filters.search) params.search = filters.search;
@@ -104,7 +105,7 @@ const RekapHotelPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, filters, showToast]);
+  }, [pagination.page, pagination.limit, activeTab, filters, showToast]);
 
   useEffect(() => {
     fetchOptions();
@@ -116,7 +117,8 @@ const RekapHotelPage: React.FC = () => {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ source_type: 'order_list', sort_order: 0 });
+    const periodName = activeTab === 'makkah' ? 'MAKKAH' : 'MADINAH';
+    setForm({ source_type: 'order_list', period_name: periodName, sort_order: 0 });
     setModalOpen(true);
   };
 
@@ -127,10 +129,6 @@ const RekapHotelPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!form.source_type) {
-      showToast('Pilih tipe sumber', 'error');
-      return;
-    }
     setSaving(true);
     try {
       if (editingId) {
@@ -163,13 +161,14 @@ const RekapHotelPage: React.FC = () => {
     }
   };
 
-  // Urutan kolom sama dengan spreadsheet HOTEL: No, TNTV, DFNT, CLIENT, HOTEL MEKKAH, IN, OUT, TOTAL HARI, D, T, Q, Qn, Hx, Room, Pax, Meal Plan (BB/FB), Status (Available/Booked/Amend/LUNAS), Voucher, Keterangan, Invoice Clerk, Aksi
+  const hotelColLabel = activeTab === 'makkah' ? 'HOTEL MEKKAH' : 'HOTEL MADINAH';
+  const hotelColId = activeTab === 'makkah' ? 'hotel_makkah' : 'hotel_madinah';
+  // Kolom tabel: TNTV, DFNT, CLIENT, HOTEL, IN, OUT, TOTAL HARI, D, T, Q, Qn, Hx, Room, Pax, BB, FB, Available, Booked, Amend, LUNAS, Voucher, Keterangan, Invoice Clerk, Aksi (tanpa No)
   const colDefs: TableColumn[] = [
-    { id: 'no', label: 'No' },
     { id: 'tntv', label: 'TNTV' },
     { id: 'dfnt', label: 'DFNT' },
     { id: 'client', label: 'CLIENT' },
-    { id: 'hotel_makkah', label: 'HOTEL MEKKAH' },
+    { id: hotelColId, label: hotelColLabel },
     { id: 'check_in', label: 'IN' },
     { id: 'check_out', label: 'OUT' },
     { id: 'total_hari', label: 'TOTAL HARI' },
@@ -205,11 +204,11 @@ const RekapHotelPage: React.FC = () => {
 
   const getCell = (r: RekapHotelRecord, colId: string, rowIndex: number) => {
     switch (colId) {
-      case 'no': return (pagination.page - 1) * pagination.limit + rowIndex + 1;
       case 'tntv': return r.tentative || '–';
       case 'dfnt': return r.definite || '–';
       case 'client': return r.client || '–';
       case 'hotel_makkah': return r.hotel_makkah || r.hotel_combo || '–';
+      case 'hotel_madinah': return r.hotel_madinah || r.hotel_combo || '–';
       case 'check_in': return formatDate(r.check_in);
       case 'check_out': return formatDate(r.check_out);
       case 'total_hari': return r.total_hari != null ? String(r.total_hari) : '–';
@@ -254,6 +253,22 @@ const RekapHotelPage: React.FC = () => {
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setActiveTab('makkah')}
+                className={`px-4 py-2 text-sm font-medium ${activeTab === 'makkah' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                Mekkah
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('madinah')}
+                className={`px-4 py-2 text-sm font-medium ${activeTab === 'madinah' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                Madinah
+              </button>
+            </div>
             <Button onClick={() => setShowFilters(!showFilters)} variant="outline" size="sm">
               <Filter className="w-4 h-4 mr-1" />
               Filter {showFilters ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
@@ -264,7 +279,7 @@ const RekapHotelPage: React.FC = () => {
             </Button>
             <Button onClick={openCreate} size="sm">
               <Plus className="w-4 h-4 mr-1" />
-              Tambah Data
+              Tambah Rekap Hotel
             </Button>
           </div>
           <div className="text-sm text-slate-600">
@@ -273,69 +288,25 @@ const RekapHotelPage: React.FC = () => {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tipe Sumber</label>
-              <select
+              <label className="block text-xs font-medium text-slate-600 mb-1">Tahun Bulan</label>
+              <input
+                type="month"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                value={filters.source_type}
-                onChange={(e) => setFilters((f) => ({ ...f, source_type: e.target.value }))}
-              >
-                <option value="">Semua</option>
-                {SOURCE_TYPES.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                value={filters.year_month}
+                onChange={(e) => setFilters((f) => ({ ...f, year_month: e.target.value }))}
+              />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Periode</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Jangka Waktu</label>
               <select
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                value={filters.period_name}
-                onChange={(e) => setFilters((f) => ({ ...f, period_name: e.target.value }))}
+                value={filters.time_range}
+                onChange={(e) => setFilters((f) => ({ ...f, time_range: e.target.value }))}
               >
-                <option value="">Semua</option>
-                {(options?.period_names || []).map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tahun</label>
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                value={filters.season_year}
-                onChange={(e) => setFilters((f) => ({ ...f, season_year: e.target.value }))}
-              >
-                <option value="">Semua</option>
-                {(options?.season_years || []).map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Lokasi</label>
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                value={filters.location}
-                onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value }))}
-              >
-                <option value="">Semua</option>
-                {(options?.locations || []).map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                value={filters.status}
-                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-              >
-                <option value="">Semua</option>
-                {(options?.statuses || []).map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                {TIME_RANGE_OPTIONS.map((o) => (
+                  <option key={o.value || 'semua'} value={o.value}>{o.label}</option>
                 ))}
               </select>
             </div>
@@ -350,9 +321,9 @@ const RekapHotelPage: React.FC = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchList()}
               />
             </div>
-            <div className="col-span-2 md:col-span-4 lg:col-span-6 flex gap-2">
+            <div className="col-span-2 md:col-span-4 flex gap-2 items-end">
               <Button size="sm" onClick={fetchList}>Terapkan Filter</Button>
-              <Button size="sm" variant="outline" onClick={() => setFilters({ ...filters, source_type: '', period_name: '', season_year: '', client: '', location: '', status: '', paket_type: '', bandara: '', search: '', sort_by: 'sort_order', sort_order: 'ASC' })}>
+              <Button size="sm" variant="outline" onClick={() => setFilters({ year_month: '', time_range: '', paket_type: '', bandara: '', search: '', sort_by: 'sort_order', sort_order: 'ASC' })}>
                 Reset
               </Button>
             </div>
@@ -401,28 +372,24 @@ const RekapHotelPage: React.FC = () => {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
         <ModalBoxLg>
-          <ModalHeader title={editingId ? 'Edit Rekap Hotel' : 'Tambah Rekap Hotel'} onClose={() => setModalOpen(false)} />
+          <ModalHeader
+            title={editingId ? `Edit Rekap Hotel - ${activeTab === 'makkah' ? 'Mekkah' : 'Madinah'}` : `Tambah Rekap Hotel - ${activeTab === 'makkah' ? 'Mekkah' : 'Madinah'}`}
+            onClose={() => setModalOpen(false)}
+          />
           <ModalBody className="max-h-[70vh] overflow-y-auto">
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Sumber *</label>
-                <select
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2"
-                  value={form.source_type || 'order_list'}
-                  onChange={(e) => setForm((f) => ({ ...f, source_type: e.target.value as any }))}
-                >
-                  {SOURCE_TYPES.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="TNTV" value={form.tentative || '' || ''} onChange={(e) => setForm((f) => ({ ...f, tentative: e.target.value }))} placeholder="6675" />
+              {/* Urutan input sama dengan kolom tabel: TNTV, DFNT, CLIENT, HOTEL, IN, OUT, TOTAL HARI, D, T, Q, Qn, Hx, Room, Pax, BB, FB, Available, Booked, Amend, LUNAS, Voucher, Keterangan, Invoice Clerk */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Input label="TNTV" value={form.tentative || ''} onChange={(e) => setForm((f) => ({ ...f, tentative: e.target.value }))} placeholder="6675" />
                 <Input label="DFNT" value={form.definite || ''} onChange={(e) => setForm((f) => ({ ...f, definite: e.target.value }))} placeholder="4746" />
                 <Input label="CLIENT" value={form.client || ''} onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))} placeholder="Nama client" />
-                <Input label="HOTEL MEKKAH" value={form.hotel_makkah || ''} onChange={(e) => setForm((f) => ({ ...f, hotel_makkah: e.target.value }))} placeholder="hilton, taiba suite" />
-                <Input label="IN (Check-in)" type="date" value={form.check_in || ''} onChange={(e) => setForm((f) => ({ ...f, check_in: e.target.value || undefined }))} />
-                <Input label="OUT (Check-out)" type="date" value={form.check_out || ''} onChange={(e) => setForm((f) => ({ ...f, check_out: e.target.value || undefined }))} />
+                {activeTab === 'makkah' ? (
+                  <Input label="HOTEL MEKKAH" value={form.hotel_makkah || ''} onChange={(e) => setForm((f) => ({ ...f, hotel_makkah: e.target.value }))} placeholder="hilton, taiba suite" />
+                ) : (
+                  <Input label="HOTEL MADINAH" value={form.hotel_madinah || ''} onChange={(e) => setForm((f) => ({ ...f, hotel_madinah: e.target.value }))} placeholder="Nama hotel Madinah" />
+                )}
+                <Input label="IN" type="date" value={form.check_in || ''} onChange={(e) => setForm((f) => ({ ...f, check_in: e.target.value || undefined }))} />
+                <Input label="OUT" type="date" value={form.check_out || ''} onChange={(e) => setForm((f) => ({ ...f, check_out: e.target.value || undefined }))} />
                 <Input label="TOTAL HARI" type="number" value={form.total_hari != null ? String(form.total_hari) : ''} onChange={(e) => setForm((f) => ({ ...f, total_hari: e.target.value ? parseInt(e.target.value, 10) : undefined }))} placeholder="3" />
                 <Input label="D" type="number" value={form.room_d != null ? String(form.room_d) : ''} onChange={(e) => setForm((f) => ({ ...f, room_d: e.target.value ? parseInt(e.target.value, 10) : undefined }))} />
                 <Input label="T" type="number" value={form.room_t != null ? String(form.room_t) : ''} onChange={(e) => setForm((f) => ({ ...f, room_t: e.target.value ? parseInt(e.target.value, 10) : undefined }))} />
@@ -430,17 +397,9 @@ const RekapHotelPage: React.FC = () => {
                 <Input label="Qn" type="number" value={form.room_qn != null ? String(form.room_qn) : ''} onChange={(e) => setForm((f) => ({ ...f, room_qn: e.target.value ? parseInt(e.target.value, 10) : undefined }))} />
                 <Input label="Hx" type="number" value={form.room_hx != null ? String(form.room_hx) : ''} onChange={(e) => setForm((f) => ({ ...f, room_hx: e.target.value ? parseInt(e.target.value, 10) : undefined }))} />
                 <Input label="Room" type="number" value={form.room != null ? String(form.room) : ''} onChange={(e) => setForm((f) => ({ ...f, room: e.target.value ? parseInt(e.target.value, 10) : undefined }))} placeholder="Jumlah kamar" />
-                <Input label="Hotel Madinah" value={form.hotel_madinah || ''} onChange={(e) => setForm((f) => ({ ...f, hotel_madinah: e.target.value }))} placeholder="Nama hotel Madinah" />
-                <Input label="Hotel Combo" value={form.hotel_combo || ''} onChange={(e) => setForm((f) => ({ ...f, hotel_combo: e.target.value }))} placeholder="Villa Hilton/taiba suite" />
-                <Input label="Nama Hotel (Allotment)" value={form.hotel_name || ''} onChange={(e) => setForm((f) => ({ ...f, hotel_name: e.target.value }))} placeholder="Snood, Nada Deafa" />
-                <Input label="Lokasi" value={form.location || ''} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="mekkah, madinah" />
                 <Input label="Pax" type="number" value={form.pax != null ? String(form.pax) : ''} onChange={(e) => setForm((f) => ({ ...f, pax: e.target.value ? parseInt(e.target.value, 10) : undefined }))} placeholder="10" />
-                <Input label="Total Room" value={form.total_room || ''} onChange={(e) => setForm((f) => ({ ...f, total_room: e.target.value }))} placeholder="60" />
-                <Input label="Paket / Paket Type" value={form.paket_type || form.paket_label || form.paket || ''} onChange={(e) => setForm((f) => ({ ...f, paket_type: e.target.value, paket_label: e.target.value, paket: e.target.value }))} placeholder="arofah, safa" />
-                <Input label="Bandara" value={form.bandara || ''} onChange={(e) => setForm((f) => ({ ...f, bandara: e.target.value }))} placeholder="CGK, BTH" />
-                <Input label="KET" value={form.ket || ''} onChange={(e) => setForm((f) => ({ ...f, ket: e.target.value }))} placeholder="dakhili" />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-center">
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={!!form.meal_bb} onChange={(e) => setForm((f) => ({ ...f, meal_bb: e.target.checked }))} className="rounded border-slate-300" />
                   <span className="text-sm font-medium text-slate-700">BB</span>
@@ -470,17 +429,7 @@ const RekapHotelPage: React.FC = () => {
                 <Input label="Voucher" value={form.voucher || ''} onChange={(e) => setForm((f) => ({ ...f, voucher: e.target.value }))} />
                 <Input label="Invoice Clerk" value={form.invoice_clerk || ''} onChange={(e) => setForm((f) => ({ ...f, invoice_clerk: e.target.value }))} />
               </div>
-              <Input label="Keterangan" value={form.keterangan || form.notes || ''} onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value, notes: e.target.value }))} placeholder="Remarks" />
-              <div className="border-t border-slate-200 pt-4 mt-4 grid grid-cols-2 gap-3">
-                <Input label="Periode" value={form.period_name || ''} onChange={(e) => setForm((f) => ({ ...f, period_name: e.target.value }))} placeholder="HAJI 2026" />
-                <Input label="Tahun" value={form.season_year || ''} onChange={(e) => setForm((f) => ({ ...f, season_year: e.target.value }))} />
-                <Input label="Ref Number" value={form.ref_number || ''} onChange={(e) => setForm((f) => ({ ...f, ref_number: e.target.value }))} />
-                <Input label="Status (teks)" value={form.status || ''} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} />
-                <Input label="Paket Type" value={form.paket_type || ''} onChange={(e) => setForm((f) => ({ ...f, paket_type: e.target.value }))} />
-                <Input label="Bandara" value={form.bandara || ''} onChange={(e) => setForm((f) => ({ ...f, bandara: e.target.value }))} />
-                <Input label="KET" value={form.ket || ''} onChange={(e) => setForm((f) => ({ ...f, ket: e.target.value }))} />
-                <Input label="Total Room (Allotment)" value={form.total_room || ''} onChange={(e) => setForm((f) => ({ ...f, total_room: e.target.value }))} />
-              </div>
+              <Input label="Keterangan" value={form.keterangan || form.notes || ''} onChange={(e) => setForm((f) => ({ ...f, keterangan: e.target.value, notes: e.target.value }))} placeholder="Keterangan" />
             </div>
           </ModalBody>
           <ModalFooter>
