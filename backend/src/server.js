@@ -135,6 +135,7 @@ async function ensureOrderBusIncludeColumns(db) {
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_departure_status VARCHAR(50) DEFAULT \'pending\'');
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_status VARCHAR(50) DEFAULT \'pending\'');
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_notes TEXT');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_ticket_file_url VARCHAR(500)');
   } catch (e) {
     logger.warn('ensureOrderBusIncludeColumns:', e.message);
   }

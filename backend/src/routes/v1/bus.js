@@ -11,6 +11,7 @@ router.get('/dashboard', busController.getDashboard);
 router.get('/invoices', busController.listInvoices);
 router.get('/invoices/:id', busController.getInvoice);
 router.put('/invoices/:id/order-bus-include-progress', busController.updateOrderBusIncludeProgress);
+router.post('/invoices/:id/order-bus-include-ticket-file', busController.uploadOrderBusIncludeTicketFile);
 router.get('/export-excel', busController.exportExcel);
 router.get('/export-pdf', busController.exportPdf);
 router.get('/orders', busController.listOrders);

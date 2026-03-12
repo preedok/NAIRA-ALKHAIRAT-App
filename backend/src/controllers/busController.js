@@ -1,7 +1,10 @@
 const asyncHandler = require('express-async-handler');
+const multer = require('multer');
+const path = require('path');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const { Op } = require('sequelize');
+const uploadConfig = require('../config/uploads');
 const {
   Order,
   OrderItem,
@@ -28,6 +31,19 @@ const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'paym
 const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
+
+const busTicketDir = uploadConfig.getDir(uploadConfig.SUBDIRS.BUS_TICKET_DOCS);
+const busTicketStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, busTicketDir),
+  filename: (req, file, cb) => {
+    const { dateTimeForFilename, safeExt } = uploadConfig;
+    const { date, time } = dateTimeForFilename();
+    const ext = uploadConfig.safeExt(file.originalname);
+    const invId = (req.params.id || '').toString().slice(-8);
+    cb(null, `BUS_TICKET_INV_${invId}_${date}_${time}${ext}`);
+  }
+});
+const uploadBusIncludeTicketFile = multer({ storage: busTicketStorage, limits: { fileSize: 15 * 1024 * 1024 } });
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
 /** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role_bus = semua cabang (sama seperti menu Invoice yang tidak filter cabang untuk role_bus; order visa = bus include). */
@@ -509,11 +525,11 @@ const updateItemProgress = asyncHandler(async (req, res) => {
 
 /**
  * PUT /api/v1/bus/invoices/:id/order-bus-include-progress
- * Update progress bus untuk order "bus include" (tanpa item bus): tiket, kedatangan, keberangkatan, kepulangan.
+ * Update progress bus untuk order "bus include": Status Tiket Bis (Pergi & Pulang), Nomor Bis, Status Kedatangan, Catatan.
  */
 const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
   const { id: invoiceId } = req.params;
-  const { bus_ticket_status, bus_ticket_info, arrival_status, departure_status, return_status, notes } = req.body;
+  const { bus_ticket_status, bus_ticket_info, ticket_file_url, arrival_status, notes } = req.body;
 
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
@@ -533,8 +549,6 @@ const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
   const validTrip = Object.values(BUS_TRIP_STATUS);
   if (bus_ticket_status != null && !validTicket.includes(bus_ticket_status)) return res.status(400).json({ success: false, message: 'Status tiket bus tidak valid' });
   if (arrival_status != null && !validTrip.includes(arrival_status)) return res.status(400).json({ success: false, message: 'Status kedatangan tidak valid' });
-  if (departure_status != null && !validTrip.includes(departure_status)) return res.status(400).json({ success: false, message: 'Status keberangkatan tidak valid' });
-  if (return_status != null && !validTrip.includes(return_status)) return res.status(400).json({ success: false, message: 'Status kepulangan tidak valid' });
 
   const order = await Order.findByPk(invoice.order_id);
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
@@ -542,14 +556,46 @@ const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
   const updates = {};
   if (bus_ticket_status !== undefined) updates.bus_include_ticket_status = bus_ticket_status;
   if (bus_ticket_info !== undefined) updates.bus_include_ticket_info = bus_ticket_info;
+  if (ticket_file_url !== undefined) updates.bus_include_ticket_file_url = ticket_file_url;
   if (arrival_status !== undefined) updates.bus_include_arrival_status = arrival_status;
-  if (departure_status !== undefined) updates.bus_include_departure_status = departure_status;
-  if (return_status !== undefined) updates.bus_include_return_status = return_status;
   if (notes !== undefined) updates.bus_include_notes = notes;
   await order.update(updates);
 
   res.json({ success: true, data: order });
 });
+
+/**
+ * POST /api/v1/bus/invoices/:id/order-bus-include-ticket-file
+ * Upload file tiket bus untuk order bus include. Setelah upload, kirim ticket_file_url di PUT order-bus-include-progress.
+ */
+const uploadOrderBusIncludeTicketFile = [
+  uploadBusIncludeTicketFile.single('ticket_file'),
+  asyncHandler(async (req, res) => {
+    const { id: invoiceId } = req.params;
+    const branchIds = await getBusBranchIds(req.user);
+    if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
+
+    const invoice = await Invoice.findByPk(invoiceId, { include: [{ model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', attributes: ['id', 'type'] }] }] });
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+    if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+
+    const orderItems = invoice.Order?.OrderItems || [];
+    const busItems = orderItems.filter(i => i.type === ORDER_ITEM_TYPE.BUS);
+    const hasVisa = orderItems.some(i => i.type === ORDER_ITEM_TYPE.VISA);
+    const waiveBusPenalty = !!invoice.Order?.waive_bus_penalty;
+    if (busItems.length > 0) return res.status(400).json({ success: false, message: 'Invoice ini punya item bus; gunakan update per item.' });
+    if (!hasVisa && !waiveBusPenalty) return res.status(400).json({ success: false, message: 'Invoice ini bukan bus include.' });
+
+    if (!req.file) return res.status(400).json({ success: false, message: 'File tiket wajib diupload' });
+
+    const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.BUS_TICKET_DOCS, req.file.filename);
+    const order = await Order.findByPk(invoice.order_id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+    await order.update({ bus_include_ticket_file_url: fileUrl });
+
+    res.json({ success: true, data: { url: fileUrl } });
+  })
+];
 
 /**
  * GET /api/v1/bus/export-excel
@@ -751,6 +797,7 @@ module.exports = {
   listInvoices,
   getInvoice,
   updateOrderBusIncludeProgress,
+  uploadOrderBusIncludeTicketFile,
   listOrders,
   getOrder,
   listProducts,

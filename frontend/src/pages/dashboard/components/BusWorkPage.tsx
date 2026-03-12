@@ -14,7 +14,7 @@ import { Input, Autocomplete, Textarea, ContentLoading, NominalDisplay } from '.
 import type { TableColumn } from '../../../types';
 import { busApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { INVOICE_STATUS_LABELS, PROGRESS_INVOICE_TABLE_COLUMNS } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, PROGRESS_INVOICE_TABLE_COLUMNS, API_BASE_URL } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../../utils';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
@@ -67,8 +67,9 @@ const BusWorkPage: React.FC = () => {
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
   const filterChangedOnce = useRef(false);
-  type BusItemDraft = { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string };
+  type BusItemDraft = { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; notes?: string };
   const [detailDraft, setDetailDraft] = useState<Record<string, BusItemDraft>>({});
+  const [uploadingTicketFile, setUploadingTicketFile] = useState(false);
   const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
 
   useEffect(() => {
@@ -283,8 +284,6 @@ const BusWorkPage: React.FC = () => {
           bus_ticket_status: prog?.bus_ticket_status || 'pending',
           bus_ticket_info: prog?.bus_ticket_info ?? '',
           arrival_status: prog?.arrival_status || 'pending',
-          departure_status: prog?.departure_status || 'pending',
-          return_status: prog?.return_status || 'pending',
           notes: prog?.notes ?? ''
         };
       });
@@ -297,8 +296,6 @@ const BusWorkPage: React.FC = () => {
           bus_ticket_status: o.bus_include_ticket_status || 'pending',
           bus_ticket_info: o.bus_include_ticket_info ?? '',
           arrival_status: o.bus_include_arrival_status || 'pending',
-          departure_status: o.bus_include_departure_status || 'pending',
-          return_status: o.bus_include_return_status || 'pending',
           notes: o.bus_include_notes ?? ''
         }
       }));
@@ -312,8 +309,6 @@ const BusWorkPage: React.FC = () => {
       bus_ticket_status: d.bus_ticket_status,
       bus_ticket_info: d.bus_ticket_info?.trim() || undefined,
       arrival_status: d.arrival_status,
-      departure_status: d.departure_status,
-      return_status: d.return_status,
       notes: d.notes?.trim() || undefined
     });
   };
@@ -326,14 +321,12 @@ const BusWorkPage: React.FC = () => {
         bus_ticket_status: d.bus_ticket_status,
         bus_ticket_info: d.bus_ticket_info?.trim() || undefined,
         arrival_status: d.arrival_status,
-        departure_status: d.departure_status,
-        return_status: d.return_status,
         notes: d.notes?.trim() || undefined
       });
     }
   };
 
-  const handleUpdateProgress = async (orderItemId: string, payload: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) => {
+  const handleUpdateProgress = async (orderItemId: string, payload: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; notes?: string }) => {
     setUpdatingId(orderItemId);
     try {
       await busApi.updateItemProgress(orderItemId, payload);
@@ -359,8 +352,6 @@ const BusWorkPage: React.FC = () => {
         bus_ticket_status: d.bus_ticket_status,
         bus_ticket_info: d.bus_ticket_info?.trim() || undefined,
         arrival_status: d.arrival_status,
-        departure_status: d.departure_status,
-        return_status: d.return_status,
         notes: d.notes?.trim() || undefined
       });
       const res = await busApi.getInvoice(detailInvoice.id);
@@ -371,6 +362,21 @@ const BusWorkPage: React.FC = () => {
       showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleUploadBusIncludeTicketFile = async (file: File) => {
+    if (!detailInvoice?.id) return;
+    setUploadingTicketFile(true);
+    try {
+      await busApi.uploadOrderBusIncludeTicketFile(detailInvoice.id, file);
+      const res = await busApi.getInvoice(detailInvoice.id);
+      if (res.data.success) setDetailInvoice(res.data.data);
+      showToast('File tiket berhasil diupload.', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal upload file', 'error');
+    } finally {
+      setUploadingTicketFile(false);
     }
   };
 
@@ -612,11 +618,41 @@ const BusWorkPage: React.FC = () => {
             <ModalBody className="space-y-4">
               {detailTab === 'slip' ? (
                 <div className="space-y-4">
-                  {busItems.length === 0 ? (
+                  {busItems.length === 0 && isBusIncludeOnly && (() => {
+                    const o = detailInvoice?.Order as any;
+                    const ticketStatus = o?.bus_include_ticket_status || detailDraft[ORDER_BUS_INCLUDE_KEY]?.bus_ticket_status || '';
+                    if (ticketStatus !== 'issued') {
+                      return (
+                        <p className="text-sm text-slate-600 rounded-lg bg-amber-50 border border-amber-100 p-4">
+                          Bus include (dengan visa). Isi status di tab Detail dan set <strong>Status Tiket Bis (Pergi & Pulang)</strong> ke Terbit untuk cetak slip.
+                        </p>
+                      );
+                    }
+                    const ticketStatusLabel = TICKET_OPTIONS.find((x: { value: string }) => x.value === ticketStatus)?.label ?? ticketStatus;
+                    const ticketInfo = (o?.bus_include_ticket_info ?? detailDraft[ORDER_BUS_INCLUDE_KEY]?.bus_ticket_info ?? '').trim() || '–';
+                    const arrivalLabel = TRIP_OPTIONS.find((x: { value: string }) => x.value === (o?.bus_include_arrival_status || ''))?.label ?? o?.bus_include_arrival_status ?? '–';
+                    const notes = (o?.bus_include_notes ?? detailDraft[ORDER_BUS_INCLUDE_KEY]?.notes ?? '').trim() || '–';
+                    return (
+                      <div key="bus-include" className="rounded-xl border border-amber-200 bg-white p-5 shadow-sm">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Slip Bus Include (dengan visa)</p>
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                          <div><dt className="text-slate-500">No. Invoice</dt><dd className="font-medium text-slate-900">{detailInvoice?.invoice_number ?? '–'}</dd></div>
+                          <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{(detailInvoice?.Order as any)?.User?.name ?? '–'}</dd></div>
+                          <div><dt className="text-slate-500">Status Tiket Bis (Pergi & Pulang)</dt><dd className="font-medium text-slate-900">{ticketStatusLabel}</dd></div>
+                          <div><dt className="text-slate-500">Nomor Bis</dt><dd className="font-medium text-slate-900">{ticketInfo}</dd></div>
+                          <div><dt className="text-slate-500">Status Kedatangan</dt><dd className="font-medium text-slate-900">{arrivalLabel}</dd></div>
+                          <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{notes}</dd></div>
+                        </dl>
+                        <p className="text-xs text-slate-400 mt-3">Slip ini digenerate otomatis. Digabungkan ke arsip invoice (Unduh ZIP).</p>
+                      </div>
+                    );
+                  })()}
+                  {busItems.length === 0 && !isBusIncludeOnly ? (
                     <p className="text-sm text-slate-600 rounded-lg bg-amber-50 border border-amber-100 p-4">
-                      Invoice ini <strong>bus include (dengan visa)</strong> atau penalti bus. Tidak ada item bus untuk slip.
+                      Invoice ini tidak memiliki item bus untuk slip.
                     </p>
-                  ) : busItems
+                  ) : null}
+                  {busItems.length > 0 ? busItems
                     .filter((item: any) => (detailDraft[item.id]?.bus_ticket_status ?? item.BusProgress?.bus_ticket_status ?? '') === 'issued')
                     .map((item: any) => {
                       const prog = item.BusProgress;
@@ -628,8 +664,6 @@ const BusWorkPage: React.FC = () => {
                       const ticketInfo = (prog?.bus_ticket_info ?? detailDraft[item.id]?.bus_ticket_info ?? '').trim() || '–';
                       const route = (item.meta?.route || '').toString() || '–';
                       const arrivalLabel = TRIP_OPTIONS.find((o: { value: string }) => o.value === (prog?.arrival_status || ''))?.label ?? prog?.arrival_status ?? '–';
-                      const departureLabel = TRIP_OPTIONS.find((o: { value: string }) => o.value === (prog?.departure_status || ''))?.label ?? prog?.departure_status ?? '–';
-                      const returnLabel = TRIP_OPTIONS.find((o: { value: string }) => o.value === (prog?.return_status || ''))?.label ?? prog?.return_status ?? '–';
                       const notes = (prog?.notes ?? detailDraft[item.id]?.notes ?? '').trim() || '–';
                       return (
                         <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -640,17 +674,15 @@ const BusWorkPage: React.FC = () => {
                             <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
                             <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
                             <div><dt className="text-slate-500">Rute</dt><dd className="font-medium text-slate-900">{route}</dd></div>
-                            <div><dt className="text-slate-500">Status Tiket Bus</dt><dd className="font-medium text-slate-900">{ticketStatusLabel}</dd></div>
-                            <div><dt className="text-slate-500">Info Tiket Bus</dt><dd className="font-medium text-slate-900">{ticketInfo}</dd></div>
+                            <div><dt className="text-slate-500">Status Tiket Bis (Pergi & Pulang)</dt><dd className="font-medium text-slate-900">{ticketStatusLabel}</dd></div>
+                            <div><dt className="text-slate-500">Nomor Bis</dt><dd className="font-medium text-slate-900">{ticketInfo}</dd></div>
                             <div><dt className="text-slate-500">Status Kedatangan</dt><dd className="font-medium text-slate-900">{arrivalLabel}</dd></div>
-                            <div><dt className="text-slate-500">Status Keberangkatan</dt><dd className="font-medium text-slate-900">{departureLabel}</dd></div>
-                            <div><dt className="text-slate-500">Status Kepulangan</dt><dd className="font-medium text-slate-900">{returnLabel}</dd></div>
                             <div className="sm:col-span-2"><dt className="text-slate-500">Catatan</dt><dd className="font-medium text-slate-900">{notes}</dd></div>
                           </dl>
                           <p className="text-xs text-slate-400 mt-3">Slip ini digenerate otomatis. Digabungkan ke arsip invoice (Unduh ZIP).</p>
                         </div>
                       );
-                    })}
+                    }) : null}
                 </div>
               ) : isBusIncludeOnly ? (
                 (() => {
@@ -658,10 +690,11 @@ const BusWorkPage: React.FC = () => {
                     bus_ticket_status: 'pending',
                     bus_ticket_info: '',
                     arrival_status: 'pending',
-                    departure_status: 'pending',
-                    return_status: 'pending',
                     notes: ''
                   };
+                  const isIssued = (d.bus_ticket_status ?? '') === 'issued';
+                  const ticketFileUrl = (detailInvoice?.Order as any)?.bus_include_ticket_file_url;
+                  const uploadBase = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
                   return (
                     <div className="p-4 border border-amber-200 rounded-xl space-y-3 bg-amber-50/50">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -677,44 +710,52 @@ const BusWorkPage: React.FC = () => {
                           )}
                         </Button>
                       </div>
-                      <p className="text-xs text-slate-600">Isi status tiket, kedatangan, keberangkatan, dan kepulangan untuk bus include (tanpa item bus terpisah).</p>
+                      <p className="text-xs text-slate-600">Isi status tiket bis (pergi & pulang) dan status kedatangan untuk bus include (tanpa item bus terpisah). Jika terbit, isi nomor bis dan upload file tiket.</p>
                       <Autocomplete
-                        label="Status Tiket Bis"
+                        label="Status Tiket Bis (Pergi & Pulang)"
                         value={d.bus_ticket_status ?? 'pending'}
                         onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), bus_ticket_status: v ?? 'pending' } }))}
                         options={TICKET_OPTIONS}
                         disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
                         fullWidth
                       />
-                      <Input
-                        label="Info Tiket (nomor, dll)"
-                        type="text"
-                        placeholder="Opsional"
-                        value={d.bus_ticket_info ?? ''}
-                        onChange={(e) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), bus_ticket_info: e.target.value } }))}
-                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
-                        fullWidth
-                      />
+                      {isIssued && (
+                        <>
+                          <Input
+                            label="Nomor Bis"
+                            type="text"
+                            placeholder="Contoh: B-01"
+                            value={d.bus_ticket_info ?? ''}
+                            onChange={(e) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), bus_ticket_info: e.target.value } }))}
+                            disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                            fullWidth
+                          />
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Upload file tiket</label>
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-[#0D1A63] file:text-white file:text-sm"
+                              disabled={updatingId === ORDER_BUS_INCLUDE_KEY || uploadingTicketFile}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleUploadBusIncludeTicketFile(f);
+                                e.target.value = '';
+                              }}
+                            />
+                            {uploadingTicketFile && <p className="text-xs text-amber-600 mt-1">Mengupload...</p>}
+                            {ticketFileUrl && (
+                              <p className="text-xs text-slate-600 mt-2">
+                                File: <a href={ticketFileUrl.startsWith('http') ? ticketFileUrl : `${uploadBase}${ticketFileUrl}`} target="_blank" rel="noopener noreferrer" className="text-[#0D1A63] underline">Unduh file tiket</a>
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
                       <Autocomplete
                         label="Status Kedatangan"
                         value={d.arrival_status ?? 'pending'}
                         onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), arrival_status: v ?? 'pending' } }))}
-                        options={TRIP_OPTIONS}
-                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
-                        fullWidth
-                      />
-                      <Autocomplete
-                        label="Status Keberangkatan"
-                        value={d.departure_status ?? 'pending'}
-                        onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), departure_status: v ?? 'pending' } }))}
-                        options={TRIP_OPTIONS}
-                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
-                        fullWidth
-                      />
-                      <Autocomplete
-                        label="Status Kepulangan"
-                        value={d.return_status ?? 'pending'}
-                        onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), return_status: v ?? 'pending' } }))}
                         options={TRIP_OPTIONS}
                         disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
                         fullWidth
@@ -741,8 +782,6 @@ const BusWorkPage: React.FC = () => {
                   bus_ticket_status: prog?.bus_ticket_status || 'pending',
                   bus_ticket_info: prog?.bus_ticket_info ?? '',
                   arrival_status: prog?.arrival_status || 'pending',
-                  departure_status: prog?.departure_status || 'pending',
-                  return_status: prog?.return_status || 'pending',
                   notes: prog?.notes ?? ''
                 };
                 return (
@@ -761,42 +800,28 @@ const BusWorkPage: React.FC = () => {
                       </Button>
                     </div>
                     <Autocomplete
-                      label="Status Tiket Bis"
+                      label="Status Tiket Bis (Pergi & Pulang)"
                       value={d.bus_ticket_status ?? 'pending'}
                       onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), bus_ticket_status: v ?? 'pending' } }))}
                       options={TICKET_OPTIONS}
                       disabled={updatingId === item.id}
                       fullWidth
                     />
-                    <Input
-                      label="Info Tiket (nomor, dll)"
-                      type="text"
-                      placeholder="Opsional"
-                      value={d.bus_ticket_info ?? ''}
-                      onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), bus_ticket_info: e.target.value } }))}
-                      disabled={updatingId === item.id}
-                      fullWidth
-                    />
+                    {(d.bus_ticket_status ?? '') === 'issued' && (
+                      <Input
+                        label="Nomor Bis"
+                        type="text"
+                        placeholder="Contoh: B-01"
+                        value={d.bus_ticket_info ?? ''}
+                        onChange={(e) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), bus_ticket_info: e.target.value } }))}
+                        disabled={updatingId === item.id}
+                        fullWidth
+                      />
+                    )}
                     <Autocomplete
                       label="Status Kedatangan"
                       value={d.arrival_status ?? 'pending'}
                       onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), arrival_status: v ?? 'pending' } }))}
-                      options={TRIP_OPTIONS}
-                      disabled={updatingId === item.id}
-                      fullWidth
-                    />
-                    <Autocomplete
-                      label="Status Keberangkatan"
-                      value={d.departure_status ?? 'pending'}
-                      onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), departure_status: v ?? 'pending' } }))}
-                      options={TRIP_OPTIONS}
-                      disabled={updatingId === item.id}
-                      fullWidth
-                    />
-                    <Autocomplete
-                      label="Status Kepulangan"
-                      value={d.return_status ?? 'pending'}
-                      onChange={(v) => setDetailDraft(prev => ({ ...prev, [item.id]: { ...(prev[item.id] ?? {}), return_status: v ?? 'pending' } }))}
                       options={TRIP_OPTIONS}
                       disabled={updatingId === item.id}
                       fullWidth

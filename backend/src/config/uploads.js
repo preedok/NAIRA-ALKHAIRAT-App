@@ -41,7 +41,8 @@ const SUBDIRS = {
   JAMAAH_DATA: 'jamaah-data',
   INVOICES: 'invoices',
   REFUND_PROOFS: 'refund-proofs',
-  PURCHASE_PROOFS: 'purchase-proofs'
+  PURCHASE_PROOFS: 'purchase-proofs',
+  BUS_TICKET_DOCS: 'bus-ticket-docs'
 };
 
 function getDir(subdir) {
