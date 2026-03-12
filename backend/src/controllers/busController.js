@@ -243,7 +243,11 @@ const listInvoices = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'penalty_amount', 'waive_bus_penalty', 'currency_rates_override'],
+        attributes: [
+          'id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'penalty_amount', 'waive_bus_penalty', 'currency_rates_override',
+          'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time',
+          'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'
+        ],
         include: [
           { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
           {
