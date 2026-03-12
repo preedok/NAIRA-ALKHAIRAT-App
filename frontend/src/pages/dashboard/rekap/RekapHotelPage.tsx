@@ -10,7 +10,8 @@ import {
   ChevronDown,
   ChevronUp,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  MoreHorizontal
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
@@ -69,6 +70,7 @@ const RekapHotelPage: React.FC = () => {
   const [form, setForm] = useState<Partial<RekapHotelRecord>>({ source_type: 'order_list' });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
 
   const fetchOptions = useCallback(async () => {
     try {
@@ -230,13 +232,40 @@ const RekapHotelPage: React.FC = () => {
       case 'invoice_clerk': return r.invoice_clerk || '–';
       case 'actions':
         return (
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" onClick={() => openEdit(r)} title="Edit">
-              <Pencil className="w-4 h-4" />
+          <div className="relative">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
+              title="Aksi"
+            >
+              <MoreHorizontal className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => handleDelete(r.id)} disabled={deletingId === r.id} title="Hapus" className="text-red-600 hover:text-red-700">
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {openActionsId === r.id && (
+              <div className="absolute right-0 mt-1 w-32 rounded-md border border-slate-200 bg-white shadow-lg z-10">
+                <button
+                  type="button"
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => {
+                    setOpenActionsId(null);
+                    openEdit(r);
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                  disabled={deletingId === r.id}
+                  onClick={() => {
+                    setOpenActionsId(null);
+                    handleDelete(r.id);
+                  }}
+                >
+                  Hapus
+                </button>
+              </div>
+            )}
           </div>
         );
       default: return '–';

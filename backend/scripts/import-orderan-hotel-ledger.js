@@ -207,7 +207,23 @@ async function importFile(filePath, sortStart) {
       const checkIn = parseDateId(checkInRaw);
       const checkOut = parseDateId(checkOutRaw);
 
-      const hasAny = tentative || definite || client || hotelVal || checkIn || checkOut;
+      const numCols = [
+        idxTotalHari, idxD, idxT, idxQ, idxQn, idxHx, idxRoom, idxPax
+      ].map((idx) => (idx >= 0 ? (cells[idx] || '').trim() : ''));
+      const boolCols = [
+        idxBB, idxFB, idxAvail, idxBooked, idxAmend, idxLunas
+      ].map((idx) => (idx >= 0 ? (cells[idx] || '').trim() : ''));
+      const otherText = [
+        idxVoucher >= 0 ? (cells[idxVoucher] || '').trim() : '',
+        idxKet >= 0 ? (cells[idxKet] || '').trim() : '',
+        idxClerk >= 0 ? (cells[idxClerk] || '').trim() : ''
+      ];
+
+      const hasNumeric = numCols.some((v) => v !== '');
+      const hasBool = boolCols.some((v) => v !== '');
+      const hasOtherText = otherText.some((v) => v !== '');
+
+      const hasAny = tentative || definite || client || hotelVal || checkIn || checkOut || hasNumeric || hasBool || hasOtherText;
       if (!hasAny) {
         skippedEmpty += 1;
         continue;
