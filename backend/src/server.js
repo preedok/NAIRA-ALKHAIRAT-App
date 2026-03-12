@@ -126,6 +126,20 @@ async function ensureOrdersWaiveBusPenaltyColumn(db) {
   }
 }
 
+/** Ensure orders has bus_include_* columns (progress bus untuk order tanpa item bus) */
+async function ensureOrderBusIncludeColumns(db) {
+  try {
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_ticket_status VARCHAR(50) DEFAULT \'pending\'');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_ticket_info VARCHAR(500)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_arrival_status VARCHAR(50) DEFAULT \'pending\'');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_departure_status VARCHAR(50) DEFAULT \'pending\'');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_status VARCHAR(50) DEFAULT \'pending\'');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_notes TEXT');
+  } catch (e) {
+    logger.warn('ensureOrderBusIncludeColumns:', e.message);
+  }
+}
+
 /** Ensure owner_profiles has is_mou_owner column (MOU vs non-MOU owner) */
 async function ensureOwnerProfilesIsMouOwnerColumn(db) {
   try {
@@ -180,6 +194,7 @@ sequelize.sync({ alter })
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
   .then(() => ensureOrdersWaiveBusPenaltyColumn(sequelize))
+  .then(() => ensureOrderBusIncludeColumns(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
   .then(async () => {

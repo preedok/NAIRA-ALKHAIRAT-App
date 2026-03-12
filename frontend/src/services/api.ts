@@ -270,6 +270,8 @@ export const busApi = {
   listProducts: () => api.get<{ success: boolean; data: BusProduct[] }>('/bus/products'),
   updateItemProgress: (orderItemId: string, body: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) =>
     api.patch(`/bus/order-items/${orderItemId}/progress`, body),
+  updateOrderBusIncludeProgress: (invoiceId: string, body: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) =>
+    api.put(`/bus/invoices/${invoiceId}/order-bus-include-progress`, body),
   exportExcel: () => api.get('/bus/export-excel', { responseType: 'blob' }),
   exportPdf: () => api.get('/bus/export-pdf', { responseType: 'blob' }),
   getOrderItemSlip: (invoiceId: string, orderItemId: string) =>

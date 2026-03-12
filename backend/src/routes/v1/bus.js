@@ -10,6 +10,7 @@ router.use(requireRole(ROLES.ROLE_BUS, ROLES.SUPER_ADMIN));
 router.get('/dashboard', busController.getDashboard);
 router.get('/invoices', busController.listInvoices);
 router.get('/invoices/:id', busController.getInvoice);
+router.put('/invoices/:id/order-bus-include-progress', busController.updateOrderBusIncludeProgress);
 router.get('/export-excel', busController.exportExcel);
 router.get('/export-pdf', busController.exportPdf);
 router.get('/orders', busController.listOrders);

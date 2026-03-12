@@ -9,7 +9,7 @@ import Button from './Button';
 import { InvoiceNumberCell } from './InvoiceNumberCell';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from './InvoiceStatusRefundCell';
 import { PaymentProofCell } from './PaymentProofCell';
-import InvoiceProgressStatusCell from './InvoiceProgressStatusCell';
+import InvoiceProgressStatusCell, { type ProgressSectionKey } from './InvoiceProgressStatusCell';
 import NominalDisplay from './NominalDisplay';
 import { INVOICE_STATUS_LABELS } from '../../utils/constants';
 import { invoiceTotalTriple, amountTriple, isCancelledNoPayment } from '../../utils/invoiceTableHelpers';
@@ -27,6 +27,8 @@ export interface ProgressInvoiceTableRowProps {
   onViewDetail: (inv: any) => void;
   getStatusLabel?: (inv: any) => string;
   getStatusBadgeVariant?: (inv: any) => 'default' | 'success' | 'warning' | 'error' | 'info';
+  /** Hanya tampilkan section Status Progress ini (mis. role bus: ['visa', 'bus']). */
+  progressAllowedSections?: ProgressSectionKey[];
 }
 
 export function ProgressInvoiceTableRow({
@@ -36,7 +38,8 @@ export function ProgressInvoiceTableRow({
   formatDateWithTime = (d, t) => (d ? `${formatDate(d ?? null)}${t ? `, ${t}` : ''}` : '–'),
   onViewDetail,
   getStatusLabel = getEffectiveInvoiceStatusLabel,
-  getStatusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant
+  getStatusBadgeVariant = getEffectiveInvoiceStatusBadgeVariant,
+  progressAllowedSections
 }: ProgressInvoiceTableRowProps) {
   const sarToIdr = currencyRates.SAR_TO_IDR ?? 4200;
   const usdToIdr = currencyRates.USD_TO_IDR ?? 15500;
@@ -92,7 +95,7 @@ export function ProgressInvoiceTableRow({
         </div>
       </td>
       <td className="py-3 px-4 align-top max-w-[320px]">
-        <InvoiceProgressStatusCell inv={inv} formatDate={formatDate} formatDateWithTime={formatDateWithTime} />
+        <InvoiceProgressStatusCell inv={inv} formatDate={formatDate} formatDateWithTime={formatDateWithTime} allowedSections={progressAllowedSections} />
       </td>
       <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
         <PaymentProofCell paymentProofs={inv.PaymentProofs || []} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />

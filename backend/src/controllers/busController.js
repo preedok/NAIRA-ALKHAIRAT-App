@@ -508,6 +508,50 @@ const updateItemProgress = asyncHandler(async (req, res) => {
 });
 
 /**
+ * PUT /api/v1/bus/invoices/:id/order-bus-include-progress
+ * Update progress bus untuk order "bus include" (tanpa item bus): tiket, kedatangan, keberangkatan, kepulangan.
+ */
+const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
+  const { id: invoiceId } = req.params;
+  const { bus_ticket_status, bus_ticket_info, arrival_status, departure_status, return_status, notes } = req.body;
+
+  const branchIds = await getBusBranchIds(req.user);
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
+
+  const invoice = await Invoice.findByPk(invoiceId, { include: [{ model: Order, as: 'Order', include: [{ model: OrderItem, as: 'OrderItems', attributes: ['id', 'type'] }] }] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
+
+  const orderItems = invoice.Order?.OrderItems || [];
+  const busItems = orderItems.filter(i => i.type === ORDER_ITEM_TYPE.BUS);
+  const hasVisa = orderItems.some(i => i.type === ORDER_ITEM_TYPE.VISA);
+  const waiveBusPenalty = !!invoice.Order?.waive_bus_penalty;
+  if (busItems.length > 0) return res.status(400).json({ success: false, message: 'Invoice ini punya item bus; gunakan update per item.' });
+  if (!hasVisa && !waiveBusPenalty) return res.status(400).json({ success: false, message: 'Invoice ini bukan bus include.' });
+
+  const validTicket = Object.values(BUS_TICKET_STATUS);
+  const validTrip = Object.values(BUS_TRIP_STATUS);
+  if (bus_ticket_status != null && !validTicket.includes(bus_ticket_status)) return res.status(400).json({ success: false, message: 'Status tiket bus tidak valid' });
+  if (arrival_status != null && !validTrip.includes(arrival_status)) return res.status(400).json({ success: false, message: 'Status kedatangan tidak valid' });
+  if (departure_status != null && !validTrip.includes(departure_status)) return res.status(400).json({ success: false, message: 'Status keberangkatan tidak valid' });
+  if (return_status != null && !validTrip.includes(return_status)) return res.status(400).json({ success: false, message: 'Status kepulangan tidak valid' });
+
+  const order = await Order.findByPk(invoice.order_id);
+  if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+
+  const updates = {};
+  if (bus_ticket_status !== undefined) updates.bus_include_ticket_status = bus_ticket_status;
+  if (bus_ticket_info !== undefined) updates.bus_include_ticket_info = bus_ticket_info;
+  if (arrival_status !== undefined) updates.bus_include_arrival_status = arrival_status;
+  if (departure_status !== undefined) updates.bus_include_departure_status = departure_status;
+  if (return_status !== undefined) updates.bus_include_return_status = return_status;
+  if (notes !== undefined) updates.bus_include_notes = notes;
+  await order.update(updates);
+
+  res.json({ success: true, data: order });
+});
+
+/**
  * GET /api/v1/bus/export-excel
  * Export rekap pekerjaan bus ke Excel (lengkap dan detail).
  */
@@ -706,6 +750,7 @@ module.exports = {
   getDashboard,
   listInvoices,
   getInvoice,
+  updateOrderBusIncludeProgress,
   listOrders,
   getOrder,
   listProducts,

@@ -90,7 +90,13 @@ const Order = sequelize.define('Order', {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
     comment: 'Jika true: tanpa penalti bus, 1 Hiace ditambah otomatis, tampil di progress bus'
-  }
+  },
+  bus_include_ticket_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
+  bus_include_ticket_info: { type: DataTypes.STRING(500), allowNull: true },
+  bus_include_arrival_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
+  bus_include_departure_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
+  bus_include_return_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
+  bus_include_notes: { type: DataTypes.TEXT, allowNull: true }
 }, {
   tableName: 'orders',
   underscored: true,

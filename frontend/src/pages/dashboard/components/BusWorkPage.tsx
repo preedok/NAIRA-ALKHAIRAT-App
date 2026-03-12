@@ -268,6 +268,12 @@ const BusWorkPage: React.FC = () => {
   }, [invoiceIdParam]);
 
   const busItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'bus') || [];
+  const orderItems = detailInvoice?.Order?.OrderItems || [];
+  const hasVisa = orderItems.some((i: any) => i.type === 'visa');
+  const waiveBusPenalty = !!detailInvoice?.Order?.waive_bus_penalty;
+  const isBusIncludeOnly = busItems.length === 0 && (hasVisa || waiveBusPenalty);
+  const ORDER_BUS_INCLUDE_KEY = 'order_bus_include';
+
   useEffect(() => {
     if (busItems.length) {
       const next: Record<string, BusItemDraft> = {};
@@ -283,8 +289,21 @@ const BusWorkPage: React.FC = () => {
         };
       });
       setDetailDraft(prev => ({ ...prev, ...next }));
+    } else if (detailInvoice?.Order && isBusIncludeOnly) {
+      const o = detailInvoice.Order as any;
+      setDetailDraft(prev => ({
+        ...prev,
+        [ORDER_BUS_INCLUDE_KEY]: {
+          bus_ticket_status: o.bus_include_ticket_status || 'pending',
+          bus_ticket_info: o.bus_include_ticket_info ?? '',
+          arrival_status: o.bus_include_arrival_status || 'pending',
+          departure_status: o.bus_include_departure_status || 'pending',
+          return_status: o.bus_include_return_status || 'pending',
+          notes: o.bus_include_notes ?? ''
+        }
+      }));
     }
-  }, [detailInvoice?.id, busItems.map((i: any) => i.id).join(',')]);
+  }, [detailInvoice?.id, detailInvoice?.Order?.bus_include_ticket_status, isBusIncludeOnly, busItems.map((i: any) => i.id).join(',')]);
 
   const handleProsesItem = (itemId: string) => {
     const d = detailDraft[itemId];
@@ -326,6 +345,30 @@ const BusWorkPage: React.FC = () => {
       showToast('Status bus berhasil diupdate.', 'success');
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal update status', 'error');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleProsesOrderBusInclude = async () => {
+    const d = detailDraft[ORDER_BUS_INCLUDE_KEY];
+    if (!d || !detailInvoice?.id) return;
+    setUpdatingId(ORDER_BUS_INCLUDE_KEY);
+    try {
+      await busApi.updateOrderBusIncludeProgress(detailInvoice.id, {
+        bus_ticket_status: d.bus_ticket_status,
+        bus_ticket_info: d.bus_ticket_info?.trim() || undefined,
+        arrival_status: d.arrival_status,
+        departure_status: d.departure_status,
+        return_status: d.return_status,
+        notes: d.notes?.trim() || undefined
+      });
+      const res = await busApi.getInvoice(detailInvoice.id);
+      if (res.data.success) setDetailInvoice(res.data.data);
+      refetchAll();
+      showToast('Status bus include berhasil disimpan.', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -526,6 +569,7 @@ const BusWorkPage: React.FC = () => {
                 onViewDetail={(i) => setSearchParams({ invoice: i.id })}
                 getStatusLabel={getEffectiveInvoiceStatusLabel}
                 getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+                progressAllowedSections={['visa', 'bus']}
               />
             )}
           />
@@ -608,9 +652,88 @@ const BusWorkPage: React.FC = () => {
                       );
                     })}
                 </div>
+              ) : isBusIncludeOnly ? (
+                (() => {
+                  const d = detailDraft[ORDER_BUS_INCLUDE_KEY] ?? {
+                    bus_ticket_status: 'pending',
+                    bus_ticket_info: '',
+                    arrival_status: 'pending',
+                    departure_status: 'pending',
+                    return_status: 'pending',
+                    notes: ''
+                  };
+                  return (
+                    <div className="p-4 border border-amber-200 rounded-xl space-y-3 bg-amber-50/50">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-semibold text-slate-800 flex items-center gap-2">
+                          <Bus className="w-4 h-4 text-[#0D1A63]" />
+                          Bus include (dengan visa)
+                        </p>
+                        <Button size="sm" variant="primary" onClick={handleProsesOrderBusInclude} disabled={updatingId === ORDER_BUS_INCLUDE_KEY}>
+                          {updatingId === ORDER_BUS_INCLUDE_KEY ? (
+                            <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...</>
+                          ) : (
+                            <><Play className="w-4 h-4 mr-1.5" /> Proses</>
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-slate-600">Isi status tiket, kedatangan, keberangkatan, dan kepulangan untuk bus include (tanpa item bus terpisah).</p>
+                      <Autocomplete
+                        label="Status Tiket Bis"
+                        value={d.bus_ticket_status ?? 'pending'}
+                        onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), bus_ticket_status: v ?? 'pending' } }))}
+                        options={TICKET_OPTIONS}
+                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                        fullWidth
+                      />
+                      <Input
+                        label="Info Tiket (nomor, dll)"
+                        type="text"
+                        placeholder="Opsional"
+                        value={d.bus_ticket_info ?? ''}
+                        onChange={(e) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), bus_ticket_info: e.target.value } }))}
+                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                        fullWidth
+                      />
+                      <Autocomplete
+                        label="Status Kedatangan"
+                        value={d.arrival_status ?? 'pending'}
+                        onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), arrival_status: v ?? 'pending' } }))}
+                        options={TRIP_OPTIONS}
+                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                        fullWidth
+                      />
+                      <Autocomplete
+                        label="Status Keberangkatan"
+                        value={d.departure_status ?? 'pending'}
+                        onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), departure_status: v ?? 'pending' } }))}
+                        options={TRIP_OPTIONS}
+                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                        fullWidth
+                      />
+                      <Autocomplete
+                        label="Status Kepulangan"
+                        value={d.return_status ?? 'pending'}
+                        onChange={(v) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), return_status: v ?? 'pending' } }))}
+                        options={TRIP_OPTIONS}
+                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                        fullWidth
+                      />
+                      <Textarea
+                        label="Catatan"
+                        rows={2}
+                        placeholder="Opsional"
+                        value={d.notes ?? ''}
+                        onChange={(e) => setDetailDraft(prev => ({ ...prev, [ORDER_BUS_INCLUDE_KEY]: { ...(prev[ORDER_BUS_INCLUDE_KEY] ?? {}), notes: e.target.value } }))}
+                        disabled={updatingId === ORDER_BUS_INCLUDE_KEY}
+                        fullWidth
+                      />
+                    </div>
+                  );
+                })()
               ) : busItems.length === 0 ? (
                 <p className="text-sm text-slate-600 rounded-lg bg-amber-50 border border-amber-100 p-4">
-                  Invoice ini <strong>bus include (dengan visa)</strong> atau penalti bus. Tidak ada item bus untuk di-progress (tiket, kedatangan, keberangkatan, kepulangan).
+                  Invoice ini tidak memiliki item bus atau bus include.
                 </p>
               ) : busItems.map((item: any, idx: number) => {
                 const prog = item.BusProgress;
@@ -694,9 +817,15 @@ const BusWorkPage: React.FC = () => {
             {detailTab === 'detail' && (
             <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
               <p className="text-sm text-slate-600">Perubahan input hanya tersimpan setelah Anda klik <strong>Proses</strong> (per item) atau <strong>Proses semua</strong> di bawah.</p>
-              <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || busItems.length === 0}>
-                {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
-              </Button>
+              {isBusIncludeOnly ? (
+                <Button variant="primary" onClick={handleProsesOrderBusInclude} disabled={!!updatingId}>
+                  {updatingId === ORDER_BUS_INCLUDE_KEY ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
+                </Button>
+              ) : (
+                <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || busItems.length === 0}>
+                  {updatingId ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</> : <><Play className="w-4 h-4 mr-2" /> Proses semua</>}
+                </Button>
+              )}
             </ModalFooter>
             )}
           </ModalBoxLg>

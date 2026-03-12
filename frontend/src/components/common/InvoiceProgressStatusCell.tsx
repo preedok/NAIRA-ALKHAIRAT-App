@@ -94,11 +94,15 @@ const defaultFormatDateWithTime = (d: string | null | undefined, time: string | 
   return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
 };
 
+export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'package';
+
 export interface InvoiceProgressStatusCellProps {
   /** Invoice row (dengan Order.OrderItems dan progress relations) */
   inv: any;
   formatDate?: (d: string | null | undefined) => string;
   formatDateWithTime?: (d: string | null | undefined, time?: string | null) => string;
+  /** Jika diisi, hanya section dengan key ini yang ditampilkan (mis. role bus: hanya visa & bus). */
+  allowedSections?: ProgressSectionKey[];
 }
 
 /**
@@ -108,8 +112,10 @@ export interface InvoiceProgressStatusCellProps {
 const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
   inv,
   formatDate = defaultFormatDate,
-  formatDateWithTime = defaultFormatDateWithTime
+  formatDateWithTime = defaultFormatDateWithTime,
+  allowedSections
 }) => {
+  const allow = (key: ProgressSectionKey) => !allowedSections || allowedSections.includes(key);
   const items = inv?.Order?.OrderItems || [];
   if (items.length === 0) return <span className="text-slate-400 text-xs">–</span>;
 
@@ -122,7 +128,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
 
   const sections: { title: string; nodes: React.ReactNode[] }[] = [];
 
-  if (visaItems.length > 0) {
+  if (visaItems.length > 0 && allow('visa')) {
     sections.push({
       title: 'Visa',
       nodes: visaItems.map((item: any, idx: number) => {
@@ -142,7 +148,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     });
   }
 
-  if (ticketItems.length > 0) {
+  if (ticketItems.length > 0 && allow('ticket')) {
     sections.push({
       title: 'Tiket',
       nodes: ticketItems.map((item: any, idx: number) => {
@@ -165,7 +171,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     });
   }
 
-  if (hotelItems.length > 0) {
+  if (hotelItems.length > 0 && allow('hotel')) {
     const getCheckInOut = (item: any) => {
       const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
       const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
@@ -212,7 +218,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     });
   }
 
-  if (busItems.length > 0) {
+  if (busItems.length > 0 && allow('bus')) {
     sections.push({
       title: 'Bus',
       nodes: busItems.map((item: any, idx: number) => {
@@ -258,7 +264,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     });
   }
 
-  if (handlingItems.length > 0) {
+  if (handlingItems.length > 0 && allow('handling')) {
     sections.push({
       title: 'Handling',
       nodes: handlingItems.map((item: any, idx: number) => {
@@ -273,7 +279,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     });
   }
 
-  if (packageItems.length > 0) {
+  if (packageItems.length > 0 && allow('package')) {
     sections.push({
       title: 'Paket',
       nodes: packageItems.map((item: any, idx: number) => {
