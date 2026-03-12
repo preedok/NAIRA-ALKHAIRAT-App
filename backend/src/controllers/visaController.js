@@ -243,10 +243,6 @@ const listInvoices = asyncHandler(async (req, res) => {
       orderItemsByOrderId[oid].push(plain);
     });
   }
-  for (const inv of invoices || []) {
-    if (inv.Order) inv.Order.setDataValue('OrderItems', orderItemsByOrderId[inv.order_id] || []);
-  }
-
   const invoiceIds = (invoices || []).map((i) => i.id).filter(Boolean);
   if (invoiceIds.length > 0) {
     const [reallocOut, reallocIn] = await Promise.all([
@@ -282,7 +278,12 @@ const listInvoices = asyncHandler(async (req, res) => {
   }
 
   const totalPages = Math.ceil((count || 0) / lim) || 1;
-  res.json({ success: true, data: invoices, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
+  const data = (invoices || []).map((inv) => {
+    const plain = inv.get ? inv.get({ plain: true }) : inv;
+    if (plain.Order && orderItemsByOrderId[plain.order_id]) plain.Order.OrderItems = orderItemsByOrderId[plain.order_id];
+    return plain;
+  });
+  res.json({ success: true, data, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
 });
 
 /**
