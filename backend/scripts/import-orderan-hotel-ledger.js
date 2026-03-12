@@ -21,13 +21,23 @@ process.chdir(path.join(__dirname, '..'));
 const sequelize = require('../src/config/sequelize');
 const { RekapHotel } = require('../src/models');
 
+function decodeEntities(s) {
+  if (!s) return s;
+  return String(s)
+    .replace(/&#x2713;/gi, '\u2713')
+    .replace(/&#x2714;/gi, '\u2714')
+    .replace(/&#9745;/g, '\u2713')
+    .replace(/&check;|&#10003;/gi, '\u2713')
+    .replace(/&nbsp;/gi, ' ');
+}
+
 function stripTags(html) {
   if (!html) return '';
-  return String(html)
+  return decodeEntities(String(html)
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
+    .replace(/&amp;/gi, '&'))
     .trim();
 }
 
@@ -87,11 +97,13 @@ function toInt(value) {
 }
 
 function toBool(cell) {
-  if (!cell) return false;
-  const s = String(cell).trim();
+  if (cell == null || cell === '') return false;
+  const s = decodeEntities(String(cell)).replace(/\s+/g, ' ').trim();
   if (!s) return false;
-  if (/^(0|no|tidak|false)$/i.test(s)) return false;
-  return true;
+  if (/^(0|no|n|tidak|false|\-|–)$/i.test(s)) return false;
+  if (/^(1|yes|y|v|v\/|x|✓|✔|√|true|centang|ada)$/i.test(s)) return true;
+  if (/&#x2713;|&#x2714;|&#9745;|&check;|&#10003;/i.test(s)) return true;
+  return true; // sembarang isi lain dianggap true (centang)
 }
 
 function truncate(str, maxLen) {
@@ -135,13 +147,35 @@ async function importFile(filePath, sortStart) {
     console.log(`[${path.basename(absPath)}] Ditemukan ${headerIndices.length} segmen tabel (header berulang), semua akan diimport.`);
   }
 
-  const colIndexOr = (...regexes) => {
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const colIndexInRow = (rowCells, ...regexes) => {
     for (const r of regexes) {
-      const i = header.findIndex((c) => r.test(String(c).trim()));
+      const i = rowCells.findIndex((c) => r.test(norm(c)));
       if (i >= 0) return i;
     }
     return -1;
   };
+  const colIndexOr = (...regexes) => colIndexInRow(header, ...regexes);
+
+  // Cari kolom di baris header atau 4 baris berikutnya (untuk tabel dengan subheader)
+  const scanStart = headerIndices[0];
+  const scanEnd = Math.min(scanStart + 5, trMatches.length);
+  const findColInRange = (...regexes) => {
+    for (let r = scanStart; r < scanEnd; r += 1) {
+      const rowCells = extractCells(trMatches[r]);
+      const i = colIndexInRow(rowCells, ...regexes);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const headerRow2 = scanStart + 1 < trMatches.length ? extractCells(trMatches[scanStart + 1]) : [];
+  const pick = (idxFromRow1, ...regexesRow2) => {
+    if (idxFromRow1 >= 0) return idxFromRow1;
+    const fromRow2 = colIndexInRow(headerRow2, ...regexesRow2);
+    if (fromRow2 >= 0) return fromRow2;
+    return findColInRange(...regexesRow2);
+  };
+
   const idxTntv = colIndexOr(/tntv/i);
   const idxDfnt = colIndexOr(/dfnt/i, /d\/fnt/i);
   const idxClient = colIndexOr(/client/i);
@@ -156,15 +190,27 @@ async function importFile(filePath, sortStart) {
   const idxHx = colIndexOr(/^hx$/i, /^\bhx\b/i);
   const idxRoom = colIndexOr(/room/i, /kamar/i);
   const idxPax = colIndexOr(/pax/i, /orang/i);
-  const idxBB = colIndexOr(/^bb\b/i, /bed\s*breakfast/i);
-  const idxFB = colIndexOr(/^fb\b/i, /full\s*board/i);
-  const idxAvail = colIndexOr(/available/i, /avail/i);
-  const idxBooked = colIndexOr(/booked/i);
-  const idxAmend = colIndexOr(/amend/i);
-  const idxLunas = colIndexOr(/lunas/i);
-  const idxVoucher = colIndexOr(/voucher/i);
-  const idxKet = colIndexOr(/keterangan/i, /ket\.?/i, /remark/i);
-  const idxClerk = colIndexOr(/invoice\s*clerk/i, /clerk/i);
+  const idxBB = pick(colIndexOr(/^bb\b/i, /bed\s*breakfast/i), /^bb\b/i);
+  const idxFB = pick(colIndexOr(/^fb\b/i, /full\s*board/i), /^fb\b/i);
+  const idxAvail = pick(colIndexOr(/available/i, /avail/i), /available/i, /avail/i);
+  const idxBooked = pick(colIndexOr(/booked/i), /booked/i);
+  const idxAmend = pick(colIndexOr(/amend/i), /amend/i);
+  const idxLunas = pick(colIndexOr(/lunas/i), /lunas/i);
+  let idxVoucher = pick(colIndexOr(/voucher/i), /voucher/i);
+  let idxKet = pick(
+    colIndexOr(/keterangan/i, /^ket\b/i, /ket\./i, /remark/i, /catatan/i),
+    /keterangan/i, /^ket\b/i, /remark/i, /catatan/i, /ket/i
+  );
+  let idxClerk = pick(
+    colIndexOr(/invoice\s*clerk/i, /clerk/i, /petugas/i),
+    /invoice\s*clerk/i, /clerk/i, /invoice/i, /petugas/i
+  );
+  // Fallback: kolom setelah Voucher = Keterangan, lalu Invoice Clerk (header sering kosong di export)
+  if (idxVoucher < 0 && idxLunas >= 0) idxVoucher = idxLunas + 1;
+  if (idxKet < 0 && idxVoucher >= 0) idxKet = idxVoucher + 1;
+  if (idxClerk < 0 && idxKet >= 0) idxClerk = idxKet + 1;
+  if (idxKet < 0) idxKet = 28;
+  if (idxClerk < 0) idxClerk = 29;
 
   const colMap = {
     TNTV: idxTntv, DFNT: idxDfnt, CLIENT: idxClient, HOTEL: idxHotel, IN: idxIn, OUT: idxOut,
@@ -173,6 +219,10 @@ async function importFile(filePath, sortStart) {
     Voucher: idxVoucher, Keterangan: idxKet, InvoiceClerk: idxClerk
   };
   console.log(`[${path.basename(absPath)}] Kolom terdeteksi:`, JSON.stringify(colMap));
+  if (idxKet < 0 || idxClerk < 0) {
+    const headerPreview = header.slice(0, 35).map((c, i) => `${i}:${norm(c).slice(0, 15)}`).join(' ');
+    console.log(`  Header (indeks:teks): ${headerPreview}`);
+  }
 
   const baseName = path.basename(absPath).replace(/\.html?$/i, '');
   const periodName = baseName;
@@ -198,25 +248,26 @@ async function importFile(filePath, sortStart) {
       const joined = cells.join(' ').trim();
       if (!joined) continue;
 
-      const tentative = idxTntv >= 0 ? (cells[idxTntv] || '').trim() || null : null;
-      const definite = idxDfnt >= 0 ? (cells[idxDfnt] || '').trim() || null : null;
-      const client = idxClient >= 0 ? (cells[idxClient] || '').trim() || null : null;
-      const checkInRaw = idxIn >= 0 ? cells[idxIn] || null : null;
-      const checkOutRaw = idxOut >= 0 ? cells[idxOut] || null : null;
-      const hotelVal = idxHotel >= 0 ? (cells[idxHotel] || '').trim() || null : null;
+      const getCell = (idx) => (idx >= 0 && idx < cells.length ? cells[idx] : null);
+      const tentative = idxTntv >= 0 ? (getCell(idxTntv) || '').trim() || null : null;
+      const definite = idxDfnt >= 0 ? (getCell(idxDfnt) || '').trim() || null : null;
+      const client = idxClient >= 0 ? (getCell(idxClient) || '').trim() || null : null;
+      const checkInRaw = getCell(idxIn);
+      const checkOutRaw = getCell(idxOut);
+      const hotelVal = idxHotel >= 0 ? (getCell(idxHotel) || '').trim() || null : null;
       const checkIn = parseDateId(checkInRaw);
       const checkOut = parseDateId(checkOutRaw);
 
       const numCols = [
         idxTotalHari, idxD, idxT, idxQ, idxQn, idxHx, idxRoom, idxPax
-      ].map((idx) => (idx >= 0 ? (cells[idx] || '').trim() : ''));
+      ].map((idx) => (idx >= 0 ? (getCell(idx) || '').trim() : ''));
       const boolCols = [
         idxBB, idxFB, idxAvail, idxBooked, idxAmend, idxLunas
-      ].map((idx) => (idx >= 0 ? (cells[idx] || '').trim() : ''));
+      ].map((idx) => (idx >= 0 ? (getCell(idx) || '').trim() : ''));
       const otherText = [
-        idxVoucher >= 0 ? (cells[idxVoucher] || '').trim() : '',
-        idxKet >= 0 ? (cells[idxKet] || '').trim() : '',
-        idxClerk >= 0 ? (cells[idxClerk] || '').trim() : ''
+        idxVoucher >= 0 ? (getCell(idxVoucher) || '').trim() : '',
+        idxKet >= 0 ? (getCell(idxKet) || '').trim() : '',
+        idxClerk >= 0 ? (getCell(idxClerk) || '').trim() : ''
       ];
 
       const hasNumeric = numCols.some((v) => v !== '');
@@ -241,23 +292,23 @@ async function importFile(filePath, sortStart) {
         hotel_madinah: isMadinah ? truncate(hotelVal, 200) : null,
         check_in: checkIn || null,
         check_out: checkOut || null,
-        total_hari: idxTotalHari >= 0 ? toInt(cells[idxTotalHari]) : null,
-        room_d: idxD >= 0 ? toInt(cells[idxD]) : null,
-        room_t: idxT >= 0 ? toInt(cells[idxT]) : null,
-        room_q: idxQ >= 0 ? toInt(cells[idxQ]) : null,
-        room_qn: idxQn >= 0 ? toInt(cells[idxQn]) : null,
-        room_hx: idxHx >= 0 ? toInt(cells[idxHx]) : null,
-        room: idxRoom >= 0 ? toInt(cells[idxRoom]) : null,
-        pax: idxPax >= 0 ? toInt(cells[idxPax]) : null,
-        meal_bb: idxBB >= 0 ? toBool(cells[idxBB]) : false,
-        meal_fb: idxFB >= 0 ? toBool(cells[idxFB]) : false,
-        status_available: idxAvail >= 0 ? toBool(cells[idxAvail]) : false,
-        status_booked: idxBooked >= 0 ? toBool(cells[idxBooked]) : false,
-        status_amend: idxAmend >= 0 ? toBool(cells[idxAmend]) : false,
-        status_lunas: idxLunas >= 0 ? toBool(cells[idxLunas]) : false,
-        voucher: idxVoucher >= 0 ? truncate(cells[idxVoucher], 120) : null,
-        keterangan: idxKet >= 0 ? truncate(cells[idxKet], 500) : null,
-        invoice_clerk: idxClerk >= 0 ? truncate(cells[idxClerk], 120) : null
+        total_hari: idxTotalHari >= 0 ? toInt(getCell(idxTotalHari)) : null,
+        room_d: idxD >= 0 ? toInt(getCell(idxD)) : null,
+        room_t: idxT >= 0 ? toInt(getCell(idxT)) : null,
+        room_q: idxQ >= 0 ? toInt(getCell(idxQ)) : null,
+        room_qn: idxQn >= 0 ? toInt(getCell(idxQn)) : null,
+        room_hx: idxHx >= 0 ? toInt(getCell(idxHx)) : null,
+        room: idxRoom >= 0 ? toInt(getCell(idxRoom)) : null,
+        pax: idxPax >= 0 ? toInt(getCell(idxPax)) : null,
+        meal_bb: idxBB >= 0 ? toBool(getCell(idxBB)) : false,
+        meal_fb: idxFB >= 0 ? toBool(getCell(idxFB)) : false,
+        status_available: idxAvail >= 0 ? toBool(getCell(idxAvail)) : false,
+        status_booked: idxBooked >= 0 ? toBool(getCell(idxBooked)) : false,
+        status_amend: idxAmend >= 0 ? toBool(getCell(idxAmend)) : false,
+        status_lunas: idxLunas >= 0 ? toBool(getCell(idxLunas)) : false,
+        voucher: idxVoucher >= 0 ? truncate(getCell(idxVoucher), 120) : null,
+        keterangan: idxKet >= 0 ? truncate(getCell(idxKet), 500) : null,
+        invoice_clerk: idxClerk >= 0 ? truncate(getCell(idxClerk), 120) : null
       });
       sortOrder += 1;
     }
