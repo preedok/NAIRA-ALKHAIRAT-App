@@ -263,6 +263,8 @@ async function importFile(filePath, sortStart) {
 
       const getCell = (idx) => (idx >= 0 && idx < cells.length ? cells[idx] : null);
       const getRaw = (idx) => (idx >= 0 && idx < rawCells.length ? rawCells[idx] : null);
+      const len = cells.length;
+      const last3 = len >= 3 ? [cells[len - 3], cells[len - 2], cells[len - 1]] : [];
       const tentative = idxTntv >= 0 ? (getCell(idxTntv) || '').trim() || null : null;
       const definite = idxDfnt >= 0 ? (getCell(idxDfnt) || '').trim() || null : null;
       const client = idxClient >= 0 ? (getCell(idxClient) || '').trim() || null : null;
@@ -320,9 +322,9 @@ async function importFile(filePath, sortStart) {
         status_booked: idxBooked >= 0 ? toBool(getCell(idxBooked), getRaw(idxBooked)) : false,
         status_amend: idxAmend >= 0 ? toBool(getCell(idxAmend), getRaw(idxAmend)) : false,
         status_lunas: idxLunas >= 0 ? toBool(getCell(idxLunas), getRaw(idxLunas)) : false,
-        voucher: idxVoucher >= 0 ? truncate(getCell(idxVoucher), 120) : null,
-        keterangan: idxKet >= 0 ? truncate(getCell(idxKet), 500) : null,
-        invoice_clerk: idxClerk >= 0 ? truncate(getCell(idxClerk), 120) : null
+        voucher: (idxVoucher >= 0 && idxVoucher < len) ? truncate(getCell(idxVoucher), 120) : (last3[0] ? truncate(String(last3[0]).trim(), 120) : null),
+        keterangan: (idxKet >= 0 && idxKet < len) ? truncate(getCell(idxKet), 500) : (last3[1] ? truncate(String(last3[1]).trim(), 500) : null),
+        invoice_clerk: (idxClerk >= 0 && idxClerk < len) ? truncate(getCell(idxClerk), 120) : (last3[2] ? truncate(String(last3[2]).trim(), 120) : null)
       });
       sortOrder += 1;
     }

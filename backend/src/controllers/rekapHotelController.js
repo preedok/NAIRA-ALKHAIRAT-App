@@ -32,6 +32,16 @@ function getTimeRangeDates(timeRange) {
   return { start, end: toYMD(endDate) };
 }
 
+function normalizeRekapRow(r) {
+  const row = r.get ? r.get({ plain: true }) : { ...r };
+  const bools = ['meal_bb', 'meal_fb', 'status_available', 'status_booked', 'status_amend', 'status_lunas'];
+  bools.forEach((k) => { if (row[k] == null) row[k] = false; });
+  if (row.voucher == null) row.voucher = '';
+  if (row.keterangan == null) row.keterangan = '';
+  if (row.invoice_clerk == null) row.invoice_clerk = '';
+  return row;
+}
+
 const list = asyncHandler(async (req, res) => {
   const {
     page = 1,
@@ -106,7 +116,7 @@ const list = asyncHandler(async (req, res) => {
   const totalPages = Math.ceil((count || 0) / lim) || 1;
   res.json({
     success: true,
-    data: rows,
+    data: rows.map(normalizeRekapRow),
     pagination: { total: count || 0, page: pg, limit: lim, totalPages }
   });
 });
@@ -143,7 +153,7 @@ const getOptions = asyncHandler(async (req, res) => {
 const getById = asyncHandler(async (req, res) => {
   const row = await RekapHotel.findByPk(req.params.id);
   if (!row) return res.status(404).json({ success: false, message: 'Rekap hotel tidak ditemukan' });
-  res.json({ success: true, data: row });
+  res.json({ success: true, data: normalizeRekapRow(row) });
 });
 
 /**
