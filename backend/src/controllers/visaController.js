@@ -424,9 +424,12 @@ const uploadVisa = [
     await progress.reload();
     const shouldNotify = progress.status === VISA_PROGRESS_STATUS.ISSUED;
 
+    const invoiceForNotify = order ? await Invoice.findOne({ where: { order_id: order.id }, attributes: ['invoice_number'] }) : null;
+    const invoiceNumber = invoiceForNotify ? invoiceForNotify.invoice_number : null;
+
     if (shouldNotify && order) {
       const title = 'Visa terbit';
-      const message = `Visa untuk order ${order.order_number} telah terbit dan dokumen visa dapat diunduh.`;
+      const message = invoiceNumber ? `Visa untuk invoice ${invoiceNumber} telah terbit dan dokumen visa dapat diunduh.` : `Visa telah terbit dan dokumen visa dapat diunduh.`;
       const data = { order_id: order.id, order_item_id: item.id, visa_file_url: fileUrl };
 
       await Notification.create({
@@ -514,8 +517,7 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   sheet.columns = [
     { header: 'No', key: 'no', width: 6 },
-    { header: 'Invoice Number', key: 'invoice_number', width: 22 },
-    { header: 'Order Number', key: 'order_number', width: 20 },
+    { header: 'No. Invoice', key: 'invoice_number', width: 22 },
     { header: 'Owner', key: 'owner_name', width: 25 },
     { header: 'Product Ref', key: 'product_ref_id', width: 38 },
     { header: 'Qty', key: 'quantity', width: 6 },
@@ -535,8 +537,7 @@ const exportExcel = asyncHandler(async (req, res) => {
       const status = prog?.status || VISA_PROGRESS_STATUS.DOCUMENT_RECEIVED;
       sheet.addRow({
         no: no++,
-        invoice_number: invRow?.invoice_number || '',
-        order_number: o.order_number,
+        invoice_number: invRow?.invoice_number || '–',
         owner_name: o.User?.name || '',
         product_ref_id: item.product_ref_id || '',
         quantity: item.quantity,
@@ -564,7 +565,7 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   const branchIds = await getVisaBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
 
-  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id', 'invoice_number'] });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
 
@@ -579,8 +580,8 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   if (!item) return res.status(404).json({ success: false, message: 'Item visa tidak ditemukan' });
 
   const buf = await buildVisaSlipPdfBuffer(item);
-  const orderNumber = item.Order?.order_number || 'ORD';
-  const filename = `Slip_Visa_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  const invNum = (invoice && invoice.invoice_number) ? String(invoice.invoice_number).replace(/[^a-zA-Z0-9-]/g, '_') : 'INV';
+  const filename = `Slip_Visa_${invNum}_${String(orderItemId).slice(-6)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');

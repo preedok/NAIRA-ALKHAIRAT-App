@@ -135,13 +135,13 @@ function ticketDocFilename(orderNumber, orderItemId, originalName) {
 }
 
 /**
- * Nama file dokumen info hotel (auto-generate): HOTEL_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.pdf
+ * Nama file dokumen info hotel (auto-generate): HOTEL_{invoiceNumber}_{orderItemId6}_YYYYMMDD_HHmmss.pdf
  */
-function hotelDocFilename(orderNumber, orderItemId) {
+function hotelDocFilename(invoiceNumber, orderItemId) {
   const { date, time } = dateTimeForFilename();
-  const ord = (orderNumber || 'ORD').replace(/[^a-zA-Z0-9-]/g, '_');
+  const inv = (invoiceNumber || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
   const id6 = (orderItemId || '').toString().slice(-6);
-  return `HOTEL_${ord}_${id6}_${date}_${time}.pdf`;
+  return `HOTEL_${inv}_${id6}_${date}_${time}.pdf`;
 }
 
 /**

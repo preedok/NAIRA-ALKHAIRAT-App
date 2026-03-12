@@ -193,9 +193,9 @@ export default function OwnerAIChatPage() {
     }
   }, [isOwner]);
 
-  // Persist conversations when they change
+  // Persist conversations when they change (termasuk saat kosong setelah hapus, agar reload tidak menampilkan lagi)
   useEffect(() => {
-    if (!userId || conversations.length === 0) return;
+    if (!userId) return;
     saveConversationsToStorage(userId, conversations);
   }, [userId, conversations]);
 

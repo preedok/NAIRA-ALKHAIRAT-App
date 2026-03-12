@@ -68,7 +68,7 @@ const HandlingWorkPage: React.FC = () => {
 
   const invoiceLikeList = useMemo(() => pendingList.map((row: any) => ({
     id: row.invoice_id || row.order_item_id || row.order_id,
-    invoice_number: row.invoice_number || row.order_number || '–',
+    invoice_number: row.invoice_number || '–',
     total_amount: row.total_amount ?? 0,
     status: row.status || 'pending',
     Order: { User: { name: row.owner_name || '–' } }

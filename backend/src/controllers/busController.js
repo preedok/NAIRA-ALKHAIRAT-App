@@ -644,13 +644,16 @@ const exportExcel = asyncHandler(async (req, res) => {
     order: [['order_number', 'ASC']]
   });
 
+  const invoicesForOrders = await Invoice.findAll({ where: { order_id: orderIds }, attributes: ['order_id', 'invoice_number'], raw: true });
+  const invoiceNumberByOrderId = invoicesForOrders.reduce((acc, inv) => { acc[inv.order_id] = inv.invoice_number; return acc; }, {});
+
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Bintang Global - Role Bus';
   const sheet = workbook.addWorksheet('Rekap Bus', { headerFooter: { firstHeader: 'Rekap Pekerjaan Bus' } });
 
   sheet.columns = [
     { header: 'No', key: 'no', width: 6 },
-    { header: 'Order Number', key: 'order_number', width: 20 },
+    { header: 'No. Invoice', key: 'invoice_number', width: 22 },
     { header: 'Owner', key: 'owner_name', width: 25 },
     { header: 'Qty', key: 'quantity', width: 6 },
     { header: 'Tiket Bis', key: 'bus_ticket_status', width: 12 },
@@ -716,6 +719,9 @@ const exportPdf = asyncHandler(async (req, res) => {
     order: [['order_number', 'ASC']]
   });
 
+  const invoicesForPdf = await Invoice.findAll({ where: { order_id: orderIds }, attributes: ['order_id', 'invoice_number'], raw: true });
+  const invNumByOrderId = invoicesForPdf.reduce((acc, inv) => { acc[inv.order_id] = inv.invoice_number; return acc; }, {});
+
   const doc = new PDFDocument({ margin: 50 });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=rekap-bus-${Date.now()}.pdf`);
@@ -731,7 +737,7 @@ const exportPdf = asyncHandler(async (req, res) => {
     (o.OrderItems || []).forEach(item => {
       const prog = item.BusProgress;
       rows.push({
-        order: o.order_number,
+        order: invNumByOrderId[o.id] || '–',
         owner: o.User?.name || '',
         qty: item.quantity,
         ticket: prog?.bus_ticket_status || BUS_TICKET_STATUS.PENDING,
@@ -745,7 +751,7 @@ const exportPdf = asyncHandler(async (req, res) => {
 
   const tableTop = doc.y;
   const colWidths = { no: 25, order: 80, owner: 90, qty: 30, ticket: 45, info: 60, arrival: 45, departure: 50, return: 45 };
-  const headers = ['No', 'Order', 'Owner', 'Qty', 'Tiket', 'Info', 'Kedatangan', 'Keberangkatan', 'Kepulangan'];
+  const headers = ['No', 'No. Invoice', 'Owner', 'Qty', 'Tiket', 'Info', 'Kedatangan', 'Keberangkatan', 'Kepulangan'];
   doc.font('Helvetica-Bold').fontSize(9);
   let x = 50;
   Object.keys(colWidths).forEach((k, i) => {
@@ -787,7 +793,7 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
 
-  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id', 'invoice_number'] });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
 
@@ -802,8 +808,8 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   if (!item) return res.status(404).json({ success: false, message: 'Item bus tidak ditemukan' });
 
   const buf = await buildBusSlipPdfBuffer(item);
-  const orderNumber = item.Order?.order_number || 'ORD';
-  const filename = `Slip_Bus_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  const invNum = (invoice && invoice.invoice_number) ? String(invoice.invoice_number).replace(/[^a-zA-Z0-9-]/g, '_') : 'INV';
+  const filename = `Slip_Bus_${invNum}_${String(orderItemId).slice(-6)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');

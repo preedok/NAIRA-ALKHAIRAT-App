@@ -287,15 +287,7 @@ async function buildContextForOwner(ownerId) {
     });
   }
 
-  const ownerOrders = await Order.count({ where: { owner_id: ownerId } });
   const ownerInvoicesCount = await Invoice.count({ where: { owner_id: ownerId } });
-  const recentOrders = await Order.findAll({
-    where: { owner_id: ownerId },
-    attributes: ['id', 'order_number', 'created_at'],
-    order: [['created_at', 'DESC']],
-    limit: 5,
-    raw: true
-  });
   const recentInvoices = await Invoice.findAll({
     where: { owner_id: ownerId },
     attributes: ['id', 'invoice_number', 'status', 'total_amount', 'remaining_amount'],
@@ -408,8 +400,7 @@ ${productSummaries.filter(ps => ps.type === 'hotel').map(ps => {
   return `  ${ps.name}: (belum diatur di data produk)`;
 }).join('\n')}
 
-Ringkasan owner: ${ownerOrders} order, ${ownerInvoicesCount} invoice.
-Order terbaru: ${recentOrders.length ? recentOrders.map(o => o.order_number).join(', ') : '-'}.
+Ringkasan owner: ${ownerInvoicesCount} invoice.
 Invoice terbaru (5):
 ${invoiceLines}
 

@@ -232,15 +232,18 @@ export function InvoiceStatusRefundCell({ inv, currencyRates, align = 'right', c
         )
       ) : (
         (() => {
-          const t = amountTriple(paid);
-          const isLunas = totalInv > 0 && paid >= totalInv;
+          // Lunas: tampilkan total tagihan sebagai jumlah dibayar dan 100%, agar tidak tampil Rp 0 / 0%
+          const isLunas = st === 'paid' || (totalInv > 0 && paid >= totalInv);
+          const displayPaid = isLunas && totalInv > 0 ? totalInv : paid;
+          const displayPct = isLunas && totalInv > 0 ? 100 : pctPaid;
+          const t = amountTriple(displayPaid);
           return (
             <>
-              <div className="text-[#0D1A63] font-medium"><NominalDisplay amount={paid} currency="IDR" /></div>
+              <div className="text-[#0D1A63] font-medium"><NominalDisplay amount={displayPaid} currency="IDR" /></div>
               <div className="text-xs text-slate-500">
                 <span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} />
               </div>
-              {pctPaid != null && <div className="text-xs text-slate-600 mt-0.5">{pctPaid}% dari total tagihan</div>}
+              {displayPct != null && <div className="text-xs text-slate-600 mt-0.5">{displayPct}% dari total tagihan</div>}
               {isLunas && <div className="text-xs text-emerald-600 mt-0.5">Lunas. Sisa tagihan: Rp 0.</div>}
             </>
           );

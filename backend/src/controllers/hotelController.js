@@ -530,8 +530,9 @@ const updateItemProgress = asyncHandler(async (req, res) => {
       });
       if (fullItem && fullItem.HotelProgress) {
         const buf = await buildHotelInfoPdfBuffer(fullItem);
-        const orderNumber = fullItem.Order?.order_number || 'ORD';
-        const fileName = uploadConfig.hotelDocFilename(orderNumber, fullItem.id);
+        const inv = fullItem.Order?.id ? await Invoice.findOne({ where: { order_id: fullItem.Order.id }, attributes: ['invoice_number'] }) : null;
+        const invoiceNumber = inv ? inv.invoice_number : 'INV';
+        const fileName = uploadConfig.hotelDocFilename(invoiceNumber, fullItem.id);
         const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.HOTEL_DOCS);
         const filePath = path.join(dir, fileName);
         fs.writeFileSync(filePath, buf, 'binary');

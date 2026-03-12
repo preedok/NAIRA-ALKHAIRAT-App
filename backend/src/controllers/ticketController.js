@@ -439,16 +439,17 @@ const uploadTicket = [
       });
     }
 
-    const order = await Order.findByPk(item.order_id, { attributes: ['id', 'order_number', 'branch_id'] });
+    const order = await Order.findByPk(item.order_id, { attributes: ['id', 'branch_id'] });
     await progress.reload();
     const shouldNotify = progress.status === TICKET_PROGRESS_STATUS.TICKET_ISSUED;
 
-    const invoiceForOwner = order ? await Invoice.findOne({ where: { order_id: order.id }, attributes: ['owner_id'] }) : null;
+    const invoiceForOwner = order ? await Invoice.findOne({ where: { order_id: order.id }, attributes: ['owner_id', 'invoice_number'] }) : null;
     const ownerId = invoiceForOwner ? invoiceForOwner.owner_id : null;
+    const invoiceNumber = invoiceForOwner ? invoiceForOwner.invoice_number : null;
 
     if (shouldNotify && order) {
       const title = 'Tiket terbit';
-      const message = `Tiket untuk order ${order.order_number} telah terbit dan dokumen tiket dapat diunduh.`;
+      const message = invoiceNumber ? `Tiket untuk invoice ${invoiceNumber} telah terbit dan dokumen tiket dapat diunduh.` : `Tiket telah terbit dan dokumen tiket dapat diunduh.`;
       const data = { order_id: order.id, order_item_id: item.id, ticket_file_url: fileUrl };
 
       if (ownerId) {
@@ -541,8 +542,7 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   sheet.columns = [
     { header: 'No', key: 'no', width: 6 },
-    { header: 'Invoice Number', key: 'invoice_number', width: 22 },
-    { header: 'Order Number', key: 'order_number', width: 20 },
+    { header: 'No. Invoice', key: 'invoice_number', width: 22 },
     { header: 'Owner', key: 'owner_name', width: 25 },
     { header: 'Product Ref', key: 'product_ref_id', width: 38 },
     { header: 'Qty', key: 'quantity', width: 6 },
@@ -591,7 +591,7 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   const branchIds = await getTicketBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
 
-  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id'] });
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id', 'invoice_number'] });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
 
@@ -606,8 +606,8 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   if (!item) return res.status(404).json({ success: false, message: 'Item tiket tidak ditemukan' });
 
   const buf = await buildTicketSlipPdfBuffer(item);
-  const orderNumber = item.Order?.order_number || 'ORD';
-  const filename = `Slip_Tiket_${(orderNumber || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${String(orderItemId).slice(-6)}.pdf`;
+  const invNum = (invoice && invoice.invoice_number) ? String(invoice.invoice_number).replace(/[^a-zA-Z0-9-]/g, '_') : 'INV';
+  const filename = `Slip_Tiket_${invNum}_${String(orderItemId).slice(-6)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${filename.replace(/"/g, '%22')}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');
