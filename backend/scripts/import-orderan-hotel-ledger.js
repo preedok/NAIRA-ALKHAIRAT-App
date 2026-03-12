@@ -51,6 +51,16 @@ function extractCells(trHtml) {
   return cells;
 }
 
+function extractRawCells(trHtml) {
+  const raw = [];
+  const re = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+  let m;
+  while ((m = re.exec(trHtml)) !== null) {
+    raw.push(m[1]);
+  }
+  return raw;
+}
+
 function parseDateId(text) {
   if (!text) return null;
   const s = text.trim();
@@ -96,7 +106,9 @@ function toInt(value) {
   return Number.isNaN(n) ? null : n;
 }
 
-function toBool(cell) {
+function toBool(cell, rawHtml) {
+  const raw = String(rawHtml || '').trim();
+  if (raw && (/<img/i.test(raw) || /checked/i.test(raw) || /data-value\s*=\s*["']?true/i.test(raw))) return true;
   if (cell == null || cell === '') return false;
   const s = decodeEntities(String(cell)).replace(/\s+/g, ' ').trim();
   if (!s) return false;
@@ -244,11 +256,13 @@ async function importFile(filePath, sortStart) {
 
     for (let i = headerIndex + 1; i < endIndex; i += 1) {
       const cells = extractCells(trMatches[i]);
+      const rawCells = extractRawCells(trMatches[i]);
       if (cells.length === 0) continue;
       const joined = cells.join(' ').trim();
       if (!joined) continue;
 
       const getCell = (idx) => (idx >= 0 && idx < cells.length ? cells[idx] : null);
+      const getRaw = (idx) => (idx >= 0 && idx < rawCells.length ? rawCells[idx] : null);
       const tentative = idxTntv >= 0 ? (getCell(idxTntv) || '').trim() || null : null;
       const definite = idxDfnt >= 0 ? (getCell(idxDfnt) || '').trim() || null : null;
       const client = idxClient >= 0 ? (getCell(idxClient) || '').trim() || null : null;
@@ -300,12 +314,12 @@ async function importFile(filePath, sortStart) {
         room_hx: idxHx >= 0 ? toInt(getCell(idxHx)) : null,
         room: idxRoom >= 0 ? toInt(getCell(idxRoom)) : null,
         pax: idxPax >= 0 ? toInt(getCell(idxPax)) : null,
-        meal_bb: idxBB >= 0 ? toBool(getCell(idxBB)) : false,
-        meal_fb: idxFB >= 0 ? toBool(getCell(idxFB)) : false,
-        status_available: idxAvail >= 0 ? toBool(getCell(idxAvail)) : false,
-        status_booked: idxBooked >= 0 ? toBool(getCell(idxBooked)) : false,
-        status_amend: idxAmend >= 0 ? toBool(getCell(idxAmend)) : false,
-        status_lunas: idxLunas >= 0 ? toBool(getCell(idxLunas)) : false,
+        meal_bb: idxBB >= 0 ? toBool(getCell(idxBB), getRaw(idxBB)) : false,
+        meal_fb: idxFB >= 0 ? toBool(getCell(idxFB), getRaw(idxFB)) : false,
+        status_available: idxAvail >= 0 ? toBool(getCell(idxAvail), getRaw(idxAvail)) : false,
+        status_booked: idxBooked >= 0 ? toBool(getCell(idxBooked), getRaw(idxBooked)) : false,
+        status_amend: idxAmend >= 0 ? toBool(getCell(idxAmend), getRaw(idxAmend)) : false,
+        status_lunas: idxLunas >= 0 ? toBool(getCell(idxLunas), getRaw(idxLunas)) : false,
         voucher: idxVoucher >= 0 ? truncate(getCell(idxVoucher), 120) : null,
         keterangan: idxKet >= 0 ? truncate(getCell(idxKet), 500) : null,
         invoice_clerk: idxClerk >= 0 ? truncate(getCell(idxClerk), 120) : null
