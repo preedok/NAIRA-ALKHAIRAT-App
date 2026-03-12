@@ -243,6 +243,26 @@ export const HOTEL_LOCATION_LABELS = {
   madinah: 'Madinah'
 };
 
+/** Urutan tampilan item order / progress: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket. */
+export const ORDER_ITEM_DISPLAY_ORDER = ['hotel_madinah', 'hotel_makkah', 'visa', 'ticket', 'bus', 'handling', 'package', 'bus_include'] as const;
+
+/** Index untuk sort: semakin kecil semakin dulu. Hotel Madinah=0, Hotel Mekkah=1, Visa=2, Tiket=3, Bus=4, ... */
+export function getOrderItemSortIndex(type: string, hotelLocation?: string | null): number {
+  if (type === 'hotel') return ((hotelLocation || '').toLowerCase() === 'madinah') ? 0 : 1;
+  const idx = (ORDER_ITEM_DISPLAY_ORDER as readonly string[]).indexOf(type);
+  return idx >= 0 ? idx : 99;
+}
+
+/** Ambil lokasi hotel dari item (meta.hotel_location atau infer dari nama produk). */
+export function getHotelLocationFromItem(item: { meta?: { hotel_location?: string }; Product?: { name?: string }; product_name?: string }): 'madinah' | 'makkah' {
+  const fromMeta = (item?.meta?.hotel_location || '').toLowerCase();
+  if (fromMeta === 'madinah' || fromMeta === 'makkah') return fromMeta as 'madinah' | 'makkah';
+  const name = (item?.Product?.name || (item as any)?.product_name || '').toLowerCase();
+  if (/madinah/i.test(name)) return 'madinah';
+  if (/mekkah|makkah/i.test(name)) return 'makkah';
+  return 'makkah'; // default
+}
+
 // ============================================
 // STAR RATINGS
 // ============================================

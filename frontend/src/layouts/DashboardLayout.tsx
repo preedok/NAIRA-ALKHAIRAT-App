@@ -45,7 +45,7 @@ const menuItems: MenuItem[] = [
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling', 'role_rekap_hotel']
   },
   {
     title: 'Asisten AI',
@@ -102,6 +102,12 @@ const menuItems: MenuItem[] = [
     icon: <HandHelping className="w-5 h-5" />,
     path: '/dashboard/progress-handling',
     roles: ['super_admin', 'handling']
+  },
+  {
+    title: 'Rekap Hotel',
+    icon: <BarChart3 className="w-5 h-5" />,
+    path: '/dashboard/rekap-hotel',
+    roles: ['super_admin', 'role_rekap_hotel']
   },
   {
     title: 'Invoice',

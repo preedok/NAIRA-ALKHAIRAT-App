@@ -39,6 +39,7 @@ import RefundsPage from '../pages/dashboard/components/RefundsPage';
 import AccountingFinancialReportPage from '../pages/dashboard/accounting/AccountingFinancialReportPage';
 import AccountingAgingPage from '../pages/dashboard/accounting/AccountingAgingPage';
 import AccountingChartOfAccountsPage from '../pages/dashboard/accounting/AccountingChartOfAccountsPage';
+import RekapHotelPage from '../pages/dashboard/rekap/RekapHotelPage';
 
 const router = createBrowserRouter([
   {
@@ -123,6 +124,10 @@ const router = createBrowserRouter([
           {
             path: 'progress-handling',
             element: <HandlingWorkPage />
+          },
+          {
+            path: 'rekap-hotel',
+            element: <RekapHotelPage />
           },
           {
             path: 'products/visa',

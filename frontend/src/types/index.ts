@@ -20,7 +20,8 @@ export type UserRole =
   | 'owner_non_mou'
   | 'role_hotel'
   | 'role_bus'
-  | 'role_accounting';
+  | 'role_accounting'
+  | 'role_rekap_hotel';
 
 export interface User {
   id: string;
@@ -78,7 +79,8 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   owner_non_mou: 'Owner Non-MOU',
   role_hotel: 'Hotel',
   role_bus: 'Bus',
-  role_accounting: 'Accounting'
+  role_accounting: 'Accounting',
+  role_rekap_hotel: 'Rekap Hotel'
 };
 
 /** Role owner (hanya owner_mou dan owner_non_mou; role "owner" sudah tidak dipakai) */

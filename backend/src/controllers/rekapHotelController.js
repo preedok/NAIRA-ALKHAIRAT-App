@@ -1,0 +1,273 @@
+const asyncHandler = require('express-async-handler');
+const { Op } = require('sequelize');
+const { RekapHotel } = require('../models');
+
+/**
+ * GET /api/v1/rekap-hotel
+ * List dengan filter: source_type, period_name, season_year, client, location, status, paket_type, bandara.
+ */
+const list = asyncHandler(async (req, res) => {
+  const {
+    page = 1,
+    limit = 50,
+    source_type,
+    period_name,
+    season_year,
+    client,
+    location,
+    status,
+    paket_type,
+    bandara,
+    search,
+    sort_by = 'sort_order',
+    sort_order = 'ASC'
+  } = req.query;
+
+  const pg = Math.max(1, parseInt(page, 10));
+  const lim = Math.min(100, Math.max(1, parseInt(limit, 10)));
+  const offset = (pg - 1) * lim;
+
+  const where = {};
+  if (source_type && source_type.trim()) where.source_type = source_type.trim();
+  if (period_name && period_name.trim()) where.period_name = { [Op.iLike]: `%${period_name.trim()}%` };
+  if (season_year && season_year.trim()) where.season_year = season_year.trim();
+  if (location && location.trim()) where.location = { [Op.iLike]: location.trim() };
+  if (status && status.trim()) where.status = { [Op.iLike]: status.trim() };
+  if (paket_type && paket_type.trim()) where.paket_type = { [Op.iLike]: `%${paket_type.trim()}%` };
+  if (bandara && bandara.trim()) where.bandara = { [Op.iLike]: bandara.trim() };
+  if (client && client.trim()) where.client = { [Op.iLike]: `%${client.trim()}%` };
+
+  if (search && search.trim()) {
+    const s = `%${search.trim()}%`;
+    where[Op.or] = [
+      { client: { [Op.iLike]: s } },
+      { hotel_makkah: { [Op.iLike]: s } },
+      { hotel_madinah: { [Op.iLike]: s } },
+      { hotel_name: { [Op.iLike]: s } },
+      { hotel_combo: { [Op.iLike]: s } },
+      { paket: { [Op.iLike]: s } },
+      { paket_label: { [Op.iLike]: s } },
+      { notes: { [Op.iLike]: s } },
+      { keterangan: { [Op.iLike]: s } },
+      { definite: { [Op.iLike]: s } },
+      { tentative: { [Op.iLike]: s } },
+      { ref_number: { [Op.iLike]: s } },
+      { voucher: { [Op.iLike]: s } },
+      { invoice_clerk: { [Op.iLike]: s } }
+    ];
+  }
+
+  const order = [[sort_by, (sort_order || 'ASC').toUpperCase() === 'DESC' ? 'DESC' : 'ASC'], ['created_at', 'ASC']];
+  const { count, rows } = await RekapHotel.findAndCountAll({
+    where,
+    limit: lim,
+    offset,
+    order,
+    distinct: true
+  });
+
+  const totalPages = Math.ceil((count || 0) / lim) || 1;
+  res.json({
+    success: true,
+    data: rows,
+    pagination: { total: count || 0, page: pg, limit: lim, totalPages }
+  });
+});
+
+/**
+ * GET /api/v1/rekap-hotel/options
+ * Aggregasi untuk filter dropdown: period_name, season_year, location, status, paket_type, bandara.
+ */
+const getOptions = asyncHandler(async (req, res) => {
+  const [periods, seasons, locations, statuses, paketTypes, bandaras] = await Promise.all([
+    RekapHotel.findAll({ attributes: ['period_name'], where: { period_name: { [Op.ne]: null } }, group: ['period_name'], raw: true }).then(r => r.map(x => x.period_name).filter(Boolean).sort()),
+    RekapHotel.findAll({ attributes: ['season_year'], where: { season_year: { [Op.ne]: null } }, group: ['season_year'], raw: true }).then(r => r.map(x => x.season_year).filter(Boolean).sort()),
+    RekapHotel.findAll({ attributes: ['location'], where: { location: { [Op.ne]: null } }, group: ['location'], raw: true }).then(r => r.map(x => x.location).filter(Boolean).sort()),
+    RekapHotel.findAll({ attributes: ['status'], where: { status: { [Op.ne]: null } }, group: ['status'], raw: true }).then(r => r.map(x => x.status).filter(Boolean).sort()),
+    RekapHotel.findAll({ attributes: ['paket_type'], where: { paket_type: { [Op.ne]: null } }, group: ['paket_type'], raw: true }).then(r => r.map(x => x.paket_type).filter(Boolean).sort()),
+    RekapHotel.findAll({ attributes: ['bandara'], where: { bandara: { [Op.ne]: null } }, group: ['bandara'], raw: true }).then(r => r.map(x => x.bandara).filter(Boolean).sort())
+  ]);
+  res.json({
+    success: true,
+    data: {
+      period_names: periods,
+      season_years: seasons,
+      locations,
+      statuses,
+      paket_types: paketTypes,
+      bandaras
+    }
+  });
+});
+
+/**
+ * GET /api/v1/rekap-hotel/:id
+ */
+const getById = asyncHandler(async (req, res) => {
+  const row = await RekapHotel.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ success: false, message: 'Rekap hotel tidak ditemukan' });
+  res.json({ success: true, data: row });
+});
+
+/**
+ * POST /api/v1/rekap-hotel
+ */
+const create = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const payload = {
+    source_type: body.source_type || 'order_list',
+    period_name: body.period_name || null,
+    season_year: body.season_year || null,
+    sort_order: body.sort_order != null ? body.sort_order : 0,
+    tentative: body.tentative || null,
+    definite: body.definite || null,
+    client: body.client || null,
+    paket: body.paket || null,
+    hotel_makkah: body.hotel_makkah || null,
+    hotel_madinah: body.hotel_madinah || null,
+    check_in: body.check_in || null,
+    check_out: body.check_out || null,
+    total_hari: body.total_hari != null ? body.total_hari : null,
+    room_d: body.room_d != null ? body.room_d : null,
+    room_t: body.room_t != null ? body.room_t : null,
+    room_q: body.room_q != null ? body.room_q : null,
+    room_qn: body.room_qn != null ? body.room_qn : null,
+    room_hx: body.room_hx != null ? body.room_hx : null,
+    room: body.room != null ? body.room : null,
+    pax: body.pax != null ? body.pax : null,
+    meal_bb: body.meal_bb === true || body.meal_bb === 'true',
+    meal_fb: body.meal_fb === true || body.meal_fb === 'true',
+    status_available: body.status_available === true || body.status_available === 'true',
+    status_booked: body.status_booked === true || body.status_booked === 'true',
+    status_amend: body.status_amend === true || body.status_amend === 'true',
+    status_lunas: body.status_lunas === true || body.status_lunas === 'true',
+    voucher: body.voucher || null,
+    invoice_clerk: body.invoice_clerk || null,
+    ket: body.ket || null,
+    keterangan: body.keterangan || null,
+    location: body.location || null,
+    hotel_name: body.hotel_name || null,
+    room_7bed: body.room_7bed || null,
+    room_6bed: body.room_6bed || null,
+    room_quint: body.room_quint || null,
+    room_quad: body.room_quad || null,
+    room_triple: body.room_triple || null,
+    room_double: body.room_double || null,
+    total_room: body.total_room || null,
+    status: body.status || null,
+    ref_number: body.ref_number || null,
+    hotel_combo: body.hotel_combo || null,
+    bandara: body.bandara || null,
+    paket_type: body.paket_type || null,
+    paket_label: body.paket_label || null,
+    notes: body.notes || null,
+    extra_notes: Array.isArray(body.extra_notes) ? body.extra_notes : [],
+    created_by: req.user?.id || null
+  };
+  const row = await RekapHotel.create(payload);
+  res.status(201).json({ success: true, data: row });
+});
+
+/**
+ * PATCH /api/v1/rekap-hotel/:id
+ */
+const update = asyncHandler(async (req, res) => {
+  const row = await RekapHotel.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ success: false, message: 'Rekap hotel tidak ditemukan' });
+  const body = req.body || {};
+  const allowed = [
+    'source_type', 'period_name', 'season_year', 'sort_order',
+    'tentative', 'definite', 'client', 'paket', 'hotel_makkah', 'hotel_madinah',
+    'check_in', 'check_out', 'total_hari', 'room_d', 'room_t', 'room_q', 'room_qn', 'room_hx', 'room', 'pax',
+    'meal_bb', 'meal_fb', 'status_available', 'status_booked', 'status_amend', 'status_lunas',
+    'voucher', 'invoice_clerk', 'ket', 'keterangan',
+    'location', 'hotel_name', 'room_7bed', 'room_6bed', 'room_quint', 'room_quad', 'room_triple', 'room_double', 'total_room',
+    'status', 'ref_number', 'hotel_combo', 'bandara', 'paket_type', 'paket_label', 'notes', 'extra_notes'
+  ];
+  for (const key of allowed) {
+    if (key in body) row[key] = body[key];
+  }
+  await row.save();
+  res.json({ success: true, data: row });
+});
+
+/**
+ * DELETE /api/v1/rekap-hotel/:id
+ */
+const remove = asyncHandler(async (req, res) => {
+  const row = await RekapHotel.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ success: false, message: 'Rekap hotel tidak ditemukan' });
+  await row.destroy();
+  res.json({ success: true, message: 'Rekap hotel dihapus' });
+});
+
+/**
+ * POST /api/v1/rekap-hotel/bulk
+ * Bulk create (untuk import).
+ */
+const bulkCreate = asyncHandler(async (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (items.length > 200) return res.status(400).json({ success: false, message: 'Maksimal 200 baris per request' });
+  const mapItem = (body) => ({
+    source_type: body.source_type || 'order_list',
+    period_name: body.period_name || null,
+    season_year: body.season_year || null,
+    sort_order: body.sort_order != null ? body.sort_order : 0,
+    tentative: body.tentative || null,
+    definite: body.definite || null,
+    client: body.client || null,
+    paket: body.paket || null,
+    hotel_makkah: body.hotel_makkah || null,
+    hotel_madinah: body.hotel_madinah || null,
+    check_in: body.check_in || null,
+    check_out: body.check_out || null,
+    total_hari: body.total_hari != null ? body.total_hari : null,
+    room_d: body.room_d != null ? body.room_d : null,
+    room_t: body.room_t != null ? body.room_t : null,
+    room_q: body.room_q != null ? body.room_q : null,
+    room_qn: body.room_qn != null ? body.room_qn : null,
+    room_hx: body.room_hx != null ? body.room_hx : null,
+    room: body.room != null ? body.room : null,
+    pax: body.pax != null ? body.pax : null,
+    meal_bb: body.meal_bb === true || body.meal_bb === 'true',
+    meal_fb: body.meal_fb === true || body.meal_fb === 'true',
+    status_available: body.status_available === true || body.status_available === 'true',
+    status_booked: body.status_booked === true || body.status_booked === 'true',
+    status_amend: body.status_amend === true || body.status_amend === 'true',
+    status_lunas: body.status_lunas === true || body.status_lunas === 'true',
+    voucher: body.voucher || null,
+    invoice_clerk: body.invoice_clerk || null,
+    ket: body.ket || null,
+    keterangan: body.keterangan || null,
+    location: body.location || null,
+    hotel_name: body.hotel_name || null,
+    room_7bed: body.room_7bed || null,
+    room_6bed: body.room_6bed || null,
+    room_quint: body.room_quint || null,
+    room_quad: body.room_quad || null,
+    room_triple: body.room_triple || null,
+    room_double: body.room_double || null,
+    total_room: body.total_room || null,
+    status: body.status || null,
+    ref_number: body.ref_number || null,
+    hotel_combo: body.hotel_combo || null,
+    bandara: body.bandara || null,
+    paket_type: body.paket_type || null,
+    paket_label: body.paket_label || null,
+    notes: body.notes || null,
+    extra_notes: Array.isArray(body.extra_notes) ? body.extra_notes : [],
+    created_by: req.user?.id || null
+  });
+  const created = await RekapHotel.bulkCreate(items.map(mapItem));
+  res.status(201).json({ success: true, data: created, count: created.length });
+});
+
+module.exports = {
+  list,
+  getOptions,
+  getById,
+  create,
+  update,
+  remove,
+  bulkCreate
+};

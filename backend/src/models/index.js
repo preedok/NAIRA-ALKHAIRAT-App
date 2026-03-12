@@ -45,6 +45,7 @@ const Bank = require('./Bank');
 const InvoiceStatusHistory = require('./InvoiceStatusHistory');
 const OrderRevision = require('./OrderRevision');
 const Maskapai = require('./Maskapai');
+const RekapHotel = require('./RekapHotel');
 
 // Wilayah -> Provinsi -> Kabupaten, Branch
 Wilayah.hasMany(Provinsi, { foreignKey: 'wilayah_id' });
@@ -275,7 +276,8 @@ const db = {
   Bank,
   InvoiceStatusHistory,
   OrderRevision,
-  Maskapai
+  Maskapai,
+  RekapHotel
 };
 
 module.exports = db;

@@ -414,6 +414,29 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         subtotal: totalSub
       });
     });
+    // Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket
+    const getHotelLocationFromItem = (it) => {
+      const fromMeta = (it?.meta?.hotel_location || '').toLowerCase();
+      if (fromMeta === 'madinah' || fromMeta === 'makkah') return fromMeta;
+      const name = (it?.Product?.name || it?.product_name || '').toLowerCase();
+      if (/madinah/.test(name)) return 'madinah';
+      if (/mekkah|makkah/.test(name)) return 'makkah';
+      return 'makkah';
+    };
+    const getOrderItemSortIndex = (type, hotelLocation) => {
+      const t = (type || '').toLowerCase();
+      if (t === 'hotel') return ((hotelLocation || '').toLowerCase() === 'madinah') ? 0 : 1;
+      const order = ['visa', 'ticket', 'bus', 'handling', 'package'];
+      const idx = order.indexOf(t);
+      return idx >= 0 ? idx + 2 : 99;
+    };
+    result.sort((a, b) => {
+      const tA = (a.type || '').toLowerCase();
+      const tB = (b.type || b.product_type || '').toLowerCase();
+      const locA = tA === 'hotel' ? getHotelLocationFromItem(a) : null;
+      const locB = tB === 'hotel' ? getHotelLocationFromItem(b) : null;
+      return getOrderItemSortIndex(tA, locA) - getOrderItemSortIndex(tB, locB);
+    });
     // Baris sintetis: Bus include (dengan visa) bila order punya visa dan tidak ada item bus
     const hasVisa = items.some((it) => (it.type || '').toLowerCase() === 'visa');
     const hasBusItems = items.some((it) => (it.type || '').toLowerCase() === 'bus');

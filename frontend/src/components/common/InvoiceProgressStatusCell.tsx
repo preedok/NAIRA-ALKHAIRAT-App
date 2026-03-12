@@ -1,9 +1,9 @@
 /**
  * Status progress per divisi (Visa, Tiket, Hotel, Bus) — satu sumber kebenaran.
- * Dipakai di: tabel Invoice (OrdersInvoicesPage) dan tab Progress detail invoice.
- * Label diselaraskan dengan menu Progress masing-masing divisi (VisaWorkPage, TicketWorkPage, HotelWorkPage, BusWorkPage).
+ * Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket.
  */
 import React from 'react';
+import { getHotelLocationFromItem } from '../../utils/constants';
 
 /** Label status Visa (menu Progress Visa) */
 export const PROGRESS_LABELS_VISA: Record<string, string> = {
@@ -132,10 +132,68 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
   const handlingItems = items.filter((i: any) => (i.type || i.product_type) === 'handling');
   const packageItems = items.filter((i: any) => (i.type || i.product_type) === 'package');
 
-  const sections: { title: string; nodes: React.ReactNode[] }[] = [];
+  type Section = { sortIndex: number; title: string; nodes: React.ReactNode[] };
+  const sections: Section[] = [];
+
+  const renderHotelGroups = (hotelGroups: { key: string; name: string; items: any[] }[]) => {
+    const getCheckInOut = (item: any) => {
+      const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
+      const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
+      return { ci, co };
+    };
+    return hotelGroups.map((group) => {
+      const first = group.items[0];
+      const status = PROGRESS_LABELS_HOTEL[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
+      const mealStatus = first?.HotelProgress?.meal_status;
+      const mealLabel = mealStatus ? (PROGRESS_LABELS_MEAL[mealStatus] || mealStatus) : null;
+      const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
+      const checkOut = formatDateWithTime(first?.HotelProgress?.check_out_date ?? first?.meta?.check_out, first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time ?? '12:00');
+      const roomLines = group.items.map((item: any) => {
+        const rt = item.room_type || item.meta?.room_type || '';
+        const qty = Math.max(0, parseInt(String(item.quantity ?? 0), 10) || 0);
+        const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;
+        const orang = qty * cap;
+        const label = ROOM_TYPE_LABELS[rt] || rt || '–';
+        return `${qty} ${label}${cap > 0 ? ` (${orang} org)` : ''}`;
+      });
+      return (
+        <div key={group.key} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+          <span className="font-medium text-slate-800" title={group.name}>{group.name}:</span>{' '}
+          <span className={status === 'Selesai' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{status}</span>
+          {roomLines.length > 0 && <div className="text-slate-700 mt-0.5">{roomLines.join(', ')}</div>}
+          {mealLabel != null && <div className="text-slate-600 mt-0.5">Makan: {mealLabel}</div>}
+          <div className="text-slate-500 mt-0.5">CI {checkIn} · CO {checkOut}</div>
+        </div>
+      );
+    });
+  };
+
+  if (hotelItems.length > 0 && allow('hotel')) {
+    const getCheckInOut = (item: any) => {
+      const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
+      const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
+      return { ci, co };
+    };
+    type HotelGroup = { key: string; name: string; items: any[] };
+    const allHotelGroups = (hotelItems as any[]).reduce((acc: HotelGroup[], item: any) => {
+      const pid = String(item.product_ref_id || item.product_id || '');
+      const { ci, co } = getCheckInOut(item);
+      const key = `${pid}|${ci}|${co}`;
+      const name = item.Product?.name || item.product_name || 'Hotel';
+      const existing = acc.find((g: HotelGroup) => g.key === key);
+      if (existing) existing.items.push(item);
+      else acc.push({ key, name, items: [item] });
+      return acc;
+    }, [] as HotelGroup[]);
+    const hotelMadinah = allHotelGroups.filter((g) => getHotelLocationFromItem(g.items[0]) === 'madinah');
+    const hotelMakkah = allHotelGroups.filter((g) => getHotelLocationFromItem(g.items[0]) === 'makkah');
+    if (hotelMadinah.length > 0) sections.push({ sortIndex: 0, title: 'Hotel Madinah', nodes: renderHotelGroups(hotelMadinah) });
+    if (hotelMakkah.length > 0) sections.push({ sortIndex: 1, title: 'Hotel Mekkah', nodes: renderHotelGroups(hotelMakkah) });
+  }
 
   if (visaItems.length > 0 && allow('visa')) {
     sections.push({
+      sortIndex: 2,
       title: 'Visa',
       nodes: visaItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Visa';
@@ -156,6 +214,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
 
   if (ticketItems.length > 0 && allow('ticket')) {
     sections.push({
+      sortIndex: 3,
       title: 'Tiket',
       nodes: ticketItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Tiket';
@@ -177,55 +236,9 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     });
   }
 
-  if (hotelItems.length > 0 && allow('hotel')) {
-    const getCheckInOut = (item: any) => {
-      const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
-      const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
-      return { ci, co };
-    };
-    type HotelGroup = { key: string; name: string; items: any[] };
-    const hotelGroups = (hotelItems as any[]).reduce((acc: HotelGroup[], item: any) => {
-      const pid = String(item.product_ref_id || item.product_id || '');
-      const { ci, co } = getCheckInOut(item);
-      const key = `${pid}|${ci}|${co}`;
-      const name = item.Product?.name || item.product_name || 'Hotel';
-      const existing = acc.find((g: HotelGroup) => g.key === key);
-      if (existing) existing.items.push(item);
-      else acc.push({ key, name, items: [item] });
-      return acc;
-    }, [] as HotelGroup[]);
-    sections.push({
-      title: 'Hotel',
-      nodes: hotelGroups.map((group: HotelGroup) => {
-        const first = group.items[0];
-        const status = PROGRESS_LABELS_HOTEL[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
-        const mealStatus = first?.HotelProgress?.meal_status;
-        const mealLabel = mealStatus ? (PROGRESS_LABELS_MEAL[mealStatus] || mealStatus) : null;
-        const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
-        const checkOut = formatDateWithTime(first?.HotelProgress?.check_out_date ?? first?.meta?.check_out, first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time ?? '12:00');
-        const roomLines = group.items.map((item: any) => {
-          const rt = item.room_type || item.meta?.room_type || '';
-          const qty = Math.max(0, parseInt(String(item.quantity ?? 0), 10) || 0);
-          const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;
-          const orang = qty * cap;
-          const label = ROOM_TYPE_LABELS[rt] || rt || '–';
-          return `${qty} ${label}${cap > 0 ? ` (${orang} org)` : ''}`;
-        });
-        return (
-          <div key={group.key} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={group.name}>{group.name}:</span>{' '}
-            <span className={status === 'Selesai' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{status}</span>
-            {roomLines.length > 0 && <div className="text-slate-700 mt-0.5">{roomLines.join(', ')}</div>}
-            {mealLabel != null && <div className="text-slate-600 mt-0.5">Makan: {mealLabel}</div>}
-            <div className="text-slate-500 mt-0.5">CI {checkIn} · CO {checkOut}</div>
-          </div>
-        );
-      })
-    });
-  }
-
   if (busItems.length > 0 && allow('bus')) {
     sections.push({
+      sortIndex: 4,
       title: 'Bus',
       nodes: busItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Bus';
@@ -256,6 +269,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     const arrivalTerbit = arrivalStatus === 'terbit';
     const returnTerbit = returnStatus === 'terbit';
     sections.push({
+      sortIndex: 4,
       title: 'Bus',
       nodes: [
         <div key="bus-include" className="rounded border border-amber-100 bg-amber-50/80 p-1.5 text-xs space-y-1">
@@ -291,6 +305,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
 
   if (handlingItems.length > 0 && allow('handling')) {
     sections.push({
+      sortIndex: 5,
       title: 'Handling',
       nodes: handlingItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Handling';
@@ -306,6 +321,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
 
   if (packageItems.length > 0 && allow('package')) {
     sections.push({
+      sortIndex: 6,
       title: 'Paket',
       nodes: packageItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Paket';
@@ -321,10 +337,12 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
 
   if (sections.length === 0) return <span className="text-slate-400 text-xs">–</span>;
 
+  sections.sort((a, b) => a.sortIndex - b.sortIndex);
+
   return (
     <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 text-xs">
       {sections.map((sec) => (
-        <div key={sec.title}>
+        <div key={`${sec.sortIndex}-${sec.title}`}>
           <div className="font-semibold text-slate-600 uppercase tracking-wide mb-1 text-[10px]">{sec.title}</div>
           <div className="space-y-1">{sec.nodes}</div>
         </div>

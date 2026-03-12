@@ -63,6 +63,8 @@ const DashboardRouter: React.FC = () => {
       return <HandlingDashboard />;
     case 'role_accounting':
       return <AccountingDashboard />;
+    case 'role_rekap_hotel':
+      return <Navigate to="/dashboard/rekap-hotel" replace />;
     default:
       if (role && isKoordinatorRole(role as any)) return <KoordinatorDashboard />;
       return <OwnerDashboard />;

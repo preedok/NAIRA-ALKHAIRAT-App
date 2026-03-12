@@ -20,7 +20,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
-import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF, AUTOCOMPLETE_FILTER } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF, AUTOCOMPLETE_FILTER, getOrderItemSortIndex, getHotelLocationFromItem } from '../../../utils/constants';
 import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem, type BankItem } from '../../../services/api';
 
@@ -2303,6 +2303,13 @@ const OrdersInvoicesPage: React.FC = () => {
                                 subtotal: totalSub
                               });
                             });
+                            result.sort((a, b) => {
+                              const tA = (a.type || a.product_type) as string;
+                              const tB = (b.type || b.product_type) as string;
+                              const locA = tA === 'hotel' ? getHotelLocationFromItem(a) : null;
+                              const locB = tB === 'hotel' ? getHotelLocationFromItem(b) : null;
+                              return getOrderItemSortIndex(tA, locA) - getOrderItemSortIndex(tB, locB);
+                            });
                             return result;
                           })();
                           const getItemDesc = (item: any) => {
@@ -2891,6 +2898,14 @@ const OrdersInvoicesPage: React.FC = () => {
                       groupsMap.set('bus-include', { key: 'bus-include', productLabel: 'Bus include (dengan visa)', type: 'bus_include', items: [] });
                     }
                     const groups = Array.from(groupsMap.values());
+                    groups.sort((a, b) => {
+                      const sortIdx = (g: typeof a) => {
+                        if (g.type === 'bus_include') return 7;
+                        if (g.type === 'hotel' && g.items.length > 0) return getHotelLocationFromItem(g.items[0]) === 'madinah' ? 0 : 1;
+                        return getOrderItemSortIndex(g.type, undefined);
+                      };
+                      return sortIdx(a) - sortIdx(b);
+                    });
                     return (
                       <div className="space-y-4">
                         {groups.map((group) => {

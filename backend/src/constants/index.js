@@ -16,6 +16,7 @@ const ROLES = {
   ROLE_BUS: 'role_bus',
   ROLE_INVOICE_SAUDI: 'invoice_saudi',
   ROLE_ACCOUNTING: 'role_accounting',
+  ROLE_REKAP_HOTEL: 'role_rekap_hotel',
   OWNER_MOU: 'owner_mou',
   OWNER_NON_MOU: 'owner_non_mou',
   // Deprecated (tetap di enum DB untuk kompatibilitas, tidak dipakai)
