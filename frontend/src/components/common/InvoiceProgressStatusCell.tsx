@@ -78,6 +78,12 @@ const BUS_TRIP_LABELS: Record<string, string> = {
   round_trip: 'Pulang pergi'
 };
 
+const BUS_INCLUDE_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  di_proses: 'Di proses',
+  terbit: 'Terbit'
+};
+
 const defaultFormatDate = (d: string | null | undefined) => {
   if (!d) return '–';
   try {
@@ -243,22 +249,41 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     const order = inv?.Order;
     const waive = order?.waive_bus_penalty === true;
     const penalty = Number(order?.penalty_amount) || 0;
+    const arrivalStatus = order?.bus_include_arrival_status || 'pending';
+    const returnStatus = order?.bus_include_return_status || 'pending';
+    const arrivalLabel = BUS_INCLUDE_STATUS_LABELS[arrivalStatus] || arrivalStatus;
+    const returnLabel = BUS_INCLUDE_STATUS_LABELS[returnStatus] || returnStatus;
+    const arrivalTerbit = arrivalStatus === 'terbit';
+    const returnTerbit = returnStatus === 'terbit';
     sections.push({
       title: 'Bus',
       nodes: [
-        <div key="bus-include" className="rounded border border-amber-100 bg-amber-50/80 p-1.5 text-xs">
-          {waive ? (
-            <span className="text-slate-700">Bus Hiace (tanpa penalti) · 1 unit</span>
-          ) : (
+        <div key="bus-include" className="rounded border border-amber-100 bg-amber-50/80 p-1.5 text-xs space-y-1">
+          {waive && <div className="text-slate-700">Bus Hiace (tanpa penalti) · 1 unit</div>}
+          {!waive && (
             <>
-              <span className="font-medium text-slate-800">Bus include (dengan visa)</span>
-              {penalty > 0 ? (
-                <div className="text-amber-800 mt-0.5">Penalti bus: Rp {(penalty / 1e6).toFixed(0)} jt</div>
-              ) : (
-                <div className="text-slate-600 mt-0.5">Min 35 pack visa; jika kurang kena penalti atau centang pakai Hiace</div>
-              )}
+              <div className="font-medium text-slate-800">Bus include (dengan visa)</div>
+              {penalty > 0 && <div className="text-amber-800">Penalti bus: Rp {(penalty / 1e6).toFixed(0)} jt</div>}
             </>
           )}
+          <div className="text-slate-700">
+            <span className="font-medium">Kedatangan:</span> {arrivalLabel}
+            {arrivalTerbit && (order?.bus_include_arrival_bus_number || order?.bus_include_arrival_date || order?.bus_include_arrival_time) && (
+              <div className="text-slate-600 mt-0.5">
+                {order?.bus_include_arrival_bus_number && `No. ${order.bus_include_arrival_bus_number}`}
+                {(order?.bus_include_arrival_date || order?.bus_include_arrival_time) && ` · ${formatDate(order?.bus_include_arrival_date || null)}${order?.bus_include_arrival_time ? ` ${order.bus_include_arrival_time}` : ''}`}
+              </div>
+            )}
+          </div>
+          <div className="text-slate-700">
+            <span className="font-medium">Kepulangan:</span> {returnLabel}
+            {returnTerbit && (order?.bus_include_return_bus_number || order?.bus_include_return_date || order?.bus_include_return_time) && (
+              <div className="text-slate-600 mt-0.5">
+                {order?.bus_include_return_bus_number && `No. ${order.bus_include_return_bus_number}`}
+                {(order?.bus_include_return_date || order?.bus_include_return_time) && ` · ${formatDate(order?.bus_include_return_date || null)}${order?.bus_include_return_time ? ` ${order.bus_include_return_time}` : ''}`}
+              </div>
+            )}
+          </div>
         </div>
       ]
     });

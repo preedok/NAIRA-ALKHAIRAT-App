@@ -136,6 +136,14 @@ async function ensureOrderBusIncludeColumns(db) {
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_status VARCHAR(50) DEFAULT \'pending\'');
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_notes TEXT');
     await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_ticket_file_url VARCHAR(500)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_arrival_bus_number VARCHAR(100)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_arrival_date DATE');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_arrival_time VARCHAR(20)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_arrival_ticket_file_url VARCHAR(500)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_bus_number VARCHAR(100)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_date DATE');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_time VARCHAR(20)');
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_include_return_ticket_file_url VARCHAR(500)');
   } catch (e) {
     logger.warn('ensureOrderBusIncludeColumns:', e.message);
   }

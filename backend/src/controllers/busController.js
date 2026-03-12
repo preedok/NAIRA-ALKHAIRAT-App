@@ -28,7 +28,7 @@ const {
 } = require('../models');
 
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
-const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
+const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, BUS_INCLUDE_STATUS, ROLES, INVOICE_STATUS, DP_PAYMENT_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 
@@ -523,13 +523,19 @@ const updateItemProgress = asyncHandler(async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
+const validBusIncludeStatus = Object.values(BUS_INCLUDE_STATUS);
+
 /**
  * PUT /api/v1/bus/invoices/:id/order-bus-include-progress
- * Update progress bus untuk order "bus include": Status Tiket Bis (Pergi & Pulang), Nomor Bis, Status Kedatangan, Catatan.
+ * Update progress bus include: Status Kedatangan (pending/di_proses/terbit) + detail saat terbit; Status Kepulangan idem; Catatan.
  */
 const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
   const { id: invoiceId } = req.params;
-  const { bus_ticket_status, bus_ticket_info, ticket_file_url, arrival_status, notes } = req.body;
+  const {
+    arrival_status, arrival_bus_number, arrival_date, arrival_time, arrival_ticket_file_url,
+    return_status, return_bus_number, return_date, return_time, return_ticket_file_url,
+    notes
+  } = req.body;
 
   const branchIds = await getBusBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
@@ -545,19 +551,23 @@ const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
   if (busItems.length > 0) return res.status(400).json({ success: false, message: 'Invoice ini punya item bus; gunakan update per item.' });
   if (!hasVisa && !waiveBusPenalty) return res.status(400).json({ success: false, message: 'Invoice ini bukan bus include.' });
 
-  const validTicket = Object.values(BUS_TICKET_STATUS);
-  const validTrip = Object.values(BUS_TRIP_STATUS);
-  if (bus_ticket_status != null && !validTicket.includes(bus_ticket_status)) return res.status(400).json({ success: false, message: 'Status tiket bus tidak valid' });
-  if (arrival_status != null && !validTrip.includes(arrival_status)) return res.status(400).json({ success: false, message: 'Status kedatangan tidak valid' });
+  if (arrival_status != null && !validBusIncludeStatus.includes(arrival_status)) return res.status(400).json({ success: false, message: 'Status kedatangan tidak valid' });
+  if (return_status != null && !validBusIncludeStatus.includes(return_status)) return res.status(400).json({ success: false, message: 'Status kepulangan tidak valid' });
 
   const order = await Order.findByPk(invoice.order_id);
   if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
 
   const updates = {};
-  if (bus_ticket_status !== undefined) updates.bus_include_ticket_status = bus_ticket_status;
-  if (bus_ticket_info !== undefined) updates.bus_include_ticket_info = bus_ticket_info;
-  if (ticket_file_url !== undefined) updates.bus_include_ticket_file_url = ticket_file_url;
   if (arrival_status !== undefined) updates.bus_include_arrival_status = arrival_status;
+  if (arrival_bus_number !== undefined) updates.bus_include_arrival_bus_number = arrival_bus_number;
+  if (arrival_date !== undefined) updates.bus_include_arrival_date = arrival_date || null;
+  if (arrival_time !== undefined) updates.bus_include_arrival_time = arrival_time;
+  if (arrival_ticket_file_url !== undefined) updates.bus_include_arrival_ticket_file_url = arrival_ticket_file_url;
+  if (return_status !== undefined) updates.bus_include_return_status = return_status;
+  if (return_bus_number !== undefined) updates.bus_include_return_bus_number = return_bus_number;
+  if (return_date !== undefined) updates.bus_include_return_date = return_date || null;
+  if (return_time !== undefined) updates.bus_include_return_time = return_time;
+  if (return_ticket_file_url !== undefined) updates.bus_include_return_ticket_file_url = return_ticket_file_url;
   if (notes !== undefined) updates.bus_include_notes = notes;
   await order.update(updates);
 
@@ -566,12 +576,15 @@ const updateOrderBusIncludeProgress = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/bus/invoices/:id/order-bus-include-ticket-file
- * Upload file tiket bus untuk order bus include. Setelah upload, kirim ticket_file_url di PUT order-bus-include-progress.
+ * Upload file tiket bus untuk order bus include. Body/query: type = 'arrival' | 'return'.
  */
 const uploadOrderBusIncludeTicketFile = [
   uploadBusIncludeTicketFile.single('ticket_file'),
   asyncHandler(async (req, res) => {
     const { id: invoiceId } = req.params;
+    const type = (req.body.type || req.query.type || '').toLowerCase();
+    if (type !== 'arrival' && type !== 'return') return res.status(400).json({ success: false, message: 'Parameter type wajib: arrival atau return' });
+
     const branchIds = await getBusBranchIds(req.user);
     if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
 
@@ -591,9 +604,10 @@ const uploadOrderBusIncludeTicketFile = [
     const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.BUS_TICKET_DOCS, req.file.filename);
     const order = await Order.findByPk(invoice.order_id);
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-    await order.update({ bus_include_ticket_file_url: fileUrl });
+    const updateField = type === 'arrival' ? 'bus_include_arrival_ticket_file_url' : 'bus_include_return_ticket_file_url';
+    await order.update({ [updateField]: fileUrl });
 
-    res.json({ success: true, data: { url: fileUrl } });
+    res.json({ success: true, data: { url: fileUrl, type } });
   })
 ];
 

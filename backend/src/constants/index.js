@@ -113,6 +113,13 @@ const BUS_TRIP_STATUS = {
   COMPLETED: 'completed'
 };
 
+// Bus include: status kedatangan & kepulangan (pending → di proses → terbit)
+const BUS_INCLUDE_STATUS = {
+  PENDING: 'pending',
+  DI_PROSES: 'di_proses',
+  TERBIT: 'terbit'
+};
+
 // VI. Handling progress (Role Handling) - status disimpan di OrderItem.meta.handling_status
 const HANDLING_PROGRESS_STATUS = {
   PENDING: 'pending',
@@ -322,6 +329,7 @@ module.exports = {
   ROOM_STATUS,
   BUS_TICKET_STATUS,
   BUS_TRIP_STATUS,
+  BUS_INCLUDE_STATUS,
   BUS_TRIP_TYPES,
   BUS_ROUTE_TYPES,
   VISA_PROGRESS_STATUS,

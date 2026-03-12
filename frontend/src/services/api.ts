@@ -270,12 +270,16 @@ export const busApi = {
   listProducts: () => api.get<{ success: boolean; data: BusProduct[] }>('/bus/products'),
   updateItemProgress: (orderItemId: string, body: { bus_ticket_status?: string; bus_ticket_info?: string; arrival_status?: string; departure_status?: string; return_status?: string; notes?: string }) =>
     api.patch(`/bus/order-items/${orderItemId}/progress`, body),
-  updateOrderBusIncludeProgress: (invoiceId: string, body: { bus_ticket_status?: string; bus_ticket_info?: string; ticket_file_url?: string; arrival_status?: string; notes?: string }) =>
-    api.put(`/bus/invoices/${invoiceId}/order-bus-include-progress`, body),
-  uploadOrderBusIncludeTicketFile: (invoiceId: string, file: File) => {
+  updateOrderBusIncludeProgress: (invoiceId: string, body: {
+    arrival_status?: string; arrival_bus_number?: string; arrival_date?: string; arrival_time?: string; arrival_ticket_file_url?: string;
+    return_status?: string; return_bus_number?: string; return_date?: string; return_time?: string; return_ticket_file_url?: string;
+    notes?: string;
+  }) => api.put(`/bus/invoices/${invoiceId}/order-bus-include-progress`, body),
+  uploadOrderBusIncludeTicketFile: (invoiceId: string, file: File, type: 'arrival' | 'return') => {
     const form = new FormData();
     form.append('ticket_file', file);
-    return api.post<{ success: boolean; data?: { url: string } }>(`/bus/invoices/${invoiceId}/order-bus-include-ticket-file`, form, {
+    form.append('type', type);
+    return api.post<{ success: boolean; data?: { url: string; type: string } }>(`/bus/invoices/${invoiceId}/order-bus-include-ticket-file`, form, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },

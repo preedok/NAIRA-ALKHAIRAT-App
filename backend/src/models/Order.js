@@ -93,11 +93,19 @@ const Order = sequelize.define('Order', {
   },
   bus_include_ticket_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
   bus_include_ticket_info: { type: DataTypes.STRING(500), allowNull: true },
-  bus_include_arrival_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
+  bus_include_arrival_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending', comment: 'pending | di_proses | terbit' },
+  bus_include_arrival_bus_number: { type: DataTypes.STRING(100), allowNull: true },
+  bus_include_arrival_date: { type: DataTypes.DATEONLY, allowNull: true },
+  bus_include_arrival_time: { type: DataTypes.STRING(20), allowNull: true },
+  bus_include_arrival_ticket_file_url: { type: DataTypes.STRING(500), allowNull: true },
   bus_include_departure_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
-  bus_include_return_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
+  bus_include_return_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending', comment: 'pending | di_proses | terbit' },
+  bus_include_return_bus_number: { type: DataTypes.STRING(100), allowNull: true },
+  bus_include_return_date: { type: DataTypes.DATEONLY, allowNull: true },
+  bus_include_return_time: { type: DataTypes.STRING(20), allowNull: true },
+  bus_include_return_ticket_file_url: { type: DataTypes.STRING(500), allowNull: true },
   bus_include_notes: { type: DataTypes.TEXT, allowNull: true },
-  bus_include_ticket_file_url: { type: DataTypes.STRING(500), allowNull: true, comment: 'URL file tiket bus (bus include)' }
+  bus_include_ticket_file_url: { type: DataTypes.STRING(500), allowNull: true }
 }, {
   tableName: 'orders',
   underscored: true,
