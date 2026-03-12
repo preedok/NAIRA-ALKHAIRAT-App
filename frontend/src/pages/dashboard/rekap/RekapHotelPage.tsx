@@ -221,15 +221,15 @@ const RekapHotelPage: React.FC = () => {
       case 'room_hx': return r.room_hx != null ? String(r.room_hx) : '–';
       case 'room': return r.room != null ? String(r.room) : '–';
       case 'pax': return r.pax != null ? String(r.pax) : '–';
-      case 'meal_bb': return r.meal_bb ? '✓' : '–';
-      case 'meal_fb': return r.meal_fb ? '✓' : '–';
-      case 'status_available': return r.status_available ? '✓' : '–';
-      case 'status_booked': return r.status_booked ? '✓' : '–';
-      case 'status_amend': return r.status_amend ? '✓' : '–';
-      case 'status_lunas': return r.status_lunas ? '✓' : '–';
-      case 'voucher': return r.voucher || '–';
-      case 'keterangan': return r.keterangan || r.notes || '–';
-      case 'invoice_clerk': return r.invoice_clerk || '–';
+      case 'meal_bb': return r.meal_bb ? 'V' : '–';
+      case 'meal_fb': return r.meal_fb ? 'V' : '–';
+      case 'status_available': return r.status_available ? 'V' : '–';
+      case 'status_booked': return r.status_booked ? 'V' : '–';
+      case 'status_amend': return r.status_amend ? 'V' : '–';
+      case 'status_lunas': return r.status_lunas ? 'V' : '–';
+      case 'voucher': return (r.voucher && String(r.voucher).trim()) ? String(r.voucher).trim() : '–';
+      case 'keterangan': return (r.keterangan || r.notes) && String(r.keterangan || r.notes).trim() ? String(r.keterangan || r.notes).trim() : '–';
+      case 'invoice_clerk': return (r.invoice_clerk && String(r.invoice_clerk).trim()) ? String(r.invoice_clerk).trim() : '–';
       case 'actions':
         return (
           <div className="relative">

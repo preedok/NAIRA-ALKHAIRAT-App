@@ -197,7 +197,7 @@ async function importFile(filePath, sortStart) {
   const idxTotalHari = colIndexOr(/total\s*hari/i, /total\s*h/i, /lama/i);
   const idxD = colIndexOr(/^d$/i, /^\bd\b/i);
   const idxT = colIndexOr(/^t$/i, /^\bt\b/i);
-  const idxQ = colIndexOr(/^q$/i, /^\bq\b/i);
+  const idxQ = pick(colIndexOr(/^q$/i, /^\bq\b/i, /^qd$/i, /q\s*d/i), /^q$/i, /^qd$/i);
   const idxQn = colIndexOr(/^qn$/i, /q\s*n/i);
   const idxHx = colIndexOr(/^hx$/i, /^\bhx\b/i);
   const idxRoom = colIndexOr(/room/i, /kamar/i);
