@@ -45,7 +45,7 @@ const menuItems: MenuItem[] = [
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling', 'role_rekap_hotel']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling']
   },
   {
     title: 'Asisten AI',
@@ -316,6 +316,10 @@ const DashboardLayout: React.FC = () => {
       divider: true
     }
   ];
+
+  if (user?.role === 'role_rekap_hotel' && location.pathname === '/dashboard') {
+    return <Navigate to="/dashboard/rekap-hotel" replace />;
+  }
 
   const Sidebar = ({ mobile = false }) => {
     const isCollapsed = !mobile && sidebarCollapsed;

@@ -1,15 +1,14 @@
 /**
  * Import ORDERAN HOTEL BG ledger (MAKKAH / MADINAH) ke tabel rekap_hotel.
+ * Mendukung HTML (export Google Sheets) dan CSV.
  *
- * Contoh pakai (dari folder backend):
- *   node scripts/import-orderan-hotel-ledger.js "C:\\Users\\preed\\Downloads\\ORDERAN HOTEL BG\\MAKKAH.html" "C:\\Users\\preed\\Downloads\\ORDERAN HOTEL BG\\MADINAH.html"
+ * Contoh (dari folder backend):
+ *   node scripts/import-orderan-hotel-ledger.js "path/MAKKAH.html" "path/MADINAH.html"
+ *   node scripts/import-orderan-hotel-ledger.js "path/MAKKAH.csv" "path/MADINAH.csv"
  *
  * Setiap file akan:
- * - Hapus dulu data lama untuk period_name = nama file (tanpa .html) dan source_type = 'order_list'
- * - Insert baris baru ke rekap_hotel dengan kolom:
- *   TNTV (tentative), DFNT (definite), CLIENT (client), HOTEL (hotel_makkah/hotel_madinah),
- *   IN/OUT (check_in/check_out), TOTAL HARI (total_hari), D/T/Q/Qn/Hx/Room/Pax,
- *   BB/FB, Available/Booked/Amend/LUNAS, Voucher, Keterangan, Invoice Clerk.
+ * - Hapus dulu data lama untuk period_name = nama file (tanpa ekstensi) dan source_type = 'order_list'
+ * - Insert baris baru ke rekap_hotel.
  */
 
 require('dotenv').config();
@@ -20,6 +19,30 @@ process.chdir(path.join(__dirname, '..'));
 
 const sequelize = require('../src/config/sequelize');
 const { RekapHotel } = require('../src/models');
+
+function parseCsvLine(line) {
+  const out = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      let cell = '';
+      i += 1;
+      while (i < line.length) {
+        if (line[i] === '"') {
+          i += 1;
+          if (line[i] === '"') { cell += '"'; i += 1; } else break;
+        } else { cell += line[i]; i += 1; }
+      }
+      out.push(cell);
+    } else {
+      let cell = '';
+      while (i < line.length && line[i] !== ',') { cell += line[i]; i += 1; }
+      out.push(cell.trim());
+    }
+    if (i < line.length && line[i] === ',') i += 1;
+  }
+  return out;
+}
 
 function decodeEntities(s) {
   if (!s) return s;
@@ -108,7 +131,7 @@ function toInt(value) {
 
 function toBool(cell, rawHtml) {
   const raw = String(rawHtml || '').trim();
-  if (raw && (/<img/i.test(raw) || /checked/i.test(raw) || /data-value\s*=\s*["']?true/i.test(raw))) return true;
+  if (raw && (/<img/i.test(raw) || /<svg/i.test(raw) || /<use\s/i.test(raw) || /checked/i.test(raw) || /data-value\s*=\s*["']?true/i.test(raw))) return true;
   if (cell == null || cell === '') return false;
   const s = decodeEntities(String(cell)).replace(/\s+/g, ' ').trim();
   if (!s) return false;
@@ -342,10 +365,151 @@ async function importFile(filePath, sortStart) {
   return rows.length;
 }
 
+function csvColIndex(headerCells, ...patterns) {
+  for (const p of patterns) {
+    const i = headerCells.findIndex((c) => p.test(String(c).trim()));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+async function importFileCsv(filePath, sortStart) {
+  const absPath = path.resolve(filePath);
+  if (!fs.existsSync(absPath)) {
+    console.error(`File tidak ditemukan: ${absPath}`);
+    return 0;
+  }
+  const text = fs.readFileSync(absPath, 'utf8');
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) {
+    console.warn(`CSV terlalu pendek: ${absPath}`);
+    return 0;
+  }
+
+  const rows = [];
+  let headerRowIndex = -1;
+  let headerCells = [];
+  for (let i = 0; i < Math.min(lines.length, 20); i += 1) {
+    const cells = parseCsvLine(lines[i]);
+    const hasTntv = cells.some((c) => /tntv/i.test(String(c).trim()));
+    const hasDfnt = cells.some((c) => /dfnt/i.test(String(c).trim()) || /d\/fnt/i.test(String(c).trim()));
+    const hasClient = cells.some((c) => /client/i.test(String(c).trim()));
+    if (hasTntv && hasDfnt && hasClient) {
+      headerRowIndex = i;
+      headerCells = cells;
+      break;
+    }
+  }
+  if (headerRowIndex < 0 || headerCells.length === 0) {
+    console.error(`Header TNTV/DFNT/CLIENT tidak ditemukan di CSV: ${absPath}`);
+    return 0;
+  }
+
+  const idxTntv = csvColIndex(headerCells, /tntv/i);
+  const idxDfnt = csvColIndex(headerCells, /dfnt/i, /d\/fnt/i);
+  const idxClient = csvColIndex(headerCells, /client/i);
+  const idxHotel = csvColIndex(headerCells, /hotel\s*(mekkah|madinah)?/i, /^hotel$/i);
+  const idxIn = csvColIndex(headerCells, /^in$/i, /check\s*in/i);
+  const idxOut = csvColIndex(headerCells, /^out$/i, /check\s*out/i);
+  const idxTotalHari = csvColIndex(headerCells, /total\s*hari/i, /total\s*h/i);
+  const idxD = csvColIndex(headerCells, /^d$/i);
+  const idxT = csvColIndex(headerCells, /^t$/i);
+  const idxQ = csvColIndex(headerCells, /^q$/i, /^qd$/i);
+  const idxQn = csvColIndex(headerCells, /^qn$/i);
+  const idxHx = csvColIndex(headerCells, /^hx$/i);
+  const idxRoom = csvColIndex(headerCells, /room/i);
+  const idxPax = csvColIndex(headerCells, /pax/i);
+  const idxBB = csvColIndex(headerCells, /^bb$/i);
+  const idxFB = csvColIndex(headerCells, /^fb$/i);
+  const idxAvail = csvColIndex(headerCells, /available/i);
+  const idxBooked = csvColIndex(headerCells, /booked/i);
+  const idxAmend = csvColIndex(headerCells, /amend/i);
+  const idxLunas = csvColIndex(headerCells, /lunas/i);
+  const idxVoucher = csvColIndex(headerCells, /voucher/i);
+  const idxKet = csvColIndex(headerCells, /keterangan/i, /^ket$/i);
+  const idxClerk = csvColIndex(headerCells, /invoice\s*clerk/i, /clerk/i);
+
+  const baseName = path.basename(absPath).replace(/\.(csv|html?)$/i, '').trim();
+  let periodName = baseName;
+  if (/makkah|mekkah/i.test(baseName)) periodName = 'MAKKAH';
+  else if (/madinah/i.test(baseName)) periodName = 'MADINAH';
+  const isMakkah = periodName === 'MAKKAH' || /makkah|mekkah/i.test(baseName);
+  const isMadinah = periodName === 'MADINAH' || /madinah/i.test(baseName);
+
+  await RekapHotel.destroy({ where: { source_type: 'order_list', period_name: periodName } });
+
+  let sortOrder = sortStart;
+  let skipped = 0;
+  const get = (cells, idx) => (idx >= 0 && idx < cells.length ? String(cells[idx] || '').trim() : '');
+
+  for (let i = headerRowIndex + 1; i < lines.length; i += 1) {
+    const cells = parseCsvLine(lines[i]);
+    if (cells.length === 0) continue;
+
+    const tentative = get(cells, idxTntv) || null;
+    const definite = get(cells, idxDfnt) || null;
+    const client = get(cells, idxClient) || null;
+    const hotelVal = get(cells, idxHotel) || null;
+    const checkIn = parseDateId(get(cells, idxIn));
+    const checkOut = parseDateId(get(cells, idxOut));
+    const hasAny = tentative || definite || client || hotelVal || checkIn || checkOut ||
+      [idxTotalHari, idxD, idxT, idxQ, idxQn, idxHx, idxRoom, idxPax].some((idx) => get(cells, idx) !== '') ||
+      [idxBB, idxFB, idxAvail, idxBooked, idxAmend, idxLunas].some((idx) => get(cells, idx) !== '') ||
+      [idxVoucher, idxKet, idxClerk].some((idx) => get(cells, idx) !== '');
+    if (!hasAny) {
+      skipped += 1;
+      continue;
+    }
+
+    const toBoolCsv = (v) => (v === 'TRUE' || v === 'true' || v === '1' || v === 'YES');
+
+    rows.push({
+      source_type: 'order_list',
+      period_name: periodName,
+      season_year: null,
+      sort_order: sortOrder,
+      tentative: truncate(tentative, 200),
+      definite: truncate(definite, 200),
+      client: truncate(client, 200),
+      hotel_makkah: isMakkah ? truncate(hotelVal, 200) : null,
+      hotel_madinah: isMadinah ? truncate(hotelVal, 200) : null,
+      check_in: checkIn || null,
+      check_out: checkOut || null,
+      total_hari: toInt(get(cells, idxTotalHari)),
+      room_d: toInt(get(cells, idxD)),
+      room_t: toInt(get(cells, idxT)),
+      room_q: toInt(get(cells, idxQ)),
+      room_qn: toInt(get(cells, idxQn)),
+      room_hx: toInt(get(cells, idxHx)),
+      room: toInt(get(cells, idxRoom)),
+      pax: toInt(get(cells, idxPax)),
+      meal_bb: idxBB >= 0 ? toBoolCsv(get(cells, idxBB)) : false,
+      meal_fb: idxFB >= 0 ? toBoolCsv(get(cells, idxFB)) : false,
+      status_available: idxAvail >= 0 ? toBoolCsv(get(cells, idxAvail)) : false,
+      status_booked: idxBooked >= 0 ? toBoolCsv(get(cells, idxBooked)) : false,
+      status_amend: idxAmend >= 0 ? toBoolCsv(get(cells, idxAmend)) : false,
+      status_lunas: idxLunas >= 0 ? toBoolCsv(get(cells, idxLunas)) : false,
+      voucher: truncate(get(cells, idxVoucher), 120) || null,
+      keterangan: truncate(get(cells, idxKet), 500) || null,
+      invoice_clerk: truncate(get(cells, idxClerk), 120) || null
+    });
+    sortOrder += 1;
+  }
+
+  if (skipped) console.warn(`  Baris dilewati (kosong): ${skipped}`);
+  if (rows.length === 0) {
+    console.warn(`Tidak ada baris data yang diimport dari ${absPath}`);
+    return 0;
+  }
+  await RekapHotel.bulkCreate(rows);
+  console.log(`Imported ${rows.length} baris dari ${absPath} (period_name=${periodName}, CSV).`);
+  return rows.length;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.log('Usage: node scripts/import-orderan-hotel-ledger.js <file1.html> [file2.html] ...');
+    console.log('Usage: node scripts/import-orderan-hotel-ledger.js <file1.[html|csv]> [file2.[html|csv]] ...');
     process.exit(1);
   }
 
@@ -354,7 +518,8 @@ async function main() {
     let sort = 1;
     let total = 0;
     for (const file of args) {
-      const imported = await importFile(file, sort);
+      const isCsv = /\.csv$/i.test(path.extname(file));
+      const imported = isCsv ? await importFileCsv(file, sort) : await importFile(file, sort);
       sort += imported;
       total += imported;
     }

@@ -6,9 +6,6 @@ import {
   Pencil,
   Trash2,
   RefreshCw,
-  Filter,
-  ChevronDown,
-  ChevronUp,
   Upload,
   FileSpreadsheet,
   MoreHorizontal
@@ -47,7 +44,6 @@ const RekapHotelPage: React.FC = () => {
   const [options, setOptions] = useState<{ period_names: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number }>({ total: 0, page: 1, limit: 50, totalPages: 1 });
-  const [showFilters, setShowFilters] = useState(true);
   const [filters, setFilters] = useState<{
     year_month: string;
     time_range: string;
@@ -221,15 +217,15 @@ const RekapHotelPage: React.FC = () => {
       case 'room_hx': return r.room_hx != null ? String(r.room_hx) : '–';
       case 'room': return r.room != null ? String(r.room) : '–';
       case 'pax': return r.pax != null ? String(r.pax) : '–';
-      case 'meal_bb': return r.meal_bb ? 'V' : '–';
-      case 'meal_fb': return r.meal_fb ? 'V' : '–';
-      case 'status_available': return r.status_available ? 'V' : '–';
-      case 'status_booked': return r.status_booked ? 'V' : '–';
-      case 'status_amend': return r.status_amend ? 'V' : '–';
-      case 'status_lunas': return r.status_lunas ? 'V' : '–';
-      case 'voucher': return (r.voucher && String(r.voucher).trim()) ? String(r.voucher).trim() : '–';
-      case 'keterangan': return (r.keterangan || r.notes) && String(r.keterangan || r.notes).trim() ? String(r.keterangan || r.notes).trim() : '–';
-      case 'invoice_clerk': return (r.invoice_clerk && String(r.invoice_clerk).trim()) ? String(r.invoice_clerk).trim() : '–';
+      case 'meal_bb': return Boolean(r.meal_bb) ? 'V' : '–';
+      case 'meal_fb': return Boolean(r.meal_fb) ? 'V' : '–';
+      case 'status_available': return Boolean(r.status_available) ? 'V' : '–';
+      case 'status_booked': return Boolean(r.status_booked) ? 'V' : '–';
+      case 'status_amend': return Boolean(r.status_amend) ? 'V' : '–';
+      case 'status_lunas': return Boolean(r.status_lunas) ? 'V' : '–';
+      case 'voucher': return (r.voucher != null && String(r.voucher).trim()) ? String(r.voucher).trim() : '–';
+      case 'keterangan': return (r.keterangan != null || r.notes != null) && String(r.keterangan || r.notes || '').trim() ? String(r.keterangan || r.notes).trim() : '–';
+      case 'invoice_clerk': return (r.invoice_clerk != null && String(r.invoice_clerk).trim()) ? String(r.invoice_clerk).trim() : '–';
       case 'actions':
         return (
           <div className="relative">
@@ -298,10 +294,6 @@ const RekapHotelPage: React.FC = () => {
                 Madinah
               </button>
             </div>
-            <Button onClick={() => setShowFilters(!showFilters)} variant="outline" size="sm">
-              <Filter className="w-4 h-4 mr-1" />
-              Filter {showFilters ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
-            </Button>
             <Button onClick={fetchList} variant="outline" size="sm" disabled={loading}>
               <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -316,8 +308,7 @@ const RekapHotelPage: React.FC = () => {
           </div>
         </div>
 
-        {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Tahun Bulan</label>
               <input
@@ -357,7 +348,6 @@ const RekapHotelPage: React.FC = () => {
               </Button>
             </div>
           </div>
-        )}
 
         {loading ? (
           <ContentLoading />
