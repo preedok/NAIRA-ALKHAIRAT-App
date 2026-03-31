@@ -861,6 +861,9 @@ const create = asyncHandler(async (req, res) => {
     invoice_number: generateInvoiceNumber(),
     order_id: order.id,
     owner_id: order.owner_id,
+    owner_name_manual: order.owner_name_manual || null,
+    owner_phone_manual: order.owner_phone_manual || null,
+    owner_input_mode: order.owner_input_mode || (order.owner_id ? 'registered' : 'manual'),
     branch_id: order.branch_id,
     total_amount: totalAmount,
     total_amount_idr: totalAmount,
@@ -890,17 +893,19 @@ const create = asyncHandler(async (req, res) => {
     meta: { order_id: order.id }
   });
 
-  const notif = await Notification.create({
-    user_id: order.owner_id,
-    trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
-    title: 'Invoice baru',
-    message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
-    data: { order_id: order.id, invoice_id: invoice.id },
-    channel_in_app: true,
-    channel_email: true
-  });
-  const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
-  setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
+  if (order.owner_id) {
+    const notif = await Notification.create({
+      user_id: order.owner_id,
+      trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
+      title: 'Invoice baru',
+      message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
+      data: { order_id: order.id, invoice_id: invoice.id },
+      channel_in_app: true,
+      channel_email: true
+    });
+    const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
+    setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
+  }
 
   const full = await Invoice.findByPk(invoice.id, { include: [{ model: Order, as: 'Order' }] });
   res.status(201).json({ success: true, data: full });
@@ -949,6 +954,9 @@ async function createInvoiceForOrder(order, opts = {}) {
     invoice_number: generateInvoiceNumber(),
     order_id: orderId,
     owner_id: order.owner_id,
+    owner_name_manual: order.owner_name_manual || null,
+    owner_phone_manual: order.owner_phone_manual || null,
+    owner_input_mode: order.owner_input_mode || (order.owner_id ? 'registered' : 'manual'),
     branch_id: order.branch_id,
     total_amount: totalAmount,
     total_amount_idr: totalAmount,
@@ -978,17 +986,19 @@ async function createInvoiceForOrder(order, opts = {}) {
     meta: { order_id: orderId }
   });
   await updateOrderDpStatusFromInvoice(invoice);
-  const notif = await Notification.create({
-    user_id: order.owner_id,
-    trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
-    title: 'Invoice baru',
-    message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
-    data: { order_id: orderId, invoice_id: invoice.id },
-    channel_in_app: true,
-    channel_email: true
-  });
-  const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
-  setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
+  if (order.owner_id) {
+    const notif = await Notification.create({
+      user_id: order.owner_id,
+      trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
+      title: 'Invoice baru',
+      message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
+      data: { order_id: orderId, invoice_id: invoice.id },
+      channel_in_app: true,
+      channel_email: true
+    });
+    const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
+    setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
+  }
   return invoice;
 }
 
@@ -1322,7 +1332,7 @@ const getPdf = asyncHandler(async (req, res) => {
   // Format: STATUS INVOICE_NOMOR INVOICE_Nama Owner_Tanggal Order Invoice.pdf (nomor invoice sudah berformat INV-YYYY-xxxxx)
   const statusLabel = getEffectiveStatusLabel(data);
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
-  const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || 'Owner';
+  const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || invoice.owner_name_manual || invoice.Order?.owner_name_manual || 'Owner';
   const dateOrder = (invoice.issued_at || invoice.created_at) ? new Date(invoice.issued_at || invoice.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
   const downloadName = `${safe(statusLabel)}_${safe(invoice.invoice_number)}_${safe(ownerName)}_${dateOrder}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
@@ -1365,7 +1375,7 @@ const getArchive = asyncHandler(async (req, res) => {
   data.currency_rates_override = effectiveRates;
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
   const invNum = invoice.invoice_number || 'INV';
-  const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || 'Owner';
+  const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || invoice.owner_name_manual || invoice.Order?.owner_name_manual || 'Owner';
 
   // Riwayat status invoice (urutan: dari yang terdahulu ke terbaru) untuk generate PDF per tahap
   const statusHistoryRows = await InvoiceStatusHistory.findAll({

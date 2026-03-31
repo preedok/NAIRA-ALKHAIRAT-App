@@ -475,15 +475,21 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
  * Validasi: visa wajib hotel dari product.meta.require_hotel; bus min pack penalty from business rules.
  */
 const create = asyncHandler(async (req, res) => {
-  const { items, branch_id, owner_id, notes, currency_rates_override, waive_bus_penalty } = req.body;
-  const effectiveOwnerId = owner_id || req.user.id;
+  const { items, branch_id, owner_id, owner_name_manual, owner_phone_manual, owner_input_mode, notes, currency_rates_override, waive_bus_penalty } = req.body;
+  const isOwnerUser = isOwnerRole(req.user.role);
+  const isInvoiceRole = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
+  const ownerIdStr = typeof owner_id === 'string' && owner_id.trim() !== '' ? owner_id.trim() : null;
+  const ownerInputMode = (owner_input_mode === 'manual' || owner_input_mode === 'registered') ? owner_input_mode : 'registered';
+  const manualOwnerName = typeof owner_name_manual === 'string' ? owner_name_manual.trim() : '';
+  const manualOwnerPhone = typeof owner_phone_manual === 'string' ? owner_phone_manual.trim() : '';
+  const effectiveOwnerId = isOwnerUser ? req.user.id : ownerIdStr;
   // Gunakan branch_id dari body hanya jika benar-benar string non-kosong (body tanpa branch_id = undefined)
   const bodyBranchOk = typeof branch_id === 'string' && branch_id.trim() !== '';
   let effectiveBranchId = bodyBranchOk ? branch_id.trim() : (req.user.branch_id || null);
-  const isInvoiceRole = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
+  const isManualOwnerFlow = !isOwnerUser && ownerInputMode === 'manual' && !effectiveOwnerId;
 
   // Untuk owner: ambil assigned_branch_id dari OwnerProfile jika belum ada branch_id
-  if (isOwnerRole(req.user.role) && !effectiveBranchId) {
+  if (isOwnerUser && !effectiveBranchId) {
     try {
       const profile = await OwnerProfile.findOne({
         where: { user_id: req.user.id },
@@ -540,9 +546,18 @@ const create = asyncHandler(async (req, res) => {
     const msg = isOwnerRole(req.user.role)
       ? 'Owner belum di-assign cabang. Hubungi admin/koordinator untuk assign cabang.'
       : isInvoiceRole
-        ? 'Owner yang dipilih belum memiliki cabang. Pilih owner lain atau hubungi admin untuk menetapkan cabang.'
+        ? (isManualOwnerFlow
+            ? 'Untuk owner tanpa akun, pilih cabang secara manual.'
+            : 'Owner yang dipilih belum memiliki cabang. Pilih owner lain atau hubungi admin untuk menetapkan cabang.')
         : 'Branch/cabang wajib. Pilih cabang atau pastikan akun owner sudah di-assign cabang.';
     return res.status(400).json({ success: false, message: msg });
+  }
+
+  if (!isOwnerUser && !effectiveOwnerId && !manualOwnerName) {
+    return res.status(400).json({
+      success: false,
+      message: 'Pilih owner terdaftar, atau isi nama owner tanpa akun.'
+    });
   }
   
   console.log('Order create - using branch_id:', finalBranchId, 'for user:', req.user.id, 'role:', req.user.role);
@@ -726,7 +741,10 @@ const create = asyncHandler(async (req, res) => {
   try {
     order = await Order.create({
       order_number: generateOrderNumber(),
-      owner_id: effectiveOwnerId,
+      owner_id: effectiveOwnerId || null,
+      owner_name_manual: !effectiveOwnerId ? manualOwnerName : null,
+      owner_phone_manual: !effectiveOwnerId ? (manualOwnerPhone || null) : null,
+      owner_input_mode: effectiveOwnerId ? 'registered' : 'manual',
       branch_id: finalBranchId,
       total_jamaah: totalJamaah,
       subtotal,

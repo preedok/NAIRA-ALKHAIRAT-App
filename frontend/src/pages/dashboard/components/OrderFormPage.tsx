@@ -91,6 +91,7 @@ function getDisplayCurrency(type: ItemType, product?: ProductOption | null): Dis
 interface HotelRoomLine { id:string; room_type:RoomTypeId|''; quantity:number; unit_price:number; unit_price_currency?:DisplayCurrency; meal_unit_price?:number; meal_unit_price_currency?:DisplayCurrency; with_meal?:boolean; }
 interface OrderItemRow  { id:string; type:ItemType; product_id:string; product_name:string; quantity:number; room_type?:RoomTypeId; room_breakdown?:HotelRoomLine[]; unit_price:number; unit_price_currency?:DisplayCurrency; check_in?:string; check_out?:string; check_in_time?:string; check_out_time?:string; meta?:Record<string,unknown>; price_currency?:DisplayCurrency; }
 interface OwnerListItem { id:string; user_id:string; assigned_branch_id?:string; is_mou_owner?:boolean; User?:{id:string;name?:string;company_name?:string}; AssignedBranch?:{id:string;code:string;name:string}; }
+type OwnerInputMode = 'registered' | 'manual';
 
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'', quantity:0, unit_price:0, with_meal:false });
@@ -135,6 +136,9 @@ const OrderFormPage: React.FC = () => {
   const [branchSel,   setBranchSel]  = useState('');
   const [owners,      setOwners]     = useState<OwnerListItem[]>([]);
   const [ownerSel,    setOwnerSel]   = useState('');
+  const [ownerInputMode, setOwnerInputMode] = useState<OwnerInputMode>('registered');
+  const [manualOwnerName, setManualOwnerName] = useState('');
+  const [manualOwnerPhone, setManualOwnerPhone] = useState('');
   const [hotelAvailability, setHotelAvailability] = useState<Record<string, { byRoomType: Record<string, number> } | 'loading' | null>>({});
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const [waiveBusPenalty, setWaiveBusPenalty] = useState(false);
@@ -142,22 +146,23 @@ const OrderFormPage: React.FC = () => {
 
   const isOwner      = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
-  const ownerProf    = canPickOwner && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
+  const ownerProf    = canPickOwner && ownerInputMode === 'registered' && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
   const [ownerMeProfile, setOwnerMeProfile] = useState<{ is_mou_owner?: boolean } | null>(null);
   const bFromOwner   = ownerProf?.AssignedBranch?.id ?? ownerProf?.assigned_branch_id ?? null;
-  const branchId     = order?.branch_id || (canPickOwner ? bFromOwner : null) || branchSel || user?.branch_id || undefined;
-  const ownerId      = isOwner ? user?.id : (isEdit ? order?.owner_id : canPickOwner ? ownerSel : undefined) ?? order?.owner_id ?? user?.id;
+  const manualBranchId = canPickOwner && ownerInputMode === 'manual' ? (branchSel || null) : null;
+  const branchId     = order?.branch_id || (canPickOwner ? (ownerInputMode === 'registered' ? bFromOwner : manualBranchId) : null) || (!canPickOwner ? (branchSel || user?.branch_id || undefined) : undefined);
+  const ownerId      = isOwner ? user?.id : (isEdit ? order?.owner_id : canPickOwner ? (ownerInputMode === 'registered' ? ownerSel : undefined) : undefined) ?? order?.owner_id ?? undefined;
 
   /* loaders */
   useEffect(() => {
-    if (!isEdit && !isOwner && !canPickOwner) {
+    if (!isEdit && !isOwner) {
       branchesApi.list({ limit:500 }).then(r => {
         const list:any[] = (r.data as any)?.data ?? [];
         setBranches(Array.isArray(list)?list:[]);
         setBranchSel(p => { if(p) return p; if(user?.branch_id && list.some((b:any)=>b.id===user.branch_id)) return user.branch_id; return list[0]?.id||''; });
       }).catch(()=>{});
     }
-  },[isEdit,isOwner,canPickOwner,user?.branch_id]);
+  },[isEdit,isOwner,user?.branch_id]);
 
   useEffect(()=>{ if(isEdit&&order?.branch_id) setBranchSel(order.branch_id); },[isEdit,order?.branch_id]);
 
@@ -773,8 +778,10 @@ const OrderFormPage: React.FC = () => {
     const siskopatuhWithoutType=valid.filter(r=>r.type==='siskopatuh'&&!r.meta?.siskopatuh_type);
     if(siskopatuhWithoutType.length){ showToast('Item siskopatuh wajib pilih jenis siskopatuh','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
-    if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
-    if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&!manualOwnerName.trim()){ showToast('Isi nama owner tanpa akun','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Pilih cabang untuk owner tanpa akun','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
     setSaving(true);
@@ -785,8 +792,15 @@ const OrderFormPage: React.FC = () => {
         .finally(()=>setSaving(false));
     } else {
       const body:Record<string,any>={items:payload,...ratesPayload};
-      if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
+      if((!isOwner&&!canPickOwner&&branchId) || (canPickOwner&&ownerInputMode==='manual'&&branchSel)) body.branch_id=(canPickOwner&&ownerInputMode==='manual')?branchSel:branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
+      if(canPickOwner&&ownerInputMode==='manual'){
+        body.owner_input_mode='manual';
+        body.owner_name_manual=manualOwnerName.trim();
+        if(manualOwnerPhone.trim()) body.owner_phone_manual=manualOwnerPhone.trim();
+      } else if (canPickOwner) {
+        body.owner_input_mode='registered';
+      }
       if(waiveBusPenalty) body.waive_bus_penalty=true;
       ordersApi.create(body)
         .then(()=>{ orderDraft.clear(); showToast('Invoice dibuat.','success'); navigate('/dashboard/orders-invoices',{state:{refreshList:true}}); })
@@ -814,8 +828,10 @@ const OrderFormPage: React.FC = () => {
     const siskopatuhWithoutType=valid.filter(r=>r.type==='siskopatuh'&&!r.meta?.siskopatuh_type);
     if(siskopatuhWithoutType.length){ showToast('Item siskopatuh wajib pilih jenis siskopatuh','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
-    if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
-    if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&!manualOwnerName.trim()){ showToast('Isi nama owner tanpa akun','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Pilih cabang untuk owner tanpa akun','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
     setSaving(true);
@@ -826,8 +842,15 @@ const OrderFormPage: React.FC = () => {
         .finally(()=>setSaving(false));
     } else {
       const body:Record<string,any>={items:payload,save_as_draft:true,...ratesPayload};
-      if(!isOwner&&!canPickOwner&&branchId) body.branch_id=branchId;
+      if((!isOwner&&!canPickOwner&&branchId) || (canPickOwner&&ownerInputMode==='manual'&&branchSel)) body.branch_id=(canPickOwner&&ownerInputMode==='manual')?branchSel:branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
+      if(canPickOwner&&ownerInputMode==='manual'){
+        body.owner_input_mode='manual';
+        body.owner_name_manual=manualOwnerName.trim();
+        if(manualOwnerPhone.trim()) body.owner_phone_manual=manualOwnerPhone.trim();
+      } else if (canPickOwner) {
+        body.owner_input_mode='registered';
+      }
       if(waiveBusPenalty) body.waive_bus_penalty=true;
       ordersApi.create(body)
         .then((res:any)=>{
@@ -953,15 +976,37 @@ const OrderFormPage: React.FC = () => {
                 <p className="text-xs text-slate-500">Order & cabang mengikuti owner yang dipilih</p>
               </div>
             </div>
-            <div className="p-4 space-y-2">
-              <Autocomplete label="Owner" value={ownerSel} onChange={setOwnerSel} options={owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return { value: uid2, label: lbl }; })} placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_OWNER} />
-              {ownerProf && (
-                <p className="text-xs text-slate-600 flex items-center gap-1.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium ${ownerProf.is_mou_owner ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-                    {ownerProf.is_mou_owner ? 'Owner MOU' : 'Non-MOU'}
-                  </span>
-                  {ownerProf.is_mou_owner && <span className="text-slate-500">Harga produk diskon sesuai setting</span>}
-                </p>
+            <div className="p-4 space-y-3">
+              <Autocomplete
+                label="Sumber owner"
+                value={ownerInputMode}
+                onChange={(v)=>setOwnerInputMode((v as OwnerInputMode) || 'registered')}
+                options={[
+                  { value: 'registered', label: 'Owner terdaftar (punya akun)' },
+                  { value: 'manual', label: 'Owner tanpa akun (input manual)' }
+                ]}
+                emptyLabel="Pilih sumber owner"
+              />
+              {ownerInputMode === 'registered' ? (
+                <>
+                  <Autocomplete label="Owner" value={ownerSel} onChange={setOwnerSel} options={owners.map(o=>{ const uid2=o.User?.id??o.user_id; const lbl=o.User?.company_name||o.User?.name||uid2; return { value: uid2, label: lbl }; })} placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_OWNER} />
+                  {ownerProf && (
+                    <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium ${ownerProf.is_mou_owner ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                        {ownerProf.is_mou_owner ? 'Owner MOU' : 'Non-MOU'}
+                      </span>
+                      {ownerProf.is_mou_owner && <span className="text-slate-500">Harga produk diskon sesuai setting</span>}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="Nama owner (tanpa akun)" type="text" value={manualOwnerName} onChange={(e)=>setManualOwnerName(e.target.value)} placeholder="Contoh: PT ABC Travel" />
+                  <Input label="No HP owner (opsional)" type="text" value={manualOwnerPhone} onChange={(e)=>setManualOwnerPhone(e.target.value)} placeholder="08xxxxxxxxxx" />
+                  <div className="sm:col-span-2">
+                    <Autocomplete label="Cabang owner (wajib)" value={branchSel} onChange={setBranchSel} options={branches.map(b=>({ value: b.id, label: `${b.name} (${b.code})` }))} placeholder={AUTOCOMPLETE_PILIH.PILIH_CABANG} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_CABANG} />
+                  </div>
+                </div>
               )}
             </div>
           </section>

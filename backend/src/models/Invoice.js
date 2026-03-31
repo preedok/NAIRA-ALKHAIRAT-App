@@ -22,8 +22,22 @@ const Invoice = sequelize.define('Invoice', {
   },
   owner_id: {
     type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'users', key: 'id' },
+    onDelete: 'SET NULL'
+  },
+  owner_name_manual: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  owner_phone_manual: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  owner_input_mode: {
+    type: DataTypes.STRING(20),
     allowNull: false,
-    references: { model: 'users', key: 'id' }
+    defaultValue: 'registered'
   },
   branch_id: {
     type: DataTypes.UUID,

@@ -14,10 +14,23 @@ const Order = sequelize.define('Order', {
   },
   owner_id: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: { model: 'users', key: 'id' },
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'SET NULL'
+  },
+  owner_name_manual: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  owner_phone_manual: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  owner_input_mode: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'registered'
   },
   branch_id: {
     type: DataTypes.UUID,
