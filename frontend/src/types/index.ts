@@ -327,7 +327,7 @@ export interface Package {
 
 // ==================== ORDER ====================
 
-export type OrderItemType = 'hotel' | 'visa' | 'ticket' | 'bus' | 'package';
+export type OrderItemType = 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'package';
 export type OrderStatus = 'draft' | 'tentative' | 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
 
 /** Simplified order for list/table display (dashboard, reports) */

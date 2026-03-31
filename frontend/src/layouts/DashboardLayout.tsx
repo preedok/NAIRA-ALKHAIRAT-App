@@ -69,6 +69,7 @@ const menuItems: MenuItem[] = [
       { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: productMenuRoles },
       { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: productMenuRoles },
       { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: productMenuRoles },
+      { title: 'Siskopatuh', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/siskopatuh', roles: productMenuRoles },
       { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: productMenuRoles },
       { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: productMenuRoles },
     ]

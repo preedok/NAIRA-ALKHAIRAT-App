@@ -8,6 +8,7 @@ import HotelsPage from './HotelsPage';
 import VisaPage from './VisaPage';
 import TicketsPage from './TicketsPage';
 import BusPage from './BusPage';
+import SiskopatuhPage from './SiskopatuhPage';
 import PackagesPage from './PackagesPage';
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'visa', label: 'Visa', icon: FileText },
   { id: 'tickets', label: 'Tiket', icon: Plane },
   { id: 'bus', label: 'Bus', icon: Bus },
+  { id: 'siskopatuh', label: 'Siskopatuh', icon: FileText },
   { id: 'packages', label: 'Paket', icon: Package }
 ] as const;
 
@@ -89,6 +91,7 @@ const ProductsPage: React.FC = () => {
         {tab === 'visa' && <VisaPage embedInProducts />}
         {tab === 'tickets' && <TicketsPage embedInProducts />}
         {tab === 'bus' && <BusPage embedInProducts />}
+        {tab === 'siskopatuh' && <SiskopatuhPage />}
         {tab === 'packages' && <PackagesPage />}
       </div>
     </div>

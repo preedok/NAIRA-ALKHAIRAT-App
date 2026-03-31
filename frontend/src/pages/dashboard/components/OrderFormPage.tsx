@@ -24,6 +24,7 @@ const ITEM_TYPES = [
   { id:'visa',     label:'Visa',     Icon:FileText, color:'#78716c' },
   { id:'ticket',   label:'Tiket',    Icon:Plane,    color:'#57534e' },
   { id:'bus',      label:'Bus',      Icon:Bus,      color:'#6b7280' },
+  { id:'siskopatuh', label:'Siskopatuh', Icon:FileText, color:'#57534e' },
   { id:'handling', label:'Handling', Icon:Star,     color:'#78716c' },
   { id:'package',  label:'Paket',    Icon:Package,  color:'#64748b' },
 ] as const;
@@ -83,6 +84,7 @@ function getDisplayCurrency(type: ItemType, product?: ProductOption | null): Dis
   if (c === 'SAR' || c === 'USD' || c === 'IDR') return c as DisplayCurrency;
   if (type === 'hotel' || type === 'handling') return 'SAR';
   if (type === 'bus' || type === 'ticket') return 'IDR';
+  if (type === 'siskopatuh') return 'IDR';
   if (type === 'visa') return 'USD';
   return 'IDR';
 }
@@ -348,6 +350,17 @@ const OrderFormPage: React.FC = () => {
     const hotels=byType('hotel');
     if(!location) return hotels;
     return hotels.filter(p=>(p.meta as { location?: string })?.location===location);
+  };
+  const siskopatuhTypeOptions = (row: OrderItemRow) => {
+    const product = products.find((p) => p.id === row.product_id && p.type === 'siskopatuh');
+    const kinds = (product?.meta as { siskopatuh_kinds?: unknown } | undefined)?.siskopatuh_kinds;
+    if (Array.isArray(kinds) && kinds.length > 0) {
+      return kinds
+        .map((v) => String(v).trim())
+        .filter(Boolean)
+        .map((k) => ({ value: k, label: k }));
+    }
+    return [{ value: 'reguler', label: 'Reguler' }];
   };
   /** Hanya tipe yang punya produk di data — agar dropdown Tipe hanya tampil pilihan yang tersedia. Bus: hanya tampil jika ada produk Hiace. */
   const availableItemTypes = ITEM_TYPES.filter((t) => t.id === 'bus' ? busProductsOrderable().length > 0 : byType(t.id).length > 0);
@@ -757,6 +770,8 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan (pulang pergi: keberangkatan & kepulangan; pergi saja: tanggal keberangkatan; pulang saja: tanggal kepulangan)','warning'); return; }
+    const siskopatuhWithoutType=valid.filter(r=>r.type==='siskopatuh'&&!r.meta?.siskopatuh_type);
+    if(siskopatuhWithoutType.length){ showToast('Item siskopatuh wajib pilih jenis siskopatuh','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -796,6 +811,8 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan','warning'); return; }
+    const siskopatuhWithoutType=valid.filter(r=>r.type==='siskopatuh'&&!r.meta?.siskopatuh_type);
+    if(siskopatuhWithoutType.length){ showToast('Item siskopatuh wajib pilih jenis siskopatuh','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -1355,6 +1372,17 @@ const OrderFormPage: React.FC = () => {
                                 </>
                                 );
                               })()}
+                              {row.type==='siskopatuh' && (
+                                <div className="min-w-0">
+                                  <Autocomplete
+                                    label="Jenis siskopatuh"
+                                    value={(row.meta?.siskopatuh_type as string) || ''}
+                                    onChange={v=> updateRow(row.id,{ meta: { ...(row.meta||{}), siskopatuh_type: v || undefined } })}
+                                    options={siskopatuhTypeOptions(row)}
+                                    emptyLabel="— Pilih jenis —"
+                                  />
+                                </div>
+                              )}
                               <div className="min-w-0 w-20">
                                 <Input label="Qty" type="number" min={0} value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }} />
                               </div>

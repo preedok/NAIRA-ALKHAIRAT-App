@@ -1022,7 +1022,7 @@ export const ownersApi = {
 
 /** Item draft order dari AI chat (untuk "Isi ke Form Order"). */
 export interface AiChatOrderDraftItem {
-  type: 'hotel' | 'visa' | 'ticket' | 'bus' | 'handling' | 'package';
+  type: 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'handling' | 'package';
   product_id: string;
   product_name: string;
   quantity: number;

@@ -156,6 +156,7 @@ const ORDER_ITEM_TYPE = {
   VISA: 'visa',
   TICKET: 'ticket',
   BUS: 'bus',
+  SISKOPATUH: 'siskopatuh',
   HANDLING: 'handling',
   PACKAGE: 'package'
 };

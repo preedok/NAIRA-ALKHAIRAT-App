@@ -22,6 +22,7 @@ import TicketWorkPage from '../pages/dashboard/components/TicketWorkPage';
 import HotelsPage from '../pages/dashboard/components/HotelsPage';
 import BusPage from '../pages/dashboard/components/BusPage';
 import ProductBusPage from '../pages/dashboard/components/ProductBusPage';
+import SiskopatuhPage from '../pages/dashboard/components/SiskopatuhPage';
 import BusWorkPage from '../pages/dashboard/components/BusWorkPage';
 import PackagesPage from '../pages/dashboard/components/PackagesPage';
 import HandlingPage from '../pages/dashboard/components/HandlingPage';
@@ -148,6 +149,10 @@ const router = createBrowserRouter([
           {
             path: 'products/bus',
             element: <ProductBusPage />
+          },
+          {
+            path: 'products/siskopatuh',
+            element: <SiskopatuhPage />
           },
           {
             path: 'products/packages',

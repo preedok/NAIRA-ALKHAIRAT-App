@@ -50,6 +50,7 @@ function pickDiffMeta(type, meta) {
   if (type === ORDER_ITEM_TYPE.TICKET) return { bandara: m.bandara ?? null, trip_type: m.trip_type ?? null, departure_date: m.departure_date ?? null, return_date: m.return_date ?? null };
   if (type === ORDER_ITEM_TYPE.BUS) return { travel_date: m.travel_date ?? null, route_type: m.route_type ?? null, bus_type: m.bus_type ?? null, trip_type: m.trip_type ?? null };
   if (type === ORDER_ITEM_TYPE.VISA) return { travel_date: m.travel_date ?? null };
+  if (type === ORDER_ITEM_TYPE.SISKOPATUH) return { siskopatuh_type: m.siskopatuh_type ?? null };
   return {};
 }
 
@@ -72,6 +73,10 @@ function orderItemDiffKey(it) {
     const busType = String(meta.bus_type || '');
     const trip = String(meta.trip_type || '');
     return `${type}:${pid}:${route}:${busType}:${trip}`;
+  }
+  if (type === ORDER_ITEM_TYPE.SISKOPATUH) {
+    const skType = String(meta.siskopatuh_type || '');
+    return `${type}:${pid}:${skType}`;
   }
   return `${type}:${pid}`;
 }
