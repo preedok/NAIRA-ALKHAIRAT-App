@@ -862,8 +862,8 @@ const PackagesPage: React.FC = () => {
                 </section>
               )}
 
-              {/* Section: Produk dalam paket (Visa, Tiket, Bis, Handling) */}
-              {(form.includes.includes('visa') || form.includes.includes('tiket') || form.includes.includes('bis') || form.includes.includes('handling')) && canCreatePackage && (
+              {/* Section: Produk dalam paket (Visa, Tasreh, Tiket, Bis, Handling) */}
+              {(form.includes.includes('visa') || form.includes.includes('tasreh') || form.includes.includes('tiket') || form.includes.includes('bis') || form.includes.includes('handling')) && canCreatePackage && (
                 <section className="space-y-3">
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Produk dalam paket</h3>
                   <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
@@ -874,6 +874,16 @@ const PackagesPage: React.FC = () => {
                         onChange={(v) => setForm((f) => ({ ...f, visa_ids: v ? [v] : [] }))}
                         options={visaProducts.map((p) => ({ value: p.id, label: p.name }))}
                         placeholder={productsLoading && visaProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih visa --'}
+                        fullWidth
+                      />
+                    )}
+                    {form.includes.includes('tasreh') && (
+                      <Autocomplete
+                        label="Tasreh – pilih yang masuk paket"
+                        value={form.visa_ids[0] ?? ''}
+                        onChange={(v) => setForm((f) => ({ ...f, visa_ids: v ? [v] : [] }))}
+                        options={visaProducts.map((p) => ({ value: p.id, label: p.name }))}
+                        placeholder={productsLoading && visaProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih produk tasreh --'}
                         fullWidth
                       />
                     )}
