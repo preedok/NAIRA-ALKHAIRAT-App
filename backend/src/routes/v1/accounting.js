@@ -52,6 +52,11 @@ router.get('/export-aging-pdf', accountingController.exportAgingPdf);
 router.get('/payments', accountingController.getPaymentsList);
 router.get('/invoices', accountingController.listInvoices);
 router.get('/orders', accountingController.listOrders);
+router.get('/financial-report/period-invoices', accountingController.getFinancialReportPeriodInvoices);
+router.get('/financial-report/owner-invoices', accountingController.getFinancialReportOwnerInvoices);
+router.get('/financial-report/kota-invoices', accountingController.getFinancialReportKotaInvoices);
+router.get('/financial-report/provinsi-invoices', accountingController.getFinancialReportProvinsiInvoices);
+router.get('/financial-report/wilayah-invoices', accountingController.getFinancialReportWilayahInvoices);
 router.get('/financial-report', accountingController.getFinancialReport);
 router.post('/payments/:id/reconcile', accountingController.reconcilePayment);
 

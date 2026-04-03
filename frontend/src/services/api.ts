@@ -721,6 +721,37 @@ export interface AdminPusatDashboardData {
   orders_recent: any[];
 }
 
+/** Invoice row returned by financial-report modal endpoints (wilayah/provinsi/kota/owner/periode). */
+export interface FinancialReportModalInvoiceRow {
+  invoice_id: string;
+  invoice_number: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  issued_at: string | null;
+  due_date: string | null;
+  status: string;
+  nominal: string | number;
+  paid_amount: string | number | null;
+  outstanding_amount: string | number | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  branch_code: string | null;
+  province_id: string | null;
+  province_name: string | null;
+  owner_id: string | null;
+  owner_name: string | null;
+  order_id: string | null;
+  order_number: string | null;
+}
+
+export interface FinancialReportModalInvoicesPayload {
+  invoices: FinancialReportModalInvoiceRow[];
+  sum_nominal: number;
+  sum_paid: number;
+  sum_outstanding: number;
+  branch_count: number | null;
+}
+
 export const accountingApi = {
   getDashboard: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string; date_from?: string; date_to?: string }) =>
     api.get<{ success: boolean; data: AccountingDashboardData }>('/accounting/dashboard', { params }),
@@ -766,7 +797,7 @@ export const accountingApi = {
     api.post<{ success: boolean; data: AccountingPeriodItem; message: string }>(`/accounting/periods/${id}/unlock`),
   getAccountMappings: () =>
     api.get<{ success: boolean; data: AccountMappingItem[] }>('/accounting/account-mappings'),
-  listAccountingOwners: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string }) =>
+  listAccountingOwners: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string; kabupaten_id?: string }) =>
     api.get<{ success: boolean; data: Array<{ id: string; name: string }> }>('/accounting/owners', { params }),
   getAgingReport: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; order_status?: string; date_from?: string; date_to?: string; due_from?: string; due_to?: string; search?: string; page?: number; limit?: number; bucket?: string }) =>
     api.get<{ success: boolean; data: AccountingAgingData }>('/accounting/aging', { params }),
@@ -784,6 +815,57 @@ export const accountingApi = {
     api.get<{ success: boolean; data: any[] }>('/accounting/orders', { params }),
   getFinancialReport: (params?: { period?: string; year?: string; month?: string; date_from?: string; date_to?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; order_status?: string; product_type?: string; search?: string; min_amount?: number; max_amount?: number; page?: number; limit?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get<{ success: boolean; data: AccountingFinancialReportData }>('/accounting/financial-report', { params }),
+  getFinancialReportWilayahInvoices: (params: {
+    wilayah_id: string;
+    date_from?: string;
+    date_to?: string;
+    provinsi_id?: string;
+    kabupaten_id?: string;
+    owner_id?: string;
+    period?: string;
+    year?: string;
+    month?: string;
+  }) => api.get<{ success: boolean; data: FinancialReportModalInvoicesPayload }>('/accounting/financial-report/wilayah-invoices', { params }),
+  getFinancialReportProvinsiInvoices: (params: {
+    provinsi_id: string;
+    date_from?: string;
+    date_to?: string;
+    kabupaten_id?: string;
+    owner_id?: string;
+    period?: string;
+    year?: string;
+    month?: string;
+  }) => api.get<{ success: boolean; data: FinancialReportModalInvoicesPayload }>('/accounting/financial-report/provinsi-invoices', { params }),
+  getFinancialReportKotaInvoices: (params: {
+    branch_id: string;
+    date_from?: string;
+    date_to?: string;
+    owner_id?: string;
+    period?: string;
+    year?: string;
+    month?: string;
+  }) => api.get<{ success: boolean; data: FinancialReportModalInvoicesPayload }>('/accounting/financial-report/kota-invoices', { params }),
+  getFinancialReportOwnerInvoices: (params: {
+    owner_id: string;
+    date_from?: string;
+    date_to?: string;
+    wilayah_id?: string;
+    provinsi_id?: string;
+    branch_id?: string;
+    kabupaten_id?: string;
+    period?: string;
+    year?: string;
+    month?: string;
+  }) => api.get<{ success: boolean; data: FinancialReportModalInvoicesPayload }>('/accounting/financial-report/owner-invoices', { params }),
+  getFinancialReportPeriodInvoices: (params: {
+    year_month: string;
+    date_from?: string;
+    date_to?: string;
+    owner_id?: string;
+    wilayah_id?: string;
+    provinsi_id?: string;
+    branch_id?: string;
+  }) => api.get<{ success: boolean; data: FinancialReportModalInvoicesPayload & { year_month?: string } }>('/accounting/financial-report/period-invoices', { params }),
   exportFinancialExcel: (params?: { period?: string; year?: string; month?: string; date_from?: string; date_to?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; order_status?: string; product_type?: string; search?: string; min_amount?: number; max_amount?: number }) =>
     api.get('/accounting/export-financial-excel', { params, responseType: 'blob' }),
   exportFinancialPdf: (params?: { period?: string; year?: string; month?: string; date_from?: string; date_to?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; status?: string; order_status?: string; product_type?: string; search?: string; min_amount?: number; max_amount?: number }) =>

@@ -183,15 +183,500 @@ async function resolveBranchFilter(branch_id, provinsi_id, wilayah_id, user) {
   return {};
 }
 
+/** Ambil array branch_id dari hasil resolveBranchFilter (Op.in atau tunggal). */
+function branchFilterToIdArray(branchFilter) {
+  if (!branchFilter || branchFilter.branch_id == null) return [];
+  const b = branchFilter.branch_id;
+  if (b && typeof b === 'object' && b[Op.in]) {
+    const arr = b[Op.in];
+    return Array.isArray(arr) ? [...arr] : [];
+  }
+  return [b];
+}
+
+/**
+ * Cabang dalam suatu wilayah, dipersempit opsional provinsi & kabupaten (kode cabang = kode kabupaten).
+ */
+async function resolveWilayahScopedBranchIds(user, wilayah_id, provinsi_id, kabupaten_id) {
+  const base = await resolveBranchFilter(null, null, wilayah_id, user);
+  let ids = branchFilterToIdArray(base);
+  if (!ids.length) return [];
+
+  if (kabupaten_id && String(kabupaten_id).trim()) {
+    const kab = await Kabupaten.findByPk(String(kabupaten_id).trim(), { attributes: ['kode'], raw: true });
+    if (kab && kab.kode) {
+      const rows = await Branch.findAll({
+        where: { id: { [Op.in]: ids }, code: kab.kode, is_active: true },
+        attributes: ['id'],
+        raw: true
+      });
+      return rows.map((r) => r.id);
+    }
+    return [];
+  }
+
+  if (provinsi_id && String(provinsi_id).trim()) {
+    const rows = await Branch.findAll({
+      where: { id: { [Op.in]: ids }, provinsi_id: String(provinsi_id).trim(), is_active: true },
+      attributes: ['id'],
+      raw: true
+    });
+    return rows.map((r) => r.id);
+  }
+
+  return ids;
+}
+
+/** Cabang dalam satu provinsi (opsional persempit kabupaten = kode branch). */
+async function resolveProvinsiScopedBranchIds(user, provinsi_id, kabupaten_id) {
+  if (!provinsi_id || !String(provinsi_id).trim()) return [];
+  const base = await resolveBranchFilter(null, String(provinsi_id).trim(), null, user);
+  let ids = branchFilterToIdArray(base);
+  if (!ids.length) return [];
+
+  if (kabupaten_id && String(kabupaten_id).trim()) {
+    const kab = await Kabupaten.findByPk(String(kabupaten_id).trim(), { attributes: ['kode'], raw: true });
+    if (kab && kab.kode) {
+      const rows = await Branch.findAll({
+        where: { id: { [Op.in]: ids }, code: kab.kode, is_active: true },
+        attributes: ['id'],
+        raw: true
+      });
+      return rows.map((r) => r.id);
+    }
+    return [];
+  }
+  return ids;
+}
+
+function userMayQueryBranchFinancialModal(user, branchId) {
+  if (!branchId) return false;
+  if (!isAccountingPusat(user) && user.branch_id && !['super_admin', 'admin_pusat'].includes(user.role)) {
+    return String(user.branch_id) === String(branchId);
+  }
+  return true;
+}
+
+function parseFinancialReportModalDates(req) {
+  const { date_from, date_to } = req.query;
+  if (date_from && date_to) {
+    const startDate = new Date(String(date_from));
+    const endDate = new Date(String(date_to));
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) throw new Error('Tanggal tidak valid');
+    endDate.setHours(23, 59,59,999);
+    return { startDate, endDate };
+  }
+  const { period, year, month } = req.query;
+  const range = buildFinancialReportDateRange(period, year, month, date_from, date_to);
+  return { startDate: range.startDate, endDate: range.endDate };
+}
+
+function buildFinancialReportModalDateAnd(startDate, endDate) {
+  return {
+    [Op.or]: [
+      { issued_at: { [Op.between]: [startDate, endDate] } },
+      { issued_at: { [Op.is]: null }, created_at: { [Op.between]: [startDate, endDate] } }
+    ]
+  };
+}
+
+async function loadFinancialReportModalInvoiceRows(invWhere) {
+  const invoices = await Invoice.findAll({
+    where: invWhere,
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
+      {
+        model: Branch,
+        as: 'Branch',
+        attributes: ['id', 'code', 'name', 'city', 'provinsi_id'],
+        required: false,
+        include: [
+          {
+            model: Provinsi,
+            as: 'Provinsi',
+            attributes: ['id', 'name'],
+            required: false,
+            include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }]
+          }
+        ]
+      },
+      { model: Order, as: 'Order', attributes: ['id', 'status'], required: false }
+    ],
+    order: [
+      ['issued_at', 'DESC'],
+      ['created_at', 'DESC'],
+      ['invoice_number', 'ASC']
+    ]
+  });
+
+  await Promise.all(
+    invoices.map(async (inv) => {
+      if (inv.Branch && (inv.Branch.code || inv.Branch.provinsi_id)) {
+        try {
+          const loc = await enrichBranchWithLocation(inv.Branch, { syncDb: false });
+          inv.Branch.provinsi_name = loc.provinsi_name;
+          inv.Branch.wilayah_name = loc.wilayah_name;
+        } catch (_) { /* non-fatal */ }
+      }
+    })
+  );
+
+  return invoices.map((inv) => {
+    const paid = parseFloat(inv.paid_amount || 0);
+    return {
+      id: inv.id,
+      invoice_number: inv.invoice_number,
+      owner_name: inv.User?.company_name || inv.User?.name,
+      branch_name: inv.Branch?.name || inv.Branch?.code,
+      wilayah_name: inv.Branch?.Provinsi?.Wilayah?.name || inv.Branch?.wilayah_name,
+      provinsi_name: inv.Branch?.Provinsi?.name || inv.Branch?.provinsi_name,
+      city: inv.Branch?.city,
+      total_amount: parseFloat(inv.total_amount || 0),
+      paid_amount: paid,
+      remaining_amount: parseFloat(inv.remaining_amount || 0),
+      status: inv.status,
+      order_status: inv.Order?.status,
+      issued_at: inv.issued_at || inv.created_at
+    };
+  });
+}
+
+/**
+ * GET /api/v1/accounting/financial-report/wilayah-invoices
+ * Daftar invoice dalam wilayah (filter modal laporan keuangan). Query: wilayah_id (wajib), provinsi_id, kabupaten_id, owner_id, date_from, date_to
+ */
+const getFinancialReportWilayahInvoices = asyncHandler(async (req, res) => {
+  const { wilayah_id, provinsi_id, kabupaten_id, owner_id } = req.query;
+  if (!wilayah_id || !String(wilayah_id).trim()) {
+    return res.status(400).json({ success: false, message: 'wilayah_id wajib diisi' });
+  }
+
+  let startDate;
+  let endDate;
+  try {
+    ({ startDate, endDate } = parseFinancialReportModalDates(req));
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message || 'Rentang tanggal tidak valid' });
+  }
+
+  const branchIds = await resolveWilayahScopedBranchIds(req.user, wilayah_id, provinsi_id, kabupaten_id);
+  if (!branchIds.length) {
+    return res.json({
+      success: true,
+      data: {
+        invoices: [],
+        period: { start: startDate, end: endDate },
+        branch_count: 0
+      }
+    });
+  }
+
+  const invWhere = {
+    branch_id: { [Op.in]: branchIds },
+    [Op.and]: [buildFinancialReportModalDateAnd(startDate, endDate)],
+    status: { [Op.notIn]: ['tentative'] }
+  };
+  if (owner_id && String(owner_id).trim()) invWhere.owner_id = String(owner_id).trim();
+
+  const rows = await loadFinancialReportModalInvoiceRows(invWhere);
+  res.json({
+    success: true,
+    data: {
+      invoices: rows,
+      period: { start: startDate, end: endDate },
+      branch_count: branchIds.length
+    }
+  });
+});
+
+/**
+ * GET /api/v1/accounting/financial-report/provinsi-invoices
+ * Query: provinsi_id (wajib), kabupaten_id, owner_id, date_from, date_to
+ */
+const getFinancialReportProvinsiInvoices = asyncHandler(async (req, res) => {
+  const { provinsi_id, kabupaten_id, owner_id } = req.query;
+  if (!provinsi_id || !String(provinsi_id).trim()) {
+    return res.status(400).json({ success: false, message: 'provinsi_id wajib diisi' });
+  }
+
+  let startDate;
+  let endDate;
+  try {
+    ({ startDate, endDate } = parseFinancialReportModalDates(req));
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message || 'Rentang tanggal tidak valid' });
+  }
+
+  const branchIds = await resolveProvinsiScopedBranchIds(req.user, provinsi_id, kabupaten_id);
+  if (!branchIds.length) {
+    return res.json({
+      success: true,
+      data: { invoices: [], period: { start: startDate, end: endDate }, branch_count: 0 }
+    });
+  }
+
+  const invWhere = {
+    branch_id: { [Op.in]: branchIds },
+    [Op.and]: [buildFinancialReportModalDateAnd(startDate, endDate)],
+    status: { [Op.notIn]: ['tentative'] }
+  };
+  if (owner_id && String(owner_id).trim()) invWhere.owner_id = String(owner_id).trim();
+
+  const rows = await loadFinancialReportModalInvoiceRows(invWhere);
+  res.json({
+    success: true,
+    data: {
+      invoices: rows,
+      period: { start: startDate, end: endDate },
+      branch_count: branchIds.length
+    }
+  });
+});
+
+/**
+ * GET /api/v1/accounting/financial-report/kota-invoices (unit cabang / kota)
+ * Query: branch_id (wajib), owner_id, date_from, date_to
+ */
+const getFinancialReportKotaInvoices = asyncHandler(async (req, res) => {
+  const { branch_id, owner_id } = req.query;
+  if (!branch_id || !String(branch_id).trim()) {
+    return res.status(400).json({ success: false, message: 'branch_id wajib diisi' });
+  }
+  const bid = String(branch_id).trim();
+  if (!userMayQueryBranchFinancialModal(req.user, bid)) {
+    return res.status(403).json({ success: false, message: 'Akses cabang/kota ditolak' });
+  }
+
+  let startDate;
+  let endDate;
+  try {
+    ({ startDate, endDate } = parseFinancialReportModalDates(req));
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message || 'Rentang tanggal tidak valid' });
+  }
+
+  const invWhere = {
+    branch_id: bid,
+    [Op.and]: [buildFinancialReportModalDateAnd(startDate, endDate)],
+    status: { [Op.notIn]: ['tentative'] }
+  };
+  if (owner_id && String(owner_id).trim()) invWhere.owner_id = String(owner_id).trim();
+
+  const rows = await loadFinancialReportModalInvoiceRows(invWhere);
+  res.json({
+    success: true,
+    data: {
+      invoices: rows,
+      period: { start: startDate, end: endDate },
+      branch_count: 1
+    }
+  });
+});
+
+/**
+ * GET /api/v1/accounting/financial-report/owner-invoices
+ * Invoice milik satu owner (sesuai order). Query: owner_id (wajib), wilayah_id, provinsi_id, branch_id, kabupaten_id, date_from, date_to
+ */
+const getFinancialReportOwnerInvoices = asyncHandler(async (req, res) => {
+  const { owner_id, wilayah_id, provinsi_id, branch_id, kabupaten_id } = req.query;
+  if (!owner_id || !String(owner_id).trim()) {
+    return res.status(400).json({ success: false, message: 'owner_id wajib diisi' });
+  }
+
+  let startDate;
+  let endDate;
+  try {
+    ({ startDate, endDate } = parseFinancialReportModalDates(req));
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message || 'Rentang tanggal tidak valid' });
+  }
+
+  const branchFilter = await resolveBranchFilter(
+    branch_id && String(branch_id).trim() ? String(branch_id).trim() : null,
+    provinsi_id && String(provinsi_id).trim() ? String(provinsi_id).trim() : null,
+    wilayah_id && String(wilayah_id).trim() ? String(wilayah_id).trim() : null,
+    req.user
+  );
+
+  const invWhere = {
+    owner_id: String(owner_id).trim(),
+    [Op.and]: [buildFinancialReportModalDateAnd(startDate, endDate)],
+    status: { [Op.notIn]: ['tentative'] }
+  };
+
+  let branchIds = branchFilterToIdArray(branchFilter);
+  if (kabupaten_id && String(kabupaten_id).trim()) {
+    if (!branchIds.length && Object.keys(branchFilter).length) {
+      return res.json({
+        success: true,
+        data: { invoices: [], period: { start: startDate, end: endDate }, branch_count: 0 }
+      });
+    }
+    if (branchIds.length) {
+      const kab = await Kabupaten.findByPk(String(kabupaten_id).trim(), { attributes: ['kode'], raw: true });
+      if (kab && kab.kode) {
+        const rows = await Branch.findAll({
+          where: { id: { [Op.in]: branchIds }, code: kab.kode, is_active: true },
+          attributes: ['id'],
+          raw: true
+        });
+        branchIds = rows.map((r) => r.id);
+      } else {
+        branchIds = [];
+      }
+    } else {
+      const kab = await Kabupaten.findByPk(String(kabupaten_id).trim(), { attributes: ['kode'], raw: true });
+      if (kab && kab.kode) {
+        const rows = await Branch.findAll({
+          where: { code: kab.kode, is_active: true },
+          attributes: ['id'],
+          raw: true
+        });
+        branchIds = rows.map((r) => r.id);
+      } else {
+        branchIds = [];
+      }
+    }
+  }
+
+  if (Object.keys(branchFilter).length) {
+    if (!branchIds.length) {
+      return res.json({
+        success: true,
+        data: { invoices: [], period: { start: startDate, end: endDate }, branch_count: 0 }
+      });
+    }
+    invWhere.branch_id = { [Op.in]: branchIds };
+  } else if (branchIds.length && kabupaten_id) {
+    invWhere.branch_id = { [Op.in]: branchIds };
+  }
+
+  const rows = await loadFinancialReportModalInvoiceRows(invWhere);
+  let bc = 0;
+  if (invWhere.branch_id) {
+    const b = invWhere.branch_id;
+    bc = b && typeof b === 'object' && b[Op.in] ? b[Op.in].length : 1;
+  }
+  res.json({
+    success: true,
+    data: {
+      invoices: rows,
+      period: { start: startDate, end: endDate },
+      branch_count: bc
+    }
+  });
+});
+
+/**
+ * GET /api/v1/accounting/financial-report/period-invoices
+ * Invoice yang masuk periode bulan (issued_at / created_at). Query: year_month wajib (YYYY-MM), owner_id, wilayah_id, provinsi_id, branch_id, date_from & date_to untuk menyempitkan dalam bulan
+ */
+const getFinancialReportPeriodInvoices = asyncHandler(async (req, res) => {
+  const { year_month, owner_id, wilayah_id, provinsi_id, branch_id, date_from, date_to } = req.query;
+  const ym = year_month && String(year_month).trim();
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) {
+    return res.status(400).json({ success: false, message: 'year_month wajib format YYYY-MM' });
+  }
+
+  const [yStr, mStr] = ym.split('-');
+  const y = parseInt(yStr, 10);
+  const mo = parseInt(mStr, 10);
+  const monthStart = new Date(y, mo - 1, 1);
+  const monthEnd = new Date(y, mo, 0, 23, 59, 59, 999);
+
+  let effStart = monthStart;
+  let effEnd = monthEnd;
+  if (date_from && date_to) {
+    const df = new Date(String(date_from));
+    const dt = new Date(String(date_to));
+    if (Number.isNaN(df.getTime()) || Number.isNaN(dt.getTime())) {
+      return res.status(400).json({ success: false, message: 'Tanggal filter tidak valid' });
+    }
+    dt.setHours(23, 59, 59, 999);
+    effStart = df > monthStart ? df : monthStart;
+    effEnd = dt < monthEnd ? dt : monthEnd;
+    if (effStart > effEnd) {
+      return res.json({
+        success: true,
+        data: { invoices: [], period: { start: effStart, end: effEnd }, branch_count: 0, year_month: ym }
+      });
+    }
+  }
+
+  const branchFilter = await resolveBranchFilter(
+    branch_id && String(branch_id).trim() ? String(branch_id).trim() : null,
+    provinsi_id && String(provinsi_id).trim() ? String(provinsi_id).trim() : null,
+    wilayah_id && String(wilayah_id).trim() ? String(wilayah_id).trim() : null,
+    req.user
+  );
+
+  const invWhere = {
+    [Op.and]: [buildFinancialReportModalDateAnd(effStart, effEnd)],
+    status: { [Op.notIn]: ['tentative'] }
+  };
+  if (owner_id && String(owner_id).trim()) invWhere.owner_id = String(owner_id).trim();
+  if (Object.keys(branchFilter).length) Object.assign(invWhere, branchFilter);
+
+  const rows = await loadFinancialReportModalInvoiceRows(invWhere);
+  let bc = 0;
+  if (invWhere.branch_id) {
+    const b = invWhere.branch_id;
+    bc = b && typeof b === 'object' && b[Op.in] ? b[Op.in].length : 1;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      invoices: rows,
+      period: { start: effStart, end: effEnd },
+      year_month: ym,
+      branch_count: bc
+    }
+  });
+});
+
 /**
  * GET /api/v1/accounting/owners
  * Daftar owner/partner yang punya invoice (untuk filter). Filter: branch_id, provinsi_id, wilayah_id
  */
 const listAccountingOwners = asyncHandler(async (req, res) => {
-  const { branch_id, provinsi_id, wilayah_id } = req.query;
+  const { branch_id, provinsi_id, wilayah_id, kabupaten_id } = req.query;
   const where = {};
   const branchFilter = await resolveBranchFilter(branch_id, provinsi_id, wilayah_id, req.user);
-  if (Object.keys(branchFilter).length) Object.assign(where, branchFilter);
+  if (kabupaten_id && String(kabupaten_id).trim()) {
+    let ids = branchFilterToIdArray(branchFilter);
+    if (Object.keys(branchFilter).length) {
+      if (!ids.length) {
+        where.branch_id = { [Op.in]: [] };
+      } else {
+        const kab = await Kabupaten.findByPk(String(kabupaten_id).trim(), { attributes: ['kode'], raw: true });
+        if (kab && kab.kode) {
+          const rows = await Branch.findAll({
+            where: { id: { [Op.in]: ids }, code: kab.kode, is_active: true },
+            attributes: ['id'],
+            raw: true
+          });
+          where.branch_id = { [Op.in]: rows.map((r) => r.id) };
+        } else {
+          where.branch_id = { [Op.in]: [] };
+        }
+      }
+    } else {
+      const kab = await Kabupaten.findByPk(String(kabupaten_id).trim(), { attributes: ['kode'], raw: true });
+      if (kab && kab.kode) {
+        const rows = await Branch.findAll({
+          where: { code: kab.kode, is_active: true },
+          attributes: ['id'],
+          raw: true
+        });
+        where.branch_id = { [Op.in]: rows.map((r) => r.id) };
+      } else {
+        where.branch_id = { [Op.in]: [] };
+      }
+    }
+  } else if (Object.keys(branchFilter).length) {
+    Object.assign(where, branchFilter);
+  }
 
   const invoices = await Invoice.findAll({
     where,
@@ -2149,6 +2634,11 @@ module.exports = {
   exportInvoicesExcel,
   listOrders,
   getFinancialReport,
+  getFinancialReportWilayahInvoices,
+  getFinancialReportProvinsiInvoices,
+  getFinancialReportKotaInvoices,
+  getFinancialReportOwnerInvoices,
+  getFinancialReportPeriodInvoices,
   exportFinancialExcel,
   exportFinancialPdf,
   reconcilePayment,
