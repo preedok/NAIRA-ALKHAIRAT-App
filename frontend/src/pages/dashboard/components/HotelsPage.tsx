@@ -1521,51 +1521,99 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
             <ModalBody className="p-6 overflow-y-auto flex-1">
               {hotelAvailabilityConfigLoading ? (
-                <p className="text-sm text-slate-500 mb-5">{CONTENT_LOADING_MESSAGE}</p>
+                <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
               ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
-                  {(() => {
-                    const qCurr = CURRENCY_OPTIONS.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCY_OPTIONS[0];
-                    const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
-                    const pf = quantityModalPriceForm;
-                    const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
-                    return (
-                      <div className="space-y-6 pt-2 border-t border-slate-200">
-                        <p className="text-xs text-slate-600">Atur <strong>jumlah kamar</strong>, <strong>harga default per hari</strong>, dan <strong>harga per malam per bulan (SAR)</strong> di sini. Harga bulanan dipakai saat order mengikuti tanggal menginap; jika bulan kosong dipakai fallback harga default.</p>
-                        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                              <Bed className="w-4 h-4 text-[#0D1A63]" />
-                              Jumlah kamar per tipe
-                            </h3>
-                            <span className="px-3 py-1 rounded-full bg-btn-light text-[#0D1A63] text-sm font-semibold">Total: {totalRooms} kamar</span>
+                (() => {
+                  const qCurr = CURRENCY_OPTIONS.find((c) => c.id === quantityModalPriceForm.currency) || CURRENCY_OPTIONS[0];
+                  const qFormatAmount = (n: number) => (n > 0 ? `${qCurr.symbol} ${Number(n).toLocaleString(qCurr.locale)}` : '-');
+                  const pf = quantityModalPriceForm;
+                  const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
+                  const stepBadge = (n: number) => (
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0D1A63]/10 text-sm font-bold text-[#0D1A63]"
+                      aria-hidden
+                    >
+                      {n}
+                    </span>
+                  );
+                  return (
+                    <div className="space-y-6 max-w-full">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-5">
+                        <p className="text-sm font-medium text-slate-800">Alur pengisian</p>
+                        <ol className="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-600 list-decimal list-inside marker:font-medium">
+                          <li>Isi kapasitas per tipe kamar.</li>
+                          <li>Atur harga default per hari (dan makan bila perlu). Harga bulanan kosong akan memakai nilai ini.</li>
+                          <li>Opsional: isi harga per malam per bulan dalam SAR sesuai musim atau kebijakan harga.</li>
+                          <li>Cek ringkasan, lalu simpan.</li>
+                        </ol>
+                      </div>
+
+                      <section
+                        className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm"
+                        aria-labelledby="hotel-qty-capacity-heading"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                          <div className="flex gap-3 min-w-0">
+                            {stepBadge(1)}
+                            <div className="min-w-0">
+                              <h3 id="hotel-qty-capacity-heading" className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                                <Bed className="w-4 h-4 text-[#0D1A63] shrink-0" />
+                                Kapasitas kamar
+                              </h3>
+                              <p className="text-xs text-slate-500 mt-1">Jumlah kamar siap dijual untuk setiap tipe.</p>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                            {ROOM_TYPES.map((rt) => (
-                              <div key={rt} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">
-                                  {ROOM_TYPE_LABELS[rt] ?? rt}
-                                </label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={quantityForm[rt] ?? ''}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
-                                  }}
-                                  placeholder="0"
-                                />
-                              </div>
-                            ))}
+                          <div className="flex shrink-0 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-btn-light px-3 py-2 sm:justify-center sm:min-w-[9rem]">
+                            <span className="text-xs font-medium text-slate-600 sm:hidden">Total</span>
+                            <span className="text-sm font-semibold tabular-nums text-[#0D1A63]">
+                              <span className="hidden sm:inline">Total: </span>
+                              {totalRooms} kamar
+                            </span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                          {ROOM_TYPES.map((rt) => (
+                            <div
+                              key={rt}
+                              className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow"
+                            >
+                              <label className="block text-xs font-medium text-slate-600 mb-2">
+                                {ROOM_TYPE_LABELS[rt] ?? rt}
+                              </label>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={quantityForm[rt] ?? ''}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
+                                }}
+                                placeholder="0"
+                                className="tabular-nums"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section aria-labelledby="hotel-qty-default-price-heading">
+                        <div className="flex gap-3 mb-3 sm:mb-4">
+                          {stepBadge(2)}
+                          <div className="min-w-0">
+                            <h3 id="hotel-qty-default-price-heading" className="text-sm font-semibold text-slate-900">
+                              Harga default (per hari)
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1">
+                              Mata uang utama, makan (jika tidak fullboard), dan harga kamar sebelum override bulanan.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
                           {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && (
-                            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                              <h3 className="text-sm font-semibold text-slate-800">Mata uang & Harga Makan (per hari)</h3>
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm space-y-3">
+                              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Makan &amp; mata uang</h4>
                               <PriceCurrencyField
-                                label="Harga Makan per Kamar"
+                                label="Harga makan per kamar"
                                 value={pf.meal_price || 0}
                                 currency={pf.currency}
                                 onChange={(value, newCur) => {
@@ -1596,156 +1644,223 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             </div>
                           )}
                           {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan === 'fullboard' && (
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm space-y-2">
-                              <h3 className="text-sm font-semibold text-slate-800">Fullboard</h3>
-                              <p className="text-xs text-slate-600">Harga kamar sudah termasuk makan. Tidak perlu mengisi harga makan terpisah.</p>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 shadow-sm space-y-2">
+                              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Paket makan</h4>
+                              <p className="text-sm font-medium text-slate-800">Fullboard</p>
+                              <p className="text-xs text-slate-600 leading-relaxed">
+                                Harga kamar sudah termasuk makan. Tidak perlu mengisi harga makan terpisah.
+                              </p>
                             </div>
                           )}
-                          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                            <h3 className="text-sm font-semibold text-slate-800">Harga Kamar (per hari)</h3>
+                          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm space-y-4">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Harga kamar</h4>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-2">Mode harga</label>
-                              <div className="flex gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
-                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'single' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Satu harga</button>
-                                <button type="button" onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
-                                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pf.pricing_mode === 'per_type' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}>Per tipe</button>
+                              <span id="hotel-pricing-mode-label" className="block text-xs font-medium text-slate-500 mb-2">
+                                Mode harga kamar
+                              </span>
+                              <div
+                                className="flex flex-col sm:flex-row gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200"
+                                role="group"
+                                aria-labelledby="hotel-pricing-mode-label"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
+                                  className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-medium transition-all ${pf.pricing_mode === 'single' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                  Satu harga semua tipe
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
+                                  className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-medium transition-all ${pf.pricing_mode === 'per_type' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                  Beda per tipe
+                                </button>
                               </div>
                             </div>
-                            {pf.pricing_mode === 'single' && (
-                              <div>
-                                <PriceInput
-                                  label="Satu harga untuk semua tipe"
-                                  value={pf.single_price || 0}
-                                  currency={pf.currency}
-                                  onChange={(n) => setQuantityModalPriceForm((f) => ({ ...f, single_price: n }))}
-                                  placeholder="0"
-                                />
-                              </div>
-                            )}
-                            <div className="pt-4 mt-4 border-t border-slate-200 space-y-3">
-                              <div>
-                                <h4 className="text-sm font-semibold text-slate-800">Harga per malam per bulan (SAR)</h4>
-                                <p className="text-xs text-slate-500 mt-1">Input SAR per malam; perkiraan IDR/USD dari kurs bisnis. Simpan bersama tombol di bawah.</p>
-                              </div>
-                              <Input
-                                label="Tahun"
-                                value={monthlyPriceYear}
-                                onChange={(e) => setMonthlyPriceYear(e.target.value.replace(/[^\d]/g, '').slice(0, 4))}
-                                disabled={quantityFormSaving || monthlyPriceLoading}
+                            {pf.pricing_mode === 'single' ? (
+                              <PriceInput
+                                label="Satu harga untuk semua tipe"
+                                value={pf.single_price || 0}
+                                currency={pf.currency}
+                                onChange={(n) => setQuantityModalPriceForm((f) => ({ ...f, single_price: n }))}
+                                placeholder="0"
                               />
-                              {monthlyPriceLoading ? (
-                                <p className="text-xs text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
-                              ) : null}
-                              <div className="overflow-auto border border-slate-200 rounded-lg max-h-[min(420px,50vh)]">
-                                <table className="w-full text-sm min-w-[1100px]">
-                                  <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-200">
-                                      <th className="text-left px-3 py-2">Tipe</th>
-                                      {monthKeys.map((m) => (
-                                        <th key={m} className="text-center px-2 py-2 min-w-[7rem] font-medium text-slate-700">
-                                          {formatMonthLabelId(m)}
-                                        </th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {ROOM_TYPES.map((rt) => (
-                                      <tr key={rt} className="border-b border-slate-100 last:border-0">
-                                        <td className="px-3 py-2 font-medium text-slate-800">{ROOM_TYPE_LABELS[rt] || rt}</td>
-                                        {monthKeys.map((m) => {
-                                          const sar = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-                                          const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
-                                          const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
-                                          const cellDisabled = quantityFormSaving || monthlyPriceLoading;
-                                          return (
-                                            <td key={`${rt}-${m}`} className="px-2 py-2 align-top">
-                                              <input
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={monthlyPriceRows?.[rt]?.[m] ?? ''}
-                                                onChange={(e) => {
-                                                  const raw = e.target.value.replace(/[^\d.,]/g, '');
-                                                  setMonthlyPriceRows((prev) => ({
-                                                    ...prev,
-                                                    [rt]: { ...(prev?.[rt] || {}), [m]: raw }
-                                                  }));
-                                                }}
-                                                onBlur={() => {
-                                                  const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-                                                  setMonthlyPriceRows((prev) => ({
-                                                    ...prev,
-                                                    [rt]: { ...(prev?.[rt] || {}), [m]: n > 0 ? formatSarId(n) : '' }
-                                                  }));
-                                                }}
-                                                className="w-full min-w-[5.5rem] border border-slate-200 rounded px-2 py-1 text-right text-sm tabular-nums"
-                                                placeholder="0"
-                                                disabled={cellDisabled}
-                                                aria-label={`Harga SAR ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
-                                              />
-                                              {conv && sar > 0 ? (
-                                                <div className="mt-1 text-[10px] leading-snug text-slate-500">
-                                                  <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
-                                                  <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
-                                                </div>
-                                              ) : null}
-                                            </td>
-                                          );
-                                        })}
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
+                            ) : (
+                              <p className="text-xs text-slate-500">
+                                Harga per tipe diisi di bagian <strong className="font-medium text-slate-700">ringkasan</strong> di bawah.
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                            <h3 className="text-sm font-semibold text-slate-800">Ringkasan per tipe kamar</h3>
+                      </section>
+
+                      <section
+                        className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm"
+                        aria-labelledby="hotel-qty-monthly-heading"
+                      >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="flex gap-3 min-w-0 flex-1">
+                            {stepBadge(3)}
+                            <div className="min-w-0">
+                              <h3 id="hotel-qty-monthly-heading" className="text-sm font-semibold text-slate-900">
+                                Harga per malam per bulan (SAR)
+                              </h3>
+                              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                Nilai dalam SAR per malam; di bawah setiap kolom tampil perkiraan IDR/USD dari kurs. Kosongkan bulan yang memakai harga default.
+                              </p>
+                              <p className="mt-2 text-xs text-slate-500 flex items-start gap-1.5">
+                                <span className="text-slate-400 select-none" aria-hidden>↔</span>
+                                <span>Tabel lebar: gunakan scroll horizontal di layar kecil.</span>
+                              </p>
+                            </div>
                           </div>
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-slate-100/80 border-b border-slate-200">
-                                <th className="text-left py-3 px-4 font-medium text-slate-600">Tipe</th>
-                                <th className="text-center py-3 px-4 font-medium text-slate-600">Jumlah</th>
-                                <th className="text-right py-3 px-4 font-medium text-slate-600">Harga (room only)</th>
+                          <div className="w-full lg:w-44 shrink-0">
+                            <Input
+                              label="Tahun"
+                              value={monthlyPriceYear}
+                              onChange={(e) => setMonthlyPriceYear(e.target.value.replace(/[^\d]/g, '').slice(0, 4))}
+                              disabled={quantityFormSaving || monthlyPriceLoading}
+                            />
+                          </div>
+                        </div>
+                        {monthlyPriceLoading ? (
+                          <p className="mt-3 text-xs text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+                        ) : null}
+                        <div className="mt-4 -mx-1 px-1 overflow-auto rounded-xl border border-slate-200 max-h-[min(420px,52vh)] overscroll-x-contain">
+                          <table className="w-full text-sm min-w-[1100px]">
+                            <thead className="sticky top-0 z-[1]">
+                              <tr className="bg-slate-100 border-b border-slate-200 shadow-sm">
+                                <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[1] border-r border-slate-200/80">
+                                  Tipe
+                                </th>
+                                {monthKeys.map((m) => (
+                                  <th key={m} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
+                                    {formatMonthLabelId(m)}
+                                  </th>
+                                ))}
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="bg-white">
                               {ROOM_TYPES.map((rt) => (
-                                <tr key={rt} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
-                                  <td className="py-3 px-4 capitalize font-medium text-slate-800">{rt}</td>
-                                  <td className="py-3 px-4 text-center text-slate-700">{Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0)}</td>
-                                  <td className="py-3 px-4 text-right">
-                                    {pf.pricing_mode === 'per_type' ? (
-                                      <div className="flex items-center justify-end gap-1">
-                                        <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
-                                        <input type="number" min={0} value={pf.rooms[rt].price || ''}
-                                          onChange={(e) => setQuantityModalPriceForm((f) => ({ ...f, rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } } }))}
-                                          className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-btn focus:border-btn"
-                                        />
-                                      </div>
-                                    ) : (
-                                      <span className="text-slate-700 font-medium">{qFormatAmount(pf.single_price || 0)}</span>
-                                    )}
+                                <tr key={rt} className="border-b border-slate-100 last:border-0">
+                                  <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white z-0 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                                    {ROOM_TYPE_LABELS[rt] || rt}
                                   </td>
+                                  {monthKeys.map((m) => {
+                                    const sar = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
+                                    const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
+                                    const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
+                                    const cellDisabled = quantityFormSaving || monthlyPriceLoading;
+                                    return (
+                                      <td key={`${rt}-${m}`} className="px-2 py-2 align-top">
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={monthlyPriceRows?.[rt]?.[m] ?? ''}
+                                          onChange={(e) => {
+                                            const raw = e.target.value.replace(/[^\d.,]/g, '');
+                                            setMonthlyPriceRows((prev) => ({
+                                              ...prev,
+                                              [rt]: { ...(prev?.[rt] || {}), [m]: raw }
+                                            }));
+                                          }}
+                                          onBlur={() => {
+                                            const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
+                                            setMonthlyPriceRows((prev) => ({
+                                              ...prev,
+                                              [rt]: { ...(prev?.[rt] || {}), [m]: n > 0 ? formatSarId(n) : '' }
+                                            }));
+                                          }}
+                                          className="w-full min-w-[5.5rem] border border-slate-200 rounded-lg px-2 py-1.5 text-right text-sm tabular-nums focus:ring-2 focus:ring-[#0D1A63]/30 focus:border-[#0D1A63]"
+                                          placeholder="0"
+                                          disabled={cellDisabled}
+                                          aria-label={`Harga SAR ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
+                                        />
+                                        {conv && sar > 0 ? (
+                                          <div className="mt-1 text-[10px] leading-snug text-slate-500">
+                                            <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
+                                            <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                    );
+                                  })}
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
-                        <div className="flex justify-end">
-                          <Button size="sm" disabled={quantityFormSaving || monthlyPriceLoading || !/^\d{4}$/.test(monthlyPriceYear)} onClick={handleSaveQuantityFromUnifiedModal}>
-                            {quantityFormSaving ? 'Menyimpan…' : 'Simpan Jumlah & Harga'}
-                          </Button>
+                      </section>
+
+                      <section aria-labelledby="hotel-qty-summary-heading">
+                        <div className="flex gap-3 mb-3">
+                          {stepBadge(4)}
+                          <div>
+                            <h3 id="hotel-qty-summary-heading" className="text-sm font-semibold text-slate-900">
+                              Ringkasan &amp; harga per tipe
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1">Validasi cepat sebelum menyimpan.</p>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
-                </div>
+                        <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[320px]">
+                              <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Tipe</th>
+                                  <th className="text-center py-3 px-4 font-semibold text-slate-700">Jumlah</th>
+                                  <th className="text-right py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">Harga (room only)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ROOM_TYPES.map((rt) => (
+                                  <tr key={rt} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors">
+                                    <td className="py-3 px-4 capitalize font-medium text-slate-800">{rt}</td>
+                                    <td className="py-3 px-4 text-center tabular-nums text-slate-700">{Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0)}</td>
+                                    <td className="py-3 px-4 text-right">
+                                      {pf.pricing_mode === 'per_type' ? (
+                                        <div className="flex items-center justify-end gap-1 flex-wrap">
+                                          <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={pf.rooms[rt].price || ''}
+                                            onChange={(e) =>
+                                              setQuantityModalPriceForm((f) => ({
+                                                ...f,
+                                                rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } }
+                                              }))
+                                            }
+                                            className="w-full max-w-[7rem] text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm tabular-nums focus:ring-2 focus:ring-btn focus:border-btn"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-800 font-medium tabular-nums">{qFormatAmount(pf.single_price || 0)}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  );
+                })()
               )}
             </ModalBody>
+            <ModalFooter>
+              <Button
+                size="sm"
+                disabled={quantityFormSaving || monthlyPriceLoading || !/^\d{4}$/.test(monthlyPriceYear)}
+                onClick={handleSaveQuantityFromUnifiedModal}
+              >
+                {quantityFormSaving ? 'Menyimpan…' : 'Simpan jumlah & harga'}
+              </Button>
+            </ModalFooter>
           </ModalBoxLg>
         </Modal>
       )}
