@@ -905,7 +905,7 @@ function emptyFinancialReportPayload(startDate, endDate) {
     by_wilayah: [],
     by_provinsi: [],
     by_owner: [],
-    by_product_type: [{ type: 'hotel', revenue: 0 }, { type: 'visa', revenue: 0 }, { type: 'ticket', revenue: 0 }, { type: 'bus', revenue: 0 }, { type: 'handling', revenue: 0 }],
+    by_product_type: [{ type: 'hotel', revenue: 0 }, { type: 'visa', revenue: 0 }, { type: 'ticket', revenue: 0 }, { type: 'bus', revenue: 0 }, { type: 'siskopatuh', revenue: 0 }, { type: 'handling', revenue: 0 }],
     by_period: [],
     invoice_count: 0,
     invoices: [],
@@ -1020,7 +1020,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   const byWilayah = {};
   const byProvinsi = {};
   const byOwner = {};
-  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, handling: 0 };
+  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
   const byPeriod = {};
   const invoicesDetail = [];
 
@@ -1265,7 +1265,7 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
   const byWilayah = {};
   const byProvinsi = {};
   const byOwner = {};
-  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, handling: 0 };
+  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
   invoices.forEach(inv => {
     const paid = parseFloat(inv.paid_amount || 0);
     totalRevenue += paid;
@@ -1450,7 +1450,7 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
   const byWilayah = {};
   const byProvinsi = {};
   const byOwner = {};
-  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, handling: 0 };
+  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
   invoices.forEach(inv => {
     const paid = parseFloat(inv.paid_amount || 0);
     totalRevenue += paid;
@@ -2012,7 +2012,7 @@ const getDashboardKpi = asyncHandler(async (req, res) => {
   let totalRevenue = 0;
   let totalReceivable = 0;
   const byWilayah = {};
-  const byProduct = { hotel: 0, visa: 0, ticket: 0, bus: 0, handling: 0 };
+  const byProduct = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
 
   invoices.forEach(inv => {
     const j = inv.toJSON();

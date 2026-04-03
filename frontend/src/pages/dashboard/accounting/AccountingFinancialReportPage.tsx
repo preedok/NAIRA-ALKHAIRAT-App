@@ -21,6 +21,7 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
   visa: 'Visa',
   ticket: 'Tiket',
   bus: 'Bus',
+  siskopatuh: 'Siskopatuh',
   handling: 'Handling'
 };
 
