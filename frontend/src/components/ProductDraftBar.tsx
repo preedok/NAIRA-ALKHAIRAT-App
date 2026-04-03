@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<OrderDraftItemType, string> = {
   visa: 'Visa',
   ticket: 'Tiket',
   bus: 'Bus',
+  siskopatuh: 'Siskopatuh',
   handling: 'Handling',
   package: 'Paket'
 };
@@ -19,6 +20,7 @@ const TYPE_ICONS: Record<OrderDraftItemType, React.ReactNode> = {
   visa: <FileText className="w-4 h-4" />,
   ticket: <Plane className="w-4 h-4" />,
   bus: <Bus className="w-4 h-4" />,
+  siskopatuh: <FileText className="w-4 h-4" />,
   handling: <HandHelping className="w-4 h-4" />,
   package: <Package className="w-4 h-4" />
 };

@@ -356,17 +356,6 @@ const OrderFormPage: React.FC = () => {
     if(!location) return hotels;
     return hotels.filter(p=>(p.meta as { location?: string })?.location===location);
   };
-  const siskopatuhTypeOptions = (row: OrderItemRow) => {
-    const product = products.find((p) => p.id === row.product_id && p.type === 'siskopatuh');
-    const kinds = (product?.meta as { siskopatuh_kinds?: unknown } | undefined)?.siskopatuh_kinds;
-    if (Array.isArray(kinds) && kinds.length > 0) {
-      return kinds
-        .map((v) => String(v).trim())
-        .filter(Boolean)
-        .map((k) => ({ value: k, label: k }));
-    }
-    return [{ value: 'reguler', label: 'Reguler' }];
-  };
   /** Hanya tipe yang punya produk di data — agar dropdown Tipe hanya tampil pilihan yang tersedia. Bus: hanya tampil jika ada produk Hiace. */
   const availableItemTypes = ITEM_TYPES.filter((t) => t.id === 'bus' ? busProductsOrderable().length > 0 : byType(t.id).length > 0);
   /** Mata uang dari data produk (tanpa hardcode); fallback IDR jika belum ada produk */
@@ -660,6 +649,23 @@ const OrderFormPage: React.FC = () => {
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
   const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
+  const hotelMonthBreakdown=(r:OrderItemRow)=>{
+    if(r.type!=='hotel'||!r.check_in||!r.check_out) return [] as Array<{ yearMonth:string; nights:number; est:number }>;
+    const a=new Date(`${r.check_in}T00:00:00`);
+    const b=new Date(`${r.check_out}T00:00:00`);
+    if(Number.isNaN(a.getTime())||Number.isNaN(b.getTime())||b<=a) return [];
+    const byMonth:Record<string,number>={};
+    const cur=new Date(a.getTime());
+    while(cur<b){
+      const k=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+      byMonth[k]=(byMonth[k]||0)+1;
+      cur.setDate(cur.getDate()+1);
+    }
+    const nightsTotal=Object.values(byMonth).reduce((s,n)=>s+n,0);
+    if(!nightsTotal) return [];
+    const perNight=r.type==='hotel'?(rowSub(r)/nightsTotal):0;
+    return Object.entries(byMonth).map(([yearMonth,nights])=>({ yearMonth, nights, est: perNight*nights }));
+  };
   const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
   const wouldHaveBusPenalty=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack;
   const busPenaltyShortfall=wouldHaveBusPenalty?busPenaltyRule.bus_min_pack-totalVisaPacks:0;
@@ -775,8 +781,6 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan (pulang pergi: keberangkatan & kepulangan; pergi saja: tanggal keberangkatan; pulang saja: tanggal kepulangan)','warning'); return; }
-    const siskopatuhWithoutType=valid.filter(r=>r.type==='siskopatuh'&&!r.meta?.siskopatuh_type);
-    if(siskopatuhWithoutType.length){ showToast('Item siskopatuh wajib pilih jenis siskopatuh','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -825,8 +829,6 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan','warning'); return; }
-    const siskopatuhWithoutType=valid.filter(r=>r.type==='siskopatuh'&&!r.meta?.siskopatuh_type);
-    if(siskopatuhWithoutType.length){ showToast('Item siskopatuh wajib pilih jenis siskopatuh','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -1417,20 +1419,17 @@ const OrderFormPage: React.FC = () => {
                                 </>
                                 );
                               })()}
-                              {row.type==='siskopatuh' && (
-                                <div className="min-w-0">
-                                  <Autocomplete
-                                    label="Jenis siskopatuh"
-                                    value={(row.meta?.siskopatuh_type as string) || ''}
-                                    onChange={v=> updateRow(row.id,{ meta: { ...(row.meta||{}), siskopatuh_type: v || undefined } })}
-                                    options={siskopatuhTypeOptions(row)}
-                                    emptyLabel="— Pilih jenis —"
-                                  />
-                                </div>
-                              )}
                               <div className="min-w-0 w-20">
                                 <Input label="Qty" type="number" min={0} value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }} />
                               </div>
+                              {row.check_in && row.check_out && (
+                                <div className="min-w-0 col-span-full text-xs text-slate-600 -mt-1">
+                                  <span className="font-medium">Estimasi per bulan:</span>{' '}
+                                  {hotelMonthBreakdown(row).length
+                                    ? hotelMonthBreakdown(row).map((m)=>`${m.yearMonth} (${m.nights} malam): ${Math.round(m.est).toLocaleString('id-ID')}`).join(' | ')
+                                    : 'Belum bisa dihitung'}
+                                </div>
+                              )}
                               {canEditPrice ? (
                                 <div className="min-w-0 col-span-2 sm:col-span-1 flex flex-col justify-end">
                                   <div className="flex items-center gap-2">

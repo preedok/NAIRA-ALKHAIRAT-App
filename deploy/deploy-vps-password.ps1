@@ -1,5 +1,8 @@
 # Deploy ke VPS dengan password SSH (tanpa GitHub credentials di VPS)
 # Pakai: tar + pscp + plink. Jalankan dari repo root: .\deploy\deploy-vps-password.ps1
+# Opsional: .\deploy\deploy-vps-password.ps1 -ClearOrders  (hapus semua data order/invoice di DB lalu deploy)
+
+param([switch]$ClearOrders)
 
 $ErrorActionPreference = "Stop"
 $VPS_HOST = "187.124.90.214"
@@ -27,6 +30,15 @@ Write-Host "Upload ke VPS..." -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { Remove-Item $tar -ErrorAction SilentlyContinue; Write-Host "Upload gagal" -ForegroundColor Red; exit 1 }
 Remove-Item $tar -Force -ErrorAction SilentlyContinue
 
+$clearBlock = ""
+if ($ClearOrders) {
+  $clearBlock = @"
+
+echo '>>> ClearOrders: menghapus data order, invoice, dan terkait...'
+node scripts/clear-orders-invoices.js
+"@
+}
+
 # Gunakan LF saja agar bash di VPS tidak dapat \r
 $remote = @"
 set -e
@@ -42,7 +54,8 @@ rm -rf frontend/src/pages/dashboard/rms
 cp -a backend/.env.bak backend/.env 2>/dev/null || true
 cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
-cd $APP_PATH/backend && npm ci && (npm run migrate 2>/dev/null || true)
+cd $APP_PATH/backend && npm ci$clearBlock
+(npm run migrate 2>/dev/null || true)
 (npm run seed:kabupaten 2>/dev/null || true)
 # seed:kabupaten = isi master kabupaten/kota dari API data-indonesia (jika tabel masih kosong)
 (npm run sync:wilayah 2>/dev/null || true)

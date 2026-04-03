@@ -107,6 +107,22 @@ export const productsApi = {
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),
   getAvailability: (id: string, params: { from: string; to: string }) =>
     api.get<{ success: boolean; data: { availability_mode?: 'global' | 'per_season'; byDate: Record<string, Record<string, { total: number; booked: number; available: number }>>; byRoomType: Record<string, number> } }>(`/products/${id}/availability`, { params }),
+  getHotelMonthlyPrices: (id: string, params?: { year?: string }) =>
+    api.get<{ success: boolean; data: Array<{ id: string; year_month: string; currency: 'IDR' | 'SAR' | 'USD'; room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint'; with_meal: boolean; amount: number; branch_id?: string | null; owner_id?: string | null }> }>(`/products/${id}/hotel-monthly-prices`, { params }),
+  saveHotelMonthlyPricesBulk: (
+    id: string,
+    body: {
+      rows: Array<{
+        year_month: string;
+        room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint';
+        with_meal: boolean;
+        amount: number;
+        currency: 'IDR' | 'SAR' | 'USD';
+        branch_id?: string | null;
+        owner_id?: string | null;
+      }>;
+    }
+  ) => api.put<{ success: boolean; message?: string }>(`/products/${id}/hotel-monthly-prices/bulk`, body),
   getHotelCalendar: (id: string, params: { from: string; to: string }) =>
     api.get<{
       success: boolean;

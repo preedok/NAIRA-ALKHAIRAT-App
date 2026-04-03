@@ -138,6 +138,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [globalRoomInventory, setGlobalRoomInventory] = useState<Record<string, number>>({ single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
   const [hotelAvailabilityConfigLoading, setHotelAvailabilityConfigLoading] = useState(false);
   const [hotelAvailabilityConfigSaving, setHotelAvailabilityConfigSaving] = useState(false);
+  const [monthlyPriceHotel, setMonthlyPriceHotel] = useState<HotelProduct | null>(null);
+  const [monthlyPriceYear, setMonthlyPriceYear] = useState<string>(String(new Date().getFullYear()));
+  const [monthlyPriceCurrency, setMonthlyPriceCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
+  const [monthlyPriceLoading, setMonthlyPriceLoading] = useState(false);
+  const [monthlyPriceSaving, setMonthlyPriceSaving] = useState(false);
+  const [monthlyPriceRows, setMonthlyPriceRows] = useState<Record<string, Record<string, string>>>({});
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
   /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
   const [quantityForm, setQuantityForm] = useState<Record<string, string>>({});
@@ -162,6 +168,37 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const canEditProduct = ['super_admin', 'admin_pusat', 'role_accounting'].includes(user?.role ?? '');
   const canAddToOrder = user?.role === 'owner_mou' || user?.role === 'owner_non_mou' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const canShowProductActions = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'role_accounting', 'super_admin'].includes(user?.role ?? '');
+
+  const getMonthKeys = (year: string) => Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  const monthKeys = getMonthKeys(monthlyPriceYear);
+  const initMonthlyRows = (year = monthlyPriceYear) => {
+    const keys = getMonthKeys(year);
+    const out: Record<string, Record<string, string>> = {};
+    ROOM_TYPES.forEach((rt) => {
+      out[rt] = {};
+      keys.forEach((m) => { out[rt][m] = ''; });
+    });
+    return out;
+  };
+
+  const loadMonthlyPrices = async (hotel: HotelProduct, year = monthlyPriceYear) => {
+    setMonthlyPriceLoading(true);
+    try {
+      const res = await productsApi.getHotelMonthlyPrices(hotel.id, { year });
+      const data = (res.data as { data?: Array<{ year_month: string; room_type: string; currency: string; amount: number; with_meal: boolean }> })?.data || [];
+      const next = initMonthlyRows(year);
+      data.filter((r) => r.currency === monthlyPriceCurrency).forEach((r) => {
+        if (next[r.room_type] && next[r.room_type][r.year_month] !== undefined) {
+          next[r.room_type][r.year_month] = String(Number(r.amount) || 0);
+        }
+      });
+      setMonthlyPriceRows(next);
+    } catch (e) {
+      setMonthlyPriceRows(initMonthlyRows(year));
+    } finally {
+      setMonthlyPriceLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (openSeasonsForHotelId && hotels.length > 0) {
@@ -983,6 +1020,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         items={[
                           ...(canEditProduct ? [{ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => handleOpenEdit(hotel) }] : []),
                           ...(canAddHotel ? [{ id: 'seasons', label: 'Pengaturan Jumlah Kamar', icon: <Bed className="w-4 h-4" />, onClick: () => handleOpenUnifiedQuantityAndSeasonsModal(hotel) }] : []),
+                          ...(canAddHotel ? [{ id: 'monthly-prices', label: 'Harga Bulanan', icon: <Calendar className="w-4 h-4" />, onClick: async () => { setMonthlyPriceHotel(hotel); setMonthlyPriceYear(String(new Date().getFullYear())); setMonthlyPriceCurrency(((hotel.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD')); await loadMonthlyPrices(hotel, String(new Date().getFullYear())); } }] : []),
                           ...(canAddHotel ? [{ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteHotel(hotel), danger: true }] : []),
                         ].filter(Boolean) as ActionsMenuItem[]}
                       />
@@ -1604,6 +1642,103 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 </div>
               )}
             </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      )}
+
+      {monthlyPriceHotel && (
+        <Modal open onClose={() => !monthlyPriceSaving && setMonthlyPriceHotel(null)}>
+          <ModalBoxLg>
+            <ModalHeader
+              title="Harga Hotel per Bulan"
+              subtitle={`${monthlyPriceHotel.name} (${monthlyPriceHotel.code})`}
+              icon={<Calendar className="w-5 h-5" />}
+              onClose={() => !monthlyPriceSaving && setMonthlyPriceHotel(null)}
+            />
+            <ModalBody className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Input label="Tahun" value={monthlyPriceYear} onChange={(e) => setMonthlyPriceYear(e.target.value.replace(/[^\d]/g, '').slice(0, 4))} />
+                <Autocomplete
+                  label="Mata uang"
+                  value={monthlyPriceCurrency}
+                  onChange={(v) => setMonthlyPriceCurrency((v || 'IDR') as 'IDR' | 'SAR' | 'USD')}
+                  options={[{ value: 'IDR', label: 'IDR' }, { value: 'SAR', label: 'SAR' }, { value: 'USD', label: 'USD' }]}
+                />
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => loadMonthlyPrices(monthlyPriceHotel, monthlyPriceYear)}
+                    disabled={monthlyPriceLoading || !/^\d{4}$/.test(monthlyPriceYear)}
+                  >
+                    {monthlyPriceLoading ? 'Memuat...' : 'Muat'}
+                  </Button>
+                </div>
+              </div>
+              <div className="overflow-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-sm min-w-[980px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-3 py-2">Tipe</th>
+                      {monthKeys.map((m) => <th key={m} className="text-center px-2 py-2">{m.slice(5)}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ROOM_TYPES.map((rt) => (
+                      <tr key={rt} className="border-b border-slate-100 last:border-0">
+                        <td className="px-3 py-2 font-medium capitalize">{rt}</td>
+                        {monthKeys.map((m) => (
+                          <td key={`${rt}-${m}`} className="px-2 py-2">
+                            <input
+                              type="number"
+                              min={0}
+                              value={monthlyPriceRows?.[rt]?.[m] ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setMonthlyPriceRows((prev) => ({
+                                  ...prev,
+                                  [rt]: { ...(prev?.[rt] || {}), [m]: v }
+                                }));
+                              }}
+                              className="w-24 border border-slate-200 rounded px-2 py-1 text-right"
+                              placeholder="0"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => setMonthlyPriceHotel(null)} disabled={monthlyPriceSaving}>Batal</Button>
+              <Button
+                onClick={async () => {
+                  if (!monthlyPriceHotel) return;
+                  setMonthlyPriceSaving(true);
+                  try {
+                    const rows: Array<{ year_month: string; room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint'; with_meal: boolean; amount: number; currency: 'IDR' | 'SAR' | 'USD' }> = [];
+                    ROOM_TYPES.forEach((rt) => {
+                      monthKeys.forEach((m) => {
+                        const n = Number(monthlyPriceRows?.[rt]?.[m] || 0);
+                        if (n > 0) rows.push({ year_month: m, room_type: rt, with_meal: false, amount: n, currency: monthlyPriceCurrency });
+                      });
+                    });
+                    await productsApi.saveHotelMonthlyPricesBulk(monthlyPriceHotel.id, { rows });
+                    showToast('Harga bulanan tersimpan', 'success');
+                    setMonthlyPriceHotel(null);
+                  } catch (e: any) {
+                    showToast(e?.response?.data?.message || 'Gagal menyimpan harga bulanan', 'error');
+                  } finally {
+                    setMonthlyPriceSaving(false);
+                  }
+                }}
+                disabled={monthlyPriceSaving || !/^\d{4}$/.test(monthlyPriceYear)}
+              >
+                {monthlyPriceSaving ? 'Menyimpan...' : 'Simpan Harga Bulanan'}
+              </Button>
+            </ModalFooter>
           </ModalBoxLg>
         </Modal>
       )}

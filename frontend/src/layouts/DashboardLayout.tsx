@@ -37,8 +37,10 @@ import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
-// Semua submenu Products tampil untuk setiap role yang punya akses Products. Owner tidak melihat menu Products (lihat produk via Asisten AI / Invoice).
+// Produk umum untuk role operasional.
 const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling'];
+// Siskopatuh juga tersedia untuk role invoice + owner agar bisa langsung tambah ke order.
+const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'owner_mou', 'owner_non_mou'];
 
 const menuItems: MenuItem[] = [
   {
@@ -63,13 +65,13 @@ const menuItems: MenuItem[] = [
     title: 'Products',
     icon: <Package className="w-5 h-5" />,
     path: '/dashboard/products',
-    roles: productMenuRoles,
+    roles: Array.from(new Set<UserRole>([...productMenuRoles, ...siskopatuhMenuRoles])),
     children: [
       { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: productMenuRoles },
       { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: productMenuRoles },
       { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: productMenuRoles },
       { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: productMenuRoles },
-      { title: 'Siskopatuh', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/siskopatuh', roles: productMenuRoles },
+      { title: 'Siskopatuh', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/siskopatuh', roles: siskopatuhMenuRoles },
       { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: productMenuRoles },
       { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: productMenuRoles },
     ]

@@ -19,6 +19,7 @@ const SystemLog = require('./SystemLog');
 const MaintenanceNotice = require('./MaintenanceNotice');
 const Product = require('./Product');
 const ProductPrice = require('./ProductPrice');
+const HotelMonthlyPrice = require('./HotelMonthlyPrice');
 const BusinessRuleConfig = require('./BusinessRuleConfig');
 const HotelProgress = require('./HotelProgress');
 const TicketProgress = require('./TicketProgress');
@@ -134,6 +135,12 @@ MaintenanceNotice.belongsTo(User, { foreignKey: 'created_by', as: 'CreatedBy' })
 Product.belongsTo(User, { foreignKey: 'created_by' });
 Product.hasMany(ProductPrice, { foreignKey: 'product_id', as: 'ProductPrices' });
 ProductPrice.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(HotelMonthlyPrice, { foreignKey: 'product_id', as: 'HotelMonthlyPrices' });
+HotelMonthlyPrice.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+HotelMonthlyPrice.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+HotelMonthlyPrice.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
+Branch.hasMany(HotelMonthlyPrice, { foreignKey: 'branch_id', as: 'HotelMonthlyPrices' });
+User.hasMany(HotelMonthlyPrice, { foreignKey: 'owner_id', as: 'OwnerHotelMonthlyPrices' });
 ProductPrice.belongsTo(Branch, { foreignKey: 'branch_id' });
 ProductPrice.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
 ProductPrice.belongsTo(User, { foreignKey: 'created_by', as: 'Creator' });
@@ -251,6 +258,7 @@ const db = {
   MaintenanceNotice,
   Product,
   ProductPrice,
+  HotelMonthlyPrice,
   BusinessRuleConfig,
   HotelProgress,
   TicketProgress,

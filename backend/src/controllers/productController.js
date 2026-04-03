@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile } = require('../models');
+const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile, HotelMonthlyPrice } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
 const { getTicketCalendar } = require('../services/ticketAvailabilityService');
@@ -485,6 +485,20 @@ async function generateBusCode() {
   return `${prefix}${String(nextSeq).padStart(2, '0')}`;
 }
 
+/** Generate kode unik untuk product siskopatuh (SKP-01, SKP-02, ...) */
+async function generateSiskopatuhCode() {
+  const prefix = 'SKP-';
+  const existing = await Product.findAll({
+    where: { type: 'siskopatuh', code: { [Op.like]: `${prefix}%` } },
+    attributes: ['code']
+  });
+  const nums = existing
+    .map(p => parseInt(String(p.code || '').replace(prefix, '') || '0', 10))
+    .filter(n => !Number.isNaN(n));
+  const nextSeq = nums.length === 0 ? 1 : Math.max(...nums) + 1;
+  return `${prefix}${String(nextSeq).padStart(2, '0')}`;
+}
+
 const BUS_KIND_VALUES = ['bus', 'hiace'];
 
 /**
@@ -681,6 +695,9 @@ const create = asyncHandler(async (req, res) => {
   }
   if (type === 'visa' && (!finalCode || finalCode.trim() === '')) {
     finalCode = await generateVisaCode(finalMeta.visa_kind);
+  }
+  if (type === 'siskopatuh' && (!finalCode || finalCode.trim() === '')) {
+    finalCode = await generateSiskopatuhCode();
   }
   if (!finalCode || finalCode.trim() === '') return res.status(400).json({ success: false, message: 'code wajib' });
   const product = await Product.create({
@@ -1007,6 +1024,94 @@ const getTicketCalendarHandler = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { ...data, productName: product.name, bandara } });
 });
 
+/**
+ * GET /api/v1/products/:id/hotel-monthly-prices?year=2026
+ */
+const listHotelMonthlyPrices = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
+
+  const year = String(req.query.year || new Date().getFullYear());
+  if (!/^\d{4}$/.test(year)) return res.status(400).json({ success: false, message: 'year harus format YYYY' });
+
+  const rows = await HotelMonthlyPrice.findAll({
+    where: {
+      product_id: product.id,
+      year_month: { [Op.like]: `${year}-%` }
+    },
+    order: [['year_month', 'ASC'], ['currency', 'ASC'], ['room_type', 'ASC'], ['with_meal', 'ASC']]
+  });
+  res.json({ success: true, data: rows });
+});
+
+/**
+ * PUT /api/v1/products/:id/hotel-monthly-prices/bulk
+ * Body: { rows: [{ year_month, room_type, with_meal, amount, currency, branch_id?, owner_id? }] }
+ */
+const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type', 'meta'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
+
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  if (!rows.length) return res.status(400).json({ success: false, message: 'rows wajib diisi' });
+
+  const roomTypes = ['single', 'double', 'triple', 'quad', 'quint'];
+  const mealPlan = product.meta && typeof product.meta === 'object' ? product.meta.meal_plan : null;
+
+  const t = await sequelize.transaction();
+  try {
+    for (const r of rows) {
+      const yearMonth = String(r.year_month || '').trim();
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) throw new Error(`year_month tidak valid: ${yearMonth}`);
+      const roomType = String(r.room_type || '').trim().toLowerCase();
+      if (!roomTypes.includes(roomType)) throw new Error(`room_type tidak valid: ${roomType}`);
+      const currency = ['IDR', 'SAR', 'USD'].includes(String(r.currency || 'IDR').toUpperCase()) ? String(r.currency || 'IDR').toUpperCase() : 'IDR';
+      const amount = parseFloat(r.amount);
+      if (!(amount >= 0)) throw new Error(`amount tidak valid untuk ${yearMonth}/${roomType}`);
+      const withMeal = mealPlan === 'fullboard' ? true : !!r.with_meal;
+      const branchId = r.branch_id || null;
+      const ownerId = r.owner_id || null;
+
+      const existing = await HotelMonthlyPrice.findOne({
+        where: {
+          product_id: product.id,
+          year_month: yearMonth,
+          currency,
+          room_type: roomType,
+          with_meal: withMeal,
+          branch_id: branchId,
+          owner_id: ownerId
+        },
+        transaction: t
+      });
+      if (existing) {
+        existing.amount = amount;
+        existing.created_by = req.user?.id || existing.created_by;
+        await existing.save({ transaction: t });
+      } else {
+        await HotelMonthlyPrice.create({
+          product_id: product.id,
+          branch_id: branchId,
+          owner_id: ownerId,
+          year_month: yearMonth,
+          currency,
+          room_type: roomType,
+          with_meal: withMeal,
+          amount,
+          created_by: req.user?.id || null
+        }, { transaction: t });
+      }
+    }
+    await t.commit();
+    return res.json({ success: true, message: 'Harga bulanan hotel tersimpan' });
+  } catch (err) {
+    await t.rollback();
+    return res.status(400).json({ success: false, message: err.message || 'Gagal simpan harga bulanan hotel' });
+  }
+});
+
 module.exports = {
   list,
   getById,
@@ -1029,5 +1134,7 @@ module.exports = {
   createPrice,
   updatePrice,
   deletePrice,
-  getEffectivePrice
+  getEffectivePrice,
+  listHotelMonthlyPrices,
+  upsertHotelMonthlyPricesBulk
 };

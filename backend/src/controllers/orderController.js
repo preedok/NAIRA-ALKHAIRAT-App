@@ -8,6 +8,7 @@ const { getRulesForBranch } = require('./businessRuleController');
 const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS, isOwnerRole } = require('../constants');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
+const { calculateStayCostByNights } = require('../services/hotelMonthlyPricingService');
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const uploadConfig = require('../config/uploads');
@@ -50,7 +51,6 @@ function pickDiffMeta(type, meta) {
   if (type === ORDER_ITEM_TYPE.TICKET) return { bandara: m.bandara ?? null, trip_type: m.trip_type ?? null, departure_date: m.departure_date ?? null, return_date: m.return_date ?? null };
   if (type === ORDER_ITEM_TYPE.BUS) return { travel_date: m.travel_date ?? null, route_type: m.route_type ?? null, bus_type: m.bus_type ?? null, trip_type: m.trip_type ?? null };
   if (type === ORDER_ITEM_TYPE.VISA) return { travel_date: m.travel_date ?? null };
-  if (type === ORDER_ITEM_TYPE.SISKOPATUH) return { siskopatuh_type: m.siskopatuh_type ?? null };
   return {};
 }
 
@@ -74,10 +74,7 @@ function orderItemDiffKey(it) {
     const trip = String(meta.trip_type || '');
     return `${type}:${pid}:${route}:${busType}:${trip}`;
   }
-  if (type === ORDER_ITEM_TYPE.SISKOPATUH) {
-    const skType = String(meta.siskopatuh_type || '');
-    return `${type}:${pid}:${skType}`;
-  }
+  if (type === ORDER_ITEM_TYPE.SISKOPATUH) return `${type}:${pid}`;
   return `${type}:${pid}`;
 }
 
@@ -90,6 +87,66 @@ function unitPriceToIdr(amount, currency, rates) {
   if (cur === 'SAR') return amt * s2i;
   if (cur === 'USD') return amt * u2i;
   return amt;
+}
+
+async function resolveHotelMonthlyPricing({
+  item,
+  productId,
+  branchId,
+  ownerId,
+  qty,
+  itemCurrency,
+  unitPrice,
+  rates
+}) {
+  const checkIn = item.check_in || item.meta?.check_in;
+  const checkOut = item.check_out || item.meta?.check_out;
+  if (!checkIn || !checkOut) {
+    const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, rates);
+    return {
+      subtotal: qty * unitPriceIdr,
+      unitPrice,
+      unitPriceIdr,
+      nights: 0,
+      monthlyBreakdown: null,
+      usedMonthlyPricing: false
+    };
+  }
+
+  const monthly = await calculateStayCostByNights({
+    productId,
+    branchId,
+    ownerId,
+    roomType: item.room_type || item.meta?.room_type,
+    withMeal: item.meal ?? item.meta?.with_meal ?? item.meta?.meal ?? false,
+    checkIn,
+    checkOut,
+    quantity: qty,
+    currency: itemCurrency,
+    rates
+  });
+
+  if (!monthly.nights) {
+    const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, rates);
+    return {
+      subtotal: qty * unitPriceIdr,
+      unitPrice,
+      unitPriceIdr,
+      nights: 0,
+      monthlyBreakdown: null,
+      usedMonthlyPricing: false
+    };
+  }
+
+  return {
+    subtotal: monthly.subtotal_idr,
+    unitPrice: monthly.unit_price_in_currency,
+    unitPriceIdr: unitPriceToIdr(monthly.unit_price_in_currency, itemCurrency, rates),
+    nights: monthly.nights,
+    monthlyBreakdown: monthly.breakdown,
+    usedMonthlyPricing: true,
+    usedFallbackDefault: monthly.used_fallback_default
+  };
 }
 
 /** Ambil produk Hiace pertama dan harga efektif (untuk auto-add saat waive_bus_penalty). Return { productId, productName, unitPrice, unitPriceIdr, currency } atau null. */
@@ -365,7 +422,7 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
         throw err;
       }
     }
-    const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
+    let unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
     const checkIn = it.check_in || it.meta?.check_in;
     const checkOut = it.check_out || it.meta?.check_out;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && (it.room_type || it.meta?.room_type)) {
@@ -380,10 +437,24 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
       }
     }
     let st;
-    if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
-      const nights = getNights(checkIn, checkOut);
-      const multiplier = nights > 0 ? nights : 1;
-      st = qty * unitPriceIdr * multiplier;
+    let monthlyBreakdown = null;
+    let usedMonthlyPricing = false;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL) {
+      const monthlyPricing = await resolveHotelMonthlyPricing({
+        item: it,
+        productId: it.product_id,
+        branchId: finalBranchId,
+        ownerId,
+        qty,
+        itemCurrency,
+        unitPrice,
+        rates: ratesForCreate
+      });
+      st = monthlyPricing.subtotal;
+      unitPrice = monthlyPricing.unitPrice;
+      unitPriceIdr = monthlyPricing.unitPriceIdr;
+      monthlyBreakdown = monthlyPricing.monthlyBreakdown;
+      usedMonthlyPricing = monthlyPricing.usedMonthlyPricing;
     } else {
       st = qty * unitPriceIdr;
     }
@@ -404,6 +475,9 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
       const nights = getNights(checkIn, checkOut);
       if (nights > 0) meta.nights = nights;
+    }
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && Array.isArray(monthlyBreakdown)) {
+      meta.monthly_price_breakdown = monthlyBreakdown;
     }
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
@@ -645,7 +719,7 @@ const create = asyncHandler(async (req, res) => {
       unitPrice = await getEffectivePrice(productId, finalBranchId, effectiveOwnerId, it.meta || {}, itemCurrency);
       if (unitPrice == null) return res.status(400).json({ success: false, message: `Harga tidak ditemukan untuk product ${productId}` });
     }
-    const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
+    let unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
     const checkIn = it.check_in || it.meta?.check_in;
     const checkOut = it.check_out || it.meta?.check_out;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
@@ -656,10 +730,24 @@ const create = asyncHandler(async (req, res) => {
     }
     // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out). Subtotal dalam IDR untuk total order.
     let st;
-    if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
-      const nights = getNights(checkIn, checkOut);
-      const multiplier = nights > 0 ? nights : 1;
-      st = qty * unitPriceIdr * multiplier;
+    let monthlyBreakdown = null;
+    let usedMonthlyPricing = false;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL) {
+      const monthlyPricing = await resolveHotelMonthlyPricing({
+        item: it,
+        productId: it.product_id,
+        branchId: finalBranchId,
+        ownerId: effectiveOwnerId,
+        qty,
+        itemCurrency,
+        unitPrice,
+        rates: ratesForCreate
+      });
+      st = monthlyPricing.subtotal;
+      unitPrice = monthlyPricing.unitPrice;
+      unitPriceIdr = monthlyPricing.unitPriceIdr;
+      monthlyBreakdown = monthlyPricing.monthlyBreakdown;
+      usedMonthlyPricing = monthlyPricing.usedMonthlyPricing;
     } else {
       st = qty * unitPriceIdr;
     }
@@ -680,6 +768,9 @@ const create = asyncHandler(async (req, res) => {
     if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
       const nights = getNights(checkIn, checkOut);
       if (nights > 0) meta.nights = nights;
+    }
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && Array.isArray(monthlyBreakdown)) {
+      meta.monthly_price_breakdown = monthlyBreakdown;
     }
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
@@ -982,7 +1073,7 @@ const update = asyncHandler(async (req, res) => {
       if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
         unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, itemCurrency) || 0;
       }
-      const unitPriceIdr = unitPriceToIdr(unitPrice || 0, itemCurrency, ratesForUpdate);
+      let unitPriceIdr = unitPriceToIdr(unitPrice || 0, itemCurrency, ratesForUpdate);
       const checkIn = it.check_in || it.meta?.check_in;
       const checkOut = it.check_out || it.meta?.check_out;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
@@ -993,10 +1084,24 @@ const update = asyncHandler(async (req, res) => {
       }
       // Hotel & makan: hitung dari jumlah malam (check-in s/d check-out). Subtotal dalam IDR.
       let st;
-      if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
-        const nights = getNights(checkIn, checkOut);
-        const multiplier = nights > 0 ? nights : 1;
-        st = qty * unitPriceIdr * multiplier;
+      let monthlyBreakdown = null;
+      let usedMonthlyPricing = false;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL) {
+        const monthlyPricing = await resolveHotelMonthlyPricing({
+          item: it,
+          productId: it.product_id,
+          branchId: order.branch_id,
+          ownerId: order.owner_id,
+          qty,
+          itemCurrency,
+          unitPrice,
+          rates: ratesForUpdate
+        });
+        st = monthlyPricing.subtotal;
+        unitPrice = monthlyPricing.unitPrice;
+        unitPriceIdr = monthlyPricing.unitPriceIdr;
+        monthlyBreakdown = monthlyPricing.monthlyBreakdown;
+        usedMonthlyPricing = monthlyPricing.usedMonthlyPricing;
       } else {
         st = qty * unitPriceIdr;
       }
@@ -1013,6 +1118,9 @@ const update = asyncHandler(async (req, res) => {
       if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
         const nights = getNights(checkIn, checkOut);
         if (nights > 0) meta.nights = nights;
+      }
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && Array.isArray(monthlyBreakdown)) {
+        meta.monthly_price_breakdown = monthlyBreakdown;
       }
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
