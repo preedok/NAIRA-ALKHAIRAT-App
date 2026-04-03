@@ -78,7 +78,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(false);
       return { success: true, message: data.message };
     } catch (err: any) {
-      const message = err.response?.data?.message || err.message || 'Terjadi kesalahan';
+      let message = err.response?.data?.message || err.message || 'Terjadi kesalahan';
+      if (err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''))) {
+        message =
+          'Server tidak merespons dalam batas waktu. Periksa koneksi internet, coba lagi, atau hubungi admin jika masalah berlanjut.';
+      }
+      if (!err.response && err.message === 'Network Error') {
+        message = 'Tidak dapat terhubung ke server. Periksa koneksi atau URL API (HTTPS / domain).';
+      }
       setIsLoading(false);
       return { success: false, message };
     }

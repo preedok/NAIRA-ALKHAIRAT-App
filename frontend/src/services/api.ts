@@ -1,16 +1,24 @@
 import axios, { AxiosError } from 'axios';
 import { API_BASE_URL } from '../utils/constants';
 
+/** Batas waktu request (ms); tanpa ini browser bisa "pending" tanpa batas jika server tidak menjawab. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  withCredentials: true
+  withCredentials: true,
+  timeout: DEFAULT_REQUEST_TIMEOUT_MS
 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('bintang_global_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (config.responseType === 'blob') {
+    const t = typeof config.timeout === 'number' ? config.timeout : DEFAULT_REQUEST_TIMEOUT_MS;
+    config.timeout = Math.max(t, 120000);
   }
   return config;
 });

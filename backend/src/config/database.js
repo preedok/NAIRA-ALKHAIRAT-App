@@ -38,13 +38,15 @@ module.exports = {
       ssl: {
         require: true,
         rejectUnauthorized: false
-      }
+      },
+      /** Gagal cepat jika DB tidak reachable (hindari request menggantung sangat lama). */
+      connectionTimeoutMillis: 15000
     },
     logging: false,
     pool: {
-      max: 10,
-      min: 2,
-      acquire: 30000,
+      max: 20,
+      min: 1,
+      acquire: 20000,
       idle: 10000
     }
   }

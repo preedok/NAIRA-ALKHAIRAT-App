@@ -1,12 +1,30 @@
 const asyncHandler = require('express-async-handler');
 const { User, OwnerProfile, Branch, Provinsi, Wilayah } = require('../models');
 const { signToken } = require('../middleware/auth');
-const { ROLES, OWNER_STATUS, isOwnerRole } = require('../constants');
+const { OWNER_STATUS, isOwnerRole } = require('../constants');
 const { fillLocationFromKotaCode } = require('../utils/locationMaster');
 const logger = require('../config/logger');
 
+/** Hindari login menggantung jika query master kabupaten lambat (DB jauh / lock). */
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('LOCATION_LOOKUP_TIMEOUT')), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 /**
  * POST /api/v1/auth/login
+ * Query user tanpa join cabang dulu (lebih cepat + kurangi beban pool), lalu load Branch terpisah setelah password valid.
  */
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -17,14 +35,7 @@ const login = asyncHandler(async (req, res) => {
   let user;
   try {
     user = await User.findOne({
-      where: { email: email.toLowerCase() },
-      include: [{
-        model: Branch,
-        as: 'Branch',
-        attributes: ['id', 'code', 'name', 'city'],
-        required: false,
-        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-      }]
+      where: { email: email.toLowerCase() }
     });
   } catch (err) {
     const dbMessage = (err && err.original && err.original.message) ? err.original.message : (err && err.message) ? String(err.message) : String(err);
@@ -70,21 +81,42 @@ const login = asyncHandler(async (req, res) => {
     logger.warn('Login: update last_login_at failed (non-fatal):', e && e.message);
   }
 
+  let branch = null;
+  if (user.branch_id) {
+    try {
+      branch = await Branch.findByPk(user.branch_id, {
+        attributes: ['id', 'code', 'name', 'city'],
+        include: [{
+          model: Provinsi,
+          as: 'Provinsi',
+          attributes: ['id', 'name'],
+          required: false,
+          include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }]
+        }]
+      });
+    } catch (e) {
+      logger.warn('Login: load Branch failed (non-fatal):', e && e.message);
+    }
+  }
+
   const token = signToken(user.id, user.email, user.role);
   const u = user.toJSON();
   delete u.password_hash;
-  const branch = user.Branch;
   let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
   let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
   if (branch && !provinsiName && branch.code) {
     try {
-      const filled = await fillLocationFromKotaCode(branch.code);
+      const filled = await withTimeout(fillLocationFromKotaCode(branch.code), 2500);
       if (filled) {
         provinsiName = filled.provinsi_name || null;
         wilayahName = filled.wilayah_name || null;
       }
     } catch (e) {
-      logger.warn('Login: locationMaster fill failed (non-fatal):', e && e.message);
+      if (e && e.message === 'LOCATION_LOOKUP_TIMEOUT') {
+        logger.warn('Login: fillLocationFromKotaCode skipped (timeout)');
+      } else {
+        logger.warn('Login: locationMaster fill failed (non-fatal):', e && e.message);
+      }
     }
   }
   const payload = {
