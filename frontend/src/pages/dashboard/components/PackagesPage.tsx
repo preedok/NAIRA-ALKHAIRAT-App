@@ -22,6 +22,7 @@ import { getProductListOwnerId } from '../../../utils/productHelpers';
 const INCLUDE_OPTIONS = [
   { id: 'hotel', label: 'Hotel' },
   { id: 'makan', label: 'Makan' },
+  { id: 'tasreh', label: 'Tasreh' },
   { id: 'visa', label: 'Visa' },
   { id: 'tiket', label: 'Tiket' },
   { id: 'bis', label: 'Bis' },
