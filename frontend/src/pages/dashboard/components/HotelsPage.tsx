@@ -40,6 +40,27 @@ const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Do
 const ALMOST_FULL_THRESHOLD = 3;
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
 
+/** Label bulan untuk kolom matriks harga (id-ID, teks saja). */
+function formatMonthLabelId(ymKey: string): string {
+  const [y, mo] = ymKey.split('-');
+  if (!y || !mo) return ymKey;
+  const d = new Date(Number(y), Number(mo) - 1, 1);
+  const s = d.toLocaleString('id-ID', { month: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function parseSarInputString(s: string): number {
+  const t = String(s ?? '').replace(/\./g, '').replace(',', '.').trim();
+  if (t === '' || t === '-') return 0;
+  const n = parseFloat(t);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function formatSarId(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n));
+}
+
 /** Room breakdown: quantity & price per type */
 export type RoomBreakdown = Record<string, { quantity: number; price: number }>;
 
@@ -138,11 +159,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [globalRoomInventory, setGlobalRoomInventory] = useState<Record<string, number>>({ single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
   const [hotelAvailabilityConfigLoading, setHotelAvailabilityConfigLoading] = useState(false);
   const [hotelAvailabilityConfigSaving, setHotelAvailabilityConfigSaving] = useState(false);
-  const [monthlyPriceHotel, setMonthlyPriceHotel] = useState<HotelProduct | null>(null);
   const [monthlyPriceYear, setMonthlyPriceYear] = useState<string>(String(new Date().getFullYear()));
-  const [monthlyPriceCurrency, setMonthlyPriceCurrency] = useState<'IDR' | 'SAR' | 'USD'>('IDR');
   const [monthlyPriceLoading, setMonthlyPriceLoading] = useState(false);
-  const [monthlyPriceSaving, setMonthlyPriceSaving] = useState(false);
   const [monthlyPriceRows, setMonthlyPriceRows] = useState<Record<string, Record<string, string>>>({});
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
   /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
@@ -181,37 +199,32 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     return out;
   };
 
-  const loadMonthlyPrices = async (hotel: HotelProduct, year = monthlyPriceYear) => {
-    setMonthlyPriceLoading(true);
-    try {
-      const res = await productsApi.getHotelMonthlyPrices(hotel.id, { year });
-      const data = (res.data as { data?: Array<{ year_month: string; room_type: string; currency: string; amount: number; with_meal: boolean }> })?.data || [];
-      const next = initMonthlyRows(year);
-      data.filter((r) => r.currency === monthlyPriceCurrency).forEach((r) => {
-        if (next[r.room_type] && next[r.room_type][r.year_month] !== undefined) {
-          next[r.room_type][r.year_month] = String(Number(r.amount) || 0);
-        }
-      });
-      setMonthlyPriceRows(next);
-    } catch (e) {
-      setMonthlyPriceRows(initMonthlyRows(year));
-    } finally {
-      setMonthlyPriceLoading(false);
-    }
-  };
-
+  /** Harga bulanan (SAR): muat saat modal Pengaturan Jumlah Kamar terbuka */
   useEffect(() => {
-    if (openSeasonsForHotelId && hotels.length > 0) {
-      const hotel = hotels.find((h) => h.id === openSeasonsForHotelId);
-      if (hotel) {
-        setSeasonsModalHotel(hotel);
-        setSeasonForm({ name: '', start_date: '', end_date: '' });
-        setEditingSeasonId(null);
-        setInventoryForSeason(null);
-        loadUnifiedModalData(hotel);
+    if (!seasonsModalHotel || !/^\d{4}$/.test(monthlyPriceYear)) return;
+    let cancelled = false;
+    (async () => {
+      setMonthlyPriceLoading(true);
+      try {
+        const res = await productsApi.getHotelMonthlyPrices(seasonsModalHotel.id, { year: monthlyPriceYear });
+        const data = (res.data as { data?: Array<{ year_month: string; room_type: string; currency: string; amount: number; with_meal: boolean }> })?.data || [];
+        const next = initMonthlyRows(monthlyPriceYear);
+        data.filter((r) => String(r.currency).toUpperCase() === 'SAR' && !r.with_meal).forEach((r) => {
+          if (next[r.room_type] && next[r.room_type][r.year_month] !== undefined) {
+            const n = Number(r.amount) || 0;
+            next[r.room_type][r.year_month] = n > 0 ? formatSarId(n) : '';
+          }
+        });
+        if (!cancelled) setMonthlyPriceRows(next);
+      } catch {
+        if (!cancelled) setMonthlyPriceRows(initMonthlyRows(monthlyPriceYear));
+      } finally {
+        if (!cancelled) setMonthlyPriceLoading(false);
       }
-    }
-  }, [openSeasonsForHotelId, hotels]);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initMonthlyRows stabil untuk year yang sama
+  }, [seasonsModalHotel?.id, monthlyPriceYear]);
 
   /** Load data untuk modal terpadu (config + musim + product untuk jumlah & harga) */
   const loadUnifiedModalData = (hotel: HotelProduct) => {
@@ -277,6 +290,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const handleOpenUnifiedQuantityAndSeasonsModal = (hotel: HotelProduct) => {
     if (!canAddHotel) return;
     setSeasonsModalHotel(hotel);
+    setMonthlyPriceYear(String(new Date().getFullYear()));
     setSeasonForm({ name: '', start_date: '', end_date: '' });
     setEditingSeasonId(null);
     setInventoryForSeason(null);
@@ -288,6 +302,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       const hotel = hotels.find((h) => h.id === openSeasonsForHotelId);
       if (hotel) {
         setSeasonsModalHotel(hotel);
+        setMonthlyPriceYear(String(new Date().getFullYear()));
         setSeasonForm({ name: '', start_date: '', end_date: '' });
         setEditingSeasonId(null);
         setInventoryForSeason(null);
@@ -614,7 +629,22 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
       await adminPusatApi.setProductAvailability(hotel.id, { quantity: totalQty, meta: { room_types: roomMeta } });
       await adminPusatApi.setHotelAvailabilityConfig(hotel.id, { availability_mode: 'global' });
-      showToast('Jumlah kamar, harga, dan pengaturan (semua bulan) disimpan', 'success');
+
+      if (/^\d{4}$/.test(monthlyPriceYear)) {
+        const ymKeys = getMonthKeys(monthlyPriceYear);
+        const monthlyRowsPayload: Array<{ year_month: string; room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint'; with_meal: boolean; amount: number; currency: 'SAR' }> = [];
+        ROOM_TYPES.forEach((rt) => {
+          ymKeys.forEach((m) => {
+            const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
+            if (n > 0) monthlyRowsPayload.push({ year_month: m, room_type: rt, with_meal: false, amount: n, currency: 'SAR' });
+          });
+        });
+        if (monthlyRowsPayload.length) {
+          await productsApi.saveHotelMonthlyPricesBulk(hotel.id, { rows: monthlyRowsPayload });
+        }
+      }
+
+      showToast('Jumlah kamar, harga default, harga bulanan (SAR, jika diisi), dan pengaturan disimpan', 'success');
       fetchProducts();
       setSeasonsModalHotel(null);
     } catch (e: unknown) {
@@ -667,7 +697,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         name: addForm.name.trim(),
         meta
       });
-      showToast('Hotel berhasil ditambahkan. Gunakan "Pengaturan Jumlah" untuk mengisi jumlah kamar, harga, dan mata uang.', 'success');
+      showToast('Hotel berhasil ditambahkan. Buka "Pengaturan Jumlah Kamar" untuk jumlah kamar, harga default per hari, dan harga per bulan (SAR).', 'success');
       setShowAddModal(false);
       fetchProducts();
     } catch (e: unknown) {
@@ -1020,7 +1050,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         items={[
                           ...(canEditProduct ? [{ id: 'edit', label: 'Edit', icon: <Edit className="w-4 h-4" />, onClick: () => handleOpenEdit(hotel) }] : []),
                           ...(canAddHotel ? [{ id: 'seasons', label: 'Pengaturan Jumlah Kamar', icon: <Bed className="w-4 h-4" />, onClick: () => handleOpenUnifiedQuantityAndSeasonsModal(hotel) }] : []),
-                          ...(canAddHotel ? [{ id: 'monthly-prices', label: 'Harga Bulanan', icon: <Calendar className="w-4 h-4" />, onClick: async () => { setMonthlyPriceHotel(hotel); setMonthlyPriceYear(String(new Date().getFullYear())); setMonthlyPriceCurrency(((hotel.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD')); await loadMonthlyPrices(hotel, String(new Date().getFullYear())); } }] : []),
                           ...(canAddHotel ? [{ id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteHotel(hotel), danger: true }] : []),
                         ].filter(Boolean) as ActionsMenuItem[]}
                       />
@@ -1355,7 +1384,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           <ModalBox>
             <ModalHeader
               title={editingHotel ? 'Edit Hotel' : 'Tambah Hotel Baru'}
-              subtitle="Isi data hotel. Harga & jumlah kamar atur di Pengaturan Jumlah."
+              subtitle="Isi data hotel. Jumlah kamar, harga per hari, dan harga bulanan (SAR) atur di Pengaturan Jumlah Kamar."
               icon={<HotelIcon className="w-5 h-5" />}
               onClose={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}
             />
@@ -1481,13 +1510,13 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
       {/* Modal: Pengaturan Jumlah Kamar (tanpa opsi per musim / per trip / per lasten) */}
       {seasonsModalHotel && (
-        <Modal open onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}>
+        <Modal open onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && !monthlyPriceLoading && setSeasonsModalHotel(null)}>
           <ModalBoxLg>
             <ModalHeader
               title="Pengaturan Jumlah Kamar"
               subtitle={seasonsModalHotel.name}
               icon={<Bed className="w-5 h-5" />}
-              onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && setSeasonsModalHotel(null)}
+              onClose={() => !seasonSaving && !inventorySaving && !hotelAvailabilityConfigSaving && !quantityFormSaving && !monthlyPriceLoading && setSeasonsModalHotel(null)}
             />
 
             <ModalBody className="p-6 overflow-y-auto flex-1">
@@ -1502,7 +1531,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
                     return (
                       <div className="space-y-6 pt-2 border-t border-slate-200">
-                        <p className="text-xs text-slate-600">Jumlah kamar dan harga di bawah dipakai untuk <strong>setiap tanggal</strong> (open di semua bulan). Tidak perlu mengisi musim.</p>
+                        <p className="text-xs text-slate-600">Atur <strong>jumlah kamar</strong>, <strong>harga default per hari</strong>, dan <strong>harga per malam per bulan (SAR)</strong> di sini. Harga bulanan dipakai saat order mengikuti tanggal menginap; jika bulan kosong dipakai fallback harga default.</p>
                         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -1594,6 +1623,81 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 />
                               </div>
                             )}
+                            <div className="pt-4 mt-4 border-t border-slate-200 space-y-3">
+                              <div>
+                                <h4 className="text-sm font-semibold text-slate-800">Harga per malam per bulan (SAR)</h4>
+                                <p className="text-xs text-slate-500 mt-1">Input SAR per malam; perkiraan IDR/USD dari kurs bisnis. Simpan bersama tombol di bawah.</p>
+                              </div>
+                              <Input
+                                label="Tahun"
+                                value={monthlyPriceYear}
+                                onChange={(e) => setMonthlyPriceYear(e.target.value.replace(/[^\d]/g, '').slice(0, 4))}
+                                disabled={quantityFormSaving || monthlyPriceLoading}
+                              />
+                              {monthlyPriceLoading ? (
+                                <p className="text-xs text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+                              ) : null}
+                              <div className="overflow-auto border border-slate-200 rounded-lg max-h-[min(420px,50vh)]">
+                                <table className="w-full text-sm min-w-[1100px]">
+                                  <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                      <th className="text-left px-3 py-2">Tipe</th>
+                                      {monthKeys.map((m) => (
+                                        <th key={m} className="text-center px-2 py-2 min-w-[7rem] font-medium text-slate-700">
+                                          {formatMonthLabelId(m)}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {ROOM_TYPES.map((rt) => (
+                                      <tr key={rt} className="border-b border-slate-100 last:border-0">
+                                        <td className="px-3 py-2 font-medium text-slate-800">{ROOM_TYPE_LABELS[rt] || rt}</td>
+                                        {monthKeys.map((m) => {
+                                          const sar = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
+                                          const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
+                                          const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
+                                          const cellDisabled = quantityFormSaving || monthlyPriceLoading;
+                                          return (
+                                            <td key={`${rt}-${m}`} className="px-2 py-2 align-top">
+                                              <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={monthlyPriceRows?.[rt]?.[m] ?? ''}
+                                                onChange={(e) => {
+                                                  const raw = e.target.value.replace(/[^\d.,]/g, '');
+                                                  setMonthlyPriceRows((prev) => ({
+                                                    ...prev,
+                                                    [rt]: { ...(prev?.[rt] || {}), [m]: raw }
+                                                  }));
+                                                }}
+                                                onBlur={() => {
+                                                  const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
+                                                  setMonthlyPriceRows((prev) => ({
+                                                    ...prev,
+                                                    [rt]: { ...(prev?.[rt] || {}), [m]: n > 0 ? formatSarId(n) : '' }
+                                                  }));
+                                                }}
+                                                className="w-full min-w-[5.5rem] border border-slate-200 rounded px-2 py-1 text-right text-sm tabular-nums"
+                                                placeholder="0"
+                                                disabled={cellDisabled}
+                                                aria-label={`Harga SAR ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
+                                              />
+                                              {conv && sar > 0 ? (
+                                                <div className="mt-1 text-[10px] leading-snug text-slate-500">
+                                                  <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
+                                                  <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
+                                                </div>
+                                              ) : null}
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -1632,7 +1736,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           </table>
                         </div>
                         <div className="flex justify-end">
-                          <Button size="sm" disabled={quantityFormSaving} onClick={handleSaveQuantityFromUnifiedModal}>
+                          <Button size="sm" disabled={quantityFormSaving || monthlyPriceLoading || !/^\d{4}$/.test(monthlyPriceYear)} onClick={handleSaveQuantityFromUnifiedModal}>
                             {quantityFormSaving ? 'Menyimpan…' : 'Simpan Jumlah & Harga'}
                           </Button>
                         </div>
@@ -1642,103 +1746,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 </div>
               )}
             </ModalBody>
-          </ModalBoxLg>
-        </Modal>
-      )}
-
-      {monthlyPriceHotel && (
-        <Modal open onClose={() => !monthlyPriceSaving && setMonthlyPriceHotel(null)}>
-          <ModalBoxLg>
-            <ModalHeader
-              title="Harga Hotel per Bulan"
-              subtitle={`${monthlyPriceHotel.name} (${monthlyPriceHotel.code})`}
-              icon={<Calendar className="w-5 h-5" />}
-              onClose={() => !monthlyPriceSaving && setMonthlyPriceHotel(null)}
-            />
-            <ModalBody className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Input label="Tahun" value={monthlyPriceYear} onChange={(e) => setMonthlyPriceYear(e.target.value.replace(/[^\d]/g, '').slice(0, 4))} />
-                <Autocomplete
-                  label="Mata uang"
-                  value={monthlyPriceCurrency}
-                  onChange={(v) => setMonthlyPriceCurrency((v || 'IDR') as 'IDR' | 'SAR' | 'USD')}
-                  options={[{ value: 'IDR', label: 'IDR' }, { value: 'SAR', label: 'SAR' }, { value: 'USD', label: 'USD' }]}
-                />
-                <div className="flex items-end">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => loadMonthlyPrices(monthlyPriceHotel, monthlyPriceYear)}
-                    disabled={monthlyPriceLoading || !/^\d{4}$/.test(monthlyPriceYear)}
-                  >
-                    {monthlyPriceLoading ? 'Memuat...' : 'Muat'}
-                  </Button>
-                </div>
-              </div>
-              <div className="overflow-auto border border-slate-200 rounded-xl">
-                <table className="w-full text-sm min-w-[980px]">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="text-left px-3 py-2">Tipe</th>
-                      {monthKeys.map((m) => <th key={m} className="text-center px-2 py-2">{m.slice(5)}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ROOM_TYPES.map((rt) => (
-                      <tr key={rt} className="border-b border-slate-100 last:border-0">
-                        <td className="px-3 py-2 font-medium capitalize">{rt}</td>
-                        {monthKeys.map((m) => (
-                          <td key={`${rt}-${m}`} className="px-2 py-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={monthlyPriceRows?.[rt]?.[m] ?? ''}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setMonthlyPriceRows((prev) => ({
-                                  ...prev,
-                                  [rt]: { ...(prev?.[rt] || {}), [m]: v }
-                                }));
-                              }}
-                              className="w-24 border border-slate-200 rounded px-2 py-1 text-right"
-                              placeholder="0"
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="outline" onClick={() => setMonthlyPriceHotel(null)} disabled={monthlyPriceSaving}>Batal</Button>
-              <Button
-                onClick={async () => {
-                  if (!monthlyPriceHotel) return;
-                  setMonthlyPriceSaving(true);
-                  try {
-                    const rows: Array<{ year_month: string; room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint'; with_meal: boolean; amount: number; currency: 'IDR' | 'SAR' | 'USD' }> = [];
-                    ROOM_TYPES.forEach((rt) => {
-                      monthKeys.forEach((m) => {
-                        const n = Number(monthlyPriceRows?.[rt]?.[m] || 0);
-                        if (n > 0) rows.push({ year_month: m, room_type: rt, with_meal: false, amount: n, currency: monthlyPriceCurrency });
-                      });
-                    });
-                    await productsApi.saveHotelMonthlyPricesBulk(monthlyPriceHotel.id, { rows });
-                    showToast('Harga bulanan tersimpan', 'success');
-                    setMonthlyPriceHotel(null);
-                  } catch (e: any) {
-                    showToast(e?.response?.data?.message || 'Gagal menyimpan harga bulanan', 'error');
-                  } finally {
-                    setMonthlyPriceSaving(false);
-                  }
-                }}
-                disabled={monthlyPriceSaving || !/^\d{4}$/.test(monthlyPriceYear)}
-              >
-                {monthlyPriceSaving ? 'Menyimpan...' : 'Simpan Harga Bulanan'}
-              </Button>
-            </ModalFooter>
           </ModalBoxLg>
         </Modal>
       )}

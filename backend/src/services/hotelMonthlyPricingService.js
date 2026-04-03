@@ -80,6 +80,42 @@ async function findMonthlyPrice({
   return null;
 }
 
+/** Prioritas mata uang order; jika tidak ada baris, pakai harga bulanan SAR (nilai amount = SAR). */
+async function findMonthlyPriceRowForOrder({
+  productId,
+  yearMonth,
+  branchId,
+  ownerId,
+  roomType,
+  withMeal,
+  orderCurrency
+}) {
+  const cur = String(orderCurrency || 'IDR').toUpperCase();
+  let row = await findMonthlyPrice({
+    productId,
+    yearMonth,
+    branchId,
+    ownerId,
+    roomType,
+    withMeal,
+    currency: cur
+  });
+  if (row) return { row, amountCurrency: cur };
+  if (cur !== 'SAR') {
+    row = await findMonthlyPrice({
+      productId,
+      yearMonth,
+      branchId,
+      ownerId,
+      roomType,
+      withMeal,
+      currency: 'SAR'
+    });
+    if (row) return { row, amountCurrency: 'SAR' };
+  }
+  return { row: null, amountCurrency: cur };
+}
+
 async function findFallbackDefaultPrice({
   productId,
   branchId,
@@ -146,15 +182,19 @@ async function calculateStayCostByNights({
   for (const night of nights) {
     const yearMonth = toYearMonth(night);
     let source = 'monthly';
-    let row = await findMonthlyPrice({
+    let row = null;
+    let amountCurrency = cur;
+    const found = await findMonthlyPriceRowForOrder({
       productId,
       yearMonth,
       branchId,
       ownerId,
       roomType,
       withMeal,
-      currency: cur
+      orderCurrency: cur
     });
+    row = found.row;
+    amountCurrency = found.amountCurrency;
     if (!row) {
       source = 'fallback_default';
       row = await findFallbackDefaultPrice({
@@ -165,17 +205,18 @@ async function calculateStayCostByNights({
         withMeal,
         currency: cur
       });
+      amountCurrency = cur;
       usedFallback = true;
     }
 
-    const amountInCur = Number(row?.amount) || 0;
-    const amountIdr = amountToIdr(amountInCur, cur, rates);
+    const amountInStoredCur = Number(row?.amount) || 0;
+    const amountIdr = amountToIdr(amountInStoredCur, amountCurrency, rates);
     subtotalIdr += amountIdr * qty;
     breakdown.push({
       date: night.toISOString().slice(0, 10),
       year_month: yearMonth,
-      amount: amountInCur,
-      currency: cur,
+      amount: amountInStoredCur,
+      currency: amountCurrency,
       amount_idr: amountIdr,
       source
     });
