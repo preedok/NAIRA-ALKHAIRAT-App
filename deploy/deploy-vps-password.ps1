@@ -1,8 +1,13 @@
 # Deploy ke VPS dengan password SSH (tanpa GitHub credentials di VPS)
 # Pakai: tar + pscp + plink. Jalankan dari repo root: .\deploy\deploy-vps-password.ps1
-# Opsional: .\deploy\deploy-vps-password.ps1 -ClearOrders  (hapus semua data order/invoice di DB lalu deploy)
+# Opsional:
+#   -ClearOrders                  → hapus order/invoice + terkait (tetap users & owner)
+#   -ClearOrdersInvoicesOwners    → hapus order/invoice + akun owner & data terkait (CONFIRM di server)
 
-param([switch]$ClearOrders)
+param(
+  [switch]$ClearOrders,
+  [switch]$ClearOrdersInvoicesOwners
+)
 
 $ErrorActionPreference = "Stop"
 $VPS_HOST = "187.124.90.214"
@@ -31,7 +36,13 @@ if ($LASTEXITCODE -ne 0) { Remove-Item $tar -ErrorAction SilentlyContinue; Write
 Remove-Item $tar -Force -ErrorAction SilentlyContinue
 
 $clearBlock = ""
-if ($ClearOrders) {
+if ($ClearOrdersInvoicesOwners) {
+  $clearBlock = @"
+
+echo '>>> ClearOrdersInvoicesOwners: order, invoice, akun owner + terkait (CONFIRM=YES)...'
+CONFIRM=YES node scripts/clear-orders-and-owner-accounts.js
+"@
+} elseif ($ClearOrders) {
   $clearBlock = @"
 
 echo '>>> ClearOrders: menghapus data order, invoice, dan terkait...'
