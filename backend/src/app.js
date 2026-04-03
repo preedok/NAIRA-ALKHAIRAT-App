@@ -21,11 +21,22 @@ try {
 
 const app = express();
 
+/** Satu origin atau beberapa (koma/spasi), mis. https://domain.id,https://dev.sub.domain.id */
+function parseCorsOrigins() {
+  const raw = process.env.CORS_ORIGIN || 'http://localhost:3000';
+  return raw.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+const corsOrigins = parseCorsOrigins();
+const corsOptions =
+  corsOrigins.length === 0
+    ? { origin: 'http://localhost:3000', credentials: true }
+    : corsOrigins.length === 1
+      ? { origin: corsOrigins[0], credentials: true }
+      : { origin: corsOrigins, credentials: true };
+
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
-}));
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

@@ -52,8 +52,8 @@ DB_DIALECT=postgres
 JWT_SECRET=$(openssl rand -base64 32)
 JWT_EXPIRE=7d
 
-# CORS
-CORS_ORIGIN=https://${DOMAIN}
+# CORS (beberapa origin dipisah koma: utama, www, subdomain dev)
+CORS_ORIGIN=https://${DOMAIN},https://www.${DOMAIN},https://dev.bintangglobalgrup.${DOMAIN}
 
 # Upload
 MAX_FILE_SIZE=10485760
