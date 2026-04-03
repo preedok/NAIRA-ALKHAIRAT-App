@@ -7,7 +7,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoRefreshControl, NominalDisplay, Modal, ModalHeader, ModalBody, ModalBoxLg, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
+import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData, type FinancialReportModalInvoiceRow } from '../../../services/api';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
@@ -91,21 +91,24 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'name', label: 'Provinsi', align: 'left' },
     { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
     { id: 'pct', label: '%', align: 'right' },
-    { id: 'count', label: 'Invoice', align: 'right' }
+    { id: 'count', label: 'Invoice', align: 'right' },
+    { id: 'aksi', label: '', align: 'center' }
   ],
   cabang: [
     { id: 'no', label: 'No', align: 'left' },
-    { id: 'name', label: 'Cabang', align: 'left' },
+    { id: 'name', label: 'Kota', align: 'left' },
     { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
     { id: 'pct', label: '%', align: 'right' },
-    { id: 'count', label: 'Invoice', align: 'right' }
+    { id: 'count', label: 'Invoice', align: 'right' },
+    { id: 'aksi', label: '', align: 'center' }
   ],
   owner: [
     { id: 'no', label: 'No', align: 'left' },
     { id: 'name', label: 'Owner / Partner', align: 'left' },
     { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
     { id: 'pct', label: '%', align: 'right' },
-    { id: 'count', label: 'Invoice', align: 'right' }
+    { id: 'count', label: 'Invoice', align: 'right' },
+    { id: 'aksi', label: '', align: 'center' }
   ],
   produk: [
     { id: 'no', label: 'No', align: 'left' },
@@ -119,7 +122,8 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'name', label: 'Periode', align: 'left' },
     { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
     { id: 'pct', label: '%', align: 'right' },
-    { id: 'count', label: 'Invoice', align: 'right' }
+    { id: 'count', label: 'Invoice', align: 'right' },
+    { id: 'aksi', label: '', align: 'center' }
   ],
   detail: [
     { id: 'invoice', label: 'No. Invoice', align: 'left' },
@@ -131,6 +135,78 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'tanggal', label: 'Tanggal', align: 'left' },
     { id: 'aksi', label: '', align: 'center' }
   ]
+};
+
+function FinancialReportInvoiceModalTable({
+  invoices,
+  loading,
+  onOpenInvoice
+}: {
+  invoices: FinancialReportModalInvoiceRow[];
+  loading: boolean;
+  onOpenInvoice: (invoiceNumber: string | null | undefined) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <table className="w-full text-sm min-w-[860px]">
+        <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-[1]">
+          <tr>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">No</th>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">Invoice</th>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">Owner</th>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">Kota / Cabang</th>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">Provinsi / Kota</th>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">Tanggal</th>
+            <th className="text-right py-3 px-3 font-semibold text-slate-700">Dibayar</th>
+            <th className="text-center py-3 px-3 font-semibold text-slate-700 w-[4.5rem]">Aksi</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white">
+          {!loading && invoices.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="py-8 text-center text-slate-500">
+                Tidak ada invoice untuk filter ini.
+              </td>
+            </tr>
+          ) : null}
+          {!loading &&
+            invoices.map((inv, i) => (
+              <tr key={inv.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/90 align-top">
+                <td className="py-3 px-3 tabular-nums text-slate-600">{i + 1}</td>
+                <td className="py-3 px-3 font-medium whitespace-nowrap">{inv.invoice_number ?? '–'}</td>
+                <td className="py-3 px-3 max-w-[9rem]">{inv.owner_name || '–'}</td>
+                <td className="py-3 px-3 max-w-[9rem]">{inv.branch_name || '–'}</td>
+                <td className="py-3 px-3 text-xs text-slate-600">
+                  <div>{inv.provinsi_name || '–'}</div>
+                  {inv.city ? <div className="text-slate-500 mt-0.5">{inv.city}</div> : null}
+                </td>
+                <td className="py-3 px-3 whitespace-nowrap">{formatDate(inv.issued_at ?? null)}</td>
+                <td className="py-3 px-3 text-right">
+                  <div className="text-emerald-700 font-medium">
+                    <NominalDisplay amount={Number(inv.paid_amount) || 0} currency="IDR" />
+                  </div>
+                  <span className="block text-[10px] text-slate-600 mt-1">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span>
+                </td>
+                <td className="py-3 px-3 text-center">
+                  <Button variant="ghost" size="sm" onClick={() => onOpenInvoice(inv.invoice_number)} aria-label="Buka invoice">
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const yearMonthToDateBounds = (ym: string): { from: string; to: string } => {
+  const [yStr, mStr] = ym.split('-');
+  const y = parseInt(yStr, 10);
+  const mo = parseInt(mStr, 10);
+  const first = new Date(y, mo - 1, 1);
+  const last = new Date(y, mo, 0);
+  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
 };
 
 const AccountingFinancialReportPage: React.FC = () => {
@@ -175,24 +251,50 @@ const AccountingFinancialReportPage: React.FC = () => {
   const [wlModalOwner, setWlModalOwner] = useState('');
   const [wlModalFrom, setWlModalFrom] = useState('');
   const [wlModalTo, setWlModalTo] = useState('');
-  const [wlModalInvoices, setWlModalInvoices] = useState<
-    Array<{
-      id: string;
-      invoice_number: string;
-      owner_name?: string;
-      branch_name?: string;
-      provinsi_name?: string;
-      city?: string;
-      total_amount: number;
-      paid_amount: number;
-      remaining_amount: number;
-      status: string;
-      issued_at?: string | null;
-    }>
-  >([]);
+  const [wlModalInvoices, setWlModalInvoices] = useState<FinancialReportModalInvoiceRow[]>([]);
   const [wlModalLoading, setWlModalLoading] = useState(false);
   const [wlModalKabList, setWlModalKabList] = useState<{ id: string | number; nama: string }[]>([]);
   const [wlModalOwners, setWlModalOwners] = useState<{ id: string; name: string }[]>([]);
+
+  const [provinsiInvModal, setProvinsiInvModal] = useState<{ provinsi_id: string; provinsi_name: string } | null>(null);
+  const [prModalKab, setPrModalKab] = useState('');
+  const [prModalOwner, setPrModalOwner] = useState('');
+  const [prModalFrom, setPrModalFrom] = useState('');
+  const [prModalTo, setPrModalTo] = useState('');
+  const [prModalInvoices, setPrModalInvoices] = useState<FinancialReportModalInvoiceRow[]>([]);
+  const [prModalLoading, setPrModalLoading] = useState(false);
+  const [prModalKabList, setPrModalKabList] = useState<{ id: string | number; nama: string }[]>([]);
+  const [prModalOwners, setPrModalOwners] = useState<{ id: string; name: string }[]>([]);
+
+  const [kotaInvModal, setKotaInvModal] = useState<{ branch_id: string; kota_label: string } | null>(null);
+  const [ktModalOwner, setKtModalOwner] = useState('');
+  const [ktModalFrom, setKtModalFrom] = useState('');
+  const [ktModalTo, setKtModalTo] = useState('');
+  const [ktModalInvoices, setKtModalInvoices] = useState<FinancialReportModalInvoiceRow[]>([]);
+  const [ktModalLoading, setKtModalLoading] = useState(false);
+  const [ktModalOwners, setKtModalOwners] = useState<{ id: string; name: string }[]>([]);
+
+  const [ownerInvModal, setOwnerInvModal] = useState<{ owner_id: string; owner_name: string } | null>(null);
+  const [owModalWilayah, setOwModalWilayah] = useState('');
+  const [owModalProv, setOwModalProv] = useState('');
+  const [owModalBranch, setOwModalBranch] = useState('');
+  const [owModalKab, setOwModalKab] = useState('');
+  const [owModalFrom, setOwModalFrom] = useState('');
+  const [owModalTo, setOwModalTo] = useState('');
+  const [owModalInvoices, setOwModalInvoices] = useState<FinancialReportModalInvoiceRow[]>([]);
+  const [owModalLoading, setOwModalLoading] = useState(false);
+  const [owModalKabList, setOwModalKabList] = useState<{ id: string | number; nama: string }[]>([]);
+
+  const [periodInvModal, setPeriodInvModal] = useState<{ year_month: string; label: string } | null>(null);
+  const [pmModalOwner, setPmModalOwner] = useState('');
+  const [pmModalWilayah, setPmModalWilayah] = useState('');
+  const [pmModalProv, setPmModalProv] = useState('');
+  const [pmModalBranch, setPmModalBranch] = useState('');
+  const [pmModalFrom, setPmModalFrom] = useState('');
+  const [pmModalTo, setPmModalTo] = useState('');
+  const [pmModalInvoices, setPmModalInvoices] = useState<FinancialReportModalInvoiceRow[]>([]);
+  const [pmModalLoading, setPmModalLoading] = useState(false);
+  const [pmModalOwners, setPmModalOwners] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     businessRulesApi.get({}).then((res) => {
@@ -215,6 +317,18 @@ const AccountingFinancialReportPage: React.FC = () => {
     const inWil = provinsiList.filter((p) => String(p.wilayah_id || '') === String(wilayahInvModal.wilayah_id));
     return inWil.length ? inWil : provinsiList;
   }, [wilayahInvModal, provinsiList]);
+
+  const owModalProvinsiOptions = useMemo(() => {
+    if (!owModalWilayah) return provinsiList;
+    const inWil = provinsiList.filter((p) => String(p.wilayah_id || '') === String(owModalWilayah));
+    return inWil.length ? inWil : provinsiList;
+  }, [owModalWilayah, provinsiList]);
+
+  const pmModalProvinsiOptions = useMemo(() => {
+    if (!pmModalWilayah) return provinsiList;
+    const inWil = provinsiList.filter((p) => String(p.wilayah_id || '') === String(pmModalWilayah));
+    return inWil.length ? inWil : provinsiList;
+  }, [pmModalWilayah, provinsiList]);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string | number> = {};
@@ -353,6 +467,170 @@ const AccountingFinancialReportPage: React.FC = () => {
     fetchWilayahModalInvoices();
   }, [wilayahInvModal, wlModalFrom, wlModalTo, wlModalProv, wlModalKab, wlModalOwner, fetchWilayahModalInvoices]);
 
+  useEffect(() => {
+    if (!provinsiInvModal) {
+      setPrModalKabList([]);
+      return;
+    }
+    branchesApi.listKabupaten(provinsiInvModal.provinsi_id).then((r) => {
+      if (r.data.success) setPrModalKabList(r.data.data || []);
+    }).catch(() => setPrModalKabList([]));
+  }, [provinsiInvModal]);
+
+  useEffect(() => {
+    if (!provinsiInvModal) {
+      setPrModalOwners([]);
+      return;
+    }
+    accountingApi.listAccountingOwners({ provinsi_id: provinsiInvModal.provinsi_id }).then((r) => {
+      if (r.data.success) setPrModalOwners(r.data.data || []);
+    }).catch(() => setPrModalOwners([]));
+  }, [provinsiInvModal]);
+
+  const fetchProvinsiModalInvoices = useCallback(async () => {
+    if (!provinsiInvModal || !prModalFrom || !prModalTo) return;
+    setPrModalLoading(true);
+    try {
+      const res = await accountingApi.getFinancialReportProvinsiInvoices({
+        provinsi_id: provinsiInvModal.provinsi_id,
+        date_from: prModalFrom,
+        date_to: prModalTo,
+        kabupaten_id: prModalKab || undefined,
+        owner_id: prModalOwner || undefined
+      });
+      if (res.data.success && res.data.data) setPrModalInvoices(res.data.data.invoices || []);
+      else setPrModalInvoices([]);
+    } catch {
+      setPrModalInvoices([]);
+    } finally {
+      setPrModalLoading(false);
+    }
+  }, [provinsiInvModal, prModalFrom, prModalTo, prModalKab, prModalOwner]);
+
+  useEffect(() => {
+    if (!provinsiInvModal || !prModalFrom || !prModalTo) return;
+    fetchProvinsiModalInvoices();
+  }, [provinsiInvModal, prModalFrom, prModalTo, prModalKab, prModalOwner, fetchProvinsiModalInvoices]);
+
+  useEffect(() => {
+    if (!kotaInvModal) {
+      setKtModalOwners([]);
+      return;
+    }
+    accountingApi.listAccountingOwners({ branch_id: kotaInvModal.branch_id }).then((r) => {
+      if (r.data.success) setKtModalOwners(r.data.data || []);
+    }).catch(() => setKtModalOwners([]));
+  }, [kotaInvModal]);
+
+  const fetchKotaModalInvoices = useCallback(async () => {
+    if (!kotaInvModal || !ktModalFrom || !ktModalTo) return;
+    setKtModalLoading(true);
+    try {
+      const res = await accountingApi.getFinancialReportKotaInvoices({
+        branch_id: kotaInvModal.branch_id,
+        date_from: ktModalFrom,
+        date_to: ktModalTo,
+        owner_id: ktModalOwner || undefined
+      });
+      if (res.data.success && res.data.data) setKtModalInvoices(res.data.data.invoices || []);
+      else setKtModalInvoices([]);
+    } catch {
+      setKtModalInvoices([]);
+    } finally {
+      setKtModalLoading(false);
+    }
+  }, [kotaInvModal, ktModalFrom, ktModalTo, ktModalOwner]);
+
+  useEffect(() => {
+    if (!kotaInvModal || !ktModalFrom || !ktModalTo) return;
+    fetchKotaModalInvoices();
+  }, [kotaInvModal, ktModalFrom, ktModalTo, ktModalOwner, fetchKotaModalInvoices]);
+
+  useEffect(() => {
+    if (!owModalProv) {
+      setOwModalKabList([]);
+      return;
+    }
+    branchesApi.listKabupaten(owModalProv).then((r) => {
+      if (r.data.success) setOwModalKabList(r.data.data || []);
+    }).catch(() => setOwModalKabList([]));
+  }, [owModalProv]);
+
+  const fetchOwnerModalInvoices = useCallback(async () => {
+    if (!ownerInvModal || !owModalFrom || !owModalTo) return;
+    setOwModalLoading(true);
+    try {
+      const res = await accountingApi.getFinancialReportOwnerInvoices({
+        owner_id: ownerInvModal.owner_id,
+        date_from: owModalFrom,
+        date_to: owModalTo,
+        wilayah_id: owModalWilayah || undefined,
+        provinsi_id: owModalProv || undefined,
+        branch_id: owModalBranch || undefined,
+        kabupaten_id: owModalKab || undefined
+      });
+      if (res.data.success && res.data.data) setOwModalInvoices(res.data.data.invoices || []);
+      else setOwModalInvoices([]);
+    } catch {
+      setOwModalInvoices([]);
+    } finally {
+      setOwModalLoading(false);
+    }
+  }, [ownerInvModal, owModalFrom, owModalTo, owModalWilayah, owModalProv, owModalBranch, owModalKab]);
+
+  useEffect(() => {
+    if (!ownerInvModal || !owModalFrom || !owModalTo) return;
+    fetchOwnerModalInvoices();
+  }, [ownerInvModal, owModalFrom, owModalTo, owModalWilayah, owModalProv, owModalBranch, owModalKab, fetchOwnerModalInvoices]);
+
+  useEffect(() => {
+    if (!periodInvModal) {
+      setPmModalOwners([]);
+      return;
+    }
+    const params: { branch_id?: string; provinsi_id?: string; wilayah_id?: string } = {};
+    if (pmModalBranch) params.branch_id = pmModalBranch;
+    else if (pmModalProv) params.provinsi_id = pmModalProv;
+    else if (pmModalWilayah) params.wilayah_id = pmModalWilayah;
+    accountingApi.listAccountingOwners(params).then((r) => {
+      if (r.data.success) setPmModalOwners(r.data.data || []);
+    }).catch(() => setPmModalOwners([]));
+  }, [periodInvModal, pmModalBranch, pmModalProv, pmModalWilayah]);
+
+  const fetchPeriodModalInvoices = useCallback(async () => {
+    if (!periodInvModal) return;
+    setPmModalLoading(true);
+    try {
+      const res = await accountingApi.getFinancialReportPeriodInvoices({
+        year_month: periodInvModal.year_month,
+        date_from: pmModalFrom || undefined,
+        date_to: pmModalTo || undefined,
+        owner_id: pmModalOwner || undefined,
+        wilayah_id: pmModalWilayah || undefined,
+        provinsi_id: pmModalProv || undefined,
+        branch_id: pmModalBranch || undefined
+      });
+      if (res.data.success && res.data.data) setPmModalInvoices(res.data.data.invoices || []);
+      else setPmModalInvoices([]);
+    } catch {
+      setPmModalInvoices([]);
+    } finally {
+      setPmModalLoading(false);
+    }
+  }, [periodInvModal, pmModalFrom, pmModalTo, pmModalOwner, pmModalWilayah, pmModalProv, pmModalBranch]);
+
+  useEffect(() => {
+    if (!periodInvModal) return;
+    fetchPeriodModalInvoices();
+  }, [periodInvModal, pmModalFrom, pmModalTo, pmModalOwner, pmModalWilayah, pmModalProv, pmModalBranch, fetchPeriodModalInvoices]);
+
+  const openOrdersInvoices = useCallback(
+    (invoiceNumber: string | null | undefined) => {
+      navigate('/dashboard/orders-invoices' + (invoiceNumber ? '?invoice_number=' + encodeURIComponent(invoiceNumber) : ''));
+    },
+    [navigate]
+  );
+
   const applyPreset = (preset: typeof DATE_PRESETS[0]) => {
     setDatePresetId(preset.id);
     const v = preset.getValue();
@@ -445,7 +723,7 @@ const AccountingFinancialReportPage: React.FC = () => {
     { id: 'ringkasan', label: 'Ringkasan', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'wilayah', label: 'Per Wilayah', icon: <MapPin className="w-4 h-4" /> },
     { id: 'provinsi', label: 'Per Provinsi', icon: <Map className="w-4 h-4" /> },
-    { id: 'cabang', label: 'Per Cabang', icon: <Building2 className="w-4 h-4" /> },
+    { id: 'cabang', label: 'Per Kota', icon: <Building2 className="w-4 h-4" /> },
     { id: 'owner', label: 'Per Owner', icon: <Users className="w-4 h-4" /> },
     { id: 'produk', label: 'Per Produk', icon: <Package className="w-4 h-4" /> },
     { id: 'periode', label: 'Per Bulan', icon: <Calendar className="w-4 h-4" /> },
@@ -456,7 +734,7 @@ const AccountingFinancialReportPage: React.FC = () => {
     <div className="space-y-4">
       <PageHeader
         title="Laporan Keuangan"
-        subtitle="Pendapatan per wilayah, provinsi, cabang, owner, dan jenis produk"
+        subtitle="Pendapatan per wilayah, provinsi, kota, owner, dan jenis produk"
         right={
           <div className="flex items-center gap-2 flex-wrap">
             <AutoRefreshControl onRefresh={fetchReport} disabled={loading} size="sm" />
@@ -473,7 +751,7 @@ const AccountingFinancialReportPage: React.FC = () => {
       />
 
       <Card className="travel-card min-h-[200px]">
-        <CardSectionHeader icon={<FileText className="w-6 h-6" />} title="Laporan Keuangan" subtitle="Hanya invoice yang sudah ada pembayaran (tagihan DP tidak dihitung). Ringkasan per wilayah, cabang, owner, dan detail invoice." className="mb-4" />
+        <CardSectionHeader icon={<FileText className="w-6 h-6" />} title="Laporan Keuangan" subtitle="Hanya invoice yang sudah ada pembayaran (tagihan DP tidak dihitung). Ringkasan per wilayah, kota, owner, dan detail invoice." className="mb-4" />
         {loading && !data ? (
           <ContentLoading />
         ) : !loading && !data ? (
@@ -531,7 +809,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 <StatCard icon={<Calendar className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} />
                 <StatCard icon={<MapPin className="w-5 h-5" />} label="Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
                 <StatCard icon={<Map className="w-5 h-5" />} label="Provinsi" value={(data.by_provinsi || []).length} subtitle="Provinsi dengan transaksi" />
-                <StatCard icon={<Building2 className="w-5 h-5" />} label="Cabang" value={data.by_branch.length} subtitle="Cabang dengan transaksi" />
+                <StatCard icon={<Building2 className="w-5 h-5" />} label="Kota" value={data.by_branch.length} subtitle="Unit cabang / kota dengan transaksi" />
                 <StatCard icon={<Users className="w-5 h-5" />} label="Owner" value={(data.by_owner || []).length} subtitle="Owner dengan transaksi" />
                 {prevPeriod && (
                   <StatCard
@@ -669,7 +947,9 @@ const AccountingFinancialReportPage: React.FC = () => {
                   onPageChange: setTablePage,
                   onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
                 } : undefined}
-                renderRow={(row, idx) => (
+                renderRow={(row, idx) => {
+                  const canViewProv = (row.invoice_count ?? 0) > 0 || (row.revenue ?? 0) > 0;
+                  return (
                       <tr key={row.provinsi_id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{row.provinsi_name || row.provinsi_id || 'Lainnya'}</td>
@@ -679,8 +959,36 @@ const AccountingFinancialReportPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                    <td className="py-3 px-4 text-center">
+                      {canViewProv ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ps = data.period?.start ? new Date(data.period.start).toISOString().slice(0, 10) : '';
+                            const pe = data.period?.end ? new Date(data.period.end).toISOString().slice(0, 10) : '';
+                            setPrModalFrom(ps);
+                            setPrModalTo(pe);
+                            setPrModalKab('');
+                            setPrModalOwner('');
+                            setPrModalKabList([]);
+                            setProvinsiInvModal({
+                              provinsi_id: String(row.provinsi_id),
+                              provinsi_name: String(row.provinsi_name || row.provinsi_id || 'Provinsi')
+                            });
+                          }}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-[#0D1A63] transition-colors"
+                          title="Lihat invoice"
+                          aria-label={`Lihat daftar invoice ${row.provinsi_name || row.provinsi_id || 'provinsi'}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">–</span>
+                      )}
+                    </td>
                       </tr>
-                )}
+                  );
+                }}
               />
               </div>
             </Card>
@@ -690,16 +998,16 @@ const AccountingFinancialReportPage: React.FC = () => {
           {activeTab === 'cabang' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-                <StatCard icon={<Building2 className="w-5 h-5" />} label="Jumlah Cabang" value={data.by_branch.length} subtitle="Cabang dengan transaksi" />
+                <StatCard icon={<Building2 className="w-5 h-5" />} label="Jumlah Kota" value={data.by_branch.length} subtitle="Unit cabang / kota dengan transaksi" />
                 <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={data.by_branch.length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
-                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={data.by_branch.reduce((s, b) => s + (b.invoice_count ?? 0), 0)} subtitle="Seluruh cabang" />
+                <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={data.by_branch.reduce((s, b) => s + (b.invoice_count ?? 0), 0)} subtitle="Seluruh kota" />
                 {data.by_branch.length > 0 && (() => {
                   const top = [...data.by_branch].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))[0];
-                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Cabang Tertinggi" value={top?.branch_name || '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
+                  return <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Kota Tertinggi" value={top?.branch_name || '–'} subtitle={top ? <NominalDisplay amount={top.revenue} currency="IDR" /> : undefined} />;
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Cabang" subtitle="Periode & wilayah/provinsi" right={null} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Kota" subtitle="Periode & wilayah/provinsi" right={null} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
@@ -709,8 +1017,8 @@ const AccountingFinancialReportPage: React.FC = () => {
               </div>
               <CardSectionHeader
                 icon={<Building2 className="w-6 h-6" />}
-                title="Pendapatan per Cabang"
-                subtitle={`${(data.by_branch || []).length} cabang`}
+                title="Pendapatan per Kota"
+                subtitle={`${(data.by_branch || []).length} kota`}
                 className="mb-2"
               />
               <div className="min-w-0 overflow-x-auto">
@@ -726,18 +1034,47 @@ const AccountingFinancialReportPage: React.FC = () => {
                   onPageChange: setTablePage,
                   onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
                 } : undefined}
-                renderRow={(row, idx) => (
+                renderRow={(row, idx) => {
+                  const canViewKota = (row.invoice_count ?? 0) > 0 || (row.revenue ?? 0) > 0;
+                  const kotaLabel = row.branch_name || row.branch_id || 'Kota';
+                  return (
                       <tr key={row.branch_id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
-                    <td className="py-3 px-4 font-medium">{row.branch_name || row.branch_id || 'Lainnya'}</td>
+                    <td className="py-3 px-4 font-medium">{kotaLabel}</td>
                     <td className="py-3 px-4 text-right align-top">
                       <div><NominalDisplay amount={row.revenue} currency="IDR" /></div>
                       {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                    <td className="py-3 px-4 text-center">
+                      {canViewKota ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ps = data.period?.start ? new Date(data.period.start).toISOString().slice(0, 10) : '';
+                            const pe = data.period?.end ? new Date(data.period.end).toISOString().slice(0, 10) : '';
+                            setKtModalFrom(ps);
+                            setKtModalTo(pe);
+                            setKtModalOwner('');
+                            setKotaInvModal({
+                              branch_id: String(row.branch_id),
+                              kota_label: String(kotaLabel)
+                            });
+                          }}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-[#0D1A63] transition-colors"
+                          title="Lihat invoice"
+                          aria-label={`Lihat daftar invoice ${kotaLabel}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">–</span>
+                      )}
+                    </td>
                       </tr>
-                )}
+                  );
+                }}
               />
               </div>
             </Card>
@@ -785,7 +1122,9 @@ const AccountingFinancialReportPage: React.FC = () => {
                   onPageChange: setTablePage,
                   onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
                 } : undefined}
-                renderRow={(row, idx) => (
+                renderRow={(row, idx) => {
+                  const canViewOwner = (row.invoice_count ?? 0) > 0 || (row.revenue ?? 0) > 0;
+                  return (
                       <tr key={row.owner_id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{row.owner_name || row.owner_id || 'Lainnya'}</td>
@@ -795,8 +1134,38 @@ const AccountingFinancialReportPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                    <td className="py-3 px-4 text-center">
+                      {canViewOwner ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ps = data.period?.start ? new Date(data.period.start).toISOString().slice(0, 10) : '';
+                            const pe = data.period?.end ? new Date(data.period.end).toISOString().slice(0, 10) : '';
+                            setOwModalFrom(ps);
+                            setOwModalTo(pe);
+                            setOwModalWilayah(wilayahId || '');
+                            setOwModalProv(provinsiId || '');
+                            setOwModalBranch(branchId || '');
+                            setOwModalKab('');
+                            setOwModalKabList([]);
+                            setOwnerInvModal({
+                              owner_id: String(row.owner_id),
+                              owner_name: String(row.owner_name || row.owner_id || 'Owner')
+                            });
+                          }}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-[#0D1A63] transition-colors"
+                          title="Lihat invoice"
+                          aria-label={`Lihat daftar invoice ${row.owner_name || row.owner_id || 'owner'}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">–</span>
+                      )}
+                    </td>
                       </tr>
-                )}
+                  );
+                }}
               />
               </div>
             </Card>
@@ -912,7 +1281,10 @@ const AccountingFinancialReportPage: React.FC = () => {
                   onPageChange: setTablePage,
                   onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
                 } : undefined}
-                renderRow={(row, idx) => (
+                renderRow={(row, idx) => {
+                  const canViewPeriode = (row.invoice_count ?? 0) > 0 || (row.revenue ?? 0) > 0;
+                  const bounds = yearMonthToDateBounds(row.period);
+                  return (
                       <tr key={row.period} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{formatPeriodLabel(row.period)}</td>
@@ -922,8 +1294,35 @@ const AccountingFinancialReportPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
                     <td className="py-3 px-4 text-right">{row.invoice_count ?? '-'}</td>
+                    <td className="py-3 px-4 text-center">
+                      {canViewPeriode ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPmModalFrom(bounds.from);
+                            setPmModalTo(bounds.to);
+                            setPmModalOwner(ownerId || '');
+                            setPmModalWilayah(wilayahId || '');
+                            setPmModalProv(provinsiId || '');
+                            setPmModalBranch(branchId || '');
+                            setPeriodInvModal({
+                              year_month: String(row.period),
+                              label: formatPeriodLabel(row.period)
+                            });
+                          }}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-[#0D1A63] transition-colors"
+                          title="Lihat invoice"
+                          aria-label={`Lihat invoice bulan ${formatPeriodLabel(row.period)}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">–</span>
+                      )}
+                    </td>
                       </tr>
-                )}
+                  );
+                }}
               />
               </div>
             </Card>
@@ -1221,66 +1620,293 @@ const AccountingFinancialReportPage: React.FC = () => {
               {wlModalLoading ? (
                 <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
               ) : null}
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-sm min-w-[860px]">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-[1]">
-                    <tr>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">No</th>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Invoice</th>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Owner</th>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Cabang</th>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Provinsi / Kota</th>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Tanggal</th>
-                      <th className="text-right py-3 px-3 font-semibold text-slate-700">Dibayar</th>
-                      <th className="text-center py-3 px-3 font-semibold text-slate-700 w-[4.5rem]">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {!wlModalLoading && wlModalInvoices.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="py-8 text-center text-slate-500">
-                          Tidak ada invoice untuk filter ini.
-                        </td>
-                      </tr>
-                    ) : null}
-                    {!wlModalLoading &&
-                      wlModalInvoices.map((inv, i) => (
-                        <tr key={inv.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/90 align-top">
-                          <td className="py-3 px-3 tabular-nums text-slate-600">{i + 1}</td>
-                          <td className="py-3 px-3 font-medium whitespace-nowrap">{inv.invoice_number}</td>
-                          <td className="py-3 px-3 max-w-[9rem]">{inv.owner_name || '–'}</td>
-                          <td className="py-3 px-3 max-w-[9rem]">{inv.branch_name || '–'}</td>
-                          <td className="py-3 px-3 text-xs text-slate-600">
-                            <div>{inv.provinsi_name || '–'}</div>
-                            {inv.city ? <div className="text-slate-500 mt-0.5">{inv.city}</div> : null}
-                          </td>
-                          <td className="py-3 px-3 whitespace-nowrap">{formatDate(inv.issued_at ?? null)}</td>
-                          <td className="py-3 px-3 text-right">
-                            <div className="text-emerald-700 font-medium">
-                              <NominalDisplay amount={Number(inv.paid_amount) || 0} currency="IDR" />
-                            </div>
-                            <span className="block text-[10px] text-slate-600 mt-1">{INVOICE_STATUS_LABELS[inv.status] || inv.status}</span>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                navigate(
-                                  '/dashboard/orders-invoices' +
-                                    (inv.invoice_number ? '?invoice_number=' + encodeURIComponent(inv.invoice_number) : '')
-                                )
-                              }
-                              aria-label="Buka invoice"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
+              <FinancialReportInvoiceModalTable
+                invoices={wlModalInvoices}
+                loading={wlModalLoading}
+                onOpenInvoice={openOrdersInvoices}
+              />
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      ) : null}
+
+      {provinsiInvModal ? (
+        <Modal
+          open
+          onClose={() => {
+            setProvinsiInvModal(null);
+            setPrModalKab('');
+            setPrModalOwner('');
+            setPrModalFrom('');
+            setPrModalTo('');
+            setPrModalInvoices([]);
+          }}
+        >
+          <ModalBoxLg className="!max-w-6xl">
+            <ModalHeader
+              title={`Invoice — ${provinsiInvModal.provinsi_name}`}
+              subtitle="Filter kabupaten/kota, owner, dan tanggal; aturan yang sama dengan laporan (tanpa invoice tentative)"
+              icon={<Map className="w-5 h-5" />}
+              onClose={() => {
+                setProvinsiInvModal(null);
+                setPrModalKab('');
+                setPrModalOwner('');
+                setPrModalFrom('');
+                setPrModalTo('');
+                setPrModalInvoices([]);
+              }}
+            />
+            <ModalBody className="p-4 sm:p-6 overflow-y-auto flex-1 max-h-[78vh] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                <Autocomplete
+                  label="Kabupaten / Kota"
+                  value={prModalKab}
+                  onChange={setPrModalKab}
+                  options={prModalKabList.map((k) => ({ value: String(k.id), label: k.nama }))}
+                  emptyLabel="Semua kabupaten/kota"
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Owner"
+                  value={prModalOwner}
+                  onChange={setPrModalOwner}
+                  options={prModalOwners.map((o) => ({ value: o.id, label: o.name }))}
+                  emptyLabel="Semua owner"
+                  className="lg:col-span-2"
+                />
+                <Input label="Dari tanggal" type="date" value={prModalFrom} onChange={(e) => setPrModalFrom(e.target.value)} />
+                <Input label="Sampai tanggal" type="date" value={prModalTo} onChange={(e) => setPrModalTo(e.target.value)} />
+                <Button type="button" variant="primary" size="sm" className="w-full sm:w-auto" onClick={() => fetchProvinsiModalInvoices()} disabled={prModalLoading || !prModalFrom || !prModalTo}>
+                  Terapkan filter
+                </Button>
               </div>
+              {prModalLoading ? (
+                <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+              ) : null}
+              <FinancialReportInvoiceModalTable invoices={prModalInvoices} loading={prModalLoading} onOpenInvoice={openOrdersInvoices} />
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      ) : null}
+
+      {kotaInvModal ? (
+        <Modal
+          open
+          onClose={() => {
+            setKotaInvModal(null);
+            setKtModalOwner('');
+            setKtModalFrom('');
+            setKtModalTo('');
+            setKtModalInvoices([]);
+          }}
+        >
+          <ModalBoxLg className="!max-w-6xl">
+            <ModalHeader
+              title={`Invoice — ${kotaInvModal.kota_label}`}
+              subtitle="Invoice unit cabang/kota ini; filter owner dan tanggal"
+              icon={<Building2 className="w-5 h-5" />}
+              onClose={() => {
+                setKotaInvModal(null);
+                setKtModalOwner('');
+                setKtModalFrom('');
+                setKtModalTo('');
+                setKtModalInvoices([]);
+              }}
+            />
+            <ModalBody className="p-4 sm:p-6 overflow-y-auto flex-1 max-h-[78vh] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                <Autocomplete
+                  label="Owner"
+                  value={ktModalOwner}
+                  onChange={setKtModalOwner}
+                  options={ktModalOwners.map((o) => ({ value: o.id, label: o.name }))}
+                  emptyLabel="Semua owner"
+                  className="lg:col-span-2"
+                />
+                <Input label="Dari tanggal" type="date" value={ktModalFrom} onChange={(e) => setKtModalFrom(e.target.value)} />
+                <Input label="Sampai tanggal" type="date" value={ktModalTo} onChange={(e) => setKtModalTo(e.target.value)} />
+                <Button type="button" variant="primary" size="sm" className="w-full sm:w-auto" onClick={() => fetchKotaModalInvoices()} disabled={ktModalLoading || !ktModalFrom || !ktModalTo}>
+                  Terapkan filter
+                </Button>
+              </div>
+              {ktModalLoading ? (
+                <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+              ) : null}
+              <FinancialReportInvoiceModalTable invoices={ktModalInvoices} loading={ktModalLoading} onOpenInvoice={openOrdersInvoices} />
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      ) : null}
+
+      {ownerInvModal ? (
+        <Modal
+          open
+          onClose={() => {
+            setOwnerInvModal(null);
+            setOwModalWilayah('');
+            setOwModalProv('');
+            setOwModalBranch('');
+            setOwModalKab('');
+            setOwModalFrom('');
+            setOwModalTo('');
+            setOwModalInvoices([]);
+          }}
+        >
+          <ModalBoxLg className="!max-w-6xl">
+            <ModalHeader
+              title={`Invoice — ${ownerInvModal.owner_name}`}
+              subtitle="Invoice milik owner ini; sempitkan lokasi (wilayah, provinsi, kabupaten, cabang) dan tanggal"
+              icon={<Users className="w-5 h-5" />}
+              onClose={() => {
+                setOwnerInvModal(null);
+                setOwModalWilayah('');
+                setOwModalProv('');
+                setOwModalBranch('');
+                setOwModalKab('');
+                setOwModalFrom('');
+                setOwModalTo('');
+                setOwModalInvoices([]);
+              }}
+            />
+            <ModalBody className="p-4 sm:p-6 overflow-y-auto flex-1 max-h-[78vh] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                <Autocomplete
+                  label="Wilayah"
+                  value={owModalWilayah}
+                  onChange={(v) => {
+                    setOwModalWilayah(v);
+                    setOwModalProv('');
+                    setOwModalKab('');
+                    setOwModalBranch('');
+                  }}
+                  options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+                  emptyLabel="Semua wilayah"
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Provinsi"
+                  value={owModalProv}
+                  onChange={(v) => {
+                    setOwModalProv(v);
+                    setOwModalKab('');
+                    setOwModalBranch('');
+                  }}
+                  options={owModalProvinsiOptions.map((p) => ({ value: p.id, label: p.name }))}
+                  emptyLabel="Semua provinsi"
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Kabupaten / Kota"
+                  value={owModalKab}
+                  onChange={setOwModalKab}
+                  options={owModalKabList.map((k) => ({ value: String(k.id), label: k.nama }))}
+                  emptyLabel={owModalProv ? 'Semua kabupaten' : 'Pilih provinsi dulu'}
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Cabang (kota)"
+                  value={owModalBranch}
+                  onChange={setOwModalBranch}
+                  options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
+                  emptyLabel="Semua cabang"
+                  className="lg:col-span-2"
+                />
+                <Input label="Dari tanggal" type="date" value={owModalFrom} onChange={(e) => setOwModalFrom(e.target.value)} />
+                <Input label="Sampai tanggal" type="date" value={owModalTo} onChange={(e) => setOwModalTo(e.target.value)} />
+                <Button type="button" variant="primary" size="sm" className="w-full sm:w-auto" onClick={() => fetchOwnerModalInvoices()} disabled={owModalLoading || !owModalFrom || !owModalTo}>
+                  Terapkan filter
+                </Button>
+              </div>
+              {owModalLoading ? (
+                <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+              ) : null}
+              <FinancialReportInvoiceModalTable invoices={owModalInvoices} loading={owModalLoading} onOpenInvoice={openOrdersInvoices} />
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      ) : null}
+
+      {periodInvModal ? (
+        <Modal
+          open
+          onClose={() => {
+            setPeriodInvModal(null);
+            setPmModalOwner('');
+            setPmModalWilayah('');
+            setPmModalProv('');
+            setPmModalBranch('');
+            setPmModalFrom('');
+            setPmModalTo('');
+            setPmModalInvoices([]);
+          }}
+        >
+          <ModalBoxLg className="!max-w-6xl">
+            <ModalHeader
+              title={`Invoice — ${periodInvModal.label}`}
+              subtitle={`Bulan ${periodInvModal.year_month}: daftar invoice selaras agregat pendapatan bulanan; sempitkan tanggal (dalam bulan), owner, dan lokasi`}
+              icon={<Calendar className="w-5 h-5" />}
+              onClose={() => {
+                setPeriodInvModal(null);
+                setPmModalOwner('');
+                setPmModalWilayah('');
+                setPmModalProv('');
+                setPmModalBranch('');
+                setPmModalFrom('');
+                setPmModalTo('');
+                setPmModalInvoices([]);
+              }}
+            />
+            <ModalBody className="p-4 sm:p-6 overflow-y-auto flex-1 max-h-[78vh] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                <Autocomplete
+                  label="Wilayah"
+                  value={pmModalWilayah}
+                  onChange={(v) => {
+                    setPmModalWilayah(v);
+                    setPmModalProv('');
+                    setPmModalBranch('');
+                  }}
+                  options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+                  emptyLabel="Semua wilayah"
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Provinsi"
+                  value={pmModalProv}
+                  onChange={(v) => {
+                    setPmModalProv(v);
+                    setPmModalBranch('');
+                  }}
+                  options={pmModalProvinsiOptions.map((p) => ({ value: p.id, label: p.name }))}
+                  emptyLabel="Semua provinsi"
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Kota (cabang)"
+                  value={pmModalBranch}
+                  onChange={setPmModalBranch}
+                  options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
+                  emptyLabel="Semua cabang"
+                  className="lg:col-span-2"
+                />
+                <Autocomplete
+                  label="Owner"
+                  value={pmModalOwner}
+                  onChange={setPmModalOwner}
+                  options={pmModalOwners.map((o) => ({ value: o.id, label: o.name }))}
+                  emptyLabel="Semua owner"
+                  className="lg:col-span-2"
+                />
+                <Input label="Dari tanggal (dalam bulan)" type="date" value={pmModalFrom} onChange={(e) => setPmModalFrom(e.target.value)} />
+                <Input label="Sampai tanggal (dalam bulan)" type="date" value={pmModalTo} onChange={(e) => setPmModalTo(e.target.value)} />
+                <Button type="button" variant="primary" size="sm" className="w-full sm:w-auto" onClick={() => fetchPeriodModalInvoices()} disabled={pmModalLoading}>
+                  Terapkan filter
+                </Button>
+              </div>
+              {pmModalLoading ? (
+                <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+              ) : null}
+              <FinancialReportInvoiceModalTable invoices={pmModalInvoices} loading={pmModalLoading} onOpenInvoice={openOrdersInvoices} />
             </ModalBody>
           </ModalBoxLg>
         </Modal>

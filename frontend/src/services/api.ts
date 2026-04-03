@@ -723,33 +723,26 @@ export interface AdminPusatDashboardData {
 
 /** Invoice row returned by financial-report modal endpoints (wilayah/provinsi/kota/owner/periode). */
 export interface FinancialReportModalInvoiceRow {
-  invoice_id: string;
+  id: string;
   invoice_number: string | null;
-  customer_name: string | null;
-  customer_email: string | null;
-  issued_at: string | null;
-  due_date: string | null;
+  owner_name?: string | null;
+  branch_name?: string | null;
+  wilayah_name?: string | null;
+  provinsi_name?: string | null;
+  city?: string | null;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
   status: string;
-  nominal: string | number;
-  paid_amount: string | number | null;
-  outstanding_amount: string | number | null;
-  branch_id: string | null;
-  branch_name: string | null;
-  branch_code: string | null;
-  province_id: string | null;
-  province_name: string | null;
-  owner_id: string | null;
-  owner_name: string | null;
-  order_id: string | null;
-  order_number: string | null;
+  order_status?: string | null;
+  issued_at?: string | null;
 }
 
 export interface FinancialReportModalInvoicesPayload {
   invoices: FinancialReportModalInvoiceRow[];
-  sum_nominal: number;
-  sum_paid: number;
-  sum_outstanding: number;
-  branch_count: number | null;
+  period?: { start: string | Date; end: string | Date };
+  branch_count?: number;
+  year_month?: string;
 }
 
 export const accountingApi = {
