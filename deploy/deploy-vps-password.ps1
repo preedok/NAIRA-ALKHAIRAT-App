@@ -72,8 +72,14 @@ cd $APP_PATH/frontend && npm ci && npm run build
 if [ -f $APP_PATH/deploy/nginx.conf ]; then
   sudo cp $APP_PATH/deploy/nginx.conf /etc/nginx/sites-available/bgg-app
   sudo ln -sf /etc/nginx/sites-available/bgg-app /etc/nginx/sites-enabled/bgg-app
-  sudo nginx -t && (sudo systemctl is-active --quiet nginx && sudo systemctl reload nginx || sudo systemctl start nginx)
-  echo 'Nginx OK.'
+  if sudo nginx -t 2>/dev/null; then
+    (sudo systemctl is-active --quiet nginx && sudo systemctl reload nginx || sudo systemctl start nginx) || true
+  fi
+  echo 'Host nginx: ok atau dilewati (mis. port 80/443 dipakai Docker).'
+fi
+if [ -f $APP_PATH/deploy/vps-insancita-docker-nginx.conf ] && docker ps --format '{{.Names}}' | grep -qx insancita-integrasi-nginx-1; then
+  cp $APP_PATH/deploy/vps-insancita-docker-nginx.conf /var/www/insancita-integrasi/infra/nginx.conf
+  docker exec insancita-integrasi-nginx-1 nginx -t && docker exec insancita-integrasi-nginx-1 nginx -s reload && echo 'Docker nginx (dev subdomain) OK.' || echo 'Docker nginx reload gagal (cek manual).'
 fi
 echo DEPLOY_DONE
 "@
