@@ -69,6 +69,12 @@ sleep 2
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/health || echo "health-fail"
 echo '=== Frontend ==='
 cd $APP_PATH/frontend && npm ci && npm run build
+if [ -f $APP_PATH/deploy/nginx.conf ]; then
+  sudo cp $APP_PATH/deploy/nginx.conf /etc/nginx/sites-available/bgg-app
+  sudo ln -sf /etc/nginx/sites-available/bgg-app /etc/nginx/sites-enabled/bgg-app
+  sudo nginx -t && (sudo systemctl is-active --quiet nginx && sudo systemctl reload nginx || sudo systemctl start nginx)
+  echo 'Nginx OK.'
+fi
 echo DEPLOY_DONE
 "@
 $remote = $remote -replace "`r`n", "`n"
