@@ -56,6 +56,7 @@ cp -a frontend/.env.production.bak frontend/.env.production 2>/dev/null || true
 echo '=== Backend ==='
 cd $APP_PATH/backend && npm ci$clearBlock
 (npm run migrate 2>/dev/null || true)
+(npm run ensure:owner-manual-columns 2>/dev/null || true)
 (npm run seed:kabupaten 2>/dev/null || true)
 # seed:kabupaten = isi master kabupaten/kota dari API data-indonesia (jika tabel masih kosong)
 (npm run sync:wilayah 2>/dev/null || true)
