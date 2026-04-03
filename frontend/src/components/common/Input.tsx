@@ -5,6 +5,10 @@ interface InputProps {
   label?: string;
   type?: string;
   name?: string;
+  id?: string;
+  /** aria-label pada input (berguna jika tanpa label visual, mis. sel tabel) */
+  ariaLabel?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
@@ -17,6 +21,8 @@ interface InputProps {
   required?: boolean;
   fullWidth?: boolean;
   className?: string;
+  /** Kelas tambahan pada elemen input native (mis. padat untuk sel tabel) */
+  inputClassName?: string;
   min?: number | string;
   max?: number | string;
   step?: number | string;
@@ -36,6 +42,9 @@ const Input: React.FC<InputProps> = ({
   label,
   type = 'text',
   name,
+  id,
+  ariaLabel,
+  inputMode,
   value,
   onChange,
   onBlur,
@@ -48,6 +57,7 @@ const Input: React.FC<InputProps> = ({
   required = false,
   fullWidth = true,
   className = '',
+  inputClassName = '',
   min,
   max,
   step,
@@ -80,6 +90,7 @@ const Input: React.FC<InputProps> = ({
           </div>
         )}
         <input
+          id={id}
           type={type}
           name={name}
           value={type === 'file' ? undefined : value}
@@ -98,7 +109,9 @@ const Input: React.FC<InputProps> = ({
           maxLength={maxLength}
           autoComplete={autoComplete}
           title={title}
-          className={`${inputBaseClass} ${borderStyles} ${iconPadding} ${suffixPadding} ${widthStyles} ${readOnlyStyles} text-sm`}
+          inputMode={inputMode}
+          aria-label={ariaLabel}
+          className={`${inputBaseClass} ${borderStyles} ${iconPadding} ${suffixPadding} ${widthStyles} ${readOnlyStyles} text-sm ${inputClassName}`.trim()}
         />
         {suffix && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center">

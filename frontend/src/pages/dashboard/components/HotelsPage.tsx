@@ -1755,7 +1755,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                     const cellDisabled = quantityFormSaving || monthlyPriceLoading;
                                     return (
                                       <td key={`${rt}-${m}`} className="px-2 py-2 align-top">
-                                        <input
+                                        <Input
                                           type="text"
                                           inputMode="decimal"
                                           value={monthlyPriceRows?.[rt]?.[m] ?? ''}
@@ -1773,10 +1773,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                               [rt]: { ...(prev?.[rt] || {}), [m]: n > 0 ? formatSarId(n) : '' }
                                             }));
                                           }}
-                                          className="w-full min-w-[5.5rem] border border-slate-200 rounded-lg px-2 py-1.5 text-right text-sm tabular-nums focus:ring-2 focus:ring-[#0D1A63]/30 focus:border-[#0D1A63]"
                                           placeholder="0"
                                           disabled={cellDisabled}
-                                          aria-label={`Harga SAR ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
+                                          ariaLabel={`Harga SAR ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
+                                          className="min-w-[5.5rem]"
+                                          inputClassName="!px-2 !py-1.5 !rounded-lg text-right tabular-nums"
                                         />
                                         {conv && sar > 0 ? (
                                           <div className="mt-1 text-[10px] leading-snug text-slate-500">
@@ -1823,17 +1824,24 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                       {pf.pricing_mode === 'per_type' ? (
                                         <div className="flex items-center justify-end gap-1 flex-wrap">
                                           <span className="text-slate-500 text-xs">{qCurr.symbol}</span>
-                                          <input
+                                          <Input
                                             type="number"
                                             min={0}
-                                            value={pf.rooms[rt].price || ''}
+                                            fullWidth={false}
+                                            className="w-full max-w-[7rem]"
+                                            inputClassName="!px-2 !py-1.5 !rounded-lg text-right tabular-nums"
+                                            value={
+                                              pf.rooms[rt].price === 0 || pf.rooms[rt].price
+                                                ? String(pf.rooms[rt].price)
+                                                : ''
+                                            }
                                             onChange={(e) =>
                                               setQuantityModalPriceForm((f) => ({
                                                 ...f,
                                                 rooms: { ...f.rooms, [rt]: { ...f.rooms[rt], price: Number(e.target.value) || 0 } }
                                               }))
                                             }
-                                            className="w-full max-w-[7rem] text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm tabular-nums focus:ring-2 focus:ring-btn focus:border-btn"
+                                            ariaLabel={`Harga ${rt} (${qCurr.id})`}
                                           />
                                         </div>
                                       ) : (
