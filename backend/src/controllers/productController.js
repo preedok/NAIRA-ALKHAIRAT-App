@@ -699,6 +699,21 @@ const create = asyncHandler(async (req, res) => {
   if (type === 'siskopatuh' && (!finalCode || finalCode.trim() === '')) {
     finalCode = await generateSiskopatuhCode();
   }
+  if (type === 'package') {
+    const vf = finalMeta.valid_from ? String(finalMeta.valid_from).slice(0, 10) : null;
+    const vu = finalMeta.valid_until ? String(finalMeta.valid_until).slice(0, 10) : null;
+    if (vf && !/^\d{4}-\d{2}-\d{2}$/.test(vf)) {
+      return res.status(400).json({ success: false, message: 'valid_from harus format YYYY-MM-DD' });
+    }
+    if (vu && !/^\d{4}-\d{2}-\d{2}$/.test(vu)) {
+      return res.status(400).json({ success: false, message: 'valid_until harus format YYYY-MM-DD' });
+    }
+    if (vf && vu && vu < vf) {
+      return res.status(400).json({ success: false, message: 'valid_until tidak boleh lebih kecil dari valid_from' });
+    }
+    if (vf) finalMeta.valid_from = vf; else delete finalMeta.valid_from;
+    if (vu) finalMeta.valid_until = vu; else delete finalMeta.valid_until;
+  }
   if (!finalCode || finalCode.trim() === '') return res.status(400).json({ success: false, message: 'code wajib' });
   const product = await Product.create({
     type, code: finalCode, name,
@@ -723,6 +738,15 @@ const update = asyncHandler(async (req, res) => {
   if (is_package !== undefined) product.is_package = is_package;
   if (meta !== undefined) {
     const nextMeta = { ...(product.meta || {}), ...(meta && typeof meta === 'object' ? meta : {}) };
+    if (product.type === 'package') {
+      const vf = nextMeta.valid_from ? String(nextMeta.valid_from).slice(0, 10) : null;
+      const vu = nextMeta.valid_until ? String(nextMeta.valid_until).slice(0, 10) : null;
+      if (vf && !/^\d{4}-\d{2}-\d{2}$/.test(vf)) return res.status(400).json({ success: false, message: 'valid_from harus format YYYY-MM-DD' });
+      if (vu && !/^\d{4}-\d{2}-\d{2}$/.test(vu)) return res.status(400).json({ success: false, message: 'valid_until harus format YYYY-MM-DD' });
+      if (vf && vu && vu < vf) return res.status(400).json({ success: false, message: 'valid_until tidak boleh lebih kecil dari valid_from' });
+      if (vf) nextMeta.valid_from = vf; else delete nextMeta.valid_from;
+      if (vu) nextMeta.valid_until = vu; else delete nextMeta.valid_until;
+    }
     if (product.type === 'visa') {
       if (nextMeta.visa_kind && !VISA_KIND_VALUES.includes(nextMeta.visa_kind)) nextMeta.visa_kind = VISA_KIND.ONLY;
       if (typeof nextMeta.require_hotel !== 'boolean') nextMeta.require_hotel = nextMeta.require_hotel === true || nextMeta.require_hotel === 'true';

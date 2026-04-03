@@ -325,6 +325,39 @@ async function visaRequiresHotel(items) {
   return products.some(p => (p.meta && p.meta.require_hotel === true));
 }
 
+function isDateOnlyValid(str) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(str || ''));
+}
+
+function normalizeDateOnly(str) {
+  return String(str || '').slice(0, 10);
+}
+
+async function assertPackageIsInValidityWindow(productId, referenceDate) {
+  if (!productId) return;
+  const pkg = await Product.findByPk(productId, { attributes: ['id', 'type', 'is_active', 'meta'], raw: true });
+  if (!pkg || pkg.type !== ORDER_ITEM_TYPE.PACKAGE) return;
+  if (pkg.is_active === false) {
+    const err = new Error('Paket tidak aktif');
+    err.code = 'VALIDATION';
+    throw err;
+  }
+  const m = pkg.meta && typeof pkg.meta === 'object' ? pkg.meta : {};
+  const validFrom = m.valid_from ? normalizeDateOnly(m.valid_from) : null;
+  const validUntil = m.valid_until ? normalizeDateOnly(m.valid_until) : null;
+  const ref = normalizeDateOnly(referenceDate || new Date().toISOString().slice(0, 10));
+  if (validFrom && isDateOnlyValid(validFrom) && ref < validFrom) {
+    const err = new Error(`Paket belum berlaku. Berlaku mulai ${validFrom}`);
+    err.code = 'VALIDATION';
+    throw err;
+  }
+  if (validUntil && isDateOnlyValid(validUntil) && ref > validUntil) {
+    const err = new Error(`Paket sudah tidak berlaku (berakhir ${validUntil})`);
+    err.code = 'VALIDATION';
+    throw err;
+  }
+}
+
 /**
  * Buat order + invoice dari items (dipanggil dari AI chat saat owner minta buatkan invoice).
  * @param {{ ownerId: string, branchId: string, items: Array, createdByUserId: string }} params
@@ -369,6 +402,9 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
   const orderItems = [];
 
   for (const it of items) {
+    if (it.type === ORDER_ITEM_TYPE.PACKAGE && it.product_id) {
+      await assertPackageIsInValidityWindow(it.product_id, new Date().toISOString().slice(0, 10));
+    }
     if (it.type === ORDER_ITEM_TYPE.TICKET) {
       const bandara = it.meta?.bandara;
       if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
@@ -686,6 +722,9 @@ const create = asyncHandler(async (req, res) => {
   const orderItems = [];
 
   for (const it of items) {
+    if (it.type === ORDER_ITEM_TYPE.PACKAGE && it.product_id) {
+      await assertPackageIsInValidityWindow(it.product_id, new Date().toISOString().slice(0, 10));
+    }
     if (it.type === ORDER_ITEM_TYPE.TICKET) {
       const bandara = it.meta?.bandara;
       if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {
@@ -1043,6 +1082,9 @@ const update = asyncHandler(async (req, res) => {
     await OrderItem.destroy({ where: { order_id: order.id } });
     let subtotal = 0, totalJamaah = 0;
     for (const it of items) {
+      if (it.type === ORDER_ITEM_TYPE.PACKAGE && it.product_id) {
+        await assertPackageIsInValidityWindow(it.product_id, new Date().toISOString().slice(0, 10));
+      }
       if (it.type === ORDER_ITEM_TYPE.TICKET) {
         const bandara = it.meta?.bandara;
         if (!bandara || !BANDARA_TIKET_CODES.includes(bandara)) {

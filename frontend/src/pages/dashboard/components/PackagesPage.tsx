@@ -75,6 +75,8 @@ interface PackageProduct {
     handling_ids?: string[];
     makan_hotel_ids?: string[];
     price_total_idr?: number;
+    valid_from?: string;
+    valid_until?: string;
   } | null;
   is_active: boolean;
   is_package?: boolean;
@@ -125,6 +127,8 @@ type FormState = {
   bus_ids: string[];
   handling_ids: string[];
   makan_hotel_ids: string[];
+  valid_from: string;
+  valid_until: string;
 };
 
 const emptyForm: FormState = {
@@ -143,7 +147,9 @@ const emptyForm: FormState = {
   ticket_trip_type: '',
   bus_ids: [],
   handling_ids: [],
-  makan_hotel_ids: []
+  makan_hotel_ids: [],
+  valid_from: '',
+  valid_until: ''
 };
 
 const PackagesPage: React.FC = () => {
@@ -279,6 +285,7 @@ const PackagesPage: React.FC = () => {
     { id: 'code', label: 'Kode', align: 'left', sortable: true, sortKey: 'code' },
     { id: 'name', label: 'Nama Paket', align: 'left', sortable: true },
     { id: 'days', label: 'Hari', align: 'center' },
+    { id: 'validity', label: 'Periode Berlaku', align: 'center' },
     { id: 'hotel_makkah', label: 'Hotel Mekkah', align: 'left' },
     { id: 'hotel_madinah', label: 'Hotel Madinah', align: 'left' },
     { id: 'currency', label: 'Mata Uang', align: 'center' },
@@ -373,7 +380,9 @@ const PackagesPage: React.FC = () => {
       ticket_trip_type: meta?.ticket_trip_type ?? '',
       bus_ids: meta?.bus_ids ?? [],
       handling_ids: meta?.handling_ids ?? [],
-      makan_hotel_ids: meta?.makan_hotel_ids ?? []
+      makan_hotel_ids: meta?.makan_hotel_ids ?? [],
+      valid_from: (meta?.valid_from ? String(meta.valid_from).slice(0, 10) : ''),
+      valid_until: (meta?.valid_until ? String(meta.valid_until).slice(0, 10) : '')
     });
     setDaysInput(days >= 1 ? String(days) : '1');
     setShowModal(true);
@@ -391,6 +400,10 @@ const PackagesPage: React.FC = () => {
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       showToast('Nama paket wajib', 'error');
+      return;
+    }
+    if (form.valid_from && form.valid_until && form.valid_until < form.valid_from) {
+      showToast('Tanggal selesai berlaku harus sama/lebih besar dari tanggal mulai', 'error');
       return;
     }
     if (form.includes.includes('hotel') && !form.hotel_makkah_id && !form.hotel_madinah_id) {
@@ -419,7 +432,9 @@ const PackagesPage: React.FC = () => {
         ...(form.ticket_trip_type ? { ticket_trip_type: form.ticket_trip_type } : {}),
         ...(form.bus_ids?.length ? { bus_ids: form.bus_ids } : {}),
         ...(form.handling_ids?.length ? { handling_ids: form.handling_ids } : {}),
-        ...(form.makan_hotel_ids?.length ? { makan_hotel_ids: form.makan_hotel_ids } : {})
+        ...(form.makan_hotel_ids?.length ? { makan_hotel_ids: form.makan_hotel_ids } : {}),
+        ...(form.valid_from ? { valid_from: form.valid_from } : {}),
+        ...(form.valid_until ? { valid_until: form.valid_until } : {})
       };
       if (editingPackage) {
         await productsApi.update(editingPackage.id, {
@@ -593,6 +608,8 @@ const PackagesPage: React.FC = () => {
             const priceAfterIdr = discountPercent > 0 ? getPriceAfterDiscount(basePriceIdr, discountPercent) : null;
             const includesList = (pkg.meta?.includes as string[] | undefined) ?? [];
             const pkgMeta = pkg.meta as PackageProduct['meta'];
+            const validFrom = pkgMeta?.valid_from ? String(pkgMeta.valid_from).slice(0, 10) : '';
+            const validUntil = pkgMeta?.valid_until ? String(pkgMeta.valid_until).slice(0, 10) : '';
             const hotelMakkahName = pkgMeta?.hotel_makkah_id ? (hotels.find((h) => h.id === pkgMeta.hotel_makkah_id)?.name ?? '-') : '-';
             const hotelMadinahName = pkgMeta?.hotel_madinah_id ? (hotels.find((h) => h.id === pkgMeta.hotel_madinah_id)?.name ?? '-') : '-';
             return (
@@ -602,6 +619,9 @@ const PackagesPage: React.FC = () => {
                   <span className="font-semibold text-slate-900">{pkg.name}</span>
                 </td>
                 <td className="px-4 py-3 text-center text-slate-700 whitespace-nowrap">{days} hari</td>
+                <td className="px-4 py-3 text-center text-sm text-slate-700 whitespace-nowrap">
+                  {validFrom || validUntil ? `${validFrom || '...'} s/d ${validUntil || '...'}` : '-'}
+                </td>
                 <td className="px-4 py-3 text-sm text-slate-700">{hotelMakkahName}</td>
                 <td className="px-4 py-3 text-sm text-slate-700">{hotelMadinahName}</td>
                 <td className="px-4 py-3 text-center text-sm text-slate-700">IDR</td>
@@ -755,6 +775,22 @@ const PackagesPage: React.FC = () => {
                     })}
                   </div>
                   <p className="text-xs text-slate-500 mt-1.5">Jika pilih Hotel, isi hotel Mekkah & Madinah di bawah.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Berlaku mulai"
+                    type="date"
+                    value={form.valid_from}
+                    onChange={(e) => setForm((f) => ({ ...f, valid_from: e.target.value }))}
+                    fullWidth
+                  />
+                  <Input
+                    label="Berlaku sampai"
+                    type="date"
+                    value={form.valid_until}
+                    onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value }))}
+                    fullWidth
+                  />
                 </div>
               </section>
 
