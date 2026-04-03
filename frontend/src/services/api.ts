@@ -800,6 +800,28 @@ export interface AccountingFinancialReportData {
   by_provinsi?: Array<{ provinsi_id: string; provinsi_name: string; revenue: number; invoice_count?: number }>;
   by_owner: Array<{ owner_id: string; owner_name: string; revenue: number; invoice_count?: number }>;
   by_product_type: Array<{ type: string; revenue: number }>;
+  /** Rincian invoice per jenis produk (alokasi pendapatan pro-rata dari subtotal item) */
+  invoices_by_product_type?: Record<
+    string,
+    Array<{
+      invoice_id: string;
+      invoice_number: string;
+      order_id?: string | null;
+      owner_name?: string | null;
+      branch_name?: string | null;
+      invoice_paid_amount: number;
+      issued_at?: string | null;
+      allocated_revenue: number;
+      lines: Array<{
+        order_item_id?: string | null;
+        type: string;
+        subtotal: number | null;
+        allocated_revenue: number;
+        quantity?: number;
+        label?: string;
+      }>;
+    }>
+  >;
   by_period?: Array<{ period: string; revenue: number; invoice_count?: number }>;
   invoice_count: number;
   invoices: Array<{

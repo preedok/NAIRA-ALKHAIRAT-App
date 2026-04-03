@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Package, List, ExternalLink, TrendingUp, TrendingDown, Search, Calendar, MapPin, Map, Receipt, DollarSign } from 'lucide-react';
+import { FileText, Filter, Download, RefreshCw, BarChart3, Users, Building2, Package, List, ExternalLink, TrendingUp, TrendingDown, Search, Calendar, MapPin, Map, Receipt, DollarSign, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoRefreshControl, NominalDisplay } from '../../../components/common';
+import { StatCard, CardSectionHeader, Input, Autocomplete, ContentLoading, AutoRefreshControl, NominalDisplay, Modal, ModalHeader, ModalBody, ModalBoxLg } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
 import { accountingApi, branchesApi, businessRulesApi, type AccountingFinancialReportData } from '../../../services/api';
@@ -110,7 +110,8 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'no', label: 'No', align: 'left' },
     { id: 'name', label: 'Jenis Produk', align: 'left' },
     { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
-    { id: 'pct', label: '%', align: 'right' }
+    { id: 'pct', label: '%', align: 'right' },
+    { id: 'aksi', label: '', align: 'center' }
   ],
   periode: [
     { id: 'no', label: 'No', align: 'left' },
@@ -166,6 +167,7 @@ const AccountingFinancialReportPage: React.FC = () => {
   const [tableSortOrder, setTableSortOrder] = useState<'asc' | 'desc'>('desc');
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
+  const [productInvoiceModalType, setProductInvoiceModalType] = useState<string | null>(null);
 
   useEffect(() => {
     businessRulesApi.get({}).then((res) => {
@@ -726,7 +728,10 @@ const AccountingFinancialReportPage: React.FC = () => {
                   onPageChange: setTablePage,
                   onLimitChange: (l) => { setTableLimit(l); setTablePage(1); }
                 } : undefined}
-                renderRow={(row, idx) => (
+                renderRow={(row, idx) => {
+                  const invList = data.invoices_by_product_type?.[row.type] ?? [];
+                  const canView = (row.revenue ?? 0) > 0 && invList.length > 0;
+                  return (
                       <tr key={row.type} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4">{(tablePage - 1) * tableLimit + idx + 1}</td>
                     <td className="py-3 px-4 font-medium">{PRODUCT_TYPE_LABELS[row.type] || row.type}</td>
@@ -735,8 +740,24 @@ const AccountingFinancialReportPage: React.FC = () => {
                       {(() => { const t = amountTriple(row.revenue); return <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div>; })()}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">{data.total_revenue > 0 ? ((row.revenue / data.total_revenue) * 100).toFixed(1) : 0}%</td>
+                    <td className="py-3 px-4 text-center">
+                      {canView ? (
+                        <button
+                          type="button"
+                          onClick={() => setProductInvoiceModalType(row.type)}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-[#0D1A63] transition-colors"
+                          title="Lihat invoice"
+                          aria-label={`Lihat daftar invoice ${PRODUCT_TYPE_LABELS[row.type] || row.type}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">–</span>
+                      )}
+                    </td>
                       </tr>
-                )}
+                  );
+                }}
               />
               </div>
             </Card>
@@ -934,6 +955,98 @@ const AccountingFinancialReportPage: React.FC = () => {
         </>
       ) : null}
       </Card>
+
+      {productInvoiceModalType && data ? (
+        <Modal open onClose={() => setProductInvoiceModalType(null)}>
+          <ModalBoxLg className="!max-w-5xl">
+            <ModalHeader
+              title={`Invoice — ${PRODUCT_TYPE_LABELS[productInvoiceModalType] || productInvoiceModalType}`}
+              subtitle={`${(data.invoices_by_product_type?.[productInvoiceModalType] ?? []).length} invoice dalam filter laporan`}
+              icon={<Eye className="w-5 h-5" />}
+              onClose={() => setProductInvoiceModalType(null)}
+            />
+            <ModalBody className="p-4 sm:p-6 overflow-y-auto flex-1 max-h-[75vh]">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-sm min-w-[800px]">
+                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-[1]">
+                    <tr>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700">No</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700">No. Invoice</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Owner</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Cabang</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Tanggal</th>
+                      <th className="text-right py-3 px-3 font-semibold text-slate-700">Alokasi produk</th>
+                      <th className="text-right py-3 px-3 font-semibold text-slate-700">Dibayar (inv.)</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700 min-w-[12rem]">Rincian item</th>
+                      <th className="text-center py-3 px-3 font-semibold text-slate-700 w-[4.5rem]">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {(data.invoices_by_product_type?.[productInvoiceModalType] ?? []).length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-slate-500">
+                          Tidak ada invoice untuk jenis ini pada filter saat ini.
+                        </td>
+                      </tr>
+                    ) : (
+                      (data.invoices_by_product_type?.[productInvoiceModalType] ?? []).map((row, i) => {
+                        const trip = amountTriple(Number(row.allocated_revenue) || 0);
+                        const lineSummary = (row.lines || [])
+                          .map((l) => {
+                            const lbl = (l.label || '').trim();
+                            const tlab = PRODUCT_TYPE_LABELS[l.type] || l.type;
+                            return lbl ? `${tlab}: ${lbl}` : tlab;
+                          })
+                          .filter(Boolean)
+                          .join(' · ');
+                        return (
+                          <tr key={row.invoice_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/90 align-top">
+                            <td className="py-3 px-3 text-slate-600 tabular-nums">{i + 1}</td>
+                            <td className="py-3 px-3 font-medium text-slate-900 whitespace-nowrap">{row.invoice_number}</td>
+                            <td className="py-3 px-3 max-w-[10rem]">{row.owner_name || '–'}</td>
+                            <td className="py-3 px-3 max-w-[10rem] text-slate-700">{row.branch_name || '–'}</td>
+                            <td className="py-3 px-3 whitespace-nowrap text-slate-700">{formatDate(row.issued_at ?? null)}</td>
+                            <td className="py-3 px-3 text-right">
+                              <div><NominalDisplay amount={Number(row.allocated_revenue) || 0} currency="IDR" /></div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                <span className="text-slate-400">SAR</span>{' '}
+                                <NominalDisplay amount={trip.sar} currency="SAR" showCurrency={false} />{' '}
+                                <span className="text-slate-400 ml-1">USD</span>{' '}
+                                <NominalDisplay amount={trip.usd} currency="USD" showCurrency={false} />
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-right tabular-nums">
+                              <NominalDisplay amount={Number(row.invoice_paid_amount) || 0} currency="IDR" />
+                            </td>
+                            <td className="py-3 px-3 text-xs text-slate-600 max-w-md">
+                              <span className="line-clamp-3" title={lineSummary}>{lineSummary || '–'}</span>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(
+                                    '/dashboard/orders-invoices' +
+                                      (row.invoice_number ? '?invoice_number=' + encodeURIComponent(row.invoice_number) : '')
+                                  )
+                                }
+                                aria-label="Buka halaman order & invoice"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </ModalBody>
+          </ModalBoxLg>
+        </Modal>
+      ) : null}
     </div>
   );
 };

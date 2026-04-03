@@ -10,6 +10,22 @@ const { INVOICE_STATUS } = require('../constants');
 /** Atribut PaymentProof tanpa kolom opsional (proof_file_name, proof_file_content_type, proof_file_data) agar kompatibel dengan DB lama */
 const PAYMENT_PROOF_ATTRS_SAFE = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 
+const FIN_REPORT_PRODUCT_KEYS = ['hotel', 'visa', 'ticket', 'bus', 'siskopatuh', 'handling'];
+
+function finReportBucketType(t) {
+  const x = String(t || 'handling').toLowerCase();
+  return FIN_REPORT_PRODUCT_KEYS.includes(x) ? x : 'handling';
+}
+
+function finReportLineLabel(item) {
+  const m = item.meta && typeof item.meta === 'object' ? item.meta : {};
+  if (m.hotel_name) return String(m.hotel_name);
+  if (m.package_name) return String(m.package_name);
+  if (m.description) return String(m.description);
+  if (item.notes) return String(item.notes).slice(0, 100);
+  return '';
+}
+
 // Role accounting bekerja di pusat: filter cabang untuk lihat order/invoice per cabang atau seluruh cabang.
 const isAccountingPusat = (user) => user && user.role === 'role_accounting';
 
@@ -909,6 +925,10 @@ function emptyFinancialReportPayload(startDate, endDate) {
     by_period: [],
     invoice_count: 0,
     invoices: [],
+    invoices_by_product_type: FIN_REPORT_PRODUCT_KEYS.reduce((acc, k) => {
+      acc[k] = [];
+      return acc;
+    }, {}),
     pagination: { total: 0, page: 1, limit: 25, totalPages: 1 },
     previous_period: { start: prevStart, end: prevEnd, revenue: 0, invoice_count: 0, growth_percent: null }
   };
@@ -1023,6 +1043,21 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
   const byPeriod = {};
   const invoicesDetail = [];
+  const invoiceRowsByProduct = Object.fromEntries(FIN_REPORT_PRODUCT_KEYS.map((k) => [k, new Map()]));
+
+  const orderIdsForItems = [...new Set(invoices.map((i) => i.order_id).filter(Boolean))];
+  const itemsByOrderId = new Map();
+  if (orderIdsForItems.length > 0) {
+    const itemRows = await OrderItem.findAll({
+      where: { order_id: orderIdsForItems },
+      attributes: ['id', 'order_id', 'type', 'subtotal', 'quantity', 'meta', 'notes'],
+      raw: true
+    });
+    for (const r of itemRows) {
+      if (!itemsByOrderId.has(r.order_id)) itemsByOrderId.set(r.order_id, []);
+      itemsByOrderId.get(r.order_id).push(r);
+    }
+  }
 
   await Promise.all(invoices.map(async (inv) => {
     if (inv.Branch && (inv.Branch.code || inv.Branch.provinsi_id)) {
@@ -1068,7 +1103,10 @@ const getFinancialReport = asyncHandler(async (req, res) => {
     byPeriod[periodKey].invoice_count += 1;
 
     const orderTotal = parseFloat(inv.Order?.total_amount || 0) || 1;
-    const items = inv.Order?.OrderItems || [];
+    let items = itemsByOrderId.get(inv.order_id) || [];
+    if (!items.length && inv.Order?.OrderItems?.length) {
+      items = inv.Order.OrderItems.map((x) => (typeof x.get === 'function' ? x.get({ plain: true }) : x));
+    }
     if (product_type) {
       const matching = items.filter(i => (i.type || '').toLowerCase() === String(product_type).toLowerCase());
       if (matching.length) {
@@ -1087,6 +1125,53 @@ const getFinancialReport = asyncHandler(async (req, res) => {
         else byProductType.handling += alloc;
       });
       if (!items.length) byProductType.handling += paid;
+    }
+
+    const pushProductRow = (typeKey, alloc, lineMeta) => {
+      if (!(alloc > 0)) return;
+      const m = invoiceRowsByProduct[typeKey];
+      const ex = m.get(inv.id);
+      if (ex) {
+        ex.allocated_revenue += alloc;
+        ex.lines.push(lineMeta);
+      } else {
+        m.set(inv.id, {
+          invoice_id: inv.id,
+          invoice_number: inv.invoice_number,
+          order_id: inv.order_id,
+          owner_name: inv.User?.company_name || inv.User?.name || null,
+          branch_name: inv.Branch?.name || inv.Branch?.code || null,
+          invoice_paid_amount: paid,
+          issued_at: inv.issued_at || inv.created_at,
+          allocated_revenue: alloc,
+          lines: [lineMeta]
+        });
+      }
+    };
+    if (items.length) {
+      items.forEach((item) => {
+        const sub = parseFloat(item.subtotal || 0);
+        const ratio = sub / orderTotal;
+        const alloc = paid * ratio;
+        const t = finReportBucketType(item.type);
+        pushProductRow(t, alloc, {
+          order_item_id: item.id,
+          type: item.type,
+          subtotal: sub,
+          allocated_revenue: alloc,
+          quantity: item.quantity,
+          label: finReportLineLabel(item)
+        });
+      });
+    } else {
+      pushProductRow('handling', paid, {
+        order_item_id: null,
+        type: 'handling',
+        subtotal: null,
+        allocated_revenue: paid,
+        quantity: 1,
+        label: 'Tanpa rincian item (alokasi penuh)'
+      });
     }
 
     invoicesDetail.push({
@@ -1168,6 +1253,15 @@ const getFinancialReport = asyncHandler(async (req, res) => {
 
   const growthPercent = totalRevenue > 0 && prevRevenue > 0 ? (((totalRevenue - prevRevenue) / prevRevenue) * 100).toFixed(1) : (totalRevenue > 0 && prevRevenue === 0 ? 100 : null);
 
+  const invoices_by_product_type = Object.fromEntries(
+    FIN_REPORT_PRODUCT_KEYS.map((k) => [
+      k,
+      Array.from(invoiceRowsByProduct[k].values()).sort(
+        (a, b) => (parseFloat(b.allocated_revenue) || 0) - (parseFloat(a.allocated_revenue) || 0)
+      )
+    ])
+  );
+
   res.json({
     success: true,
     data: {
@@ -1179,6 +1273,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
       by_owner: Object.values(byOwner),
       by_product_type: Object.entries(byProductType).map(([type, revenue]) => ({ type, revenue })),
       by_period: byPeriodArr,
+      invoices_by_product_type,
       invoice_count: totalInvoices,
       invoices: paginatedInvoices,
       pagination: { total: totalInvoices, page: pageNum, limit: limitNum, totalPages },
