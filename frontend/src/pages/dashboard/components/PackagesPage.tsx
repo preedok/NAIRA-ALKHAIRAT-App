@@ -23,6 +23,7 @@ const INCLUDE_OPTIONS = [
   { id: 'hotel', label: 'Hotel' },
   { id: 'makan', label: 'Makan' },
   { id: 'tasreh', label: 'Tasreh' },
+  { id: 'siskopatuh', label: 'Siskopatuh' },
   { id: 'visa', label: 'Visa' },
   { id: 'tiket', label: 'Tiket' },
   { id: 'bis', label: 'Bis' },
@@ -68,6 +69,7 @@ interface PackageProduct {
     hotel_makkah_id?: string;
     hotel_madinah_id?: string;
     visa_ids?: string[];
+    siskopatuh_ids?: string[];
     ticket_ids?: string[];
     ticket_bandara?: string;
     ticket_maskapai?: string;
@@ -121,6 +123,7 @@ type FormState = {
   hotel_makkah_id: string;
   hotel_madinah_id: string;
   visa_ids: string[];
+  siskopatuh_ids: string[];
   ticket_ids: string[];
   ticket_bandara: string;
   ticket_maskapai: string;
@@ -142,6 +145,7 @@ const emptyForm: FormState = {
   hotel_makkah_id: '',
   hotel_madinah_id: '',
   visa_ids: [],
+  siskopatuh_ids: [],
   ticket_ids: [],
   ticket_bandara: '',
   ticket_maskapai: '',
@@ -170,6 +174,7 @@ const PackagesPage: React.FC = () => {
   const [hotels, setHotels] = useState<HotelOption[]>([]);
   const [hotelsLoading, setHotelsLoading] = useState(false);
   const [visaProducts, setVisaProducts] = useState<ProductOption[]>([]);
+  const [siskopatuhProducts, setSiskopatuhProducts] = useState<ProductOption[]>([]);
   const [ticketProducts, setTicketProducts] = useState<ProductOption[]>([]);
   const [busProducts, setBusProducts] = useState<ProductOption[]>([]);
   const [handlingProducts, setHandlingProducts] = useState<ProductOption[]>([]);
@@ -202,12 +207,14 @@ const PackagesPage: React.FC = () => {
     const ownerParam = optionsOwnerId ? { owner_id: optionsOwnerId } : {};
     Promise.all([
       productsApi.list({ type: 'visa', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
+      productsApi.list({ type: 'siskopatuh', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
       productsApi.list({ type: 'ticket', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
       productsApi.list({ type: 'bus', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? []),
       productsApi.list({ type: 'handling', ...base, ...ownerParam }).then((r) => (r.data?.data as ProductOption[]) ?? [])
     ])
-      .then(([visa, ticket, bus, handling]) => {
+      .then(([visa, siskopatuh, ticket, bus, handling]) => {
         setVisaProducts(visa);
+        setSiskopatuhProducts(siskopatuh);
         setTicketProducts(ticket);
         setBusProducts(bus);
         setHandlingProducts(handling);
@@ -375,6 +382,7 @@ const PackagesPage: React.FC = () => {
       hotel_makkah_id: meta?.hotel_makkah_id ?? '',
       hotel_madinah_id: meta?.hotel_madinah_id ?? '',
       visa_ids: meta?.visa_ids ?? [],
+      siskopatuh_ids: meta?.siskopatuh_ids ?? [],
       ticket_ids: meta?.ticket_ids ?? [],
       ticket_bandara: meta?.ticket_bandara ?? '',
       ticket_maskapai: meta?.ticket_maskapai ?? '',
@@ -427,6 +435,7 @@ const PackagesPage: React.FC = () => {
         ...(form.hotel_makkah_id ? { hotel_makkah_id: form.hotel_makkah_id } : {}),
         ...(form.hotel_madinah_id ? { hotel_madinah_id: form.hotel_madinah_id } : {}),
         ...(form.visa_ids?.length ? { visa_ids: form.visa_ids } : {}),
+        ...(form.siskopatuh_ids?.length ? { siskopatuh_ids: form.siskopatuh_ids } : {}),
         ...(form.ticket_ids?.length ? { ticket_ids: form.ticket_ids } : {}),
         ...(form.ticket_bandara ? { ticket_bandara: form.ticket_bandara } : {}),
         ...(form.ticket_maskapai ? { ticket_maskapai: form.ticket_maskapai } : {}),
@@ -862,8 +871,8 @@ const PackagesPage: React.FC = () => {
                 </section>
               )}
 
-              {/* Section: Produk dalam paket (Visa, Tasreh, Tiket, Bis, Handling) */}
-              {(form.includes.includes('visa') || form.includes.includes('tasreh') || form.includes.includes('tiket') || form.includes.includes('bis') || form.includes.includes('handling')) && canCreatePackage && (
+              {/* Section: Produk dalam paket (Visa, Tasreh, Siskopatuh, Tiket, Bis, Handling) */}
+              {(form.includes.includes('visa') || form.includes.includes('tasreh') || form.includes.includes('siskopatuh') || form.includes.includes('tiket') || form.includes.includes('bis') || form.includes.includes('handling')) && canCreatePackage && (
                 <section className="space-y-3">
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Produk dalam paket</h3>
                   <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
@@ -884,6 +893,16 @@ const PackagesPage: React.FC = () => {
                         onChange={(v) => setForm((f) => ({ ...f, visa_ids: v ? [v] : [] }))}
                         options={visaProducts.map((p) => ({ value: p.id, label: p.name }))}
                         placeholder={productsLoading && visaProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih produk tasreh --'}
+                        fullWidth
+                      />
+                    )}
+                    {form.includes.includes('siskopatuh') && (
+                      <Autocomplete
+                        label="Siskopatuh – pilih yang masuk paket"
+                        value={form.siskopatuh_ids[0] ?? ''}
+                        onChange={(v) => setForm((f) => ({ ...f, siskopatuh_ids: v ? [v] : [] }))}
+                        options={siskopatuhProducts.map((p) => ({ value: p.id, label: p.name }))}
+                        placeholder={productsLoading && siskopatuhProducts.length === 0 ? CONTENT_LOADING_MESSAGE : '-- Pilih produk siskopatuh --'}
                         fullWidth
                       />
                     )}
