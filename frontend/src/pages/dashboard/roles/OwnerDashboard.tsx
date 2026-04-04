@@ -156,41 +156,42 @@ const OwnerDashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Travel-style Hero: grid tanpa overlap — kiri sapaan + Buat Pesanan, kanan Lihat Paket + auto refresh */}
+      {/* Travel-style Hero: sapaan + dua tombol sejajar di tengah + auto refresh */}
       <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(13.5rem,16rem)] gap-5 md:gap-8 md:items-start">
-          <div className="min-w-0 flex flex-col gap-4">
-            <div>
-              <p className="text-primary-600 font-semibold text-sm uppercase tracking-wide">Selamat datang</p>
-              <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-                {user?.company_name || user?.name}
-              </h1>
-              <p className="text-stone-600 mt-1 flex items-center gap-2 flex-wrap">
-                <span>{user?.name}</span>
-                {hasSpecialPrice && (
-                  <Badge variant="success" className="text-xs">⭐ Harga Khusus</Badge>
-                )}
-              </p>
-            </div>
-            <Button variant="primary" className="w-full sm:w-fit shrink-0 gap-2 sm:min-w-[11rem]" onClick={() => navigate('/dashboard/orders-invoices')}>
-              <Plus className="w-5 h-5" />
+        <div className="flex flex-col items-center text-center gap-5 sm:gap-6">
+          <div className="min-w-0 max-w-2xl">
+            <p className="text-primary-600 font-semibold text-sm uppercase tracking-wide">Selamat datang</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+              {user?.company_name || user?.name}
+            </h1>
+            <p className="text-stone-600 mt-1 flex items-center justify-center gap-2 flex-wrap">
+              <span>{user?.name}</span>
+              {hasSpecialPrice && (
+                <Badge variant="success" className="text-xs">⭐ Harga Khusus</Badge>
+              )}
+            </p>
+          </div>
+          <div className="flex w-full max-w-md sm:max-w-lg flex-col sm:flex-row items-stretch justify-center gap-3">
+            <Button
+              variant="primary"
+              className="w-full sm:flex-1 sm:max-w-[13rem] gap-2 justify-center"
+              onClick={() => navigate('/dashboard/orders-invoices')}
+            >
+              <Plus className="w-5 h-5 shrink-0" />
               Buat Pesanan
             </Button>
-          </div>
-          <div className="flex flex-col gap-3 w-full md:max-w-none">
             <Button
               variant="outline"
-              size="sm"
-              className="w-full gap-1.5 bg-white/95 border-stone-300 hover:bg-white shadow-sm justify-center"
+              className="w-full sm:flex-1 sm:max-w-[13rem] gap-2 justify-center bg-white/95 border-stone-300 hover:bg-white shadow-sm"
               onClick={() => navigate('/dashboard/products')}
             >
-              <Package className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-              <span>Lihat Paket</span>
+              <Package className="w-5 h-5 shrink-0" />
+              Lihat Paket
             </Button>
-            <div className="rounded-xl border border-stone-200/90 bg-white/95 p-3 shadow-sm w-full">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 mb-2">Perbarui dashboard</p>
-              <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" stacked />
-            </div>
+          </div>
+          <div className="w-full max-w-sm rounded-xl border border-stone-200/90 bg-white/95 p-3 shadow-sm text-left">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 mb-2 text-center">Perbarui dashboard</p>
+            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" stacked />
           </div>
         </div>
       </div>
