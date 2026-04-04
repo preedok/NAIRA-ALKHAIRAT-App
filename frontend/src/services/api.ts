@@ -109,7 +109,7 @@ export const maskapaiApi = {
 };
 
 export const productsApi = {
-  list: (params?: { type?: string; with_prices?: string; branch_id?: string; owner_id?: string; view_as_pusat?: string; is_package?: string; include_inactive?: string; name?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  list: (params?: { type?: string; with_prices?: string; hotel_monthly_year?: string; branch_id?: string; owner_id?: string; view_as_pusat?: string; is_package?: string; include_inactive?: string; name?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/products', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   getById: (id: string) => api.get(`/products/${id}`),
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),

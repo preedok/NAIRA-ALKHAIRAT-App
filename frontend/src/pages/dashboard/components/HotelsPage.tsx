@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Hotel as HotelIcon,
   Plus,
@@ -57,6 +57,15 @@ function formatYmShortId(ym: string): string {
   return d.toLocaleString('id-ID', { month: 'short', year: 'numeric' });
 }
 
+/** Label bulan singkat untuk baris ringkas di tabel (mis. "Jan"). */
+function formatMonthShortId(ymKey: string): string {
+  const [y, mo] = ymKey.split('-');
+  if (!y || !mo) return ymKey;
+  const d = new Date(Number(y), Number(mo) - 1, 1);
+  const s = d.toLocaleString('id-ID', { month: 'short' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function parseSarInputString(s: string): number {
   const t = String(s ?? '').replace(/\./g, '').replace(',', '.').trim();
   if (t === '' || t === '-') return 0;
@@ -107,6 +116,16 @@ export interface HotelProduct {
     sar_room_only: number | null;
     sar_with_meal: number | null;
     sar_meal_per_person_per_night?: number | null;
+  } | null;
+  /** Grid SAR per bulan (satu tahun) untuk tabel daftar — dari API products?hotel_monthly_year= */
+  hotel_monthly_series?: {
+    year: string;
+    room_type: string;
+    months: Array<{
+      year_month: string;
+      sar_room_per_night: number | null;
+      sar_meal_per_person_per_night: number | null;
+    }>;
   } | null;
 }
 
@@ -357,6 +376,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  /** Tahun grid SAR untuk kolom harga di tabel daftar (query `hotel_monthly_year`). */
+  const [hotelListMonthlyYear] = useState(() => String(new Date().getFullYear()));
   const lastFilterKeyRef = useRef<string>('');
   const tableSectionRef = useRef<HTMLDivElement>(null);
 
@@ -376,7 +397,19 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     setLoading(true);
     setError(null);
     const ownerId = getProductListOwnerId(user);
-    const params = { type: 'hotel' as const, with_prices: 'true' as const, include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchTerm.trim() ? { name: debouncedSearchTerm.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
+    const params = {
+      type: 'hotel' as const,
+      with_prices: 'true' as const,
+      hotel_monthly_year: hotelListMonthlyYear,
+      include_inactive: filterIncludeInactive,
+      limit,
+      page: pageToUse,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      ...(debouncedSearchTerm.trim() ? { name: debouncedSearchTerm.trim() } : {}),
+      ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' as const } : {}),
+      ...(ownerId ? { owner_id: ownerId } : {})
+    };
     productsApi
       .list(params)
       .then((res) => {
@@ -389,7 +422,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive, debouncedSearchTerm]);
+  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive, debouncedSearchTerm, hotelListMonthlyYear]);
 
   useEffect(() => {
     fetchProducts();
@@ -516,18 +549,29 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     return { byRoom, total };
   })();
 
-  const tableColumns: TableColumn[] = [
-    { id: 'code', label: 'Kode', align: 'left', sortable: true },
-    { id: 'name', label: 'Nama Hotel', align: 'left', sortable: true },
-    { id: 'location', label: 'Lokasi', align: 'left' },
-    { id: 'type_meal', label: 'Type / Meal', align: 'left' },
-    { id: 'currency', label: 'Mata Uang', align: 'center' },
-    { id: 'meal', label: 'Harga Makan (IDR · SAR · USD)', align: 'left' },
-    { id: 'room_price_type', label: 'Harga Kamar (IDR · SAR · USD)', align: 'left' },
-    { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
-    { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
-    ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
-  ];
+  const tableColumns: TableColumn[] = useMemo(
+    () => [
+      { id: 'code', label: 'Kode', align: 'left', sortable: true },
+      { id: 'name', label: 'Nama Hotel', align: 'left', sortable: true },
+      { id: 'location', label: 'Lokasi', align: 'left' },
+      { id: 'type_meal', label: 'Type / Meal', align: 'left' },
+      { id: 'currency', label: 'Mata Uang', align: 'center' },
+      {
+        id: 'meal',
+        label: `Harga makan / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
+        align: 'left'
+      },
+      {
+        id: 'room_price_type',
+        label: `Harga kamar / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
+        align: 'left'
+      },
+      { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
+      { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
+      ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
+    ],
+    [hotelListMonthlyYear, canShowProductActions]
+  );
 
   const handleOpenAdd = () => {
     setEditingHotel(null);
@@ -646,7 +690,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         }
       }
 
-      showToast('Jumlah kamar & harga bulanan SAR (kamar + makan) disimpan. Order memakai grid per bulan sesuai tanggal.', 'success');
+      showToast('Jumlah kamar & tarif per malam SAR (grid per bulan kalender) disimpan. Order menghitung per malam menginap sesuai tanggal.', 'success');
       fetchProducts();
       setSeasonsModalHotel(null);
     } catch (e: unknown) {
@@ -699,7 +743,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         name: addForm.name.trim(),
         meta: { ...meta, currency: 'SAR' }
       });
-      showToast('Hotel berhasil ditambahkan. Buka "Pengaturan Jumlah Kamar" untuk kapasitas dan harga per malam per bulan (SAR).', 'success');
+      showToast('Hotel berhasil ditambahkan. Buka "Pengaturan Jumlah Kamar" untuk kapasitas dan grid tarif per malam (SAR) per bulan kalender.', 'success');
       setShowAddModal(false);
       fetchProducts();
     } catch (e: unknown) {
@@ -898,6 +942,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const gridMonthLabel = md?.year_month ? formatYmShortId(md.year_month) : '';
             const gridRtLabel = md?.room_type ? (ROOM_TYPE_LABELS[md.room_type] || md.room_type) : '';
             const avail = availabilityByHotelId[hotel.id];
+            const gridRates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
+            const series = hotel.hotel_monthly_series;
             return (
               <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
                 <td className="px-4 py-3.5 text-sm text-slate-600 font-mono align-middle">{hotel.code || '-'}</td>
@@ -924,6 +970,34 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
                   {hotel.meta?.meal_plan === 'fullboard' ? (
                     <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Termasuk (fullboard)</span></>
+                  ) : series?.months?.length ? (
+                    <div className="min-w-[9rem] max-w-[15rem]">
+                      <div className="max-h-44 overflow-y-auto text-xs space-y-0.5 pr-1 py-1.5 px-1.5 rounded-lg border border-slate-100 bg-slate-50/60">
+                        {series.months.map((m) => {
+                          const sar = m.sar_meal_per_person_per_night;
+                          if (sar == null || !(sar > 0)) {
+                            return (
+                              <div key={m.year_month} className="flex justify-between gap-2 text-slate-400 tabular-nums leading-tight">
+                                <span className="shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
+                                <span>—</span>
+                              </div>
+                            );
+                          }
+                          const conv = fillFromSource('SAR', sar, gridRates);
+                          const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
+                          return (
+                            <div key={m.year_month} className="flex justify-between gap-1.5 text-slate-700 leading-tight">
+                              <span className="text-slate-500 shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
+                              <div className="text-right min-w-0">
+                                <div className="font-medium tabular-nums text-[11px]">{t.sarText} SAR</div>
+                                <div className="text-[10px] text-slate-500 tabular-nums leading-tight">{t.idrText} · {t.usdText}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">per orang · per malam · {series.year}</p>
+                    </div>
                   ) : md?.sar_meal_per_person_per_night != null && md.sar_meal_per_person_per_night > 0 ? (
                     (() => {
                       const tm = fillFromSource('SAR', md.sar_meal_per_person_per_night as number, currencyRates);
@@ -963,7 +1037,38 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   })()}
                 </td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {tripleRoomFromMonthly ? (
+                  {series?.months?.length ? (
+                    <div className="min-w-[9rem] max-w-[15rem]">
+                      <div className="max-h-44 overflow-y-auto text-xs space-y-0.5 pr-1 py-1.5 px-1.5 rounded-lg border border-slate-100 bg-slate-50/60">
+                        {series.months.map((m) => {
+                          const sar = m.sar_room_per_night;
+                          if (sar == null || !(sar > 0)) {
+                            return (
+                              <div key={m.year_month} className="flex justify-between gap-2 text-slate-400 tabular-nums leading-tight">
+                                <span className="shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
+                                <span>—</span>
+                              </div>
+                            );
+                          }
+                          const conv = fillFromSource('SAR', sar, gridRates);
+                          const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
+                          return (
+                            <div key={m.year_month} className="flex justify-between gap-1.5 text-slate-700 leading-tight">
+                              <span className="text-slate-500 shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
+                              <div className="text-right min-w-0">
+                                <div className="font-semibold tabular-nums text-[11px]">{t.sarText} SAR</div>
+                                <div className="text-[10px] text-slate-500 tabular-nums leading-tight">{t.idrText} · {t.usdText}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        per malam · {series.year} · {ROOM_TYPE_LABELS[series.room_type] || series.room_type}
+                        {isFullboardPlan ? ' · termasuk makan' : ''}
+                      </p>
+                    </div>
+                  ) : tripleRoomFromMonthly ? (
                     (() => {
                       const t = getPriceTripleForTable(tripleRoomFromMonthly.idr, tripleRoomFromMonthly.sar, tripleRoomFromMonthly.usd);
                       return (
@@ -1142,7 +1247,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const popupCurrency = (hotel?.currency || hotel?.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
         const popupCurrInfo = CURRENCY_OPTIONS.find((c) => c.id === popupCurrency) || CURRENCY_OPTIONS[0];
         const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');
-        const roomPriceTypeLabel = 'Per hari';
+        const roomPriceTypeLabel = 'per malam';
         const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
         const isSinglePrice = hotel?.meta?.pricing_mode === 'single';
         const singlePriceValue = isSinglePrice ? (Number(hotel?.price_branch ?? hotel?.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
@@ -1156,10 +1261,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 onClose={() => setAvailabilityPopupHotelId(null)}
               />
               <ModalBody className="p-6 overflow-y-auto flex-1 min-h-0">
-                {/* Harga Kamar Per hari — satu harga atau per tipe */}
+                {/* Harga kamar per malam — satu harga atau per tipe (referensi; operasional dari grid bulanan) */}
                 <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
                   <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50">
-                    <h4 className="text-sm font-semibold text-slate-800">Harga Kamar {roomPriceTypeLabel}</h4>
+                    <h4 className="text-sm font-semibold text-slate-800">Harga kamar {roomPriceTypeLabel}</h4>
                   </div>
                   <div className="px-4 py-3">
                     {isSinglePrice ? (
@@ -1446,7 +1551,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           <ModalBox>
             <ModalHeader
               title={editingHotel ? 'Edit Hotel' : 'Tambah Hotel Baru'}
-              subtitle="Isi data hotel. Jumlah kamar, harga per hari, dan harga bulanan (SAR) atur di Pengaturan Jumlah Kamar."
+              subtitle="Isi data hotel. Kapasitas dan tarif kamar diatur di Pengaturan Jumlah Kamar: SAR per malam menginap, diisi per bulan kalender (bukan total sewa satu bulan penuh)."
               icon={<HotelIcon className="w-5 h-5" />}
               onClose={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}
             />
@@ -1588,18 +1693,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 (() => {
                   const pf = quantityModalPriceForm;
                   const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
-                  const avgSarRoom = (rt: string) => {
-                    let sum = 0;
-                    let c = 0;
-                    monthKeys.forEach((m) => {
-                      const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-                      if (n > 0) {
-                        sum += n;
-                        c += 1;
-                      }
-                    });
-                    return c > 0 ? sum / c : 0;
-                  };
                   const stepBadge = (n: number) => (
                     <span
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0D1A63]/10 text-sm font-bold text-[#0D1A63]"
@@ -1614,9 +1707,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         <p className="text-sm font-medium text-slate-800">Alur pengisian</p>
                         <ol className="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-600 list-decimal list-inside marker:font-medium">
                           <li>Isi kapasitas per tipe kamar.</li>
-                          <li>Isi <strong className="font-medium text-slate-800">harga kamar per malam per bulan (SAR)</strong> — kolom kosong memakai harga default lama di sistem (fallback) jika ada.</li>
-                          <li>Room only: isi juga <strong className="font-medium text-slate-800">harga makan per orang per malam (SAR)</strong> per bulan.</li>
-                          <li>Cek ringkasan, lalu simpan. Form order menghitung total dari tanggal check-in/out sesuai bulan masing-masing.</li>
+                          <li>
+                            Isi <strong className="font-medium text-slate-800">tarif kamar SAR per malam</strong> untuk tiap kolom bulan kalender (mis. Januari = harga satu malam menginap jika tanggal inap jatuh di Januari).{' '}
+                            <span className="text-slate-500">Bukan total sewa hotel untuk sebulan penuh.</span> Kolom kosong memakai fallback harga lama di sistem jika ada.
+                          </li>
+                          <li>
+                            Room only: isi <strong className="font-medium text-slate-800">harga makan SAR per orang per malam</strong> dengan pola yang sama per bulan kalender.
+                          </li>
+                          <li>Simpan. Form order menjumlahkan malam menginap × tarif per malam sesuai bulan masing-masing.</li>
                         </ol>
                       </div>
 
@@ -1675,8 +1773,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             <h3 id="hotel-qty-pricing-mode-heading" className="text-sm font-semibold text-slate-900">
                               Mode penentuan tipe acuan
                             </h3>
-                            <p className="text-xs text-slate-500 mt-1">
-                              Harga operasional diambil dari <strong className="font-medium text-slate-700">grid bulanan SAR</strong> (bukan form harga harian). Mode ini hanya memilih tipe kamar acuan untuk tampilan ringkas di daftar produk.
+                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                              Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Grid SAR berikut menyimpan{' '}
+                              <strong className="font-medium text-slate-700">tarif satu malam per bulan kalender</strong> (bukan harga lump sum sewa satu bulan penuh). Mode di sini hanya memilih tipe kamar acuan untuk tampilan ringkas di daftar produk.
                             </p>
                             <div
                               className="flex flex-col sm:flex-row gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mt-3"
@@ -1714,10 +1813,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             {stepBadge(3)}
                             <div className="min-w-0">
                               <h3 id="hotel-qty-monthly-heading" className="text-sm font-semibold text-slate-900">
-                                Harga per malam per bulan (SAR)
+                                Tarif per malam (SAR) per bulan kalender
                               </h3>
                               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                                Nilai dalam SAR per malam per kamar; di bawah setiap sel tampil perkiraan IDR/USD dari kurs. Kosongkan bulan yang akan memakai fallback (data harga lama di sistem, jika masih ada).
+                                Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong> per kamar, berlaku untuk malam-malam yang jatuh pada bulan kolom tersebut. Bukan total untuk seluruh bulan. Di bawah sel: perkiraan IDR/USD. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
                               </p>
                               <p className="mt-2 text-xs text-slate-500 flex items-start gap-1.5">
                                 <span className="text-slate-400 select-none" aria-hidden>↔</span>
@@ -1813,10 +1912,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             {stepBadge(4)}
                             <div className="min-w-0">
                               <h3 id="hotel-qty-monthly-meal-heading" className="text-sm font-semibold text-slate-900">
-                                Harga makan per orang per malam (SAR) — per bulan
+                                Makan: SAR per orang per malam, per bulan kalender
                               </h3>
                               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                                Hanya untuk <strong className="font-medium text-slate-700">room only</strong>. Di bawah setiap bulan: perkiraan IDR/USD. Kosongkan bulan yang memakai fallback (meta lama).
+                                Hanya untuk <strong className="font-medium text-slate-700">room only</strong>. Tiap sel = tambahan makan untuk <strong className="font-medium text-slate-700">satu malam</strong> per orang, berlaku untuk malam di bulan kolom (bukan total makan sebulan). Di bawah sel: perkiraan IDR/USD. Kosongkan bulan yang memakai fallback (meta lama).
                               </p>
                             </div>
                           </div>
@@ -1879,92 +1978,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           </div>
                         </section>
                       )}
-
-                      <section aria-labelledby="hotel-qty-summary-heading">
-                        <div className="flex gap-3 mb-3">
-                          {stepBadge((seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan === 'fullboard' ? 4 : 5)}
-                          <div>
-                            <h3 id="hotel-qty-summary-heading" className="text-sm font-semibold text-slate-900">
-                              Ringkasan &amp; validasi grid ({monthlyPriceYear})
-                            </h3>
-                            <p className="text-xs text-slate-500 mt-1">
-                              Angka dihitung dari isian grid SAR tahun ini (bukan input harga harian). Rata-rata hanya dari bulan yang terisi.
-                            </p>
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm min-w-[320px]">
-                              <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200">
-                                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Tipe kamar</th>
-                                  <th className="text-center py-3 px-4 font-semibold text-slate-700">Jumlah kamar</th>
-                                  <th className="text-right py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">Rata-rata SAR/malam (grid)</th>
-                                  <th className="text-right py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">≈ IDR / USD</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {ROOM_TYPES.map((rt) => {
-                                  const avg = avgSarRoom(rt);
-                                  const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
-                                  const conv = avg > 0 ? fillFromSource('SAR', avg, rates) : null;
-                                  return (
-                                    <tr key={rt} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors">
-                                      <td className="py-3 px-4 capitalize font-medium text-slate-800">{rt}</td>
-                                      <td className="py-3 px-4 text-center tabular-nums text-slate-700">{Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0)}</td>
-                                      <td className="py-3 px-4 text-right tabular-nums text-slate-800 font-medium">
-                                        {avg > 0 ? `${formatSarId(Math.round(avg))} SAR` : '—'}
-                                      </td>
-                                      <td className="py-3 px-4 text-right text-xs text-slate-600">
-                                        {conv ? (
-                                          <>
-                                            <div>Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
-                                            <div>USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
-                                          </>
-                                        ) : (
-                                          '—'
-                                        )}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                          {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && (() => {
-                            let sum = 0;
-                            let c = 0;
-                            monthKeys.forEach((m) => {
-                              const n = parseSarInputString(monthlyMealByMonth?.[m] ?? '');
-                              if (n > 0) {
-                                sum += n;
-                                c += 1;
-                              }
-                            });
-                            const avgM = c > 0 ? sum / c : 0;
-                            const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
-                            const convM = avgM > 0 ? fillFromSource('SAR', avgM, rates) : null;
-                            return (
-                              <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/80 text-xs text-slate-600">
-                                <span className="font-semibold text-slate-800">Makan (orang/malam): </span>
-                                {avgM > 0 ? (
-                                  <>
-                                    rata-rata {formatSarId(Math.round(avgM))} SAR
-                                    {convM ? (
-                                      <span className="ml-2">
-                                        (≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(convM.idr))} · USD{' '}
-                                        {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(convM.usd)})
-                                      </span>
-                                    ) : null}
-                                  </>
-                                ) : (
-                                  'belum ada bulan terisi di grid (fallback ke meta lama saat order jika ada)'
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </section>
                     </div>
                   );
                 })()

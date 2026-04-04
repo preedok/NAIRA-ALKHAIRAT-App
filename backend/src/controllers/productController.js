@@ -147,7 +147,7 @@ const PRODUCT_ALLOWED_SORT = ['code', 'name', 'type', 'is_active', 'created_at']
  * List products (with optional prices for branch/owner). For invoice: show general + branch prices.
  */
 const list = asyncHandler(async (req, res) => {
-  const { type, branch_id, owner_id, with_prices, is_package, include_inactive, limit = 25, page = 1, sort_by, sort_order, name } = req.query;
+  const { type, branch_id, owner_id, with_prices, is_package, include_inactive, limit = 25, page = 1, sort_by, sort_order, name, hotel_monthly_year } = req.query;
   const where = {};
   if (include_inactive !== 'true' && include_inactive !== '1') where.is_active = true;
   if (type) where.type = type;
@@ -326,45 +326,45 @@ const list = asyncHandler(async (req, res) => {
       return base;
     });
 
-    /** Untuk tabel hotel: snapshot SAR dari hotel_monthly_prices (bulan berjalan UTC), supaya kolom harga = input grid bulanan. */
+    /** Untuk tabel hotel: grid SAR tahun (semua bulan) + snapshot bulan berjalan UTC untuk kompatibilitas. */
     const hotelIdsForMonthly = result.filter((p) => p.type === 'hotel').map((p) => p.id);
     if (hotelIdsForMonthly.length) {
-      const ym = new Date().toISOString().slice(0, 7);
-      const monthlyRows = await HotelMonthlyPrice.findAll({
-        where: {
-          product_id: { [Op.in]: hotelIdsForMonthly },
-          year_month: ym,
-          currency: 'SAR',
-          branch_id: null,
-          owner_id: null
-        },
+      const ymNow = new Date().toISOString().slice(0, 7);
+      const seriesYearRaw = hotel_monthly_year != null ? String(hotel_monthly_year).trim() : String(new Date().getFullYear());
+      const seriesYear = /^\d{4}$/.test(seriesYearRaw) ? seriesYearRaw : String(new Date().getFullYear());
+      const ymNowYear = ymNow.slice(0, 4);
+      const monthlyWhere = {
+        product_id: { [Op.in]: hotelIdsForMonthly },
+        currency: 'SAR',
+        branch_id: null,
+        owner_id: null,
+        [Op.or]: ymNowYear === seriesYear
+          ? [{ year_month: { [Op.like]: `${seriesYear}-%` } }]
+          : [
+              { year_month: { [Op.like]: `${seriesYear}-%` } },
+              { year_month: ymNow }
+            ]
+      };
+      const monthlyRowsAll = await HotelMonthlyPrice.findAll({
+        where: monthlyWhere,
         raw: true
       });
-      const pack = {};
-      for (const row of monthlyRows) {
+      /** pack[productId][yearMonth] = { single_room, single_bundle, ..., meal } */
+      const packByProductMonth = {};
+      for (const row of monthlyRowsAll) {
         const pid = row.product_id;
-        if (!pack[pid]) pack[pid] = {};
-        if (String(row.room_type || '') === MEAL_ROOM_TYPE) continue;
+        const ymKey = row.year_month;
+        if (!packByProductMonth[pid]) packByProductMonth[pid] = {};
+        if (!packByProductMonth[pid][ymKey]) packByProductMonth[pid][ymKey] = {};
+        const slot = packByProductMonth[pid][ymKey];
+        if (String(row.room_type || '') === MEAL_ROOM_TYPE) {
+          slot.meal = parseFloat(row.amount) || 0;
+          continue;
+        }
         const rt = String(row.room_type || '').toLowerCase();
         if (!['single', 'double', 'triple', 'quad', 'quint'].includes(rt)) continue;
-        if (row.with_meal) pack[pid][`${rt}_bundle`] = parseFloat(row.amount) || 0;
-        else pack[pid][`${rt}_room`] = parseFloat(row.amount) || 0;
-      }
-      const mealRows = await HotelMonthlyPrice.findAll({
-        where: {
-          product_id: { [Op.in]: hotelIdsForMonthly },
-          year_month: ym,
-          currency: 'SAR',
-          branch_id: null,
-          owner_id: null,
-          room_type: MEAL_ROOM_TYPE,
-          with_meal: false
-        },
-        raw: true
-      });
-      const mealSarByProduct = {};
-      for (const row of mealRows) {
-        mealSarByProduct[row.product_id] = parseFloat(row.amount) || 0;
+        if (row.with_meal) slot[`${rt}_bundle`] = parseFloat(row.amount) || 0;
+        else slot[`${rt}_room`] = parseFloat(row.amount) || 0;
       }
       const pickRefRoomType = (meta, breakdown) => {
         if (meta && meta.pricing_mode === 'single') return 'single';
@@ -380,12 +380,35 @@ const list = asyncHandler(async (req, res) => {
         const meta = p.meta && typeof p.meta === 'object' ? p.meta : {};
         const breakdown = p.room_breakdown || p.prices_by_room || {};
         const rt = pickRefRoomType(meta, breakdown);
-        const m = pack[p.id] || {};
-        const sarRoom = m[`${rt}_room`];
-        const sarBundle = m[`${rt}_bundle`];
-        const sarMeal = mealSarByProduct[p.id];
+        const isFb = meta.meal_plan === 'fullboard';
+        const monthsSeries = [];
+        for (let mo = 1; mo <= 12; mo += 1) {
+          const ymKey = `${seriesYear}-${String(mo).padStart(2, '0')}`;
+          const cell = packByProductMonth[p.id]?.[ymKey] || {};
+          const room = cell[`${rt}_room`];
+          const bundle = cell[`${rt}_bundle`];
+          const meal = cell.meal;
+          const sarRoomNight = isFb
+            ? ((bundle != null && bundle > 0) ? bundle : (room != null && room > 0 ? room : null))
+            : (room != null && room > 0 ? room : null);
+          const sarMealPer = !isFb && meal != null && meal > 0 ? meal : null;
+          monthsSeries.push({
+            year_month: ymKey,
+            sar_room_per_night: sarRoomNight,
+            sar_meal_per_person_per_night: sarMealPer
+          });
+        }
+        p.hotel_monthly_series = {
+          year: seriesYear,
+          room_type: rt,
+          months: monthsSeries
+        };
+        const mNow = packByProductMonth[p.id]?.[ymNow] || {};
+        const sarRoom = mNow[`${rt}_room`];
+        const sarBundle = mNow[`${rt}_bundle`];
+        const sarMeal = mNow.meal;
         p.hotel_monthly_display = {
-          year_month: ym,
+          year_month: ymNow,
           room_type: rt,
           sar_room_only: sarRoom != null && sarRoom > 0 ? sarRoom : null,
           sar_with_meal: sarBundle != null && sarBundle > 0 ? sarBundle : null,
