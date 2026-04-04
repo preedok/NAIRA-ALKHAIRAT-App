@@ -80,6 +80,11 @@ sleep 2
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/health || echo "health-fail"
 echo '=== Frontend ==='
 cd $APP_PATH/frontend && npm ci && npm run build
+if docker ps --format '{{.Names}}' | grep -qx insancita-integrasi-nginx-1; then
+  echo '>>> Salin frontend/build ke container nginx:/var/www/bgg-frontend (compose tidak bind-mount folder ini)...'
+  docker exec insancita-integrasi-nginx-1 mkdir -p /var/www/bgg-frontend
+  docker cp $APP_PATH/frontend/build/. insancita-integrasi-nginx-1:/var/www/bgg-frontend/
+fi
 if [ -f $APP_PATH/deploy/nginx.conf ]; then
   sudo cp $APP_PATH/deploy/nginx.conf /etc/nginx/sites-available/bgg-app
   sudo ln -sf /etc/nginx/sites-available/bgg-app /etc/nginx/sites-enabled/bgg-app
