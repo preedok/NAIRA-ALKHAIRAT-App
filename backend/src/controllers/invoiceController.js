@@ -191,10 +191,28 @@ async function ensureBlockedStatus(invoice) {
 }
 
 /**
- * Hitung ulang paid_amount dan status invoice dari semua bukti bayar yang verified.
+ * Total IDR yang masuk ke invoice lewat alokasi saldo owner (POST .../allocate-balance).
+ * Di owner_balance_transactions: type=allocation, amount negatif = saldo owner berkurang = pembayaran ke invoice.
+ */
+async function sumBalanceAllocationsToInvoice(invoiceId, { transaction } = {}) {
+  const raw = await OwnerBalanceTransaction.sum('amount', {
+    where: {
+      reference_type: 'invoice',
+      reference_id: invoiceId,
+      type: 'allocation'
+    },
+    transaction
+  });
+  const n = parseFloat(raw);
+  if (!Number.isFinite(n) || n >= 0) return 0;
+  return Math.abs(n);
+}
+
+/**
+ * Hitung ulang paid_amount dan status invoice dari bukti bayar terverifikasi + alokasi saldo ke invoice.
  * Pembayaran KES (payment_location = saudi) selalu dianggap terverifikasi, tidak perlu konfirmasi admin.
  */
-async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, meta } = {}) {
+async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, meta, transaction } = {}) {
   const proofs = await PaymentProof.findAll({
     where: {
       invoice_id: invoice.id,
@@ -203,25 +221,28 @@ async function recalcInvoiceFromVerifiedProofs(invoice, { changedBy, reason, met
         { payment_location: 'saudi' }
       ]
     },
-    attributes: PAYMENT_PROOF_ATTRS
+    attributes: PAYMENT_PROOF_ATTRS,
+    transaction
   });
   const verifiedSum = proofs.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const allocSum = await sumBalanceAllocationsToInvoice(invoice.id, { transaction });
+  const newPaid = verifiedSum + allocSum;
   const total = parseFloat(invoice.total_amount) || 0;
   const dpAmount = parseFloat(invoice.dp_amount) || 0;
-  const remaining = Math.max(0, total - verifiedSum);
+  const remaining = Math.max(0, total - newPaid);
   let newStatus;
   if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
-  else if (dpAmount > 0 && verifiedSum >= dpAmount) newStatus = INVOICE_STATUS.PARTIAL_PAID; // Pembayaran DP (DP terpenuhi)
-  else if (verifiedSum > 0) newStatus = INVOICE_STATUS.PARTIAL_PAID; // Ada pembayaran terverifikasi
+  else if (dpAmount > 0 && newPaid >= dpAmount) newStatus = INVOICE_STATUS.PARTIAL_PAID; // Pembayaran DP (DP terpenuhi)
+  else if (newPaid > 0) newStatus = INVOICE_STATUS.PARTIAL_PAID; // Ada pembayaran (bukti dan/atau saldo)
   else newStatus = INVOICE_STATUS.TENTATIVE; // Tagihan DP
   await updateInvoiceWithAudit(invoice, {
-    paid_amount: verifiedSum,
+    paid_amount: newPaid,
     remaining_amount: remaining,
     status: newStatus
-  }, { changedBy, reason: reason || 'recalc_from_verified_proofs', meta: { ...(meta || {}), verified_sum: verifiedSum } });
-  const invReload = await Invoice.findByPk(invoice.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
+  }, { changedBy, reason: reason || 'recalc_from_verified_proofs', meta: { ...(meta || {}), verified_sum: verifiedSum, balance_allocation_sum: allocSum }, transaction });
+  const invReload = await Invoice.findByPk(invoice.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'], transaction });
   if (invReload) await updateOrderDpStatusFromInvoice(invReload);
-  return { verifiedSum, remaining, newStatus };
+  return { verifiedSum, allocSum, combinedPaid: newPaid, remaining, newStatus };
 }
 
 /**
@@ -504,6 +525,45 @@ const list = asyncHandler(async (req, res) => {
     for (const d of data) {
       d.ReallocationsOut = outByInvId[d.id] || [];
       d.ReallocationsIn = inByInvId[d.id] || [];
+    }
+  }
+
+  /** Perbaiki paid_amount di DB + payload list jika sempat tertimpa sync "hanya bukti" padahal ada alokasi saldo. */
+  const idsForHeal = data.map((d) => d.id).filter(Boolean);
+  if (idsForHeal.length > 0) {
+    const allocRows = await OwnerBalanceTransaction.findAll({
+      attributes: ['reference_id', [sequelize.fn('SUM', sequelize.col('amount')), 'sum_amt']],
+      where: { reference_type: 'invoice', type: 'allocation', reference_id: { [Op.in]: idsForHeal } },
+      group: ['reference_id'],
+      raw: true
+    });
+    const allocByInv = {};
+    for (const r of allocRows) {
+      const n = parseFloat(r.sum_amt);
+      allocByInv[r.reference_id] = Number.isFinite(n) && n < 0 ? Math.abs(n) : 0;
+    }
+    for (const d of data) {
+      const proofList = d.PaymentProofs || [];
+      const vSum = proofList
+        .filter((p) => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
+        .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+      const combined = vSum + (allocByInv[d.id] || 0);
+      const cur = parseFloat(d.paid_amount) || 0;
+      if (Math.abs(combined - cur) <= 0.01) continue;
+      const inv = await Invoice.findByPk(d.id);
+      if (!inv) continue;
+      const totalInv = parseFloat(inv.total_amount) || 0;
+      const remaining = Math.max(0, totalInv - combined);
+      let newStatus = inv.status;
+      if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
+      else if ((parseFloat(inv.dp_amount) || 0) > 0 && combined >= parseFloat(inv.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+      else if (combined > 0 && [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(inv.status)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+      await updateInvoiceWithAudit(inv, { paid_amount: combined, remaining_amount: remaining, status: newStatus }, { changedBy: null, reason: 'sync_paid_on_list', meta: { verified_sum: vSum, balance_allocation_sum: allocByInv[d.id] || 0 } });
+      const invReload = await Invoice.findByPk(d.id, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
+      if (invReload) await updateOrderDpStatusFromInvoice(invReload);
+      d.paid_amount = combined;
+      d.remaining_amount = remaining;
+      d.status = newStatus;
     }
   }
 
@@ -1044,27 +1104,29 @@ const getById = asyncHandler(async (req, res) => {
     if (!hasBus && !hasVisa) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item bus atau visa (bus include)' });
   }
   await ensureBlockedStatus(invoice);
-  // Sinkronkan paid_amount dari jumlah semua bukti terverifikasi (KES otomatis terverifikasi + transfer yang dikonfirmasi)
+  // Sinkronkan paid_amount: bukti terverifikasi + alokasi saldo (allocate-balance tidak punya PaymentProof)
   const proofs = invoice.PaymentProofs || [];
   const verifiedSum = proofs
     .filter(p => p.payment_location === 'saudi' || p.verified_status === 'verified' || (p.verified_at != null && p.verified_status !== 'rejected'))
     .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const allocSum = await sumBalanceAllocationsToInvoice(invoice.id);
+  const combinedPaid = verifiedSum + allocSum;
   const currentPaid = parseFloat(invoice.paid_amount) || 0;
-  if (Math.abs(verifiedSum - currentPaid) > 0.01) {
+  if (Math.abs(combinedPaid - currentPaid) > 0.01) {
     const totalInv = parseFloat(invoice.total_amount) || 0;
-    const remaining = Math.max(0, totalInv - verifiedSum);
+    const remaining = Math.max(0, totalInv - combinedPaid);
     let newStatus = invoice.status;
     if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
-    else if ((parseFloat(invoice.dp_amount) || 0) > 0 && verifiedSum >= parseFloat(invoice.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-    else if (verifiedSum > 0 && [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-    await updateInvoiceWithAudit(invoice, { paid_amount: verifiedSum, remaining_amount: remaining, status: newStatus }, { changedBy: null, reason: 'sync_paid_on_get', meta: { verified_sum: verifiedSum } });
-    invoice.paid_amount = verifiedSum;
+    else if ((parseFloat(invoice.dp_amount) || 0) > 0 && combinedPaid >= parseFloat(invoice.dp_amount)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+    else if (combinedPaid > 0 && [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED].includes(invoice.status)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+    await updateInvoiceWithAudit(invoice, { paid_amount: combinedPaid, remaining_amount: remaining, status: newStatus }, { changedBy: null, reason: 'sync_paid_on_get', meta: { verified_sum: verifiedSum, balance_allocation_sum: allocSum } });
+    invoice.paid_amount = combinedPaid;
     invoice.remaining_amount = remaining;
     invoice.status = newStatus;
-  } else if (invoice.status === INVOICE_STATUS.TENTATIVE && verifiedSum > 0) {
+  } else if (invoice.status === INVOICE_STATUS.TENTATIVE && combinedPaid > 0) {
     const dpAmt = parseFloat(invoice.dp_amount) || 0;
-    if (dpAmt > 0 && verifiedSum >= dpAmt) {
-      await updateInvoiceWithAudit(invoice, { status: INVOICE_STATUS.PARTIAL_PAID }, { changedBy: null, reason: 'sync_paid_on_get', meta: { verified_sum: verifiedSum } });
+    if (dpAmt > 0 && combinedPaid >= dpAmt) {
+      await updateInvoiceWithAudit(invoice, { status: INVOICE_STATUS.PARTIAL_PAID }, { changedBy: null, reason: 'sync_paid_on_get', meta: { verified_sum: verifiedSum, balance_allocation_sum: allocSum } });
       invoice.status = INVOICE_STATUS.PARTIAL_PAID;
     }
   }

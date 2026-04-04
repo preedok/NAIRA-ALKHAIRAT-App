@@ -156,25 +156,25 @@ const OwnerDashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Travel-style Hero: sapaan + dua tombol sejajar di tengah + auto refresh */}
+      {/* Travel-style Hero: kiri sapaan · tengah tombol · kanan perbarui (satu baris di lg+) */}
       <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80">
-        <div className="flex flex-col items-center text-center gap-5 sm:gap-6">
-          <div className="min-w-0 max-w-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-5 lg:gap-6 lg:items-center">
+          <div className="min-w-0 text-left">
             <p className="text-primary-600 font-semibold text-sm uppercase tracking-wide">Selamat datang</p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1 break-words">
               {user?.company_name || user?.name}
             </h1>
-            <p className="text-stone-600 mt-1 flex items-center justify-center gap-2 flex-wrap">
+            <p className="text-stone-600 mt-1 flex flex-wrap items-center gap-2">
               <span>{user?.name}</span>
               {hasSpecialPrice && (
                 <Badge variant="success" className="text-xs">⭐ Harga Khusus</Badge>
               )}
             </p>
           </div>
-          <div className="flex w-full max-w-md sm:max-w-lg flex-col sm:flex-row items-stretch justify-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 shrink-0">
             <Button
               variant="primary"
-              className="w-full sm:flex-1 sm:max-w-[13rem] gap-2 justify-center"
+              className="w-full sm:w-auto gap-2 justify-center sm:min-w-[10.75rem]"
               onClick={() => navigate('/dashboard/orders-invoices')}
             >
               <Plus className="w-5 h-5 shrink-0" />
@@ -182,16 +182,18 @@ const OwnerDashboard: React.FC = () => {
             </Button>
             <Button
               variant="outline"
-              className="w-full sm:flex-1 sm:max-w-[13rem] gap-2 justify-center bg-white/95 border-stone-300 hover:bg-white shadow-sm"
+              className="w-full sm:w-auto gap-2 justify-center sm:min-w-[10.75rem] bg-white/95 border-stone-300 hover:bg-white shadow-sm"
               onClick={() => navigate('/dashboard/products')}
             >
               <Package className="w-5 h-5 shrink-0" />
               Lihat Paket
             </Button>
           </div>
-          <div className="w-full max-w-sm rounded-xl border border-stone-200/90 bg-white/95 p-3 shadow-sm text-left">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 mb-2 text-center">Perbarui dashboard</p>
-            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" stacked />
+          <div className="w-full min-w-0 lg:flex lg:justify-end">
+            <div className="w-full lg:max-w-[17rem] rounded-xl border border-stone-200/90 bg-white/95 p-3 shadow-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 mb-2">Perbarui dashboard</p>
+              <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" stacked />
+            </div>
           </div>
         </div>
       </div>
