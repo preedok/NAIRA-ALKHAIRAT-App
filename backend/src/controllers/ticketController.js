@@ -31,7 +31,7 @@ const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildTicketSlipPdfBuffer } = require('../utils/ticketSlipPdf');
 const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
-const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS } = require('../utils/progressInvoiceFilters');
+const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS, appendProgressExcludeCancelledOrders } = require('../utils/progressInvoiceFilters');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
 /** Scope cabang: super_admin = semua cabang, koordinator = wilayah, tiket_koordinator = cabang/wilayah. Jika belum terikat, fallback semua cabang agar tidak 403. */
@@ -202,6 +202,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   if (refundExcludedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundExcludedInvoiceIds };
   where[Op.and] = where[Op.and] || [];
   where[Op.and].push({ status: { [Op.notIn]: PROGRESS_INVOICE_STATUS_BLOCKLIST } });
+  appendProgressExcludeCancelledOrders(where, Op);
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);

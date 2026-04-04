@@ -32,7 +32,7 @@ const { ORDER_ITEM_TYPE, BUS_TICKET_STATUS, BUS_TRIP_STATUS, BUS_INCLUDE_STATUS,
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
-const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS } = require('../utils/progressInvoiceFilters');
+const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS, appendProgressExcludeCancelledOrders } = require('../utils/progressInvoiceFilters');
 
 const busTicketDir = uploadConfig.getDir(uploadConfig.SUBDIRS.BUS_TICKET_DOCS);
 const busTicketStorage = multer.diskStorage({
@@ -200,6 +200,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   if (refundExcludedInvoiceIds.length > 0) whereInv.id = { [Op.notIn]: refundExcludedInvoiceIds };
   whereInv[Op.and] = whereInv[Op.and] || [];
   whereInv[Op.and].push({ status: { [Op.notIn]: PROGRESS_INVOICE_STATUS_BLOCKLIST } });
+  appendProgressExcludeCancelledOrders(whereInv, Op);
 
   const allInScope = await Invoice.findAll({
     where: whereInv,
@@ -234,6 +235,7 @@ const listInvoices = asyncHandler(async (req, res) => {
   if (refundExcludedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundExcludedInvoiceIds };
   where[Op.and] = where[Op.and] || [];
   where[Op.and].push({ status: { [Op.notIn]: PROGRESS_INVOICE_STATUS_BLOCKLIST } });
+  appendProgressExcludeCancelledOrders(where, Op);
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
