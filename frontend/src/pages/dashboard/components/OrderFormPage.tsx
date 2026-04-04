@@ -506,6 +506,8 @@ const OrderFormPage: React.FC = () => {
   const effectiveRates = (orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null))
     ? { SAR_TO_IDR: orderRatesOverride.SAR_TO_IDR ?? rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: orderRatesOverride.USD_TO_IDR ?? rates.USD_TO_IDR ?? 15500 }
     : rates;
+  /** Ada input kurs khusus order → total & subtotal hotel (IDR dari master SAR) dihitung ulang pakai kurs ini, bukan nilai IDR tersimpan dari kurs admin. */
+  const hasCustomOrderKurs = !!(orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null));
   const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
   const s2iEff=effectiveRates.SAR_TO_IDR||4200; const u2iEff=effectiveRates.USD_TO_IDR||15500;
   /** Konversi nilai dari satu mata uang ke mata uang lain (satu sumber kebenaran: kurs effectiveRates). */
@@ -719,6 +721,18 @@ const OrderFormPage: React.FC = () => {
     if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
     return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur);
   };
+  /** Untuk ringkasan total & header: jika kurs order diisi, harga kamar dihitung lagi dari master SAR × kurs order (bukan IDR tersimpan dari kurs settings). */
+  const getEffectiveLinePriceForTotals=(r:OrderItemRow,l:HotelRoomLine):number=>{
+    if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
+    if (!hasCustomOrderKurs) return getEffectiveLinePrice(r,l);
+    const prod=byType('hotel').find(p=>p.id===r.product_id);
+    const cur=rowCur(r);
+    const hasSplitMeal=typeof l.meal_unit_price==='number';
+    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur);
+    const roomPart=toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false),cur);
+    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur)):0;
+    return roomPart+mealPart;
+  };
   const nightsFor=(r:OrderItemRow)=> r.type==='hotel' ? getNights(r.check_in,r.check_out) : 0;
   const rowSub=(r:OrderItemRow)=>{
     if(r.type==='hotel'&&r.room_breakdown?.length){
@@ -726,14 +740,20 @@ const OrderFormPage: React.FC = () => {
       if(!hasDates) return 0;
       const nights = nightsFor(r)||0;
       const multiplier = nights>0 ? nights : 1;
-      return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*getEffectiveLinePrice(r,l)*multiplier,0);
+      return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*getEffectiveLinePriceForTotals(r,l)*multiplier,0);
     }
     if(r.type==='hotel'&&r.room_type){
       const hasDates = !!(r.check_in && r.check_out);
       if(!hasDates) return 0;
       const nights = nightsFor(r)||0;
       const multiplier = nights>0 ? nights : 1;
-      return Math.max(0,r.quantity)*(r.unit_price||0)*multiplier;
+      const prod=byType('hotel').find(p=>p.id===r.product_id);
+      const cur=rowCur(r);
+      const fullboard=!!(prod && (prod.meta?.meal_plan as string)==='fullboard');
+      const unit=hasCustomOrderKurs&&prod&&r.room_type
+        ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard),cur)
+        :(r.unit_price||0);
+      return Math.max(0,r.quantity)*unit*multiplier;
     }
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
@@ -772,7 +792,8 @@ const OrderFormPage: React.FC = () => {
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
-          const unitPriceIdr=useLatestRates?toIDRWithRates(l.unit_price,r,latestRates):toIDR(l.unit_price,r);
+          const lineRowCur=getEffectiveLinePriceForTotals(r,l);
+          const unitPriceIdr=useLatestRates?toIDRWithRates(lineRowCur,r,latestRates):toIDR(lineRowCur,r);
           const nights=nightsFor(r)||1;
           sum+=l.quantity*unitPriceIdr*nights;
         }
@@ -780,7 +801,13 @@ const OrderFormPage: React.FC = () => {
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
-        const unitPriceIdr=useLatestRates?toIDRWithRates(r.unit_price,r,latestRates):toIDR(r.unit_price,r);
+        const prod=byType('hotel').find(p=>p.id===r.product_id);
+        const cur=rowCur(r);
+        const fullboard=!!(prod && (prod.meta?.meal_plan as string)==='fullboard');
+        const lineRowCur=hasCustomOrderKurs&&prod&&r.room_type
+          ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard),cur)
+          :(r.unit_price||0);
+        const unitPriceIdr=useLatestRates?toIDRWithRates(lineRowCur,r,latestRates):toIDR(lineRowCur,r);
         const nights=nightsFor(r)||1;
         sum+=Math.max(1,r.quantity)*unitPriceIdr*nights;
       } else{
@@ -1635,7 +1662,7 @@ const OrderFormPage: React.FC = () => {
               </div>
               <div>
                 <h2 className="font-semibold text-slate-900 text-sm">Kurs untuk order ini</h2>
-                <p className="text-xs text-slate-500">{hasDpPayment ? 'Sudah ada DP: kurs order dipakai untuk item lama; kurs terbaru untuk item tambahan.' : 'Isi hanya jika ada permintaan khusus; kosong = pakai kurs dari sistem (Settings).'}</p>
+                <p className="text-xs text-slate-500">{hasDpPayment ? 'Sudah ada DP: kurs order dipakai untuk item lama; kurs terbaru untuk item tambahan.' : 'Jika diisi: Total SAR / IDR / USD di atas dan ringkasan memakai kurs ini (bukan kurs Settings). Hotel dalam IDR ikut dihitung ulang dari master. Kosong = kurs dari Settings.'}</p>
               </div>
             </div>
             <div className="p-4 space-y-4">
@@ -1671,6 +1698,13 @@ const OrderFormPage: React.FC = () => {
             </div>
           </div>
           <div className="p-4 space-y-3">
+            {hasCustomOrderKurs && (
+              <p className="text-xs text-slate-600 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
+                Kurs dipakai untuk total: 1 SAR = <NominalDisplay amount={effectiveRates.SAR_TO_IDR ?? 0} currency="IDR" />
+                {' · '}
+                1 USD = <NominalDisplay amount={effectiveRates.USD_TO_IDR ?? 0} currency="IDR" />
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="rounded-lg bg-primary-500/5 border border-primary-200/80 p-3">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total SAR</p>
