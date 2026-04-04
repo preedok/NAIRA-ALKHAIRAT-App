@@ -37,9 +37,22 @@ import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
-// Produk umum untuk role operasional.
-const productMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_hotel', 'role_bus', 'invoice_saudi', 'handling'];
-// Siskopatuh juga tersedia untuk role invoice + owner agar bisa langsung tambah ke order.
+// Produk umum: operasional + owner (owner perlu lihat master harga seperti sub menu lain, bukan hanya Siskopatuh).
+const productMenuRoles: UserRole[] = [
+  'super_admin',
+  'admin_pusat',
+  'role_accounting',
+  'invoice_koordinator',
+  'tiket_koordinator',
+  'visa_koordinator',
+  'role_hotel',
+  'role_bus',
+  'invoice_saudi',
+  'handling',
+  'owner_mou',
+  'owner_non_mou'
+];
+// Siskopatuh: subset invoice + owner (tetap eksplisit agar jelas siapa yang mengisi dokumen ke order).
 const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'owner_mou', 'owner_non_mou'];
 
 const menuItems: MenuItem[] = [

@@ -30,7 +30,7 @@ import HotelWorkPage from './HotelWorkPage';
 import { productsApi, adminPusatApi, businessRulesApi } from '../../../services/api';
 import type { HotelSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
-import { getPriceTripleForTable } from '../../../utils';
+import { getPriceTripleForTable, formatUSD } from '../../../utils';
 import { CURRENCY_OPTIONS } from '../../../utils/constants';
 import { getProductListOwnerId } from '../../../utils/productHelpers';
 
@@ -73,7 +73,7 @@ type HotelMonthlyByRoomTypeMap = Record<
   { months: Array<{ year_month: string; sar_room_per_night: number | null }> }
 >;
 
-/** Sel harga read-only (SAR + IDR ringkas) untuk tabel kalender di daftar hotel. */
+/** Sel harga read-only (SAR + IDR + USD) untuk tabel kalender di daftar hotel. */
 function MonthlyReadonlyPriceCell({ sar, gridRates }: { sar: number | null; gridRates: GridRatesPair }): JSX.Element {
   if (sar == null || !(sar > 0)) {
     return <div className="text-center py-1 text-slate-400 tabular-nums">—</div>;
@@ -81,9 +81,16 @@ function MonthlyReadonlyPriceCell({ sar, gridRates }: { sar: number | null; grid
   const conv = fillFromSource('SAR', sar, gridRates);
   const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
   return (
-    <div className="text-center py-1 px-0.5">
-      <div className="font-semibold tabular-nums text-[10px] text-slate-800 leading-tight">{t.sarText}</div>
-      <div className="text-[8px] text-slate-500 tabular-nums leading-tight line-clamp-2">{t.idrText}</div>
+    <div className="text-center py-1 px-0.5 space-y-0.5">
+      <div className="font-semibold tabular-nums text-[10px] text-slate-800 leading-tight" title="SAR per malam">
+        <span className="text-slate-500 font-normal">SAR</span> {t.sarText}
+      </div>
+      <div className="text-[8px] text-slate-500 tabular-nums leading-tight line-clamp-2" title="Perkiraan IDR">
+        {t.idrText}
+      </div>
+      <div className="text-[8px] text-slate-500 tabular-nums leading-tight" title="Perkiraan USD">
+        {formatUSD(conv.usd, true)}
+      </div>
     </div>
   );
 }
@@ -105,14 +112,14 @@ function renderHotelListMonthlyMatrixTable(props: {
 
   return (
     <div className="min-w-0 overflow-x-auto max-w-[min(52rem,92vw)] rounded-lg border border-slate-100 bg-slate-50/60 touch-pan-x overscroll-x-contain">
-      <table className="w-full text-[10px] min-w-[520px] border-collapse">
+      <table className="w-full text-[10px] min-w-[560px] border-collapse">
         <thead>
           <tr className="bg-slate-100/90 border-b border-slate-200">
             <th className="sticky left-0 z-[1] bg-slate-100/90 text-left px-2 py-1.5 font-semibold text-slate-700 border-r border-slate-200/80 w-[4.75rem]">
               Tipe
             </th>
             {monthKeys.map((ym) => (
-              <th key={ym} className="px-1 py-1.5 font-medium text-slate-600 text-center whitespace-nowrap min-w-[2.75rem]">
+              <th key={ym} className="px-1 py-1.5 font-medium text-slate-600 text-center whitespace-nowrap min-w-[3.25rem]">
                 {formatMonthShortId(ym)}
               </th>
             ))}
