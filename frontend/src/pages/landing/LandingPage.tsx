@@ -7,7 +7,7 @@ import {
   CheckCircle, Clock, Award, TrendingUp, MessageCircle,
   Phone, Mail, Instagram, Twitter, Youtube, Sparkles,
   BarChart3, Lock, Layers, Navigation, Search, Calendar,
-  UtensilsCrossed, PlaneTakeoff,
+  UtensilsCrossed, PlaneTakeoff, Eye, Target, HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { publicApi } from '../../services/api';

@@ -324,6 +324,56 @@ const list = asyncHandler(async (req, res) => {
       }
       return base;
     });
+
+    /** Untuk tabel hotel: snapshot SAR dari hotel_monthly_prices (bulan berjalan UTC), supaya kolom harga = input grid bulanan. */
+    const hotelIdsForMonthly = result.filter((p) => p.type === 'hotel').map((p) => p.id);
+    if (hotelIdsForMonthly.length) {
+      const ym = new Date().toISOString().slice(0, 7);
+      const monthlyRows = await HotelMonthlyPrice.findAll({
+        where: {
+          product_id: { [Op.in]: hotelIdsForMonthly },
+          year_month: ym,
+          currency: 'SAR',
+          branch_id: null,
+          owner_id: null
+        },
+        raw: true
+      });
+      const pack = {};
+      for (const row of monthlyRows) {
+        const pid = row.product_id;
+        if (!pack[pid]) pack[pid] = {};
+        const rt = String(row.room_type || '').toLowerCase();
+        if (!['single', 'double', 'triple', 'quad', 'quint'].includes(rt)) continue;
+        if (row.with_meal) pack[pid][`${rt}_bundle`] = parseFloat(row.amount) || 0;
+        else pack[pid][`${rt}_room`] = parseFloat(row.amount) || 0;
+      }
+      const pickRefRoomType = (meta, breakdown) => {
+        if (meta && meta.pricing_mode === 'single') return 'single';
+        const order = ['single', 'double', 'triple', 'quad', 'quint'];
+        for (const rt of order) {
+          const pr = breakdown && breakdown[rt];
+          if (pr && Number(pr.price) > 0) return rt;
+        }
+        return 'triple';
+      };
+      for (const p of result) {
+        if (p.type !== 'hotel') continue;
+        const meta = p.meta && typeof p.meta === 'object' ? p.meta : {};
+        const breakdown = p.room_breakdown || p.prices_by_room || {};
+        const rt = pickRefRoomType(meta, breakdown);
+        const m = pack[p.id] || {};
+        const sarRoom = m[`${rt}_room`];
+        const sarBundle = m[`${rt}_bundle`];
+        p.hotel_monthly_display = {
+          year_month: ym,
+          room_type: rt,
+          sar_room_only: sarRoom != null && sarRoom > 0 ? sarRoom : null,
+          sar_with_meal: sarBundle != null && sarBundle > 0 ? sarBundle : null
+        };
+      }
+    }
+
     const totalPages = Math.ceil(count / lim) || 1;
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.json({

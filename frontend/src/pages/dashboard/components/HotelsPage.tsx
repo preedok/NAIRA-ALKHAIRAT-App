@@ -49,6 +49,14 @@ function formatMonthLabelId(ymKey: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Label singkat untuk snapshot grid bulanan (YYYY-MM) di tabel harga */
+function formatYmShortId(ym: string): string {
+  const [y, mo] = ym.split('-');
+  if (!y || !mo) return ym;
+  const d = new Date(Number(y), Number(mo) - 1, 1);
+  return d.toLocaleString('id-ID', { month: 'short', year: 'numeric' });
+}
+
 function parseSarInputString(s: string): number {
   const t = String(s ?? '').replace(/\./g, '').replace(',', '.').trim();
   if (t === '' || t === '-') return 0;
@@ -92,6 +100,13 @@ export interface HotelProduct {
   /** Jumlah & harga per tipe kamar (dari backend) */
   room_breakdown?: RoomBreakdown;
   prices_by_room?: RoomBreakdown;
+  /** Snapshot harga per malam dari grid bulanan SAR (bulan berjalan server UTC) */
+  hotel_monthly_display?: {
+    year_month: string;
+    room_type: string;
+    sar_room_only: number | null;
+    sar_with_meal: number | null;
+  } | null;
 }
 
 type HotelsPageProps = {
@@ -869,13 +884,32 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const mealPrice = hotel.meta?.meal_price ?? 0;
             const mealType = hotel.meta?.meal_price_type === 'per_trip' ? 'Per trip' : hotel.meta?.meal_price_type === 'per_day' ? 'Per hari' : '-';
             const roomPriceType = hotel.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : hotel.meta?.room_price_type === 'per_day' ? 'Per hari' : '-';
-            const pricingMode = hotel.meta?.pricing_mode === 'per_type' ? 'Per tipe' : hotel.meta?.pricing_mode === 'single' ? 'Satu harga' : '-';
             const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
             const isSinglePrice = hotel.meta?.pricing_mode === 'single';
             // Harga Kamar column: show room-only (breakdown is room-only from API)
             const singlePriceVal = isSinglePrice ? (Number(breakdown.single?.price ?? hotel.price_branch ?? hotel.price_general ?? 0) || 0) : 0;
             const tripleMeal = fillFromSource(cur, mealPrice, currencyRates);
             const tripleRoom = fillFromSource(cur, singlePriceVal, currencyRates);
+            const md = hotel.hotel_monthly_display;
+            const isFullboardPlan = hotel.meta?.meal_plan === 'fullboard';
+            /** SAR per malam dari grid bulanan (sumber utama tabel) */
+            const monthlyRoomSar =
+              md && (isFullboardPlan
+                ? (md.sar_with_meal ?? md.sar_room_only)
+                : md.sar_room_only);
+            const hasMonthlyRoom = monthlyRoomSar != null && monthlyRoomSar > 0;
+            /** Suplemen makan dari grid: baris with_meal − room_only (jika keduanya ada) */
+            const monthlyMealDeltaSar =
+              md && md.sar_with_meal != null && md.sar_room_only != null && md.sar_with_meal > md.sar_room_only
+                ? md.sar_with_meal - md.sar_room_only
+                : null;
+            const tripleRoomFromMonthly = hasMonthlyRoom ? fillFromSource('SAR', monthlyRoomSar as number, currencyRates) : null;
+            const tripleMealFromMonthlyDelta =
+              monthlyMealDeltaSar != null && monthlyMealDeltaSar > 0
+                ? fillFromSource('SAR', monthlyMealDeltaSar, currencyRates)
+                : null;
+            const gridMonthLabel = md?.year_month ? formatYmShortId(md.year_month) : '';
+            const gridRtLabel = md?.room_type ? (ROOM_TYPE_LABELS[md.room_type] || md.room_type) : '';
             const avail = availabilityByHotelId[hotel.id];
             return (
               <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
@@ -902,7 +936,18 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
                   {hotel.meta?.meal_plan === 'fullboard' ? (
-                    <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Per hari jadi free</span></>
+                    <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Termasuk (fullboard)</span></>
+                  ) : tripleMealFromMonthlyDelta ? (
+                    (() => {
+                      const t = getPriceTripleForTable(tripleMealFromMonthlyDelta.idr, tripleMealFromMonthlyDelta.sar, tripleMealFromMonthlyDelta.usd);
+                      return (
+                        <>
+                          <div className="tabular-nums font-medium">{t.idrText}</div>
+                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · selisih grid SAR · {gridMonthLabel}</span>
+                        </>
+                      );
+                    })()
                   ) : (() => {
                     const t = getPriceTripleForTable(tripleMeal.idr, tripleMeal.sar, tripleMeal.usd);
                     if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-400 text-xs block">{mealType}</span></>;
@@ -910,13 +955,31 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       <>
                         <div className="tabular-nums font-medium">{t.idrText}</div>
                         <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                        <span className="text-slate-400 text-xs block mt-0.5">per orang · {mealType}</span>
+                        <span className="text-slate-400 text-xs block mt-0.5">
+                          per orang · {mealType}
+                          {hasMonthlyRoom ? <span className="text-slate-500"> · selain harga kamar (grid {gridMonthLabel})</span> : null}
+                        </span>
                       </>
                     );
                   })()}
                 </td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {isSinglePrice ? (
+                  {tripleRoomFromMonthly ? (
+                    (() => {
+                      const t = getPriceTripleForTable(tripleRoomFromMonthly.idr, tripleRoomFromMonthly.sar, tripleRoomFromMonthly.usd);
+                      return (
+                        <>
+                          <div className="tabular-nums font-semibold">{t.idrText}</div>
+                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                          <span className="text-slate-600 text-xs block mt-0.5">
+                            per malam · grid SAR · {gridMonthLabel}
+                            {gridRtLabel ? ` · ${gridRtLabel}` : ''}
+                            {isFullboardPlan ? ' · termasuk makan' : ''}
+                          </span>
+                        </>
+                      );
+                    })()
+                  ) : isSinglePrice ? (
                     (() => {
                       const t = getPriceTripleForTable(tripleRoom.idr, tripleRoom.sar, tripleRoom.usd);
                       if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
@@ -924,7 +987,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         <>
                           <div className="tabular-nums font-semibold">{t.idrText}</div>
                           <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · {roomPriceType}</span>
+                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · {roomPriceType}</span>
                         </>
                       );
                     })()
@@ -938,7 +1001,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         <>
                           <div className="tabular-nums font-medium">{t.idrText}</div>
                           <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · Per tipe · {roomPriceType}</span>
+                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · Per tipe · {roomPriceType}</span>
                         </>
                       );
                     })()
