@@ -274,16 +274,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     allotment_type: 'allotment' as 'allotment' | 'non_allotment',
     meal_plan: 'fullboard' as 'fullboard' | 'room_only'
   });
-  /** Form Pengaturan Jumlah Kamar: jumlah + harga kamar, harga makan, mata uang */
-  const [quantityModalPriceForm, setQuantityModalPriceForm] = useState({
-    currency: 'IDR' as 'IDR' | 'SAR' | 'USD',
-    meal_price: 0,
-    meal_price_type: 'per_day' as 'per_day' | 'per_trip',
-    room_price_type: 'per_day' as 'per_day' | 'per_lasten',
-    pricing_mode: 'single' as 'single' | 'per_type',
-    single_price: 0,
-    rooms: { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } }
-  });
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [seasonsModalHotel, setSeasonsModalHotel] = useState<HotelProduct | null>(null);
   const [seasonsList, setSeasonsList] = useState<HotelSeason[]>([]);
@@ -419,21 +409,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           initial[rt] = String(num);
         });
         setQuantityForm(initial);
-        const pricingMode = (meta.pricing_mode as 'single' | 'per_type') || 'single';
-        const rooms = { single: { ...DEFAULT_ROOM }, double: { ...DEFAULT_ROOM }, triple: { ...DEFAULT_ROOM }, quad: { ...DEFAULT_ROOM }, quint: { ...DEFAULT_ROOM } };
-        ROOM_TYPES.forEach((rt) => {
-          const qty = Number(roomMeta[rt]) || 0;
-          rooms[rt] = { quantity: qty, price: 0 };
-        });
-        setQuantityModalPriceForm({
-          currency: 'SAR',
-          meal_price: 0,
-          meal_price_type: 'per_day',
-          room_price_type: 'per_day',
-          pricing_mode: pricingMode,
-          single_price: 0,
-          rooms
-        });
       })
       .catch(() => {})
       .finally(() => setHotelAvailabilityConfigLoading(false));
@@ -728,7 +703,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     const totalQty = ROOM_TYPES.reduce((s, rt) => s + parseQty(quantityForm[rt]), 0);
     const roomMeta: Record<string, number> = {};
     ROOM_TYPES.forEach((rt) => { roomMeta[rt] = parseQty(quantityForm[rt]); });
-    const pf = quantityModalPriceForm;
     setQuantityFormSaving(true);
     try {
       const existingMeta = (hotel.meta as Record<string, unknown>) || {};
@@ -739,7 +713,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           meal_price: 0,
           meal_price_type: 'per_day',
           room_price_type: 'per_day',
-          pricing_mode: pf.pricing_mode,
+          pricing_mode: 'per_type',
           room_types: ROOM_TYPES
         }
       });
@@ -839,7 +813,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         location: addForm.location,
         room_types: ROOM_TYPES,
         allotment_type: addForm.allotment_type,
-        meal_plan: addForm.meal_plan
+        meal_plan: addForm.meal_plan,
+        pricing_mode: 'per_type'
       };
       await productsApi.createHotel({
         name: addForm.name.trim(),
@@ -1018,11 +993,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const mealType = hotel.meta?.meal_price_type === 'per_trip' ? 'Per trip' : hotel.meta?.meal_price_type === 'per_day' ? 'Per hari' : '-';
             const roomPriceType = hotel.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : hotel.meta?.room_price_type === 'per_day' ? 'Per hari' : '-';
             const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
-            const isSinglePrice = hotel.meta?.pricing_mode === 'single';
-            // Harga Kamar column: show room-only (breakdown is room-only from API)
-            const singlePriceVal = isSinglePrice ? (Number(breakdown.single?.price ?? hotel.price_branch ?? hotel.price_general ?? 0) || 0) : 0;
             const tripleMeal = fillFromSource(cur, mealPrice, currencyRates);
-            const tripleRoom = fillFromSource(cur, singlePriceVal, currencyRates);
             const md = hotel.hotel_monthly_display;
             const isFullboardPlan = hotel.meta?.meal_plan === 'fullboard';
             /** SAR per malam dari grid bulanan (sumber utama tabel) */
@@ -1249,29 +1220,27 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                               </>
                             );
                           })()
-                        ) : isSinglePrice ? (
+                        ) : (
                           (() => {
-                            const t = getPriceTripleForTable(tripleRoom.idr, tripleRoom.sar, tripleRoom.usd);
+                            const repPrice =
+                              Number(
+                                breakdown.single?.price ??
+                                  breakdown.double?.price ??
+                                  breakdown.triple?.price ??
+                                  breakdown.quad?.price ??
+                                  breakdown.quint?.price ??
+                                  hotel.price_branch ??
+                                  hotel.price_general ??
+                                  0
+                              ) || 0;
+                            const tr = fillFromSource(cur, repPrice, currencyRates);
+                            const t = getPriceTripleForTable(tr.idr, tr.sar, tr.usd);
                             if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
                             return (
                               <>
                                 <div className="tabular-nums font-semibold">{t.idrText}</div>
                                 <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
                                 <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · {roomPriceType}</span>
-                              </>
-                            );
-                          })()
-                        ) : (
-                          (() => {
-                            const repPrice = Number(breakdown.single?.price ?? breakdown.double?.price ?? breakdown.triple?.price ?? breakdown.quad?.price ?? breakdown.quint?.price ?? 0) || 0;
-                            const tr = fillFromSource(cur, repPrice, currencyRates);
-                            const t = getPriceTripleForTable(tr.idr, tr.sar, tr.usd);
-                            if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
-                            return (
-                              <>
-                                <div className="tabular-nums font-medium">{t.idrText}</div>
-                                <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                                <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · Per tipe · {roomPriceType}</span>
                               </>
                             );
                           })()
@@ -1295,8 +1264,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       <div className="flex flex-wrap gap-1.5">
                         {Object.entries(avail.byRoomType).map(([rt, n]) => {
                           const isFullboard = hotel.meta?.meal_plan === 'fullboard';
-                          const isPerTypePrice = hotel.meta?.pricing_mode === 'per_type';
-                          const showPriceHere = isFullboard && isPerTypePrice;
+                          const showPriceHere = isFullboard;
                           const rtEntry = breakdown[rt as keyof typeof breakdown];
                           const priceVal = typeof rtEntry === 'object' && rtEntry != null && 'price' in rtEntry ? Number((rtEntry as { price?: number }).price) : 0;
                           const tripleRt = fillFromSource(cur, priceVal, currencyRates);
@@ -1418,8 +1386,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');
         const roomPriceTypeLabel = 'per malam';
         const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
-        const isSinglePrice = hotel?.meta?.pricing_mode === 'single';
-        const singlePriceValue = isSinglePrice ? (Number(hotel?.price_branch ?? hotel?.price_general ?? 0) || (breakdown.single?.price ?? 0)) : 0;
         return (
           <Modal open onClose={() => setAvailabilityPopupHotelId(null)}>
             <ModalBoxLg className="relative">
@@ -1430,34 +1396,27 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 onClose={() => setAvailabilityPopupHotelId(null)}
               />
               <ModalBody className="p-6 overflow-y-auto flex-1 min-h-0">
-                {/* Harga kamar per malam — satu harga atau per tipe (referensi; operasional dari grid bulanan) */}
+                {/* Harga kamar per malam per tipe (referensi; operasional dari grid bulanan SAR) */}
                 <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
                   <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50">
                     <h4 className="text-sm font-semibold text-slate-800">Harga kamar {roomPriceTypeLabel}</h4>
                   </div>
                   <div className="px-4 py-3">
-                    {isSinglePrice ? (
-                      <p className="text-slate-700">
-                        <span className="font-semibold tabular-nums">{formatPrice(singlePriceValue)}</span>
-                        <span className="text-slate-500 text-sm ml-2">/ kamar · semua tipe</span>
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        {ROOM_TYPES.map((rt) => {
-                          const pr = breakdown[rt]?.price;
-                          if (pr == null) return null;
-                          return (
-                            <span key={rt} className="inline-flex items-center gap-2">
-                              <span className="text-slate-500 text-sm">{roomTypeLabels[rt]}:</span>
-                              <span className="font-semibold tabular-nums text-slate-800">{formatPrice(pr)}</span>
-                            </span>
-                          );
-                        })}
-                        {ROOM_TYPES.every((rt) => breakdown[rt]?.price == null) && (
-                          <span className="text-slate-400 text-sm">Belum diatur di Pengaturan Jumlah</span>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-x-6 gap-y-2">
+                      {ROOM_TYPES.map((rt) => {
+                        const pr = breakdown[rt]?.price;
+                        if (pr == null) return null;
+                        return (
+                          <span key={rt} className="inline-flex items-center gap-2">
+                            <span className="text-slate-500 text-sm">{roomTypeLabels[rt]}:</span>
+                            <span className="font-semibold tabular-nums text-slate-800">{formatPrice(pr)}</span>
+                          </span>
+                        );
+                      })}
+                      {ROOM_TYPES.every((rt) => breakdown[rt]?.price == null) && (
+                        <span className="text-slate-400 text-sm">Belum diatur di Pengaturan Jumlah</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1860,7 +1819,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
               ) : (
                 (() => {
-                  const pf = quantityModalPriceForm;
                   const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
                   const stepBadge = (n: number) => (
                     <span
@@ -1935,57 +1893,22 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         </div>
                       </section>
 
-                      <section aria-labelledby="hotel-qty-pricing-mode-heading">
-                        <div className="flex gap-3 mb-3">
-                          {stepBadge(2)}
-                          <div className="min-w-0 flex-1">
-                            <h3 id="hotel-qty-pricing-mode-heading" className="text-sm font-semibold text-slate-900">
-                              Mode penentuan tipe acuan
-                            </h3>
-                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                              Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Grid SAR berikut menyimpan{' '}
-                              <strong className="font-medium text-slate-700">tarif satu malam per bulan kalender</strong> (bukan harga lump sum sewa satu bulan penuh). Mode di sini hanya memilih tipe kamar acuan untuk tampilan ringkas di daftar produk.
-                            </p>
-                            <div
-                              className="flex flex-col sm:flex-row gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200 mt-3"
-                              role="group"
-                              aria-label="Mode harga kamar"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'single' }))}
-                                className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-medium transition-all ${pf.pricing_mode === 'single' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                Acuan: single (satu harga semua tipe di grid)
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setQuantityModalPriceForm((f) => ({ ...f, pricing_mode: 'per_type' }))}
-                                className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-medium transition-all ${pf.pricing_mode === 'per_type' ? 'bg-white text-[#0D1A63] shadow-sm border border-btn' : 'text-slate-600 hover:bg-slate-50'}`}
-                              >
-                                Acuan: per tipe (beda baris di grid)
-                              </button>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-2">
-                              Mata uang default hotel: <strong className="font-medium text-slate-700">SAR</strong>. IDR/USD di bawah sel grid mengikuti kurs pengaturan.
-                            </p>
-                          </div>
-                        </div>
-                      </section>
-
                       <section
                         className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm"
                         aria-labelledby="hotel-qty-monthly-heading"
                       >
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div className="flex gap-3 min-w-0 flex-1">
-                            {stepBadge(3)}
+                            {stepBadge(2)}
                             <div className="min-w-0">
                               <h3 id="hotel-qty-monthly-heading" className="text-sm font-semibold text-slate-900">
                                 Tarif per malam (SAR) per bulan kalender
                               </h3>
                               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                                Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong> per kamar, berlaku untuk malam-malam yang jatuh pada bulan kolom tersebut. Bukan total untuk seluruh bulan. Di bawah sel: perkiraan IDR/USD. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
+                                Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong> per kamar untuk tipe baris tersebut, berlaku untuk malam yang jatuh pada bulan kolom (bukan total sewa satu bulan penuh). Di bawah sel: perkiraan IDR/USD mengikuti kurs pengaturan. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
+                              </p>
+                              <p className="text-xs text-slate-500 mt-2">
+                                Mata uang grid: <strong className="font-medium text-slate-700">SAR</strong>.
                               </p>
                               <p className="mt-2 text-xs text-slate-500 flex items-start gap-1.5">
                                 <span className="text-slate-400 select-none" aria-hidden>↔</span>
@@ -2078,7 +2001,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           aria-labelledby="hotel-qty-monthly-meal-heading"
                         >
                           <div className="flex gap-3 min-w-0 flex-1 mb-3">
-                            {stepBadge(4)}
+                            {stepBadge(3)}
                             <div className="min-w-0">
                               <h3 id="hotel-qty-monthly-meal-heading" className="text-sm font-semibold text-slate-900">
                                 Makan: SAR per orang per malam, per bulan kalender

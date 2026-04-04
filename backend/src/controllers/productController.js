@@ -395,8 +395,7 @@ const list = asyncHandler(async (req, res) => {
         if (withMeal) slot[`${rt}_bundle`] = sar;
         else slot[`${rt}_room`] = sar;
       }
-      const pickRefRoomType = (meta, breakdown) => {
-        if (meta && meta.pricing_mode === 'single') return 'single';
+      const pickRefRoomType = (_meta, breakdown) => {
         const order = ['single', 'double', 'triple', 'quad', 'quint'];
         for (const rt of order) {
           const pr = breakdown && breakdown[rt];
