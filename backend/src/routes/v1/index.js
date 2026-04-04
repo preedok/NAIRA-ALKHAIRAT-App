@@ -30,6 +30,7 @@ router.use('/owners', require('./owners'));
 router.use('/ai-chat', require('./aiChat'));
 router.use('/branches', require('./branches'));
 router.use('/orders', require('./orders'));
+router.use('/order-cancellation-requests', require('./orderCancellationRequests'));
 router.use('/invoices', require('./invoices'));
 router.use('/refunds', require('./refunds'));
 router.use('/products', require('./products'));

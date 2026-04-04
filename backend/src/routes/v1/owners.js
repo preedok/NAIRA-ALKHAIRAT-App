@@ -49,6 +49,11 @@ router.get('/:id/registration-payment-file', ownerController.getRegistrationPaym
 router.get('/:id/mou-file', ownerController.getMouFile);
 router.get('/', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.list);
 router.get('/stats', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.getStats);
+router.get(
+  '/user/:userId/balance',
+  requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI),
+  ownerController.getBalanceForUser
+);
 router.get('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.getById);
 router.patch('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), ownerController.updateProfile);
 router.patch('/:id/verify-mou', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), ownerController.verifyMou);

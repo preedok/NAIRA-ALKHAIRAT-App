@@ -17,6 +17,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { Card, Button, PageHeader, StatCard, CardSectionHeader, ContentLoading, AutoRefreshControl, NominalDisplay } from '../../../components/common';
 import { DONUT_COLORS } from '../../../utils';
 import { superAdminApi, branchesApi } from '../../../services/api';
+import OrderCancellationRequestsPanel from '../components/OrderCancellationRequestsPanel';
 import { ROLE_NAMES } from '../../../types';
 import type { UserRole } from '../../../types';
 
@@ -199,6 +200,8 @@ const SuperAdminDashboard: React.FC = () => {
           </div>
         </div>
       </Card>
+
+      <OrderCancellationRequestsPanel />
 
       <Card className="travel-card">
         <CardSectionHeader icon={<Activity className="w-6 h-6" />} title="Dashboard Super Admin" subtitle="Rekap transaksi dan kesehatan sistem." className="mb-4" />

@@ -45,6 +45,7 @@ const AccountingBankAccount = require('./AccountingBankAccount');
 const Bank = require('./Bank');
 const InvoiceStatusHistory = require('./InvoiceStatusHistory');
 const OrderRevision = require('./OrderRevision');
+const OrderCancellationRequest = require('./OrderCancellationRequest');
 const Maskapai = require('./Maskapai');
 const RekapHotel = require('./RekapHotel');
 
@@ -83,6 +84,11 @@ Invoice.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 Invoice.belongsTo(User, { foreignKey: 'owner_id', as: 'User' });
 Invoice.belongsTo(Branch, { foreignKey: 'branch_id' });
 Order.hasOne(Invoice, { foreignKey: 'order_id' });
+Order.hasMany(OrderCancellationRequest, { foreignKey: 'order_id', as: 'CancellationRequests' });
+OrderCancellationRequest.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
+OrderCancellationRequest.belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'Invoice' });
+OrderCancellationRequest.belongsTo(User, { foreignKey: 'owner_id', as: 'Owner' });
+OrderCancellationRequest.belongsTo(User, { foreignKey: 'reviewed_by', as: 'ReviewedBy' });
 
 PaymentProof.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 PaymentProof.belongsTo(User, { foreignKey: 'uploaded_by' });
@@ -284,6 +290,7 @@ const db = {
   Bank,
   InvoiceStatusHistory,
   OrderRevision,
+  OrderCancellationRequest,
   Maskapai,
   RekapHotel
 };

@@ -249,6 +249,40 @@ const getMyBalance = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/owners/user/:userId/balance
+ * Saldo akun owner (by user_id) untuk tim invoice/admin — alokasi saldo ke invoice dari dashboard invoice.
+ */
+const getBalanceForUser = asyncHandler(async (req, res) => {
+  const allowedStaff = [
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN_PUSAT,
+    ROLES.INVOICE_KOORDINATOR,
+    ROLES.ROLE_INVOICE_SAUDI
+  ];
+  if (!allowedStaff.includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Akses ditolak' });
+  }
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ success: false, message: 'userId wajib' });
+
+  const profile = await OwnerProfile.findOne({ where: { user_id: userId } });
+  if (!profile) return res.status(404).json({ success: false, message: 'Profil owner tidak ditemukan' });
+
+  const isKoord = isKoordinatorRole(req.user.role);
+  if (isKoord && req.user.wilayah_id) {
+    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+    const okBranch = profile.assigned_branch_id && branchIds.includes(profile.assigned_branch_id);
+    const okVerified = profile.status === OWNER_STATUS.DEPOSIT_VERIFIED;
+    if (!okBranch && !okVerified) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak' });
+    }
+  }
+
+  const balance = parseFloat(profile.balance) || 0;
+  res.json({ success: true, data: { balance, user_id: userId } });
+});
+
+/**
  * GET /api/v1/owners/:id (detail owner untuk Admin/Koordinator)
  */
 const getById = asyncHandler(async (req, res) => {
@@ -733,6 +767,7 @@ module.exports = {
   uploadMou,
   getMyProfile,
   getMyBalance,
+  getBalanceForUser,
   getRegistrationPaymentFile,
   getMouFile,
   getStats,

@@ -3,7 +3,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
-const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory, Notification } = require('../models');
+const { Refund, Invoice, Order, User, OwnerProfile, OwnerBalanceTransaction, InvoiceStatusHistory, Notification, sequelize } = require('../models');
 const { REFUND_STATUS, REFUND_SOURCE, INVOICE_STATUS, NOTIFICATION_TRIGGER, isOwnerRole } = require('../constants');
 const uploadConfig = require('../config/uploads');
 const { sendRefundProofToOwner } = require('../utils/emailService');
@@ -23,7 +23,52 @@ const refundProofStorage = multer.diskStorage({
 });
 const refundProofUpload = multer({ storage: refundProofStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta }) {
+/**
+ * Potong saldo owner untuk refund sumber saldo (sekali per refund). Idempoten jika sudah ada transaksi refund_debit.
+ * @returns {{ ok: true } | { ok: false, code: number, message: string }}
+ */
+async function applyBalanceRefundDebitIfNeeded(refundRow, { transaction } = {}) {
+  if (!refundRow || refundRow.source !== REFUND_SOURCE.BALANCE || !refundRow.owner_id) {
+    return { ok: true };
+  }
+  const existing = await OwnerBalanceTransaction.findOne({
+    where: { reference_type: 'refund', reference_id: refundRow.id, type: 'refund_debit' },
+    transaction
+  });
+  if (existing) return { ok: true };
+
+  const amount = parseFloat(refundRow.amount) || 0;
+  if (amount <= 0) return { ok: false, code: 400, message: 'Jumlah refund tidak valid' };
+
+  const profile = await OwnerProfile.findOne({ where: { user_id: refundRow.owner_id }, transaction });
+  if (!profile) return { ok: false, code: 400, message: 'Profil owner tidak ditemukan' };
+
+  const current = parseFloat(profile.balance) || 0;
+  if (current < amount) {
+    return {
+      ok: false,
+      code: 400,
+      message: `Saldo owner tidak cukup untuk menyelesaikan penarikan (tersisa Rp ${current.toLocaleString('id-ID')}, dibutuhkan Rp ${amount.toLocaleString('id-ID')}).`
+    };
+  }
+
+  const newBalance = Math.max(0, current - amount);
+  await profile.update({ balance: newBalance }, { transaction });
+  await OwnerBalanceTransaction.create(
+    {
+      owner_id: refundRow.owner_id,
+      amount: -amount,
+      type: 'refund_debit',
+      reference_type: 'refund',
+      reference_id: refundRow.id,
+      notes: `Penarikan saldo ke rekening (refund). Saldo -${amount.toLocaleString('id-ID')}`
+    },
+    { transaction }
+  );
+  return { ok: true };
+}
+
+async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta, transaction }) {
   try {
     await InvoiceStatusHistory.create({
       invoice_id,
@@ -33,7 +78,7 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
       changed_by: changed_by || null,
       reason: reason || null,
       meta: meta && typeof meta === 'object' ? meta : {}
-    });
+    }, transaction ? { transaction } : {});
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('refundController logInvoiceStatusChange failed:', e?.message || e);
@@ -46,12 +91,14 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
  */
 const createFromBalance = asyncHandler(async (req, res) => {
   if (!isOwnerRole(req.user.role)) return res.status(403).json({ success: false, message: 'Hanya owner yang dapat meminta refund dari saldo' });
-  const { amount: amountRaw, bank_name, account_number } = req.body || {};
+  const { amount: amountRaw, bank_name, account_number, account_holder_name } = req.body || {};
   const amount = parseFloat(amountRaw);
   if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'amount wajib angka positif' });
   const bank = bank_name ? String(bank_name).trim() : '';
   const account = account_number ? String(account_number).trim() : '';
+  const holder = account_holder_name != null && String(account_holder_name).trim() !== '' ? String(account_holder_name).trim() : null;
   if (!bank || !account) return res.status(400).json({ success: false, message: 'bank_name dan account_number wajib diisi' });
+  if (!holder) return res.status(400).json({ success: false, message: 'account_holder_name (nama pemilik rekening penerima) wajib diisi' });
 
   const profile = await OwnerProfile.findOne({ where: { user_id: req.user.id } });
   if (!profile) return res.status(404).json({ success: false, message: 'Profil owner tidak ditemukan' });
@@ -67,14 +114,25 @@ const createFromBalance = asyncHandler(async (req, res) => {
     source: REFUND_SOURCE.BALANCE,
     bank_name: bank,
     account_number: account,
+    account_holder_name: holder,
     reason: 'Penarikan saldo ke rekening',
     requested_by: req.user.id
+  });
+
+  await Notification.create({
+    user_id: req.user.id,
+    trigger: NOTIFICATION_TRIGGER.REFUND,
+    title: 'Penarikan saldo diajukan',
+    message: `Permintaan penarikan Rp ${amount.toLocaleString('id-ID')} ke rekening Anda telah diterima. Status dapat Anda pantau di menu Refund; tim accounting akan mengapproval dan memproses transfer.`,
+    data: { refund_id: r.id, status: 'requested', source: REFUND_SOURCE.BALANCE },
+    channel_in_app: true,
+    channel_email: false
   });
 
   const full = await Refund.findByPk(r.id, {
     include: [{ model: User, as: 'Owner', attributes: ['id', 'name'], required: false }]
   });
-  res.status(201).json({ success: true, data: full, message: 'Permintaan refund saldo telah dicatat. Admin/accounting akan memproses.' });
+  res.status(201).json({ success: true, data: full, message: 'Permintaan penarikan saldo telah dikirim. Pantau status di menu Refund; accounting akan menyetujui dan memproses transfer.' });
 });
 
 /** Build where for list/stats (status, owner_id, date_from, date_to, source) */
@@ -210,67 +268,99 @@ const updateStatus = asyncHandler(async (req, res) => {
   const valid = [REFUND_STATUS.APPROVED, REFUND_STATUS.REJECTED, REFUND_STATUS.REFUNDED].includes(status);
   if (!valid) return res.status(400).json({ success: false, message: 'status harus approved, rejected, atau refunded' });
 
-  if (status === REFUND_STATUS.REJECTED && rejection_reason) await r.update({ rejection_reason: String(rejection_reason).trim() });
-
   const updates = { status };
+  if (status === REFUND_STATUS.REJECTED && rejection_reason != null && String(rejection_reason).trim() !== '') {
+    updates.rejection_reason = String(rejection_reason).trim();
+  }
   if (status === REFUND_STATUS.APPROVED || status === REFUND_STATUS.REFUNDED) {
     updates.approved_by = req.user.id;
     updates.approved_at = new Date();
   }
   if (status === REFUND_STATUS.REFUNDED) updates.refunded_at = new Date();
 
-  await r.update(updates);
+  try {
+    await sequelize.transaction(async (tx) => {
+      await r.update(updates, { transaction: tx });
 
-  // Jika refund terkait invoice, simpan jejak proses dan update status invoice saat refund selesai.
-  if (r.invoice_id) {
-    const inv = await Invoice.findByPk(r.invoice_id);
-    if (inv) {
-      if (status === REFUND_STATUS.APPROVED) {
-        await logInvoiceStatusChange({
-          invoice_id: inv.id,
-          from_status: inv.status,
-          to_status: inv.status,
-          changed_by: req.user.id,
-          reason: 'refund_approved',
-          meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 }
-        });
-      } else if (status === REFUND_STATUS.REJECTED) {
-        await logInvoiceStatusChange({
-          invoice_id: inv.id,
-          from_status: inv.status,
-          to_status: inv.status,
-          changed_by: req.user.id,
-          reason: 'refund_rejected',
-          meta: { refund_id: r.id, rejection_reason: rejection_reason ? String(rejection_reason).trim() : null }
-        });
-      } else if (status === REFUND_STATUS.REFUNDED) {
-        await logInvoiceStatusChange({
-          invoice_id: inv.id,
-          from_status: inv.status,
-          to_status: INVOICE_STATUS.REFUNDED,
-          changed_by: req.user.id,
-          reason: 'refund_refunded',
-          meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 }
-        });
-        await inv.update({ status: INVOICE_STATUS.REFUNDED });
+      if (r.invoice_id) {
+        const inv = await Invoice.findByPk(r.invoice_id, { transaction: tx });
+        if (inv) {
+          if (status === REFUND_STATUS.APPROVED) {
+            await logInvoiceStatusChange({
+              invoice_id: inv.id,
+              from_status: inv.status,
+              to_status: inv.status,
+              changed_by: req.user.id,
+              reason: 'refund_approved',
+              meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 },
+              transaction: tx
+            });
+          } else if (status === REFUND_STATUS.REJECTED) {
+            await logInvoiceStatusChange({
+              invoice_id: inv.id,
+              from_status: inv.status,
+              to_status: inv.status,
+              changed_by: req.user.id,
+              reason: 'refund_rejected',
+              meta: { refund_id: r.id, rejection_reason: updates.rejection_reason ?? null },
+              transaction: tx
+            });
+          } else if (status === REFUND_STATUS.REFUNDED) {
+            await logInvoiceStatusChange({
+              invoice_id: inv.id,
+              from_status: inv.status,
+              to_status: INVOICE_STATUS.REFUNDED,
+              changed_by: req.user.id,
+              reason: 'refund_refunded',
+              meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 },
+              transaction: tx
+            });
+            await inv.update({ status: INVOICE_STATUS.REFUNDED }, { transaction: tx });
+          }
+        }
       }
-    }
+
+      if (status === REFUND_STATUS.REFUNDED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
+        const debit = await applyBalanceRefundDebitIfNeeded(r, { transaction: tx });
+        if (!debit.ok) {
+          const err = new Error(debit.message);
+          err.debitCode = debit.code;
+          throw err;
+        }
+      }
+    });
+  } catch (e) {
+    if (e.debitCode) return res.status(e.debitCode).json({ success: false, message: e.message });
+    throw e;
   }
 
-  if (status === REFUND_STATUS.REFUNDED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
-    const profile = await OwnerProfile.findOne({ where: { user_id: r.owner_id } });
-    if (profile) {
-      const current = parseFloat(profile.balance) || 0;
-      const amount = parseFloat(r.amount) || 0;
-      const newBalance = Math.max(0, current - amount);
-      await profile.update({ balance: newBalance });
-      await OwnerBalanceTransaction.create({
-        owner_id: r.owner_id,
-        amount: -amount,
-        type: 'refund_debit',
-        reference_type: 'refund',
-        reference_id: r.id,
-        notes: `Refund saldo ke rekening. Saldo -${amount.toLocaleString('id-ID')}`
+  if (r.owner_id) {
+    const amtStr = Number(parseFloat(r.amount) || 0).toLocaleString('id-ID');
+    if (status === REFUND_STATUS.APPROVED) {
+      await Notification.create({
+        user_id: r.owner_id,
+        trigger: NOTIFICATION_TRIGGER.REFUND,
+        title: r.source === REFUND_SOURCE.BALANCE ? 'Penarikan saldo disetujui' : 'Refund disetujui',
+        message:
+          r.source === REFUND_SOURCE.BALANCE
+            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Accounting akan mentransfer ke rekening yang Anda ajukan.`
+            : `Permintaan refund Rp ${amtStr} disetujui.`,
+        data: { refund_id: r.id, status: 'approved' },
+        channel_in_app: true,
+        channel_email: false
+      });
+    } else if (status === REFUND_STATUS.REJECTED) {
+      await Notification.create({
+        user_id: r.owner_id,
+        trigger: NOTIFICATION_TRIGGER.REFUND,
+        title: r.source === REFUND_SOURCE.BALANCE ? 'Penarikan saldo ditolak' : 'Refund ditolak',
+        message:
+          r.source === REFUND_SOURCE.BALANCE
+            ? `Permintaan penarikan saldo Rp ${amtStr} ditolak.${updates.rejection_reason ? ` Alasan: ${updates.rejection_reason}` : ''}`
+            : `Permintaan refund ditolak.${updates.rejection_reason ? ` Alasan: ${updates.rejection_reason}` : ''}`,
+        data: { refund_id: r.id, status: 'rejected', rejection_reason: updates.rejection_reason ?? null },
+        channel_in_app: true,
+        channel_email: false
       });
     }
   }
@@ -311,24 +401,44 @@ const uploadProof = [
     const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.REFUND_PROOFS, savedName);
 
     const wasRefunded = r.status === REFUND_STATUS.REFUNDED;
-    await r.update({
-      proof_file_url: fileUrl,
-      ...(wasRefunded ? {} : { status: REFUND_STATUS.REFUNDED, refunded_at: new Date(), approved_by: req.user.id, approved_at: new Date() })
-    });
+    try {
+      await sequelize.transaction(async (tx) => {
+        await r.update(
+          {
+            proof_file_url: fileUrl,
+            ...(wasRefunded ? {} : { status: REFUND_STATUS.REFUNDED, refunded_at: new Date(), approved_by: req.user.id, approved_at: new Date() })
+          },
+          { transaction: tx }
+        );
 
-    if (r.invoice_id) {
-      const inv = await Invoice.findByPk(r.invoice_id);
-      if (inv && !wasRefunded) {
-        await logInvoiceStatusChange({
-          invoice_id: inv.id,
-          from_status: inv.status,
-          to_status: INVOICE_STATUS.REFUNDED,
-          changed_by: req.user.id,
-          reason: 'refund_refunded',
-          meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 }
-        });
-        await inv.update({ status: INVOICE_STATUS.REFUNDED });
-      }
+        if (r.invoice_id) {
+          const inv = await Invoice.findByPk(r.invoice_id, { transaction: tx });
+          if (inv && !wasRefunded) {
+            await logInvoiceStatusChange({
+              invoice_id: inv.id,
+              from_status: inv.status,
+              to_status: INVOICE_STATUS.REFUNDED,
+              changed_by: req.user.id,
+              reason: 'refund_refunded',
+              meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 },
+              transaction: tx
+            });
+            await inv.update({ status: INVOICE_STATUS.REFUNDED }, { transaction: tx });
+          }
+        }
+
+        if (!wasRefunded) {
+          const debit = await applyBalanceRefundDebitIfNeeded(r, { transaction: tx });
+          if (!debit.ok) {
+            const err = new Error(debit.message);
+            err.debitCode = debit.code;
+            throw err;
+          }
+        }
+      });
+    } catch (e) {
+      if (e.debitCode) return res.status(e.debitCode).json({ success: false, message: e.message });
+      throw e;
     }
 
     const ownerEmail = r.Owner?.email || null;
@@ -340,15 +450,21 @@ const uploadProof = [
         r.Owner?.name || 'Pemesan',
         parseFloat(r.amount) || 0,
         r.Invoice?.invoice_number || '',
-        proofPath
+        proofPath,
+        { balanceWithdrawal: r.source === REFUND_SOURCE.BALANCE }
       );
     }
+    const isBalance = r.source === REFUND_SOURCE.BALANCE;
+    const notifTitle = isBalance ? 'Penarikan saldo selesai' : 'Refund diproses – bukti terkirim';
+    const notifMsg = isBalance
+      ? `Penarikan saldo Rp ${Number(parseFloat(r.amount) || 0).toLocaleString('id-ID')} telah diproses. Saldo akun telah dikurangi. Bukti transfer${ownerEmail ? ' dikirim ke email Anda' : ' tersedia di menu Refund'}.`
+      : `Refund untuk invoice ${r.Invoice?.invoice_number || ''} telah diproses. Bukti transfer telah dikirim ke email Anda.`;
     await Notification.create({
       user_id: r.owner_id,
       trigger: NOTIFICATION_TRIGGER.REFUND,
-      title: 'Refund diproses – bukti terkirim',
-      message: `Refund untuk invoice ${r.Invoice?.invoice_number || ''} telah diproses. Bukti transfer telah dikirim ke email Anda.`,
-      data: { refund_id: r.id, invoice_id: r.invoice_id, proof_file_url: r.proof_file_url },
+      title: notifTitle,
+      message: notifMsg,
+      data: { refund_id: r.id, invoice_id: r.invoice_id, proof_file_url: fileUrl, source: r.source },
       channel_in_app: true,
       channel_email: true,
       ...(emailSent ? { email_sent_at: new Date() } : {})

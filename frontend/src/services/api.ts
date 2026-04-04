@@ -287,7 +287,27 @@ export const ordersApi = {
       : api.post(`/orders/${orderId}/items/${itemId}/jamaah-data`, data),
   /** Unduh file data jamaah (stream dari server, hindari 404 direct URL) */
   getJamaahFile: (orderId: string, itemId: string) =>
-    api.get(`/orders/${orderId}/items/${itemId}/jamaah-file`, { responseType: 'blob' })
+    api.get(`/orders/${orderId}/items/${itemId}/jamaah-file`, { responseType: 'blob' }),
+  /** Owner: ajukan pembatalan invoice lunas ke Admin Pusat (body sama seperti delete + opsional owner_note). */
+  createCancellationRequest: (orderId: string, body: {
+    action: 'to_balance' | 'refund' | 'allocate_to_order';
+    reason?: string;
+    bank_name?: string;
+    account_number?: string;
+    account_holder_name?: string;
+    refund_amount?: number;
+    remainder_action?: 'to_balance' | 'allocate_to_order';
+    remainder_target_invoice_id?: string;
+    target_invoice_id?: string;
+    owner_note?: string;
+  }) => api.post<{ success: boolean; message?: string; data?: unknown }>(`/orders/${orderId}/cancellation-requests`, body)
+};
+
+export const orderCancellationRequestsApi = {
+  list: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: unknown[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/order-cancellation-requests', { params }),
+  review: (id: string, body: { decision: 'approve' | 'reject'; rejection_reason?: string }) =>
+    api.patch<{ success: boolean; message?: string; data?: unknown }>(`/order-cancellation-requests/${id}`, body)
 };
 
 export const hotelApi = {
@@ -554,7 +574,7 @@ export const refundsApi = {
   getStats: (params?: Omit<RefundListParams, 'limit' | 'page'>) => api.get<{ success: boolean; data: RefundStats }>('/refunds/stats', { params }),
   getById: (id: string) => api.get(`/refunds/${id}`),
   updateStatus: (id: string, body: { status: string; rejection_reason?: string }) => api.patch(`/refunds/${id}`, body),
-  createFromBalance: (body: { amount: number; bank_name: string; account_number: string }) => api.post('/refunds', body),
+  createFromBalance: (body: { amount: number; bank_name: string; account_number: string; account_holder_name: string }) => api.post('/refunds', body),
   /** Role accounting: upload bukti bayar refund. Setelah upload, status jadi refunded & bukti dikirim ke email pemesan. */
   uploadProof: (id: string, formData: FormData) => api.post(`/refunds/${id}/upload-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getProofFile: (id: string) => api.get(`/refunds/${id}/proof/file`, { responseType: 'blob' })
@@ -1183,6 +1203,9 @@ export const ownersApi = {
   activate: (ownerId: string, body?: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; message?: string; data?: { owner_status: string; user_id?: string; generated_password?: string; mou_generated_url?: string } }>(`/owners/${ownerId}/activate`, body || {}),
   updateProfile: (profileId: string, body: { is_mou_owner?: boolean }) => api.patch<{ success: boolean; data: OwnerProfile }>(`/owners/${profileId}`, body),
   getMyBalance: () => api.get<{ success: boolean; data: { balance: number; transactions: Array<{ id: string; amount: number; type: string; reference_type?: string; reference_id?: string; notes?: string; created_at: string }> } }>('/owners/me/balance'),
+  /** Saldo owner (user_id) untuk invoice koordinator / invoice saudi / admin — dipakai alokasi ke invoice */
+  getBalanceForUser: (userId: string) =>
+    api.get<{ success: boolean; data: { balance: number; user_id: string } }>(`/owners/user/${userId}/balance`),
   /** Stream file bukti bayar pendaftaran (untuk preview; hindari 404 direct /uploads/). */
   getRegistrationPaymentFile: (ownerId: string) => api.get(`/owners/${ownerId}/registration-payment-file`, { responseType: 'blob' }),
   /** Stream file MOU (generated or signed) agar tidak 404. */

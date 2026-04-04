@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Receipt, Wallet, Clock, CheckCircle, XCircle, Banknote, Upload, Download, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -23,6 +24,7 @@ const SOURCE_LABELS: Record<string, string> = { cancel: 'Refund pembatalan order
 
 const RefundsPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [list, setList] = useState<any[]>([]);
   const [stats, setStats] = useState<RefundStats | null>(null);
@@ -42,6 +44,7 @@ const RefundsPage: React.FC = () => {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
+  const isOwnerViewer = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
 
   const refundColumns: TableColumn[] = [
     { id: 'invoice_order', label: 'Invoice', align: 'left' },
@@ -49,8 +52,19 @@ const RefundsPage: React.FC = () => {
     { id: 'amount', label: 'Jumlah', align: 'right' },
     { id: 'bank', label: 'Rekening', align: 'left' },
     { id: 'status', label: 'Status', align: 'left' },
+    ...(isOwnerViewer ? [{ id: 'owner_followup', label: 'Tindak lanjut', align: 'left' as const }] : []),
     ...(canUpdateStatus ? [{ id: 'actions', label: 'Aksi', align: 'left' as const }] : [])
   ];
+
+  const renderBankCell = (r: any) => {
+    if (!r.bank_name && !r.account_number) return '-';
+    return (
+      <div>
+        <div>{r.bank_name} {r.account_number}</div>
+        {r.account_holder_name ? <div className="text-xs text-slate-500 mt-0.5">a.n. {r.account_holder_name}</div> : null}
+      </div>
+    );
+  };
   const totalRefunds = list.length;
   const totalPages = Math.max(1, Math.ceil(totalRefunds / limit));
   const pagedList = list.slice((page - 1) * limit, page * limit);
@@ -168,9 +182,18 @@ const RefundsPage: React.FC = () => {
     <div className="space-y-6 w-full">
       <PageHeader
         title="Refund"
-        subtitle={canUpdateStatus ? 'Daftar permintaan refund. Beri status (Setujui / Tolak) lalu upload bukti bayar refund; setelah upload, status otomatis Sudah direfund dan bukti dikirim ke email pemesan.' : 'Daftar permintaan refund Anda.'}
+        subtitle={
+          canUpdateStatus
+            ? 'Daftar permintaan refund & penarikan saldo. Setujui / tolak penarikan saldo; upload bukti transfer — saldo owner berkurang saat status Sudah direfund (saat upload bukti atau saat status di-set refunded).'
+            : 'Riwayat refund & penarikan saldo Anda. Ajukan tarik saldo dari Dashboard (Saldo Akun). Setelah diproses, saldo berkurang otomatis; bukti transfer bisa diunduh di sini.'
+        }
         right={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {isOwnerViewer && (
+              <Button size="sm" variant="primary" className="gap-1" onClick={() => navigate('/dashboard', { state: { openWithdraw: true } })}>
+                <Wallet className="w-4 h-4" /> Tarik saldo
+              </Button>
+            )}
             <AutoRefreshControl onRefresh={onRefresh} disabled={loading} />
             <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v) => !v)} hasActiveFilters={hasActiveFilters} />
           </div>
@@ -280,8 +303,26 @@ const RefundsPage: React.FC = () => {
                         </td>
                         <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
                         <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
-                        <td className="py-2 px-4 text-slate-600 text-sm">{r.bank_name && r.account_number ? `${r.bank_name} ${r.account_number}` : '-'}</td>
-                        <td className="py-2 px-4"><Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge></td>
+                        <td className="py-2 px-4 text-slate-600 text-sm">{renderBankCell(r)}</td>
+                        <td className="py-2 px-4">
+                          <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge>
+                          {r.status === 'rejected' && r.rejection_reason ? (
+                            <p className="text-xs text-red-600 mt-1 max-w-[14rem]">{r.rejection_reason}</p>
+                          ) : null}
+                        </td>
+                        {isOwnerViewer && (
+                          <td className="py-2 px-4 text-sm">
+                            {r.status === 'refunded' && r.proof_file_url ? (
+                              <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
+                                <Download className="w-3.5 h-3.5" /> Unduh bukti
+                              </Button>
+                            ) : r.source === 'balance' && r.status === 'requested' ? (
+                              <span className="text-slate-500 text-xs">Menunggu persetujuan</span>
+                            ) : r.source === 'balance' && r.status === 'approved' ? (
+                              <span className="text-slate-500 text-xs">Menunggu transfer</span>
+                            ) : null}
+                          </td>
+                        )}
                         {canUpdateStatus && <td className="py-2 px-4" />}
                       </tr>
                     )}
@@ -337,10 +378,26 @@ const RefundsPage: React.FC = () => {
                   {r.Owner ? <span>{r.Owner.name || r.Owner.company_name}</span> : '-'}
                 </td>
                 <td className="py-3 px-4 text-right font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
-                <td className="py-3 px-4 text-slate-600">{r.bank_name && r.account_number ? `${r.bank_name} ${r.account_number}` : '-'}</td>
+                <td className="py-3 px-4 text-slate-600">{renderBankCell(r)}</td>
                 <td className="py-3 px-4">
                   <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge>
+                  {r.status === 'rejected' && r.rejection_reason ? (
+                    <p className="text-xs text-red-600 mt-1 max-w-xs">{r.rejection_reason}</p>
+                  ) : null}
                 </td>
+                {isOwnerViewer && (
+                  <td className="py-3 px-4 text-sm">
+                    {r.status === 'refunded' && r.proof_file_url ? (
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
+                        <Download className="w-3.5 h-3.5" /> Unduh bukti
+                      </Button>
+                    ) : r.source === 'balance' && r.status === 'requested' ? (
+                      <span className="text-slate-500 text-xs">Menunggu persetujuan</span>
+                    ) : r.source === 'balance' && r.status === 'approved' ? (
+                      <span className="text-slate-500 text-xs">Menunggu transfer</span>
+                    ) : null}
+                  </td>
+                )}
                 {canUpdateStatus && (
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap items-center gap-2">

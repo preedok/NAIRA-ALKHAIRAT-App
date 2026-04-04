@@ -22,6 +22,7 @@ import Button from '../../../components/common/Button';
 import { DashboardFilterBar, AutoRefreshControl, PageFilter, FilterIconButton, PageHeader, StatCard, CardSectionHeader, Modal, ModalHeader, ModalBody, ModalBoxXl, ContentLoading, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { adminPusatApi, branchesApi, ordersApi, invoicesApi, type AdminPusatDashboardData, type ProvinceItem } from '../../../services/api';
+import OrderCancellationRequestsPanel from '../components/OrderCancellationRequestsPanel';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import type { TableColumn } from '../../../types';
@@ -482,6 +483,8 @@ const AdminPusatDashboard: React.FC = () => {
           orderStatusOptions={ORDER_STATUS_LABELS}
         />
       </PageFilter>
+
+      <OrderCancellationRequestsPanel />
 
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-3 flex items-center gap-2">

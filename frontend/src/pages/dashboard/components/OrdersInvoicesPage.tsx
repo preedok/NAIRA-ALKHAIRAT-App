@@ -59,6 +59,61 @@ const getFileUrl = (path: string) => {
   return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
+/** Invoice boleh dipilih sebagai tujuan alokasi dana: sisa tagihan > 0, bukan batal/lunas, order aktif. */
+function isInvoiceReallocateTarget(inv: any, excludeInvoiceId?: string): boolean {
+  if (!inv?.id) return false;
+  if (excludeInvoiceId && inv.id === excludeInvoiceId) return false;
+  const st = (inv.status || '').toLowerCase();
+  const blocked =
+    st === 'canceled' ||
+    st === 'cancelled' ||
+    st === 'cancelled_refund' ||
+    st === 'refunded' ||
+    st === 'refund_canceled' ||
+    st === 'draft' ||
+    st === 'paid' ||
+    st === 'completed' ||
+    st === 'overpaid_transferred';
+  if (blocked) return false;
+  const remain = parseFloat(inv.remaining_amount ?? 0);
+  if (!Number.isFinite(remain) || remain <= 0) return false;
+  const ordSt = inv.Order?.status != null ? String(inv.Order.status).toLowerCase() : '';
+  if (ordSt === 'cancelled' || ordSt === 'canceled') return false;
+  return true;
+}
+
+/** Selaras backend: lunas (sisa ~0 atau status paid/completed) → owner mengajukan pembatalan ke Admin Pusat. */
+function isInvoiceFullyPaidOwnerCancelFlow(inv: any): boolean {
+  const paid = parseFloat(inv?.paid_amount) || 0;
+  if (paid <= 0) return false;
+  const rem = parseFloat(inv?.remaining_amount) || 0;
+  const st = String(inv?.status || '').toLowerCase();
+  return rem <= 0.01 || st === 'paid' || st === 'completed';
+}
+
+const OWNER_CANCEL_MAX_CALENDAR_DAYS = 7;
+
+function calendarDaysBetweenUtcDateOnly(a: Date, b: Date): number {
+  const start = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const end = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.floor((end - start) / (24 * 60 * 60 * 1000));
+}
+
+/** Tanggal acuan: order dibuat (Order.created_at). */
+function getInvoiceOrderCreatedAt(inv: any): Date | null {
+  const raw = inv?.Order?.created_at ?? inv?.Order?.createdAt;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Owner boleh membatalkan lewat UI hanya jika belum lewat 7 hari kalender sejak order dibuat (tim invoice tidak dibatasi). */
+function isOwnerWithinOrderCancelWindow(inv: any): boolean {
+  const d = getInvoiceOrderCreatedAt(inv);
+  if (!d) return true;
+  return calendarDaysBetweenUtcDateOnly(d, new Date()) < OWNER_CANCEL_MAX_CALENDAR_DAYS;
+}
+
 /**
  * Order & Invoice - Satu komponen untuk menu Invoice (admin pusat, koordinator, divisi hotel/bus/visa/tiket, accounting, owner).
  * Data dibatasi: koordinator & divisi visa/tiket = wilayah masing-masing; hotel & bus = semua wilayah.
@@ -82,6 +137,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const canOrderAction = (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  const isOwnerRoleUser = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const isInvoiceTeamUser = user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const [branchId, setBranchId] = useState<string>('');
   const [wilayahId, setWilayahId] = useState<string>('');
   const [provinsiId, setProvinsiId] = useState<string>('');
@@ -146,8 +203,12 @@ const OrdersInvoicesPage: React.FC = () => {
   const [cancelModalTab, setCancelModalTab] = useState<'view_invoice' | 'invoice_refund'>('view_invoice');
   const [cancelModalPdfUrl, setCancelModalPdfUrl] = useState<string | null>(null);
   const [loadingCancelPdf, setLoadingCancelPdf] = useState(false);
+  const [cancelOwnerNote, setCancelOwnerNote] = useState('');
   const [ownerBalance, setOwnerBalance] = useState<number | null>(null);
   const [ownerBalanceLoading, setOwnerBalanceLoading] = useState(false);
+  const [invoiceOwnerBalance, setInvoiceOwnerBalance] = useState<number | null>(null);
+  const [invoiceOwnerBalanceLoading, setInvoiceOwnerBalanceLoading] = useState(false);
+  const [invoiceOwnerBalanceError, setInvoiceOwnerBalanceError] = useState(false);
   const [allocateAmount, setAllocateAmount] = useState('');
   const [allocating, setAllocating] = useState(false);
   const [showReallocateModal, setShowReallocateModal] = useState(false);
@@ -177,6 +238,9 @@ const OrdersInvoicesPage: React.FC = () => {
     if (!inv || isDraftRow(inv) || parseFloat(inv.remaining_amount || 0) <= 0) return false;
     return inv.owner_id === user?.id || ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   };
+
+  /** Tim invoice/admin: lihat & pakai saldo akun owner terdaftar untuk alokasi ke invoice (bukan saldo user login). */
+  const canUseInvoiceOwnerBalance = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
 
   const showLocationFilters = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
   const fetchBranches = useCallback(async () => {
@@ -333,6 +397,10 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const openCancelModal = (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
+    if (isOwnerRoleUser && !isInvoiceTeamUser && !isOwnerWithinOrderCancelWindow(inv)) {
+      showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+      return;
+    }
     const paid = parseFloat(inv.paid_amount || 0);
     const formatNum = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     setCancelTargetInv(inv);
@@ -347,12 +415,13 @@ const OrdersInvoicesPage: React.FC = () => {
     setCancelTargetInvoiceId('');
     setCancelModalTab('view_invoice');
     setCancelModalPdfUrl(null);
+    setCancelOwnerNote('');
     setShowCancelModal(true);
     if (paid > 0 && inv.owner_id) {
       invoicesApi.list({ owner_id: inv.owner_id, limit: 200 })
         .then((r: any) => {
           const list = (r.data?.data ?? []) as any[];
-          const options = list.filter((i: any) => i.id !== inv.id && !['canceled', 'cancelled', 'cancelled_refund'].includes((i.status || '').toLowerCase()));
+          const options = list.filter((i: any) => isInvoiceReallocateTarget(i, inv.id));
           setCancelTargetInvoiceOptions(options);
         })
         .catch(() => setCancelTargetInvoiceOptions([]));
@@ -367,6 +436,42 @@ const OrdersInvoicesPage: React.FC = () => {
       .catch(() => setOwnerBalance(null))
       .finally(() => setOwnerBalanceLoading(false));
   }, [user?.role]);
+
+  useEffect(() => {
+    if (!viewInvoice?.owner_id || !canUseInvoiceOwnerBalance) {
+      setInvoiceOwnerBalance(null);
+      setInvoiceOwnerBalanceLoading(false);
+      setInvoiceOwnerBalanceError(false);
+      return;
+    }
+    let cancelled = false;
+    setInvoiceOwnerBalanceLoading(true);
+    setInvoiceOwnerBalanceError(false);
+    ownersApi
+      .getBalanceForUser(viewInvoice.owner_id)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.data?.success && res.data?.data) {
+          setInvoiceOwnerBalance(res.data.data.balance);
+          setInvoiceOwnerBalanceError(false);
+        } else {
+          setInvoiceOwnerBalance(null);
+          setInvoiceOwnerBalanceError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setInvoiceOwnerBalance(null);
+          setInvoiceOwnerBalanceError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setInvoiceOwnerBalanceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewInvoice?.owner_id, canUseInvoiceOwnerBalance]);
 
   const handleTerbitkanDraft = async (inv: any) => {
     if (!inv?.order_id || !isDraftRow(inv)) return;
@@ -384,6 +489,10 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const handleDeleteOrder = async (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
+    if (isOwnerRoleUser && !isInvoiceTeamUser && !isOwnerWithinOrderCancelWindow(inv)) {
+      showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+      return;
+    }
     const paidAmount = parseFloat(inv.paid_amount) || 0;
     if (paidAmount > 0) {
       openCancelModal(inv);
@@ -396,7 +505,12 @@ const OrdersInvoicesPage: React.FC = () => {
       showToast('Order dibatalkan', 'success');
       fetchInvoices();
     } catch (e: any) {
-      showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
+      const code = e.response?.data?.code;
+      if (code === 'OWNER_CANCEL_WINDOW_EXPIRED') {
+        showToast(e.response?.data?.message || 'Batas 7 hari pembatalan owner telah lewat.', 'error');
+      } else {
+        showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
+      }
     } finally {
       setDeletingOrderId(null);
     }
@@ -404,6 +518,10 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const submitCancelModal = async () => {
     if (!cancelTargetInv?.order_id) return;
+    if (isOwnerRoleUser && !isInvoiceTeamUser && !isOwnerWithinOrderCancelWindow(cancelTargetInv)) {
+      showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+      return;
+    }
     const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
     if (paid > 0 && cancelAction === 'refund') {
       if (!cancelBankName.trim() || !cancelAccountNumber.trim()) {
@@ -439,16 +557,32 @@ const OrdersInvoicesPage: React.FC = () => {
           body.target_invoice_id = cancelTargetInvoiceId.trim();
         }
       }
-      const res = await ordersApi.delete(cancelTargetInv.order_id, body);
-      const msg = (res.data as any)?.message || 'Order dibatalkan.';
-      showToast(msg, 'success');
+      const isOwnerUser = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+      const ownerLunasRequest = isOwnerUser && paid > 0 && isInvoiceFullyPaidOwnerCancelFlow(cancelTargetInv);
+      if (ownerLunasRequest) {
+        if (cancelOwnerNote.trim()) (body as Record<string, unknown>).owner_note = cancelOwnerNote.trim();
+        const res = await ordersApi.createCancellationRequest(cancelTargetInv.order_id, body as any);
+        const msg = (res.data as any)?.message || 'Pengajuan pembatalan terkirim.';
+        showToast(msg, 'success');
+      } else {
+        const res = await ordersApi.delete(cancelTargetInv.order_id, body);
+        const msg = (res.data as any)?.message || 'Order dibatalkan.';
+        showToast(msg, 'success');
+      }
       const wasViewing = viewInvoice?.id === cancelTargetInv.id;
       closeCancelModal();
       fetchInvoices();
       if (wasViewing) setViewInvoice(null);
       if (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') fetchOwnerBalance();
     } catch (e: any) {
-      showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
+      const code = e.response?.data?.code;
+      if (code === 'CANCEL_REQUIRES_ADMIN_APPROVAL') {
+        showToast(e.response?.data?.message || 'Pengajuan ke Admin Pusat diperlukan.', 'error');
+      } else if (code === 'OWNER_CANCEL_WINDOW_EXPIRED') {
+        showToast(e.response?.data?.message || 'Batas 7 hari pembatalan owner telah lewat.', 'error');
+      } else {
+        showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
+      }
     } finally {
       setDeletingOrderId(null);
     }
@@ -631,6 +765,7 @@ const OrdersInvoicesPage: React.FC = () => {
     setCancelRefundAmount('');
     setCancelRemainderTargetInvoiceId('');
     setCancelTargetInvoiceId('');
+    setCancelOwnerNote('');
   }, []);
 
   const closeModal = useCallback(() => {
@@ -1657,7 +1792,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 ? [{ id: 'view-refund', label: 'Lihat Invoice Refund', icon: <Receipt className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice_refund'); fetchInvoiceDetail(inv.id); } }]
                                 : []),
                               { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                              ...(canOrderAction && inv.order_id && !['canceled', 'cancelled', 'cancelled_refund'].includes((inv.status || '').toLowerCase())
+                              ...(canOrderAction && inv.order_id && !['canceled', 'cancelled', 'cancelled_refund'].includes((inv.status || '').toLowerCase()) && (isInvoiceTeamUser || !isOwnerRoleUser || isOwnerWithinOrderCancelWindow(inv))
                                 ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
                                 : []),
                             ].filter(Boolean) as ActionsMenuItem[]}
@@ -2190,6 +2325,89 @@ const OrdersInvoicesPage: React.FC = () => {
                                               showToast(e.response?.data?.message || 'Gagal alokasi', 'error');
                                             } finally { setAllocating(false); }
                                           }}>{allocating ? '...' : 'Alokasikan'}</Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                            {canUseInvoiceOwnerBalance && viewInvoice?.owner_id && !isDraftRow(viewInvoice) && (
+                              <div className="p-5 rounded-2xl bg-indigo-50/90 border border-indigo-200 shadow-sm">
+                                <h4 className="text-sm font-semibold text-[#0D1A63] flex items-center gap-2 mb-3">
+                                  <Wallet className="w-4 h-4" /> Saldo akun owner
+                                </h4>
+                                {invoiceOwnerBalanceLoading || (invoiceOwnerBalance === null && !invoiceOwnerBalanceError) ? (
+                                  <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
+                                ) : invoiceOwnerBalanceError || invoiceOwnerBalance === null ? (
+                                  <p className="text-sm text-slate-600">Saldo tidak dapat dimuat (owner tidak terdaftar atau di luar wilayah Anda).</p>
+                                ) : (
+                                  <>
+                                    <p className="text-2xl font-bold text-[#0D1A63]"><NominalDisplay amount={invoiceOwnerBalance} currency="IDR" /></p>
+                                    <p className="text-xs text-slate-600 mt-1">Pembayaran memakai saldo milik pemilik invoice ini (bukan akun Anda).</p>
+                                    {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && (
+                                      <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
+                                        <div className="flex gap-2 items-end">
+                                          <Input
+                                            label="Alokasikan saldo owner ke invoice"
+                                            type="number"
+                                            min={1}
+                                            max={Math.min(invoiceOwnerBalance, parseFloat(viewInvoice.remaining_amount || 0))}
+                                            value={allocateAmount}
+                                            onChange={(e) => setAllocateAmount(e.target.value)}
+                                            placeholder="Jumlah (IDR)"
+                                            className="flex-1 min-w-0"
+                                          />
+                                          <Button
+                                            size="sm"
+                                            variant="primary"
+                                            disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0}
+                                            onClick={async () => {
+                                              const remaining = parseFloat(viewInvoice.remaining_amount || 0) || 0;
+                                              const balance = invoiceOwnerBalance;
+                                              let amt = parseFloat(allocateAmount);
+                                              if (!Number.isFinite(amt) || amt <= 0) return;
+                                              amt = Math.min(amt, balance, remaining);
+                                              if (amt <= 0) {
+                                                showToast('Jumlah tidak valid atau sisa tagihan/saldo tidak cukup', 'error');
+                                                return;
+                                              }
+                                              setAllocating(true);
+                                              try {
+                                                const res = await invoicesApi.allocateBalance(viewInvoice.id, { amount: amt });
+                                                showToast(`Saldo Rp ${amt.toLocaleString('id-ID')} berhasil dialokasikan`, 'success');
+                                                setAllocateAmount('');
+                                                const updated = (res.data as any)?.data;
+                                                if (updated && updated.id === viewInvoice.id) {
+                                                  setViewInvoice((prev: any) => {
+                                                    if (!prev || prev.id !== updated.id) return prev;
+                                                    return {
+                                                      ...prev,
+                                                      paid_amount: updated.paid_amount,
+                                                      remaining_amount: updated.remaining_amount,
+                                                      status: updated.status,
+                                                      BalanceAllocations: updated.BalanceAllocations ?? prev.BalanceAllocations,
+                                                      Order: prev.Order ? { ...prev.Order, ...updated.Order } : updated.Order
+                                                    };
+                                                  });
+                                                  setInvoiceOwnerBalance((b) => (b != null ? Math.max(0, b - amt) : null));
+                                                }
+                                                fetchInvoiceDetail(viewInvoice.id);
+                                                if (viewInvoice.owner_id) {
+                                                  ownersApi.getBalanceForUser(viewInvoice.owner_id).then((r) => {
+                                                    if (r.data?.success && r.data?.data) setInvoiceOwnerBalance(r.data.data.balance);
+                                                  }).catch(() => {});
+                                                }
+                                                fetchInvoices();
+                                              } catch (e: any) {
+                                                showToast(e.response?.data?.message || 'Gagal alokasi', 'error');
+                                              } finally {
+                                                setAllocating(false);
+                                              }
+                                            }}
+                                          >
+                                            {allocating ? '...' : 'Alokasikan'}
+                                          </Button>
                                         </div>
                                       </div>
                                     )}
@@ -3147,7 +3365,18 @@ const OrdersInvoicesPage: React.FC = () => {
       {showCancelModal && cancelTargetInv && (
         <Modal open onClose={() => !deletingOrderId && closeCancelModal()} zIndex={60}>
           <ModalBox className="max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <ModalHeader title="Batalkan Order / Invoice" subtitle="Lihat invoice pembayaran sebelumnya dan konfirmasi pembatalan." icon={<X className="w-5 h-5" />} onClose={() => !deletingOrderId && closeCancelModal()} />
+            <ModalHeader
+              title="Batalkan Order / Invoice"
+              subtitle={
+                (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') &&
+                isInvoiceFullyPaidOwnerCancelFlow(cancelTargetInv) &&
+                (parseFloat(cancelTargetInv.paid_amount) || 0) > 0
+                  ? 'Invoice lunas: konfirmasi mengirim pengajuan ke Admin Pusat. Setelah disetujui, pembatalan diproses otomatis (saldo/refund/alokasi sesuai pilihan Anda).'
+                  : 'Lihat invoice pembayaran sebelumnya dan konfirmasi pembatalan.'
+              }
+              icon={<X className="w-5 h-5" />}
+              onClose={() => !deletingOrderId && closeCancelModal()}
+            />
             <div className="flex gap-1 px-6 pt-2 pb-0 border-b border-slate-200 bg-slate-50/60 shrink-0">
               <button
                 type="button"
@@ -3217,6 +3446,11 @@ const OrdersInvoicesPage: React.FC = () => {
                       const remainder = isPartialRefund ? paid - refundAmt : 0;
                       return (
                         <div className="pt-4 border-t border-slate-200 space-y-4">
+                          {(user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && isInvoiceFullyPaidOwnerCancelFlow(cancelTargetInv) && (
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm px-3 py-2">
+                              Invoice sudah lunas: pembatalan tidak langsung aktif. Data di bawah dikirim sebagai <strong>pengajuan</strong> ke Admin Pusat untuk ditinjau.
+                            </div>
+                          )}
                           <p className="text-sm font-medium text-slate-700">Pilih tindakan dan isi data:</p>
                           <div className="space-y-3">
                             <Button type="button" variant={cancelAction === 'to_balance' ? 'primary' : 'outline'} fullWidth onClick={() => setCancelAction('to_balance')} className="flex flex-col items-start text-left h-auto py-3">
@@ -3246,6 +3480,16 @@ const OrdersInvoicesPage: React.FC = () => {
                             </div>
                           )}
                           <Textarea label="Alasan pembatalan (opsional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." rows={2} disabled={!!deletingOrderId} />
+                          {(user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && isInvoiceFullyPaidOwnerCancelFlow(cancelTargetInv) && (
+                            <Textarea
+                              label="Catatan untuk Admin Pusat (opsional)"
+                              value={cancelOwnerNote}
+                              onChange={(e) => setCancelOwnerNote(e.target.value)}
+                              placeholder="Informasi tambahan untuk peninjauan..."
+                              rows={2}
+                              disabled={!!deletingOrderId}
+                            />
+                          )}
                           <p className="text-xs text-slate-500">Seluruh proses tersimpan di sistem dan dapat dilihat di riwayat invoice serta tab Invoice Refund.</p>
                         </div>
                       );
@@ -3263,7 +3507,17 @@ const OrdersInvoicesPage: React.FC = () => {
             <ModalFooter>
               <Button variant="outline" onClick={closeCancelModal} disabled={!!deletingOrderId}>Batal</Button>
               <Button variant="primary" onClick={submitCancelModal} disabled={!!deletingOrderId} className="bg-red-600 hover:bg-red-700">
-                {deletingOrderId ? 'Memproses...' : (parseFloat(cancelTargetInv.paid_amount) || 0) > 0 ? (cancelAction === 'to_balance' ? 'Ya, batalkan & jadikan saldo' : cancelAction === 'refund' ? 'Ya, batalkan & minta refund' : 'Ya, batalkan & pindah ke invoice lain') : 'Ya, batalkan'}
+                {deletingOrderId
+                  ? 'Memproses...'
+                  : (parseFloat(cancelTargetInv.paid_amount) || 0) > 0
+                    ? (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && isInvoiceFullyPaidOwnerCancelFlow(cancelTargetInv)
+                      ? 'Ajukan ke Admin Pusat'
+                      : cancelAction === 'to_balance'
+                        ? 'Ya, batalkan & jadikan saldo'
+                        : cancelAction === 'refund'
+                          ? 'Ya, batalkan & minta refund'
+                          : 'Ya, batalkan & pindah ke invoice lain'
+                    : 'Ya, batalkan'}
               </Button>
             </ModalFooter>
           </ModalBox>
@@ -3281,11 +3535,7 @@ const OrdersInvoicesPage: React.FC = () => {
           if (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') return paid > 0 || cancelledRefundAmt > 0;
           return overpaid > 0;
         });
-        const targetCandidates = list.filter((i: any) => {
-          const st = (i.status || '').toLowerCase();
-          const remain = parseFloat(i.remaining_amount || 0);
-          return st !== 'canceled' && st !== 'cancelled' && st !== 'cancelled_refund' && remain > 0;
-        });
+        const targetCandidates = list.filter((i: any) => isInvoiceReallocateTarget(i));
         const getReleasable = (inv: any) => {
           const st = (inv?.status || '').toLowerCase();
           if (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') {

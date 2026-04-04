@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ShoppingCart, 
   Receipt, 
@@ -20,24 +20,33 @@ import Button from '../../../components/common/Button';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
-import { AutoRefreshControl } from '../../../components/common';
+import { AutoRefreshControl, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, Input } from '../../../components/common';
+import { useToast } from '../../../contexts/ToastContext';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { NominalDisplay } from '../../../components/common';
 import { INVOICE_STATUS_LABELS as INVOICE_STATUS_LABELS_GLOBAL } from '../../../utils/constants';
 import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
-import { invoicesApi, ownersApi, type InvoicesSummaryData } from '../../../services/api';
+import { invoicesApi, ownersApi, refundsApi, type InvoicesSummaryData } from '../../../services/api';
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
 const OwnerDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { showToast } = useToast();
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ownerProfile, setOwnerProfile] = useState<{ mou_generated_url?: string } | null>(null);
   const [balanceData, setBalanceData] = useState<{ balance: number; transactions: Array<{ id: string; amount: number; type: string; notes?: string; created_at: string }> } | null>(null);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawBank, setWithdrawBank] = useState('');
+  const [withdrawAccount, setWithdrawAccount] = useState('');
+  const [withdrawHolder, setWithdrawHolder] = useState('');
+  const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -67,6 +76,14 @@ const OwnerDashboard: React.FC = () => {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    const st = location.state as { openWithdraw?: boolean } | undefined;
+    if (st?.openWithdraw) {
+      setShowWithdrawModal(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const pendingCount = summary ? (summary.by_invoice_status?.tentative || 0) + (summary.by_invoice_status?.partial_paid || 0) : 0;
   const stats = [
@@ -242,6 +259,9 @@ const OwnerDashboard: React.FC = () => {
                 <Receipt className="w-4 h-4" />
                 Alokasi ke Invoice
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowWithdrawModal(true)} className="gap-1 border-emerald-300 text-emerald-800 bg-white">
+                Tarik saldo ke rekening
+              </Button>
             </div>
           )}
         </div>
@@ -262,6 +282,63 @@ const OwnerDashboard: React.FC = () => {
           </div>
         )}
       </Card>
+
+      {showWithdrawModal && (
+        <Modal open onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)}>
+          <ModalBox className="max-w-md w-full">
+            <ModalHeader title="Tarik saldo ke rekening" subtitle="Pengajuan masuk ke menu Refund. Accounting menyetujui, mentransfer, dan mengunggah bukti. Saldo berkurang setelah transfer selesai (status Sudah direfund)." onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)} />
+            <ModalBody className="space-y-3">
+              <p className="text-sm text-slate-600">Saldo tersedia: <strong className="text-emerald-700"><NominalDisplay amount={accountBalance} currency="IDR" /></strong></p>
+              <Input label="Jumlah penarikan (IDR)" type="number" min={1} max={accountBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Minimal 1" disabled={withdrawSubmitting} />
+              <Input label="Nama bank" type="text" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} placeholder="Contoh: BCA" disabled={withdrawSubmitting} />
+              <Input label="Nomor rekening penerima" type="text" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} placeholder="Tanpa spasi" disabled={withdrawSubmitting} />
+              <Input label="Nama pemilik rekening" type="text" value={withdrawHolder} onChange={(e) => setWithdrawHolder(e.target.value)} placeholder="Sesuai buku tabungan" disabled={withdrawSubmitting} />
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => setShowWithdrawModal(false)} disabled={withdrawSubmitting}>Batal</Button>
+              <Button
+                variant="primary"
+                disabled={withdrawSubmitting}
+                onClick={async () => {
+                  const amt = parseFloat(withdrawAmount.replace(/,/g, ''));
+                  if (!Number.isFinite(amt) || amt <= 0) {
+                    showToast('Jumlah tidak valid', 'error');
+                    return;
+                  }
+                  if (amt > accountBalance) {
+                    showToast('Jumlah melebihi saldo', 'error');
+                    return;
+                  }
+                  const bank = withdrawBank.trim();
+                  const acc = withdrawAccount.trim();
+                  const holder = withdrawHolder.trim();
+                  if (!bank || !acc || !holder) {
+                    showToast('Lengkapi bank, nomor rekening, dan nama pemilik rekening', 'error');
+                    return;
+                  }
+                  setWithdrawSubmitting(true);
+                  try {
+                    await refundsApi.createFromBalance({ amount: amt, bank_name: bank, account_number: acc, account_holder_name: holder });
+                    showToast('Pengajuan terkirim. Pantau status di menu Refund.', 'success');
+                    setShowWithdrawModal(false);
+                    setWithdrawAmount('');
+                    setWithdrawBank('');
+                    setWithdrawAccount('');
+                    setWithdrawHolder('');
+                    fetchDashboard();
+                  } catch (e: any) {
+                    showToast(e.response?.data?.message || 'Gagal mengajukan penarikan', 'error');
+                  } finally {
+                    setWithdrawSubmitting(false);
+                  }
+                }}
+              >
+                {withdrawSubmitting ? 'Mengirim...' : 'Ajukan'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
+      )}
 
       {/* Quick Actions - full width */}
       <Card className="travel-card">
