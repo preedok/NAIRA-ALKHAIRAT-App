@@ -74,7 +74,7 @@ type HotelMonthlyByRoomTypeMap = Record<
 >;
 
 /** Sel harga read-only (SAR + IDR ringkas) untuk tabel kalender di daftar hotel. */
-function MonthlyReadonlyPriceCell({ sar, gridRates }: { sar: number | null; gridRates: GridRatesPair }): React.ReactNode {
+function MonthlyReadonlyPriceCell({ sar, gridRates }: { sar: number | null; gridRates: GridRatesPair }): JSX.Element {
   if (sar == null || !(sar > 0)) {
     return <div className="text-center py-1 text-slate-400 tabular-nums">—</div>;
   }
