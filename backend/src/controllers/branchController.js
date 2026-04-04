@@ -8,7 +8,7 @@ const asyncHandler = require('express-async-handler');
 const { Branch, Wilayah, Provinsi, Kabupaten } = require('../models');
 const { ROLES } = require('../constants');
 const { Op } = require('sequelize');
-const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const { getBranchIdsForWilayah, resolveWilayahIdsSameName } = require('../utils/wilayahScope');
 const { resolveFromKota, enrichBranchWithLocation } = require('../utils/locationMaster');
 
 const ALLOWED_SORT = ['code', 'name', 'city', 'region', 'manager_name', 'is_active', 'created_at'];
@@ -105,8 +105,21 @@ const listKabupaten = asyncHandler(async (req, res) => {
  * GET /branches/kabupaten-for-owner
  * Returns all kabupaten with provinsi_id, provinsi_nama, wilayah_id, wilayah_nama for Add User (owner) dropdown.
  * Data dari master kabupaten di DB saja (isi via seeder seed:kabupaten).
+ * Untuk invoice_koordinator / invoice_saudi dengan users.wilayah_id: hanya kabupaten di wilayah itu
+ * (semua UUID wilayah dengan nama sama — konsisten dengan listProvinces / wilayahScope).
  */
+const INVOICE_ROLES_WILAYAH_KAB = [ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI];
+
 const listKabupatenForOwner = asyncHandler(async (req, res) => {
+  let provinsiWhere;
+  const uid = req.user?.wilayah_id;
+  if (uid && INVOICE_ROLES_WILAYAH_KAB.includes(req.user?.role)) {
+    const wilayahVariantIds = await resolveWilayahIdsSameName(uid);
+    if (wilayahVariantIds.length > 0) {
+      provinsiWhere = { wilayah_id: { [Op.in]: wilayahVariantIds } };
+    }
+  }
+
   const fromDb = await Kabupaten.findAll({
     attributes: ['id', 'kode', 'nama', 'provinsi_id'],
     include: [{
@@ -114,6 +127,7 @@ const listKabupatenForOwner = asyncHandler(async (req, res) => {
       as: 'Provinsi',
       attributes: ['id', 'name', 'wilayah_id'],
       required: true,
+      ...(provinsiWhere ? { where: provinsiWhere } : {}),
       include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }]
     }],
     order: [['kode', 'ASC']]

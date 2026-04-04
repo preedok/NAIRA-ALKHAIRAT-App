@@ -153,9 +153,6 @@ const OrderFormPage: React.FC = () => {
 
   const isOwner      = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
-  /** Invoice koordinator & invoice Saudi: batasi kabupaten ke wilayah user jika user punya wilayah_id */
-  const invoiceKabupatenScopeWilayah =
-    !!user?.wilayah_id && ['invoice_koordinator', 'invoice_saudi'].includes(user?.role ?? '');
   const ownerProf    = canPickOwner && ownerInputMode === 'registered' && ownerSel ? owners.find(o=>(o.User?.id??o.user_id)===ownerSel) : null;
   const [ownerMeProfile, setOwnerMeProfile] = useState<{ is_mou_owner?: boolean } | null>(null);
   const bFromOwner   = ownerProf?.AssignedBranch?.id ?? ownerProf?.assigned_branch_id ?? null;
@@ -163,13 +160,14 @@ const OrderFormPage: React.FC = () => {
   const branchId     = order?.branch_id || (canPickOwner ? (ownerInputMode === 'registered' ? bFromOwner : manualBranchId) : null) || (!canPickOwner ? (branchSel || user?.branch_id || undefined) : undefined);
   const ownerId      = isOwner ? user?.id : (isEdit ? order?.owner_id : canPickOwner ? (ownerInputMode === 'registered' ? ownerSel : undefined) : undefined) ?? order?.owner_id ?? undefined;
 
-  const kabupatenOptions = useMemo(() => {
-    let list = kabupatenMaster.filter((k) => k != null && k.id != null && String(k.id) !== '');
-    if (invoiceKabupatenScopeWilayah && user?.wilayah_id) {
-      list = list.filter((k) => k.wilayah_id != null && String(k.wilayah_id) === String(user.wilayah_id));
-    }
-    return list.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
-  }, [kabupatenMaster, user?.wilayah_id, invoiceKabupatenScopeWilayah]);
+  /** Daftar dari API sudah difilter per wilayah (backend) untuk role invoice + wilayah_id — jangan filter ulang di sini (UUID wilayah bisa beda baris, nama sama). */
+  const kabupatenOptions = useMemo(
+    () =>
+      kabupatenMaster
+        .filter((k) => k != null && k.id != null && String(k.id) !== '')
+        .sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id')),
+    [kabupatenMaster]
+  );
 
   const selectedManualKab = useMemo(
     () => kabupatenMaster.find((k) => String(k.id) === String(manualKabupatenId)) ?? null,
@@ -212,15 +210,12 @@ const OrderFormPage: React.FC = () => {
     }).catch(()=>{});
   },[canPickOwner]);
 
-  /** Muat master kabupaten saat mode manual dipakai (bukan di halaman load) supaya request tidak batal / kosong karena timing auth. */
+  /** Muat master kabupaten saat halaman order invoice (API mem-scope wilayah di server). */
   useEffect(() => {
     if (!canPickOwner) {
       setKabupatenMaster([]);
       setKabupatenLoading(false);
       setKabupatenFetchError(false);
-      return;
-    }
-    if (ownerInputMode !== 'manual') {
       return;
     }
     let cancelled = false;
@@ -248,7 +243,7 @@ const OrderFormPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [canPickOwner, ownerInputMode]);
+  }, [canPickOwner]);
 
   useEffect(() => {
     const prev = prevOwnerInputModeRef.current;
@@ -1129,19 +1124,10 @@ const OrderFormPage: React.FC = () => {
                         Daftar kabupaten kosong atau gagal dimuat. Periksa koneksi, refresh halaman, atau pastikan master kabupaten sudah diisi di server (npm run seed:kabupaten).
                       </p>
                     )}
-                    {!kabupatenLoading &&
-                      !kabupatenFetchError &&
-                      kabupatenMaster.length > 0 &&
-                      kabupatenOptions.length === 0 &&
-                      invoiceKabupatenScopeWilayah && (
-                        <p className="text-xs text-amber-700 mt-1">
-                          Tidak ada kabupaten di wilayah Anda pada master (pastikan provinsi punya wilayah_id dan sinkron). Hubungi admin pusat.
-                        </p>
-                      )}
-                    {!kabupatenLoading && !kabupatenFetchError && !(kabupatenMaster.length > 0 && kabupatenOptions.length === 0 && invoiceKabupatenScopeWilayah) && (
+                    {!kabupatenLoading && !kabupatenFetchError && (
                       <p className="text-xs text-slate-500 mt-1">
-                        {invoiceKabupatenScopeWilayah
-                          ? 'Hanya kabupaten di wilayah Anda. Provinsi & wilayah terisi otomatis setelah memilih kabupaten.'
+                        {user?.wilayah_id && ['invoice_koordinator', 'invoice_saudi'].includes(user?.role ?? '')
+                          ? 'Daftar kabupaten sesuai wilayah Anda (dari server). Provinsi & wilayah terisi otomatis setelah memilih kabupaten.'
                           : 'Provinsi & wilayah (master) terisi otomatis setelah memilih kabupaten.'}
                       </p>
                     )}

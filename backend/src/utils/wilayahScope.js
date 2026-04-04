@@ -2,6 +2,23 @@ const { Op } = require('sequelize');
 const { Branch, Provinsi, Wilayah, Kabupaten } = require('../models');
 
 /**
+ * Semua UUID wilayah yang punya nama sama dengan wilayah referensi (master bisa punya duplikat baris).
+ * Dipakai agar provinsi.wilayah_id (satu UUID) tetap cocok dengan users.wilayah_id (UUID lain, nama sama).
+ */
+async function resolveWilayahIdsSameName(wilayahId) {
+  if (!wilayahId) return [];
+  const wid = String(wilayahId).trim();
+  const wilayahRow = await Wilayah.findByPk(wid, { attributes: ['id', 'name'] });
+  if (wilayahRow && wilayahRow.name) {
+    const allWilayah = await Wilayah.findAll({ attributes: ['id', 'name'], raw: true });
+    const nameKey = (wilayahRow.name || '').trim().toLowerCase();
+    const ids = (allWilayah || []).filter((w) => (w.name || '').trim().toLowerCase() === nameKey).map((w) => w.id);
+    if (ids.length > 0) return ids;
+  }
+  return [wid];
+}
+
+/**
  * Resolve branch_id untuk filter wilayah (dinamis: nama wilayah + fallback via kabupaten/kota).
  * Dipakai agar filter Wilayah menampilkan data sesuai kota/provinsi yang ada di order.
  * - Resolve semua id wilayah dengan nama sama (duplikat nama).
@@ -10,15 +27,7 @@ const { Branch, Provinsi, Wilayah, Kabupaten } = require('../models');
  */
 async function getBranchIdsForWilayahDynamic(wilayahId) {
   if (!wilayahId) return [];
-  const wid = String(wilayahId).trim();
-  const wilayahRow = await Wilayah.findByPk(wid, { attributes: ['id', 'name'] });
-  const wilayahIds = [];
-  if (wilayahRow && wilayahRow.name) {
-    const allWilayah = await Wilayah.findAll({ attributes: ['id', 'name'], raw: true });
-    const nameKey = (wilayahRow.name || '').trim().toLowerCase();
-    wilayahIds.push(...(allWilayah || []).filter((w) => (w.name || '').trim().toLowerCase() === nameKey).map((w) => w.id));
-  }
-  if (wilayahIds.length === 0) wilayahIds.push(wid);
+  const wilayahIds = await resolveWilayahIdsSameName(wilayahId);
 
   let branches = await Branch.findAll({
     where: { is_active: true },
@@ -77,4 +86,10 @@ async function invoiceInKoordinatorWilayah(invoice, wilayahId) {
   return false;
 }
 
-module.exports = { getBranchIdsForWilayah, getBranchIdsForWilayahDynamic, branchBelongsToWilayah, invoiceInKoordinatorWilayah };
+module.exports = {
+  getBranchIdsForWilayah,
+  getBranchIdsForWilayahDynamic,
+  branchBelongsToWilayah,
+  invoiceInKoordinatorWilayah,
+  resolveWilayahIdsSameName
+};
