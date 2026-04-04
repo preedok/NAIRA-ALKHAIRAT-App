@@ -109,7 +109,9 @@ async function resolveHotelMonthlyPricing({
       unitPriceIdr,
       nights: 0,
       monthlyBreakdown: null,
-      usedMonthlyPricing: false
+      usedMonthlyPricing: false,
+      room_unit_per_night_in_currency: null,
+      meal_unit_per_person_per_night_in_currency: null
     };
   }
 
@@ -134,7 +136,9 @@ async function resolveHotelMonthlyPricing({
       unitPriceIdr,
       nights: 0,
       monthlyBreakdown: null,
-      usedMonthlyPricing: false
+      usedMonthlyPricing: false,
+      room_unit_per_night_in_currency: null,
+      meal_unit_per_person_per_night_in_currency: null
     };
   }
 
@@ -145,7 +149,9 @@ async function resolveHotelMonthlyPricing({
     nights: monthly.nights,
     monthlyBreakdown: monthly.breakdown,
     usedMonthlyPricing: true,
-    usedFallbackDefault: monthly.used_fallback_default
+    usedFallbackDefault: monthly.used_fallback_default,
+    room_unit_per_night_in_currency: monthly.room_unit_per_night_in_currency,
+    meal_unit_per_person_per_night_in_currency: monthly.meal_unit_per_person_per_night_in_currency
   };
 }
 
@@ -475,8 +481,9 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     let st;
     let monthlyBreakdown = null;
     let usedMonthlyPricing = false;
+    let monthlyPricing = null;
     if (it.type === ORDER_ITEM_TYPE.HOTEL) {
-      const monthlyPricing = await resolveHotelMonthlyPricing({
+      monthlyPricing = await resolveHotelMonthlyPricing({
         item: it,
         productId: it.product_id,
         branchId: finalBranchId,
@@ -515,8 +522,15 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && Array.isArray(monthlyBreakdown)) {
       meta.monthly_price_breakdown = monthlyBreakdown;
     }
-    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
-    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && monthlyPricing && monthlyPricing.room_unit_per_night_in_currency != null) {
+      meta.room_unit_price = monthlyPricing.room_unit_per_night_in_currency;
+      meta.meal_unit_price = monthlyPricing.meal_unit_per_person_per_night_in_currency != null
+        ? monthlyPricing.meal_unit_per_person_per_night_in_currency
+        : 0;
+    } else {
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+    }
     if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
     orderItems.push({
       type: it.type,
@@ -771,8 +785,9 @@ const create = asyncHandler(async (req, res) => {
     let st;
     let monthlyBreakdown = null;
     let usedMonthlyPricing = false;
+    let monthlyPricing = null;
     if (it.type === ORDER_ITEM_TYPE.HOTEL) {
-      const monthlyPricing = await resolveHotelMonthlyPricing({
+      monthlyPricing = await resolveHotelMonthlyPricing({
         item: it,
         productId: it.product_id,
         branchId: finalBranchId,
@@ -811,8 +826,15 @@ const create = asyncHandler(async (req, res) => {
     if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && Array.isArray(monthlyBreakdown)) {
       meta.monthly_price_breakdown = monthlyBreakdown;
     }
-    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
-    if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+    if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && monthlyPricing && monthlyPricing.room_unit_per_night_in_currency != null) {
+      meta.room_unit_price = monthlyPricing.room_unit_per_night_in_currency;
+      meta.meal_unit_price = monthlyPricing.meal_unit_per_person_per_night_in_currency != null
+        ? monthlyPricing.meal_unit_per_person_per_night_in_currency
+        : 0;
+    } else {
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+    }
     if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
     orderItems.push({
       type: it.type,
@@ -1128,8 +1150,9 @@ const update = asyncHandler(async (req, res) => {
       let st;
       let monthlyBreakdown = null;
       let usedMonthlyPricing = false;
+      let monthlyPricing = null;
       if (it.type === ORDER_ITEM_TYPE.HOTEL) {
-        const monthlyPricing = await resolveHotelMonthlyPricing({
+        monthlyPricing = await resolveHotelMonthlyPricing({
           item: it,
           productId: it.product_id,
           branchId: order.branch_id,
@@ -1164,8 +1187,15 @@ const update = asyncHandler(async (req, res) => {
       if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && Array.isArray(monthlyBreakdown)) {
         meta.monthly_price_breakdown = monthlyBreakdown;
       }
-      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
-      if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && usedMonthlyPricing && monthlyPricing && monthlyPricing.room_unit_per_night_in_currency != null) {
+        meta.room_unit_price = monthlyPricing.room_unit_per_night_in_currency;
+        meta.meal_unit_price = monthlyPricing.meal_unit_per_person_per_night_in_currency != null
+          ? monthlyPricing.meal_unit_per_person_per_night_in_currency
+          : 0;
+      } else {
+        if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.room_unit_price != null) meta.room_unit_price = it.meta.room_unit_price;
+        if (it.type === ORDER_ITEM_TYPE.HOTEL && it.meta?.meal_unit_price != null) meta.meal_unit_price = it.meta.meal_unit_price;
+      }
       if (it.type === ORDER_ITEM_TYPE.BUS && !meta.trip_type) meta.trip_type = 'round_trip';
       afterItemsRaw.push({
         type: it.type,

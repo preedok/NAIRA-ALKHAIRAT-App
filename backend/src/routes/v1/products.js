@@ -45,6 +45,7 @@ router.get('/:id/hotel-calendar', productController.getHotelCalendar);
 router.get('/:id/visa-calendar', productController.getVisaCalendar);
 router.get('/:id/price', productController.getPrice);
 router.get('/:id/availability', productController.getAvailability);
+router.get('/:id/hotel-stay-quote', productController.getHotelStayQuote);
 router.get('/:id/hotel-monthly-prices', productController.listHotelMonthlyPrices);
 router.put('/:id/hotel-monthly-prices/bulk', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), productController.upsertHotelMonthlyPricesBulk);
 router.put('/:id/ticket-bandara', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING), productController.setTicketBandara);

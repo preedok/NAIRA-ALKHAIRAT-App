@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
 const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile, HotelMonthlyPrice } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
+const { calculateStayCostByNights, MEAL_ROOM_TYPE, COMPONENT_MEAL, COMPONENT_ROOM } = require('../services/hotelMonthlyPricingService');
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
 const { getTicketCalendar } = require('../services/ticketAvailabilityService');
 const { getBusCalendar } = require('../services/busAvailabilityService');
@@ -335,7 +336,8 @@ const list = asyncHandler(async (req, res) => {
           year_month: ym,
           currency: 'SAR',
           branch_id: null,
-          owner_id: null
+          owner_id: null,
+          component: COMPONENT_ROOM
         },
         raw: true
       });
@@ -347,6 +349,23 @@ const list = asyncHandler(async (req, res) => {
         if (!['single', 'double', 'triple', 'quad', 'quint'].includes(rt)) continue;
         if (row.with_meal) pack[pid][`${rt}_bundle`] = parseFloat(row.amount) || 0;
         else pack[pid][`${rt}_room`] = parseFloat(row.amount) || 0;
+      }
+      const mealRows = await HotelMonthlyPrice.findAll({
+        where: {
+          product_id: { [Op.in]: hotelIdsForMonthly },
+          year_month: ym,
+          currency: 'SAR',
+          branch_id: null,
+          owner_id: null,
+          component: COMPONENT_MEAL,
+          room_type: MEAL_ROOM_TYPE,
+          with_meal: false
+        },
+        raw: true
+      });
+      const mealSarByProduct = {};
+      for (const row of mealRows) {
+        mealSarByProduct[row.product_id] = parseFloat(row.amount) || 0;
       }
       const pickRefRoomType = (meta, breakdown) => {
         if (meta && meta.pricing_mode === 'single') return 'single';
@@ -365,11 +384,13 @@ const list = asyncHandler(async (req, res) => {
         const m = pack[p.id] || {};
         const sarRoom = m[`${rt}_room`];
         const sarBundle = m[`${rt}_bundle`];
+        const sarMeal = mealSarByProduct[p.id];
         p.hotel_monthly_display = {
           year_month: ym,
           room_type: rt,
           sar_room_only: sarRoom != null && sarRoom > 0 ? sarRoom : null,
-          sar_with_meal: sarBundle != null && sarBundle > 0 ? sarBundle : null
+          sar_with_meal: sarBundle != null && sarBundle > 0 ? sarBundle : null,
+          sar_meal_per_person_per_night: sarMeal != null && sarMeal > 0 ? sarMeal : null
         };
       }
     }
@@ -1099,6 +1120,61 @@ const getTicketCalendarHandler = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/products/:id/hotel-stay-quote?check_in=&check_out=&room_type=&with_meal=&quantity=&currency=
+ * Harga menginap dari grid bulanan (+ makan per orang jika room_only & with_meal), untuk sinkron dengan form order.
+ */
+const getHotelStayQuote = asyncHandler(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type'] });
+  if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
+  if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
+
+  const checkIn = req.query.check_in;
+  const checkOut = req.query.check_out;
+  const roomType = String(req.query.room_type || 'triple').toLowerCase();
+  const withMeal = req.query.with_meal === 'true' || req.query.with_meal === '1' || req.query.with_meal === true;
+  const quantity = Math.max(1, parseInt(req.query.quantity, 10) || 1);
+  const currency = (req.query.currency && ['IDR', 'SAR', 'USD'].includes(String(req.query.currency).toUpperCase()))
+    ? String(req.query.currency).toUpperCase()
+    : 'SAR';
+  const branchId = req.query.branch_id || req.user?.branch_id || null;
+  const ownerId = req.query.owner_id || null;
+
+  if (!checkIn || !checkOut) {
+    return res.status(400).json({ success: false, message: 'Query check_in dan check_out wajib (YYYY-MM-DD)' });
+  }
+
+  const rates = await getCurrencyRates();
+  const monthly = await calculateStayCostByNights({
+    productId: product.id,
+    branchId,
+    ownerId,
+    roomType,
+    withMeal,
+    checkIn,
+    checkOut,
+    quantity,
+    currency,
+    rates
+  });
+
+  res.json({
+    success: true,
+    data: {
+      nights: monthly.nights,
+      currency,
+      unit_price_per_room_per_night: monthly.unit_price_in_currency,
+      room_unit_per_night: monthly.room_unit_per_night_in_currency,
+      meal_unit_per_person_per_night: monthly.meal_unit_per_person_per_night_in_currency,
+      subtotal_idr: monthly.subtotal_idr,
+      room_subtotal_idr: monthly.room_subtotal_idr,
+      meal_subtotal_idr: monthly.meal_subtotal_idr,
+      breakdown: monthly.breakdown,
+      used_fallback_default: monthly.used_fallback_default
+    }
+  });
+});
+
+/**
  * GET /api/v1/products/:id/hotel-monthly-prices?year=2026
  */
 const listHotelMonthlyPrices = asyncHandler(async (req, res) => {
@@ -1121,7 +1197,8 @@ const listHotelMonthlyPrices = asyncHandler(async (req, res) => {
 
 /**
  * PUT /api/v1/products/:id/hotel-monthly-prices/bulk
- * Body: { rows: [{ year_month, room_type, with_meal, amount, currency, branch_id?, owner_id? }] }
+ * Body: { rows: [{ year_month, room_type, with_meal?, amount, currency, component?: 'room'|'meal', branch_id?, owner_id? }] }
+ * component meal → room_type disimpan __meal__ (SAR per orang per malam, room only).
  */
 const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
   const product = await Product.findByPk(req.params.id, { attributes: ['id', 'type', 'meta'] });
@@ -1139,12 +1216,23 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
     for (const r of rows) {
       const yearMonth = String(r.year_month || '').trim();
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) throw new Error(`year_month tidak valid: ${yearMonth}`);
-      const roomType = String(r.room_type || '').trim().toLowerCase();
-      if (!roomTypes.includes(roomType)) throw new Error(`room_type tidak valid: ${roomType}`);
+      const component = r.component === COMPONENT_MEAL || r.component === 'meal' ? COMPONENT_MEAL : COMPONENT_ROOM;
       const currency = ['IDR', 'SAR', 'USD'].includes(String(r.currency || 'IDR').toUpperCase()) ? String(r.currency || 'IDR').toUpperCase() : 'IDR';
       const amount = parseFloat(r.amount);
-      if (!(amount >= 0)) throw new Error(`amount tidak valid untuk ${yearMonth}/${roomType}`);
-      const withMeal = mealPlan === 'fullboard' ? true : !!r.with_meal;
+      if (!(amount >= 0)) throw new Error(`amount tidak valid untuk ${yearMonth}`);
+
+      let roomType;
+      let withMeal;
+      if (component === COMPONENT_MEAL) {
+        if (mealPlan === 'fullboard') throw new Error('Harga makan bulanan hanya untuk hotel room only');
+        roomType = MEAL_ROOM_TYPE;
+        withMeal = false;
+      } else {
+        roomType = String(r.room_type || '').trim().toLowerCase();
+        if (!roomTypes.includes(roomType)) throw new Error(`room_type tidak valid: ${roomType}`);
+        withMeal = mealPlan === 'fullboard' ? true : !!r.with_meal;
+      }
+
       const branchId = r.branch_id || null;
       const ownerId = r.owner_id || null;
 
@@ -1155,6 +1243,7 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           currency,
           room_type: roomType,
           with_meal: withMeal,
+          component,
           branch_id: branchId,
           owner_id: ownerId
         },
@@ -1173,6 +1262,7 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           currency,
           room_type: roomType,
           with_meal: withMeal,
+          component,
           amount,
           created_by: req.user?.id || null
         }, { transaction: t });
@@ -1210,5 +1300,6 @@ module.exports = {
   deletePrice,
   getEffectivePrice,
   listHotelMonthlyPrices,
-  upsertHotelMonthlyPricesBulk
+  upsertHotelMonthlyPricesBulk,
+  getHotelStayQuote
 };

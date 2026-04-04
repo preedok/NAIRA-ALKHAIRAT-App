@@ -115,17 +115,65 @@ export const productsApi = {
   getPrice: (id: string, params?: { branch_id?: string; owner_id?: string; currency?: string; room_type?: string; with_meal?: string }) => api.get(`/products/${id}/price`, { params }),
   getAvailability: (id: string, params: { from: string; to: string }) =>
     api.get<{ success: boolean; data: { availability_mode?: 'global' | 'per_season'; byDate: Record<string, Record<string, { total: number; booked: number; available: number }>>; byRoomType: Record<string, number> } }>(`/products/${id}/availability`, { params }),
+  getHotelStayQuote: (
+    id: string,
+    params: {
+      check_in: string;
+      check_out: string;
+      room_type: string;
+      with_meal?: boolean;
+      quantity?: number;
+      currency?: string;
+      branch_id?: string;
+      owner_id?: string;
+    }
+  ) =>
+    api.get<{
+      success: boolean;
+      data: {
+        nights: number;
+        currency: string;
+        unit_price_per_room_per_night: number;
+        room_unit_per_night: number;
+        meal_unit_per_person_per_night: number;
+        subtotal_idr: number;
+        room_subtotal_idr: number;
+        meal_subtotal_idr: number;
+        breakdown: unknown[];
+        used_fallback_default: boolean;
+      };
+    }>(`/products/${id}/hotel-stay-quote`, {
+      params: {
+        ...params,
+        with_meal: params.with_meal ? 'true' : 'false',
+        quantity: params.quantity ?? 1
+      }
+    }),
   getHotelMonthlyPrices: (id: string, params?: { year?: string }) =>
-    api.get<{ success: boolean; data: Array<{ id: string; year_month: string; currency: 'IDR' | 'SAR' | 'USD'; room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint'; with_meal: boolean; amount: number; branch_id?: string | null; owner_id?: string | null }> }>(`/products/${id}/hotel-monthly-prices`, { params }),
+    api.get<{
+      success: boolean;
+      data: Array<{
+        id: string;
+        year_month: string;
+        currency: 'IDR' | 'SAR' | 'USD';
+        room_type: string;
+        with_meal: boolean;
+        amount: number;
+        component?: string;
+        branch_id?: string | null;
+        owner_id?: string | null;
+      }>;
+    }>(`/products/${id}/hotel-monthly-prices`, { params }),
   saveHotelMonthlyPricesBulk: (
     id: string,
     body: {
       rows: Array<{
         year_month: string;
-        room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint';
-        with_meal: boolean;
+        room_type?: 'single' | 'double' | 'triple' | 'quad' | 'quint' | string;
+        with_meal?: boolean;
         amount: number;
         currency: 'IDR' | 'SAR' | 'USD';
+        component?: 'room' | 'meal';
         branch_id?: string | null;
         owner_id?: string | null;
       }>;

@@ -616,6 +616,75 @@ const OrderFormPage: React.FC = () => {
     }));
   }, [products, hotelAvailability, bestRoomCombo, isFullboardHotel, getMealPriceSar]);
 
+  /** Sinkron harga baris hotel dengan grid bulanan backend (check-in/out + tipe + qty). */
+  const hotelStayQuoteKey = useMemo(() => {
+    return items
+      .filter((r) => r.type === 'hotel' && r.product_id && r.check_in && r.check_out)
+      .map((r) => {
+        const prod = products.find((p) => p.id === r.product_id);
+        const cur = (r.price_currency ?? getDisplayCurrency('hotel', prod)) as string;
+        const lines = (r.room_breakdown || [])
+          .filter((l) => l.room_type && l.quantity > 0)
+          .map((l) => `${l.id}:${l.room_type}:${l.quantity}:${l.with_meal ? 1 : 0}`)
+          .join('|');
+        return `${r.id}|${r.product_id}|${r.check_in}|${r.check_out}|${cur}|${lines}|${branchId ?? ''}|${ownerId ?? ''}|${s2iEff}|${u2iEff}`;
+      })
+      .sort()
+      .join('##');
+  }, [items, products, branchId, ownerId, s2iEff, u2iEff]);
+
+  useEffect(() => {
+    if (loadingProd) return;
+    const handle = window.setTimeout(() => {
+      const hotelRows = items.filter((r) => r.type === 'hotel' && r.product_id && r.check_in && r.check_out);
+      hotelRows.forEach((row) => {
+        const prod = products.find((p) => p.id === row.product_id);
+        const cur = (row.price_currency ?? getDisplayCurrency('hotel', prod)) as 'SAR' | 'IDR' | 'USD';
+        (row.room_breakdown || []).forEach((line) => {
+          if (!line.room_type || line.quantity <= 0) return;
+          productsApi
+            .getHotelStayQuote(row.product_id, {
+              check_in: row.check_in!,
+              check_out: row.check_out!,
+              room_type: line.room_type,
+              with_meal: !!line.with_meal,
+              quantity: line.quantity,
+              currency: cur,
+              branch_id: branchId,
+              owner_id: ownerId
+            })
+            .then((res) => {
+              const d = (res.data as { data?: { nights?: number; room_unit_per_night?: number; meal_unit_per_person_per_night?: number } })?.data;
+              if (!d || !d.nights || d.nights <= 0) return;
+              const ru = Number(d.room_unit_per_night) || 0;
+              const mu = Number(d.meal_unit_per_person_per_night) || 0;
+              setItems((prev) =>
+                prev.map((r) => {
+                  if (r.id !== row.id || !r.room_breakdown) return r;
+                  return {
+                    ...r,
+                    room_breakdown: r.room_breakdown.map((l) =>
+                      l.id === line.id
+                        ? {
+                            ...l,
+                            unit_price: ru,
+                            meal_unit_price: l.with_meal ? mu : 0,
+                            unit_price_currency: cur,
+                            meal_unit_price_currency: cur
+                          }
+                        : l
+                    )
+                  };
+                })
+              );
+            })
+            .catch(() => {});
+        });
+      });
+    }, 450);
+    return () => window.clearTimeout(handle);
+  }, [hotelStayQuoteKey, loadingProd, products, branchId, ownerId]);
+
   /* mutations */
   const addRow   =()=>setItems(p=>[...p,newRow()]);
   const removeRow=(id:string)=>setItems(p=>{ const n=p.filter(r=>r.id!==id); return n.length?n:[newRow()]; });
