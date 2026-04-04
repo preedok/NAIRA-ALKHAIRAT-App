@@ -44,12 +44,6 @@ const HotelMonthlyPrice = sequelize.define('HotelMonthlyPrice', {
     allowNull: false,
     defaultValue: false
   },
-  /** 'room' = harga kamar per malam; 'meal' = harga makan SAR per orang per malam (room_type __meal__) */
-  component: {
-    type: DataTypes.STRING(16),
-    allowNull: false,
-    defaultValue: 'room'
-  },
   amount: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: false

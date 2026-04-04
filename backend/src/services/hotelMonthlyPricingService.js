@@ -74,9 +74,10 @@ async function findMonthlyPrice({
   currency,
   component = COMPONENT_ROOM
 }) {
-  const room = roomType || 'single';
+  const isMeal = component === COMPONENT_MEAL;
+  const room = isMeal ? MEAL_ROOM_TYPE : (roomType || 'single');
+  const withMealFlag = isMeal ? false : !!withMeal;
   const cur = String(currency || 'IDR').toUpperCase();
-  const comp = component === COMPONENT_MEAL ? COMPONENT_MEAL : COMPONENT_ROOM;
   const layers = [
     { branch_id: branchId || null, owner_id: ownerId || null },
     { branch_id: branchId || null, owner_id: null },
@@ -89,8 +90,7 @@ async function findMonthlyPrice({
         year_month: yearMonth,
         currency: cur,
         room_type: room,
-        with_meal: !!withMeal,
-        component: comp,
+        with_meal: withMealFlag,
         branch_id: layer.branch_id,
         owner_id: layer.owner_id
       },
