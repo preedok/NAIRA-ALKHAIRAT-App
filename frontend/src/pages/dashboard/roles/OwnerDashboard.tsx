@@ -131,11 +131,10 @@ const OwnerDashboard: React.FC = () => {
     return map[status] || 'default';
   };
 
+  const accountBalance = balanceData?.balance ?? 0;
+
   return (
     <div className="space-y-8 w-full">
-      <div className="flex justify-end">
-        <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
-      </div>
       {/* Notifikasi: Akun telah diaktivasi, MoU tersedia */}
       {ownerProfile?.mou_generated_url && (
         <Card className="bg-primary-50 border-primary-200">
@@ -157,10 +156,24 @@ const OwnerDashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Travel-style Hero */}
-      <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
+      {/* Travel-style Hero: Lihat Paket + auto refresh sudut kanan atas; sapaan + Buat Pesanan */}
+      <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80 relative overflow-hidden">
+        <div className="absolute top-5 right-5 sm:top-7 sm:right-7 z-[1] flex flex-col items-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 bg-white/90 border-stone-300 hover:bg-white shadow-sm"
+            onClick={() => navigate('/dashboard/products')}
+          >
+            <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>Lihat Paket</span>
+          </Button>
+          <div className="rounded-lg bg-white/70 backdrop-blur-[2px] px-1.5 py-1 border border-stone-200/60 shadow-sm">
+            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pr-0 min-[380px]:pr-[9.5rem] sm:pr-[13.5rem]">
+          <div className="min-w-0">
             <p className="text-primary-600 font-semibold text-sm uppercase tracking-wide">Selamat datang</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
               {user?.company_name || user?.name}
@@ -172,17 +185,10 @@ const OwnerDashboard: React.FC = () => {
               )}
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-            <Button variant="primary" className="w-full gap-2" onClick={() => navigate('/dashboard/orders-invoices')}>
-              <Plus className="w-5 h-5" />
-              <span className="hidden sm:inline">Buat Pesanan</span>
-              <span className="sm:hidden">Pesan</span>
-            </Button>
-            <Button variant="outline" className="w-full" onClick={() => navigate('/dashboard/products')}>
-              <Package className="w-5 h-5 sm:mr-1" />
-              <span className="hidden sm:inline">Lihat Paket</span>
-            </Button>
-          </div>
+          <Button variant="primary" className="w-full sm:w-auto shrink-0 gap-2 sm:min-w-[11rem]" onClick={() => navigate('/dashboard/orders-invoices')}>
+            <Plus className="w-5 h-5" />
+            Buat Pesanan
+          </Button>
         </div>
       </div>
 
@@ -220,16 +226,18 @@ const OwnerDashboard: React.FC = () => {
               {loading ? (
                 <p className="text-stone-500 mt-2">Memuat...</p>
               ) : (
-                <p className="text-2xl font-bold text-emerald-700 mt-2"><NominalDisplay amount={balanceData?.balance ?? 0} currency="IDR" /></p>
+                <p className="text-2xl font-bold text-emerald-700 mt-2"><NominalDisplay amount={accountBalance} currency="IDR" /></p>
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')} className="gap-1">
-              <Receipt className="w-4 h-4" />
-              Alokasi ke Invoice
-            </Button>
-          </div>
+          {accountBalance > 0 && (
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders-invoices')} className="gap-1">
+                <Receipt className="w-4 h-4" />
+                Alokasi ke Invoice
+              </Button>
+            </div>
+          )}
         </div>
         {balanceData && balanceData.transactions.length > 0 && (
           <div className="mt-4 pt-4 border-t border-emerald-200/80">

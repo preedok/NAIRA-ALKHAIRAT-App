@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { FileText, Plus, Pencil, ShoppingCart } from 'lucide-react';
-import { productsApi } from '../../../services/api';
+import { productsApi, businessRulesApi } from '../../../services/api';
+import { fillFromSource } from '../../../utils/currencyConversion';
+import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
@@ -34,6 +36,7 @@ const SiskopatuhPage: React.FC = () => {
     description: '',
     price_idr: 0
   });
+  const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
 
   const isPusat = ['super_admin', 'admin_pusat', 'role_accounting'].includes(user?.role || '');
   const canAddToOrder = user?.role === 'owner_mou' || user?.role === 'owner_non_mou' || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
@@ -56,6 +59,24 @@ const SiskopatuhPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    businessRulesApi.get().then((res) => {
+      const data = (res.data as { data?: { currency_rates?: unknown } })?.data;
+      let cr = data?.currency_rates;
+      if (typeof cr === 'string') {
+        try {
+          cr = JSON.parse(cr) as { SAR_TO_IDR?: number; USD_TO_IDR?: number };
+        } catch {
+          cr = null;
+        }
+      }
+      const rates = cr as { SAR_TO_IDR?: number; USD_TO_IDR?: number } | null;
+      if (rates && typeof rates === 'object') {
+        setCurrencyRates({ SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 });
+      }
+    }).catch(() => {});
+  }, []);
 
   const resetForm = () => {
     setForm({ name: '', description: '', price_idr: 0 });
@@ -159,7 +180,7 @@ const SiskopatuhPage: React.FC = () => {
               <tr>
                 <th className="text-left px-4 py-2">Kode</th>
                 <th className="text-left px-4 py-2">Nama</th>
-                <th className="text-right px-4 py-2">Harga (IDR)</th>
+                <th className="text-right px-4 py-2">{PRICE_COLUMN_LABEL}</th>
                 {(isPusat || canAddToOrder) && <th className="text-center px-4 py-2">Aksi</th>}
               </tr>
             </thead>
@@ -171,7 +192,23 @@ const SiskopatuhPage: React.FC = () => {
                 <tr key={p.id} className="border-b border-slate-100 last:border-0">
                   <td className="px-4 py-2 font-mono">{p.code}</td>
                   <td className="px-4 py-2">{p.name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{(Number(p.price_general_idr ?? p.price_general ?? 0) || 0).toLocaleString('id-ID')}</td>
+                  <td className="px-4 py-2 text-right text-slate-800 align-top">
+                    {(() => {
+                      const priceIdr = Number(p.price_general_idr ?? p.price_general ?? 0) || 0;
+                      const triple = fillFromSource('IDR', priceIdr, currencyRates);
+                      const t = getPriceTripleForTable(priceIdr, triple.sar, triple.usd);
+                      if (!t.hasPrice) return <span className="text-slate-400">–</span>;
+                      return (
+                        <>
+                          <div className="tabular-nums font-medium">{t.idrText}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            <span className="text-slate-400">SAR:</span> {t.sarText}
+                            <span className="text-slate-400 ml-1">USD:</span> {t.usdText}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </td>
                   {(isPusat || canAddToOrder) && (
                     <td className="px-4 py-2 text-center">
                       <div className="inline-flex items-center gap-2">
