@@ -734,36 +734,30 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         ROOM_TYPES.forEach((rt) => {
           ymKeys.forEach((m) => {
             const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-            if (n > 0) {
-              monthlyRowsPayload.push({
-                year_month: m,
-                room_type: rt,
-                with_meal: !!isFullboard,
-                amount: n,
-                currency: 'SAR',
-                component: 'room'
-              });
-            }
+            monthlyRowsPayload.push({
+              year_month: m,
+              room_type: rt,
+              with_meal: !!isFullboard,
+              amount: n,
+              currency: 'SAR',
+              component: 'room'
+            });
           });
         });
         if (!isFullboard) {
           ymKeys.forEach((m) => {
             const nm = parseSarInputString(monthlyMealByMonth?.[m] ?? '');
-            if (nm > 0) {
-              monthlyRowsPayload.push({
-                year_month: m,
-                room_type: '__meal__',
-                with_meal: false,
-                amount: nm,
-                currency: 'SAR',
-                component: 'meal'
-              });
-            }
+            monthlyRowsPayload.push({
+              year_month: m,
+              room_type: '__meal__',
+              with_meal: false,
+              amount: nm,
+              currency: 'SAR',
+              component: 'meal'
+            });
           });
         }
-        if (monthlyRowsPayload.length) {
-          await productsApi.saveHotelMonthlyPricesBulk(hotel.id, { rows: monthlyRowsPayload });
-        }
+        await productsApi.saveHotelMonthlyPricesBulk(hotel.id, { rows: monthlyRowsPayload });
       }
 
       showToast('Jumlah kamar & tarif per malam SAR (grid per bulan kalender) disimpan. Order menghitung per malam menginap sesuai tanggal.', 'success');

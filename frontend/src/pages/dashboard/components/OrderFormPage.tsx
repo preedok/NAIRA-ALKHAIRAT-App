@@ -73,7 +73,24 @@ interface ProductOption {
   price_general_idr?:number|null; price_general_sar?:number|null; price_general_usd?:number|null;
   price_branch?:number|null; price_owner?:number|null;
   currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
-  room_breakdown?:Record<string,{ price: number }>; prices_by_room?:Record<string,{ price: number }>;
+  room_breakdown?:Record<string,{ price: number; quantity?: number }>; prices_by_room?:Record<string,{ price: number; quantity?: number }>;
+  /** Backend: nilai suplemen makan dalam mata uang referensi produk (bukan selalu IDR meski namanya _idr). */
+  meal_price_idr?: number | null;
+  hotel_monthly_display?: { sar_meal_per_person_per_night?: number | null };
+  /** Grid 12 bulan per tipe kamar (SAR/malam) — dipakai form order sesuai bulan check-in. */
+  hotel_monthly_series_by_room_type?: {
+    year: string;
+    by_room_type: Record<string, { months: Array<{ year_month: string; sar_room_per_night: number | null }> }>;
+  };
+  hotel_monthly_series?: {
+    year: string;
+    room_type: string;
+    months: Array<{ year_month: string; sar_room_per_night: number | null }>;
+  };
+  hotel_monthly_meal_months?: {
+    year: string;
+    months: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>;
+  };
   bandara_options?: Array<{ bandara: string; name: string; default: { price_idr: number; seat_quota?: number } }>;
   route_prices?: Partial<Record<BusRouteType, number>>;
 }
@@ -150,6 +167,22 @@ const OrderFormPage: React.FC = () => {
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const [waiveBusPenalty, setWaiveBusPenalty] = useState(false);
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
+
+  /** Tahun grid hotel terbesar dari tanggal di form (agar April 2027 memuat series 2027 dari API). */
+  const hotelMonthlyListYear = useMemo(() => {
+    let maxY = new Date().getFullYear();
+    const bump = (s?: string) => {
+      if (!s || s.length < 4) return;
+      const y = parseInt(s.slice(0, 4), 10);
+      if (!Number.isNaN(y) && y > maxY) maxY = y;
+    };
+    items.forEach((r) => {
+      if (r.type !== 'hotel') return;
+      bump(r.check_in);
+      bump(r.check_out);
+    });
+    return String(maxY);
+  }, [items]);
 
   const isOwner      = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const canPickOwner = !isEdit && ['invoice_koordinator','invoice_saudi'].includes(user?.role ?? '');
@@ -299,14 +332,14 @@ const OrderFormPage: React.FC = () => {
 
   const fetchProducts = useCallback(()=>{
     setLoadingProd(true);
-    const p:Record<string,any>={with_prices:'true',include_inactive:'false',limit:500};
+    const p:Record<string,any>={with_prices:'true',include_inactive:'false',limit:500,hotel_monthly_year:hotelMonthlyListYear};
     if(branchId) p.branch_id=branchId;
     if(ownerId)  p.owner_id=ownerId;
     productsApi.list(p)
       .then(r=>{ const d=(r.data as any)?.data??[]; setProducts(Array.isArray(d)?d:[]); })
       .catch(()=>showToast('Gagal memuat produk','error'))
       .finally(()=>setLoadingProd(false));
-  },[branchId,ownerId,showToast]);
+  },[branchId,ownerId,showToast,hotelMonthlyListYear]);
   useEffect(()=>{ fetchProducts(); },[fetchProducts]);
 
   useEffect(()=>{
@@ -487,18 +520,39 @@ const OrderFormPage: React.FC = () => {
     if(pv>0) return pv;
     return typeof p.price_general_idr==='number'?p.price_general_idr:0;
   };
-  const hrp=(p:ProductOption|undefined,rt:RoomTypeId|'',meal:boolean)=>{
+  const hrp=(p:ProductOption|undefined,rt:RoomTypeId|'',meal:boolean,checkIn?:string)=>{
     if(!p || !rt) return 0;
     const rb=p.room_breakdown??p.prices_by_room??{};
     const rtEntry=rb[rt];
     const rtPrice=typeof rtEntry==='object'&&rtEntry!==null&&'price' in rtEntry?Number(rtEntry.price):typeof rtEntry==='number'?rtEntry:0;
+    const cur=((p.currency ?? (p.meta as { currency?: string } | undefined)?.currency) || 'IDR').toUpperCase();
+    const toSar=(x:number)=>cur==='SAR'?x:cur==='USD'?x*u2iR/s2i:x/s2i;
+    /**
+     * Hotel: harga dari grid produk untuk bulan check-in (YYYY-MM), bukan snapshot “bulan berjalan” saja.
+     * Nilai serial API sudah SAR/malam (fullboard = paket jika ada di grid).
+     */
+    if (p.type === 'hotel') {
+      const ym = checkIn && String(checkIn).length >= 7 ? String(checkIn).slice(0, 7) : null;
+      if (ym) {
+        const byRt = p.hotel_monthly_series_by_room_type?.by_room_type;
+        let sar: number | null = null;
+        if (byRt?.[rt]?.months?.length) {
+          const cell = byRt[rt].months.find((m) => m.year_month === ym);
+          if (cell?.sar_room_per_night != null && Number(cell.sar_room_per_night) > 0) sar = Number(cell.sar_room_per_night);
+        }
+        if (sar == null && p.hotel_monthly_series?.months?.length && String(p.hotel_monthly_series.room_type) === String(rt)) {
+          const cell = p.hotel_monthly_series.months.find((m) => m.year_month === ym);
+          if (cell?.sar_room_per_night != null && Number(cell.sar_room_per_night) > 0) sar = Number(cell.sar_room_per_night);
+        }
+        if (sar != null && sar > 0) return sar;
+        return 0;
+      }
+      return rtPrice > 0 ? toSar(rtPrice) : 0;
+    }
     const fallbackGeneral=p.price_general_sar ?? (p.price_general_idr ?? 0)/s2i;
     const fallbackAnyRoom=Object.values(rb).find((v:unknown)=>typeof v==='object'&&v!==null&&'price' in (v as object)&&Number((v as {price?:unknown}).price)>0);
     const anyRoomPrice=fallbackAnyRoom?Number((fallbackAnyRoom as {price:number}).price):0;
-    const cur=((p.currency ?? (p.meta as { currency?: string } | undefined)?.currency) || 'IDR').toUpperCase();
-    const toSar=(x:number)=>cur==='SAR'?x:cur==='USD'?x*u2iR/s2i:x/s2i;
     const rawRoom = rtPrice>0 ? rtPrice : (anyRoomPrice>0 ? anyRoomPrice : 0);
-    // Harga pokok mengikuti currency produk. Kurs hanya mempengaruhi konversi tampilan, bukan nilai pokok.
     const roomSar = rawRoom > 0 ? toSar(rawRoom) : fallbackGeneral;
     return meal ? roomSar + toSar((p.meta?.meal_price as number|undefined)??0) : roomSar;
   };
@@ -526,7 +580,29 @@ const OrderFormPage: React.FC = () => {
   const setRP=(rowId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updateRow(rowId,{unit_price:toRowCurrency(idr,row),unit_price_currency:rowCur(row)}); };
   const setLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updLine(rowId,lineId,{unit_price:toRowCurrency(idr,row),unit_price_currency:rowCur(row)}); };
   const setMealLP=(rowId:string,lineId:string,cur:'IDR'|'SAR'|'USD',val:number)=>{ const row=items.find(r=>r.id===rowId); if(!row) return; const idr=cur==='IDR'?val:cur==='SAR'?val*s2iEff:val*u2iEff; updLine(rowId,lineId,{meal_unit_price:toRowCurrency(idr,row),meal_unit_price_currency:rowCur(row)}); };
-  const getMealPriceSar=(p:ProductOption|undefined):number=>{ if(!p) return 0; if((p.meta?.meal_plan as string)==='fullboard') return 0; const raw=(p.meta?.meal_price as number)??0; const cur=(p.currency||'IDR').toUpperCase(); return cur==='SAR'?raw:cur==='USD'?raw*u2iR/s2i:raw/s2i; };
+  const getMealPriceSar=(p:ProductOption|undefined,checkIn?:string):number=>{
+    if(!p) return 0;
+    if((p.meta?.meal_plan as string)==='fullboard') return 0;
+    if (p.type === 'hotel') {
+      const ym = checkIn && String(checkIn).length >= 7 ? String(checkIn).slice(0, 7) : null;
+      if (ym && p.hotel_monthly_meal_months?.months?.length) {
+        const cell = p.hotel_monthly_meal_months.months.find((m) => m.year_month === ym);
+        const v = cell?.sar_meal_per_person_per_night;
+        if (v != null && Number(v) > 0) return Number(v);
+        return 0;
+      }
+      const sarGrid = p.hotel_monthly_display?.sar_meal_per_person_per_night;
+      if (sarGrid != null && Number(sarGrid) > 0) return Number(sarGrid);
+      const mp = p.meal_price_idr;
+      if (mp != null && Number(mp) > 0) {
+        const cur = (p.currency || 'IDR').toUpperCase();
+        const raw = Number(mp);
+        return cur === 'SAR' ? raw : cur === 'USD' ? raw * u2iR / s2i : raw / s2i;
+      }
+      return 0;
+    }
+    const raw=(p.meta?.meal_price as number)??0; const cur=(p.currency||'IDR').toUpperCase(); return cur==='SAR'?raw:cur==='USD'?raw*u2iR/s2i:raw/s2i;
+  };
   const isFullboardHotel=(p:ProductOption|undefined):boolean=>!!(p?.meta?.meal_plan==='fullboard');
 
   const roomCap = (rt: RoomTypeId) => ROOM_TYPES.find((t) => t.id === rt)?.cap ?? 0;
@@ -594,7 +670,7 @@ const OrderFormPage: React.FC = () => {
       const rowCurrency = rowCur(r);
       const fullboard = isFullboardHotel(prod);
       const withMealDefault = fullboard ? true : !!(r.room_breakdown || []).find((l) => l.with_meal)?.with_meal;
-      const mealPSar = getMealPriceSar(prod);
+      const mealPSar = getMealPriceSar(prod, r.check_in);
 
       const lines: HotelRoomLine[] = Object.entries(combo)
         .filter(([, qty]) => (qty || 0) > 0)
@@ -602,8 +678,8 @@ const OrderFormPage: React.FC = () => {
         .map(([rtRaw, qty]) => {
           const rt = rtRaw as RoomTypeId;
           const withMeal = fullboard ? true : withMealDefault;
-          const roomOnlySar = hrp(prod, rt, false);
-          const withMealSar = hrp(prod, rt, true);
+          const roomOnlySar = hrp(prod, rt, false, r.check_in);
+          const withMealSar = hrp(prod, rt, true, r.check_in);
           const roomP = toCurrencyFromSAR(roomOnlySar, rowCurrency);
           const mealP = toCurrencyFromSAR(mealPSar, rowCurrency);
           const unitP = fullboard ? toCurrencyFromSAR(withMealSar, rowCurrency) : (withMeal ? toCurrencyFromSAR(withMealSar, rowCurrency) : roomP);
@@ -624,7 +700,7 @@ const OrderFormPage: React.FC = () => {
         const prod = products.find((p) => p.id === r.product_id);
         const cur = (r.price_currency ?? getDisplayCurrency('hotel', prod)) as string;
         const lines = (r.room_breakdown || [])
-          .filter((l) => l.room_type && l.quantity > 0)
+          .filter((l) => l.room_type)
           .map((l) => `${l.id}:${l.room_type}:${l.quantity}:${l.with_meal ? 1 : 0}`)
           .join('|');
         return `${r.id}|${r.product_id}|${r.check_in}|${r.check_out}|${cur}|${lines}|${branchId ?? ''}|${ownerId ?? ''}|${s2iEff}|${u2iEff}`;
@@ -641,14 +717,15 @@ const OrderFormPage: React.FC = () => {
         const prod = products.find((p) => p.id === row.product_id);
         const cur = (row.price_currency ?? getDisplayCurrency('hotel', prod)) as 'SAR' | 'IDR' | 'USD';
         (row.room_breakdown || []).forEach((line) => {
-          if (!line.room_type || line.quantity <= 0) return;
+          if (!line.room_type) return;
+          const q = Math.max(1, line.quantity || 1);
           productsApi
             .getHotelStayQuote(row.product_id, {
               check_in: row.check_in!,
               check_out: row.check_out!,
               room_type: line.room_type,
               with_meal: !!line.with_meal,
-              quantity: line.quantity,
+              quantity: q,
               currency: cur,
               branch_id: branchId,
               owner_id: ownerId
@@ -678,7 +755,21 @@ const OrderFormPage: React.FC = () => {
                 })
               );
             })
-            .catch(() => {});
+            .catch(() => {
+              setItems((prev) =>
+                prev.map((r) => {
+                  if (r.id !== row.id || !r.room_breakdown) return r;
+                  return {
+                    ...r,
+                    room_breakdown: r.room_breakdown.map((l) =>
+                      l.id === line.id
+                        ? { ...l, unit_price: 0, meal_unit_price: 0, unit_price_currency: cur, meal_unit_price_currency: cur }
+                        : l
+                    )
+                  };
+                })
+              );
+            });
         });
       });
     }, 450);
@@ -735,11 +826,11 @@ const OrderFormPage: React.FC = () => {
           next.room_breakdown=next.room_breakdown.map(l=>{
             if(!l.room_type) return l;
             const withMeal=fullboard?true:(l.with_meal??false);
-            const roomPSar=hrp(prod,l.room_type as RoomTypeId,false);
-            const mealPSar=getMealPriceSar(prod);
+            const roomPSar=hrp(prod,l.room_type as RoomTypeId,false,next.check_in);
+            const mealPSar=getMealPriceSar(prod,next.check_in);
             const roomP=toCurrencyFromSAR(roomPSar,rowCurHotel);
             const mealP=toCurrencyFromSAR(mealPSar,rowCurHotel);
-            const combinedP=fullboard?toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),rowCurHotel):(roomP+(withMeal?mealP:0));
+            const combinedP=fullboard?toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,next.check_in),rowCurHotel):(roomP+(withMeal?mealP:0));
             return { ...l, with_meal: withMeal, unit_price: l.unit_price||(fullboard?combinedP:roomP), meal_unit_price: withMeal && !fullboard ? (l.meal_unit_price??mealP) : 0 };
           });
         }
@@ -768,27 +859,48 @@ const OrderFormPage: React.FC = () => {
     if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    if (prod?.type === 'hotel') {
+      const hasSplitMeal = typeof l.meal_unit_price === 'number';
+      if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
+      const roomPart = l.unit_price || toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, r.check_in), cur)) : 0;
+      return roomPart + mealPart;
+    }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur);
-    const roomPart=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false),cur);
-    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur)):0;
+    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur);
+    const roomPart=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false,r.check_in),cur);
+    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur)):0;
     return roomPart+mealPart;
   };
   const getEffectiveRoomPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    if (prod?.type === 'hotel') {
+      if (l.with_meal && typeof l.meal_unit_price !== 'number') {
+        const combined = l.unit_price || 0;
+        const meal = toCurrencyFromSAR(getMealPriceSar(prod, r.check_in), cur);
+        return Math.max(0, combined - meal);
+      }
+      return l.unit_price || toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+    }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod),cur); return Math.max(0,combined-meal); }
-    return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false),cur);
+    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur); return Math.max(0,combined-meal); }
+    return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false,r.check_in),cur);
   };
   const getEffectiveMealPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.with_meal) return 0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    if (prod?.type === 'hotel') {
+      if (typeof l.meal_unit_price === 'number') return l.meal_unit_price;
+      const combined = l.unit_price || 0;
+      const room = toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      return Math.max(0, combined - room);
+    }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
-    return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur);
+    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
+    return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur);
   };
   /** Untuk ringkasan total & header: jika kurs order diisi, harga kamar dihitung lagi dari master SAR × kurs order (bukan IDR tersimpan dari kurs settings). */
   const getEffectiveLinePriceForTotals=(r:OrderItemRow,l:HotelRoomLine):number=>{
@@ -796,10 +908,17 @@ const OrderFormPage: React.FC = () => {
     if (!hasCustomOrderKurs) return getEffectiveLinePrice(r,l);
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    if (prod?.type === 'hotel') {
+      const hasSplitMeal = typeof l.meal_unit_price === 'number';
+      if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
+      const roomPart = toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, r.check_in), cur)) : 0;
+      return roomPart + mealPart;
+    }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true),cur);
-    const roomPart=toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false),cur);
-    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod),cur)):0;
+    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur);
+    const roomPart=toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false,r.check_in),cur);
+    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur)):0;
     return roomPart+mealPart;
   };
   const nightsFor=(r:OrderItemRow)=> r.type==='hotel' ? getNights(r.check_in,r.check_out) : 0;
@@ -820,7 +939,7 @@ const OrderFormPage: React.FC = () => {
       const cur=rowCur(r);
       const fullboard=!!(prod && (prod.meta?.meal_plan as string)==='fullboard');
       const unit=hasCustomOrderKurs&&prod&&r.room_type
-        ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard),cur)
+        ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard,r.check_in),cur)
         :(r.unit_price||0);
       return Math.max(0,r.quantity)*unit*multiplier;
     }
@@ -874,7 +993,7 @@ const OrderFormPage: React.FC = () => {
         const cur=rowCur(r);
         const fullboard=!!(prod && (prod.meta?.meal_plan as string)==='fullboard');
         const lineRowCur=hasCustomOrderKurs&&prod&&r.room_type
-          ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard),cur)
+          ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard,r.check_in),cur)
           :(r.unit_price||0);
         const unitPriceIdr=useLatestRates?toIDRWithRates(lineRowCur,r,latestRates):toIDR(lineRowCur,r);
         const nights=nightsFor(r)||1;
@@ -1502,7 +1621,7 @@ const OrderFormPage: React.FC = () => {
                                           return (
                                             <>
                                   <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
-                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hrp(hProd,rt,false); const withMealSar=hrp(hProd,rt,true); const unitP=rt?(fullboard?toCurrencyFromSAR(withMealSar,cur):toCurrencyFromSAR(withMeal?withMealSar:roomOnlySar,cur)):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
+                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hrp(hProd,rt,false,row.check_in); const withMealSar=hrp(hProd,rt,true,row.check_in); const unitP=rt?(fullboard?toCurrencyFromSAR(withMealSar,cur):toCurrencyFromSAR(withMeal?withMealSar:roomOnlySar,cur)):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd,row.check_in),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
                                   </div>
                                   <div className="w-16 min-w-[60px]">
                                     <Input label="Jumlah" type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ if(locked) return; const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
@@ -1517,7 +1636,7 @@ const OrderFormPage: React.FC = () => {
                                         const nextWithMeal = !(line.with_meal ?? false);
                                         updLine(row.id, line.id, {
                                           with_meal: nextWithMeal,
-                                          meal_unit_price: nextWithMeal ? toCurrencyFromSAR(getMealPriceSar(hProd), rowCur(row)) : 0
+                                          meal_unit_price: nextWithMeal ? toCurrencyFromSAR(getMealPriceSar(hProd, row.check_in), rowCur(row)) : 0
                                         }); 
                                       }}>
                                       <Utensils size={14} className="mr-1.5"/> Makan

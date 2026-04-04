@@ -1352,6 +1352,23 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
       const branchId = r.branch_id || null;
       const ownerId = r.owner_id || null;
 
+      /** Harga dikosongkan di UI → hapus baris agar tidak tertinggal nilai lama. */
+      if (amount === 0) {
+        await HotelMonthlyPrice.destroy({
+          where: {
+            product_id: product.id,
+            year_month: yearMonth,
+            currency,
+            room_type: roomType,
+            with_meal: withMeal,
+            branch_id: branchId,
+            owner_id: ownerId
+          },
+          transaction: t
+        });
+        continue;
+      }
+
       const existing = await HotelMonthlyPrice.findOne({
         where: {
           product_id: product.id,
