@@ -5,7 +5,7 @@
  */
 const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
-const { Product, ProductPrice, Order, Invoice, OwnerProfile, User, Branch } = require('../models');
+const { Product, Order, Invoice, OwnerProfile, User, Branch, HotelMonthlyPrice } = require('../models');
 const { getRulesForBranch } = require('../controllers/businessRuleController');
 const { getEffectivePrice } = require('../controllers/productController');
 const { getAvailabilityByDateRange } = require('./hotelAvailabilityService');
@@ -170,10 +170,12 @@ async function buildContextForOwner(ownerId) {
   const productLimit = 80;
   for (const p of products.slice(0, productLimit)) {
     let priceIdr = null;
-    try {
-      priceIdr = await getEffectivePrice(p.id, branchId, ownerId, {}, 'IDR');
-    } catch (e) {
-      // skip
+    if (p.type !== 'hotel') {
+      try {
+        priceIdr = await getEffectivePrice(p.id, branchId, ownerId, {}, 'IDR');
+      } catch (e) {
+        // skip
+      }
     }
     const priceSar = priceIdr != null ? (priceIdr / sarToIdr).toFixed(2) : null;
     const priceUsd = priceIdr != null ? (priceIdr / usdToIdr).toFixed(2) : null;
@@ -181,21 +183,6 @@ async function buildContextForOwner(ownerId) {
     let meal_price_idr = null;
     let meal_price_sar = null;
     let meal_price_usd = null;
-    if (p.type === 'hotel' && meta.meal_price != null && Number(meta.meal_price) > 0) {
-      const mealInRef = Number(meta.meal_price);
-      const refCur = (meta.currency || 'IDR').toString().toUpperCase();
-      if (refCur === 'IDR') {
-        meal_price_idr = mealInRef;
-      } else if (refCur === 'SAR') {
-        meal_price_idr = mealInRef * sarToIdr;
-      } else if (refCur === 'USD') {
-        meal_price_idr = mealInRef * usdToIdr;
-      } else {
-        meal_price_idr = mealInRef;
-      }
-      meal_price_sar = meal_price_idr != null ? (meal_price_idr / sarToIdr).toFixed(2) : null;
-      meal_price_usd = meal_price_idr != null ? (meal_price_idr / usdToIdr).toFixed(2) : null;
-    }
     productSummaries.push({
       id: p.id,
       name: p.name,
@@ -210,67 +197,47 @@ async function buildContextForOwner(ownerId) {
     });
   }
 
-  // Fallback harga makan hotel: dari ProductPrice (with_meal - room_only) jika meta.meal_price belum diatur.
-  // Cek harga pusat (branch_id null) dan harga cabang owner (branchId) agar data makan tampil.
-  const hotelIdsWithoutMeal = productSummaries.filter(ps => ps.type === 'hotel' && (ps.meal_price_idr == null || ps.meal_price_idr === 0)).map(ps => ps.id);
-  if (hotelIdsWithoutMeal.length > 0) {
-    const today = new Date().toISOString().slice(0, 10);
-    const whereBase = {
-      product_id: { [Op.in]: hotelIdsWithoutMeal },
-      [Op.or]: [{ branch_id: null }, ...(branchId ? [{ branch_id: branchId }] : [])],
-      owner_id: null,
-      [Op.and]: [
-        { [Op.or]: [{ effective_from: null }, { effective_from: { [Op.lte]: today } }] },
-        { [Op.or]: [{ effective_until: null }, { effective_until: { [Op.gte]: today } }] }
-      ]
-    };
-    const prices = await ProductPrice.findAll({
-      where: whereBase,
-      attributes: ['product_id', 'amount', 'currency', 'meta', 'branch_id'],
+  const MEAL_ROOM_TYPE_GRID = '__meal__';
+  const hotelIdsForMealGrid = productSummaries.filter(ps => ps.type === 'hotel').map(ps => ps.id);
+  const ymChat = new Date().toISOString().slice(0, 7);
+  if (hotelIdsForMealGrid.length > 0) {
+    const mealRows = await HotelMonthlyPrice.findAll({
+      where: {
+        product_id: { [Op.in]: hotelIdsForMealGrid },
+        year_month: ymChat,
+        room_type: MEAL_ROOM_TYPE_GRID,
+        with_meal: false,
+        branch_id: null,
+        owner_id: null
+      },
+      attributes: ['product_id', 'amount', 'currency'],
       raw: true
     });
-    // Prioritas: harga cabang (branch_id set) mengoverride harga pusat (branch_id null)
-    prices.sort((a, b) => (a.branch_id ? 1 : 0) - (b.branch_id ? 1 : 0));
-    const mealByProduct = {};
-    prices.forEach(pr => {
-      const mid = pr.product_id;
-      const rt = (pr.meta && pr.meta.room_type) ? pr.meta.room_type : 'quad';
-      const withMeal = !!(pr.meta && pr.meta.with_meal);
-      const amount = parseFloat(pr.amount) || 0;
-      const cur = (pr.currency || 'IDR').toUpperCase();
-      if (!mealByProduct[mid]) mealByProduct[mid] = { roomOnly: {}, withMeal: {}, currency: {} };
-      if (withMeal) {
-        mealByProduct[mid].withMeal[rt] = amount;
-        mealByProduct[mid].currency[rt] = cur;
-      } else {
-        mealByProduct[mid].roomOnly[rt] = amount;
+    const curRank = (c) => ({ SAR: 0, USD: 1, IDR: 2 }[String(c || '').toUpperCase()] ?? 3);
+    const bestMealByProduct = {};
+    for (const row of mealRows) {
+      const pid = row.product_id;
+      const prev = bestMealByProduct[pid];
+      if (!prev || curRank(row.currency) < curRank(prev.currency)) bestMealByProduct[pid] = row;
+    }
+    for (const pid of hotelIdsForMealGrid) {
+      const row = bestMealByProduct[pid];
+      if (!row) continue;
+      const amt = parseFloat(row.amount);
+      if (!Number.isFinite(amt) || amt <= 0) continue;
+      const cur = String(row.currency || 'IDR').toUpperCase();
+      let idr = null;
+      if (cur === 'IDR') idr = amt;
+      else if (cur === 'SAR') idr = amt * sarToIdr;
+      else if (cur === 'USD') idr = amt * usdToIdr;
+      else idr = amt;
+      const ps = productSummaries.find(s => s.id === pid);
+      if (ps && idr != null) {
+        ps.meal_price_idr = Math.round(idr);
+        ps.meal_price_sar = (ps.meal_price_idr / sarToIdr).toFixed(2);
+        ps.meal_price_usd = (ps.meal_price_idr / usdToIdr).toFixed(2);
       }
-    });
-    hotelIdsWithoutMeal.forEach(id => {
-      const entry = mealByProduct[id];
-      if (!entry) return;
-      const rts = ['quad', 'triple', 'double', 'single', 'quint'];
-      let mealInRef = null;
-      let cur = 'IDR';
-      for (const rt of rts) {
-        const withM = entry.withMeal[rt];
-        const roomO = entry.roomOnly[rt];
-        if (withM != null && roomO != null && withM > roomO) {
-          mealInRef = withM - roomO;
-          cur = (entry.currency && entry.currency[rt]) || 'IDR';
-          break;
-        }
-      }
-      if (mealInRef != null && mealInRef > 0) {
-        const ps = productSummaries.find(s => s.id === id);
-        if (ps) {
-          const toIdr = cur === 'SAR' ? sarToIdr : cur === 'USD' ? usdToIdr : 1;
-          ps.meal_price_idr = Math.round(mealInRef * toIdr);
-          ps.meal_price_sar = (ps.meal_price_idr / sarToIdr).toFixed(2);
-          ps.meal_price_usd = (ps.meal_price_idr / usdToIdr).toFixed(2);
-        }
-      }
-    });
+    }
   }
 
   // Terapkan diskon MOU ke harga makan hotel (sama seperti getEffectivePrice): owner MOU dapat diskon, non-MOU tidak.
@@ -302,7 +269,10 @@ async function buildContextForOwner(ownerId) {
     if (ps.price_idr != null) prices.push(`${Math.round(ps.price_idr).toLocaleString('id-ID')} IDR`);
     if (ps.price_sar != null) prices.push(`${ps.price_sar} SAR`);
     if (ps.price_usd != null) prices.push(`${ps.price_usd} USD`);
-    let line = `- ${ps.type} | id: ${ps.id} | ${ps.name} (${ps.code}) | Harga kamar: ${prices.join(' / ') || 'sesuai permintaan'}`;
+    const roomPriceLabel = ps.type === 'hotel'
+      ? (prices.length ? prices.join(' / ') : 'grid bulanan per malam (sesuai bulan check-in)')
+      : (prices.join(' / ') || 'sesuai permintaan');
+    let line = `- ${ps.type} | id: ${ps.id} | ${ps.name} (${ps.code}) | Harga kamar: ${roomPriceLabel}`;
     if (ps.type === 'hotel' && (ps.meal_price_idr != null || ps.meal_price_sar != null || ps.meal_price_usd != null)) {
       const mealParts = [];
       if (ps.meal_price_idr != null) mealParts.push(`${Math.round(ps.meal_price_idr).toLocaleString('id-ID')} IDR`);
@@ -310,7 +280,7 @@ async function buildContextForOwner(ownerId) {
       if (ps.meal_price_usd != null) mealParts.push(`${ps.meal_price_usd} USD`);
       line += ` | Harga makan (per orang per hari): ${mealParts.join(' / ')}`;
     } else if (ps.type === 'hotel') {
-      line += ' | Harga makan: (belum diatur di data produk)';
+      line += ` | Harga makan: (grid bulanan ${ymChat}, belum diisi atau fullboard)`;
     }
     return line;
   }).join('\n');

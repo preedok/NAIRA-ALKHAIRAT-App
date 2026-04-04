@@ -61,6 +61,7 @@ const chat = asyncHandler(async (req, res) => {
   let createdInvoice = null;
   /** Alasan invoice tidak terbentuk: no_branch | no_items | validation_failed | create_error */
   let createInvoiceFailureReason = null;
+  let createInvoiceDetailMessage = null;
   const isCreateInvoiceRequest = /buatkan\s*(invoice|invocenya|invice|order)?|buat\s*(invoice|order)|create\s*invoice|setuju\s*(buatkan)?|invoice\s*nya|proses\s*invoice|buatkan\s*order|buat\s*orderannya/i.test(userMessage.trim());
 
   if (isCreateInvoiceRequest && !branchId) {
@@ -99,6 +100,9 @@ const chat = asyncHandler(async (req, res) => {
       } catch (err) {
         console.error('AI chat create order/invoice failed:', err?.message || err);
         createInvoiceFailureReason = 'create_error';
+        if (err && err.code === 'VALIDATION' && typeof err.message === 'string' && err.message.trim()) {
+          createInvoiceDetailMessage = err.message.trim();
+        }
       }
     } else {
       if (!extracted?.items?.length) {
@@ -122,7 +126,9 @@ const chat = asyncHandler(async (req, res) => {
     } else if (createInvoiceFailureReason === 'validation_failed') {
       finalReply = 'Maaf, data pesanan tidak valid atau produk tidak ditemukan di sistem. Pastikan nama produk dan tanggal sesuai katalog. Silakan coba lagi atau buat order lewat menu Form Order.';
     } else if (createInvoiceFailureReason === 'create_error') {
-      finalReply = 'Terjadi kesalahan saat membuat invoice. Silakan coba lagi atau buat order lewat menu Form Order / Daftar Invoice.';
+      finalReply = createInvoiceDetailMessage
+        ? `Invoice belum bisa dibuat: ${createInvoiceDetailMessage} Silakan lengkapi grid tarif hotel untuk tanggal tersebut atau buat order lewat menu Form Order.`
+        : 'Terjadi kesalahan saat membuat invoice. Silakan coba lagi atau buat order lewat menu Form Order / Daftar Invoice.';
     } else {
       finalReply = 'Maaf, invoice belum bisa dibuat dari obrolan ini. Pastikan Anda sudah menyebutkan: nama produk, jumlah/kamar, dan tanggal. Silakan tulis ulang ringkasan pesanan lalu kirim lagi "buatkan invoice".';
     }

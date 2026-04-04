@@ -115,18 +115,28 @@ async function resolveHotelMonthlyPricing({
     };
   }
 
-  const monthly = await calculateStayCostByNights({
-    productId,
-    branchId,
-    ownerId,
-    roomType: item.room_type || item.meta?.room_type,
-    withMeal: item.meal ?? item.meta?.with_meal ?? item.meta?.meal ?? false,
-    checkIn,
-    checkOut,
-    quantity: qty,
-    currency: itemCurrency,
-    rates
-  });
+  let monthly;
+  try {
+    monthly = await calculateStayCostByNights({
+      productId,
+      branchId,
+      ownerId,
+      roomType: item.room_type || item.meta?.room_type,
+      withMeal: item.meal ?? item.meta?.with_meal ?? item.meta?.meal ?? false,
+      checkIn,
+      checkOut,
+      quantity: qty,
+      currency: itemCurrency,
+      rates
+    });
+  } catch (e) {
+    if (e && (e.code === 'MISSING_HOTEL_MONTHLY_ROOM' || e.code === 'MISSING_HOTEL_MONTHLY_MEAL')) {
+      const err = new Error(e.message);
+      err.code = 'VALIDATION';
+      throw err;
+    }
+    throw e;
+  }
 
   if (!monthly.nights) {
     const unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, rates);
@@ -449,24 +459,28 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     }
     const qty = parseInt(it.quantity, 10) || 1;
     const itemCurrency = (it.currency && ['IDR', 'SAR', 'USD'].includes(String(it.currency).toUpperCase())) ? String(it.currency).toUpperCase() : 'IDR';
+    const checkIn = it.check_in || it.meta?.check_in;
+    const checkOut = it.check_out || it.meta?.check_out;
     let unitPrice = parseFloat(it.unit_price);
     if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
-      const productId = it.product_id;
-      if (!productId) {
-        const err = new Error('product_id atau unit_price wajib per item');
-        err.code = 'VALIDATION';
-        throw err;
-      }
-      unitPrice = await getEffectivePrice(productId, finalBranchId, ownerId, it.meta || {}, itemCurrency);
-      if (unitPrice == null) {
-        const err = new Error(`Harga tidak ditemukan untuk product ${productId}`);
-        err.code = 'VALIDATION';
-        throw err;
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+        unitPrice = 0;
+      } else {
+        const productId = it.product_id;
+        if (!productId) {
+          const err = new Error('product_id atau unit_price wajib per item');
+          err.code = 'VALIDATION';
+          throw err;
+        }
+        unitPrice = await getEffectivePrice(productId, finalBranchId, ownerId, it.meta || {}, itemCurrency);
+        if (unitPrice == null) {
+          const err = new Error(`Harga tidak ditemukan untuk product ${productId}`);
+          err.code = 'VALIDATION';
+          throw err;
+        }
       }
     }
     let unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
-    const checkIn = it.check_in || it.meta?.check_in;
-    const checkOut = it.check_out || it.meta?.check_out;
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && (it.room_type || it.meta?.room_type)) {
       const rt = it.room_type || it.meta?.room_type;
       if (checkIn && checkOut) {
@@ -765,16 +779,20 @@ const create = asyncHandler(async (req, res) => {
     }
     const qty = parseInt(it.quantity, 10) || 1;
     const itemCurrency = (it.currency && ['IDR', 'SAR', 'USD'].includes(String(it.currency).toUpperCase())) ? String(it.currency).toUpperCase() : 'IDR';
-    let unitPrice = parseFloat(it.unit_price);
-    if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
-      const productId = it.product_id;
-      if (!productId) return res.status(400).json({ success: false, message: 'product_id atau unit_price wajib per item' });
-      unitPrice = await getEffectivePrice(productId, finalBranchId, effectiveOwnerId, it.meta || {}, itemCurrency);
-      if (unitPrice == null) return res.status(400).json({ success: false, message: `Harga tidak ditemukan untuk product ${productId}` });
-    }
-    let unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
     const checkIn = it.check_in || it.meta?.check_in;
     const checkOut = it.check_out || it.meta?.check_out;
+    let unitPrice = parseFloat(it.unit_price);
+    if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+      if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+        unitPrice = 0;
+      } else {
+        const productId = it.product_id;
+        if (!productId) return res.status(400).json({ success: false, message: 'product_id atau unit_price wajib per item' });
+        unitPrice = await getEffectivePrice(productId, finalBranchId, effectiveOwnerId, it.meta || {}, itemCurrency);
+        if (unitPrice == null) return res.status(400).json({ success: false, message: `Harga tidak ditemukan untuk product ${productId}` });
+      }
+    }
+    let unitPriceIdr = unitPriceToIdr(unitPrice, itemCurrency, ratesForCreate);
     if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
       if (checkIn && checkOut) {
         const avail = await checkAvailability(it.product_id, it.room_type, checkIn, checkOut, qty, null);
@@ -787,16 +805,23 @@ const create = asyncHandler(async (req, res) => {
     let usedMonthlyPricing = false;
     let monthlyPricing = null;
     if (it.type === ORDER_ITEM_TYPE.HOTEL) {
-      monthlyPricing = await resolveHotelMonthlyPricing({
-        item: it,
-        productId: it.product_id,
-        branchId: finalBranchId,
-        ownerId: effectiveOwnerId,
-        qty,
-        itemCurrency,
-        unitPrice,
-        rates: ratesForCreate
-      });
+      try {
+        monthlyPricing = await resolveHotelMonthlyPricing({
+          item: it,
+          productId: it.product_id,
+          branchId: finalBranchId,
+          ownerId: effectiveOwnerId,
+          qty,
+          itemCurrency,
+          unitPrice,
+          rates: ratesForCreate
+        });
+      } catch (e) {
+        if (e && e.code === 'VALIDATION') {
+          return res.status(400).json({ success: false, message: e.message });
+        }
+        throw e;
+      }
       st = monthlyPricing.subtotal;
       unitPrice = monthlyPricing.unitPrice;
       unitPriceIdr = monthlyPricing.unitPriceIdr;
@@ -1133,13 +1158,17 @@ const update = asyncHandler(async (req, res) => {
       }
       const qty = parseInt(it.quantity, 10) || 1;
       const itemCurrency = (it.currency && ['IDR', 'SAR', 'USD'].includes(String(it.currency).toUpperCase())) ? String(it.currency).toUpperCase() : 'IDR';
-      let unitPrice = parseFloat(it.unit_price);
-      if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
-        unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, itemCurrency) || 0;
-      }
-      let unitPriceIdr = unitPriceToIdr(unitPrice || 0, itemCurrency, ratesForUpdate);
       const checkIn = it.check_in || it.meta?.check_in;
       const checkOut = it.check_out || it.meta?.check_out;
+      let unitPrice = parseFloat(it.unit_price);
+      if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        if (it.type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) {
+          unitPrice = 0;
+        } else {
+          unitPrice = await getEffectivePrice(it.product_id, order.branch_id, order.owner_id, it.meta || {}, itemCurrency) || 0;
+        }
+      }
+      let unitPriceIdr = unitPriceToIdr(unitPrice || 0, itemCurrency, ratesForUpdate);
       if (it.type === ORDER_ITEM_TYPE.HOTEL && it.product_id && it.room_type) {
         if (checkIn && checkOut) {
           const avail = await checkAvailability(it.product_id, it.room_type, checkIn, checkOut, qty, order.id);
@@ -1152,16 +1181,23 @@ const update = asyncHandler(async (req, res) => {
       let usedMonthlyPricing = false;
       let monthlyPricing = null;
       if (it.type === ORDER_ITEM_TYPE.HOTEL) {
-        monthlyPricing = await resolveHotelMonthlyPricing({
-          item: it,
-          productId: it.product_id,
-          branchId: order.branch_id,
-          ownerId: order.owner_id,
-          qty,
-          itemCurrency,
-          unitPrice,
-          rates: ratesForUpdate
-        });
+        try {
+          monthlyPricing = await resolveHotelMonthlyPricing({
+            item: it,
+            productId: it.product_id,
+            branchId: order.branch_id,
+            ownerId: order.owner_id,
+            qty,
+            itemCurrency,
+            unitPrice,
+            rates: ratesForUpdate
+          });
+        } catch (e) {
+          if (e && e.code === 'VALIDATION') {
+            return res.status(400).json({ success: false, message: e.message });
+          }
+          throw e;
+        }
         st = monthlyPricing.subtotal;
         unitPrice = monthlyPricing.unitPrice;
         unitPriceIdr = monthlyPricing.unitPriceIdr;

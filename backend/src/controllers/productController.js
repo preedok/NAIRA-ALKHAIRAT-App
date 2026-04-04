@@ -257,40 +257,13 @@ const list = asyncHandler(async (req, res) => {
         const av = p.ProductAvailability;
         const avMeta = (av?.meta || {}) || {};
         const roomTypesMeta = avMeta.room_types || {};
-        const generalPricesHotel = prices.filter(pr => !pr.branch_id && !pr.owner_id);
         const rooms = {};
-        const byRoomRefCur = (rt, withMeal) => generalPricesHotel.find(pr => pr.meta?.room_type === rt && (!!pr.meta?.with_meal) === withMeal && pr.currency === refCur);
-        const isFullboard = base.meta && base.meta.meal_plan === 'fullboard';
-        let mealPriceInRef = isFullboard ? 0 : (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : null);
-        if (!isFullboard) {
-          ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
-            const priceRow = byRoomRefCur(rt, false);
-            const priceWithMeal = byRoomRefCur(rt, true);
-            if (mealPriceInRef == null && priceRow && priceWithMeal) {
-              mealPriceInRef = parseFloat(priceWithMeal.amount) - parseFloat(priceRow.amount);
-            }
-          });
-        }
-        const mealToSubtract = mealPriceInRef ?? (base.meta && typeof base.meta.meal_price === 'number' ? base.meta.meal_price : 0);
         ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
-          const priceRow = byRoomRefCur(rt, false);
-          const priceWithMeal = byRoomRefCur(rt, true);
-          let basePrice;
-          if (isFullboard) {
-            basePrice = priceWithMeal ? parseFloat(priceWithMeal.amount) : 0;
-          } else {
-            basePrice = priceRow ? parseFloat(priceRow.amount) : (priceWithMeal ? Math.max(0, parseFloat(priceWithMeal.amount) - mealToSubtract) : 0);
-          }
-          rooms[rt] = { quantity: qty, price: applyMou(basePrice) };
+          rooms[rt] = { quantity: qty, price: 0 };
         });
         base.room_breakdown = rooms;
         base.prices_by_room = rooms;
-        const mealPriceDiscounted = applyMou(mealPriceInRef);
-        base.meal_price_idr = mealPriceDiscounted;
-        if (oid != null && base.meta && typeof base.meta === 'object') {
-          base.meta = { ...base.meta, meal_price: mealPriceDiscounted != null ? mealPriceDiscounted : base.meta.meal_price };
-        }
       }
       if (productType === 'visa') {
         const av = p.ProductAvailability;
@@ -399,6 +372,10 @@ const list = asyncHandler(async (req, res) => {
         const order = ['single', 'double', 'triple', 'quad', 'quint'];
         for (const rt of order) {
           const pr = breakdown && breakdown[rt];
+          if (pr && Number(pr.quantity) > 0) return rt;
+        }
+        for (const rt of order) {
+          const pr = breakdown && breakdown[rt];
           if (pr && Number(pr.price) > 0) return rt;
         }
         return 'triple';
@@ -481,6 +458,38 @@ const list = asyncHandler(async (req, res) => {
           sar_with_meal: sarBundle != null && sarBundle > 0 ? sarBundle : null,
           sar_meal_per_person_per_night: sarMeal != null && sarMeal > 0 ? sarMeal : null
         };
+        const refCurUpper = String(p.currency || 'IDR').toUpperCase();
+        const sarToRefForList = (sar) => {
+          if (sar == null || !Number.isFinite(Number(sar)) || Number(sar) <= 0) return null;
+          const t = fillTriple('SAR', Number(sar), monthlyRates);
+          if (refCurUpper === 'SAR') return t.sar;
+          if (refCurUpper === 'USD') return t.usd;
+          return t.idr;
+        };
+        const roomsFromMonthly = {};
+        ['single', 'double', 'triple', 'quad', 'quint'].forEach((rtv) => {
+          const qtyRoom = Number((p.room_breakdown && p.room_breakdown[rtv] && p.room_breakdown[rtv].quantity) ?? 0) || 0;
+          const roomSar = mNow[`${rtv}_room`];
+          const bundleSar = mNow[`${rtv}_bundle`];
+          let priceSar = null;
+          if (isFb) {
+            priceSar = bundleSar != null && bundleSar > 0 ? bundleSar : roomSar;
+          } else {
+            priceSar = roomSar != null && roomSar > 0 ? roomSar : null;
+          }
+          const refAmt = priceSar != null ? sarToRefForList(priceSar) : null;
+          const priceVal = refAmt != null ? applyMou(Math.round(refAmt * 100) / 100) : null;
+          roomsFromMonthly[rtv] = { quantity: qtyRoom, price: priceVal != null ? priceVal : 0 };
+        });
+        p.room_breakdown = roomsFromMonthly;
+        p.prices_by_room = roomsFromMonthly;
+        if (!isFb) {
+          const mealSar = mNow.meal;
+          const mealRef = mealSar != null && mealSar > 0 ? sarToRefForList(mealSar) : null;
+          p.meal_price_idr = mealRef != null ? applyMou(Math.round(mealRef * 100) / 100) : null;
+        } else {
+          p.meal_price_idr = null;
+        }
       }
     }
 
@@ -1233,18 +1242,26 @@ const getHotelStayQuote = asyncHandler(async (req, res) => {
   }
 
   const rates = await getCurrencyRates();
-  const monthly = await calculateStayCostByNights({
-    productId: product.id,
-    branchId,
-    ownerId,
-    roomType,
-    withMeal,
-    checkIn,
-    checkOut,
-    quantity,
-    currency,
-    rates
-  });
+  let monthly;
+  try {
+    monthly = await calculateStayCostByNights({
+      productId: product.id,
+      branchId,
+      ownerId,
+      roomType,
+      withMeal,
+      checkIn,
+      checkOut,
+      quantity,
+      currency,
+      rates
+    });
+  } catch (e) {
+    if (e && (e.code === 'MISSING_HOTEL_MONTHLY_ROOM' || e.code === 'MISSING_HOTEL_MONTHLY_MEAL')) {
+      return res.status(400).json({ success: false, message: e.message });
+    }
+    throw e;
+  }
 
   res.json({
     success: true,

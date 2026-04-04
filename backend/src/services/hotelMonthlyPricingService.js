@@ -1,5 +1,4 @@
-const { Op } = require('sequelize');
-const { HotelMonthlyPrice, ProductPrice, Product } = require('../models');
+const { HotelMonthlyPrice, Product } = require('../models');
 const { ROOM_CAPACITY } = require('../constants');
 
 const MEAL_ROOM_TYPE = '__meal__';
@@ -49,19 +48,6 @@ function idrToCurrency(idr, currency, rates) {
   if (cur === 'SAR') return n / sar;
   if (cur === 'USD') return n / usd;
   return n;
-}
-
-/** meal_price di meta produk → SAR per orang per malam */
-function metaMealPriceToSar(meta, rates) {
-  if (!meta || typeof meta !== 'object') return 0;
-  const raw = Number(meta.meal_price) || 0;
-  if (raw <= 0) return 0;
-  const cur = String(meta.currency || 'IDR').toUpperCase();
-  const sar = Number(rates?.SAR_TO_IDR) || 4200;
-  const usd = Number(rates?.USD_TO_IDR) || 15500;
-  if (cur === 'SAR') return raw;
-  if (cur === 'USD') return (raw * usd) / sar;
-  return raw / sar;
 }
 
 async function findMonthlyPrice({
@@ -158,40 +144,6 @@ async function findMonthlyMealRowForOrder({
   });
 }
 
-async function findFallbackDefaultPrice({
-  productId,
-  branchId,
-  ownerId,
-  roomType,
-  withMeal,
-  currency
-}) {
-  const room = roomType || 'single';
-  const cur = String(currency || 'IDR').toUpperCase();
-  const layers = [
-    { branch_id: branchId || null, owner_id: ownerId || null },
-    { branch_id: branchId || null, owner_id: null },
-    { branch_id: null, owner_id: null }
-  ];
-  for (const layer of layers) {
-    const row = await ProductPrice.findOne({
-      where: {
-        product_id: productId,
-        currency: cur,
-        branch_id: layer.branch_id,
-        owner_id: layer.owner_id,
-        [Op.or]: [
-          { meta: { room_type: room, with_meal: !!withMeal } },
-          { meta: { room_type: room } }
-        ]
-      },
-      order: [['created_at', 'DESC']]
-    });
-    if (row) return row;
-  }
-  return null;
-}
-
 /**
  * Harga menginap: kamar dari grid bulanan (component room) + opsional makan (component meal) untuk room_only.
  */
@@ -234,7 +186,6 @@ async function calculateStayCostByNights({
   let roomSubtotalIdr = 0;
   let mealSubtotalIdr = 0;
   const breakdown = [];
-  let usedFallback = false;
 
   /** Untuk baris kamar: with_meal di DB bulanan (fullboard = true = paket) */
   const roomMonthlyWithMeal = mealPlan === 'fullboard' && !!withMeal;
@@ -257,17 +208,11 @@ async function calculateStayCostByNights({
     row = found.row;
     amountCurrency = found.amountCurrency;
     if (!row) {
-      source = 'fallback_default';
-      row = await findFallbackDefaultPrice({
-        productId,
-        branchId,
-        ownerId,
-        roomType: rt,
-        withMeal: roomMonthlyWithMeal,
-        currency: cur
-      });
-      amountCurrency = cur;
-      usedFallback = true;
+      const err = new Error(
+        `Tarif kamar belum di grid bulanan SAR untuk bulan ${yearMonth} (malam ${night.toISOString().slice(0, 10)}). Isi Pengaturan Jumlah Kamar → tarif per malam per bulan.`
+      );
+      err.code = 'MISSING_HOTEL_MONTHLY_ROOM';
+      throw err;
     }
 
     const amountInStoredCur = Number(row?.amount) || 0;
@@ -292,12 +237,14 @@ async function calculateStayCostByNights({
         ownerId,
         orderCurrency: cur
       });
-      let mealAmt = mf.row ? Number(mf.row.amount) || 0 : 0;
-      let mealCur = mf.amountCurrency;
+      const mealAmt = mf.row ? Number(mf.row.amount) || 0 : 0;
+      const mealCur = mf.amountCurrency;
       if (!mf.row || mealAmt <= 0) {
-        mealSource = 'fallback_meta_meal';
-        mealAmt = metaMealPriceToSar(meta, rates);
-        mealCur = 'SAR';
+        const err = new Error(
+          `Harga makan belum di grid bulanan SAR untuk bulan ${yearMonth} (malam ${night.toISOString().slice(0, 10)}). Isi baris makan per bulan (room only).`
+        );
+        err.code = 'MISSING_HOTEL_MONTHLY_MEAL';
+        throw err;
       }
       const mealNightIdr = amountToIdr(mealAmt, mealCur, rates);
       mealSubtotalIdr += mealNightIdr * cap * qty;
@@ -332,7 +279,7 @@ async function calculateStayCostByNights({
     room_unit_per_night_in_currency: roomUnitPerNightInCur,
     meal_unit_per_person_per_night_in_currency: mealUnitPerPersonPerNightInCur,
     breakdown,
-    used_fallback_default: usedFallback
+    used_fallback_default: false
   };
 }
 
