@@ -16,6 +16,8 @@ export interface AutoRefreshControlProps {
   disabled?: boolean;
   /** Ukuran tampilan: compact (inline) atau default */
   size?: 'sm' | 'md';
+  /** Susun vertikal (checkbox di atas, interval + refresh di bawah) — cocok kolom sempit / kartu dashboard */
+  stacked?: boolean;
   className?: string;
 }
 
@@ -28,6 +30,7 @@ const AutoRefreshControl: React.FC<AutoRefreshControlProps> = ({
   storageKey: propStorageKey,
   disabled = false,
   size = 'md',
+  stacked = false,
   className = ''
 }) => {
   const location = useLocation();
@@ -79,25 +82,19 @@ const AutoRefreshControl: React.FC<AutoRefreshControlProps> = ({
   }, [onRefresh]);
 
   const isSm = size === 'sm';
-  return (
-    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => setEnabled(e.target.checked)}
-          disabled={disabled}
-          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-        />
-        <span className={`whitespace-nowrap ${isSm ? 'text-xs text-slate-600' : 'text-sm text-slate-700'}`}>Auto refresh</span>
-      </label>
+  const rootClass = stacked
+    ? `flex flex-col items-stretch gap-2 ${className}`
+    : `flex flex-wrap items-center gap-2 ${className}`;
+
+  const controlsRow = (
+    <div className={`flex flex-row items-center ${stacked ? 'gap-2 w-full' : 'gap-2'}`}>
       <Autocomplete
         value={String(intervalSeconds)}
         onChange={(v) => setIntervalSeconds(Number(v) as typeof INTERVAL_OPTIONS[number])}
         options={INTERVAL_OPTIONS.map((sec) => ({ value: String(sec), label: `${sec} detik` }))}
         disabled={disabled}
-        fullWidth={false}
-        className="min-w-[5.5rem] w-auto"
+        fullWidth={stacked}
+        className={stacked ? 'min-w-0 flex-1' : 'min-w-[5.5rem] w-auto'}
         placeholder="Interval"
       />
       <Button
@@ -110,6 +107,22 @@ const AutoRefreshControl: React.FC<AutoRefreshControlProps> = ({
         title="Refresh sekarang"
         aria-label="Refresh sekarang"
       />
+    </div>
+  );
+
+  return (
+    <div className={rootClass}>
+      <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          disabled={disabled}
+          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+        />
+        <span className={`whitespace-nowrap ${isSm ? 'text-xs text-slate-600' : 'text-sm text-slate-700'}`}>Auto refresh</span>
+      </label>
+      {controlsRow}
     </div>
   );
 };

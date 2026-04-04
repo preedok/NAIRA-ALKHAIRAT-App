@@ -156,39 +156,42 @@ const OwnerDashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Travel-style Hero: Lihat Paket + auto refresh sudut kanan atas; sapaan + Buat Pesanan */}
-      <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80 relative overflow-hidden">
-        <div className="absolute top-5 right-5 sm:top-7 sm:right-7 z-[1] flex flex-col items-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0 gap-1.5 bg-white/90 border-stone-300 hover:bg-white shadow-sm"
-            onClick={() => navigate('/dashboard/products')}
-          >
-            <Package className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Lihat Paket</span>
-          </Button>
-          <div className="rounded-lg bg-white/70 backdrop-blur-[2px] px-1.5 py-1 border border-stone-200/60 shadow-sm">
-            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
+      {/* Travel-style Hero: grid tanpa overlap — kiri sapaan + Buat Pesanan, kanan Lihat Paket + auto refresh */}
+      <div className="travel-hero-bg rounded-travel-lg p-6 sm:p-8 border border-stone-200/80">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(13.5rem,16rem)] gap-5 md:gap-8 md:items-start">
+          <div className="min-w-0 flex flex-col gap-4">
+            <div>
+              <p className="text-primary-600 font-semibold text-sm uppercase tracking-wide">Selamat datang</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
+                {user?.company_name || user?.name}
+              </h1>
+              <p className="text-stone-600 mt-1 flex items-center gap-2 flex-wrap">
+                <span>{user?.name}</span>
+                {hasSpecialPrice && (
+                  <Badge variant="success" className="text-xs">⭐ Harga Khusus</Badge>
+                )}
+              </p>
+            </div>
+            <Button variant="primary" className="w-full sm:w-fit shrink-0 gap-2 sm:min-w-[11rem]" onClick={() => navigate('/dashboard/orders-invoices')}>
+              <Plus className="w-5 h-5" />
+              Buat Pesanan
+            </Button>
           </div>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pr-0 min-[380px]:pr-[9.5rem] sm:pr-[13.5rem]">
-          <div className="min-w-0">
-            <p className="text-primary-600 font-semibold text-sm uppercase tracking-wide">Selamat datang</p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-              {user?.company_name || user?.name}
-            </h1>
-            <p className="text-stone-600 mt-1 flex items-center gap-2 flex-wrap">
-              <span>{user?.name}</span>
-              {hasSpecialPrice && (
-                <Badge variant="success" className="text-xs">⭐ Harga Khusus</Badge>
-              )}
-            </p>
+          <div className="flex flex-col gap-3 w-full md:max-w-none">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-1.5 bg-white/95 border-stone-300 hover:bg-white shadow-sm justify-center"
+              onClick={() => navigate('/dashboard/products')}
+            >
+              <Package className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+              <span>Lihat Paket</span>
+            </Button>
+            <div className="rounded-xl border border-stone-200/90 bg-white/95 p-3 shadow-sm w-full">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 mb-2">Perbarui dashboard</p>
+              <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" stacked />
+            </div>
           </div>
-          <Button variant="primary" className="w-full sm:w-auto shrink-0 gap-2 sm:min-w-[11rem]" onClick={() => navigate('/dashboard/orders-invoices')}>
-            <Plus className="w-5 h-5" />
-            Buat Pesanan
-          </Button>
         </div>
       </div>
 
