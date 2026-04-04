@@ -1352,13 +1352,15 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
       const branchId = r.branch_id || null;
       const ownerId = r.owner_id || null;
 
-      /** Harga dikosongkan di UI → hapus baris agar tidak tertinggal nilai lama. */
+      /**
+       * Harga dikosongkan di UI → hapus semua baris untuk slot ini (semua mata uang).
+       * Tanpa ini, baris IDR/USD lama tetap ada lalu digabung ke SAR di API list produk → harga “tampak” belum hilang.
+       */
       if (amount === 0) {
         await HotelMonthlyPrice.destroy({
           where: {
             product_id: product.id,
             year_month: yearMonth,
-            currency,
             room_type: roomType,
             with_meal: withMeal,
             branch_id: branchId,

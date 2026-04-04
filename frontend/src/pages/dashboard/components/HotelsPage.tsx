@@ -170,6 +170,31 @@ function parseSarInputString(s: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/** Samakan logika backend `hotelMonthlyRowToSar`: satu nilai SAR per baris grid. */
+function monthlyRowAmountToSar(
+  amount: number,
+  currency: string,
+  rates: { SAR_TO_IDR: number; USD_TO_IDR: number }
+): number | null {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const c = String(currency || 'IDR').toUpperCase();
+  const s2i = rates.SAR_TO_IDR || 4200;
+  const u2i = rates.USD_TO_IDR || 15500;
+  if (c === 'SAR') return Math.round(n * 100) / 100;
+  if (c === 'IDR') return Math.round((n / s2i) * 100) / 100;
+  if (c === 'USD') return Math.round(((n * u2i) / s2i) * 100) / 100;
+  return null;
+}
+
+function monthlyCurrencyRank(currency: string): number {
+  const u = String(currency || '').toUpperCase();
+  if (u === 'SAR') return 0;
+  if (u === 'USD') return 1;
+  if (u === 'IDR') return 2;
+  return 3;
+}
+
 function formatSarId(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '';
   return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n));
@@ -351,20 +376,34 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const isFullboard = (seasonsModalHotel.meta as Record<string, unknown> | undefined)?.meal_plan === 'fullboard';
         const next = initMonthlyRows(monthlyPriceYear);
         const mealNext = initMonthlyMeal(monthlyPriceYear);
+        const gridRates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
+        const mealBest = new Map<string, { sar: number; rank: number }>();
+        const roomBest = new Map<string, { sar: number; rank: number }>();
         data.forEach((r) => {
-          if (String(r.currency).toUpperCase() !== 'SAR') return;
           const comp = r.component || 'room';
+          const rank = monthlyCurrencyRank(r.currency);
+          const sar = monthlyRowAmountToSar(Number(r.amount), r.currency, gridRates);
+          if (sar == null || sar <= 0) return;
           if (comp === 'meal' || r.room_type === '__meal__') {
-            const n = Number(r.amount) || 0;
-            mealNext[r.year_month] = n > 0 ? formatSarId(n) : '';
+            const prev = mealBest.get(r.year_month);
+            if (!prev || rank < prev.rank) mealBest.set(r.year_month, { sar, rank });
             return;
           }
           if (comp !== 'room') return;
           if (isFullboard ? !r.with_meal : r.with_meal) return;
-          if (next[r.room_type] && next[r.room_type][r.year_month] !== undefined) {
-            const n = Number(r.amount) || 0;
-            next[r.room_type][r.year_month] = n > 0 ? formatSarId(n) : '';
-          }
+          const slotKey = `${r.room_type}:${r.year_month}`;
+          const prev = roomBest.get(slotKey);
+          if (!prev || rank < prev.rank) roomBest.set(slotKey, { sar, rank });
+        });
+        mealBest.forEach(({ sar }, ym) => {
+          mealNext[ym] = sar > 0 ? formatSarId(sar) : '';
+        });
+        roomBest.forEach(({ sar }, slotKey) => {
+          const colon = slotKey.indexOf(':');
+          if (colon < 0) return;
+          const rt = slotKey.slice(0, colon);
+          const ym = slotKey.slice(colon + 1);
+          if (next[rt] && next[rt][ym] !== undefined) next[rt][ym] = sar > 0 ? formatSarId(sar) : '';
         });
         if (!cancelled) {
           setMonthlyPriceRows(next);
@@ -381,7 +420,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- initMonthlyRows stabil untuk year yang sama
-  }, [seasonsModalHotel?.id, seasonsModalHotel?.meta, monthlyPriceYear]);
+  }, [seasonsModalHotel?.id, seasonsModalHotel?.meta, monthlyPriceYear, currencyRates.SAR_TO_IDR, currencyRates.USD_TO_IDR]);
 
   /** Load data untuk modal terpadu (config + musim + product untuk jumlah & harga) */
   const loadUnifiedModalData = (hotel: HotelProduct) => {
