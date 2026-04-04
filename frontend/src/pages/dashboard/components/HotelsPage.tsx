@@ -68,6 +68,11 @@ function formatMonthShortId(ymKey: string): string {
 
 type GridRatesPair = { SAR_TO_IDR: number; USD_TO_IDR: number };
 
+type HotelMonthlyByRoomTypeMap = Record<
+  string,
+  { months: Array<{ year_month: string; sar_room_per_night: number | null }> }
+>;
+
 /** Satu baris horizontal: Jan … Des (scroll jika sempit). */
 function renderMealMonthRow(
   months: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>,
@@ -1033,12 +1038,31 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const mealYearLabel = hotel.hotel_monthly_meal_months?.year ?? series?.year;
             const byRoomType = hotel.hotel_monthly_series_by_room_type?.by_room_type;
             const roomTypesYear = hotel.hotel_monthly_series_by_room_type?.year;
-            const hasByRoomTypeGrid =
+            /** API mengirim grid per tipe (12 bulan tiap tipe) — tampilkan semua tipe, termasuk yang belum terisi grid. */
+            const hasMonthlyByRoomTypePayload =
               !!byRoomType &&
               ROOM_TYPES.some((rt) => {
                 const block = byRoomType[rt];
-                return block?.months?.some((x) => x.sar_room_per_night != null && x.sar_room_per_night > 0);
+                return Array.isArray(block?.months) && block.months.length > 0;
               });
+            /** Fallback: response hanya punya `series` satu tipe acuan → bentuk 5 baris (harga terisi di tipe acuan saja). */
+            const byRoomTypeDisplay: HotelMonthlyByRoomTypeMap | null =
+              hasMonthlyByRoomTypePayload && byRoomType
+                ? (byRoomType as HotelMonthlyByRoomTypeMap)
+                : series?.months?.length
+                  ? (Object.fromEntries(
+                      ROOM_TYPES.map((rt) => [
+                        rt,
+                        {
+                          months: series.months.map((m) => ({
+                            year_month: m.year_month,
+                            sar_room_per_night: rt === series.room_type ? m.sar_room_per_night : null
+                          }))
+                        }
+                      ])
+                    ) as HotelMonthlyByRoomTypeMap)
+                  : null;
+            const roomYearDisplay = roomTypesYear ?? series?.year;
             return (
               <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
                 <td className="px-4 py-3.5 text-sm text-slate-600 font-mono align-middle">{hotel.code || '-'}</td>
@@ -1114,14 +1138,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   })()}
                 </td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {hasByRoomTypeGrid && byRoomType ? (
+                  {byRoomTypeDisplay ? (
                     <div className="min-w-0 max-w-[min(44rem,92vw)]">
                       <div className="space-y-1.5 text-xs">
                         {ROOM_TYPES.map((rt) => {
-                          const block = byRoomType[rt];
+                          const block = byRoomTypeDisplay[rt];
                           if (!block?.months?.length) return null;
-                          const hasAny = block.months.some((x) => x.sar_room_per_night != null && x.sar_room_per_night > 0);
-                          if (!hasAny) return null;
                           return (
                             <div key={rt} className="flex items-start gap-1.5 min-w-0">
                               <span className="shrink-0 w-11 text-[10px] font-semibold text-slate-600 pt-1 leading-tight">
@@ -1135,23 +1157,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         })}
                       </div>
                       <p className="text-[10px] text-slate-400 mt-1">
-                        per malam · {roomTypesYear}
-                        {isFullboardPlan ? ' · termasuk makan' : ''}
-                      </p>
-                    </div>
-                  ) : series?.months?.length ? (
-                    <div className="min-w-0 max-w-[min(40rem,92vw)]">
-                      <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-1 py-1 text-xs">
-                        {renderRoomMonthRow(
-                          series.months.map((m) => ({
-                            year_month: m.year_month,
-                            sar_room_per_night: m.sar_room_per_night
-                          })),
-                          gridRates
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        per malam · {series.year} · {ROOM_TYPE_LABELS[series.room_type] || series.room_type}
+                        per malam · {roomYearDisplay} · Single – Quint
                         {isFullboardPlan ? ' · termasuk makan' : ''}
                       </p>
                     </div>
