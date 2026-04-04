@@ -24,6 +24,17 @@ function mapBalanceAllocRow(r) {
   };
 }
 
+/** Alokasi saldo per invoice untuk PDF / email (sama bentuk dengan BalanceAllocations di API). */
+async function loadBalanceAllocationsForInvoicePdf(invoiceId) {
+  const rows = await OwnerBalanceTransaction.findAll({
+    where: { reference_type: 'invoice', reference_id: invoiceId, type: 'allocation' },
+    attributes: ['id', 'amount', 'notes', 'created_at'],
+    order: [['created_at', 'ASC']],
+    raw: true
+  });
+  return rows.map(mapBalanceAllocRow);
+}
+
 /** Atribut PaymentProof untuk include (tanpa proof_file_name, proof_file_content_type, proof_file_data agar kompatibel dengan DB yang belum punya kolom tersebut; setelah migration 20260327000001 jalan, bisa tambah proof_file_name) */
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const archiver = require('archiver');
@@ -59,6 +70,7 @@ async function sendInvoiceCreatedNotificationEmail(invoiceId, notificationId, du
     const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
     data.currency_rates = effectiveRates;
     data.currency_rates_override = effectiveRates;
+    data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
     const pdfBuffer = await buildInvoicePdfBuffer(data);
     const sent = await sendInvoiceCreatedEmail(
       invoice.User.email,
@@ -104,6 +116,7 @@ async function sendPaymentReceivedNotificationEmail(invoiceId, notificationId, p
     const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
     data.currency_rates = effectiveRates;
     data.currency_rates_override = effectiveRates;
+    data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
     const pdfBuffer = await buildInvoicePdfBuffer(data);
     const paidAmount = parseFloat(invoice.paid_amount) || 0;
     const sent = await sendPaymentReceivedEmail(
@@ -344,7 +357,7 @@ const list = asyncHandler(async (req, res) => {
     }
   }
   if (isOwnerRole(req.user.role)) where.owner_id = req.user.id;
-  // Role hotel/bus/handling/visa_koordinator/tiket_koordinator: hanya tampilkan invoice dengan status pembayaran_dp (sudah ada bukti bayar DP), agar tampil di menu Invoice dan Progress.
+  // Role divisi: menu Invoice menampilkan semua invoice order yang punya item terkait (termasuk belum bayar DP). Menu Progress tetap pakai endpoint /hotel|visa|ticket|bus/invoices.
   const divisiProgressRoles = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
   if (divisiProgressRoles.includes(req.user.role)) {
     let orderIdsByType = [];
@@ -371,10 +384,7 @@ const list = asyncHandler(async (req, res) => {
       const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((ticketRows || []).map((r) => r.order_id))];
     }
-    const orderIdsWithDpPaid = orderIdsByType.length
-      ? (await Order.findAll({ where: { id: { [Op.in]: orderIdsByType }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP }, attributes: ['id'], raw: true })).map((o) => o.id)
-      : [];
-    where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
+    where.order_id = orderIdsByType.length ? { [Op.in]: orderIdsByType } : { [Op.in]: [] };
   }
   // Untuk owner: jangan filter branch_id agar semua invoice milik mereka tampil (order bisa punya branch dari form).
   // role_accounting, invoice_saudi, role_hotel, role_bus, handling: lihat invoice sesuai scope (tidak paksa branch_id user).
@@ -807,7 +817,7 @@ const getSummary = asyncHandler(async (req, res) => {
     if (branchIds.length) where.branch_id = { [Op.in]: branchIds };
     // bila wilayah tidak punya cabang ter-link: jangan set filter agar summary tampil
   }
-  // Role hotel/bus/handling/visa_koordinator/tiket_koordinator: summary hanya invoice yang order-nya sudah ada pembayaran DP (sama seperti list)
+  // Sama seperti list: divisi melihat summary untuk semua order bertipe terkait (termasuk belum bayar DP).
   const divisiProgressRolesSummary = ['role_hotel', 'role_bus', 'handling', 'visa_koordinator', 'tiket_koordinator'];
   if (divisiProgressRolesSummary.includes(req.user.role)) {
     let orderIdsByType = [];
@@ -834,10 +844,7 @@ const getSummary = asyncHandler(async (req, res) => {
       const ticketRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.TICKET }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((ticketRows || []).map((r) => r.order_id))];
     }
-    const orderIdsWithDpPaid = orderIdsByType.length
-      ? (await Order.findAll({ where: { id: { [Op.in]: orderIdsByType }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP }, attributes: ['id'], raw: true })).map((o) => o.id)
-      : [];
-    where.order_id = orderIdsWithDpPaid.length ? { [Op.in]: orderIdsWithDpPaid } : { [Op.in]: [] };
+    where.order_id = orderIdsByType.length ? { [Op.in]: orderIdsByType } : { [Op.in]: [] };
   }
 
   const orderInclude = { model: Order, as: 'Order', attributes: ['id', 'owner_id', 'status'] };
@@ -1410,6 +1417,7 @@ const getPdf = asyncHandler(async (req, res) => {
   const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
   data.currency_rates = effectiveRates;
   data.currency_rates_override = effectiveRates;
+  data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
   const buf = await buildInvoicePdfBuffer(data);
 
   // Simpan ke disk (local - uploads/invoices/) — setiap request regenerate agar selalu terupdate
@@ -1475,6 +1483,7 @@ const getArchive = asyncHandler(async (req, res) => {
   const effectiveRates = await getEffectiveKursForInvoice(invoice, invoice.Order);
   data.currency_rates = effectiveRates;
   data.currency_rates_override = effectiveRates;
+  data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
   const invNum = invoice.invoice_number || 'INV';
   const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || invoice.owner_name_manual || invoice.Order?.owner_name_manual || 'Owner';

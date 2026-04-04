@@ -798,14 +798,20 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   }
   y += 162;
 
-  // ---- Rincian Pembayaran (jumlah pembayaran per bukti) ----
+  // ---- Rincian Pembayaran (bukti transfer + alokasi saldo akun) ----
   const proofs = (data.PaymentProofs || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-  if (proofs.length > 0) {
+  const balanceAllocs = (data.BalanceAllocations || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  const payRows = [
+    ...proofs.map((p) => ({ kind: 'proof', sort: new Date(p.transfer_date || p.created_at || 0).getTime(), p })),
+    ...balanceAllocs.map((b) => ({ kind: 'alloc', sort: new Date(b.created_at || 0).getTime(), b }))
+  ].sort((a, b) => a.sort - b.sort);
+
+  if (payRows.length > 0) {
     y = checkNewPage(doc, y, margin, 120);
     doc.fontSize(12).fillColor('#0f172a').font('Helvetica-Bold').text('Rincian Pembayaran', margin, y);
     y += 20;
-    doc.fontSize(9).fillColor('#64748b').font('Helvetica').text('Setiap baris = satu bukti transfer. Status verifikasi dan verifikator (seperti di Riwayat Status) tercantum di kolom Status.', margin, y);
-    y += 28;
+    doc.fontSize(9).fillColor('#64748b').font('Helvetica').text('Setiap baris = satu bukti transfer atau satu alokasi saldo akun. Untuk transfer, status verifikasi dan verifikator tercantum di kolom Status. Untuk saldo akun, pembayaran tercatat otomatis tanpa upload bukti.', margin, y, { width: pageWidth });
+    y += 36;
 
     const payTableTop = y;
     // No, Tgl, Tipe, Jumlah, Mata Uang, Status (gabungan status + oleh), Rek.Pengirim, Rek.Penerima
@@ -816,54 +822,82 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     doc.rect(margin, payTableTop, pageWidth, headerRowH).fillAndStroke('#f1f5f9', '#e2e8f0');
     doc.fontSize(7).fillColor('#475569').font('Helvetica-Bold');
     doc.text('No', px(0), payTableTop + 8, { width: pw(0) });
-    doc.text('Tgl Transfer', px(1), payTableTop + 8, { width: pw(1) });
+    doc.text('Tanggal', px(1), payTableTop + 8, { width: pw(1) });
     doc.text('Tipe', px(2), payTableTop + 8, { width: pw(2) });
     doc.text('Jumlah', px(3), payTableTop + 8, { width: pw(3) });
     doc.text('Mata Uang', px(4), payTableTop + 8, { width: pw(4) });
     doc.text('Status', px(5), payTableTop + 6, { width: pw(5) });
-    doc.fontSize(6).fillColor('#64748b').text('(verifikasi & verifikator)', px(5), payTableTop + 15, { width: pw(5) });
+    doc.fontSize(6).fillColor('#64748b').text('(verifikasi / saldo)', px(5), payTableTop + 15, { width: pw(5) });
     doc.fontSize(7).fillColor('#475569');
-    doc.text('Rek. Pengirim', px(6), payTableTop + 8, { width: pw(6) });
+    doc.text('Rek. Pengirim / Keterangan', px(6), payTableTop + 8, { width: pw(6) });
     doc.text('Rek. Penerima', px(7), payTableTop + 8, { width: pw(7) });
     y = payTableTop + headerRowH + 2;
 
     const dataRowMinH = 32;
     const cellFontSize = 7;
-    proofs.forEach((p, idx) => {
-      const currency = (p.payment_currency || 'IDR').toUpperCase();
-      const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
-        ? formatAmount(p.amount_original, currency)
-        : formatIDR(parseFloat(p.amount || 0));
-      const senderBank = p.bank_name || p.Bank?.name || '';
-      const senderName = p.sender_account_name || '';
-      const senderNo = p.sender_account_number || p.account_number || '';
-      const senderStr = [senderBank, senderName, senderNo].filter(Boolean).join(' · ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '–');
-      const rec = p.RecipientAccount;
-      const recipientStr = rec ? [rec.bank_name, rec.name, rec.account_number].filter(Boolean).join(' · ') || '–' : '–';
-      const statusLabel = verifiedStatusLabel(p.verified_status);
-      const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '');
-      const statusBlock = verifier ? `${statusLabel}\noleh: ${verifier}` : statusLabel;
+    payRows.forEach((row, idx) => {
       doc.fontSize(cellFontSize).fillColor('#334155').font('Helvetica');
-      const senderH = doc.heightOfString(String(senderStr), { width: pw(6) });
-      const recipientH = doc.heightOfString(String(recipientStr), { width: pw(7) });
-      const statusH = doc.heightOfString(statusBlock, { width: pw(5) });
-      const rowH = Math.max(dataRowMinH, Math.ceil(Math.max(senderH, recipientH, statusH)) + 14);
-      y = checkNewPage(doc, y, margin, rowH + 4);
-      doc.rect(margin, y - 2, pageWidth, rowH).stroke('#f1f5f9');
-      doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
-      doc.text(formatDate(p.transfer_date), px(1), y + 8, { width: pw(1) });
-      doc.text(paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
-      doc.text(amountDisplay, px(3), y + 8, { width: pw(3) });
-      doc.text(currency || 'IDR', px(4), y + 8, { width: pw(4) });
-      doc.text(statusBlock, px(5), y + 8, { width: pw(5) });
-      doc.text(String(senderStr), px(6), y + 8, { width: pw(6) });
-      doc.text(String(recipientStr), px(7), y + 8, { width: pw(7) });
-      y += rowH + 2;
+      if (row.kind === 'proof') {
+        const p = row.p;
+        const currency = (p.payment_currency || 'IDR').toUpperCase();
+        const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
+          ? formatAmount(p.amount_original, currency)
+          : formatIDR(parseFloat(p.amount || 0));
+        const senderBank = p.bank_name || p.Bank?.name || '';
+        const senderName = p.sender_account_name || '';
+        const senderNo = p.sender_account_number || p.account_number || '';
+        const senderStr = [senderBank, senderName, senderNo].filter(Boolean).join(' · ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '–');
+        const rec = p.RecipientAccount;
+        const recipientStr = rec ? [rec.bank_name, rec.name, rec.account_number].filter(Boolean).join(' · ') || '–' : '–';
+        const statusLabel = verifiedStatusLabel(p.verified_status);
+        const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '');
+        const statusBlock = verifier ? `${statusLabel}\noleh: ${verifier}` : statusLabel;
+        const senderH = doc.heightOfString(String(senderStr), { width: pw(6) });
+        const recipientH = doc.heightOfString(String(recipientStr), { width: pw(7) });
+        const statusH = doc.heightOfString(statusBlock, { width: pw(5) });
+        const rowH = Math.max(dataRowMinH, Math.ceil(Math.max(senderH, recipientH, statusH)) + 14);
+        y = checkNewPage(doc, y, margin, rowH + 4);
+        doc.rect(margin, y - 2, pageWidth, rowH).stroke('#f1f5f9');
+        doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
+        doc.text(formatDate(p.transfer_date || p.created_at), px(1), y + 8, { width: pw(1) });
+        doc.text(paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
+        doc.text(amountDisplay, px(3), y + 8, { width: pw(3) });
+        doc.text(currency || 'IDR', px(4), y + 8, { width: pw(4) });
+        doc.text(statusBlock, px(5), y + 8, { width: pw(5) });
+        doc.text(String(senderStr), px(6), y + 8, { width: pw(6) });
+        doc.text(String(recipientStr), px(7), y + 8, { width: pw(7) });
+        y += rowH + 2;
+      } else {
+        const b = row.b;
+        const amt = parseFloat(b.amount || 0);
+        const senderStr = b.notes ? String(b.notes) : 'Pemotongan saldo akun pemesan';
+        const statusBlock = 'Tercatat otomatis\n(saldo akun)';
+        const recipientStr = '–';
+        const senderH = doc.heightOfString(String(senderStr), { width: pw(6) });
+        const statusH = doc.heightOfString(statusBlock, { width: pw(5) });
+        const rowH = Math.max(dataRowMinH, Math.ceil(Math.max(senderH, statusH)) + 14);
+        y = checkNewPage(doc, y, margin, rowH + 4);
+        doc.rect(margin, y - 2, pageWidth, rowH).stroke('#ecfdf5');
+        doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
+        doc.text(formatDateTime(b.created_at), px(1), y + 8, { width: pw(1) });
+        doc.text('Saldo akun', px(2), y + 8, { width: pw(2) });
+        doc.text(formatIDR(amt), px(3), y + 8, { width: pw(3) });
+        doc.text('IDR', px(4), y + 8, { width: pw(4) });
+        doc.text(statusBlock, px(5), y + 8, { width: pw(5) });
+        doc.text(String(senderStr), px(6), y + 8, { width: pw(6) });
+        doc.text(recipientStr, px(7), y + 8, { width: pw(7) });
+        y += rowH + 2;
+      }
     });
     y += 8;
     doc.fontSize(9).fillColor(colors.accent).font('Helvetica-Bold');
-    const totalPaidFromProofs = proofs.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-    doc.text(`Total Jumlah Pembayaran (dari ${proofs.length} bukti): ${formatIDR(totalPaidFromProofs)}`, margin, y);
+    const totalProofsIdr = proofs.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+    const totalAllocIdr = balanceAllocs.reduce((s, b) => s + (parseFloat(b.amount) || 0), 0);
+    const totalPaidAll = totalProofsIdr + totalAllocIdr;
+    const parts = [];
+    if (proofs.length) parts.push(`${proofs.length} bukti transfer`);
+    if (balanceAllocs.length) parts.push(`${balanceAllocs.length} alokasi saldo`);
+    doc.text(`Total Jumlah Pembayaran (dari ${parts.join(' + ')}): ${formatIDR(totalPaidAll)}`, margin, y);
     y += 22;
   }
 

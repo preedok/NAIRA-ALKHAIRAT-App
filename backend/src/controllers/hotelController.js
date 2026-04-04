@@ -9,6 +9,8 @@ const { HOTEL_PROGRESS_STATUS } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const uploadConfig = require('../config/uploads');
 const { buildHotelInfoPdfBuffer } = require('../utils/hotelPdf');
+const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
+const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS } = require('../utils/progressInvoiceFilters');
 
 /** Default jam check-in 16:00, check-out 12:00 (otomatis sistem, tidak perlu pilih jam) */
 const DEFAULT_CHECK_IN_TIME = '16:00';
@@ -102,11 +104,15 @@ const listInvoices = asyncHandler(async (req, res) => {
   } else {
     where.status = { [Op.in]: statusesForProgress };
   }
-  // Progress: jangan tampilkan invoice yang sudah dibatalkan atau sudah direfund
-  const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
-  if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
+  // Progress: sembunyikan batal, refund (saldo/rekening), pindahan overpaid, serta invoice yang punya proses refund
+  const refundExcludedInvoiceIds = await Refund.findAll({
+    where: { status: { [Op.in]: REFUND_STATUSES_HIDE_FROM_PROGRESS } },
+    attributes: ['invoice_id'],
+    raw: true
+  }).then((rows) => [...new Set((rows || []).map((r) => r.invoice_id).filter(Boolean))]);
+  if (refundExcludedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundExcludedInvoiceIds };
   where[Op.and] = where[Op.and] || [];
-  where[Op.and].push({ status: { [Op.notIn]: [INVOICE_STATUS.CANCELED, INVOICE_STATUS.CANCELLED_REFUND] } });
+  where[Op.and].push({ status: { [Op.notIn]: PROGRESS_INVOICE_STATUS_BLOCKLIST } });
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
@@ -190,7 +196,7 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   const invoiceIds = data.map((d) => d.id).filter(Boolean);
   if (invoiceIds.length > 0) {
-    const [reallocOut, reallocIn] = await Promise.all([
+    const [reallocOut, reallocIn, balByInvId] = await Promise.all([
       PaymentReallocation.findAll({
         where: { source_invoice_id: { [Op.in]: invoiceIds } },
         include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }],
@@ -202,7 +208,8 @@ const listInvoices = asyncHandler(async (req, res) => {
         include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }],
         order: [['created_at', 'DESC']],
         raw: false
-      })
+      }),
+      balanceAllocationsByInvoiceId(invoiceIds)
     ]);
     const outByInvId = (reallocOut || []).reduce((acc, r) => {
       const sid = r.source_invoice_id;
@@ -216,7 +223,12 @@ const listInvoices = asyncHandler(async (req, res) => {
       acc[tid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, SourceInvoice: r.SourceInvoice ? { id: r.SourceInvoice.id, invoice_number: r.SourceInvoice.invoice_number } : null });
       return acc;
     }, {});
-    data = data.map((d) => ({ ...d, ReallocationsOut: outByInvId[d.id] || [], ReallocationsIn: inByInvId[d.id] || [] }));
+    data = data.map((d) => ({
+      ...d,
+      ReallocationsOut: outByInvId[d.id] || [],
+      ReallocationsIn: inByInvId[d.id] || [],
+      BalanceAllocations: balByInvId[d.id] || []
+    }));
   }
 
   const totalPages = Math.ceil((count || 0) / lim) || 1;
@@ -282,6 +294,9 @@ const getInvoice = asyncHandler(async (req, res) => {
       oi.hotel_location = loc ? loc.toLowerCase() : '';
     }
   });
+
+  const balMap = await balanceAllocationsByInvoiceId([invoice.id]);
+  data.BalanceAllocations = balMap[invoice.id] || [];
 
   res.json({ success: true, data });
 });

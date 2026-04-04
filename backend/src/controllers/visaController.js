@@ -30,6 +30,8 @@ const { ORDER_ITEM_TYPE, VISA_PROGRESS_STATUS, NOTIFICATION_TRIGGER, ROLES, INVO
 const uploadConfig = require('../config/uploads');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildVisaSlipPdfBuffer } = require('../utils/visaSlipPdf');
+const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
+const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS } = require('../utils/progressInvoiceFilters');
 
 async function getVisaBranchIds(user) {
   if (user.role === ROLES.SUPER_ADMIN) {
@@ -177,11 +179,14 @@ const listInvoices = asyncHandler(async (req, res) => {
   } else {
     where.status = { [Op.in]: statusesForProgress };
   }
-  // Progress: jangan tampilkan invoice yang sudah dibatalkan atau sudah direfund
-  const refundedInvoiceIds = await Refund.findAll({ where: { status: 'refunded' }, attributes: ['invoice_id'], raw: true }).then(rows => rows.map(r => r.invoice_id).filter(Boolean));
-  if (refundedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundedInvoiceIds };
+  const refundExcludedInvoiceIds = await Refund.findAll({
+    where: { status: { [Op.in]: REFUND_STATUSES_HIDE_FROM_PROGRESS } },
+    attributes: ['invoice_id'],
+    raw: true
+  }).then((rows) => [...new Set((rows || []).map((r) => r.invoice_id).filter(Boolean))]);
+  if (refundExcludedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundExcludedInvoiceIds };
   where[Op.and] = where[Op.and] || [];
-  where[Op.and].push({ status: { [Op.notIn]: [INVOICE_STATUS.CANCELED, INVOICE_STATUS.CANCELLED_REFUND] } });
+  where[Op.and].push({ status: { [Op.notIn]: PROGRESS_INVOICE_STATUS_BLOCKLIST } });
 
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
@@ -244,8 +249,9 @@ const listInvoices = asyncHandler(async (req, res) => {
     });
   }
   const invoiceIds = (invoices || []).map((i) => i.id).filter(Boolean);
+  let balByInvId = {};
   if (invoiceIds.length > 0) {
-    const [reallocOut, reallocIn] = await Promise.all([
+    const [reallocOut, reallocIn, balMap] = await Promise.all([
       PaymentReallocation.findAll({
         where: { source_invoice_id: { [Op.in]: invoiceIds } },
         include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }],
@@ -257,8 +263,10 @@ const listInvoices = asyncHandler(async (req, res) => {
         include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }],
         order: [['created_at', 'DESC']],
         raw: false
-      })
+      }),
+      balanceAllocationsByInvoiceId(invoiceIds)
     ]);
+    balByInvId = balMap;
     const outByInvId = (reallocOut || []).reduce((acc, r) => {
       const sid = r.source_invoice_id;
       if (!acc[sid]) acc[sid] = [];
@@ -274,6 +282,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     for (const inv of invoices) {
       inv.setDataValue('ReallocationsOut', outByInvId[inv.id] || []);
       inv.setDataValue('ReallocationsIn', inByInvId[inv.id] || []);
+      inv.setDataValue('BalanceAllocations', balByInvId[inv.id] || []);
     }
   }
 
@@ -330,6 +339,8 @@ const getInvoice = asyncHandler(async (req, res) => {
       oi.product_name = p.name || p.code || null;
     }
   });
+  const balMap = await balanceAllocationsByInvoiceId([invoice.id]);
+  data.BalanceAllocations = balMap[invoice.id] || [];
   res.json({ success: true, data: data || invoice });
 });
 
