@@ -139,8 +139,7 @@ const OrderFormPage: React.FC = () => {
   const [ownerInputMode, setOwnerInputMode] = useState<OwnerInputMode>('registered');
   const [manualOwnerName, setManualOwnerName] = useState('');
   const [manualOwnerPhone, setManualOwnerPhone] = useState('');
-  /** Owner manual: wilayah → kota (master) → provinsi/wilayah otomatis → cabang dari kode kabupaten */
-  const [wilayahList, setWilayahList] = useState<Array<{ id: string; name: string }>>([]);
+  /** Owner manual: pilih kabupaten saja → provinsi & wilayah master terisi otomatis → cabang dari kode kabupaten */
   const [kabupatenMaster, setKabupatenMaster] = useState<KabupatenForOwnerItem[]>([]);
   const [manualWilayahId, setManualWilayahId] = useState('');
   const [manualKabupatenId, setManualKabupatenId] = useState('');
@@ -159,22 +158,13 @@ const OrderFormPage: React.FC = () => {
   const branchId     = order?.branch_id || (canPickOwner ? (ownerInputMode === 'registered' ? bFromOwner : manualBranchId) : null) || (!canPickOwner ? (branchSel || user?.branch_id || undefined) : undefined);
   const ownerId      = isOwner ? user?.id : (isEdit ? order?.owner_id : canPickOwner ? (ownerInputMode === 'registered' ? ownerSel : undefined) : undefined) ?? order?.owner_id ?? undefined;
 
-  const KOORDINATOR_WILAYAH_ROLES = ['invoice_koordinator', 'visa_koordinator', 'tiket_koordinator'];
-
-  const wilayahOptions = useMemo(() => {
-    if (user?.wilayah_id && KOORDINATOR_WILAYAH_ROLES.includes(user?.role ?? '')) {
-      const hit = wilayahList.filter((w) => w.id === user.wilayah_id);
-      if (hit.length) return hit;
-    }
-    return wilayahList;
-  }, [wilayahList, user?.wilayah_id, user?.role]);
-
   const kabupatenOptions = useMemo(() => {
-    if (!manualWilayahId) return [];
-    return kabupatenMaster
-      .filter((k) => k.wilayah_id && String(k.wilayah_id) === String(manualWilayahId))
-      .sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
-  }, [kabupatenMaster, manualWilayahId]);
+    let list = kabupatenMaster.filter((k) => k.id != null);
+    if (user?.wilayah_id && user?.role === 'invoice_koordinator') {
+      list = list.filter((k) => k.wilayah_id != null && String(k.wilayah_id) === String(user.wilayah_id));
+    }
+    return list.sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
+  }, [kabupatenMaster, user?.wilayah_id, user?.role]);
 
   const selectedManualKab = useMemo(
     () => kabupatenMaster.find((k) => String(k.id) === String(manualKabupatenId)) ?? null,
@@ -219,24 +209,19 @@ const OrderFormPage: React.FC = () => {
 
   useEffect(() => {
     if (!canPickOwner) {
-      setWilayahList([]);
       setKabupatenMaster([]);
       return;
     }
     let cancelled = false;
-    Promise.all([branchesApi.listWilayah(), branchesApi.listKabupatenForOwner()])
-      .then(([wRes, kRes]) => {
+    branchesApi
+      .listKabupatenForOwner()
+      .then((kRes) => {
         if (cancelled) return;
-        const w = (wRes.data as { data?: unknown })?.data;
         const k = (kRes.data as { data?: unknown })?.data;
-        setWilayahList(Array.isArray(w) ? (w as Array<{ id: string; name: string }>) : []);
         setKabupatenMaster(Array.isArray(k) ? (k as KabupatenForOwnerItem[]) : []);
       })
       .catch(() => {
-        if (!cancelled) {
-          setWilayahList([]);
-          setKabupatenMaster([]);
-        }
+        if (!cancelled) setKabupatenMaster([]);
       });
     return () => { cancelled = true; };
   }, [canPickOwner]);
@@ -250,13 +235,6 @@ const OrderFormPage: React.FC = () => {
     }
     prevOwnerInputModeRef.current = ownerInputMode;
   }, [ownerInputMode]);
-
-  useEffect(() => {
-    if (!canPickOwner || ownerInputMode !== 'manual') return;
-    if (wilayahOptions.length === 1 && !manualWilayahId) {
-      setManualWilayahId(wilayahOptions[0].id);
-    }
-  }, [canPickOwner, ownerInputMode, wilayahOptions, manualWilayahId]);
 
   const applyBranchFromKabupaten = useCallback(
     (kabId: string, list: typeof branches, master: KabupatenForOwnerItem[]) => {
@@ -877,8 +855,8 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualOwnerName.trim()){ showToast('Isi nama owner tanpa akun','warning'); return; }
-    if(canPickOwner&&ownerInputMode==='manual'&&!manualWilayahId){ showToast('Pilih wilayah','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualKabupatenId){ showToast('Pilih kota/kabupaten','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&manualKabupatenId&&!selectedManualKab?.wilayah_id){ showToast('Kabupaten ini belum dipetakan ke wilayah di master. Hubungi admin pusat.','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada cabang sistem untuk kota terpilih (pastikan master cabang punya kode sama dengan kode kabupaten).','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
@@ -927,8 +905,8 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualOwnerName.trim()){ showToast('Isi nama owner tanpa akun','warning'); return; }
-    if(canPickOwner&&ownerInputMode==='manual'&&!manualWilayahId){ showToast('Pilih wilayah','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualKabupatenId){ showToast('Pilih kota/kabupaten','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&manualKabupatenId&&!selectedManualKab?.wilayah_id){ showToast('Kabupaten ini belum dipetakan ke wilayah di master. Hubungi admin pusat.','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada cabang sistem untuk kota terpilih (pastikan master cabang punya kode sama dengan kode kabupaten).','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
@@ -1103,28 +1081,23 @@ const OrderFormPage: React.FC = () => {
                   <Input label="No HP owner (opsional)" type="text" value={manualOwnerPhone} onChange={(e)=>setManualOwnerPhone(e.target.value)} placeholder="08xxxxxxxxxx" />
                   <div className="sm:col-span-2">
                     <Autocomplete
-                      label="Wilayah (wajib)"
-                      value={manualWilayahId}
-                      onChange={(v) => {
-                        setManualWilayahId(v);
-                        setManualKabupatenId('');
-                        setBranchSel('');
-                      }}
-                      options={wilayahOptions.map((w) => ({ value: w.id, label: w.name }))}
-                      placeholder="Pilih wilayah"
-                      emptyLabel="Pilih wilayah"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Kota/kabupaten yang bisa dipilih mengikuti wilayah ini.</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Autocomplete
                       label="Kota / kabupaten (wajib)"
                       value={manualKabupatenId}
-                      onChange={(v) => setManualKabupatenId(v)}
+                      onChange={(v) => {
+                        setManualKabupatenId(v);
+                        const kab = kabupatenMaster.find((k) => String(k.id) === String(v));
+                        setManualWilayahId(kab?.wilayah_id ? String(kab.wilayah_id) : '');
+                        if (!v) setBranchSel('');
+                      }}
                       options={kabupatenOptions.map((k) => ({ value: String(k.id), label: `${k.nama} (${k.kode})` }))}
-                      placeholder={manualWilayahId ? 'Pilih kota/kabupaten' : 'Pilih wilayah dulu'}
-                      emptyLabel={manualWilayahId ? 'Pilih kota/kabupaten' : 'Pilih wilayah dulu'}
+                      placeholder="Cari & pilih kabupaten/kota"
+                      emptyLabel="Pilih kota/kabupaten"
                     />
+                    <p className="text-xs text-slate-500 mt-1">
+                      {user?.role === 'invoice_koordinator' && user?.wilayah_id
+                        ? 'Hanya kabupaten di wilayah Anda. Provinsi & wilayah terisi otomatis setelah memilih kabupaten.'
+                        : 'Provinsi & wilayah (master) terisi otomatis setelah memilih kabupaten.'}
+                    </p>
                   </div>
                   <Input
                     label="Provinsi (otomatis dari kota)"
