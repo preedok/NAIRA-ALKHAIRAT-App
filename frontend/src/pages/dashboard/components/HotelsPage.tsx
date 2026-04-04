@@ -381,6 +381,30 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const lastFilterKeyRef = useRef<string>('');
   const tableSectionRef = useRef<HTMLDivElement>(null);
 
+  const tableColumns: TableColumn[] = useMemo(
+    () => [
+      { id: 'code', label: 'Kode', align: 'left', sortable: true },
+      { id: 'name', label: 'Nama Hotel', align: 'left', sortable: true },
+      { id: 'location', label: 'Lokasi', align: 'left' },
+      { id: 'type_meal', label: 'Type / Meal', align: 'left' },
+      { id: 'currency', label: 'Mata Uang', align: 'center' },
+      {
+        id: 'meal',
+        label: `Harga makan / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
+        align: 'left'
+      },
+      {
+        id: 'room_price_type',
+        label: `Harga kamar / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
+        align: 'left'
+      },
+      { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
+      { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
+      ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
+    ],
+    [hotelListMonthlyYear, canShowProductActions]
+  );
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 350);
     return () => clearTimeout(t);
@@ -548,30 +572,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     });
     return { byRoom, total };
   })();
-
-  const tableColumns: TableColumn[] = useMemo(
-    () => [
-      { id: 'code', label: 'Kode', align: 'left', sortable: true },
-      { id: 'name', label: 'Nama Hotel', align: 'left', sortable: true },
-      { id: 'location', label: 'Lokasi', align: 'left' },
-      { id: 'type_meal', label: 'Type / Meal', align: 'left' },
-      { id: 'currency', label: 'Mata Uang', align: 'center' },
-      {
-        id: 'meal',
-        label: `Harga makan / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
-        align: 'left'
-      },
-      {
-        id: 'room_price_type',
-        label: `Harga kamar / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
-        align: 'left'
-      },
-      { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
-      { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
-      ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
-    ],
-    [hotelListMonthlyYear, canShowProductActions]
-  );
 
   const handleOpenAdd = () => {
     setEditingHotel(null);
