@@ -73,75 +73,92 @@ type HotelMonthlyByRoomTypeMap = Record<
   { months: Array<{ year_month: string; sar_room_per_night: number | null }> }
 >;
 
-/** Satu baris horizontal: Jan … Des (scroll jika sempit). */
-function renderMealMonthRow(
-  months: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>,
-  gridRates: GridRatesPair
-): React.ReactNode {
+/** Sel harga read-only (SAR + IDR ringkas) untuk tabel kalender di daftar hotel. */
+function MonthlyReadonlyPriceCell({ sar, gridRates }: { sar: number | null; gridRates: GridRatesPair }): React.ReactNode {
+  if (sar == null || !(sar > 0)) {
+    return <div className="text-center py-1 text-slate-400 tabular-nums">—</div>;
+  }
+  const conv = fillFromSource('SAR', sar, gridRates);
+  const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
   return (
-    <div className="flex flex-nowrap gap-1 overflow-x-auto max-w-full touch-pan-x overscroll-x-contain py-0.5">
-      {months.map((m) => {
-        const sar = m.sar_meal_per_person_per_night;
-        if (sar == null || !(sar > 0)) {
-          return (
-            <div
-              key={m.year_month}
-              className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
-            >
-              <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
-              <div className="text-[10px] text-slate-400 tabular-nums">—</div>
-            </div>
-          );
-        }
-        const conv = fillFromSource('SAR', sar, gridRates);
-        const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
-        return (
-          <div
-            key={m.year_month}
-            className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
-          >
-            <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
-            <div className="font-medium tabular-nums text-[10px] text-slate-800 leading-tight">{t.sarText}</div>
-            <div className="text-[8px] text-slate-500 tabular-nums leading-tight mt-0.5 line-clamp-2">{t.idrText}</div>
-          </div>
-        );
-      })}
+    <div className="text-center py-1 px-0.5">
+      <div className="font-semibold tabular-nums text-[10px] text-slate-800 leading-tight">{t.sarText}</div>
+      <div className="text-[8px] text-slate-500 tabular-nums leading-tight line-clamp-2">{t.idrText}</div>
     </div>
   );
 }
 
-function renderRoomMonthRow(
-  months: Array<{ year_month: string; sar_room_per_night: number | null }>,
-  gridRates: GridRatesPair
-): React.ReactNode {
+/**
+ * Satu header bulan (Jan–Des) + baris makan (room only) + baris Single–Quint — sama pola dengan modal "Tarif per malam (SAR) per bulan kalender".
+ */
+function renderHotelListMonthlyMatrixTable(props: {
+  monthKeys: string[];
+  isFullboard: boolean;
+  mealMonthsList: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }> | null | undefined;
+  byRoomTypeDisplay: HotelMonthlyByRoomTypeMap;
+  gridRates: GridRatesPair;
+  roomYearDisplay: string | undefined;
+}): React.ReactNode {
+  const { monthKeys, isFullboard, mealMonthsList, byRoomTypeDisplay, gridRates, roomYearDisplay } = props;
+  const mealByYm = new Map((mealMonthsList || []).map((m) => [m.year_month, m.sar_meal_per_person_per_night]));
+  const showMealRow = !isFullboard && Array.isArray(mealMonthsList) && mealMonthsList.length > 0;
+
   return (
-    <div className="flex flex-nowrap gap-1 overflow-x-auto max-w-full touch-pan-x overscroll-x-contain py-0.5">
-      {months.map((m) => {
-        const sar = m.sar_room_per_night;
-        if (sar == null || !(sar > 0)) {
-          return (
-            <div
-              key={m.year_month}
-              className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
-            >
-              <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
-              <div className="text-[10px] text-slate-400 tabular-nums">—</div>
-            </div>
-          );
-        }
-        const conv = fillFromSource('SAR', sar, gridRates);
-        const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
-        return (
-          <div
-            key={m.year_month}
-            className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
-          >
-            <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
-            <div className="font-semibold tabular-nums text-[10px] text-slate-800 leading-tight">{t.sarText}</div>
-            <div className="text-[8px] text-slate-500 tabular-nums leading-tight mt-0.5 line-clamp-2">{t.idrText}</div>
-          </div>
-        );
-      })}
+    <div className="min-w-0 overflow-x-auto max-w-[min(52rem,92vw)] rounded-lg border border-slate-100 bg-slate-50/60 touch-pan-x overscroll-x-contain">
+      <table className="w-full text-[10px] min-w-[520px] border-collapse">
+        <thead>
+          <tr className="bg-slate-100/90 border-b border-slate-200">
+            <th className="sticky left-0 z-[1] bg-slate-100/90 text-left px-2 py-1.5 font-semibold text-slate-700 border-r border-slate-200/80 w-[4.75rem]">
+              Tipe
+            </th>
+            {monthKeys.map((ym) => (
+              <th key={ym} className="px-1 py-1.5 font-medium text-slate-600 text-center whitespace-nowrap min-w-[2.75rem]">
+                {formatMonthShortId(ym)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white">
+          {showMealRow ? (
+            <tr className="border-b border-slate-100">
+              <td className="sticky left-0 z-0 bg-white px-2 py-1 font-medium text-slate-700 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                Makan / org
+              </td>
+              {monthKeys.map((ym) => (
+                <td key={`meal-${ym}`} className="align-top border-b border-slate-50">
+                  <MonthlyReadonlyPriceCell sar={mealByYm.get(ym) ?? null} gridRates={gridRates} />
+                </td>
+              ))}
+            </tr>
+          ) : null}
+          {ROOM_TYPES.map((rt) => {
+            const block = byRoomTypeDisplay[rt];
+            if (!block?.months?.length) return null;
+            const roomByYm = new Map(block.months.map((m) => [m.year_month, m.sar_room_per_night]));
+            return (
+              <tr key={rt} className="border-b border-slate-100 last:border-0">
+                <td className="sticky left-0 z-0 bg-white px-2 py-1 font-medium text-slate-800 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                  {ROOM_TYPE_LABELS[rt] || rt}
+                </td>
+                {monthKeys.map((ym) => (
+                  <td key={`${rt}-${ym}`} className="align-top">
+                    <MonthlyReadonlyPriceCell sar={roomByYm.get(ym) ?? null} gridRates={gridRates} />
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {isFullboard ? (
+        <p className="text-[10px] text-slate-500 px-2 py-1 border-t border-slate-100 bg-white/80">
+          Makan termasuk (fullboard) · {roomYearDisplay ?? ''}
+        </p>
+      ) : (
+        <p className="text-[10px] text-slate-400 px-2 py-1 border-t border-slate-100 bg-white/80">
+          Per malam menginap (bukan total sebulan) · {roomYearDisplay ?? ''}
+        </p>
+      )}
     </div>
   );
 }
@@ -479,13 +496,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       { id: 'type_meal', label: 'Type / Meal', align: 'left' },
       { id: 'currency', label: 'Mata Uang', align: 'center' },
       {
-        id: 'meal',
-        label: `Harga makan / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
-        align: 'left'
-      },
-      {
-        id: 'room_price_type',
-        label: `Harga kamar / bulan (${hotelListMonthlyYear}) · per malam · IDR / SAR / USD`,
+        id: 'monthly_tariff',
+        label: `Tarif per malam (${hotelListMonthlyYear}) · per bulan kalender · IDR / SAR / USD`,
         align: 'left'
       },
       { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
@@ -1087,121 +1099,185 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 </td>
                 <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {hotel.meta?.meal_plan === 'fullboard' ? (
-                    <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Termasuk (fullboard)</span></>
-                  ) : mealMonthsList?.length ? (
-                    <div className="min-w-0 max-w-[min(40rem,92vw)]">
-                      <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-1 py-1 text-xs">
-                        {renderMealMonthRow(
-                          mealMonthsList as Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>,
-                          gridRates
+                  {byRoomTypeDisplay ? (
+                    <div className="min-w-0 space-y-2">
+                      {(() => {
+                        const monthKeysForMatrix = (() => {
+                          for (const rt of ROOM_TYPES) {
+                            const mo = byRoomTypeDisplay[rt]?.months;
+                            if (mo?.length) return mo.map((m) => m.year_month);
+                          }
+                          return Array.from({ length: 12 }, (_, i) => `${hotelListMonthlyYear}-${String(i + 1).padStart(2, '0')}`);
+                        })();
+                        return renderHotelListMonthlyMatrixTable({
+                          monthKeys: monthKeysForMatrix,
+                          isFullboard: isFullboardPlan,
+                          mealMonthsList: isFullboardPlan ? [] : mealMonthsList,
+                          byRoomTypeDisplay,
+                          gridRates,
+                          roomYearDisplay
+                        });
+                      })()}
+                      {!isFullboardPlan && !(mealMonthsList?.length) ? (
+                        <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs space-y-1">
+                          <p className="text-[10px] font-semibold text-slate-500">Makan (ringkas / fallback)</p>
+                          {md?.sar_meal_per_person_per_night != null && md.sar_meal_per_person_per_night > 0 ? (
+                            (() => {
+                              const tm = fillFromSource('SAR', md.sar_meal_per_person_per_night as number, currencyRates);
+                              const t = getPriceTripleForTable(tm.idr, tm.sar, tm.usd);
+                              return (
+                                <>
+                                  <div className="tabular-nums font-medium">{t.idrText}</div>
+                                  <div className="text-[10px] text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                  <span className="text-slate-500 text-[10px] block">per orang · grid SAR · {gridMonthLabel || md.year_month}</span>
+                                </>
+                              );
+                            })()
+                          ) : tripleMealFromMonthlyDelta ? (
+                            (() => {
+                              const t = getPriceTripleForTable(tripleMealFromMonthlyDelta.idr, tripleMealFromMonthlyDelta.sar, tripleMealFromMonthlyDelta.usd);
+                              return (
+                                <>
+                                  <div className="tabular-nums font-medium">{t.idrText}</div>
+                                  <div className="text-[10px] text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                  <span className="text-slate-500 text-[10px] block">per kamar · selisih grid SAR · {gridMonthLabel}</span>
+                                </>
+                              );
+                            })()
+                          ) : (() => {
+                            const t = getPriceTripleForTable(tripleMeal.idr, tripleMeal.sar, tripleMeal.usd);
+                            if (!t.hasPrice) return <span className="text-slate-400 text-[10px]">– · {mealType}</span>;
+                            return (
+                              <>
+                                <div className="tabular-nums font-medium">{t.idrText}</div>
+                                <div className="text-[10px] text-slate-500"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                <span className="text-slate-500 text-[10px] block">
+                                  per orang · {mealType}
+                                  {hasMonthlyRoom ? <span> · selain kamar (grid {gridMonthLabel})</span> : null}
+                                </span>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-w-md">
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Makan</p>
+                        {hotel.meta?.meal_plan === 'fullboard' ? (
+                          <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Termasuk (fullboard)</span></>
+                        ) : mealMonthsList?.length ? (
+                          <div className="rounded-md border border-slate-100 bg-slate-50/60 px-1 py-1 text-xs overflow-x-auto">
+                            <table className="w-full text-[10px] min-w-[280px] border-collapse">
+                              <thead>
+                                <tr>
+                                  {mealMonthsList.map((m) => (
+                                    <th key={m.year_month} className="px-0.5 py-0.5 font-medium text-slate-600 text-center">
+                                      {formatMonthShortId(m.year_month)}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  {mealMonthsList.map((m) => (
+                                    <td key={m.year_month} className="align-top px-0.5">
+                                      <MonthlyReadonlyPriceCell
+                                        sar={m.sar_meal_per_person_per_night}
+                                        gridRates={gridRates}
+                                      />
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                            <p className="text-[10px] text-slate-400 mt-1">per orang · per malam · {mealYearLabel}</p>
+                          </div>
+                        ) : md?.sar_meal_per_person_per_night != null && md.sar_meal_per_person_per_night > 0 ? (
+                          (() => {
+                            const tm = fillFromSource('SAR', md.sar_meal_per_person_per_night as number, currencyRates);
+                            const t = getPriceTripleForTable(tm.idr, tm.sar, tm.usd);
+                            return (
+                              <>
+                                <div className="tabular-nums font-medium">{t.idrText}</div>
+                                <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                <span className="text-slate-600 text-xs block mt-0.5">per orang · grid SAR · {gridMonthLabel || md.year_month}</span>
+                              </>
+                            );
+                          })()
+                        ) : tripleMealFromMonthlyDelta ? (
+                          (() => {
+                            const t = getPriceTripleForTable(tripleMealFromMonthlyDelta.idr, tripleMealFromMonthlyDelta.sar, tripleMealFromMonthlyDelta.usd);
+                            return (
+                              <>
+                                <div className="tabular-nums font-medium">{t.idrText}</div>
+                                <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                <span className="text-slate-500 text-xs block mt-0.5">per kamar · selisih grid SAR · {gridMonthLabel}</span>
+                              </>
+                            );
+                          })()
+                        ) : (() => {
+                          const t = getPriceTripleForTable(tripleMeal.idr, tripleMeal.sar, tripleMeal.usd);
+                          if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-400 text-xs block">{mealType}</span></>;
+                          return (
+                            <>
+                              <div className="tabular-nums font-medium">{t.idrText}</div>
+                              <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                              <span className="text-slate-400 text-xs block mt-0.5">
+                                per orang · {mealType}
+                                {hasMonthlyRoom ? <span className="text-slate-500"> · selain harga kamar (grid {gridMonthLabel})</span> : null}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Kamar</p>
+                        {tripleRoomFromMonthly ? (
+                          (() => {
+                            const t = getPriceTripleForTable(tripleRoomFromMonthly.idr, tripleRoomFromMonthly.sar, tripleRoomFromMonthly.usd);
+                            return (
+                              <>
+                                <div className="tabular-nums font-semibold">{t.idrText}</div>
+                                <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                <span className="text-slate-600 text-xs block mt-0.5">
+                                  per malam · grid SAR · {gridMonthLabel}
+                                  {gridRtLabel ? ` · ${gridRtLabel}` : ''}
+                                  {isFullboardPlan ? ' · termasuk makan' : ''}
+                                </span>
+                              </>
+                            );
+                          })()
+                        ) : isSinglePrice ? (
+                          (() => {
+                            const t = getPriceTripleForTable(tripleRoom.idr, tripleRoom.sar, tripleRoom.usd);
+                            if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
+                            return (
+                              <>
+                                <div className="tabular-nums font-semibold">{t.idrText}</div>
+                                <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · {roomPriceType}</span>
+                              </>
+                            );
+                          })()
+                        ) : (
+                          (() => {
+                            const repPrice = Number(breakdown.single?.price ?? breakdown.double?.price ?? breakdown.triple?.price ?? breakdown.quad?.price ?? breakdown.quint?.price ?? 0) || 0;
+                            const tr = fillFromSource(cur, repPrice, currencyRates);
+                            const t = getPriceTripleForTable(tr.idr, tr.sar, tr.usd);
+                            if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
+                            return (
+                              <>
+                                <div className="tabular-nums font-medium">{t.idrText}</div>
+                                <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
+                                <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · Per tipe · {roomPriceType}</span>
+                              </>
+                            );
+                          })()
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1">per orang · per malam · {mealYearLabel}</p>
                     </div>
-                  ) : md?.sar_meal_per_person_per_night != null && md.sar_meal_per_person_per_night > 0 ? (
-                    (() => {
-                      const tm = fillFromSource('SAR', md.sar_meal_per_person_per_night as number, currencyRates);
-                      const t = getPriceTripleForTable(tm.idr, tm.sar, tm.usd);
-                      return (
-                        <>
-                          <div className="tabular-nums font-medium">{t.idrText}</div>
-                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-600 text-xs block mt-0.5">per orang · grid SAR · {gridMonthLabel || md.year_month}</span>
-                        </>
-                      );
-                    })()
-                  ) : tripleMealFromMonthlyDelta ? (
-                    (() => {
-                      const t = getPriceTripleForTable(tripleMealFromMonthlyDelta.idr, tripleMealFromMonthlyDelta.sar, tripleMealFromMonthlyDelta.usd);
-                      return (
-                        <>
-                          <div className="tabular-nums font-medium">{t.idrText}</div>
-                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · selisih grid SAR · {gridMonthLabel}</span>
-                        </>
-                      );
-                    })()
-                  ) : (() => {
-                    const t = getPriceTripleForTable(tripleMeal.idr, tripleMeal.sar, tripleMeal.usd);
-                    if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-400 text-xs block">{mealType}</span></>;
-                    return (
-                      <>
-                        <div className="tabular-nums font-medium">{t.idrText}</div>
-                        <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                        <span className="text-slate-400 text-xs block mt-0.5">
-                          per orang · {mealType}
-                          {hasMonthlyRoom ? <span className="text-slate-500"> · selain harga kamar (grid {gridMonthLabel})</span> : null}
-                        </span>
-                      </>
-                    );
-                  })()}
-                </td>
-                <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {byRoomTypeDisplay ? (
-                    <div className="min-w-0 max-w-[min(44rem,92vw)]">
-                      <div className="space-y-1.5 text-xs">
-                        {ROOM_TYPES.map((rt) => {
-                          const block = byRoomTypeDisplay[rt];
-                          if (!block?.months?.length) return null;
-                          return (
-                            <div key={rt} className="flex items-start gap-1.5 min-w-0">
-                              <span className="shrink-0 w-11 text-[10px] font-semibold text-slate-600 pt-1 leading-tight">
-                                {ROOM_TYPE_LABELS[rt] || rt}
-                              </span>
-                              <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/60 px-1 py-0.5">
-                                {renderRoomMonthRow(block.months, gridRates)}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        per malam · {roomYearDisplay} · Single – Quint
-                        {isFullboardPlan ? ' · termasuk makan' : ''}
-                      </p>
-                    </div>
-                  ) : tripleRoomFromMonthly ? (
-                    (() => {
-                      const t = getPriceTripleForTable(tripleRoomFromMonthly.idr, tripleRoomFromMonthly.sar, tripleRoomFromMonthly.usd);
-                      return (
-                        <>
-                          <div className="tabular-nums font-semibold">{t.idrText}</div>
-                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-600 text-xs block mt-0.5">
-                            per malam · grid SAR · {gridMonthLabel}
-                            {gridRtLabel ? ` · ${gridRtLabel}` : ''}
-                            {isFullboardPlan ? ' · termasuk makan' : ''}
-                          </span>
-                        </>
-                      );
-                    })()
-                  ) : isSinglePrice ? (
-                    (() => {
-                      const t = getPriceTripleForTable(tripleRoom.idr, tripleRoom.sar, tripleRoom.usd);
-                      if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
-                      return (
-                        <>
-                          <div className="tabular-nums font-semibold">{t.idrText}</div>
-                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · {roomPriceType}</span>
-                        </>
-                      );
-                    })()
-                  ) : (
-                    (() => {
-                      const repPrice = Number(breakdown.single?.price ?? breakdown.double?.price ?? breakdown.triple?.price ?? breakdown.quad?.price ?? breakdown.quint?.price ?? 0) || 0;
-                      const tr = fillFromSource(cur, repPrice, currencyRates);
-                      const t = getPriceTripleForTable(tr.idr, tr.sar, tr.usd);
-                      if (!t.hasPrice) return <><span className="text-slate-400">–</span><span className="text-slate-500 text-xs block">{roomPriceType}</span></>;
-                      return (
-                        <>
-                          <div className="tabular-nums font-medium">{t.idrText}</div>
-                          <div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> {t.sarText} <span className="text-slate-400 ml-1">USD:</span> {t.usdText}</div>
-                          <span className="text-slate-500 text-xs block mt-0.5">per kamar · default · Per tipe · {roomPriceType}</span>
-                        </>
-                      );
-                    })()
                   )}
                 </td>
                 <td className="px-4 py-3.5 align-middle">

@@ -10,9 +10,20 @@
  *   node scripts/backfill-hotel-monthly-from-prices.js --year=2026
  *   node scripts/backfill-hotel-monthly-from-prices.js --dry-run
  *   node scripts/backfill-hotel-monthly-from-prices.js --product-id=<uuid>
+ *   node scripts/backfill-hotel-monthly-from-prices.js --env-file=.env.production
+ * Production DB: NODE_ENV=production dan DATABASE_URL di .env, atau --env-file=path
  */
-require('dotenv').config();
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+for (const a of process.argv.slice(2)) {
+  if (a.startsWith('--env-file=')) {
+    const p = a.slice(11).trim();
+    if (p) {
+      const resolved = path.isAbsolute(p) ? p : path.join(process.cwd(), p);
+      require('dotenv').config({ path: resolved, override: true });
+    }
+  }
+}
 const sequelize = require(path.join(__dirname, '../src/config/sequelize'));
 const { Product, ProductPrice, BusinessRuleConfig } = require(path.join(__dirname, '../src/models'));
 const { BUSINESS_RULE_KEYS } = require(path.join(__dirname, '../src/constants'));
@@ -27,6 +38,7 @@ function parseArgs() {
     if (a === '--dry-run') out.dryRun = true;
     else if (a.startsWith('--year=')) out.year = a.slice(7).trim();
     else if (a.startsWith('--product-id=')) out.productId = a.slice(13).trim() || null;
+    else if (a.startsWith('--env-file=')) { /* sudah diproses sebelum require sequelize */ }
   }
   if (!/^\d{4}$/.test(out.year)) {
     console.error('Invalid --year, use YYYY');
