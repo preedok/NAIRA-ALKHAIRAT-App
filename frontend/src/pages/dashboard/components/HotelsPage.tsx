@@ -66,6 +66,81 @@ function formatMonthShortId(ymKey: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+type GridRatesPair = { SAR_TO_IDR: number; USD_TO_IDR: number };
+
+/** Satu baris horizontal: Jan … Des (scroll jika sempit). */
+function renderMealMonthRow(
+  months: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>,
+  gridRates: GridRatesPair
+): React.ReactNode {
+  return (
+    <div className="flex flex-nowrap gap-1 overflow-x-auto max-w-full touch-pan-x overscroll-x-contain py-0.5">
+      {months.map((m) => {
+        const sar = m.sar_meal_per_person_per_night;
+        if (sar == null || !(sar > 0)) {
+          return (
+            <div
+              key={m.year_month}
+              className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
+            >
+              <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
+              <div className="text-[10px] text-slate-400 tabular-nums">—</div>
+            </div>
+          );
+        }
+        const conv = fillFromSource('SAR', sar, gridRates);
+        const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
+        return (
+          <div
+            key={m.year_month}
+            className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
+          >
+            <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
+            <div className="font-medium tabular-nums text-[10px] text-slate-800 leading-tight">{t.sarText}</div>
+            <div className="text-[8px] text-slate-500 tabular-nums leading-tight mt-0.5 line-clamp-2">{t.idrText}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function renderRoomMonthRow(
+  months: Array<{ year_month: string; sar_room_per_night: number | null }>,
+  gridRates: GridRatesPair
+): React.ReactNode {
+  return (
+    <div className="flex flex-nowrap gap-1 overflow-x-auto max-w-full touch-pan-x overscroll-x-contain py-0.5">
+      {months.map((m) => {
+        const sar = m.sar_room_per_night;
+        if (sar == null || !(sar > 0)) {
+          return (
+            <div
+              key={m.year_month}
+              className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
+            >
+              <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
+              <div className="text-[10px] text-slate-400 tabular-nums">—</div>
+            </div>
+          );
+        }
+        const conv = fillFromSource('SAR', sar, gridRates);
+        const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
+        return (
+          <div
+            key={m.year_month}
+            className="shrink-0 w-[2.85rem] rounded border border-slate-200/70 bg-white px-0.5 py-1 text-center"
+          >
+            <div className="text-[9px] text-slate-500 font-medium leading-none mb-0.5">{formatMonthShortId(m.year_month)}</div>
+            <div className="font-semibold tabular-nums text-[10px] text-slate-800 leading-tight">{t.sarText}</div>
+            <div className="text-[8px] text-slate-500 tabular-nums leading-tight mt-0.5 line-clamp-2">{t.idrText}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function parseSarInputString(s: string): number {
   const t = String(s ?? '').replace(/\./g, '').replace(',', '.').trim();
   if (t === '' || t === '-') return 0;
@@ -126,6 +201,16 @@ export interface HotelProduct {
       sar_room_per_night: number | null;
       sar_meal_per_person_per_night: number | null;
     }>;
+  } | null;
+  /** Harga makan per bulan (satu array, tidak per tipe kamar). */
+  hotel_monthly_meal_months?: {
+    year: string;
+    months: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>;
+  } | null;
+  /** Harga kamar per bulan per tipe (single … quint). */
+  hotel_monthly_series_by_room_type?: {
+    year: string;
+    by_room_type: Record<string, { months: Array<{ year_month: string; sar_room_per_night: number | null }> }>;
   } | null;
 }
 
@@ -944,6 +1029,16 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const avail = availabilityByHotelId[hotel.id];
             const gridRates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
             const series = hotel.hotel_monthly_series;
+            const mealMonthsList = hotel.hotel_monthly_meal_months?.months ?? series?.months;
+            const mealYearLabel = hotel.hotel_monthly_meal_months?.year ?? series?.year;
+            const byRoomType = hotel.hotel_monthly_series_by_room_type?.by_room_type;
+            const roomTypesYear = hotel.hotel_monthly_series_by_room_type?.year;
+            const hasByRoomTypeGrid =
+              !!byRoomType &&
+              ROOM_TYPES.some((rt) => {
+                const block = byRoomType[rt];
+                return block?.months?.some((x) => x.sar_room_per_night != null && x.sar_room_per_night > 0);
+              });
             return (
               <tr key={hotel.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-b-0">
                 <td className="px-4 py-3.5 text-sm text-slate-600 font-mono align-middle">{hotel.code || '-'}</td>
@@ -970,33 +1065,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
                   {hotel.meta?.meal_plan === 'fullboard' ? (
                     <><span className="text-slate-600 font-medium">–</span><span className="text-slate-500 text-xs block mt-0.5">Termasuk (fullboard)</span></>
-                  ) : series?.months?.length ? (
-                    <div className="min-w-[9rem] max-w-[15rem]">
-                      <div className="max-h-44 overflow-y-auto text-xs space-y-0.5 pr-1 py-1.5 px-1.5 rounded-lg border border-slate-100 bg-slate-50/60">
-                        {series.months.map((m) => {
-                          const sar = m.sar_meal_per_person_per_night;
-                          if (sar == null || !(sar > 0)) {
-                            return (
-                              <div key={m.year_month} className="flex justify-between gap-2 text-slate-400 tabular-nums leading-tight">
-                                <span className="shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
-                                <span>—</span>
-                              </div>
-                            );
-                          }
-                          const conv = fillFromSource('SAR', sar, gridRates);
-                          const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
-                          return (
-                            <div key={m.year_month} className="flex justify-between gap-1.5 text-slate-700 leading-tight">
-                              <span className="text-slate-500 shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
-                              <div className="text-right min-w-0">
-                                <div className="font-medium tabular-nums text-[11px]">{t.sarText} SAR</div>
-                                <div className="text-[10px] text-slate-500 tabular-nums leading-tight">{t.idrText} · {t.usdText}</div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                  ) : mealMonthsList?.length ? (
+                    <div className="min-w-0 max-w-[min(40rem,92vw)]">
+                      <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-1 py-1 text-xs">
+                        {renderMealMonthRow(
+                          mealMonthsList as Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>,
+                          gridRates
+                        )}
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1">per orang · per malam · {series.year}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">per orang · per malam · {mealYearLabel}</p>
                     </div>
                   ) : md?.sar_meal_per_person_per_night != null && md.sar_meal_per_person_per_night > 0 ? (
                     (() => {
@@ -1037,31 +1114,41 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   })()}
                 </td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {series?.months?.length ? (
-                    <div className="min-w-[9rem] max-w-[15rem]">
-                      <div className="max-h-44 overflow-y-auto text-xs space-y-0.5 pr-1 py-1.5 px-1.5 rounded-lg border border-slate-100 bg-slate-50/60">
-                        {series.months.map((m) => {
-                          const sar = m.sar_room_per_night;
-                          if (sar == null || !(sar > 0)) {
-                            return (
-                              <div key={m.year_month} className="flex justify-between gap-2 text-slate-400 tabular-nums leading-tight">
-                                <span className="shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
-                                <span>—</span>
-                              </div>
-                            );
-                          }
-                          const conv = fillFromSource('SAR', sar, gridRates);
-                          const t = getPriceTripleForTable(conv.idr, conv.sar, conv.usd);
+                  {hasByRoomTypeGrid && byRoomType ? (
+                    <div className="min-w-0 max-w-[min(44rem,92vw)]">
+                      <div className="space-y-1.5 text-xs">
+                        {ROOM_TYPES.map((rt) => {
+                          const block = byRoomType[rt];
+                          if (!block?.months?.length) return null;
+                          const hasAny = block.months.some((x) => x.sar_room_per_night != null && x.sar_room_per_night > 0);
+                          if (!hasAny) return null;
                           return (
-                            <div key={m.year_month} className="flex justify-between gap-1.5 text-slate-700 leading-tight">
-                              <span className="text-slate-500 shrink-0 w-9">{formatMonthShortId(m.year_month)}</span>
-                              <div className="text-right min-w-0">
-                                <div className="font-semibold tabular-nums text-[11px]">{t.sarText} SAR</div>
-                                <div className="text-[10px] text-slate-500 tabular-nums leading-tight">{t.idrText} · {t.usdText}</div>
+                            <div key={rt} className="flex items-start gap-1.5 min-w-0">
+                              <span className="shrink-0 w-11 text-[10px] font-semibold text-slate-600 pt-1 leading-tight">
+                                {ROOM_TYPE_LABELS[rt] || rt}
+                              </span>
+                              <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/60 px-1 py-0.5">
+                                {renderRoomMonthRow(block.months, gridRates)}
                               </div>
                             </div>
                           );
                         })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        per malam · {roomTypesYear}
+                        {isFullboardPlan ? ' · termasuk makan' : ''}
+                      </p>
+                    </div>
+                  ) : series?.months?.length ? (
+                    <div className="min-w-0 max-w-[min(40rem,92vw)]">
+                      <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-1 py-1 text-xs">
+                        {renderRoomMonthRow(
+                          series.months.map((m) => ({
+                            year_month: m.year_month,
+                            sar_room_per_night: m.sar_room_per_night
+                          })),
+                          gridRates
+                        )}
                       </div>
                       <p className="text-[10px] text-slate-400 mt-1">
                         per malam · {series.year} · {ROOM_TYPE_LABELS[series.room_type] || series.room_type}

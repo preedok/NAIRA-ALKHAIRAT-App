@@ -375,16 +375,55 @@ const list = asyncHandler(async (req, res) => {
         }
         return 'triple';
       };
+      const ROOM_TYPES_MONTHLY = ['single', 'double', 'triple', 'quad', 'quint'];
+      const buildRoomMonthsForType = (packForProduct, rt, isFb, yearStr) => {
+        const months = [];
+        for (let mo = 1; mo <= 12; mo += 1) {
+          const ymKey = `${yearStr}-${String(mo).padStart(2, '0')}`;
+          const cell = packForProduct[ymKey] || {};
+          const room = cell[`${rt}_room`];
+          const bundle = cell[`${rt}_bundle`];
+          const sarRoomNight = isFb
+            ? ((bundle != null && bundle > 0) ? bundle : (room != null && room > 0 ? room : null))
+            : (room != null && room > 0 ? room : null);
+          months.push({ year_month: ymKey, sar_room_per_night: sarRoomNight });
+        }
+        return months;
+      };
+      const buildMealMonths = (packForProduct, isFb, yearStr) => {
+        const months = [];
+        for (let mo = 1; mo <= 12; mo += 1) {
+          const ymKey = `${yearStr}-${String(mo).padStart(2, '0')}`;
+          const cell = packForProduct[ymKey] || {};
+          const meal = cell.meal;
+          const sarMealPer = !isFb && meal != null && meal > 0 ? meal : null;
+          months.push({ year_month: ymKey, sar_meal_per_person_per_night: sarMealPer });
+        }
+        return months;
+      };
       for (const p of result) {
         if (p.type !== 'hotel') continue;
         const meta = p.meta && typeof p.meta === 'object' ? p.meta : {};
         const breakdown = p.room_breakdown || p.prices_by_room || {};
         const rt = pickRefRoomType(meta, breakdown);
         const isFb = meta.meal_plan === 'fullboard';
+        const packPid = packByProductMonth[p.id] || {};
+        const byRoomType = {};
+        for (const rtv of ROOM_TYPES_MONTHLY) {
+          byRoomType[rtv] = { months: buildRoomMonthsForType(packPid, rtv, isFb, seriesYear) };
+        }
+        p.hotel_monthly_series_by_room_type = {
+          year: seriesYear,
+          by_room_type: byRoomType
+        };
+        p.hotel_monthly_meal_months = {
+          year: seriesYear,
+          months: buildMealMonths(packPid, isFb, seriesYear)
+        };
         const monthsSeries = [];
         for (let mo = 1; mo <= 12; mo += 1) {
           const ymKey = `${seriesYear}-${String(mo).padStart(2, '0')}`;
-          const cell = packByProductMonth[p.id]?.[ymKey] || {};
+          const cell = packPid[ymKey] || {};
           const room = cell[`${rt}_room`];
           const bundle = cell[`${rt}_bundle`];
           const meal = cell.meal;
@@ -403,7 +442,7 @@ const list = asyncHandler(async (req, res) => {
           room_type: rt,
           months: monthsSeries
         };
-        const mNow = packByProductMonth[p.id]?.[ymNow] || {};
+        const mNow = packPid[ymNow] || {};
         const sarRoom = mNow[`${rt}_room`];
         const sarBundle = mNow[`${rt}_bundle`];
         const sarMeal = mNow.meal;
