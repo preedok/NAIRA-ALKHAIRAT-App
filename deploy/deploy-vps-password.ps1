@@ -90,6 +90,10 @@ if [ -f $APP_PATH/deploy/nginx.conf ]; then
 fi
 if [ -f $APP_PATH/deploy/vps-insancita-docker-nginx.conf ] && docker ps --format '{{.Names}}' | grep -qx insancita-integrasi-nginx-1; then
   cp $APP_PATH/deploy/vps-insancita-docker-nginx.conf /var/www/insancita-integrasi/infra/nginx.conf
+  if docker volume inspect insancita-integrasi_letsencrypt >/dev/null 2>&1; then
+    echo '>>> Sync Lets Encrypt host -> volume Docker nginx (volume ini bukan bind ke /etc/letsencrypt host)...'
+    docker run --rm -v insancita-integrasi_letsencrypt:/dst -v /etc/letsencrypt:/src:ro alpine sh -c 'mkdir -p /dst/live /dst/archive /dst/renewal /dst/renewal-hooks && cp -a /src/live/. /dst/live/ && cp -a /src/archive/. /dst/archive/ && cp -a /src/renewal/. /dst/renewal/ 2>/dev/null; cp -a /src/renewal-hooks/. /dst/renewal-hooks/ 2>/dev/null; true'
+  fi
   docker exec insancita-integrasi-nginx-1 nginx -t && docker exec insancita-integrasi-nginx-1 nginx -s reload && echo 'Docker nginx (dev subdomain) OK.' || echo 'Docker nginx reload gagal (cek manual).'
 fi
 echo DEPLOY_DONE
