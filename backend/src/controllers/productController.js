@@ -1318,16 +1318,6 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
   const mealPlan = product.meta && typeof product.meta === 'object' ? product.meta.meal_plan : null;
 
   const t = await sequelize.transaction();
-  const setMealComponentIfColumnExists = async (rowId) => {
-    try {
-      await sequelize.query(
-        `UPDATE hotel_monthly_prices SET component = 'meal' WHERE id = :id`,
-        { replacements: { id: rowId }, transaction: t }
-      );
-    } catch (e) {
-      if (!String(e?.message || '').includes('component')) throw e;
-    }
-  };
   try {
     for (const r of rows) {
       const yearMonth = String(r.year_month || '').trim();
@@ -1351,6 +1341,7 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
 
       const branchId = r.branch_id || null;
       const ownerId = r.owner_id || null;
+      const componentValue = component === COMPONENT_MEAL ? 'meal' : 'room';
 
       /**
        * Harga dikosongkan di UI → hapus semua baris untuk slot ini (semua mata uang).
@@ -1364,7 +1355,8 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
             room_type: roomType,
             with_meal: withMeal,
             branch_id: branchId,
-            owner_id: ownerId
+            owner_id: ownerId,
+            component: componentValue
           },
           transaction: t
         });
@@ -1379,17 +1371,18 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           room_type: roomType,
           with_meal: withMeal,
           branch_id: branchId,
-          owner_id: ownerId
+          owner_id: ownerId,
+          component: componentValue
         },
         transaction: t
       });
       if (existing) {
         existing.amount = amount;
+        existing.component = componentValue;
         existing.created_by = req.user?.id || existing.created_by;
         await existing.save({ transaction: t });
-        if (component === COMPONENT_MEAL) await setMealComponentIfColumnExists(existing.id);
       } else {
-        const created = await HotelMonthlyPrice.create({
+        await HotelMonthlyPrice.create({
           product_id: product.id,
           branch_id: branchId,
           owner_id: ownerId,
@@ -1397,10 +1390,10 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           currency,
           room_type: roomType,
           with_meal: withMeal,
+          component: componentValue,
           amount,
           created_by: req.user?.id || null
         }, { transaction: t });
-        if (component === COMPONENT_MEAL) await setMealComponentIfColumnExists(created.id);
       }
     }
     await t.commit();

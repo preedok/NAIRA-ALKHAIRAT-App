@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { HotelMonthlyPrice, Product } = require('../models');
 const { ROOM_CAPACITY } = require('../constants');
 
@@ -64,6 +65,10 @@ async function findMonthlyPrice({
   const room = isMeal ? MEAL_ROOM_TYPE : (roomType || 'single');
   const withMealFlag = isMeal ? false : !!withMeal;
   const cur = String(currency || 'IDR').toUpperCase();
+  /** Baris __meal__ lama bisa punya component default 'room' (satu migrasi); terima keduanya untuk lookup. */
+  const componentFilter = isMeal
+    ? { component: { [Op.in]: [COMPONENT_MEAL, COMPONENT_ROOM] } }
+    : { component: COMPONENT_ROOM };
   const layers = [
     { branch_id: branchId || null, owner_id: ownerId || null },
     { branch_id: branchId || null, owner_id: null },
@@ -78,7 +83,8 @@ async function findMonthlyPrice({
         room_type: room,
         with_meal: withMealFlag,
         branch_id: layer.branch_id,
-        owner_id: layer.owner_id
+        owner_id: layer.owner_id,
+        ...componentFilter
       },
       order: [['updated_at', 'DESC'], ['created_at', 'DESC']]
     });

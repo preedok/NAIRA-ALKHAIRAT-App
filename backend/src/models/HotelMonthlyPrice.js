@@ -44,6 +44,12 @@ const HotelMonthlyPrice = sequelize.define('HotelMonthlyPrice', {
     allowNull: false,
     defaultValue: false
   },
+  /** room | meal — wajib selaras migrasi & unique index uq_hmp_layer_month_variant */
+  component: {
+    type: DataTypes.STRING(16),
+    allowNull: false,
+    defaultValue: 'room'
+  },
   amount: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: false

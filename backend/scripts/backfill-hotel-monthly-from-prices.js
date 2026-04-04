@@ -79,21 +79,12 @@ function amountToSar(amount, currency, rates) {
   return null;
 }
 
-async function setMealComponentIfColumnExists(rowId) {
-  try {
-    await sequelize.query(`UPDATE hotel_monthly_prices SET component = 'meal' WHERE id = :id`, {
-      replacements: { id: rowId }
-    });
-  } catch (e) {
-    if (!String(e.message || '').includes('component')) throw e;
-  }
-}
-
 async function upsertMonthlyRow(
   { product_id, year_month, room_type, with_meal, amountSar },
   dryRun
 ) {
   if (amountSar == null || amountSar <= 0) return { skipped: true };
+  const component = room_type === MEAL_ROOM_TYPE ? 'meal' : 'room';
   if (dryRun) {
     return { dry: true, product_id, year_month, room_type, with_meal, amountSar };
   }
@@ -105,11 +96,13 @@ async function upsertMonthlyRow(
       room_type,
       with_meal,
       branch_id: null,
-      owner_id: null
+      owner_id: null,
+      component
     }
   });
   if (row) {
     row.amount = amountSar;
+    row.component = component;
     await row.save();
   } else {
     row = await HotelMonthlyPrice.create({
@@ -120,10 +113,10 @@ async function upsertMonthlyRow(
       currency: 'SAR',
       room_type,
       with_meal,
+      component,
       amount: amountSar
     });
   }
-  if (room_type === MEAL_ROOM_TYPE) await setMealComponentIfColumnExists(row.id);
   return { ok: true };
 }
 
