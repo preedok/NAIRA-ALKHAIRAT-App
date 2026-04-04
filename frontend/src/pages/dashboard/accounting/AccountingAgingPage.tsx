@@ -565,7 +565,7 @@ const AccountingAgingPage: React.FC = () => {
                   <td className="py-3 px-4 align-top">{formatDate(inv.due_date_dp)}</td>
                   <td className="py-3 px-4 text-center align-top">{inv.days_overdue > 0 ? `${inv.days_overdue} hr` : '-'}</td>
                   <td className="py-3 px-4 align-top">
-                    <PaymentProofCell paymentProofs={inv.PaymentProofs} compact />
+                    <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} compact />
                   </td>
                   <td className="py-3 px-4 align-top">{formatDate(inv.issued_at || inv.created_at)}</td>
                   <td className="py-3 px-4 align-top">

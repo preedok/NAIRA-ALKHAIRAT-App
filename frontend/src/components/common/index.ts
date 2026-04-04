@@ -28,7 +28,7 @@ export { default as Textarea } from './Textarea';
 export { InvoiceNumberCell, isNewInvoice, getOrderChangeDate } from './InvoiceNumberCell';
 export type { InvoiceNumberCellInv, InvoiceNumberCellProps } from './InvoiceNumberCell';
 export { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLabel } from './PaymentProofCell';
-export type { PaymentProofCellProps, PaymentProofItem } from './PaymentProofCell';
+export type { PaymentProofCellProps, PaymentProofItem, BalanceAllocationItem } from './PaymentProofCell';
 export { InvoiceRefundDocument } from './InvoiceRefundDocument';
 export type { InvoiceRefundDocumentInv, InvoiceRefundDocumentPreview, InvoiceRefundDocumentProps } from './InvoiceRefundDocument';
 export { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from './InvoiceStatusRefundCell';

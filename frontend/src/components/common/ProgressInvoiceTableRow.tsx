@@ -87,7 +87,7 @@ export function ProgressInvoiceTableRow({
         <InvoiceProgressStatusCell inv={inv} formatDate={formatDate} formatDateWithTime={formatDateWithTime} allowedSections={progressAllowedSections} />
       </td>
       <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-        <PaymentProofCell paymentProofs={inv.PaymentProofs || []} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
+        <PaymentProofCell paymentProofs={inv.PaymentProofs || []} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
       </td>
       <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
       <td className="py-3 px-4 sticky right-0 bg-white hover:bg-slate-50/80 border-l border-slate-100 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">

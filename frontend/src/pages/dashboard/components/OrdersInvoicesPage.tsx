@@ -649,7 +649,7 @@ const OrdersInvoicesPage: React.FC = () => {
       if (res.data?.success && res.data?.data) {
         const updated = res.data.data;
         setViewInvoice(updated);
-        setInvoices((prev) => prev.map((inv) => (inv.id === invoiceId ? { ...inv, status: updated.status, paid_amount: updated.paid_amount, remaining_amount: updated.remaining_amount, PaymentProofs: updated.PaymentProofs || inv.PaymentProofs } : inv)));
+        setInvoices((prev) => prev.map((inv) => (inv.id === invoiceId ? { ...inv, status: updated.status, paid_amount: updated.paid_amount, remaining_amount: updated.remaining_amount, PaymentProofs: updated.PaymentProofs || inv.PaymentProofs, BalanceAllocations: updated.BalanceAllocations ?? inv.BalanceAllocations } : inv)));
       }
       await fetchInvoices();
     } catch (e: any) {
@@ -882,6 +882,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const usdToIdr = rates.USD_TO_IDR || 15500;
 
   const paymentProofs = viewInvoice?.PaymentProofs || [];
+  const balanceAllocationsDetail = viewInvoice?.BalanceAllocations || [];
+  const paymentsTabCount = paymentProofs.length + balanceAllocationsDetail.length;
 
   /** Preview bukti bayar: coba via API (auth), fallback ke URL langsung (sama seperti Unduh) */
   const ProofPreview = ({ invoiceId, proof }: { invoiceId: string; proof: any }) => {
@@ -1623,7 +1625,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       <InvoiceProgressStatusCell inv={inv} formatDate={(d) => formatDate(d ?? null)} formatDateWithTime={(d, t) => formatDateWithTime(d ?? null, t)} />
                     </td>
                     <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
-                      <PaymentProofCell paymentProofs={inv.PaymentProofs} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
+                      <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
                     </td>
                     <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
                     <td className="py-3 px-4 sticky right-0 bg-white hover:bg-slate-50/80 border-l border-slate-100 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
@@ -2008,8 +2010,8 @@ const OrdersInvoicesPage: React.FC = () => {
                 }`}
               >
                 <CreditCard className="w-4 h-4" /> Bukti Bayar
-                {paymentProofs.length > 0 && (
-                  <span className="px-2 py-0.5 text-xs font-semibold bg-[#0D1A63]/10 text-emerald-700 rounded-full">{paymentProofs.length}</span>
+                {paymentsTabCount > 0 && (
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-[#0D1A63]/10 text-emerald-700 rounded-full">{paymentsTabCount}</span>
                 )}
               </button>
               <button
@@ -2175,6 +2177,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                                     paid_amount: updated.paid_amount,
                                                     remaining_amount: updated.remaining_amount,
                                                     status: updated.status,
+                                                    BalanceAllocations: updated.BalanceAllocations ?? prev.BalanceAllocations,
                                                     Order: prev.Order ? { ...prev.Order, ...updated.Order } : updated.Order
                                                   };
                                                 });
@@ -2757,14 +2760,16 @@ const OrdersInvoicesPage: React.FC = () => {
 
               {detailTab === 'payments' && (
                 <div className="space-y-6">
-                  <p className="text-sm text-slate-600">Setiap kartu di bawah = satu bukti transfer. Status verifikasi dan verifikator (sama seperti di Riwayat Status) tercantum di setiap kartu. Setelah bukti diverifikasi, invoice otomatis update: persen terbayar, sisa tagihan, dan status.</p>
-                  {paymentProofs.length === 0 ? (
+                  <p className="text-sm text-slate-600">
+                    Setiap kartu = satu bukti transfer <em>atau</em> satu alokasi saldo akun. Untuk transfer, status verifikasi dan verifikator tercantum di kartu. Pembayaran dari saldo tercatat otomatis tanpa upload file. Setelah bukti diverifikasi (atau alokasi saldo), invoice diperbarui: persen terbayar, sisa tagihan, dan status.
+                  </p>
+                  {paymentProofs.length === 0 && balanceAllocationsDetail.length === 0 ? (
                     <div className="text-center py-14 rounded-2xl border border-slate-200 bg-white shadow-sm">
                       <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
                         <CreditCard className="w-12 h-12 text-slate-400" />
                       </div>
                       <p className="text-slate-700 font-semibold">Belum ada bukti pembayaran</p>
-                      <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Upload bukti bayar untuk DP atau pelunasan via tombol &quot;Bayar DP / Bayar&quot; di tab Invoice & Order.</p>
+                      <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Upload bukti bayar untuk DP atau pelunasan via tombol &quot;Bayar DP / Bayar&quot; di tab Invoice & Order, atau alokasikan saldo akun jika tersedia.</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -2848,6 +2853,38 @@ const OrdersInvoicesPage: React.FC = () => {
                             </div>
                             <div className="p-4 bg-slate-50/50 min-h-[280px]">
                               <ProofPreview invoiceId={viewInvoice.id} proof={p} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {balanceAllocationsDetail.map((b: any, aIdx: number) => {
+                        const amt = parseFloat(String(b.amount || 0));
+                        return (
+                          <div key={b.id} className="rounded-xl border border-emerald-200 overflow-hidden bg-white shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-emerald-50/80 border-b border-emerald-100">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-semibold text-[#0D1A63]">Saldo akun #{aIdx + 1}</span>
+                                <span className="font-semibold text-slate-800">Bayar dari saldo akun</span>
+                                <span className="text-slate-600 text-sm">Tanpa upload bukti transfer</span>
+                                <span className="text-[#0D1A63] font-semibold"><NominalDisplay amount={amt} currency="IDR" /></span>
+                                <span className="text-xs text-slate-500">
+                                  ≈ <NominalDisplay amount={amt / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={amt / usdToIdr} currency="USD" />
+                                </span>
+                                <Badge variant="success">Tercatat otomatis</Badge>
+                                {b.created_at && (
+                                  <span className="text-xs text-slate-500">
+                                    Tanggal: {formatDate(b.created_at)} · Jam: {new Date(b.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="p-5 bg-white text-sm text-slate-600 space-y-2">
+                              <p>Nominal di atas dipotong dari saldo akun owner dan langsung menambah pembayaran invoice ini.</p>
+                              {b.notes ? (
+                                <p>
+                                  <span className="text-slate-500 font-medium">Keterangan:</span> {b.notes}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         );

@@ -50,9 +50,22 @@ export function getProofDisplayLabel(p: PaymentProofItem): string {
 const formatDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
+const formatTime = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+
+/** Alokasi saldo akun ke invoice (bukan file bukti transfer). */
+export type BalanceAllocationItem = {
+  id: string;
+  amount?: number | string;
+  notes?: string | null;
+  created_at?: string | null;
+};
+
 export interface PaymentProofCellProps {
   /** Daftar bukti pembayaran (PaymentProofs dari invoice). */
   paymentProofs: PaymentProofItem[] | null | undefined;
+  /** Alokasi dari saldo akun (BalanceAllocations dari API). */
+  balanceAllocations?: BalanceAllocationItem[] | null | undefined;
   /** Untuk tampilan detailed: konversi IDR ke SAR/USD. Jika tidak diisi, SAR/USD pakai amount/4200 dan amount/15800. */
   currencyRates?: { SAR_TO_IDR?: number; USD_TO_IDR?: number };
   /** true = hanya badge (DP ✓ / Cicilan ...). false = kartu lengkap per bukti. */
@@ -64,19 +77,21 @@ export interface PaymentProofCellProps {
 
 export function PaymentProofCell({
   paymentProofs,
+  balanceAllocations,
   currencyRates,
   compact = false,
   isDraft = false,
   className = '',
 }: PaymentProofCellProps) {
   const list = paymentProofs || [];
+  const allocs = balanceAllocations || [];
   const sarToIdr = currencyRates?.SAR_TO_IDR ?? 4200;
   const usdToIdr = currencyRates?.USD_TO_IDR ?? 15800;
 
   if (isDraft) {
     return <span className={`text-slate-400 text-xs ${className}`}>Tidak tersedia (belum diterbitkan)</span>;
   }
-  if (list.length === 0) {
+  if (list.length === 0 && allocs.length === 0) {
     return <span className={`text-slate-400 text-xs ${className}`}>–</span>;
   }
 
@@ -91,6 +106,11 @@ export function PaymentProofCell({
             </Badge>
           );
         })}
+        {allocs.map((b) => (
+          <Badge key={b.id} variant="success" className="text-xs">
+            Saldo ✓
+          </Badge>
+        ))}
       </div>
     );
   }
@@ -151,6 +171,40 @@ export function PaymentProofCell({
                 {statusLabel}
               </Badge>
               {ps.status === 'verified' && p.VerifiedBy?.name && <span className="text-slate-500 truncate">oleh {p.VerifiedBy.name}</span>}
+            </div>
+          </div>
+        );
+      })}
+      {allocs.map((b) => {
+        const amt = parseFloat(String(b.amount || 0));
+        const sar = amt / sarToIdr;
+        const usd = amt / usdToIdr;
+        return (
+          <div key={b.id} className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 text-xs">
+            <div className="font-semibold text-emerald-900 truncate">Bayar dari saldo akun</div>
+            <div className="text-slate-700 mt-0.5 truncate">
+              <span className="text-slate-500">IDR:</span> <NominalDisplay amount={amt} currency="IDR" /> · <span className="text-slate-500">SAR:</span>{' '}
+              <NominalDisplay amount={sar} currency="SAR" showCurrency={false} /> · <span className="text-slate-500">USD:</span>{' '}
+              <NominalDisplay amount={usd} currency="USD" showCurrency={false} />
+            </div>
+            <div className="text-slate-600 mt-0.5 space-y-0.5">
+              <span className="text-slate-500 font-medium">Sumber:</span> potongan saldo pemilik order (tanpa upload bukti transfer).
+            </div>
+            {b.notes && (
+              <div className="text-slate-600 mt-0.5 truncate" title={b.notes}>
+                <span className="text-slate-500 font-medium">Keterangan:</span> {b.notes}
+              </div>
+            )}
+            {b.created_at && (
+              <div className="text-slate-600 mt-0.5 truncate">
+                <span className="text-slate-500">Tanggal:</span> {formatDate(b.created_at)}
+                <span className="text-slate-500"> · Jam:</span> {formatTime(b.created_at)}
+              </div>
+            )}
+            <div className="mt-1">
+              <Badge variant="success" className="text-xs">
+                Tercatat otomatis
+              </Badge>
             </div>
           </div>
         );

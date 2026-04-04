@@ -14,6 +14,16 @@ function isKoordinatorRole(role) {
   return KOORDINATOR_ROLES.includes(role);
 }
 
+/** Satu baris alokasi saldo → payload API (amount selalu positif IDR). */
+function mapBalanceAllocRow(r) {
+  return {
+    id: r.id,
+    amount: Math.abs(Math.min(0, parseFloat(r.amount) || 0)),
+    notes: r.notes || null,
+    created_at: r.created_at
+  };
+}
+
 /** Atribut PaymentProof untuk include (tanpa proof_file_name, proof_file_content_type, proof_file_data agar kompatibel dengan DB yang belum punya kolom tersebut; setelah migration 20260327000001 jalan, bisa tambah proof_file_name) */
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const archiver = require('archiver');
@@ -479,6 +489,21 @@ const list = asyncHandler(async (req, res) => {
     }, {});
     for (const d of data) {
       d.Refunds = refundsByInvId[d.id] || [];
+    }
+    const balAllocList = await OwnerBalanceTransaction.findAll({
+      where: { reference_type: 'invoice', reference_id: { [Op.in]: invoiceIds }, type: 'allocation' },
+      attributes: ['id', 'reference_id', 'amount', 'notes', 'created_at'],
+      order: [['created_at', 'ASC']],
+      raw: true
+    });
+    const balByInvId = balAllocList.reduce((acc, r) => {
+      const invId = r.reference_id;
+      if (!acc[invId]) acc[invId] = [];
+      acc[invId].push(mapBalanceAllocRow(r));
+      return acc;
+    }, {});
+    for (const d of data) {
+      d.BalanceAllocations = balByInvId[d.id] || [];
     }
   }
 
@@ -1156,6 +1181,13 @@ const getById = asyncHandler(async (req, res) => {
       data.Branch.wilayah_id = loc.wilayah_id ?? data.Branch.wilayah_id;
     } catch (_) { /* non-fatal */ }
   }
+  const balAllocRows = await OwnerBalanceTransaction.findAll({
+    where: { reference_type: 'invoice', reference_id: invoice.id, type: 'allocation' },
+    attributes: ['id', 'amount', 'notes', 'created_at'],
+    order: [['created_at', 'ASC']],
+    raw: true
+  });
+  data.BalanceAllocations = balAllocRows.map(mapBalanceAllocRow);
   res.json({ success: true, data });
 });
 
@@ -1343,7 +1375,15 @@ const allocateBalance = asyncHandler(async (req, res) => {
       { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] }
     ]
   });
-  res.json({ success: true, data: full, message: `Saldo Rp ${allocateAmount.toLocaleString('id-ID')} berhasil dialokasikan ke invoice ${invoice.invoice_number}` });
+  const balAfterAlloc = await OwnerBalanceTransaction.findAll({
+    where: { reference_type: 'invoice', reference_id: invoice.id, type: 'allocation' },
+    attributes: ['id', 'amount', 'notes', 'created_at'],
+    order: [['created_at', 'ASC']],
+    raw: true
+  });
+  const fullJson = full.get({ plain: true });
+  fullJson.BalanceAllocations = balAfterAlloc.map(mapBalanceAllocRow);
+  res.json({ success: true, data: fullJson, message: `Saldo Rp ${allocateAmount.toLocaleString('id-ID')} berhasil dialokasikan ke invoice ${invoice.invoice_number}` });
 });
 
 /**
