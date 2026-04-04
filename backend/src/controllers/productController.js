@@ -35,6 +35,25 @@ async function getCurrencyRates() {
   return { SAR_TO_IDR, USD_TO_IDR };
 }
 
+/** Nilai grid bulanan hotel di API selalu SAR; baris DB bisa IDR/USD (mis. hasil migrasi awal). */
+function hotelMonthlyRowToSar(amount, currency, rates) {
+  const n = parseFloat(amount);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const c = String(currency || 'IDR').toUpperCase();
+  if (c === 'SAR') return Math.round(n * 100) / 100;
+  if (c === 'IDR') return Math.round((n / rates.SAR_TO_IDR) * 100) / 100;
+  if (c === 'USD') return Math.round(((n * rates.USD_TO_IDR) / rates.SAR_TO_IDR) * 100) / 100;
+  return null;
+}
+
+function hotelMonthlyCurrencyRank(currency) {
+  const c = String(currency || '').toUpperCase();
+  if (c === 'SAR') return 0;
+  if (c === 'USD') return 1;
+  if (c === 'IDR') return 2;
+  return 3;
+}
+
 /** Dari satu nilai dan mata uang, isi idr, sar, usd */
 function fillTriple(sourceCurrency, value, rates) {
   const { SAR_TO_IDR, USD_TO_IDR } = rates;
@@ -335,7 +354,7 @@ const list = asyncHandler(async (req, res) => {
       const ymNowYear = ymNow.slice(0, 4);
       const monthlyWhere = {
         product_id: { [Op.in]: hotelIdsForMonthly },
-        currency: 'SAR',
+        currency: { [Op.in]: ['SAR', 'IDR', 'USD'] },
         branch_id: null,
         owner_id: null,
         [Op.or]: ymNowYear === seriesYear
@@ -349,22 +368,32 @@ const list = asyncHandler(async (req, res) => {
         where: monthlyWhere,
         raw: true
       });
-      /** pack[productId][yearMonth] = { single_room, single_bundle, ..., meal } */
-      const packByProductMonth = {};
+      const monthlyRates = await getCurrencyRates();
+      /** Satu slot SAR per variant; jika ada SAR + IDR duplikat, utamakan SAR. */
+      const monthlyMerged = new Map();
       for (const row of monthlyRowsAll) {
-        const pid = row.product_id;
-        const ymKey = row.year_month;
+        const sar = hotelMonthlyRowToSar(row.amount, row.currency, monthlyRates);
+        if (sar == null || sar <= 0) continue;
+        const vk = JSON.stringify([row.product_id, row.year_month, String(row.room_type || ''), !!row.with_meal]);
+        const prev = monthlyMerged.get(vk);
+        const rank = hotelMonthlyCurrencyRank(row.currency);
+        if (!prev || rank < prev.rank) monthlyMerged.set(vk, { sar, rank });
+      }
+      /** pack[productId][yearMonth] = { single_room, single_bundle, ..., meal } (nilai SAR) */
+      const packByProductMonth = {};
+      for (const [vk, { sar }] of monthlyMerged) {
+        const [pid, ymKey, roomTypeRaw, withMeal] = JSON.parse(vk);
         if (!packByProductMonth[pid]) packByProductMonth[pid] = {};
         if (!packByProductMonth[pid][ymKey]) packByProductMonth[pid][ymKey] = {};
         const slot = packByProductMonth[pid][ymKey];
-        if (String(row.room_type || '') === MEAL_ROOM_TYPE) {
-          slot.meal = parseFloat(row.amount) || 0;
+        if (String(roomTypeRaw || '') === MEAL_ROOM_TYPE) {
+          slot.meal = sar;
           continue;
         }
-        const rt = String(row.room_type || '').toLowerCase();
+        const rt = String(roomTypeRaw || '').toLowerCase();
         if (!['single', 'double', 'triple', 'quad', 'quint'].includes(rt)) continue;
-        if (row.with_meal) slot[`${rt}_bundle`] = parseFloat(row.amount) || 0;
-        else slot[`${rt}_room`] = parseFloat(row.amount) || 0;
+        if (withMeal) slot[`${rt}_bundle`] = sar;
+        else slot[`${rt}_room`] = sar;
       }
       const pickRefRoomType = (meta, breakdown) => {
         if (meta && meta.pricing_mode === 'single') return 'single';
