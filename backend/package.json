@@ -32,6 +32,7 @@
     "db:sync": "node scripts/sync-database.js",
     "clean:uploads": "node scripts/clean-uploads.js",
     "clean:data-keep-master": "node scripts/clean-data-keep-master-only.js",
+    "clean:data-keep-users-banks-wilayah": "node scripts/clean-data-keep-users-banks-wilayah.js",
     "clear:orders-invoices": "node scripts/clear-orders-invoices.js",
     "clear:orders-invoices-owners": "node scripts/clear-orders-and-owner-accounts.js",
     "ensure:owner-manual-columns": "node scripts/ensure-invoice-order-owner-manual-columns.js",
