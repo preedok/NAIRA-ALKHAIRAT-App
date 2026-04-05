@@ -61,6 +61,9 @@ const BUS_TYPE_LABELS: Record<string, string> = {
   kecil: 'Mobil Kecil',
 };
 
+/** Opsi bus pada order ber-item visa: Finality (include), Hiace, atau tanpa bus. */
+type BusServiceOption = 'finality' | 'hiace' | 'visa_only';
+
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
 type HotelRoomInputMode = 'manual' | 'pax';
@@ -165,7 +168,7 @@ const OrderFormPage: React.FC = () => {
   const prevOwnerInputModeRef = useRef<OwnerInputMode>('registered');
   const [hotelAvailability, setHotelAvailability] = useState<Record<string, { byRoomType: Record<string, number> } | 'loading' | null>>({});
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
-  const [waiveBusPenalty, setWaiveBusPenalty] = useState(false);
+  const [busServiceOption, setBusServiceOption] = useState<BusServiceOption>('finality');
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
 
   /** Tahun grid hotel terbesar dari tanggal di form (agar April 2027 memuat series 2027 dari API). */
@@ -435,10 +438,13 @@ const OrderFormPage: React.FC = () => {
     }
     initialOrderItemKeysRef.current = keys;
     setItems(rows.length?rows:[newRow()]);
-    if (order.waive_bus_penalty != null) setWaiveBusPenalty(!!order.waive_bus_penalty);
-    else {
-      const visaPacks = rows.filter((r:OrderItemRow)=>r.type==='visa').reduce((s:number,r:OrderItemRow)=>s+Math.max(0,r.quantity),0);
-      if(isEdit&&order&&Number(order.penalty_amount)===0&&visaPacks>0&&visaPacks<35) setWaiveBusPenalty(true);
+    const oOpt = (order as { bus_service_option?: string }).bus_service_option;
+    if (oOpt === 'hiace' || oOpt === 'visa_only' || oOpt === 'finality') {
+      setBusServiceOption(oOpt as BusServiceOption);
+    } else if (order.waive_bus_penalty) {
+      setBusServiceOption('hiace');
+    } else {
+      setBusServiceOption('finality');
     }
   },[orderId,order,products,rates.SAR_TO_IDR,rates.USD_TO_IDR]);
 
@@ -966,7 +972,22 @@ const OrderFormPage: React.FC = () => {
   const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
   const wouldHaveBusPenalty=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack;
   const busPenaltyShortfall=wouldHaveBusPenalty?busPenaltyRule.bus_min_pack-totalVisaPacks:0;
-  const busPenaltyIDR=!waiveBusPenalty&&busPenaltyShortfall>0?busPenaltyShortfall*busPenaltyRule.bus_penalty_idr:0;
+  const busPenaltyIDR=busServiceOption==='finality'&&busPenaltyShortfall>0?busPenaltyShortfall*busPenaltyRule.bus_penalty_idr:0;
+
+  const applyBusServiceOption = useCallback((opt: BusServiceOption) => {
+    setBusServiceOption(opt);
+    if (opt !== 'hiace') {
+      setItems((prev) => prev.filter((r) => !(r.type === 'bus' && (r.meta as { auto_hiace_waive?: boolean })?.auto_hiace_waive)));
+    }
+  }, []);
+
+  const busOrderApiFields = useMemo(() => {
+    if (!items.some((r) => r.type === 'visa')) return {};
+    return {
+      bus_service_option: busServiceOption,
+      ...(busServiceOption === 'hiace' ? { waive_bus_penalty: true as const } : {})
+    };
+  }, [items, busServiceOption]);
 
   /* submit */
   const latestRates = { SAR_TO_IDR: rates.SAR_TO_IDR ?? 4200, USD_TO_IDR: rates.USD_TO_IDR ?? 15500 };
@@ -1098,7 +1119,7 @@ const OrderFormPage: React.FC = () => {
     const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,...ratesPayload,...(waiveBusPenalty?{waive_bus_penalty:true}:{})})
+      ordersApi.update(orderId,{items:payload,...ratesPayload,...busOrderApiFields})
         .then(()=>{ showToast('Invoice diperbarui. Tagihan ikut diperbarui.','success'); navigate('/dashboard/orders-invoices', { state: { refreshList: true } }); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal memperbarui','error'))
         .finally(()=>setSaving(false));
@@ -1113,7 +1134,7 @@ const OrderFormPage: React.FC = () => {
       } else if (canPickOwner) {
         body.owner_input_mode='registered';
       }
-      if(waiveBusPenalty) body.waive_bus_penalty=true;
+      Object.assign(body, busOrderApiFields);
       ordersApi.create(body)
         .then(()=>{ orderDraft.clear(); showToast('Invoice dibuat.','success'); navigate('/dashboard/orders-invoices',{state:{refreshList:true}}); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal membuat invoice','error'))
@@ -1150,7 +1171,7 @@ const OrderFormPage: React.FC = () => {
     const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,...ratesPayload,...(waiveBusPenalty?{waive_bus_penalty:true}:{})})
+      ordersApi.update(orderId,{items:payload,...ratesPayload,...busOrderApiFields})
         .then(()=>{ showToast('Draft disimpan. Invoice belum diterbitkan.','success'); setSaving(false); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menyimpan draft','error'))
         .finally(()=>setSaving(false));
@@ -1165,7 +1186,7 @@ const OrderFormPage: React.FC = () => {
       } else if (canPickOwner) {
         body.owner_input_mode='registered';
       }
-      if(waiveBusPenalty) body.waive_bus_penalty=true;
+      Object.assign(body, busOrderApiFields);
       ordersApi.create(body)
         .then((res:any)=>{
           orderDraft.clear();
@@ -1844,12 +1865,16 @@ const OrderFormPage: React.FC = () => {
                   {items.some(r=>r.type==='visa')&&(
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
                       <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
-                      {wouldHaveBusPenalty ? (
+                      {busServiceOption === 'finality' && wouldHaveBusPenalty ? (
                         <span className="text-amber-800"> Kurang {busPenaltyShortfall} pack dari min {busPenaltyRule.bus_min_pack} → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" />.</span>
+                      ) : busServiceOption === 'finality' ? (
+                        <span className="text-slate-600"> Memenuhi minimum pack — tidak ada penalti Bus Finality.</span>
+                      ) : busServiceOption === 'hiace' ? (
+                        <span className="text-slate-600"> Opsi Bus Hiace: tanpa penalti; satu unit Hiace dihitung otomatis di ringkasan.</span>
                       ) : (
-                        <span className="text-slate-600"> Penalti bus tidak berlaku.</span>
+                        <span className="text-slate-600"> Tanpa layanan bus — hanya visa (tidak ada bus include / Hiace otomatis).</span>
                       )}
-                      <p className="text-xs text-slate-600 mt-1">Centang &quot;Tanpa penalti bus (pakai bus Hiace saja)&quot; di Ringkasan untuk hapus penalti.</p>
+                      <p className="text-xs text-slate-600 mt-1">Pilih opsi bus di bagian Ringkasan.</p>
                     </div>
                   )}
                   <Button type="button" variant="outline" onClick={addRow} className="w-full py-4 rounded-xl border-2 border-dashed border-[#0D1A63]/40 bg-[#0D1A63]/5 text-[#0D1A63] hover:border-[#0D1A63] hover:bg-[#0D1A63]/10 transition-colors text-base font-semibold shadow-sm">
@@ -1928,25 +1953,64 @@ const OrderFormPage: React.FC = () => {
                 <p className="text-xs text-slate-500">Pembayaran USD</p>
               </div>
             </div>
-            {(wouldHaveBusPenalty||waiveBusPenalty)&&items.some(r=>r.type==='visa')&&(
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
-                <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
-                <p className="text-slate-600 text-xs mt-0.5">
-                  {wouldHaveBusPenalty ? <>Kurang {busPenaltyShortfall} pack → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></> : 'Penalti bus tidak berlaku (pakai bus Hiace saja).'}
-                </p>
-                <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={waiveBusPenalty}
-                    onChange={(e)=>{
-                      const checked=e.target.checked;
-                      setWaiveBusPenalty(checked);
-                      if(!checked) setItems(prev=>prev.filter(r=>!(r.type==='bus'&&(r.meta as { auto_hiace_waive?: boolean })?.auto_hiace_waive)));
-                    }}
-                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                  />
-                  <span className="text-sm text-slate-700">Tanpa penalti bus (pakai bus Hiace saja) — 1 Hiace qty 1 dihitung &amp; tampil di progress bus</span>
-                </label>
+            {items.some(r=>r.type==='visa')&&(
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm space-y-3">
+                <div>
+                  <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
+                  <p className="text-slate-600 text-xs mt-0.5">
+                    {busServiceOption === 'finality' && wouldHaveBusPenalty ? (
+                      <>Kurang {busPenaltyShortfall} pack → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></>
+                    ) : busServiceOption === 'finality' ? (
+                      <>Tidak ada penalti (pack memenuhi syarat Bus Finality).</>
+                    ) : busServiceOption === 'hiace' ? (
+                      <>Tanpa penalti; sistem menambahkan 1 unit Bus Hiace untuk progress &amp; tagihan.</>
+                    ) : (
+                      <>Tidak ada penalti bus — trip hanya visa tanpa layanan bus.</>
+                    )}
+                  </p>
+                </div>
+                <fieldset className="space-y-2.5 border-0 p-0 m-0">
+                  <legend className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">Opsi layanan bus</legend>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="bus_service_option"
+                      className="mt-1 border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63]"
+                      checked={busServiceOption === 'finality'}
+                      onChange={() => applyBusServiceOption('finality')}
+                    />
+                    <span className="text-sm text-slate-700">
+                      <span className="font-medium text-slate-900">Bus Finality</span>
+                      {' — '}Bus besar include dengan visa; penalti flat per pack kurang jika di bawah minimum.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="bus_service_option"
+                      className="mt-1 border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63]"
+                      checked={busServiceOption === 'hiace'}
+                      onChange={() => applyBusServiceOption('hiace')}
+                    />
+                    <span className="text-sm text-slate-700">
+                      <span className="font-medium text-slate-900">Bus Hiace</span>
+                      {' — '}Tanpa penalti; satu Hiace (qty 1) ditambah otomatis dan tampil di progress bus.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="bus_service_option"
+                      className="mt-1 border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63]"
+                      checked={busServiceOption === 'visa_only'}
+                      onChange={() => applyBusServiceOption('visa_only')}
+                    />
+                    <span className="text-sm text-slate-700">
+                      <span className="font-medium text-slate-900">Tidak pakai bus</span>
+                      {' — '}Hanya visa; tanpa bus include dan tanpa Hiace otomatis.
+                    </span>
+                  </label>
+                </fieldset>
               </div>
             )}
             <div className="flex flex-wrap gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">

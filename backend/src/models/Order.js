@@ -104,6 +104,12 @@ const Order = sequelize.define('Order', {
     defaultValue: false,
     comment: 'Jika true: tanpa penalti bus, 1 Hiace ditambah otomatis, tampil di progress bus'
   },
+  bus_service_option: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'finality',
+    comment: 'finality=bus include visa; hiace=Hiace; visa_only=tanpa bus'
+  },
   bus_include_ticket_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending' },
   bus_include_ticket_info: { type: DataTypes.STRING(500), allowNull: true },
   bus_include_arrival_status: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'pending', comment: 'pending | di_proses | terbit' },

@@ -166,8 +166,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
   const [filterStatus, setFilterStatus] = useState('');
   const [filterOwnerId, setFilterOwnerId] = useState('');
   const [filterInvoiceNumber, setFilterInvoiceNumber] = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
   const [filterDueStatus, setFilterDueStatus] = useState('');
   const [sortBy, setSortBy] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -186,8 +184,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
     setFilterStatus('');
     setFilterOwnerId('');
     setFilterInvoiceNumber('');
-    setFilterDateFrom('');
-    setFilterDateTo('');
     setFilterDueStatus('');
     setSortBy('created_at');
     setSortOrder('desc');
@@ -200,8 +196,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
     filterStatus ||
     (!restrictToOwnerId && filterOwnerId) ||
     filterInvoiceNumber.trim() ||
-    filterDateFrom ||
-    filterDateTo ||
     filterDueStatus ||
     sortBy !== 'created_at' ||
     sortOrder !== 'desc'
@@ -344,9 +338,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
         const num = String(inv.invoice_number || '').toLowerCase();
         if (!num.includes(numNeedle)) return false;
       }
-      const issued = String(inv.issued_at || inv.created_at || '').slice(0, 10);
-      if (filterDateFrom && issued && issued < filterDateFrom) return false;
-      if (filterDateTo && issued && issued > filterDateTo) return false;
       if (filterDueStatus) {
         const cat = invoiceDueDpCategory(inv.due_date_dp);
         if (cat === 'none') return false;
@@ -388,8 +379,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
     filterOwnerId,
     restrictToOwnerId,
     filterInvoiceNumber,
-    filterDateFrom,
-    filterDateTo,
     filterDueStatus,
     wilayahId,
     provinsiId,
@@ -454,7 +443,7 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
             hideToggleRow
             className="px-4 pb-2 w-full shrink-0"
             cardTitle="Filter invoice"
-            cardDescription="Sama seperti menu Invoice: status, lokasi, owner, nomor, tanggal, jatuh tempo, dan urutan. Data di sini difilter di perangkat Anda."
+            cardDescription="Status, lokasi, owner, nomor invoice, jatuh tempo, dan urutan. Data di sini difilter di perangkat Anda."
           >
             <DashboardFilterBar
               variant="modal"
@@ -469,7 +458,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
               search2Placeholder="No. Invoice..."
               search2={filterInvoiceNumber}
               onSearch2Change={setFilterInvoiceNumber}
-              showDateRange
               showDueStatus
               showSort
               hideActions
@@ -478,8 +466,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
               branchId={branchId}
               status={filterStatus}
               ownerId={restrictToOwnerId ? '' : filterOwnerId}
-              dateFrom={filterDateFrom}
-              dateTo={filterDateTo}
               dueStatus={filterDueStatus}
               sortBy={sortBy}
               sortOrder={sortOrder}
@@ -503,8 +489,6 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
               onBranchChange={setBranchId}
               onStatusChange={setFilterStatus}
               onOwnerChange={setFilterOwnerId}
-              onDateFromChange={setFilterDateFrom}
-              onDateToChange={setFilterDateTo}
               onDueStatusChange={setFilterDueStatus}
               onApply={() => {}}
               wilayahList={wilayahList}

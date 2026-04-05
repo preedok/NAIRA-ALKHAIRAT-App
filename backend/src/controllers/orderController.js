@@ -20,6 +20,32 @@ const generateOrderNumber = () => {
   return `ORD-${y}-${String(n).padStart(5, '0')}`;
 };
 
+const BUS_SERVICE_OPTION_VALUES = ['finality', 'hiace', 'visa_only'];
+
+function normalizeBusServiceOptionForCreate(body) {
+  if (!body || typeof body !== 'object') return 'finality';
+  const raw = body.bus_service_option;
+  if (raw && BUS_SERVICE_OPTION_VALUES.includes(String(raw))) return String(raw);
+  if (body.waive_bus_penalty === true || body.waive_bus_penalty === 'true') return 'hiace';
+  return 'finality';
+}
+
+function normalizeBusServiceOptionForUpdate(body, existingOrder) {
+  if (!body || typeof body !== 'object') {
+    const ex = existingOrder?.bus_service_option;
+    if (ex && BUS_SERVICE_OPTION_VALUES.includes(String(ex))) return String(ex);
+    return existingOrder?.waive_bus_penalty ? 'hiace' : 'finality';
+  }
+  if (body.bus_service_option && BUS_SERVICE_OPTION_VALUES.includes(String(body.bus_service_option))) {
+    return String(body.bus_service_option);
+  }
+  if (body.waive_bus_penalty === true || body.waive_bus_penalty === 'true') return 'hiace';
+  if (body.waive_bus_penalty === false || body.waive_bus_penalty === 'false') return 'finality';
+  const ex = existingOrder?.bus_service_option;
+  if (ex && BUS_SERVICE_OPTION_VALUES.includes(String(ex))) return String(ex);
+  return existingOrder?.waive_bus_penalty ? 'hiace' : 'finality';
+}
+
 async function logInvoiceStatusChange({ invoice_id, from_status, to_status, changed_by, reason, meta }) {
   try {
     await InvoiceStatusHistory.create({
@@ -803,7 +829,7 @@ async function assertPackageIsInValidityWindow(productId, referenceDate) {
  * items format: [{ type, product_id, quantity, unit_price, currency?, meta?, check_in?, check_out?, room_type?, meal? }]
  * @returns {Promise<{ order: import('../models').Order, invoice: import('../models').Invoice|null }>}
  */
-async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items, createdByUserId, waive_bus_penalty }) {
+async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items, createdByUserId, waive_bus_penalty, bus_service_option }) {
   const finalBranchId = branchId && String(branchId).trim().length >= 10 ? String(branchId).trim() : null;
   if (!finalBranchId || !ownerId) {
     const err = new Error('Branch dan owner wajib.');
@@ -982,14 +1008,17 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     });
   }
 
-  // Penalti bus: bus besar sudah include dengan visa. Jika visa < 35 pack → penalti flat (Rp 500.000). Bisa dihapus jika pakai Hiace saja (waive_bus_penalty).
-  const waiveBusPenalty = (waive_bus_penalty === true || waive_bus_penalty === 'true');
+  // Penalti bus: finality = bus include visa; hiace = tanpa penalti + Hiace auto; visa_only = tanpa bus & tanpa penalti.
+  const busOptAi = bus_service_option && BUS_SERVICE_OPTION_VALUES.includes(String(bus_service_option))
+    ? String(bus_service_option)
+    : ((waive_bus_penalty === true || waive_bus_penalty === 'true') ? 'hiace' : 'finality');
+  const waiveBusPenaltyAi = busOptAi === 'hiace';
   const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
   const penaltyPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
   const shortfall = hasVisaItems && totalVisaPacks < minPack ? minPack - totalVisaPacks : 0;
-  const penaltyAmount = !waiveBusPenalty && shortfall > 0 ? shortfall * penaltyPerPackIdr : 0;
+  const penaltyAmount = busOptAi === 'visa_only' ? 0 : (!waiveBusPenaltyAi && shortfall > 0 ? shortfall * penaltyPerPackIdr : 0);
 
   let ratesPayload = {};
   const crForPayload = typeof rules.currency_rates === 'object' && rules.currency_rates != null
@@ -1010,11 +1039,38 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     status: 'draft',
     created_by: createdByUserId,
     notes: null,
+    waive_bus_penalty: !!waiveBusPenaltyAi,
+    bus_service_option: busOptAi,
     ...ratesPayload
   });
 
   for (const it of orderItems) {
     await OrderItem.create({ ...it, order_id: order.id });
+  }
+
+  if (busOptAi === 'hiace' && !orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS)) {
+    const hiaceAi = await getFirstHiaceProductAndPrice(finalBranchId, ownerId);
+    if (hiaceAi) {
+      const hiaceMeta = { trip_type: 'round_trip', auto_hiace_waive: true };
+      await OrderItem.create({
+        order_id: order.id,
+        type: ORDER_ITEM_TYPE.BUS,
+        product_ref_id: hiaceAi.productId,
+        product_ref_type: 'product',
+        quantity: 1,
+        unit_price: hiaceAi.unitPrice,
+        unit_price_currency: hiaceAi.currency,
+        subtotal: hiaceAi.unitPriceIdr,
+        meta: hiaceMeta
+      });
+      const newSub = (parseFloat(order.subtotal) || 0) + hiaceAi.unitPriceIdr;
+      await order.update({
+        subtotal: newSub,
+        penalty_amount: 0,
+        total_amount: newSub,
+        total_jamaah: totalJamaah + 1
+      });
+    }
   }
 
   const orderForInvoice = await Order.findByPk(order.id, {
@@ -1297,14 +1353,15 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
-  // Penalti bus: bus besar sudah include dengan visa. Jika visa < 35 pack → penalti flat Rp 500.000. Bisa dihapus (waive_bus_penalty) jika pakai Hiace saja.
-  const waiveBusPenaltyCreate = (waive_bus_penalty === true || waive_bus_penalty === 'true');
+  // Opsi bus: finality (include visa + penalti jika pack kurang), hiace (Hiace auto), visa_only (tanpa bus / tanpa penalti).
+  const busOptCreate = normalizeBusServiceOptionForCreate(req.body);
+  const waiveBusPenaltyCreate = busOptCreate === 'hiace';
   const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
   const penaltyPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
   const shortfallCreate = hasVisaItems && totalVisaPacks < minPack ? minPack - totalVisaPacks : 0;
-  const penaltyAmount = !waiveBusPenaltyCreate && shortfallCreate > 0 ? shortfallCreate * penaltyPerPackIdr : 0;
+  const penaltyAmount = busOptCreate === 'visa_only' ? 0 : (!waiveBusPenaltyCreate && shortfallCreate > 0 ? shortfallCreate * penaltyPerPackIdr : 0);
 
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
@@ -1354,6 +1411,7 @@ const create = asyncHandler(async (req, res) => {
       created_by: req.user.id,
       notes,
       waive_bus_penalty: !!waiveBusPenaltyCreate,
+      bus_service_option: busOptCreate,
       ...ratesPayload
     });
   } catch (createErr) {
@@ -1379,8 +1437,8 @@ const create = asyncHandler(async (req, res) => {
     await OrderItem.create({ ...it, order_id: order.id });
   }
 
-  // Jika centang "Tanpa penalti bus (pakai Hiace saja)": tambah 1 item Hiace otomatis agar tampil di progress bus dan harga Hiace qty 1 dihitung.
-  if (waiveBusPenaltyCreate && !orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS)) {
+  // Opsi Hiace: tambah 1 item Hiace otomatis agar tampil di progress bus dan harga Hiace qty 1 dihitung.
+  if (busOptCreate === 'hiace' && !orderItems.some((i) => i.type === ORDER_ITEM_TYPE.BUS)) {
     const hiace = await getFirstHiaceProductAndPrice(finalBranchId, effectiveOwnerId);
     if (hiace) {
       const hiaceMeta = { trip_type: 'round_trip', auto_hiace_waive: true };
@@ -1476,7 +1534,7 @@ const update = asyncHandler(async (req, res) => {
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa diubah saat draft/tentative/confirmed/processing' });
   }
-  const { items, notes, currency_rates_override, waive_bus_penalty } = req.body;
+  const { items, notes, currency_rates_override, waive_bus_penalty, bus_service_option } = req.body;
   const canSetRates = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
   const hasDpPayment = order.dp_payment_status === DP_PAYMENT_STATUS.PEMBAYARAN_DP;
   if (canSetRates && !hasDpPayment) {
@@ -1685,8 +1743,9 @@ const update = asyncHandler(async (req, res) => {
         ...itemRatesPayload
       });
     }
-    // Penalti bus: jika waive = pakai 1 Hiace (tambah item otomatis), tampil di progress bus; jika tidak waive = penalti per pack shortfall.
-    const waiveBusPenaltyUpdate = (waive_bus_penalty === true || waive_bus_penalty === 'true');
+    // Opsi bus: hiace → tambah Hiace auto; visa_only → tanpa penalti; finality → penalti per pack shortfall.
+    const busOptUpdate = normalizeBusServiceOptionForUpdate(req.body, order);
+    const waiveBusPenaltyUpdate = busOptUpdate === 'hiace';
     let penaltyAmountUpdate;
     if (waiveBusPenaltyUpdate && !items.some((i) => i.type === ORDER_ITEM_TYPE.BUS)) {
       const hiaceUpdate = await getFirstHiaceProductAndPrice(order.branch_id, order.owner_id);
@@ -1707,6 +1766,8 @@ const update = asyncHandler(async (req, res) => {
         totalJamaah += 1;
       }
       penaltyAmountUpdate = 0;
+    } else if (busOptUpdate === 'visa_only') {
+      penaltyAmountUpdate = 0;
     } else {
       const hasVisaItemsUpdate = items.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
       const totalVisaPacksUpdate = items.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
@@ -1721,7 +1782,8 @@ const update = asyncHandler(async (req, res) => {
       total_jamaah: totalJamaah,
       penalty_amount: penaltyAmountUpdate,
       total_amount: subtotal + penaltyAmountUpdate,
-      waive_bus_penalty: !!waiveBusPenaltyUpdate
+      waive_bus_penalty: !!waiveBusPenaltyUpdate,
+      bus_service_option: busOptUpdate
     });
     const orderReloaded = await Order.findByPk(order.id, { attributes: ['id', 'total_amount', 'subtotal', 'penalty_amount'] });
 

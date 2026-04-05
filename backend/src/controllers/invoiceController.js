@@ -472,7 +472,16 @@ const list = asyncHandler(async (req, res) => {
         OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
       ]);
       const orderIdsFromBus = [...new Set((busRows || []).map((r) => r.order_id))];
-      const orderIdsFromVisa = [...new Set((visaRows || []).map((r) => r.order_id))];
+      const orderIdsFromVisaRaw = [...new Set((visaRows || []).map((r) => r.order_id))];
+      const visaOnlyOrders = orderIdsFromVisaRaw.length
+        ? await Order.findAll({
+          where: { id: { [Op.in]: orderIdsFromVisaRaw }, bus_service_option: 'visa_only' },
+          attributes: ['id'],
+          raw: true
+        })
+        : [];
+      const visaOnlySet = new Set((visaOnlyOrders || []).map((o) => o.id));
+      const orderIdsFromVisa = orderIdsFromVisaRaw.filter((oid) => !visaOnlySet.has(oid));
       const waiveOrders = await Order.findAll({ where: { waive_bus_penalty: true }, attributes: ['id'], raw: true });
       const orderIdsWaive = (waiveOrders || []).map((o) => o.id);
       orderIdsByType = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa, ...orderIdsWaive])];
@@ -501,7 +510,7 @@ const list = asyncHandler(async (req, res) => {
     model: Order,
     as: 'Order',
     attributes: [
-      'id', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar', 'penalty_amount', 'waive_bus_penalty',
+      'id', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar', 'penalty_amount', 'waive_bus_penalty', 'bus_service_option',
       'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time',
       'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'
     ],
@@ -958,7 +967,16 @@ const getSummary = asyncHandler(async (req, res) => {
         OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true })
       ]);
       const orderIdsFromBus = [...new Set((busRows || []).map((r) => r.order_id))];
-      const orderIdsFromVisa = [...new Set((visaRows || []).map((r) => r.order_id))];
+      const orderIdsFromVisaRaw = [...new Set((visaRows || []).map((r) => r.order_id))];
+      const visaOnlyOrders = orderIdsFromVisaRaw.length
+        ? await Order.findAll({
+          where: { id: { [Op.in]: orderIdsFromVisaRaw }, bus_service_option: 'visa_only' },
+          attributes: ['id'],
+          raw: true
+        })
+        : [];
+      const visaOnlySet = new Set((visaOnlyOrders || []).map((o) => o.id));
+      const orderIdsFromVisa = orderIdsFromVisaRaw.filter((oid) => !visaOnlySet.has(oid));
       const waiveOrders = await Order.findAll({ where: { waive_bus_penalty: true }, attributes: ['id'], raw: true });
       const orderIdsWaive = (waiveOrders || []).map((o) => o.id);
       orderIdsByType = [...new Set([...orderIdsFromBus, ...orderIdsFromVisa, ...orderIdsWaive])];
@@ -1258,6 +1276,8 @@ const getById = asyncHandler(async (req, res) => {
     const orderItems = order?.OrderItems || [];
     const hasBus = orderItems.some((it) => it.type === 'bus');
     const hasVisa = orderItems.some((it) => it.type === 'visa');
+    const visaOnlyNoBus = String(order?.bus_service_option || '') === 'visa_only' && !hasBus;
+    if (visaOnlyNoBus) return res.status(403).json({ success: false, message: 'Order ini hanya visa tanpa layanan bus.' });
     if (!hasBus && !hasVisa) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item bus atau visa (bus include)' });
   }
   if (req.user.role === 'role_siskopatuh') {

@@ -2956,7 +2956,8 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const raw = viewInvoice?.Order?.OrderItems || [];
                                       const hasVisa = raw.some((i: any) => (i.type || i.product_type) === 'visa');
                                       const hasBusItems = raw.some((i: any) => (i.type || i.product_type) === 'bus');
-                                      const hasBusInclude = (hasVisa || (Number(order?.penalty_amount) > 0) || !!order?.waive_bus_penalty) && !hasBusItems;
+                                      const busIncludeAllowed = String(order?.bus_service_option || '') !== 'visa_only';
+                                      const hasBusInclude = busIncludeAllowed && (hasVisa || (Number(order?.penalty_amount) > 0) || !!order?.waive_bus_penalty) && !hasBusItems;
                                       if (!hasBusInclude) return null;
                                       const penalty = Number(order?.penalty_amount) || 0;
                                       const waive = !!order?.waive_bus_penalty;
@@ -3355,7 +3356,8 @@ const OrdersInvoicesPage: React.FC = () => {
                     const hasVisaItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'visa');
                     const hasBusItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'bus');
                     const waiveBus = !!order?.waive_bus_penalty;
-                    const isBusInclude = (hasVisaItems || waiveBus) && !hasBusItems;
+                    const busIncludeAllowed = String(order?.bus_service_option || '') !== 'visa_only';
+                    const isBusInclude = busIncludeAllowed && (hasVisaItems || waiveBus) && !hasBusItems;
                     if (items.length === 0 && !isBusInclude) {
                       return (
                         <div className="text-center py-14 rounded-2xl border border-slate-200 bg-white shadow-sm">

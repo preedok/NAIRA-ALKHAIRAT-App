@@ -266,7 +266,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         );
       })
     });
-  } else if (visaItems.length > 0) {
+  } else if (visaItems.length > 0 && String(inv?.Order?.bus_service_option || '') !== 'visa_only') {
     const order = inv?.Order;
     const waive = order?.waive_bus_penalty === true;
     const penalty = Number(order?.penalty_amount) || 0;

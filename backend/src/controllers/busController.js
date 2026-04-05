@@ -222,7 +222,17 @@ const listInvoices = asyncHandler(async (req, res) => {
     OrderItem.findAll({ where: { order_id: { [Op.in]: orderIdsWithDp } }, attributes: ['order_id', 'type'], raw: true }),
     Order.findAll({ where: { id: { [Op.in]: orderIdsWithDp }, waive_bus_penalty: true }, attributes: ['id'], raw: true })
   ]);
-  const orderIdsVisaOrBus = [...new Set((orderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.VISA || i.type === ORDER_ITEM_TYPE.BUS).map(i => i.order_id))];
+  const orderIdsVisaOrBusRaw = [...new Set((orderItems || []).filter(i => i.type === ORDER_ITEM_TYPE.VISA || i.type === ORDER_ITEM_TYPE.BUS).map(i => i.order_id))];
+  const visaOnlyIds = orderIdsVisaOrBusRaw.length
+    ? (await Order.findAll({
+      where: { id: { [Op.in]: orderIdsVisaOrBusRaw }, bus_service_option: 'visa_only' },
+      attributes: ['id'],
+      raw: true
+    })).map((r) => r.id)
+    : [];
+  const visaOnlySet = new Set(visaOnlyIds);
+  const busItemOrderIds = new Set((orderItems || []).filter((i) => i.type === ORDER_ITEM_TYPE.BUS).map((i) => i.order_id));
+  const orderIdsVisaOrBus = orderIdsVisaOrBusRaw.filter((oid) => !visaOnlySet.has(oid) || busItemOrderIds.has(oid));
   const orderIdsWaive = (ordersWaive || []).map(r => r.id).filter(Boolean);
   const orderIdsRelevant = [...new Set([...orderIdsVisaOrBus, ...orderIdsWaive])];
   if (orderIdsRelevant.length === 0) {
@@ -252,7 +262,7 @@ const listInvoices = asyncHandler(async (req, res) => {
         model: Order,
         as: 'Order',
         attributes: [
-          'id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'penalty_amount', 'waive_bus_penalty', 'currency_rates_override',
+          'id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'penalty_amount', 'waive_bus_penalty', 'bus_service_option', 'currency_rates_override',
           'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time',
           'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'
         ],

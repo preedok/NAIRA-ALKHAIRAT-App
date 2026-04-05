@@ -284,7 +284,8 @@ const BusWorkPage: React.FC = () => {
   const orderItems = detailInvoice?.Order?.OrderItems || [];
   const hasVisa = orderItems.some((i: any) => i.type === 'visa');
   const waiveBusPenalty = !!detailInvoice?.Order?.waive_bus_penalty;
-  const isBusIncludeOnly = busItems.length === 0 && (hasVisa || waiveBusPenalty);
+  const visaOnlyOrder = String((detailInvoice?.Order as { bus_service_option?: string })?.bus_service_option || '') === 'visa_only';
+  const isBusIncludeOnly = !visaOnlyOrder && busItems.length === 0 && (hasVisa || waiveBusPenalty);
   const ORDER_BUS_INCLUDE_KEY = 'order_bus_include';
 
   useEffect(() => {

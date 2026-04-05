@@ -358,7 +358,7 @@ function buildInvoiceDisplayItems(data) {
   });
   const hasVisa = items.some((it) => (it.type || '').toLowerCase() === 'visa');
   const hasBusItems = items.some((it) => (it.type || '').toLowerCase() === 'bus');
-  if (hasVisa && !hasBusItems && data.Order) {
+  if (hasVisa && !hasBusItems && data.Order && String(data.Order.bus_service_option || '') !== 'visa_only') {
     const penalty = parseFloat(String(data.Order.penalty_amount || 0)) || 0;
     const waive = !!(data.Order.waive_bus_penalty);
     const desc = waive ? 'Tanpa penalti (Hiace)' : (penalty > 0 ? `Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt (visa < 35 pack)` : 'Termasuk dengan visa');
