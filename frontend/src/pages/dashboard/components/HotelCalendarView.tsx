@@ -49,62 +49,150 @@ function formatCalendarDayShort(ymd: string): string {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 }
 
-/** Penanda check-in / check-out per sel tanggal (selaras backend: jam default 16:00 / 12:00 WIB). */
-function HotelStayTimeMarker({ booking, dateStr }: { booking: CalendarBooking; dateStr: string }) {
+type StayKind = 'check_in' | 'check_out' | 'stay' | 'same_day' | 'unknown';
+
+function getStayKind(booking: CalendarBooking, dateStr: string): StayKind {
+  const ci = booking.stay_check_in;
+  const co = booking.stay_check_out;
+  if (!ci || !co) return 'unknown';
+  if (ci === co) return 'same_day';
+  if (dateStr === ci) return 'check_in';
+  if (dateStr === co) return 'check_out';
+  if (dateStr > ci && dateStr < co) return 'stay';
+  return 'unknown';
+}
+
+function stayStripeClass(kind: StayKind): string {
+  if (kind === 'check_in') return 'bg-blue-500';
+  if (kind === 'check_out') return 'bg-amber-500';
+  if (kind === 'stay') return 'bg-slate-400';
+  if (kind === 'same_day') return 'bg-violet-500';
+  return 'bg-slate-300';
+}
+
+/** Tooltip / aria: ringkasan lengkap satu baris untuk aksesibilitas */
+function stayFullSummary(booking: CalendarBooking, dateStr: string): string {
+  const ci = booking.stay_check_in;
+  const co = booking.stay_check_out;
+  const cit = booking.check_in_time || '16:00';
+  const cot = booking.check_out_time || '12:00';
+  const name = booking.owner_name || 'Tamu';
+  if (!ci || !co) return `${name}: tanpa tanggal in/out`;
+  const kind = getStayKind(booking, dateStr);
+  if (kind === 'check_in') return `${name}: Check-in ${cit} WIB, check-out ${formatCalendarDayShort(co)} ${cot} WIB`;
+  if (kind === 'check_out') return `${name}: Check-out ${cot} WIB, check-in ${formatCalendarDayShort(ci)} ${cit} WIB`;
+  if (kind === 'stay') return `${name}: Menginap, keluar ${formatCalendarDayShort(co)} ${cot} WIB`;
+  if (kind === 'same_day') return `${name}: In & out ${cit} / ${cot}`;
+  return name;
+}
+
+/** Satu baris ringkas untuk sel kalender (banyak booking). */
+function HotelStayTimeMarkerCompact({ booking, dateStr }: { booking: CalendarBooking; dateStr: string }) {
   const ci = booking.stay_check_in;
   const co = booking.stay_check_out;
   const cit = booking.check_in_time || '16:00';
   const cot = booking.check_out_time || '12:00';
   if (!ci || !co) {
-    return <span className="text-slate-400 italic">Tanpa tanggal in/out</span>;
+    return <span className="text-slate-400">—</span>;
   }
   if (ci === co) {
     return (
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="inline-flex items-center gap-0.5 rounded-md bg-blue-100 text-blue-900 px-1 py-0.5 font-semibold tabular-nums">
-          <LogIn className="w-2.5 h-2.5 shrink-0" /> in {cit}
-        </span>
-        <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 text-amber-950 px-1 py-0.5 font-semibold tabular-nums">
-          <LogOut className="w-2.5 h-2.5 shrink-0" /> out {cot}
-        </span>
-      </div>
+      <span className="inline-flex items-center gap-0.5 flex-wrap text-slate-600">
+        <LogIn className="w-2 h-2 text-blue-600 shrink-0" />
+        <span className="font-semibold text-blue-800">{cit}</span>
+        <span className="text-slate-400">·</span>
+        <LogOut className="w-2 h-2 text-amber-700 shrink-0" />
+        <span className="font-semibold text-amber-900">{cot}</span>
+      </span>
     );
   }
   if (dateStr === ci) {
     return (
-      <div className="space-y-0.5">
-        <div className="inline-flex items-center gap-0.5 rounded-md bg-blue-100 text-blue-900 px-1 py-0.5 font-semibold tabular-nums">
-          <LogIn className="w-2.5 h-2.5 shrink-0" /> Check-in {cit} WIB
-        </div>
-        <div className="text-slate-500">
-          Check-out {formatCalendarDayShort(co)} {cot} WIB
-        </div>
-      </div>
+      <span className="inline-flex items-center gap-0.5 flex-wrap min-w-0">
+        <span className="font-semibold text-blue-800 whitespace-nowrap shrink-0">CI {cit}</span>
+        <span className="text-slate-400 shrink-0">→</span>
+        <span className="text-slate-500 truncate min-w-0">CO {formatCalendarDayShort(co)} {cot}</span>
+      </span>
     );
   }
   if (dateStr === co) {
     return (
-      <div className="space-y-0.5">
-        <div className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 text-amber-950 px-1 py-0.5 font-semibold tabular-nums">
-          <LogOut className="w-2.5 h-2.5 shrink-0" /> Check-out {cot} WIB
-        </div>
-        <div className="text-slate-500">
-          Check-in {formatCalendarDayShort(ci)} {cit} WIB
-        </div>
-      </div>
+      <span className="inline-flex items-center gap-0.5 flex-wrap min-w-0">
+        <span className="font-semibold text-amber-900 whitespace-nowrap shrink-0">CO {cot}</span>
+        <span className="text-slate-400 shrink-0">←</span>
+        <span className="text-slate-500 truncate min-w-0">CI {formatCalendarDayShort(ci)} {cit}</span>
+      </span>
     );
   }
   if (dateStr > ci && dateStr < co) {
     return (
-      <div className="space-y-0.5 text-slate-600">
-        <div className="font-semibold text-slate-700">Menginap</div>
-        <div className="text-slate-500">
-          Out {formatCalendarDayShort(co)} {cot} WIB
-        </div>
-      </div>
+      <span className="inline-flex items-center gap-0.5 flex-wrap min-w-0 text-slate-600">
+        <span className="font-semibold text-slate-800 shrink-0">Menginap</span>
+        <span className="text-slate-400 shrink-0">·</span>
+        <span className="text-slate-500 truncate min-w-0">Out {formatCalendarDayShort(co)} {cot}</span>
+      </span>
     );
   }
   return null;
+}
+
+/** Daftar booking ringkas: strip status + scroll jika banyak. */
+const BOOKING_LIST_MAX_HEIGHT_PX = 104;
+
+function HotelCalendarDayBookingsList({
+  bookings,
+  dateStr
+}: {
+  bookings: CalendarBooking[];
+  dateStr: string;
+}) {
+  const sorted = useMemo(
+    () =>
+      [...bookings].sort((a, b) => {
+        const ka = getStayKind(a, dateStr);
+        const kb = getStayKind(b, dateStr);
+        const order = (k: StayKind) =>
+          k === 'check_in' ? 0 : k === 'check_out' ? 1 : k === 'stay' ? 2 : 3;
+        const d = order(ka) - order(kb);
+        if (d !== 0) return d;
+        return (a.owner_name || '').localeCompare(b.owner_name || '', 'id');
+      }),
+    [bookings, dateStr]
+  );
+
+  return (
+    <div className="mt-1.5 border-t border-slate-100 pt-1.5 min-w-0">
+      <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+        Booking ({sorted.length})
+      </p>
+      <div
+        className="space-y-1 overflow-y-auto overflow-x-hidden pr-0.5 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent min-w-0"
+        style={{ maxHeight: BOOKING_LIST_MAX_HEIGHT_PX }}
+      >
+        {sorted.map((b) => {
+          const kind = getStayKind(b, dateStr);
+          return (
+            <div
+              key={b.order_id}
+              className="flex gap-1.5 items-start min-w-0 rounded-md bg-slate-50/80 hover:bg-slate-100/90 px-1 py-0.5 border border-slate-100/80"
+              title={stayFullSummary(b, dateStr)}
+            >
+              <span
+                className={`w-0.5 shrink-0 rounded-full mt-0.5 self-stretch min-h-[1.75rem] ${stayStripeClass(kind)}`}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-[9px] font-semibold text-slate-800 truncate leading-tight">{b.owner_name}</div>
+                <div className="text-[8px] leading-tight mt-0.5 min-w-0">
+                  <HotelStayTimeMarkerCompact booking={b} dateStr={dateStr} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 type AddQuantityPopup = {
@@ -421,21 +509,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                     <p className="mt-2 text-[11px] text-slate-400">—</p>
                   )}
                   {dayBookings.length > 0 ? (
-                    <div className="mt-2 space-y-1.5">
-                      {dayBookings.map((b) => (
-                        <div
-                          key={b.order_id}
-                          className="rounded-lg border border-slate-200/80 bg-slate-50/90 px-1.5 py-1 text-[9px] leading-snug"
-                        >
-                          <div className="font-semibold text-slate-800 truncate" title={b.owner_name}>
-                            {b.owner_name}
-                          </div>
-                          <div className="mt-0.5">
-                            <HotelStayTimeMarker booking={b} dateStr={dateStr} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <HotelCalendarDayBookingsList bookings={dayBookings} dateStr={dateStr} />
                   ) : null}
                   {dayBookings.length > 0 ? (
                     <button
@@ -452,7 +526,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                           orderIds: ids
                         });
                       }}
-                      className="mt-3 text-[11px] font-semibold flex items-center gap-1.5 rounded-lg py-1.5 px-2 w-full justify-center transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      className="mt-1.5 text-[10px] font-semibold flex items-center gap-1.5 rounded-lg py-1 px-1.5 w-full justify-center transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                     >
                       <Users className="w-3.5 h-3.5" />
                       {isOwner ? (dayBookings.length === 1 ? 'Invoice saya' : `${dayBookings.length} invoice saya`) : `${rawBookings.length} owner`}
