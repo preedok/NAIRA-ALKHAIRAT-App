@@ -1031,8 +1031,30 @@ const OrderFormPage: React.FC = () => {
     return sum;
   };
   const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+  /** Estimasi IDR untuk 1× Hiace otomatis (sama intent backend getFirstHiaceProductAndPrice + trip round_trip) jika belum ada baris bus. */
+  const autoHiaceSubtotalIdr=(()=>{
+    if(busServiceOption!=='hiace') return 0;
+    if(!items.some(r=>r.type==='visa')) return 0;
+    if(items.some(r=>r.type==='bus')) return 0;
+    const hiaceProducts=products.filter(p=>p.type==='bus'&&(p.meta as { bus_kind?: string })?.bus_kind==='hiace');
+    const p=hiaceProducts[0];
+    if(!p) return 0;
+    const byTrip=p.meta?.route_prices_by_trip as Record<string,number>|undefined;
+    let unitRaw:number;
+    if(byTrip&&typeof byTrip.round_trip==='number'&&!Number.isNaN(byTrip.round_trip)&&byTrip.round_trip>=0){
+      unitRaw=byTrip.round_trip;
+    }else{
+      const rp=p.meta?.route_prices as Record<string,number>|undefined;
+      const routeOpt=rp&&Object.keys(rp).length?Object.entries(rp).find(([,v])=>(v??0)>0)?.[0] as BusRouteType|undefined:undefined;
+      const route:BusRouteType=(p.meta?.route_type as BusRouteType)||routeOpt||'full_route';
+      unitRaw=busRoutePrice(p,route,'round_trip');
+    }
+    const cur=getDisplayCurrency('bus',p);
+    const fakeRow={ id:'_auto_hiace_est', type:'bus' as const, product_id:p.id, quantity:1, unit_price:unitRaw, price_currency:cur } as OrderItemRow;
+    return Math.max(0,toIDR(unitRaw,fakeRow));
+  })();
   const subtotalIDR=payloadSubtotalIDR(validForTotal);
-  const totalIDR=subtotalIDR+busPenaltyIDR;
+  const totalIDR=subtotalIDR+busPenaltyIDR+autoHiaceSubtotalIdr;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   /** Nilai dalam mata uang baris untuk ditampilkan pakai NominalDisplay */
@@ -1963,7 +1985,12 @@ const OrderFormPage: React.FC = () => {
                     ) : busServiceOption === 'finality' ? (
                       <>Tidak ada penalti (pack memenuhi syarat Bus Finality).</>
                     ) : busServiceOption === 'hiace' ? (
-                      <>Tanpa penalti; sistem menambahkan 1 unit Bus Hiace untuk progress &amp; tagihan.</>
+                      <>
+                        Tanpa penalti; sistem menambahkan 1 unit Bus Hiace untuk progress &amp; tagihan.
+                        {autoHiaceSubtotalIdr > 0 ? (
+                          <> Estimasi harga 1× Hiace dalam total: <NominalDisplay amount={autoHiaceSubtotalIdr} currency="IDR" />.</>
+                        ) : null}
+                      </>
                     ) : (
                       <>Tidak ada penalti bus — trip hanya visa tanpa layanan bus.</>
                     )}
