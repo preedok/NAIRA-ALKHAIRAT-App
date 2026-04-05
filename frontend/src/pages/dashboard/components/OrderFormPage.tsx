@@ -1085,6 +1085,8 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan (pulang pergi: keberangkatan & kepulangan; pergi saja: tanggal keberangkatan; pulang saja: tanggal kepulangan)','warning'); return; }
+    const siskopatuhWithoutDate=valid.filter(r=>r.type==='siskopatuh'&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
+    if(siskopatuhWithoutDate.length){ showToast('Item siskopatuh wajib isi tanggal layanan','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -1135,6 +1137,8 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan','warning'); return; }
+    const siskopatuhWithoutDateDraft=valid.filter(r=>r.type==='siskopatuh'&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
+    if(siskopatuhWithoutDateDraft.length){ showToast('Item siskopatuh wajib isi tanggal layanan','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
@@ -1769,6 +1773,21 @@ const OrderFormPage: React.FC = () => {
                               })()}
                               {row.type==='visa' && (
                                 <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender visa" /></div>
+                              )}
+                              {row.type==='siskopatuh' && (
+                                <div className="min-w-0">
+                                  <Input
+                                    label="Tanggal layanan"
+                                    type="date"
+                                    value={(row.meta?.service_date as string) ?? ''}
+                                    onChange={(e) =>
+                                      updateRow(row.id, {
+                                        meta: { ...(row.meta || {}), service_date: e.target.value || undefined }
+                                      })
+                                    }
+                                    title="Untuk filter progress & referensi jadwal siskopatuh"
+                                  />
+                                </div>
                               )}
                               {row.type==='bus' && (()=>{
                                 const busProduct = products.find((p:ProductOption)=>p.type==='bus'&&p.id===row.product_id);

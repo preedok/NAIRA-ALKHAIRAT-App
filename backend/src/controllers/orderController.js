@@ -135,6 +135,7 @@ function earliestServiceYmdFromOrderItems(items) {
     pushServiceYmd(all, meta.departure_date);
     pushServiceYmd(all, meta.return_date);
     pushServiceYmd(all, meta.travel_date);
+    pushServiceYmd(all, meta.service_date);
     const hp = it.HotelProgress;
     if (hp) {
       const cid = typeof hp.get === 'function' ? hp.get('check_in_date') : hp.check_in_date;

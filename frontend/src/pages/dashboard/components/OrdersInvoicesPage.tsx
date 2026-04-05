@@ -166,6 +166,7 @@ function getEarliestServiceYmdFromInvoice(inv: any): string | null {
     pushServiceYmd(all, meta.departure_date);
     pushServiceYmd(all, meta.return_date);
     pushServiceYmd(all, meta.travel_date);
+    pushServiceYmd(all, meta.service_date);
     const hp = it?.HotelProgress;
     if (hp?.check_in_date) pushServiceYmd(all, hp.check_in_date);
   }
@@ -2759,6 +2760,9 @@ const OrdersInvoicesPage: React.FC = () => {
                               const tgl = meta.travel_date ? formatDate(meta.travel_date) : '';
                               const route = meta.route_type ? String(meta.route_type) : '';
                               return [trip, tgl && `Tgl ${tgl}`, route && `Rute ${route}`].filter(Boolean).join(' · ');
+                            }
+                            if (t === 'siskopatuh') {
+                              return meta.service_date ? `Tanggal layanan: ${formatDate(meta.service_date)}` : '';
                             }
                             return '';
                           };
