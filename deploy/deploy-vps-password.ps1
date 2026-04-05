@@ -3,10 +3,14 @@
 # Opsional:
 #   -ClearOrders                  → hapus order/invoice + terkait (tetap users & owner)
 #   -ClearOrdersInvoicesOwners    → hapus order/invoice + akun owner & data terkait (CONFIRM di server)
+#   -ClearInvoicesDatabase        → setelah npm ci: CONFIRM=YES clear-invoices-database-clean.js
+#   -OnlyClearInvoicesDatabase    → TANPA upload/tar: hanya jalankan hapus invoice+order di VPS (cepat)
 
 param(
   [switch]$ClearOrders,
-  [switch]$ClearOrdersInvoicesOwners
+  [switch]$ClearOrdersInvoicesOwners,
+  [switch]$ClearInvoicesDatabase,
+  [switch]$OnlyClearInvoicesDatabase
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +27,27 @@ if (-not (Test-Path $Pscp))  { Write-Host "PuTTY pscp tidak ditemukan: $Pscp" -F
 
 $root = (Get-Item $PSScriptRoot).Parent.FullName
 Set-Location $root
+
+if ($OnlyClearInvoicesDatabase) {
+  Write-Host "Hanya hapus invoice + order di VPS (tanpa deploy file)..." -ForegroundColor Yellow
+  $onlyClear = @"
+set -e
+cd $APP_PATH/backend
+if [ ! -f scripts/clear-invoices-database-clean.js ]; then
+  echo "File scripts/clear-invoices-database-clean.js tidak ada. Deploy repo dulu (git/pull atau deploy penuh)."
+  exit 1
+fi
+export CONFIRM=YES
+node scripts/clear-invoices-database-clean.js
+echo CLEAR_INVOICES_DONE
+"@
+  $onlyClear = $onlyClear -replace "`r`n", "`n"
+  $onlyClear | & $Plink -ssh -batch -pw $VPS_PASS -hostkey $HOSTKEY "${VPS_USER}@${VPS_HOST}" "bash -s"
+  $code = $LASTEXITCODE
+  if ($code -eq 0) { Write-Host "`nPenghapusan invoice/order selesai." -ForegroundColor Green } else { Write-Host "`nGagal (exit $code)." -ForegroundColor Red; exit $code }
+  exit 0
+}
+
 $tar = Join-Path $env:TEMP "bgg-app-deploy.tar"
 if (Test-Path $tar) { Remove-Item $tar -Force }
 
@@ -41,6 +66,12 @@ if ($ClearOrdersInvoicesOwners) {
 
 echo '>>> ClearOrdersInvoicesOwners: order, invoice, akun owner + terkait (CONFIRM=YES)...'
 CONFIRM=YES node scripts/clear-orders-and-owner-accounts.js
+"@
+} elseif ($ClearInvoicesDatabase) {
+  $clearBlock = @"
+
+echo '>>> ClearInvoicesDatabase: hapus semua invoice + order terkait (CONFIRM=YES)...'
+CONFIRM=YES node scripts/clear-invoices-database-clean.js
 "@
 } elseif ($ClearOrders) {
   $clearBlock = @"
