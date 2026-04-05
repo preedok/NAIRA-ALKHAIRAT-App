@@ -20,14 +20,14 @@ import Button from '../../../components/common/Button';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import ContentLoading from '../../../components/common/ContentLoading';
-import { AutoRefreshControl, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, Input } from '../../../components/common';
+import { AutoRefreshControl, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, Input, Autocomplete } from '../../../components/common';
 import { useToast } from '../../../contexts/ToastContext';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { NominalDisplay } from '../../../components/common';
 import { INVOICE_STATUS_LABELS as INVOICE_STATUS_LABELS_GLOBAL } from '../../../utils/constants';
 import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
-import { invoicesApi, ownersApi, refundsApi, type InvoicesSummaryData } from '../../../services/api';
+import { invoicesApi, ownersApi, refundsApi, accountingApi, type InvoicesSummaryData, type BankItem } from '../../../services/api';
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
@@ -47,6 +47,7 @@ const OwnerDashboard: React.FC = () => {
   const [withdrawAccount, setWithdrawAccount] = useState('');
   const [withdrawHolder, setWithdrawHolder] = useState('');
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+  const [withdrawBanks, setWithdrawBanks] = useState<BankItem[]>([]);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -84,6 +85,17 @@ const OwnerDashboard: React.FC = () => {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!showWithdrawModal) return;
+    accountingApi
+      .getBanks({ is_active: 'true' })
+      .then((r) => {
+        if (r.data?.success && Array.isArray(r.data.data)) setWithdrawBanks(r.data.data);
+        else setWithdrawBanks([]);
+      })
+      .catch(() => setWithdrawBanks([]));
+  }, [showWithdrawModal]);
 
   const pendingCount = summary ? (summary.by_invoice_status?.tentative || 0) + (summary.by_invoice_status?.partial_paid || 0) : 0;
   const stats = [
@@ -290,7 +302,15 @@ const OwnerDashboard: React.FC = () => {
             <ModalBody className="space-y-3">
               <p className="text-sm text-slate-600">Saldo tersedia: <strong className="text-emerald-700"><NominalDisplay amount={accountBalance} currency="IDR" /></strong></p>
               <Input label="Jumlah penarikan (IDR)" type="number" min={1} max={accountBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Minimal 1" disabled={withdrawSubmitting} />
-              <Input label="Nama bank" type="text" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} placeholder="Contoh: BCA" disabled={withdrawSubmitting} />
+              <Autocomplete
+                label="Nama bank"
+                value={withdrawBank}
+                onChange={(v) => setWithdrawBank(v || '')}
+                options={withdrawBanks.map((b) => ({ value: b.name, label: b.name }))}
+                placeholder="Pilih bank"
+                emptyLabel="Pilih bank"
+                disabled={withdrawSubmitting}
+              />
               <Input label="Nomor rekening penerima" type="text" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} placeholder="Tanpa spasi" disabled={withdrawSubmitting} />
               <Input label="Nama pemilik rekening" type="text" value={withdrawHolder} onChange={(e) => setWithdrawHolder(e.target.value)} placeholder="Sesuai buku tabungan" disabled={withdrawSubmitting} />
             </ModalBody>
