@@ -49,7 +49,23 @@ const formatDateShort = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day
 const formatDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 const paymentTypeLabel = (t) => (t === 'dp' ? 'DP' : t === 'partial' ? 'Cicilan' : t === 'full' ? 'Lunas' : t || '-');
 const verifiedStatusLabel = (s) => (s === 'verified' ? 'Diverifikasi' : s === 'rejected' ? 'Ditolak' : 'Menunggu');
-const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[String(t).toLowerCase()] || t);
+const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket', siskopatuh: 'Siskopatuh' }[String(t).toLowerCase()] || t);
+/** Kode singkat kolom Tipe di PDF (3 huruf) */
+const typeCode = (t) => {
+  const k = String(t || '').toLowerCase();
+  const map = {
+    hotel: 'HTL',
+    visa: 'VSA',
+    ticket: 'TKT',
+    bus: 'BUS',
+    handling: 'HND',
+    package: 'PKG',
+    siskopatuh: 'SKP'
+  };
+  if (map[k]) return map[k];
+  if (!k) return '—';
+  return k.length <= 3 ? k.toUpperCase() : k.slice(0, 3).toUpperCase();
+};
 const mealStatusLabel = (s) => ({ pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' }[String(s).toLowerCase()] || s || '-');
 /** Label status progress hotel (sesuai pilihan divisi hotel: Progress → Penetapan room → Pemberian nomor room → Selesai) */
 const hotelProgressStatusLabel = (s) => ({
@@ -295,11 +311,11 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   y += 22;
 
   const tableTop = y;
-  // Kolom: No, Tipe, Deskripsi, Qty, Harga Satuan Kamar, Harga Satuan Makan, Subtotal (pisah kamar/makan; subtotal gabungan)
-  const colW = [0.04, 0.06, 0.24, 0.06, 0.18, 0.18, 0.24];
-  const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, w) => s + w, 0) + 6;
-  const w = (i) => pageWidth * colW[i] - 12;
-  const headerRowH = 36;
+  // Kolom: No kecil | Tipe (kode 3 huruf) | Deskripsi | Qty | Harga kamar | Harga makan | Subtotal — proporsi diperlebar untuk harga & subtotal
+  const colW = [0.038, 0.058, 0.208, 0.048, 0.198, 0.198, 0.252];
+  const x = (i) => margin + pageWidth * colW.slice(0, i).reduce((s, cw) => s + cw, 0) + (i <= 1 ? 4 : 5);
+  const w = (i) => pageWidth * colW[i] - (i <= 1 ? 8 : 10);
+  const headerRowH = 40;
   const dataRowHMin = 48;
   const descLineGap = 5;
   const descBlockGap = 6;
@@ -307,19 +323,17 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const s2i = (rates && rates.SAR_TO_IDR != null) ? rates.SAR_TO_IDR : 4200;
   const u2i = (rates && rates.USD_TO_IDR != null) ? rates.USD_TO_IDR : 15500;
   doc.rect(margin, tableTop, pageWidth, headerRowH).fillAndStroke(colors.header, colors.stroke);
-  doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold');
-  doc.text('No', x(0), tableTop + 8, { width: w(0) });
-  doc.text('Tipe', x(1), tableTop + 8, { width: w(1) });
-  doc.text('Deskripsi', x(2), tableTop + 8, { width: w(2) });
-  doc.text('Qty', x(3), tableTop + 8, { width: w(3) });
-  doc.text('Harga Satuan Kamar', x(4), tableTop + 6, { width: w(4) });
-  doc.fontSize(7).font('Helvetica').text('(IDR)', x(4), tableTop + 18, { width: w(4) });
-  doc.fontSize(9).font('Helvetica-Bold');
-  doc.text('Harga Satuan Makan', x(5), tableTop + 6, { width: w(5) });
-  doc.fontSize(7).font('Helvetica').text('(IDR)', x(5), tableTop + 18, { width: w(5) });
-  doc.fontSize(9).font('Helvetica-Bold');
-  doc.text('Subtotal (gabungan)', x(6), tableTop + 6, { width: w(6) });
-  doc.fontSize(7).font('Helvetica').text('(IDR · SAR · USD)', x(6), tableTop + 18, { width: w(6) });
+  doc.fillColor('#ffffff').font('Helvetica-Bold');
+  doc.fontSize(8).text('No.', x(0), tableTop + 12, { width: w(0), align: 'center' });
+  doc.text('Tipe', x(1), tableTop + 12, { width: w(1), align: 'center' });
+  doc.fontSize(9).text('Deskripsi', x(2), tableTop + 12, { width: w(2) });
+  doc.fontSize(8).text('Qty', x(3), tableTop + 12, { width: w(3), align: 'center' });
+  doc.fontSize(7).text('Harga satuan kamar', x(4), tableTop + 6, { width: w(4), align: 'center' });
+  doc.fontSize(6).font('Helvetica').text('IDR + SAR / USD', x(4), tableTop + 22, { width: w(4), align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(7).text('Harga satuan makan', x(5), tableTop + 6, { width: w(5), align: 'center' });
+  doc.fontSize(6).font('Helvetica').text('IDR + SAR / USD', x(5), tableTop + 22, { width: w(5), align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(7).text('Subtotal (gabungan)', x(6), tableTop + 6, { width: w(6), align: 'center' });
+  doc.fontSize(6).font('Helvetica').text('IDR · SAR · USD', x(6), tableTop + 22, { width: w(6), align: 'center' });
   doc.fontSize(9).font('Helvetica-Bold');
   y = tableTop + headerRowH;
 
@@ -485,8 +499,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         y = checkNewPage(doc, y, margin, rowH + 6);
         doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
         doc.fillColor('#334155').fontSize(9);
-        doc.text(String(i + 1), x(0), y + 6, { width: w(0) });
-        doc.text('Bus', x(1), y + 6, { width: w(1) });
+        doc.text(String(i + 1), x(0), y + 6, { width: w(0), align: 'center' });
+        doc.text(typeCode('bus'), x(1), y + 6, { width: w(1), align: 'center' });
         doc.text('Bus include (dengan visa)', x(2), y + 4, { width: w(2) });
         if (item._busIncludeDesc) {
           doc.fontSize(7).fillColor('#64748b');
@@ -651,8 +665,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       y = checkNewPage(doc, y, margin, rowH + 6);
       doc.rect(margin, y - 2, pageWidth, rowH).stroke('#e2e8f0');
       doc.fillColor('#334155').fontSize(9);
-      doc.text(String(i + 1), x(0), y + 6, { width: w(0) });
-      doc.text(typeLabel(item.type), x(1), y + 6, { width: w(1) });
+      doc.text(String(i + 1), x(0), y + 6, { width: w(0), align: 'center' });
+      doc.text(typeCode(item.type), x(1), y + 6, { width: w(1), align: 'center' });
       doc.text(descStr, x(2), y + 4, { width: w(2) });
       let blockY = y + 4 + Math.ceil(descHeight) + descBlockGap;
       if (dateLine) {
@@ -739,8 +753,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     const emptyRowH = dataRowHMin;
     doc.rect(margin, y - 2, pageWidth, emptyRowH).stroke('#e2e8f0');
     doc.fontSize(9).fillColor('#334155');
-    doc.text('1', x(0), y + 6, { width: w(0) });
-    doc.text('Paket', x(1), y + 6, { width: w(1) });
+    doc.text('1', x(0), y + 6, { width: w(0), align: 'center' });
+    doc.text(typeCode('package'), x(1), y + 6, { width: w(1), align: 'center' });
     doc.text('Layanan Umroh', x(2), y + 6, { width: w(2) });
     doc.text('1', x(3), y + 6, { width: w(3) });
     doc.text(formatIDR(totalAmount), x(4), y + 4, { width: w(4) });
