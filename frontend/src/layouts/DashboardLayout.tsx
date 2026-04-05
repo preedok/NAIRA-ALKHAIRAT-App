@@ -127,12 +127,6 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'role_siskopatuh']
   },
   {
-    title: 'Rekap Hotel',
-    icon: <BarChart3 className="w-5 h-5" />,
-    path: '/dashboard/rekap-hotel',
-    roles: ['super_admin', 'role_rekap_hotel']
-  },
-  {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
@@ -339,10 +333,6 @@ const DashboardLayout: React.FC = () => {
       divider: true
     }
   ];
-
-  if (user?.role === 'role_rekap_hotel' && location.pathname === '/dashboard') {
-    return <Navigate to="/dashboard/rekap-hotel" replace />;
-  }
 
   const Sidebar = ({ mobile = false }) => {
     const isCollapsed = !mobile && sidebarCollapsed;

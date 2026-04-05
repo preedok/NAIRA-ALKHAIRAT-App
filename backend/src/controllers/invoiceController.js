@@ -24,6 +24,98 @@ function mapBalanceAllocRow(r) {
   };
 }
 
+function normalizeAccountNumberDigits(n) {
+  return String(n || '').replace(/\D/g, '');
+}
+
+/**
+ * Rekening khusus bagian siskopatuh (Mandiri / NABIELA — identifikasi lewat nomor di accounting_bank_accounts).
+ * Override: env SISKOPATUH_PAYMENT_ACCOUNT_NUMBER (default 1330020805941).
+ */
+const SISKOPATUH_PAYMENT_ACCOUNT_NUMBER =
+  (process.env.SISKOPATUH_PAYMENT_ACCOUNT_NUMBER || '1330020805941').trim();
+
+function nabielaAccountDigits() {
+  return normalizeAccountNumberDigits(SISKOPATUH_PAYMENT_ACCOUNT_NUMBER);
+}
+
+function orderInvoiceBankFlags(orderLike) {
+  const items = orderLike?.OrderItems || [];
+  const hasSiskopatuh = items.some((it) => (it.type || it.product_type) === ORDER_ITEM_TYPE.SISKOPATUH);
+  const hasNonSiskopatuh = items.some((it) => {
+    const t = it.type || it.product_type;
+    return t && t !== ORDER_ITEM_TYPE.SISKOPATUH;
+  });
+  return { hasSiskopatuh, hasNonSiskopatuh };
+}
+
+function isNabielaAccountRow(row) {
+  const d = nabielaAccountDigits();
+  if (!d || !row) return false;
+  return normalizeAccountNumberDigits(row.account_number) === d;
+}
+
+function accRowToJson(row) {
+  if (!row) return null;
+  return row.get ? row.get({ plain: true }) : row.toJSON();
+}
+
+function findNabielaInSequelizeRows(rows) {
+  if (!Array.isArray(rows)) return null;
+  return rows.find((a) => isNabielaAccountRow(a)) || null;
+}
+
+function findNabielaInPlainRows(rows) {
+  if (!Array.isArray(rows)) return null;
+  return rows.find((a) => isNabielaAccountRow(a)) || null;
+}
+
+/**
+ * Hanya siskopatuh → hanya rekening Nabiela.
+ * Tanpa siskopatuh → rekening lain (bukan Nabiela).
+ * Campuran → Nabiela + rekening lain (tanpa duplikat).
+ */
+function resolveBankAccountsForInvoice(orderLike, accountingInstances, rulesPlainAccounts) {
+  const { hasSiskopatuh, hasNonSiskopatuh } = orderInvoiceBankFlags(orderLike || {});
+  const inst = Array.isArray(accountingInstances) ? accountingInstances : [];
+  const rulesArr = Array.isArray(rulesPlainAccounts) ? rulesPlainAccounts : [];
+
+  const allJsonFromDb = inst.length > 0 ? inst.map((a) => accRowToJson(a)) : [];
+  const defaultMerged = allJsonFromDb.length > 0 ? allJsonFromDb : rulesArr;
+
+  const othersInst = inst.filter((a) => !isNabielaAccountRow(a));
+  const othersJsonFromDb = othersInst.map((a) => accRowToJson(a));
+  const othersRulesOnly = rulesArr.filter((a) => !isNabielaAccountRow(a));
+
+  const nabielaInst = findNabielaInSequelizeRows(inst);
+  const nabielaJsonFromDb = nabielaInst ? accRowToJson(nabielaInst) : findNabielaInPlainRows(allJsonFromDb.length ? allJsonFromDb : rulesArr);
+
+  if (hasSiskopatuh && !hasNonSiskopatuh) {
+    if (nabielaJsonFromDb) return [nabielaJsonFromDb];
+    return defaultMerged.length ? defaultMerged : [];
+  }
+
+  if (!hasSiskopatuh) {
+    if (othersJsonFromDb.length > 0) return othersJsonFromDb;
+    if (othersRulesOnly.length > 0) return othersRulesOnly;
+    const filtered = defaultMerged.filter((a) => !isNabielaAccountRow(a));
+    if (filtered.length > 0) return filtered;
+    return defaultMerged;
+  }
+
+  const out = [];
+  if (nabielaJsonFromDb) out.push(nabielaJsonFromDb);
+  const rest = othersJsonFromDb.length > 0 ? othersJsonFromDb : othersRulesOnly;
+  for (const r of rest) out.push(r);
+  const seen = new Set();
+  return out.filter((x) => {
+    const id = x && x.id ? String(x.id) : `${x?.bank_name}-${x?.account_number}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 /** Alokasi saldo per invoice untuk PDF / email (sama bentuk dengan BalanceAllocations di API). */
 async function loadBalanceAllocationsForInvoicePdf(invoiceId) {
   const rows = await OwnerBalanceTransaction.findAll({
@@ -1194,7 +1286,12 @@ const getById = asyncHandler(async (req, res) => {
     order: [['bank_name', 'ASC'], ['account_number', 'ASC']],
     attributes: ['id', 'code', 'name', 'bank_name', 'account_number', 'currency']
   });
-  data.bank_accounts = accountingBankAccounts.length > 0 ? accountingBankAccounts.map((a) => a.toJSON()) : (Array.isArray(rules.bank_accounts) ? rules.bank_accounts : (typeof rules.bank_accounts === 'string' ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })() : []));
+  const rulesBankAccounts = Array.isArray(rules.bank_accounts)
+    ? rules.bank_accounts
+    : (typeof rules.bank_accounts === 'string'
+      ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })()
+      : []);
+  data.bank_accounts = resolveBankAccountsForInvoice(data.Order, accountingBankAccounts, rulesBankAccounts);
   if (data.Branch && (data.Branch.code || data.Branch.provinsi_id)) {
     try {
       const loc = await enrichBranchWithLocation(data.Branch, { syncDb: false });

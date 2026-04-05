@@ -14,7 +14,6 @@ import HandlingDashboard from './roles/HandlingDashboard';
 import SiskopatuhDashboard from './roles/SiskopatuhDashboard';
 import AccountingDashboard from './roles/AccountingDashboard';
 import { isKoordinatorRole } from '../../types';
-import Card from '../../components/common/Card';
 
 /**
  * Menampilkan dashboard sesuai role user.
@@ -22,13 +21,6 @@ import Card from '../../components/common/Card';
  * Koordinator: dashboard wilayah.
  * Owner / Invoice / Hotel / Visa / Ticket / Bus: rekapitulasi pekerjaan masing-masing.
  */
-const RoleDeprecatedMessage: React.FC<{ label?: string }> = ({ label = 'Role ini' }) => (
-  <Card className="max-w-xl mx-auto mt-8 p-8 text-center">
-    <p className="text-slate-600 font-medium">{label} tidak lagi digunakan.</p>
-    <p className="text-sm text-slate-500 mt-2">Hubungi administrator untuk mengubah role akun Anda.</p>
-  </Card>
-);
-
 const DashboardRouter: React.FC = () => {
   const { user } = useAuth();
   const role = user?.role;
@@ -43,8 +35,6 @@ const DashboardRouter: React.FC = () => {
       return <SuperAdminDashboard />;
     case 'admin_pusat':
       return <AdminPusatDashboard />;
-    case 'admin_cabang':
-      return <RoleDeprecatedMessage label="Role Admin Cabang" />;
     case 'invoice_koordinator':
       return <KoordinatorDashboard />;
     case 'visa_koordinator':
@@ -66,8 +56,6 @@ const DashboardRouter: React.FC = () => {
       return <SiskopatuhDashboard />;
     case 'role_accounting':
       return <AccountingDashboard />;
-    case 'role_rekap_hotel':
-      return <Navigate to="/dashboard/rekap-hotel" replace />;
     default:
       if (role && isKoordinatorRole(role as any)) return <KoordinatorDashboard />;
       return <OwnerDashboard />;

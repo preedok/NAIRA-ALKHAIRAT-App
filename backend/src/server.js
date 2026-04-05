@@ -182,16 +182,6 @@ async function ensureOwnerRolesEnum(db) {
   }
 }
 
-/** Ensure enum_users_role has role_rekap_hotel (modul Rekap Hotel) */
-async function ensureRekapHotelRoleEnum(db) {
-  try {
-    await db.query(`ALTER TYPE "enum_users_role" ADD VALUE 'role_rekap_hotel'`);
-    logger.info('enum_users_role: added role_rekap_hotel');
-  } catch (e) {
-    if (!String(e.message || '').includes('already exists')) logger.warn('ensureRekapHotelRoleEnum:', e.message);
-  }
-}
-
 // Start HTTP server first so Nginx gets a response (avoid 502 while DB initializes)
 const apiVersion = process.env.API_VERSION || 'v1';
 const apiUrl = (process.env.NODE_ENV === 'production' && process.env.CORS_ORIGIN)
@@ -216,7 +206,6 @@ sequelize.sync({ alter })
   .then(() => ensureOrderBusIncludeColumns(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
-  .then(() => ensureRekapHotelRoleEnum(sequelize))
   .then(async () => {
     logger.info('Database synchronized');
     const { SystemLog } = require('./models');

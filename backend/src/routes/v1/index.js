@@ -48,6 +48,5 @@ router.use('/admin-pusat', require('./adminPusat'));
 router.use('/accounting', require('./accounting'));
 router.use('/reports', require('./reports'));
 router.use('/super-admin', require('./superAdmin'));
-router.use('/rekap-hotel', require('./rekapHotel'));
 
 module.exports = router;

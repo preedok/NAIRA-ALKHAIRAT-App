@@ -2,7 +2,7 @@
 
 /**
  * Hapus SEMUA data order & invoice + akun owner (owner_mou, owner_non_mou, owner legacy)
- * dan data yang terikat owner (owner_profiles, harga khusus owner, notifikasi/audit owner, rekap_hotel oleh owner).
+ * dan data yang terikat owner (owner_profiles, harga khusus owner, notifikasi/audit owner).
  *
  * TETAP: cabang, wilayah, provinsi, kabupaten, user selain owner, products, product_prices (tanpa owner_id),
  * business_rules, accounting master, dll.
@@ -122,17 +122,6 @@ async function run() {
       console.log('  - audit_logs (skip)');
     } else {
       console.error('  ✗ audit_logs:', err.message);
-    }
-  }
-
-  try {
-    await sequelize.query(`DELETE FROM "rekap_hotel" WHERE created_by IN ${ownerSub}`);
-    console.log('  ✓ rekap_hotel (baris yang dibuat user owner)');
-  } catch (err) {
-    if (err.message && err.message.includes('does not exist')) {
-      console.log('  - rekap_hotel (skip)');
-    } else {
-      console.error('  ✗ rekap_hotel:', err.message);
     }
   }
 

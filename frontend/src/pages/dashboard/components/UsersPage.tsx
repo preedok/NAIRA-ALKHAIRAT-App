@@ -572,7 +572,7 @@ const UsersPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title="Manajemen User"
-        subtitle="Daftar user – tambah akun via Admin Pusat / Admin Cabang"
+        subtitle="Daftar user – tambah akun via Admin Pusat"
         right={<AutoRefreshControl onRefresh={fetchUsers} disabled={loading} />}
       />
 

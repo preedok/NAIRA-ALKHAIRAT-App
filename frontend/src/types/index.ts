@@ -16,13 +16,11 @@ export type UserRole =
   | 'invoice_saudi'
   | 'handling'
   | 'role_siskopatuh'
-  | 'admin_cabang'
   | 'owner_mou'
   | 'owner_non_mou'
   | 'role_hotel'
   | 'role_bus'
-  | 'role_accounting'
-  | 'role_rekap_hotel';
+  | 'role_accounting';
 
 export interface User {
   id: string;
@@ -76,13 +74,11 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   invoice_saudi: 'Invoice Saudi',
   handling: 'Handling',
   role_siskopatuh: 'Siskopatuh',
-  admin_cabang: 'Admin Cabang',
   owner_mou: 'Owner MOU',
   owner_non_mou: 'Owner Non-MOU',
   role_hotel: 'Hotel',
   role_bus: 'Bus',
-  role_accounting: 'Accounting',
-  role_rekap_hotel: 'Rekap Hotel'
+  role_accounting: 'Accounting'
 };
 
 /** Role owner (hanya owner_mou dan owner_non_mou; role "owner" sudah tidak dipakai) */

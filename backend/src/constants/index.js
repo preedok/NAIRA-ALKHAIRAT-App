@@ -7,7 +7,7 @@
 const ROLES = {
   SUPER_ADMIN: 'super_admin',
   ADMIN_PUSAT: 'admin_pusat',
-  // Koordinator per wilayah (invoice / tiket / visa — admin_koordinator dihapus)
+  // Koordinator per wilayah (invoice / tiket / visa)
   INVOICE_KOORDINATOR: 'invoice_koordinator',
   TIKET_KOORDINATOR: 'tiket_koordinator',
   VISA_KOORDINATOR: 'visa_koordinator',
@@ -16,14 +16,12 @@ const ROLES = {
   ROLE_BUS: 'role_bus',
   ROLE_INVOICE_SAUDI: 'invoice_saudi',
   ROLE_ACCOUNTING: 'role_accounting',
-  ROLE_REKAP_HOTEL: 'role_rekap_hotel',
   OWNER_MOU: 'owner_mou',
   OWNER_NON_MOU: 'owner_non_mou',
   // Deprecated (tetap di enum DB untuk kompatibilitas, tidak dipakai)
   OWNER: 'owner',
   ADMIN_PROVINSI: 'admin_provinsi',
   ADMIN_WILAYAH: 'admin_wilayah',
-  ADMIN_CABANG: 'admin_cabang',
   ROLE_HANDLING: 'handling',
   /** Divisi Siskopatuh: proses item order tipe siskopatuh (meta.siskopatuh_status), pola sama handling */
   ROLE_SISKOPATUH: 'role_siskopatuh'
