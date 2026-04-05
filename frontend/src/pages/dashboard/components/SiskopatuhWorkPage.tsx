@@ -279,6 +279,14 @@ const SiskopatuhWorkPage: React.FC = () => {
     if (!file) return;
     setUploadingSiskopatuhDocId(orderItemId);
     try {
+      const row = detailInvoice?.Order?.OrderItems?.find((i: any) => i.id === orderItemId);
+      if (row && getSiskopatuhItemStatus(row) !== 'completed') {
+        await siskopatuhApi.updateOrderItemProgress(orderItemId, { siskopatuh_status: 'completed' });
+        setDetailDraft((prev) => ({
+          ...prev,
+          [orderItemId]: { ...(prev[orderItemId] ?? {}), siskopatuh_status: 'completed' }
+        }));
+      }
       const fd = new FormData();
       fd.append('siskopatuh_file', file);
       await siskopatuhApi.uploadSiskopatuhDocument(orderItemId, fd);
@@ -653,22 +661,19 @@ const SiskopatuhWorkPage: React.FC = () => {
                           ))}
                         </select>
                         {draftSaysCompleted && !serverCompleted && (
-                          <p className="text-xs text-amber-700 mt-2 flex items-start gap-1.5">
-                            <span className="shrink-0 font-semibold">!</span>
-                            <span>
-                              Status &quot;Selesai&quot; di dropdown <strong>belum tersimpan di server</strong>. Klik <strong>Proses</strong> (atau Proses semua) — setelah tersimpan, bagian upload dokumen hasil akan muncul.
-                            </span>
+                          <p className="text-xs text-slate-500 mt-2 leading-snug">
+                            Anda bisa langsung <strong>unggah dokumen</strong> di bawah — status Selesai akan tersimpan otomatis di server sebelum file diunggah. Atau klik <strong>Proses</strong> jika hanya ingin menyimpan status tanpa file.
                           </p>
                         )}
                       </div>
 
-                      {serverCompleted && (
+                      {(draftSaysCompleted || serverCompleted) && (
                         <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
                           <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
                             <Download className="w-3.5 h-3.5" /> Dokumen hasil Siskopatuh (untuk owner unduh)
                           </p>
                           <p className="text-xs text-slate-500">
-                            Unggah PDF/ZIP hasil proses. Owner mengunduh dari menu Invoice → tab Progress → <strong>Dokumen Siskopatuh</strong>.
+                            Muncul saat status <strong>Selesai</strong> dipilih. Unggah PDF/ZIP — owner mengunduh dari Invoice → tab Progress → <strong>Dokumen Siskopatuh</strong>.
                           </p>
                           <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
                             <input
@@ -725,7 +730,7 @@ const SiskopatuhWorkPage: React.FC = () => {
               </div>
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                 <p className="text-sm text-slate-600 max-w-md">
-                  Perubahan hanya tersimpan setelah klik <strong>Proses</strong> per item atau <strong>Proses semua</strong>.
+                  Menunggu / Dalam proses: simpan lewat <strong>Proses</strong>. Selesai: bisa langsung unggah dokumen (status tersimpan otomatis) atau <strong>Proses</strong> tanpa file.
                 </p>
                 <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || siskItems.length === 0}>
                   {updatingId ? (
