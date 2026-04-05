@@ -61,7 +61,58 @@ async function applyBalanceRefundDebitIfNeeded(refundRow, { transaction } = {}) 
       type: 'refund_debit',
       reference_type: 'refund',
       reference_id: refundRow.id,
-      notes: `Penarikan saldo ke rekening (refund). Saldo -${amount.toLocaleString('id-ID')}`
+      notes: `Penarikan saldo ke rekening — disetujui/diproses. Saldo -${amount.toLocaleString('id-ID')}`
+    },
+    { transaction }
+  );
+  return { ok: true };
+}
+
+/**
+ * Saat penarikan saldo ditolak: jika saldo sudah dipotong (status sebelumnya approved), kembalikan saldo + buat baris riwayat.
+ * Jika masih requested, hanya catat riwayat (saldo tidak pernah dipotong).
+ */
+async function reverseBalanceWithdrawalOnReject(refundRow, { transaction, rejectionReason } = {}) {
+  if (!refundRow || refundRow.source !== REFUND_SOURCE.BALANCE || !refundRow.owner_id) {
+    return { ok: true };
+  }
+  const amt = parseFloat(refundRow.amount) || 0;
+  const amtStr = amt.toLocaleString('id-ID');
+  const reasonSuffix = rejectionReason ? ` Alasan: ${rejectionReason}` : '';
+
+  const existingDebit = await OwnerBalanceTransaction.findOne({
+    where: { reference_type: 'refund', reference_id: refundRow.id, type: 'refund_debit' },
+    transaction
+  });
+
+  if (existingDebit) {
+    const debited = Math.abs(parseFloat(existingDebit.amount)) || 0;
+    const profile = await OwnerProfile.findOne({ where: { user_id: refundRow.owner_id }, transaction });
+    if (!profile) return { ok: false, code: 400, message: 'Profil owner tidak ditemukan' };
+    const current = parseFloat(profile.balance) || 0;
+    await profile.update({ balance: current + debited }, { transaction });
+    await OwnerBalanceTransaction.create(
+      {
+        owner_id: refundRow.owner_id,
+        amount: debited,
+        type: 'adjustment',
+        reference_type: 'refund',
+        reference_id: refundRow.id,
+        notes: `Penarikan saldo Rp ${amtStr} ditolak — saldo dikembalikan (+${debited.toLocaleString('id-ID')}).${reasonSuffix}`
+      },
+      { transaction }
+    );
+    return { ok: true };
+  }
+
+  await OwnerBalanceTransaction.create(
+    {
+      owner_id: refundRow.owner_id,
+      amount: 0,
+      type: 'adjustment',
+      reference_type: 'refund',
+      reference_id: refundRow.id,
+      notes: `Pengajuan penarikan saldo Rp ${amtStr} ditolak. Saldo tidak berubah.${reasonSuffix}`
     },
     { transaction }
   );
@@ -255,7 +306,8 @@ const getById = asyncHandler(async (req, res) => {
  * PATCH /api/v1/refunds/:id
  * Admin pusat & accounting: update status (approved, rejected, refunded).
  * Body: { status: 'approved'|'rejected'|'refunded', rejection_reason? }
- * Saat status = refunded dan source = balance: kurangi saldo owner.
+ * Penarikan saldo (source balance): saldo berkurang saat disetujui (approved); saat ditolak, saldo dikembalikan jika sudah dipotong + riwayat.
+ * Status refunded / upload bukti: tetap idempoten (debit saldo sekali).
  */
 const updateStatus = asyncHandler(async (req, res) => {
   const allowed = ['admin_pusat', 'super_admin', 'role_accounting'].includes(req.user.role);
@@ -268,6 +320,7 @@ const updateStatus = asyncHandler(async (req, res) => {
   const valid = [REFUND_STATUS.APPROVED, REFUND_STATUS.REJECTED, REFUND_STATUS.REFUNDED].includes(status);
   if (!valid) return res.status(400).json({ success: false, message: 'status harus approved, rejected, atau refunded' });
 
+  const prevStatus = r.status;
   const updates = { status };
   if (status === REFUND_STATUS.REJECTED && rejection_reason != null && String(rejection_reason).trim() !== '') {
     updates.rejection_reason = String(rejection_reason).trim();
@@ -320,6 +373,29 @@ const updateStatus = asyncHandler(async (req, res) => {
         }
       }
 
+      if (status === REFUND_STATUS.APPROVED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
+        const debit = await applyBalanceRefundDebitIfNeeded(r, { transaction: tx });
+        if (!debit.ok) {
+          const err = new Error(debit.message);
+          err.debitCode = debit.code;
+          throw err;
+        }
+      }
+
+      if (status === REFUND_STATUS.REJECTED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
+        if (prevStatus !== REFUND_STATUS.REJECTED && [REFUND_STATUS.REQUESTED, REFUND_STATUS.APPROVED].includes(prevStatus)) {
+          const rev = await reverseBalanceWithdrawalOnReject(r, {
+            transaction: tx,
+            rejectionReason: updates.rejection_reason ?? null
+          });
+          if (!rev.ok) {
+            const err = new Error(rev.message);
+            err.debitCode = rev.code;
+            throw err;
+          }
+        }
+      }
+
       if (status === REFUND_STATUS.REFUNDED && r.source === REFUND_SOURCE.BALANCE && r.owner_id) {
         const debit = await applyBalanceRefundDebitIfNeeded(r, { transaction: tx });
         if (!debit.ok) {
@@ -343,21 +419,26 @@ const updateStatus = asyncHandler(async (req, res) => {
         title: r.source === REFUND_SOURCE.BALANCE ? 'Penarikan saldo disetujui' : 'Refund disetujui',
         message:
           r.source === REFUND_SOURCE.BALANCE
-            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Accounting akan mentransfer ke rekening yang Anda ajukan.`
+            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Saldo akun telah dikurangi sesuai jumlah tersebut. Accounting akan mentransfer ke rekening yang Anda ajukan.`
             : `Permintaan refund Rp ${amtStr} disetujui.`,
         data: { refund_id: r.id, status: 'approved' },
         channel_in_app: true,
         channel_email: false
       });
     } else if (status === REFUND_STATUS.REJECTED) {
+      const rejReason = updates.rejection_reason ? ` Alasan: ${updates.rejection_reason}` : '';
+      const balanceRejMsg =
+        prevStatus === REFUND_STATUS.APPROVED
+          ? `Permintaan penarikan saldo Rp ${amtStr} ditolak. Saldo akun telah dikembalikan.${rejReason}`
+          : `Permintaan penarikan saldo Rp ${amtStr} ditolak. Saldo tidak berubah.${rejReason}`;
       await Notification.create({
         user_id: r.owner_id,
         trigger: NOTIFICATION_TRIGGER.REFUND,
         title: r.source === REFUND_SOURCE.BALANCE ? 'Penarikan saldo ditolak' : 'Refund ditolak',
         message:
           r.source === REFUND_SOURCE.BALANCE
-            ? `Permintaan penarikan saldo Rp ${amtStr} ditolak.${updates.rejection_reason ? ` Alasan: ${updates.rejection_reason}` : ''}`
-            : `Permintaan refund ditolak.${updates.rejection_reason ? ` Alasan: ${updates.rejection_reason}` : ''}`,
+            ? balanceRejMsg
+            : `Permintaan refund ditolak.${rejReason}`,
         data: { refund_id: r.id, status: 'rejected', rejection_reason: updates.rejection_reason ?? null },
         channel_in_app: true,
         channel_email: false
@@ -457,7 +538,7 @@ const uploadProof = [
     const isBalance = r.source === REFUND_SOURCE.BALANCE;
     const notifTitle = isBalance ? 'Penarikan saldo selesai' : 'Refund diproses – bukti terkirim';
     const notifMsg = isBalance
-      ? `Penarikan saldo Rp ${Number(parseFloat(r.amount) || 0).toLocaleString('id-ID')} telah diproses. Saldo akun telah dikurangi. Bukti transfer${ownerEmail ? ' dikirim ke email Anda' : ' tersedia di menu Refund'}.`
+      ? `Penarikan saldo Rp ${Number(parseFloat(r.amount) || 0).toLocaleString('id-ID')} — transfer selesai. Bukti${ownerEmail ? ' dikirim ke email Anda' : ' tersedia di menu Refund'}. (Saldo sudah dikurangi saat persetujuan Admin Pusat.)`
       : `Refund untuk invoice ${r.Invoice?.invoice_number || ''} telah diproses. Bukti transfer telah dikirim ke email Anda.`;
     await Notification.create({
       user_id: r.owner_id,

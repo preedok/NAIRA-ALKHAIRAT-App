@@ -6,6 +6,7 @@ import Badge from '../../../components/common/Badge';
 import { Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading, Textarea, CardSectionHeader } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { orderCancellationRequestsApi } from '../../../services/api';
+import { useToast } from '../../../contexts/ToastContext';
 import type { TableColumn } from '../../../types';
 
 function actionLabel(action: string | undefined) {
@@ -34,6 +35,7 @@ type Row = {
 };
 
 const OrderCancellationRequestsPanel: React.FC = () => {
+  const { showToast } = useToast();
   const [filterStatus, setFilterStatus] = useState<'pending' | 'all'>('pending');
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<Row[]>([]);
@@ -42,6 +44,7 @@ const OrderCancellationRequestsPanel: React.FC = () => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectRow, setRejectRow] = useState<Row | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [approveRow, setApproveRow] = useState<Row | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,22 +90,24 @@ const OrderCancellationRequestsPanel: React.FC = () => {
       await load();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      window.alert(msg || 'Gagal menolak pengajuan');
+      showToast(msg || 'Gagal menolak pengajuan', 'error');
     } finally {
       setBusyId(null);
     }
   };
 
-  const submitApprove = async (row: Row) => {
-    const invNo = row.Invoice?.invoice_number || row.id;
-    if (!window.confirm(`Setujui pembatalan untuk invoice ${invNo}? Proses pembatalan akan langsung dijalankan (saldo/refund/alokasi sesuai pilihan owner).`)) return;
+  const confirmApprove = async () => {
+    if (!approveRow) return;
+    const row = approveRow;
     setBusyId(row.id);
     try {
       await orderCancellationRequestsApi.review(row.id, { decision: 'approve' });
+      setApproveRow(null);
+      showToast('Pengajuan disetujui dan pembatalan diproses.', 'success');
       await load();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      window.alert(msg || 'Gagal menyetujui');
+      showToast(msg || 'Gagal menyetujui', 'error');
       await load();
     } finally {
       setBusyId(null);
@@ -188,7 +193,7 @@ const OrderCancellationRequestsPanel: React.FC = () => {
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700"
                         disabled={busyId === row.id}
-                        onClick={() => submitApprove(row)}
+                        onClick={() => setApproveRow(row)}
                       >
                         Setujui
                       </Button>
@@ -213,8 +218,41 @@ const OrderCancellationRequestsPanel: React.FC = () => {
         )}
       </Card>
 
+      {approveRow && (
+        <Modal open onClose={() => !busyId && setApproveRow(null)} zIndex={70}>
+          <ModalBox className="max-w-md w-full">
+            <ModalHeader
+              title="Setujui pembatalan?"
+              subtitle={`Invoice ${approveRow.Invoice?.invoice_number || '–'} · ${approveRow.Owner?.company_name || approveRow.Owner?.name || 'Owner'}`}
+              onClose={() => !busyId && setApproveRow(null)}
+            />
+            <ModalBody className="space-y-2">
+              <p className="text-sm text-slate-600">
+                Proses pembatalan akan langsung dijalankan (saldo, refund, atau alokasi sesuai pilihan owner). Tindakan ini tidak dapat dibatalkan dari sini.
+              </p>
+              <p className="text-sm text-slate-500">
+                Tindakan: <strong className="text-slate-800">{actionLabel(approveRow.payload?.action)}</strong>
+              </p>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => setApproveRow(null)} disabled={!!busyId}>
+                Batal
+              </Button>
+              <Button
+                variant="primary"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={confirmApprove}
+                disabled={!!busyId}
+              >
+                {busyId ? 'Memproses...' : 'Ya, setujui'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
+      )}
+
       {rejectRow && (
-        <Modal open onClose={() => !busyId && setRejectRow(null)}>
+        <Modal open onClose={() => !busyId && setRejectRow(null)} zIndex={70}>
           <ModalBox className="max-w-lg w-full">
             <ModalHeader title="Tolak pengajuan" subtitle="Opsional: beri alasan agar owner memahami penolakan." onClose={() => !busyId && setRejectRow(null)} />
             <ModalBody className="space-y-3">

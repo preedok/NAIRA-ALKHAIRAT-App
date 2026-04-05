@@ -171,6 +171,20 @@ async function ownerCancelBlockedByUpcomingServiceDb(orderId) {
   return daysUntil < OWNER_CANCEL_SERVICE_EXCLUSION_DAYS;
 }
 
+/**
+ * Fase tagihan DP (tentative / draft invoice, belum ada pembayaran) atau order draft belum terbit invoice:
+ * owner tetap boleh batalkan tanpa batas 7 hari order / 7 hari menjelang layanan.
+ */
+function ownerInvoiceIsTagihanDpPhase(inv, order) {
+  const ordSt = order && String(order.status || '').toLowerCase();
+  if (!inv && ordSt === 'draft') return true;
+  if (!inv) return false;
+  const paid = parseFloat(inv.paid_amount) || 0;
+  if (paid > 0.01) return false;
+  const st = String(inv.status || '').toLowerCase();
+  return st === 'tentative' || st === 'draft';
+}
+
 async function validatePaidCancelBody(order, inv, body) {
   if (!inv) {
     return { ok: false, status: 400, message: 'Order tidak memiliki invoice.' };
@@ -1785,9 +1799,13 @@ const destroy = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa dibatalkan saat draft/tentative/confirmed/processing' });
   }
 
+  const inv = await Invoice.findOne({ where: { order_id: order.id } });
+  const paidAmountZero = inv ? parseFloat(inv.paid_amount) || 0 : 0;
+
   const isStaffCancelRoleEarly = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
   const isOwnerSelfOrderEarly = isOwnerRole(req.user.role) && order.owner_id === req.user.id;
-  if (isOwnerSelfOrderEarly && !isStaffCancelRoleEarly) {
+  const ownerSkipTimeServiceRules = ownerInvoiceIsTagihanDpPhase(inv, order);
+  if (isOwnerSelfOrderEarly && !isStaffCancelRoleEarly && !ownerSkipTimeServiceRules) {
     if (await ownerCancelBlockedByUpcomingServiceDb(order.id)) {
       return res.status(403).json({
         success: false,
@@ -1803,9 +1821,6 @@ const destroy = asyncHandler(async (req, res) => {
       });
     }
   }
-
-  const inv = await Invoice.findOne({ where: { order_id: order.id } });
-  const paidAmountZero = inv ? parseFloat(inv.paid_amount) || 0 : 0;
 
   // Jika masih tagihan DP (belum ada pembayaran): hapus data (delete), bukan sekadar ubah status.
   if (inv && paidAmountZero === 0) {
@@ -1828,6 +1843,23 @@ const destroy = asyncHandler(async (req, res) => {
       await Order.destroy({ where: { id: order.id }, transaction: tx });
     });
     return res.json({ success: true, message: 'Order dan invoice telah dihapus (belum ada pembayaran DP).', data: { deleted: true } });
+  }
+
+  if (!inv && String(order.status || '').toLowerCase() === 'draft') {
+    const orderItemIdsDraft = (await OrderItem.findAll({ where: { order_id: order.id }, attributes: ['id'], raw: true })).map((r) => r.id);
+    await sequelize.transaction(async (tx) => {
+      await Refund.update({ order_id: null }, { where: { order_id: order.id }, transaction: tx });
+      await OrderRevision.destroy({ where: { order_id: order.id }, transaction: tx });
+      if (orderItemIdsDraft.length > 0) {
+        await HotelProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIdsDraft } }, transaction: tx });
+        await VisaProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIdsDraft } }, transaction: tx });
+        await TicketProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIdsDraft } }, transaction: tx });
+        await BusProgress.destroy({ where: { order_item_id: { [Op.in]: orderItemIdsDraft } }, transaction: tx });
+      }
+      await OrderItem.destroy({ where: { order_id: order.id }, transaction: tx });
+      await Order.destroy({ where: { id: order.id }, transaction: tx });
+    });
+    return res.json({ success: true, message: 'Order draft telah dihapus.', data: { deleted: true } });
   }
 
   if (!inv) {

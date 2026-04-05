@@ -186,8 +186,17 @@ function isOwnerCancelBlockedByUpcomingService(inv: any): boolean {
   return daysUntil < OWNER_CANCEL_SERVICE_EXCLUSION_DAYS;
 }
 
+/** Tagihan DP (tentative/draft, belum ada pembayaran): owner boleh batalkan tanpa batas 7 hari order / tanggal layanan. */
+function isOwnerInvoiceTagihanDpPhase(inv: any): boolean {
+  const paid = parseFloat(inv?.paid_amount) || 0;
+  if (paid > 0.01) return false;
+  const st = (inv?.status || '').toLowerCase();
+  return st === 'tentative' || st === 'draft' || !!inv?.is_draft_order;
+}
+
 /** Gabungan aturan owner: jendela dari tanggal order + tidak dalam masa 7 hari menjelang layanan. */
 function canOwnerCancelInvoiceInUi(inv: any): boolean {
+  if (isOwnerInvoiceTagihanDpPhase(inv)) return true;
   return isOwnerWithinOrderCancelWindow(inv) && !isOwnerCancelBlockedByUpcomingService(inv);
 }
 

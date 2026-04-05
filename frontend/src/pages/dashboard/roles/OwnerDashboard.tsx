@@ -31,6 +31,25 @@ import { invoicesApi, ownersApi, refundsApi, accountingApi, type InvoicesSummary
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
+/** Teks riwayat saldo: bedakan pembatalan order vs penarikan vs alokasi agar tidak tertukar dengan tarik saldo. */
+function formatOwnerBalanceTransactionLine(t: { type?: string; notes?: string; amount?: number }): string {
+  const ty = (t.type || '').toLowerCase();
+  const notes = (t.notes || '').trim();
+  if (ty === 'cancel_credit') {
+    return notes ? `Kredit saldo (pembatalan order): ${notes}` : 'Kredit saldo dari pembatalan order';
+  }
+  if (ty === 'refund_debit') {
+    return notes || 'Penarikan saldo ke rekening — saldo dikurangi';
+  }
+  if (ty === 'allocation') {
+    return notes || 'Alokasi saldo ke invoice';
+  }
+  if (ty === 'adjustment') {
+    return notes || 'Penyesuaian saldo';
+  }
+  return notes || (Number(t.amount) >= 0 ? 'Kredit saldo' : 'Debit saldo');
+}
+
 const OwnerDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -257,7 +276,7 @@ const OwnerDashboard: React.FC = () => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-stone-900">Saldo Akun</h3>
-              <p className="text-sm text-stone-600 mt-0.5">Dana dari pembatalan order. Bisa dialokasikan ke tagihan invoice atau dipakai untuk pesanan.</p>
+              <p className="text-sm text-stone-600 mt-0.5">Dana dari pembatalan order (kredit saldo), sisa alokasi, atau penyesuaian. Bisa dialokasikan ke tagihan atau ditarik ke rekening lewat menu Refund.</p>
               {loading ? (
                 <p className="text-stone-500 mt-2">Memuat...</p>
               ) : (
@@ -283,7 +302,7 @@ const OwnerDashboard: React.FC = () => {
             <ul className="space-y-2 max-h-32 overflow-y-auto">
               {balanceData.transactions.slice(0, 5).map((t) => (
                 <li key={t.id} className="flex items-center justify-between gap-2 text-sm py-1">
-                  <span className="text-stone-600 truncate flex-1 min-w-0">{t.notes || (Number(t.amount) >= 0 ? 'Kredit' : 'Debit')}</span>
+                  <span className="text-stone-600 truncate flex-1 min-w-0" title={t.notes || ''}>{formatOwnerBalanceTransactionLine(t)}</span>
                   <span className={`shrink-0 font-medium ${Number(t.amount) >= 0 ? 'text-emerald-600' : 'text-stone-700'}`}>
                     {Number(t.amount) >= 0 ? '+' : ''}<NominalDisplay amount={Math.abs(Number(t.amount))} currency="IDR" />
                   </span>
@@ -298,7 +317,7 @@ const OwnerDashboard: React.FC = () => {
       {showWithdrawModal && (
         <Modal open onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)}>
           <ModalBox className="max-w-md w-full">
-            <ModalHeader title="Tarik saldo ke rekening" subtitle="Pengajuan masuk ke menu Refund. Accounting menyetujui, mentransfer, dan mengunggah bukti. Saldo berkurang setelah transfer selesai (status Sudah direfund)." onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)} />
+            <ModalHeader title="Tarik saldo ke rekening" subtitle="Pengajuan masuk ke menu Refund. Setelah Admin Pusat menyetujui, saldo akun langsung berkurang sesuai jumlah penarikan. Accounting mentransfer dan mengunggah bukti (status Sudah direfund). Jika ditolak, saldo dikembalikan dan tercatat di riwayat." onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)} />
             <ModalBody className="space-y-3">
               <p className="text-sm text-slate-600">Saldo tersedia: <strong className="text-emerald-700"><NominalDisplay amount={accountBalance} currency="IDR" /></strong></p>
               <Input label="Jumlah penarikan (IDR)" type="number" min={1} max={accountBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Minimal 1" disabled={withdrawSubmitting} />
