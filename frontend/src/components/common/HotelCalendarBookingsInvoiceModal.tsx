@@ -29,6 +29,29 @@ const ROOM_LABELS: Record<string, string> = {
   quint: 'Quint'
 };
 
+/** Waktu sekarang di WIB (selaras backend hotelAvailabilityService). */
+function getJakartaYmdAndMinutesFromMidnight(): { ymd: string; minutesFromMidnight: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  const ymd = `${get('year')}-${get('month')}-${get('day')}`;
+  const h = parseInt(get('hour'), 10) || 0;
+  const m = parseInt(get('minute'), 10) || 0;
+  return { ymd, minutesFromMidnight: h * 60 + m };
+}
+
+/**
+ * Item hotel “aktif” pada sel tanggal dateStr: malam menginap seperti biasa,
+ * plus tanggal checkout sampai jam 12:00 WIB (setelah itu tidak ditampilkan di sel itu).
+ */
 function hotelItemForCalendarDate(item: any, hotelProductId: string, dateStr: string): boolean {
   if ((item?.type || '').toLowerCase() !== 'hotel') return false;
   if (String(item?.product_ref_id || '') !== String(hotelProductId)) return false;
@@ -41,7 +64,14 @@ function hotelItemForCalendarDate(item: any, hotelProductId: string, dateStr: st
     .slice(0, 10)
     .trim();
   if (!ci || !co) return true;
-  return ci <= dateStr && co > dateStr;
+  if (ci <= dateStr && co > dateStr) return true;
+  if (co === dateStr) {
+    const { ymd, minutesFromMidnight } = getJakartaYmdAndMinutesFromMidnight();
+    if (ymd < dateStr) return true;
+    if (ymd > dateStr) return false;
+    return minutesFromMidnight < 12 * 60;
+  }
+  return false;
 }
 
 function formatShortYmd(ymd: string): string {

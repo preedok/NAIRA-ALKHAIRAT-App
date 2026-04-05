@@ -2,6 +2,48 @@ const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 const { HotelSeason, HotelRoomInventory, ProductAvailability } = require('../models');
 
+/**
+ * Ekspresi SQL: tanggal menginap dari meta.check_in / check_out.
+ * Pakai 10 karakter pertama YYYY-MM-DD bila ada (sama seperti frontend .slice(0,10)), lalu COALESCE ke ::date penuh.
+ * Menghindari geser satu hari saat nilai disimpan sebagai timestamp ISO: di PG, teks "…T…Z" di-cast ke date
+ * memakai TimeZone sesi (mis. Asia/Jakarta) sehingga malam 8 Apr UTC+0 bisa jadi "9 Apr" lokal — kalender jadi kosong di tanggal 8.
+ */
+const SQL_META_CHECK_IN_DATE = `COALESCE(
+  (substring(oi.meta->>'check_in' from '^[0-9]{4}-[0-9]{2}-[0-9]{2}'))::date,
+  (oi.meta->>'check_in')::date
+)`;
+const SQL_META_CHECK_OUT_DATE = `COALESCE(
+  (substring(oi.meta->>'check_out' from '^[0-9]{4}-[0-9]{2}-[0-9]{2}'))::date,
+  (oi.meta->>'check_out')::date
+)`;
+
+/** Waktu “sekarang” kalender di WIB (satu sumber untuk batas checkout). */
+const SQL_NOW_JAKARTA_DATE = `(now() AT TIME ZONE 'Asia/Jakarta')::date`;
+const SQL_NOW_JAKARTA_TIME = `(now() AT TIME ZONE 'Asia/Jakarta')::time`;
+
+/**
+ * Kamar dihitung terpakai pada tanggal kalender dateStr jika:
+ * - malam menginap: check_in <= dateStr < check_out (tanggal), ATAU
+ * - tanggal checkout: masih sebelum jam 12:00 WIB di hari itu (setelah 12:00 kamar kembali available).
+ * Untuk tanggal checkout di masa depan (lihat kalender bulan depan): dianggap terpakai penuh sampai hari H jam 12.
+ */
+const SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE = `(
+  (
+    ${SQL_META_CHECK_IN_DATE} <= :dateStr::date
+    AND ${SQL_META_CHECK_OUT_DATE} > :dateStr::date
+  )
+  OR (
+    ${SQL_META_CHECK_OUT_DATE} = :dateStr::date
+    AND (
+      ${SQL_NOW_JAKARTA_DATE} < :dateStr::date
+      OR (
+        ${SQL_NOW_JAKARTA_DATE} = :dateStr::date
+        AND ${SQL_NOW_JAKARTA_TIME} < TIME '12:00'
+      )
+    )
+  )
+)`;
+
 const HOTEL_AVAILABILITY_MODES = ['global', 'per_season'];
 const ROOM_TYPES_LIST = ['single', 'double', 'triple', 'quad', 'quint'];
 
@@ -116,8 +158,7 @@ async function getBookedForDateRaw(seq, productId, roomType, dateStr) {
     WHERE oi.type = 'hotel'
       AND oi.product_ref_id = :productId
       AND oi.meta->>'room_type' = :roomType
-      AND (oi.meta->>'check_in')::date <= :dateStr::date
-      AND (oi.meta->>'check_out')::date > :dateStr::date
+      AND ${SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE}
   `, {
     replacements: { productId, roomType, dateStr }
   });
@@ -143,8 +184,7 @@ async function getBookingsForDate(productId, dateStr) {
     INNER JOIN users u ON u.id = o.owner_id
     WHERE oi.type = 'hotel'
       AND oi.product_ref_id = :productId
-      AND (oi.meta->>'check_in')::date <= :dateStr::date
-      AND (oi.meta->>'check_out')::date > :dateStr::date
+      AND ${SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE}
     GROUP BY o.id, o.owner_id, u.name, oi.meta->>'room_type'
   `, {
     replacements: { productId, dateStr }
@@ -314,8 +354,7 @@ async function checkAvailability(productId, roomType, checkInStr, checkOutStr, q
         FROM order_items oi
         WHERE oi.order_id = :excludeOrderId AND oi.type = 'hotel'
           AND oi.product_ref_id = :productId AND oi.meta->>'room_type' = :roomType
-          AND (oi.meta->>'check_in')::date <= :dateStr::date
-          AND (oi.meta->>'check_out')::date > :dateStr::date
+          AND ${SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE}
       `, { replacements: { excludeOrderId, productId, roomType, dateStr } });
       const sub = (exRows && exRows[0]) ? exRows[0].q : 0;
       booked -= sub;
