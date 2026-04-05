@@ -31,7 +31,7 @@ export { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLab
 export type { PaymentProofCellProps, PaymentProofItem, BalanceAllocationItem } from './PaymentProofCell';
 export { InvoiceRefundDocument } from './InvoiceRefundDocument';
 export type { InvoiceRefundDocumentInv, InvoiceRefundDocumentPreview, InvoiceRefundDocumentProps } from './InvoiceRefundDocument';
-export { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from './InvoiceStatusRefundCell';
+export { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, shouldHideInvoiceCancelAction } from './InvoiceStatusRefundCell';
 export type { InvoiceForStatusRefund, ReallocationItem } from './InvoiceStatusRefundCell';
 export { default as ProgressDateFilterSection, getProgressDateRange } from './ProgressDateFilterSection';
 export type { ProgressDateFilterSectionProps } from './ProgressDateFilterSection';

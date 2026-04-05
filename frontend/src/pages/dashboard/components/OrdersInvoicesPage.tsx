@@ -9,7 +9,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { DashboardFilterBar, PageFilter, ActionsMenu, AutoRefreshControl, PageHeader, FilterIconButton, StatCard, CardSectionHeader, Input, Textarea, Autocomplete, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
-import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
+import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, shouldHideInvoiceCancelAction } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLabel } from '../../../components/common/PaymentProofCell';
 import InvoiceProgressStatusCell, { PROGRESS_LABELS, ROOM_TYPE_LABELS, PROGRESS_LABELS_MEAL } from '../../../components/common/InvoiceProgressStatusCell';
@@ -486,6 +486,10 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const openCancelModal = (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
+    if (shouldHideInvoiceCancelAction(inv)) {
+      showToast('Invoice ini sudah dibatalkan atau tidak dapat dibatalkan lagi.', 'error');
+      return;
+    }
     if (isOwnerRoleUser && !isInvoiceTeamUser && !canOwnerCancelInvoiceInUi(inv)) {
       if (isOwnerCancelBlockedByUpcomingService(inv)) {
         showToast('Pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Hubungi tim invoice.', 'error');
@@ -582,6 +586,10 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const handleDeleteOrder = async (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
+    if (shouldHideInvoiceCancelAction(inv)) {
+      showToast('Invoice ini sudah dibatalkan atau tidak dapat dibatalkan lagi.', 'error');
+      return;
+    }
     if (isOwnerRoleUser && !isInvoiceTeamUser && !canOwnerCancelInvoiceInUi(inv)) {
       if (isOwnerCancelBlockedByUpcomingService(inv)) {
         showToast('Pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Hubungi tim invoice.', 'error');
@@ -617,6 +625,11 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const submitCancelModal = async () => {
     if (!cancelTargetInv?.order_id) return;
+    if (shouldHideInvoiceCancelAction(cancelTargetInv)) {
+      showToast('Invoice ini sudah dibatalkan atau tidak dapat dibatalkan lagi.', 'error');
+      setShowCancelModal(false);
+      return;
+    }
     if (isOwnerRoleUser && !isInvoiceTeamUser && !canOwnerCancelInvoiceInUi(cancelTargetInv)) {
       if (isOwnerCancelBlockedByUpcomingService(cancelTargetInv)) {
         showToast('Pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Hubungi tim invoice.', 'error');
@@ -1902,7 +1915,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 ? [{ id: 'view-refund', label: 'Lihat Invoice Refund', icon: <Receipt className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice_refund'); fetchInvoiceDetail(inv.id); } }]
                                 : []),
                               { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                              ...(canOrderAction && inv.order_id && !['canceled', 'cancelled', 'cancelled_refund'].includes((inv.status || '').toLowerCase()) && (isInvoiceTeamUser || !isOwnerRoleUser || canOwnerCancelInvoiceInUi(inv))
+                              ...(canOrderAction && inv.order_id && !shouldHideInvoiceCancelAction(inv) && (isInvoiceTeamUser || !isOwnerRoleUser || canOwnerCancelInvoiceInUi(inv))
                                 ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
                                 : []),
                             ].filter(Boolean) as ActionsMenuItem[]}

@@ -89,6 +89,22 @@ export function getEffectiveInvoiceStatusBadgeVariant(inv: InvoiceForStatusRefun
   return getStatusBadge(inv?.status || '');
 }
 
+/**
+ * Sembunyikan / blokir aksi "Batalkan Invoice" bila invoice sudah terminal di DB atau status efektif
+ * menunjukkan pembatalan/refund sudah ditangani (mis. Direfund ke saldo akun meski status masih paid).
+ */
+export function shouldHideInvoiceCancelAction(inv: InvoiceForStatusRefund): boolean {
+  const st = (inv?.status || '').toLowerCase();
+  if (['canceled', 'cancelled', 'cancelled_refund', 'refunded'].includes(st)) return true;
+
+  const effective = getEffectiveInvoiceStatusLabel(inv);
+  if (effective === CANCELLATION_TO_BALANCE_LABEL) return true;
+  if (effective === REALLOCATION_OUT_STATUS_LABEL) return true;
+  if (effective === REFUND_STATUS_LABELS.refunded) return true;
+  if (effective === REFUND_IN_PROCESS_LABEL) return true;
+  return false;
+}
+
 const getInvoiceStatusLabel = (inv: InvoiceForStatusRefund): string => {
   const st = (inv?.status || '').toLowerCase();
   if (st === 'cancelled_refund' || st === 'refund_canceled') {
