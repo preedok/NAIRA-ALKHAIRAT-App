@@ -10,6 +10,7 @@ router.use(requireRole(ROLES.ROLE_SISKOPATUH, ROLES.SUPER_ADMIN));
 router.get('/dashboard', siskopatuhController.getDashboard);
 router.get('/invoices', siskopatuhController.listInvoices);
 router.get('/invoices/:id', siskopatuhController.getInvoice);
+router.post('/order-items/:orderItemId/siskopatuh-document', siskopatuhController.uploadSiskopatuhDocument);
 router.patch('/order-items/:orderItemId/progress', siskopatuhController.updateOrderItemProgress);
 
 module.exports = router;

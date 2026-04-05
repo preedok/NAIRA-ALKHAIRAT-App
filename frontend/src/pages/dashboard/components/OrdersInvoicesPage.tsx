@@ -1013,15 +1013,20 @@ const OrdersInvoicesPage: React.FC = () => {
   };
 
   /** Unduh dokumen terbit (tiket/visa) via API — file di-stream dari server, mengatasi "file not available" */
-  const downloadIssuedDoc = async (invoiceId: string, orderItemId: string, type: 'ticket' | 'visa') => {
+  const downloadIssuedDoc = async (invoiceId: string, orderItemId: string, type: 'ticket' | 'visa' | 'siskopatuh') => {
     try {
-      const res = type === 'ticket'
-        ? await invoicesApi.getTicketFile(invoiceId, orderItemId)
-        : await invoicesApi.getVisaFile(invoiceId, orderItemId);
+      const res =
+        type === 'ticket'
+          ? await invoicesApi.getTicketFile(invoiceId, orderItemId)
+          : type === 'visa'
+            ? await invoicesApi.getVisaFile(invoiceId, orderItemId)
+            : await invoicesApi.getSiskopatuhFile(invoiceId, orderItemId);
       const blob = res.data as Blob;
       const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
       const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
-      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `dokumen-terbit-${type}-${orderItemId.slice(-6)}`;
+      const name =
+        (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) ||
+        `dokumen-terbit-${type}-${orderItemId.slice(-6)}`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -3303,12 +3308,12 @@ const OrdersInvoicesPage: React.FC = () => {
 
               {detailTab === 'progress' && (
                 <div className="space-y-6">
-                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus). Diupdate oleh divisi Visa, Tiket, Hotel, dan Bus.</p>
+                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus, siskopatuh). Diupdate oleh divisi terkait.</p>
                   {(() => {
                     const order = viewInvoice?.Order;
                     const items = (order?.OrderItems || []).filter((i: any) => {
                       const t = (i.type || i.product_type);
-                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus';
+                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus' || t === 'siskopatuh';
                     });
                     const hasVisaItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'visa');
                     const hasBusItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'bus');
@@ -3320,7 +3325,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
                             <ClipboardList className="w-12 h-12 text-slate-400" />
                           </div>
-                          <p className="text-slate-700 font-semibold">Tidak ada item visa / tiket / hotel / bus</p>
+                          <p className="text-slate-700 font-semibold">Tidak ada item visa / tiket / hotel / bus / siskopatuh</p>
                           <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Invoice ini tidak memiliki item dengan status pekerjaan.</p>
                         </div>
                       );
@@ -3333,7 +3338,10 @@ const OrdersInvoicesPage: React.FC = () => {
                       const pid = String(item.product_ref_id || item.product_id || '');
                       const key = `${t}-${pid || item.id}`;
                       if (!groupsMap.has(key)) {
-                        const productLabel = item.Product?.name || (item as any).product_name || (t === 'visa' ? 'Visa' : t === 'ticket' ? 'Tiket' : t === 'hotel' ? 'Hotel' : 'Bus');
+                        const productLabel =
+                          item.Product?.name ||
+                          (item as any).product_name ||
+                          (t === 'visa' ? 'Visa' : t === 'ticket' ? 'Tiket' : t === 'hotel' ? 'Hotel' : t === 'siskopatuh' ? 'Siskopatuh' : 'Bus');
                         groupsMap.set(key, { key, productLabel, type: t, items: [] });
                       }
                       groupsMap.get(key)!.items.push(item);
@@ -3388,13 +3396,61 @@ const OrdersInvoicesPage: React.FC = () => {
                           const isTicket = group.type === 'ticket';
                           const isHotel = group.type === 'hotel';
                           const isBus = group.type === 'bus';
-                          const progress = isVisa ? first.VisaProgress : isTicket ? first.TicketProgress : first.HotelProgress;
+                          const isSiskopatuh = group.type === 'siskopatuh';
+                          const SISKOPATUH_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', in_progress: 'Dalam Proses', completed: 'Selesai' };
+                          const skRaw =
+                            isSiskopatuh && first.meta && typeof first.meta === 'object'
+                              ? String((first.meta as { siskopatuh_status?: string }).siskopatuh_status || 'pending')
+                              : '';
+                          const progress = isVisa ? first.VisaProgress : isTicket ? first.TicketProgress : isHotel ? first.HotelProgress : isBus ? first.BusProgress : null;
                           const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
-                          const status = isBus ? (progress?.bus_ticket_status ? (BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status) : 'Pending') : (progress?.status ? (statusLabels[progress.status] || progress.status) : (isHotel ? 'Menunggu konfirmasi' : 'Menunggu data'));
+                          const status = isSiskopatuh
+                            ? SISKOPATUH_STATUS_LABELS[skRaw] || skRaw
+                            : isBus
+                              ? progress?.bus_ticket_status
+                                ? BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status
+                                : 'Pending'
+                              : progress?.status
+                                ? statusLabels[progress.status] || progress.status
+                                : isHotel
+                                  ? 'Menunggu konfirmasi'
+                                  : 'Menunggu data';
                           const hasJamaah = itemWithJamaah.jamaah_data_type && itemWithJamaah.jamaah_data_value;
-                          const badgeVariant = isBus ? (progress?.bus_ticket_status === 'issued' ? 'success' : 'info') : ((isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed') ? 'success' : 'info');
-                          const typeIcon = isVisa ? <FileText className="w-4 h-4" /> : isTicket ? <Plane className="w-4 h-4" /> : isHotel ? <Package className="w-4 h-4" /> : <CreditCard className="w-4 h-4" />;
-                          const typeBg = isVisa ? 'bg-sky-100 text-sky-600' : isTicket ? 'bg-[#0D1A63]/10 text-[#0D1A63]' : isHotel ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600';
+                          const badgeVariant = isSiskopatuh
+                            ? skRaw === 'completed'
+                              ? 'success'
+                              : 'info'
+                            : isBus
+                              ? progress?.bus_ticket_status === 'issued'
+                                ? 'success'
+                                : 'info'
+                              : (isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed')
+                                ? 'success'
+                                : 'info';
+                          const typeIcon = isSiskopatuh ? (
+                            <FileText className="w-4 h-4" />
+                          ) : isVisa ? (
+                            <FileText className="w-4 h-4" />
+                          ) : isTicket ? (
+                            <Plane className="w-4 h-4" />
+                          ) : isHotel ? (
+                            <Package className="w-4 h-4" />
+                          ) : (
+                            <CreditCard className="w-4 h-4" />
+                          );
+                          const typeBg = isSiskopatuh
+                            ? 'bg-violet-100 text-violet-600'
+                            : isVisa
+                              ? 'bg-sky-100 text-sky-600'
+                              : isTicket
+                                ? 'bg-[#0D1A63]/10 text-[#0D1A63]'
+                                : isHotel
+                                  ? 'bg-amber-100 text-amber-600'
+                                  : 'bg-slate-100 text-slate-600';
+                          const siskopatuhFileUrl =
+                            isSiskopatuh && first.meta && typeof first.meta === 'object'
+                              ? String((first.meta as { siskopatuh_file_url?: string }).siskopatuh_file_url || '').trim()
+                              : '';
                           return (
                             <div key={group.key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                               <div className="flex items-start gap-4 p-4">
@@ -3434,14 +3490,25 @@ const OrdersInvoicesPage: React.FC = () => {
                                         <Download className="w-3.5 h-3.5" /> Manifest
                                       </button>
                                     )}
-                                    {!isHotel && !isBus && (progress?.visa_file_url || progress?.ticket_file_url) && viewInvoice?.id && first?.id && (
+                                    {!isHotel && !isBus && !isSiskopatuh && (progress?.visa_file_url || progress?.ticket_file_url) && viewInvoice?.id && first?.id && (
                                       <button type="button" onClick={() => downloadIssuedDoc(viewInvoice.id, first.id, isVisa ? 'visa' : 'ticket')} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0">
                                         <Download className="w-3.5 h-3.5" /> Dokumen terbit
+                                      </button>
+                                    )}
+                                    {isSiskopatuh && siskopatuhFileUrl && viewInvoice?.id && first?.id && (
+                                      <button type="button" onClick={() => downloadIssuedDoc(viewInvoice.id, first.id, 'siskopatuh')} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0">
+                                        <Download className="w-3.5 h-3.5" /> Dokumen Siskopatuh
                                       </button>
                                     )}
                                   </div>
                                   {progress?.issued_at && (
                                     <p className="text-xs text-slate-500">Terbit: {new Date(progress.issued_at).toLocaleString('id-ID')}</p>
+                                  )}
+                                  {isSiskopatuh && first.meta && typeof first.meta === 'object' && (first.meta as { siskopatuh_file_uploaded_at?: string }).siskopatuh_file_uploaded_at && (
+                                    <p className="text-xs text-slate-500">
+                                      Dokumen diunggah:{' '}
+                                      {new Date((first.meta as { siskopatuh_file_uploaded_at: string }).siskopatuh_file_uploaded_at).toLocaleString('id-ID')}
+                                    </p>
                                   )}
                                 </div>
                               </div>

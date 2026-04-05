@@ -429,7 +429,11 @@ export const siskopatuhApi = {
     api.get<{ success: boolean; data: unknown[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/siskopatuh/invoices', { params }),
   getInvoice: (id: string) => api.get<{ success: boolean; data: unknown }>(`/siskopatuh/invoices/${id}`),
   updateOrderItemProgress: (orderItemId: string, body: { siskopatuh_status: 'pending' | 'in_progress' | 'completed' }) =>
-    api.patch(`/siskopatuh/order-items/${orderItemId}/progress`, body)
+    api.patch(`/siskopatuh/order-items/${orderItemId}/progress`, body),
+  uploadSiskopatuhDocument: (orderItemId: string, formData: FormData) =>
+    api.post(`/siskopatuh/order-items/${orderItemId}/siskopatuh-document`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
 };
 
 // Minimal types for ticket dashboard (invoice-based)
@@ -561,6 +565,9 @@ export const invoicesApi = {
   getTicketFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/ticket-file`, { responseType: 'blob' }),
   /** Unduh dokumen visa terbit via API — file di-stream dari server */
   getVisaFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/visa-file`, { responseType: 'blob' }),
+  /** Unduh dokumen siskopatuh (setelah divisi upload, status selesai) */
+  getSiskopatuhFile: (invoiceId: string, orderItemId: string) =>
+    api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/siskopatuh-file`, { responseType: 'blob' }),
   /** Unduh file manifest jamaah via API (sama seperti invoice/visa/tiket) */
   getManifestFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/manifest-file`, { responseType: 'blob' }),
   allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body),

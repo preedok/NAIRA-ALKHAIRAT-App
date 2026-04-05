@@ -2101,6 +2101,47 @@ const getVisaFile = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/invoices/:id/order-items/:orderItemId/siskopatuh-file
+ * Unduh dokumen siskopatuh (upload divisi setelah status selesai) — path di OrderItem.meta.siskopatuh_file_url
+ */
+const getSiskopatuhFile = asyncHandler(async (req, res) => {
+  let access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok && req.user.role === ROLES.ROLE_SISKOPATUH) {
+    const inv = await Invoice.findByPk(req.params.id, { attributes: ['id', 'owner_id', 'branch_id', 'order_id'] });
+    if (inv?.branch_id) {
+      const rows = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+      const ids = rows.map((r) => r.id);
+      if (ids.includes(inv.branch_id)) {
+        access = { ok: true, invoice: inv };
+      }
+    }
+  }
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const invoice = access.invoice;
+  const orderItem = await OrderItem.findOne({
+    where: { id: req.params.orderItemId, order_id: invoice.order_id, type: ORDER_ITEM_TYPE.SISKOPATUH },
+    attributes: ['id', 'meta']
+  });
+  if (!orderItem) {
+    return res.status(404).json({ success: false, message: 'Item siskopatuh tidak ditemukan' });
+  }
+  const meta = orderItem.meta && typeof orderItem.meta === 'object' ? orderItem.meta : {};
+  const fileUrl = (meta.siskopatuh_file_url || '').trim();
+  if (!fileUrl) {
+    return res.status(404).json({ success: false, message: 'Dokumen siskopatuh belum diupload' });
+  }
+  const filePath = resolveUploadFilePath(fileUrl);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File tidak tersedia di server' });
+  }
+  const filename = path.basename(filePath);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+/**
  * POST /api/v1/invoices/reallocate-payments
  * Body: { transfers: [ { source_invoice_id, target_invoice_id, amount }, ... ], notes? }
  * Pemindahan dana dari invoice sumber (canceled/overpaid) ke invoice penerima. Bisa banyak sumber -> banyak penerima.
@@ -2362,5 +2403,6 @@ module.exports = {
   sendPaymentReceivedNotificationEmail,
   getTicketFile,
   getVisaFile,
+  getSiskopatuhFile,
   getManifestFile
 };

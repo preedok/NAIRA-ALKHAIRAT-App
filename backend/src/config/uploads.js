@@ -18,6 +18,7 @@
  *   - payment-proof: BUKTI_{invoiceNumber}_{tipe}_{nominal}_IDR_YYYYMMDD_HHmmss.{ext}
  *   - visa-doc:      VISA_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
  *   - ticket-doc:    TIKET_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
+ *   - siskopatuh-doc: SISKOPATUH_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
  *   - manifest:      MANIFEST_VISA_ORD-XXXX-XXXXX_YYYYMMDD.{ext} atau MANIFEST_TIKET_...
  */
 
@@ -42,7 +43,8 @@ const SUBDIRS = {
   INVOICES: 'invoices',
   REFUND_PROOFS: 'refund-proofs',
   PURCHASE_PROOFS: 'purchase-proofs',
-  BUS_TICKET_DOCS: 'bus-ticket-docs'
+  BUS_TICKET_DOCS: 'bus-ticket-docs',
+  SISKOPATUH_DOCS: 'siskopatuh-docs'
 };
 
 function getDir(subdir) {
@@ -134,6 +136,15 @@ function ticketDocFilename(orderNumber, orderItemId, originalName) {
   return `TIKET_${ord}_${id6}_${date}_${time}${ext}`;
 }
 
+/** Dokumen siskopatuh selesai (divisi upload): SISKOPATUH_ORD-..._{orderItemId6}_YYYYMMDD_HHmmss.{ext} */
+function siskopatuhDocFilename(orderNumber, orderItemId, originalName) {
+  const { date, time } = dateTimeForFilename();
+  const ord = (orderNumber || 'ORD').replace(/[^a-zA-Z0-9-]/g, '_');
+  const id6 = (orderItemId || '').toString().slice(-6);
+  const ext = safeExt(originalName);
+  return `SISKOPATUH_${ord}_${id6}_${date}_${time}${ext}`;
+}
+
 /**
  * Nama file dokumen info hotel (auto-generate): HOTEL_{invoiceNumber}_{orderItemId6}_YYYYMMDD_HHmmss.pdf
  */
@@ -198,6 +209,7 @@ module.exports = {
   paymentProofFilename,
   visaDocFilename,
   ticketDocFilename,
+  siskopatuhDocFilename,
   hotelDocFilename,
   jamaahDataFilename,
   invoiceFilename,

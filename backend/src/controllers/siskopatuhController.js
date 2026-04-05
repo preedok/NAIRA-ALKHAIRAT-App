@@ -1,5 +1,9 @@
 const asyncHandler = require('express-async-handler');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { Op } = require('sequelize');
+const uploadConfig = require('../config/uploads');
 const {
   Order,
   OrderItem,
@@ -32,6 +36,18 @@ const {
   REFUND_STATUSES_HIDE_FROM_PROGRESS,
   appendProgressExcludeCancelledOrders
 } = require('../utils/progressInvoiceFilters');
+
+const siskopatuhDocsDir = uploadConfig.getDir(uploadConfig.SUBDIRS.SISKOPATUH_DOCS);
+const siskopatuhUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, siskopatuhDocsDir),
+  filename: (req, file, cb) => {
+    const { dateTimeForFilename, safeExt } = uploadConfig;
+    const { date, time } = dateTimeForFilename();
+    const ext = safeExt(file.originalname);
+    cb(null, `SISKOPATUH_${req.params.orderItemId}_${date}_${time}${ext}`);
+  }
+});
+const uploadSiskopatuhFileMulter = multer({ storage: siskopatuhUploadStorage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 const PAYMENT_PROOF_ATTRS = [
   'id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'
@@ -370,9 +386,59 @@ const updateOrderItemProgress = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * POST /api/v1/siskopatuh/order-items/:orderItemId/siskopatuh-document
+ * Upload dokumen siskopatuh (PDF/ZIP/dll.) hanya jika status progress = selesai (completed).
+ */
+const uploadSiskopatuhDocument = [
+  uploadSiskopatuhFileMulter.single('siskopatuh_file'),
+  asyncHandler(async (req, res) => {
+    const { orderItemId } = req.params;
+    const item = await OrderItem.findByPk(orderItemId, {
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'branch_id', 'order_number'] }]
+    });
+    if (!item || item.type !== ORDER_ITEM_TYPE.SISKOPATUH) {
+      return res.status(404).json({ success: false, message: 'Order item siskopatuh tidak ditemukan' });
+    }
+    const branchIds = await getSiskopatuhBranchIds();
+    if (!branchIds.includes(item.Order.branch_id)) {
+      return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
+    }
+    const metaNow = item.meta && typeof item.meta === 'object' ? item.meta : {};
+    const st = metaNow.siskopatuh_status || SISKOPATUH_PROGRESS_STATUS.PENDING;
+    if (st !== SISKOPATUH_PROGRESS_STATUS.COMPLETED) {
+      return res.status(400).json({
+        success: false,
+        message: 'Upload dokumen siskopatuh hanya setelah status progres "Selesai" (completed).'
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File wajib diupload' });
+    }
+    const orderNumber = item.Order?.order_number || 'ORD';
+    const finalName = uploadConfig.siskopatuhDocFilename(orderNumber, item.id, req.file.originalname);
+    const newPath = path.join(siskopatuhDocsDir, finalName);
+    let savedName = req.file.filename;
+    try {
+      fs.renameSync(req.file.path, newPath);
+      savedName = finalName;
+    } catch (e) {
+      /* keep temp name */
+    }
+    const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.SISKOPATUH_DOCS, savedName);
+    const meta = { ...metaNow, siskopatuh_file_url: fileUrl, siskopatuh_file_uploaded_at: new Date().toISOString() };
+    await item.update({ meta });
+    res.json({
+      success: true,
+      data: { order_item_id: item.id, siskopatuh_file_url: fileUrl }
+    });
+  })
+];
+
 module.exports = {
   getDashboard,
   updateOrderItemProgress,
   listInvoices,
-  getInvoice
+  getInvoice,
+  uploadSiskopatuhDocument
 };

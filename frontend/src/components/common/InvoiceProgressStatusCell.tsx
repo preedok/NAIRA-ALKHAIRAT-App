@@ -340,11 +340,13 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
         const st = (item.meta && item.meta.siskopatuh_status) || 'pending';
         const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
+        const hasDoc = !!(item.meta && item.meta.siskopatuh_file_url && String(item.meta.siskopatuh_file_url).trim());
         return (
           <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
             <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
             <span className={st === 'completed' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{stLabel}</span>
             <span className="text-slate-600"> · Qty {qty}</span>
+            {hasDoc ? <div className="text-slate-500 mt-0.5">Dokumen hasil: tersedia (unduh di detail Invoice)</div> : null}
           </div>
         );
       })

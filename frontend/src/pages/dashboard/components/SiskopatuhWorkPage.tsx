@@ -68,6 +68,11 @@ function getSiskopatuhItemStatus(item: any): string {
   return 'pending';
 }
 
+function getSiskopatuhFileUrlFromItem(item: any): string {
+  const m = item?.meta && typeof item.meta === 'object' ? item.meta : {};
+  return String((m as Record<string, unknown>).siskopatuh_file_url ?? '').trim();
+}
+
 const SiskopatuhWorkPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,6 +88,8 @@ const SiskopatuhWorkPage: React.FC = () => {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [downloadingJamaahItemId, setDownloadingJamaahItemId] = useState<string | null>(null);
   const [downloadingManifestItemId, setDownloadingManifestItemId] = useState<string | null>(null);
+  const [uploadingSiskopatuhDocId, setUploadingSiskopatuhDocId] = useState<string | null>(null);
+  const [downloadingSiskopatuhDocId, setDownloadingSiskopatuhDocId] = useState<string | null>(null);
   const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
   const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
@@ -239,6 +246,52 @@ const SiskopatuhWorkPage: React.FC = () => {
       showToast(e.response?.data?.message || 'Gagal unduh manifest', 'error');
     } finally {
       setDownloadingManifestItemId(null);
+    }
+  };
+
+  const downloadSiskopatuhDocument = async (invoiceId: string, orderItemId: string) => {
+    setDownloadingSiskopatuhDocId(orderItemId);
+    try {
+      const res = await invoicesApi.getSiskopatuhFile(invoiceId, orderItemId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name =
+        (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) ||
+        `siskopatuh-${orderItemId.slice(-6)}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Dokumen siskopatuh berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh dokumen', 'error');
+    } finally {
+      setDownloadingSiskopatuhDocId(null);
+    }
+  };
+
+  const handleUploadSiskopatuhDocument = async (orderItemId: string, file: File) => {
+    if (!file) return;
+    setUploadingSiskopatuhDocId(orderItemId);
+    try {
+      const fd = new FormData();
+      fd.append('siskopatuh_file', file);
+      await siskopatuhApi.uploadSiskopatuhDocument(orderItemId, fd);
+      showToast('Dokumen siskopatuh berhasil diupload. Owner dapat mengunduh dari menu Invoice.', 'success');
+      if (detailInvoice?.id) {
+        const res = await siskopatuhApi.getInvoice(detailInvoice.id);
+        if (res.data.success) setDetailInvoice(res.data.data);
+      }
+      refetchAll();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal upload dokumen', 'error');
+    } finally {
+      setUploadingSiskopatuhDocId(null);
     }
   };
 
@@ -594,6 +647,48 @@ const SiskopatuhWorkPage: React.FC = () => {
                           ))}
                         </select>
                       </div>
+
+                      {getSiskopatuhItemStatus(item) === 'completed' && (
+                        <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
+                          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
+                            <Download className="w-3.5 h-3.5" /> Dokumen hasil Siskopatuh (unduh owner)
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Setelah status <strong>Selesai</strong> disimpan (Proses), unggah file hasil. Owner mengunduh dari menu Invoice → tab Progress → <strong>Dokumen Siskopatuh</strong>.
+                          </p>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+                            <input
+                              type="file"
+                              accept=".pdf,.zip,.xlsx,.xls,.doc,.docx,image/*"
+                              className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-800 hover:file:bg-violet-100 max-w-full"
+                              disabled={uploadingSiskopatuhDocId === item.id}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleUploadSiskopatuhDocument(item.id, f);
+                                e.target.value = '';
+                              }}
+                            />
+                            {getSiskopatuhFileUrlFromItem(item) && detailInvoice?.id && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={downloadingSiskopatuhDocId === item.id}
+                                onClick={() => downloadSiskopatuhDocument(detailInvoice.id, item.id)}
+                                className="inline-flex items-center gap-1.5 shrink-0"
+                              >
+                                {downloadingSiskopatuhDocId === item.id ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                                {downloadingSiskopatuhDocId === item.id ? 'Mengunduh...' : 'Unduh dokumen'}
+                              </Button>
+                            )}
+                          </div>
+                          {uploadingSiskopatuhDocId === item.id && <p className="text-xs text-slate-500">Mengunggah…</p>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
