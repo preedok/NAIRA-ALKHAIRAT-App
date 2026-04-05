@@ -1,6 +1,6 @@
 /**
- * One-off: kosongkan semua data invoice dan order di database.
- * Jalankan di VPS: cd /var/www/bgg-app/backend && node scripts/clear-invoice-order-data.js
+ * @deprecated Gunakan scripts/clear-invoices-database-clean.js (CONFIRM=YES) atau npm run clear:orders-invoices.
+ * Skrip ini tidak menghapus refund/pemindahan dana/notifikasi secara lengkap.
  */
 require('dotenv').config();
 const path = require('path');
