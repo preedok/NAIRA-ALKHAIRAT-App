@@ -11,6 +11,7 @@ router.get('/', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN
 router.get('/stats', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), refundController.getStats);
 router.get('/:id', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.getById);
 router.patch('/:id', requireRole(ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.updateStatus);
+router.post('/:id/sync-balance-debit', requireRole(ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.syncBalanceDebit);
 router.post('/:id/upload-proof', requireRole(ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.uploadProof);
 router.get('/:id/proof/file', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), refundController.getProofFile);
 

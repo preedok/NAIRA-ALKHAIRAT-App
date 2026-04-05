@@ -22,6 +22,13 @@ const STATUS_LABELS: Record<string, string> = { requested: 'Menunggu', approved:
 const STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'error'> = { requested: 'warning', approved: 'default', rejected: 'error', refunded: 'success' };
 const SOURCE_LABELS: Record<string, string> = { cancel: 'Refund pembatalan order', balance: 'Penarikan saldo' };
 
+function isBalanceWithdrawalRow(r: any): boolean {
+  if (String(r?.source || '').toLowerCase() === 'balance') return true;
+  if (r?.Invoice || r?.Order) return false;
+  const reason = String(r?.reason || '').toLowerCase();
+  return reason.includes('penarikan') && reason.includes('saldo');
+}
+
 const RefundsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -40,6 +47,7 @@ const RefundsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
+  const [syncingBalanceId, setSyncingBalanceId] = useState<string | null>(null);
   const [statModal, setStatModal] = useState<'total' | 'requested' | 'approved' | 'rejected' | 'refunded' | 'amount_pending' | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -178,14 +186,27 @@ const RefundsPage: React.FC = () => {
     fetchRefunds();
   };
 
+  const handleSyncBalanceDebit = (id: string) => {
+    setSyncingBalanceId(id);
+    refundsApi
+      .syncBalanceDebit(id)
+      .then((res) => {
+        showToast(res.data?.message || 'Saldo owner disinkronkan.', 'success');
+        fetchRefunds();
+        fetchStats();
+      })
+      .catch((e: any) => showToast(e.response?.data?.message || 'Gagal sinkron potong saldo', 'error'))
+      .finally(() => setSyncingBalanceId(null));
+  };
+
   return (
     <div className="space-y-6 w-full">
       <PageHeader
         title="Refund"
         subtitle={
           canUpdateStatus
-            ? 'Daftar permintaan refund & penarikan saldo. Setujui / tolak penarikan saldo; upload bukti transfer — saldo owner berkurang saat status Sudah direfund (saat upload bukti atau saat status di-set refunded).'
-            : 'Riwayat refund & penarikan saldo Anda. Ajukan tarik saldo dari Dashboard (Saldo Akun). Setelah diproses, saldo berkurang otomatis; bukti transfer bisa diunduh di sini.'
+            ? 'Penarikan saldo: saldo owner berkurang saat status Disetujui (Admin Pusat/Accounting). Upload bukti menandai Sudah direfund — tidak memotong saldo dua kali. Jika saldo belum turun setelah disetujui, gunakan Potong saldo (sinkron).'
+            : 'Riwayat refund & penarikan saldo Anda. Setelah Admin menyetujui penarikan, saldo berkurang; bukti transfer di menu ini setelah accounting mengunggahnya.'
         }
         right={
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -299,7 +320,7 @@ const RefundsPage: React.FC = () => {
                     renderRow={(r: any) => (
                       <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                         <td className="py-2 px-4 text-sm">
-                          {r.Invoice ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact /> : r.source === 'balance' ? 'Refund saldo' : '–'}
+                          {r.Invoice ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact /> : isBalanceWithdrawalRow(r) ? 'Refund saldo' : '–'}
                         </td>
                         <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
                         <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
@@ -316,9 +337,9 @@ const RefundsPage: React.FC = () => {
                               <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
                                 <Download className="w-3.5 h-3.5" /> Unduh bukti
                               </Button>
-                            ) : r.source === 'balance' && r.status === 'requested' ? (
+                            ) : isBalanceWithdrawalRow(r) && r.status === 'requested' ? (
                               <span className="text-slate-500 text-xs">Menunggu persetujuan</span>
-                            ) : r.source === 'balance' && r.status === 'approved' ? (
+                            ) : isBalanceWithdrawalRow(r) && r.status === 'approved' ? (
                               <span className="text-slate-500 text-xs">Menunggu transfer</span>
                             ) : null}
                           </td>
@@ -338,7 +359,7 @@ const RefundsPage: React.FC = () => {
         <CardSectionHeader
           icon={<Receipt className="w-6 h-6" />}
           title="Daftar Permintaan Refund"
-          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Upload bukti bayar refund untuk menandai selesai; bukti otomatis dikirim ke email pemesan.' : 'Lihat daftar permintaan refund Anda.'}`}
+          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Setujui penarikan saldo memotong saldo owner. Lalu upload bukti transfer; bukti dikirim ke email pemesan.' : 'Lihat daftar permintaan refund Anda.'}`}
           className="mb-4"
         />
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
@@ -369,7 +390,7 @@ const RefundsPage: React.FC = () => {
                   <span className="font-medium">
                     {r.Invoice
                       ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact />
-                      : r.source === 'balance'
+                      : isBalanceWithdrawalRow(r)
                         ? 'Refund saldo'
                         : '–'}
                   </span>
@@ -391,9 +412,9 @@ const RefundsPage: React.FC = () => {
                       <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
                         <Download className="w-3.5 h-3.5" /> Unduh bukti
                       </Button>
-                    ) : r.source === 'balance' && r.status === 'requested' ? (
+                    ) : isBalanceWithdrawalRow(r) && r.status === 'requested' ? (
                       <span className="text-slate-500 text-xs">Menunggu persetujuan</span>
-                    ) : r.source === 'balance' && r.status === 'approved' ? (
+                    ) : isBalanceWithdrawalRow(r) && r.status === 'approved' ? (
                       <span className="text-slate-500 text-xs">Menunggu transfer</span>
                     ) : null}
                   </td>
@@ -429,6 +450,18 @@ const RefundsPage: React.FC = () => {
                           <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'approved')}>Setujui</Button>
                           <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
                         </>
+                      )}
+                      {isBalanceWithdrawalRow(r) && (r.status === 'approved' || r.status === 'refunded') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-800 border-emerald-300"
+                          disabled={syncingBalanceId === r.id}
+                          onClick={() => handleSyncBalanceDebit(r.id)}
+                          title="Jika saldo owner belum berkurang setelah disetujui, klik untuk memotong sekali (aman berulang)"
+                        >
+                          {syncingBalanceId === r.id ? 'Sinkron…' : 'Potong saldo (sinkron)'}
+                        </Button>
                       )}
                     </div>
                   </td>
