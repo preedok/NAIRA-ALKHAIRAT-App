@@ -1,190 +1,634 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FileText, Eye, ChevronRight, Loader2, Clock, CheckCircle } from 'lucide-react';
-import PageHeader from '../../../components/common/PageHeader';
+import {
+  RefreshCw,
+  ClipboardList,
+  FileText,
+  Clock,
+  CheckCircle,
+  Search,
+  Play,
+  Download,
+  User,
+  MapPin,
+  Loader
+} from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
-import ContentLoading from '../../../components/common/ContentLoading';
+import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
+import Table from '../../../components/common/Table';
+import type { TableColumn } from '../../../types';
+import { Input, Autocomplete, CardSectionHeader, ContentLoading } from '../../../components/common';
 import { AutoRefreshControl } from '../../../components/common';
-import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
-import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
-import { siskopatuhApi } from '../../../services/api';
-import type { SiskopatuhDashboardData } from '../../../services/api';
-import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import PageHeader from '../../../components/common/PageHeader';
+import { siskopatuhApi, ordersApi, invoicesApi } from '../../../services/api';
+import { useToast } from '../../../contexts/ToastContext';
+import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER, PROGRESS_INVOICE_TABLE_COLUMNS } from '../../../utils/constants';
+import { formatInvoiceNumberDisplay } from '../../../utils';
+import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
+import { DivisionStatCardsWithModal, type DivisionStatItem, ProgressInvoiceTableRow } from '../../../components/common';
 import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
-const STATUS_OPTIONS: { value: 'pending' | 'in_progress' | 'completed'; label: string }[] = [
+const formatDate = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '–';
+const formatDateWithTime = (d: string | null | undefined, time: string | null | undefined) => {
+  const dateStr = formatDate(d);
+  if (dateStr === '–') return '–';
+  const t = (time || '').trim();
+  return t ? `${dateStr}, ${t}` : dateStr;
+};
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'pending', label: 'Menunggu' },
   { value: 'in_progress', label: 'Dalam Proses' },
   { value: 'completed', label: 'Selesai' }
 ];
 
+const RECAP_STATUS_LABELS: Record<string, string> = {
+  pending: 'Menunggu',
+  in_progress: 'Dalam Proses',
+  completed: 'Selesai'
+};
+
+const RECAP_STATUS_ICONS: Record<string, React.ReactNode> = {
+  pending: <Clock className="w-5 h-5" />,
+  in_progress: <Loader className="w-5 h-5" />,
+  completed: <CheckCircle className="w-5 h-5" />
+};
+
+const RECAP_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-600',
+  in_progress: 'bg-sky-100 text-sky-600',
+  completed: 'bg-emerald-100 text-emerald-600'
+};
+
+function getSiskopatuhItemStatus(item: any): string {
+  const st = item?.meta && typeof item.meta === 'object' ? item.meta.siskopatuh_status : null;
+  if (st === 'completed' || st === 'in_progress' || st === 'pending') return st;
+  return 'pending';
+}
+
 const SiskopatuhWorkPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const invoiceIdParam = searchParams.get('invoice_id');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const invoiceIdParam = searchParams.get('invoice');
+  const legacyInvoiceId = searchParams.get('invoice_id');
+  const qParam = searchParams.get('q');
+  const { showToast } = useToast();
 
-  const [data, setData] = useState<SiskopatuhDashboardData | null>(null);
+  const [currencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailInvoice, setDetailInvoice] = useState<any | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [downloadingJamaahItemId, setDownloadingJamaahItemId] = useState<string | null>(null);
+  const [downloadingManifestItemId, setDownloadingManifestItemId] = useState<string | null>(null);
   const [filterDateRange, setFilterDateRange] = useState<ProgressDateRangeKey>('');
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const range = getProgressDateRange(filterDateRange);
-      const params = range ? { date_from: range.date_from, date_to: range.date_to } : undefined;
-      const res = await siskopatuhApi.getDashboard(params);
-      if (res.data.success) setData(res.data.data);
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [filterDateRange]);
+  const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string>('');
+  const [filterProgressStatus, setFilterProgressStatus] = useState<string>('');
+  const [filterSearch, setFilterSearch] = useState<string>(() => qParam || '');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
+  const [detailDraft, setDetailDraft] = useState<Record<string, { siskopatuh_status?: string }>>({});
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (legacyInvoiceId && !invoiceIdParam) {
+      setSearchParams({ invoice: legacyInvoiceId }, { replace: true });
+    }
+  }, [legacyInvoiceId, invoiceIdParam, setSearchParams]);
 
-  const handleStatusChange = async (orderItemId: string, siskopatuh_status: 'pending' | 'in_progress' | 'completed') => {
+  const fetchInvoices = useCallback(async () => {
+    try {
+      const params: { status?: string; page?: number; limit?: number } = { page, limit };
+      if (filterInvoiceStatus) params.status = filterInvoiceStatus;
+      const res = await siskopatuhApi.listInvoices(params);
+      if (res.data.success) {
+        setInvoices(res.data.data || []);
+        const pag = (res.data as { pagination?: { total: number; page: number; limit: number; totalPages: number } }).pagination;
+        setPagination(pag || null);
+      }
+    } catch {
+      setInvoices([]);
+      setPagination(null);
+    }
+  }, [filterInvoiceStatus, page, limit]);
+
+  const refetchAll = useCallback(() => {
+    setLoading(true);
+    fetchInvoices().finally(() => setLoading(false));
+  }, [fetchInvoices]);
+
+  useEffect(() => {
+    refetchAll();
+  }, [refetchAll]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterInvoiceStatus]);
+
+  useEffect(() => {
+    if (invoiceIdParam) {
+      siskopatuhApi
+        .getInvoice(invoiceIdParam)
+        .then((res: any) => {
+          if (res.data.success && res.data.data) {
+            setDetailInvoice(res.data.data);
+            const invNum = res.data.data.invoice_number;
+            if (invNum) setFilterSearch(invNum);
+          }
+        })
+        .catch(() => setDetailInvoice(null));
+    } else {
+      setDetailInvoice(null);
+      setDetailDraft({});
+    }
+  }, [invoiceIdParam]);
+
+  useEffect(() => {
+    if (qParam && qParam.trim()) setFilterSearch(qParam.trim());
+  }, [qParam]);
+
+  const siskItems = detailInvoice?.Order?.OrderItems?.filter((i: any) => i.type === 'siskopatuh') || [];
+  useEffect(() => {
+    if (siskItems.length) {
+      const next: Record<string, { siskopatuh_status?: string }> = {};
+      siskItems.forEach((item: any) => {
+        next[item.id] = { siskopatuh_status: getSiskopatuhItemStatus(item) };
+      });
+      setDetailDraft((prev) => ({ ...prev, ...next }));
+    }
+  }, [detailInvoice?.id, siskItems.map((i: any) => i.id).join(',')]);
+
+  const handleProsesItem = (itemId: string) => {
+    const d = detailDraft[itemId];
+    const st = d?.siskopatuh_status;
+    if (!st) return;
+    handleUpdateProgress(itemId, st as 'pending' | 'in_progress' | 'completed');
+  };
+
+  const handleProsesSemua = async () => {
+    for (const item of siskItems) {
+      const d = detailDraft[item.id];
+      const st = d?.siskopatuh_status;
+      if (!st) continue;
+      await handleUpdateProgress(item.id, st as 'pending' | 'in_progress' | 'completed');
+    }
+  };
+
+  const handleUpdateProgress = async (orderItemId: string, siskopatuh_status: 'pending' | 'in_progress' | 'completed') => {
     setUpdatingId(orderItemId);
     try {
       await siskopatuhApi.updateOrderItemProgress(orderItemId, { siskopatuh_status });
-      await fetchData();
+      if (detailInvoice?.id) {
+        const res = await siskopatuhApi.getInvoice(detailInvoice.id);
+        if (res.data.success) setDetailInvoice(res.data.data);
+      }
+      refetchAll();
+      showToast('Status siskopatuh disimpan.', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal update status', 'error');
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const pendingList = data?.pending_list ?? [];
-  const byStatus = data?.by_status ?? {};
+  const downloadJamaahFile = async (orderId: string, itemId: string, urlPath?: string) => {
+    setDownloadingJamaahItemId(itemId);
+    try {
+      const res = await ordersApi.getJamaahFile(orderId, itemId);
+      const blob = res.data as Blob;
+      const name =
+        (urlPath && typeof urlPath === 'string' ? urlPath.replace(/^.*\//, '') : null) || `data-jamaah-${itemId.slice(-6)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('File data jamaah berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh file', 'error');
+    } finally {
+      setDownloadingJamaahItemId(null);
+    }
+  };
 
-  const invoiceLikeList = useMemo(() => pendingList.map((row: any) => ({
-    id: row.invoice_id || row.order_item_id || row.order_id,
-    invoice_number: row.invoice_number || '–',
-    total_amount: row.total_amount ?? 0,
-    status: row.status || 'pending',
-    Order: { User: { name: row.owner_name || '–' } }
-  })), [pendingList]);
+  const downloadManifestFile = async (invoiceId: string, orderItemId: string) => {
+    setDownloadingManifestItemId(orderItemId);
+    try {
+      const res = await invoicesApi.getManifestFile(invoiceId, orderItemId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name =
+        (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) ||
+        `manifest-${orderItemId.slice(-6)}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('File manifest berhasil diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh manifest', 'error');
+    } finally {
+      setDownloadingManifestItemId(null);
+    }
+  };
 
-  const divisionStats: DivisionStatItem[] = useMemo(() => [
-    { id: 'total_orders', label: 'Total Order', value: data?.total_orders ?? 0, icon: <FileText className="w-5 h-5" />, iconClassName: 'bg-slate-100 text-slate-600', modalTitle: 'Daftar – Total Order' },
-    { id: 'total_items', label: 'Total Item Siskopatuh', value: data?.total_siskopatuh_items ?? 0, icon: <FileText className="w-5 h-5" />, iconClassName: 'bg-violet-100 text-violet-600', modalTitle: 'Daftar – Total Item Siskopatuh' },
-    { id: 'pending_progress', label: 'Menunggu / Dalam Proses', value: (byStatus.pending ?? 0) + (byStatus.in_progress ?? 0), icon: <Clock className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600', modalTitle: 'Daftar – Menunggu / Dalam Proses' },
-    { id: 'completed', label: 'Selesai', value: byStatus.completed ?? 0, icon: <CheckCircle className="w-5 h-5" />, iconClassName: 'bg-emerald-100 text-emerald-600', modalTitle: 'Daftar – Selesai' }
-  ], [data?.total_orders, data?.total_siskopatuh_items, byStatus]);
+  const dateRange = getProgressDateRange(filterDateRange);
+  const dateFilteredInvoices = useMemo(() => {
+    if (!dateRange) return invoices;
+    const from = dateRange.date_from;
+    const to = dateRange.date_to;
+    return invoices.filter((inv: any) => {
+      const items = (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'siskopatuh');
+      const dates = items
+        .map((it: any) => {
+          const meta = it?.meta && typeof it.meta === 'object' ? it.meta : {};
+          const raw = (meta.travel_date || meta.service_date || meta.departure_date || '').toString();
+          const d = raw.slice(0, 10);
+          return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+        })
+        .filter(Boolean) as string[];
+      const serviceDate = dates.length ? dates.sort()[0] : (inv.issued_at || inv.created_at || '').toString().slice(0, 10);
+      return serviceDate >= from && serviceDate <= to;
+    });
+  }, [invoices, dateRange]);
 
-  const getFilteredForStat = useCallback((statId: string) => {
-    if (statId === 'total_orders' || statId === 'total_items') return invoiceLikeList;
-    if (statId === 'pending_progress') return invoiceLikeList.filter((r: any) => r.status === 'pending' || r.status === 'in_progress');
-    if (statId === 'completed') return invoiceLikeList.filter((r: any) => r.status === 'completed');
-    return invoiceLikeList;
-  }, [invoiceLikeList]);
+  const byStatus = useMemo(() => {
+    const out: Record<string, number> = {};
+    dateFilteredInvoices.forEach((inv: any) => {
+      (inv.Order?.OrderItems || [])
+        .filter((i: any) => i.type === 'siskopatuh')
+        .forEach((i: any) => {
+          const s = getSiskopatuhItemStatus(i);
+          out[s] = (out[s] || 0) + 1;
+        });
+    });
+    return out;
+  }, [dateFilteredInvoices]);
+
+  const totalInvoices = dateFilteredInvoices.length;
+  const totalItems = dateFilteredInvoices.reduce(
+    (sum, inv: any) => sum + (inv.Order?.OrderItems || []).filter((i: any) => i.type === 'siskopatuh').length,
+    0
+  );
+
+  const filteredInvoices = useMemo(() => {
+    let list = dateFilteredInvoices;
+    const q = (filterSearch || '').trim().toLowerCase();
+    if (q) {
+      list = list.filter((inv: any) => {
+        const invNum = (inv.invoice_number || '').toLowerCase();
+        const owner = (inv.User?.name || inv.User?.company_name || inv.Order?.User?.name || '').toLowerCase();
+        const branch = (inv.Branch?.name || inv.Branch?.code || '').toLowerCase();
+        return invNum.includes(q) || owner.includes(q) || branch.includes(q);
+      });
+    }
+    if (filterProgressStatus) {
+      list = list.filter((inv: any) => {
+        const orderItems = inv.Order?.OrderItems || [];
+        return orderItems.some((i: any) => i.type === 'siskopatuh' && getSiskopatuhItemStatus(i) === filterProgressStatus);
+      });
+    }
+    return list;
+  }, [dateFilteredInvoices, filterSearch, filterProgressStatus]);
+
+  const divisionStats = useMemo((): DivisionStatItem[] => {
+    const firstRow: DivisionStatItem[] = [
+      {
+        id: 'total',
+        label: 'Total Invoice',
+        value: totalInvoices,
+        icon: <ClipboardList className="w-5 h-5" />,
+        iconClassName: 'bg-slate-100 text-slate-600',
+        modalTitle: 'Daftar Invoice – Total Invoice'
+      },
+      {
+        id: 'item_siskopatuh',
+        label: 'Item Siskopatuh',
+        value: totalItems,
+        icon: <FileText className="w-5 h-5" />,
+        iconClassName: 'bg-violet-100 text-violet-600',
+        modalTitle: 'Daftar Invoice – Item Siskopatuh'
+      }
+    ];
+    const rest = STATUS_OPTIONS.map((opt) => ({
+      id: opt.value,
+      label: RECAP_STATUS_LABELS[opt.value] || opt.label,
+      value: byStatus[opt.value] ?? 0,
+      icon: RECAP_STATUS_ICONS[opt.value] || <FileText className="w-5 h-5" />,
+      iconClassName: RECAP_STATUS_COLORS[opt.value] || 'bg-slate-100 text-slate-600',
+      modalTitle: `Daftar Invoice – ${RECAP_STATUS_LABELS[opt.value] || opt.value}`
+    }));
+    return [...firstRow, ...rest];
+  }, [totalInvoices, totalItems, byStatus]);
+
+  const getFilteredInvoicesForStat = useCallback(
+    (statId: string) => {
+      if (statId === 'total' || statId === 'item_siskopatuh') return dateFilteredInvoices;
+      return dateFilteredInvoices.filter((inv: any) =>
+        (inv.Order?.OrderItems || [])
+          .filter((i: any) => i.type === 'siskopatuh')
+          .some((i: any) => getSiskopatuhItemStatus(i) === statId)
+      );
+    },
+    [dateFilteredInvoices]
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Progress Siskopatuh"
-        subtitle="Daftar item siskopatuh yang perlu diproses. Ubah status lalu buka invoice untuk detail."
-        right={<AutoRefreshControl onRefresh={fetchData} disabled={loading} size="sm" />}
+        subtitle="Invoice dengan item siskopatuh: filter seperti menu progress lain, ubah status per item, dan akses data jamaah dari modal Detail."
+        right={<AutoRefreshControl onRefresh={refetchAll} disabled={loading} size="sm" />}
       />
 
       <DivisionStatCardsWithModal
         stats={divisionStats}
-        invoices={invoiceLikeList}
-        getFilteredInvoices={getFilteredForStat}
+        invoices={dateFilteredInvoices}
+        getFilteredInvoices={getFilteredInvoicesForStat}
         loading={loading}
-        getStatusLabel={(row: any) => row.status === 'completed' ? 'Selesai' : row.status === 'in_progress' ? 'Dalam Proses' : 'Menunggu'}
-        getStatusBadgeVariant={(row: any) => (row.status === 'completed' ? 'success' : row.status === 'in_progress' ? 'warning' : 'default') as 'default' | 'success' | 'warning' | 'error' | 'info'}
+        perStatusLabel="Per Status Progress"
+        getStatusLabel={getEffectiveInvoiceStatusLabel}
+        getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
       />
 
-      <Card>
-        <div className="mb-4 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
+      <Card className="travel-card overflow-visible">
+        <CardSectionHeader
+          icon={<FileText className="w-6 h-6" />}
+          title="Daftar Invoice Siskopatuh"
+          subtitle={pagination ? `${pagination.total} invoice` : `${filteredInvoices.length} invoice. Filter status invoice & progress siskopatuh.`}
+          className="mb-4"
+        />
+        <div className="mb-6 rounded-xl bg-slate-50/80 border border-slate-200 p-4">
           <p className="text-sm font-semibold text-slate-700 mb-1">Pengaturan Filter</p>
-          <p className="text-xs text-slate-500 mb-3">Filter data menurut tanggal (hari ini, 2/3/4/5 hari, 1/2/3 minggu, 1 bulan kedepan)</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-slate-500 mb-3">
+            Filter menurut tanggal layanan (meta travel/service/berangkat) atau tanggal invoice bila kosong
+          </p>
+          <div className="flex flex-wrap gap-2 mb-4">
             {PROGRESS_DATE_RANGE_OPTIONS.map((opt) => (
-              <button key={opt.value || 'all'} type="button" onClick={() => setFilterDateRange(opt.value)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterDateRange === opt.value ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              <button
+                key={opt.value || 'all'}
+                type="button"
+                onClick={() => setFilterDateRange(opt.value)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  filterDateRange === opt.value ? 'bg-[#0D1A63] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
                 {opt.label}
               </button>
             ))}
           </div>
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
+            <div className="flex-1 min-w-0 sm:min-w-[220px]">
+              <Input
+                label="Cari (Invoice / Order / Owner / Cabang)"
+                type="text"
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                placeholder="No. invoice, owner, cabang..."
+                icon={<Search className="w-4 h-4" />}
+                fullWidth
+              />
+            </div>
+            <div className="w-full sm:w-52 min-w-0">
+              <Autocomplete
+                label="Status Invoice"
+                value={filterInvoiceStatus}
+                onChange={setFilterInvoiceStatus}
+                options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_STATUS }, ...Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))]}
+                emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS}
+              />
+            </div>
+            <div className="w-full sm:w-52 min-w-0">
+              <Autocomplete
+                label="Status Progress"
+                value={filterProgressStatus}
+                onChange={setFilterProgressStatus}
+                options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_PROGRESS }, ...STATUS_OPTIONS]}
+                emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROGRESS}
+              />
+            </div>
+          </div>
         </div>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
           {loading ? (
             <ContentLoading />
-          ) : pendingList.length === 0 ? (
-            <div className="p-12 text-center text-slate-500">
-              <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-              <p className="font-medium">Tidak ada item siskopatuh yang menunggu</p>
-              <p className="text-sm mt-1">Semua item sudah selesai atau belum ada order dengan item siskopatuh.</p>
-            </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/80">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Invoice / Order</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Pemesan</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Produk · Qty</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Status</th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-slate-700">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingList.map((row) => (
-                  <tr key={row.order_item_id} className="border-b border-slate-100 hover:bg-slate-50/50 last:border-b-0">
-                    <td className="py-3 px-4">
-                      <InvoiceNumberCell inv={{ invoice_number: row.invoice_number, status: row.status, Refunds: [] }} statusLabels={INVOICE_STATUS_LABELS} compact />
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">{row.owner_name || '–'}</td>
-                    <td className="py-3 px-4 text-slate-700">
-                      {row.product_name || 'Siskopatuh'} {row.quantity > 1 ? `× ${row.quantity}` : ''}
-                    </td>
-                    <td className="py-3 px-4">
-                      <select
-                        value={row.status}
-                        onChange={(e) => handleStatusChange(row.order_item_id, e.target.value as 'pending' | 'in_progress' | 'completed')}
-                        disabled={updatingId === row.order_item_id}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 disabled:opacity-50"
-                      >
-                        {STATUS_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      {updatingId === row.order_item_id && (
-                        <Loader2 className="inline-block w-4 h-4 ml-2 animate-spin text-slate-400" />
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/dashboard/orders-invoices?tab=invoices&invoice_id=${row.invoice_id}`)}
-                        className="gap-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Lihat Invoice
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table
+              columns={PROGRESS_INVOICE_TABLE_COLUMNS as TableColumn[]}
+              data={filteredInvoices}
+              renderRow={(inv: any) => (
+                <ProgressInvoiceTableRow
+                  key={inv.id}
+                  inv={inv}
+                  currencyRates={currencyRates}
+                  formatDate={formatDate}
+                  formatDateWithTime={formatDateWithTime}
+                  onViewDetail={(i) => setSearchParams({ invoice: i.id })}
+                  getStatusLabel={getEffectiveInvoiceStatusLabel}
+                  getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+                  progressAllowedSections={['siskopatuh']}
+                />
+              )}
+              emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item siskopatuh' : 'Tidak ada hasil untuk filter ini'}
+              emptyDescription={
+                invoices.length === 0 ? 'Buat order & invoice dari menu Invoice terlebih dahulu.' : 'Coba ubah kata kunci atau status progress.'
+              }
+              stickyActionsColumn
+              pagination={
+                pagination
+                  ? {
+                      total: pagination.total,
+                      page: pagination.page,
+                      limit: pagination.limit,
+                      totalPages: pagination.totalPages,
+                      onPageChange: (p) => setPage(p),
+                      onLimitChange: (l) => {
+                        setLimit(l);
+                        setPage(1);
+                      }
+                    }
+                  : undefined
+              }
+            />
           )}
         </div>
       </Card>
 
-      {invoiceIdParam && (
-        <div className="flex justify-center">
-          <Button variant="primary" onClick={() => navigate(`/dashboard/orders-invoices?tab=invoices&invoice_id=${invoiceIdParam}`)}>
-            Buka Invoice
-          </Button>
-        </div>
-      )}
+      <Modal open={!!detailInvoice} onClose={() => setSearchParams({})}>
+        {detailInvoice && (
+          <ModalBoxLg>
+            <ModalHeader
+              title={formatInvoiceNumberDisplay(detailInvoice, INVOICE_STATUS_LABELS, getEffectiveInvoiceStatusLabel(detailInvoice))}
+              subtitle={
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 opacity-90" />
+                    {detailInvoice.User?.name ?? detailInvoice.Order?.User?.name ?? '–'}
+                  </span>
+                  {(detailInvoice.Branch?.name || detailInvoice.Branch?.code) && (
+                    <span className="flex items-center gap-1.5 ml-3">
+                      <MapPin className="w-3.5 h-3.5 opacity-90" />
+                      {detailInvoice.Branch?.name ?? detailInvoice.Branch?.code}
+                    </span>
+                  )}
+                </>
+              }
+              icon={<FileText className="w-5 h-5" />}
+              onClose={() => setSearchParams({})}
+            />
+            <ModalBody className="space-y-5">
+              {siskItems.map((item: any) => {
+                const d = detailDraft[item.id] ?? { siskopatuh_status: getSiskopatuhItemStatus(item) };
+                const status = d.siskopatuh_status ?? getSiskopatuhItemStatus(item);
+                const productName = item.Product?.name || item.product_name || 'Siskopatuh';
+                return (
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 bg-slate-50/80 border-b border-slate-100">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-violet-100 text-violet-600 shrink-0">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">
+                            {productName} · Qty {item.quantity}
+                          </p>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium mt-1 ${
+                              RECAP_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {RECAP_STATUS_ICONS[status]}
+                            {STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status}
+                          </span>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="primary" onClick={() => handleProsesItem(item.id)} disabled={updatingId === item.id}>
+                        {updatingId === item.id ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Menyimpan...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-1.5" /> Proses
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5" /> Data Jamaah
+                        </p>
+                        {item.jamaah_data_type && item.jamaah_data_value ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {item.jamaah_data_type === 'link' ? (
+                              <a
+                                href={item.jamaah_data_value}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5 font-medium"
+                              >
+                                <Download className="w-4 h-4" /> Buka link
+                              </a>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={downloadingJamaahItemId === item.id}
+                                onClick={() => detailInvoice?.Order?.id && downloadJamaahFile(detailInvoice.Order.id, item.id, item.jamaah_data_value)}
+                                className="inline-flex items-center gap-1.5"
+                              >
+                                {downloadingJamaahItemId === item.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                {downloadingJamaahItemId === item.id ? 'Mengunduh...' : 'Unduh file'}
+                              </Button>
+                            )}
+                          </div>
+                        ) : item.manifest_file_url && detailInvoice?.id ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={downloadingManifestItemId === item.id}
+                            onClick={() => downloadManifestFile(detailInvoice.id, item.id)}
+                            className="inline-flex items-center gap-1.5"
+                          >
+                            {downloadingManifestItemId === item.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {downloadingManifestItemId === item.id ? 'Mengunduh...' : 'Unduh manifest'}
+                          </Button>
+                        ) : (
+                          <p className="text-sm text-amber-600 flex items-center gap-2">
+                            <FileText className="w-4 h-4 shrink-0" />
+                            Data jamaah belum diupload (ZIP atau link di form Invoice).
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Status Pekerjaan</label>
+                        <select
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white"
+                          value={status}
+                          onChange={(e) =>
+                            setDetailDraft((prev) => ({
+                              ...prev,
+                              [item.id]: { ...(prev[item.id] ?? {}), siskopatuh_status: e.target.value }
+                            }))
+                          }
+                          disabled={updatingId === item.id}
+                        >
+                          {STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </ModalBody>
+            <ModalFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/dashboard/orders-invoices?tab=invoices&invoice_id=${detailInvoice.id}`)}
+                >
+                  Buka di menu Invoice
+                </Button>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <p className="text-sm text-slate-600 max-w-md">
+                  Perubahan hanya tersimpan setelah klik <strong>Proses</strong> per item atau <strong>Proses semua</strong>.
+                </p>
+                <Button variant="primary" onClick={handleProsesSemua} disabled={!!updatingId || siskItems.length === 0}>
+                  {updatingId ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" /> Proses semua
+                    </>
+                  )}
+                </Button>
+              </div>
+            </ModalFooter>
+          </ModalBoxLg>
+        )}
+      </Modal>
     </div>
   );
 };

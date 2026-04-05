@@ -94,7 +94,7 @@ const SiskopatuhDashboard: React.FC = () => {
                   size="sm"
                   onClick={() => {
                     const params = new URLSearchParams();
-                    if (p.invoice_id) params.set('invoice_id', p.invoice_id);
+                    if (p.invoice_id) params.set('invoice', p.invoice_id);
                     navigate('/dashboard/progress-siskopatuh?' + params.toString());
                   }}
                   className="rounded-lg"

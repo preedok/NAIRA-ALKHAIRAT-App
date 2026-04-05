@@ -8,6 +8,8 @@ router.use(auth);
 router.use(requireRole(ROLES.ROLE_SISKOPATUH, ROLES.SUPER_ADMIN));
 
 router.get('/dashboard', siskopatuhController.getDashboard);
+router.get('/invoices', siskopatuhController.listInvoices);
+router.get('/invoices/:id', siskopatuhController.getInvoice);
 router.patch('/order-items/:orderItemId/progress', siskopatuhController.updateOrderItemProgress);
 
 module.exports = router;

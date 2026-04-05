@@ -425,6 +425,9 @@ export interface SiskopatuhDashboardData {
 export const siskopatuhApi = {
   getDashboard: (params?: { date_from?: string; date_to?: string }) =>
     api.get<{ success: boolean; data: SiskopatuhDashboardData }>('/siskopatuh/dashboard', { params }),
+  listInvoices: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: unknown[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/siskopatuh/invoices', { params }),
+  getInvoice: (id: string) => api.get<{ success: boolean; data: unknown }>(`/siskopatuh/invoices/${id}`),
   updateOrderItemProgress: (orderItemId: string, body: { siskopatuh_status: 'pending' | 'in_progress' | 'completed' }) =>
     api.patch(`/siskopatuh/order-items/${orderItemId}/progress`, body)
 };

@@ -1,13 +1,52 @@
 const asyncHandler = require('express-async-handler');
 const { Op } = require('sequelize');
-const { Order, OrderItem, User, Invoice, Product, Refund } = require('../models');
-const { ORDER_ITEM_TYPE, INVOICE_STATUS, SISKOPATUH_PROGRESS_STATUS } = require('../constants');
+const {
+  Order,
+  OrderItem,
+  User,
+  Invoice,
+  Product,
+  Refund,
+  Branch,
+  Provinsi,
+  Wilayah,
+  PaymentReallocation,
+  PaymentProof,
+  Bank,
+  AccountingBankAccount,
+  OwnerProfile,
+  VisaProgress,
+  TicketProgress,
+  HotelProgress,
+  BusProgress
+} = require('../models');
+const {
+  ORDER_ITEM_TYPE,
+  INVOICE_STATUS,
+  SISKOPATUH_PROGRESS_STATUS,
+  DP_PAYMENT_STATUS
+} = require('../constants');
+const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
+const {
+  PROGRESS_INVOICE_STATUS_BLOCKLIST,
+  REFUND_STATUSES_HIDE_FROM_PROGRESS,
+  appendProgressExcludeCancelledOrders
+} = require('../utils/progressInvoiceFilters');
+
+const PAYMENT_PROOF_ATTRS = [
+  'id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'
+];
 
 const statusWithDpPaidList = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
 
+/** Sama pola bus/tiket: semua cabang aktif (role hanya super_admin & role_siskopatuh di route). */
+async function getSiskopatuhBranchIds() {
+  const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+  return branches.map((b) => b.id);
+}
+
 /**
  * GET /api/v1/siskopatuh/dashboard
- * Rekap pekerjaan role Siskopatuh: item tipe siskopatuh, status di meta.siskopatuh_status.
  */
 const getDashboard = asyncHandler(async (req, res) => {
   const { date_from, date_to } = req.query;
@@ -89,6 +128,215 @@ const getDashboard = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/siskopatuh/invoices
+ * Daftar invoice yang order-nya punya item siskopatuh (sama pola tiket/bus untuk tabel Progress).
+ */
+const listInvoices = asyncHandler(async (req, res) => {
+  const { status, page = 1, limit = 25 } = req.query;
+  const branchIds = await getSiskopatuhBranchIds();
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
+
+  const orderIdsFromSisk = await OrderItem.findAll({
+    where: { type: ORDER_ITEM_TYPE.SISKOPATUH },
+    attributes: ['order_id'],
+    raw: true
+  }).then((rows) => [...new Set(rows.map((r) => r.order_id))]);
+
+  if (orderIdsFromSisk.length === 0) {
+    return res.json({ success: true, data: [], pagination: { total: 0, page: 1, limit: 25, totalPages: 0 } });
+  }
+
+  const ordersWithDpPaid = await Order.findAll({
+    where: { id: orderIdsFromSisk, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
+    attributes: ['id'],
+    raw: true
+  }).then((rows) => rows.map((r) => r.id));
+
+  const statusesForProgress = [INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  const where = { order_id: { [Op.in]: orderIdsFromSisk }, branch_id: { [Op.in]: branchIds } };
+  if (status && statusesForProgress.includes(status)) {
+    where.status = status;
+  } else {
+    where[Op.or] = [
+      { status: { [Op.in]: statusesForProgress } },
+      ...(ordersWithDpPaid.length > 0 ? [{ status: INVOICE_STATUS.TENTATIVE, order_id: { [Op.in]: ordersWithDpPaid } }] : [])
+    ];
+  }
+  const refundExcludedInvoiceIds = await Refund.findAll({
+    where: { status: { [Op.in]: REFUND_STATUSES_HIDE_FROM_PROGRESS } },
+    attributes: ['invoice_id'],
+    raw: true
+  }).then((rows) => [...new Set((rows || []).map((r) => r.invoice_id).filter(Boolean))]);
+  if (refundExcludedInvoiceIds.length > 0) where.id = { [Op.notIn]: refundExcludedInvoiceIds };
+  where[Op.and] = where[Op.and] || [];
+  where[Op.and].push({ status: { [Op.notIn]: PROGRESS_INVOICE_STATUS_BLOCKLIST } });
+  appendProgressExcludeCancelledOrders(where, Op);
+
+  const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
+  const pg = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (pg - 1) * lim;
+
+  const { count, rows: invoices } = await Invoice.findAndCountAll({
+    where,
+    include: [
+      { model: Refund, as: 'Refunds', required: false, attributes: ['id', 'status', 'amount'] },
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
+      { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
+      {
+        model: Order,
+        as: 'Order',
+        attributes: ['id', 'owner_id', 'order_number', 'status', 'total_amount', 'currency', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'currency_rates_override', 'penalty_amount', 'waive_bus_penalty', 'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time', 'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'],
+        include: [
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            where: { type: ORDER_ITEM_TYPE.SISKOPATUH },
+            required: true,
+            attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta', 'jamaah_data_type', 'jamaah_data_value', 'manifest_file_url'],
+            include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }]
+          }
+        ]
+      }
+    ],
+    order: [['created_at', 'DESC']],
+    limit: lim,
+    offset,
+    distinct: true
+  });
+
+  const orderIdsFromInvoices = [...new Set((invoices || []).map((i) => i.order_id).filter(Boolean))];
+  let orderItemsByOrderId = {};
+  if (orderIdsFromInvoices.length > 0) {
+    const allItemTypes = [
+      ORDER_ITEM_TYPE.VISA,
+      ORDER_ITEM_TYPE.TICKET,
+      ORDER_ITEM_TYPE.HOTEL,
+      ORDER_ITEM_TYPE.BUS,
+      ORDER_ITEM_TYPE.HANDLING,
+      ORDER_ITEM_TYPE.PACKAGE,
+      ORDER_ITEM_TYPE.SISKOPATUH
+    ];
+    const fullItems = await OrderItem.findAll({
+      where: { order_id: orderIdsFromInvoices, type: { [Op.in]: allItemTypes } },
+      include: [
+        { model: VisaProgress, as: 'VisaProgress', required: false },
+        { model: TicketProgress, as: 'TicketProgress', required: false },
+        { model: HotelProgress, as: 'HotelProgress', required: false },
+        { model: BusProgress, as: 'BusProgress', required: false },
+        { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type', 'meta'], required: false }
+      ],
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta', 'jamaah_data_type', 'jamaah_data_value', 'manifest_file_url']
+    });
+    fullItems.forEach((it) => {
+      const oid = it.order_id;
+      if (!orderItemsByOrderId[oid]) orderItemsByOrderId[oid] = [];
+      const plain = it.get ? it.get({ plain: true }) : it;
+      plain.product_name = plain.Product && plain.Product.name ? plain.Product.name : null;
+      plain.product_type = plain.type || (plain.Product && plain.Product.type) || null;
+      orderItemsByOrderId[oid].push(plain);
+    });
+  }
+  const invoiceIds = (invoices || []).map((i) => i.id).filter(Boolean);
+  let balByInvId = {};
+  if (invoiceIds.length > 0) {
+    const [reallocOut, reallocIn, balMap] = await Promise.all([
+      PaymentReallocation.findAll({
+        where: { source_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      }),
+      PaymentReallocation.findAll({
+        where: { target_invoice_id: { [Op.in]: invoiceIds } },
+        include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }],
+        order: [['created_at', 'DESC']],
+        raw: false
+      }),
+      balanceAllocationsByInvoiceId(invoiceIds)
+    ]);
+    balByInvId = balMap;
+    const outByInvId = (reallocOut || []).reduce((acc, r) => {
+      const sid = r.source_invoice_id;
+      if (!acc[sid]) acc[sid] = [];
+      acc[sid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, TargetInvoice: r.TargetInvoice ? { id: r.TargetInvoice.id, invoice_number: r.TargetInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    const inByInvId = (reallocIn || []).reduce((acc, r) => {
+      const tid = r.target_invoice_id;
+      if (!acc[tid]) acc[tid] = [];
+      acc[tid].push(r.get ? r.get({ plain: true }) : { amount: r.amount, SourceInvoice: r.SourceInvoice ? { id: r.SourceInvoice.id, invoice_number: r.SourceInvoice.invoice_number } : null });
+      return acc;
+    }, {});
+    for (const inv of invoices) {
+      inv.setDataValue('ReallocationsOut', outByInvId[inv.id] || []);
+      inv.setDataValue('ReallocationsIn', inByInvId[inv.id] || []);
+      inv.setDataValue('BalanceAllocations', balByInvId[inv.id] || []);
+    }
+  }
+
+  const totalPages = Math.ceil((count || 0) / lim) || 1;
+  const data = (invoices || []).map((inv) => {
+    const plain = inv.get ? inv.get({ plain: true }) : inv;
+    if (plain.Order && orderItemsByOrderId[plain.order_id]) plain.Order.OrderItems = orderItemsByOrderId[plain.order_id];
+    return plain;
+  });
+  res.json({ success: true, data, pagination: { total: count || 0, page: pg, limit: lim, totalPages } });
+});
+
+/**
+ * GET /api/v1/siskopatuh/invoices/:id
+ */
+const getInvoice = asyncHandler(async (req, res) => {
+  const branchIds = await getSiskopatuhBranchIds();
+  if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif. Hubungi admin.' });
+
+  const invoice = await Invoice.findByPk(req.params.id, {
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'] },
+      { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
+      { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
+      { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
+      {
+        model: Order,
+        as: 'Order',
+        include: [
+          { model: User, as: 'User', attributes: ['id', 'name', 'company_name'] },
+          { model: Branch, as: 'Branch' },
+          {
+            model: OrderItem,
+            as: 'OrderItems',
+            include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code'], required: false }],
+            attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta', 'jamaah_data_type', 'jamaah_data_value', 'manifest_file_url']
+          }
+        ]
+      }
+    ]
+  });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang Anda' });
+  const allowedStatuses = [INVOICE_STATUS.TENTATIVE, INVOICE_STATUS.PARTIAL_PAID, INVOICE_STATUS.PAID, INVOICE_STATUS.PROCESSING, INVOICE_STATUS.COMPLETED];
+  if (!invoice.status || !allowedStatuses.includes(invoice.status)) {
+    return res.status(403).json({ success: false, message: 'Invoice tidak tersedia untuk divisi siskopatuh.' });
+  }
+  const siskItems = (invoice.Order?.OrderItems || []).filter((i) => i.type === ORDER_ITEM_TYPE.SISKOPATUH);
+  if (siskItems.length === 0) return res.status(404).json({ success: false, message: 'Invoice ini tidak memiliki item siskopatuh' });
+
+  const data = invoice.get ? invoice.get({ plain: true }) : invoice;
+  (data?.Order?.OrderItems || []).forEach((oi) => {
+    if (oi.type === ORDER_ITEM_TYPE.SISKOPATUH && (oi.Product || oi.product)) {
+      const p = oi.Product || oi.product;
+      oi.product_name = p.name || p.code || null;
+    }
+  });
+
+  const balMap = await balanceAllocationsByInvoiceId([invoice.id]);
+  data.BalanceAllocations = balMap[invoice.id] || [];
+
+  res.json({ success: true, data });
+});
+
+/**
  * PATCH /api/v1/siskopatuh/order-items/:orderItemId/progress
  */
 const updateOrderItemProgress = asyncHandler(async (req, res) => {
@@ -101,10 +349,15 @@ const updateOrderItemProgress = asyncHandler(async (req, res) => {
   }
 
   const item = await OrderItem.findOne({
-    where: { id: orderItemId, type: ORDER_ITEM_TYPE.SISKOPATUH }
+    where: { id: orderItemId, type: ORDER_ITEM_TYPE.SISKOPATUH },
+    include: [{ model: Order, as: 'Order', attributes: ['id', 'branch_id'] }]
   });
   if (!item) {
     return res.status(404).json({ success: false, message: 'Order item siskopatuh tidak ditemukan.' });
+  }
+  const branchIds = await getSiskopatuhBranchIds();
+  if (!branchIds.includes(item.Order.branch_id)) {
+    return res.status(403).json({ success: false, message: 'Bukan order cabang Anda' });
   }
 
   const meta = item.meta && typeof item.meta === 'object' ? { ...item.meta } : {};
@@ -119,5 +372,7 @@ const updateOrderItemProgress = asyncHandler(async (req, res) => {
 
 module.exports = {
   getDashboard,
-  updateOrderItemProgress
+  updateOrderItemProgress,
+  listInvoices,
+  getInvoice
 };
