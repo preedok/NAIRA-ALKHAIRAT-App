@@ -859,7 +859,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         y = checkNewPage(doc, y, margin, rowH + 4);
         doc.rect(margin, y - 2, pageWidth, rowH).stroke('#f1f5f9');
         doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
-        doc.text(formatDate(p.transfer_date || p.created_at), px(1), y + 8, { width: pw(1) });
+        // transfer_date = DATEONLY (tanpa jam); tampilkan waktu verifikasi atau waktu upload agar konsisten dengan baris saldo akun
+        doc.text(formatDateTime(p.verified_at || p.created_at), px(1), y + 8, { width: pw(1) });
         doc.text(paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
         doc.text(amountDisplay, px(3), y + 8, { width: pw(3) });
         doc.text(currency || 'IDR', px(4), y + 8, { width: pw(4) });
