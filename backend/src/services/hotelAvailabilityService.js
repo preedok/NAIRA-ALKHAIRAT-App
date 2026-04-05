@@ -244,8 +244,9 @@ function parseOrderItemMeta(raw) {
  */
 async function getBookingsForDate(productId, dateStr) {
   const [rows] = await sequelize.query(`
-    SELECT o.id AS order_id, o.owner_id,
-      u.name AS owner_name,
+    SELECT o.id AS order_id,
+      COALESCE(o.owner_id, inv_one.inv_owner_id) AS owner_id,
+      COALESCE(u.name, u.company_name, o.owner_name_manual, 'Partner') AS owner_name,
       oi.meta->>'room_type' AS room_type,
       COALESCE(oi.quantity, 0)::int AS qty,
       oi.meta AS meta_json,
@@ -255,7 +256,14 @@ async function getBookingsForDate(productId, dateStr) {
       hp.check_out_time AS hp_check_out_time
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id AND o.status != 'cancelled'
-    INNER JOIN users u ON u.id = o.owner_id
+    LEFT JOIN LATERAL (
+      SELECT i.owner_id AS inv_owner_id
+      FROM invoices i
+      WHERE i.order_id = o.id AND i.owner_id IS NOT NULL
+      ORDER BY i.issued_at DESC NULLS LAST, i.created_at DESC
+      LIMIT 1
+    ) inv_one ON true
+    LEFT JOIN users u ON u.id = COALESCE(o.owner_id, inv_one.inv_owner_id)
     LEFT JOIN hotel_progress hp ON hp.order_item_id = oi.id
     WHERE oi.type = 'hotel'
       AND oi.product_ref_id = :productId
@@ -315,7 +323,10 @@ async function getBookingsForDate(productId, dateStr) {
  * Jika availability_mode === 'global', setiap tanggal pakai global_room_inventory (open semua bulan).
  * Jika 'per_season', pakai musim + inventori per musim.
  */
-async function getHotelCalendar(productId, startDateStr, endDateStr) {
+async function getHotelCalendar(productId, startDateStr, endDateStr, options = {}) {
+  const bookingsForUserId = options.bookingsForUserId != null && String(options.bookingsForUserId).trim() !== ''
+    ? String(options.bookingsForUserId)
+    : null;
   const config = await getHotelAvailabilityConfig(productId);
   const byDate = {};
   const roomTypesSeen = new Set();
@@ -345,7 +356,10 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
       const booked = await getBookedForDateRaw(sequelize, productId, rt, dateStr);
       roomTypes[rt] = { total, booked, available: Math.max(0, total - booked) };
     }
-    const bookings = await getBookingsForDate(productId, dateStr);
+    let bookings = await getBookingsForDate(productId, dateStr);
+    if (bookingsForUserId) {
+      bookings = bookings.filter((b) => String(b.owner_id || '') === bookingsForUserId);
+    }
     byDate[dateStr] = {
       seasonId,
       seasonName,

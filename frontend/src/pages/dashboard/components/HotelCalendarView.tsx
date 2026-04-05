@@ -264,7 +264,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                 )}
                 {isOwner && (
                   <span className="text-slate-600">
-                    Sebagai owner: angka kamar mencerminkan semua pemesanan; kartu booking dan popup hanya untuk invoice Anda.
+                    Sebagai owner: kuota kamar adalah agregat semua pemesanan; tombol &quot;Lihat invoice&quot; hanya untuk order Anda.
                   </span>
                 )}
                 {canAddRoomForRole && (
@@ -276,10 +276,12 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
             }
             renderDayContent={({ dateStr, dayIndex, isToday, data: day }) => {
               const rawBookings = day?.bookings ?? [];
+              /** Backend sudah filter booking per owner untuk role owner; filter client tetap jaga-jaga. */
               const dayBookings =
                 isOwner && user?.id
-                  ? rawBookings.filter((b) => String(b.owner_id) === String(user.id))
+                  ? rawBookings.filter((b) => String(b.owner_id || '') === String(user.id))
                   : rawBookings;
+              const staffOrderCount = new Set(rawBookings.map((b) => b.order_id)).size;
               const full = dateStr && isDateFull(dateStr);
               const roomEntries = day && !day._noSeason && day.roomTypes ? Object.entries(day.roomTypes) : [];
               const totalAvailable = roomEntries.reduce((s, [, r]) => s + (r?.available ?? 0), 0);
@@ -371,7 +373,13 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                       className="mt-1.5 text-[10px] font-semibold flex items-center gap-1.5 rounded-lg py-1 px-1.5 w-full justify-center transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                     >
                       <Users className="w-3.5 h-3.5" />
-                      {isOwner ? (dayBookings.length === 1 ? 'Invoice saya' : `${dayBookings.length} invoice saya`) : `${rawBookings.length} owner`}
+                      {isOwner
+                        ? dayBookings.length === 1
+                          ? 'Lihat invoice saya'
+                          : `Lihat ${dayBookings.length} invoice saya`
+                        : staffOrderCount === 1
+                          ? 'Lihat 1 invoice'
+                          : `Lihat ${staffOrderCount} invoice`}
                     </button>
                   ) : null}
                 </>

@@ -6,7 +6,7 @@ const { calculateStayCostByNights, MEAL_ROOM_TYPE, COMPONENT_MEAL, COMPONENT_ROO
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
 const { getTicketCalendar } = require('../services/ticketAvailabilityService');
 const { getBusCalendar } = require('../services/busAvailabilityService');
-const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES, BUS_ROUTE_TYPES, BUS_TRIP_TYPES } = require('../constants');
+const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES, BUS_ROUTE_TYPES, BUS_TRIP_TYPES, isOwnerRole } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const sequelize = require('../config/sequelize');
@@ -1154,7 +1154,8 @@ const getHotelCalendarHandler = asyncHandler(async (req, res) => {
   if (product.type !== 'hotel') return res.status(400).json({ success: false, message: 'Bukan product hotel' });
   const from = req.query.from || new Date().toISOString().slice(0, 10);
   const to = req.query.to || from;
-  const data = await getHotelCalendar(product.id, from, to);
+  const bookingsForUserId = isOwnerRole(req.user.role) && req.user.id ? req.user.id : null;
+  const data = await getHotelCalendar(product.id, from, to, { bookingsForUserId });
   res.json({ success: true, data: { ...data, productName: product.name } });
 });
 
