@@ -324,6 +324,11 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                   <span className="w-2 h-2 rounded-full bg-rose-400" /> Penuh
                 </span>
                 <span>Tipe: Single, Double, Triple, Quad, Quint · Angka = dipesan/total</span>
+                {calendarAvailabilityMode === 'per_season' && (
+                  <span className="text-slate-500">
+                    * Tanggal di luar rentang musim: kuota mengikuti musim terdekat (nama musim bertanda *).
+                  </span>
+                )}
                 {canAddRoomForRole && (
                   <span className="flex items-center gap-1.5 text-amber-700 font-medium">
                     <Plus className="w-3.5 h-3.5" /> Klik + pada tanggal kuning/merah untuk tambah kamar. Owner hanya lihat ketersediaan.

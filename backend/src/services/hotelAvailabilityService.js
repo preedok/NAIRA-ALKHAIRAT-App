@@ -3,18 +3,18 @@ const sequelize = require('../config/sequelize');
 const { HotelSeason, HotelRoomInventory, ProductAvailability } = require('../models');
 
 /**
- * Ekspresi SQL: tanggal menginap dari meta.check_in / check_out.
- * Pakai 10 karakter pertama YYYY-MM-DD bila ada (sama seperti frontend .slice(0,10)), lalu COALESCE ke ::date penuh.
- * Menghindari geser satu hari saat nilai disimpan sebagai timestamp ISO: di PG, teks "…T…Z" di-cast ke date
- * memakai TimeZone sesi (mis. Asia/Jakarta) sehingga malam 8 Apr UTC+0 bisa jadi "9 Apr" lokal — kalender jadi kosong di tanggal 8.
+ * Tanggal in/out per baris order_item: sama seperti menu Invoice (HotelProgress dulu, lalu meta).
+ * Menghindari geser hari bila meta berisi timestamp ISO vs DATEONLY di progress.
  */
-const SQL_META_CHECK_IN_DATE = `COALESCE(
-  (substring(oi.meta->>'check_in' from '^[0-9]{4}-[0-9]{2}-[0-9]{2}'))::date,
-  (oi.meta->>'check_in')::date
+const SQL_ITEM_CHECK_IN_DATE = `COALESCE(
+  hp.check_in_date,
+  (NULLIF(substring(oi.meta->>'check_in' from '^[0-9]{4}-[0-9]{2}-[0-9]{2}'), ''))::date,
+  (NULLIF(btrim(oi.meta->>'check_in'), ''))::date
 )`;
-const SQL_META_CHECK_OUT_DATE = `COALESCE(
-  (substring(oi.meta->>'check_out' from '^[0-9]{4}-[0-9]{2}-[0-9]{2}'))::date,
-  (oi.meta->>'check_out')::date
+const SQL_ITEM_CHECK_OUT_DATE = `COALESCE(
+  hp.check_out_date,
+  (NULLIF(substring(oi.meta->>'check_out' from '^[0-9]{4}-[0-9]{2}-[0-9]{2}'), ''))::date,
+  (NULLIF(btrim(oi.meta->>'check_out'), ''))::date
 )`;
 
 /** Waktu “sekarang” kalender di WIB (satu sumber untuk batas checkout). */
@@ -29,11 +29,11 @@ const SQL_NOW_JAKARTA_TIME = `(now() AT TIME ZONE 'Asia/Jakarta')::time`;
  */
 const SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE = `(
   (
-    ${SQL_META_CHECK_IN_DATE} <= :dateStr::date
-    AND ${SQL_META_CHECK_OUT_DATE} > :dateStr::date
+    ${SQL_ITEM_CHECK_IN_DATE} <= :dateStr::date
+    AND ${SQL_ITEM_CHECK_OUT_DATE} > :dateStr::date
   )
   OR (
-    ${SQL_META_CHECK_OUT_DATE} = :dateStr::date
+    ${SQL_ITEM_CHECK_OUT_DATE} = :dateStr::date
     AND (
       ${SQL_NOW_JAKARTA_DATE} < :dateStr::date
       OR (
@@ -132,6 +132,27 @@ async function getSeasonForDate(productId, dateStr) {
 }
 
 /**
+ * Musim untuk sel kalender: jika tanggal di luar semua musim (mis. 1 Apr sebelum musim mulai 2 Apr),
+ * pakai musim terdekat agar baris tipe kamar tetap tampil (kuota sama seperti musim acuan).
+ */
+async function getSeasonForCalendarDay(productId, dateStr) {
+  const direct = await getSeasonForDate(productId, dateStr);
+  if (direct) return { season: direct, carried: false };
+  const all = await HotelSeason.findAll({
+    where: { product_id: productId },
+    order: [['start_date', 'ASC']]
+  });
+  if (!all.length) return { season: null, carried: false };
+  if (compareYmd(dateStr, all[0].start_date) < 0) return { season: all[0], carried: true };
+  const last = all[all.length - 1];
+  if (compareYmd(dateStr, last.end_date) > 0) return { season: last, carried: true };
+  for (const s of all) {
+    if (compareYmd(dateStr, s.start_date) < 0) return { season: s, carried: true };
+  }
+  return { season: last, carried: true };
+}
+
+/**
  * Ambil inventori kamar per room_type untuk suatu musim.
  * Returns { single: 10, double: 5, ... }
  */
@@ -155,6 +176,7 @@ async function getBookedForDateRaw(seq, productId, roomType, dateStr) {
     SELECT COALESCE(SUM(oi.quantity), 0)::int AS booked
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id AND o.status != 'cancelled'
+    LEFT JOIN hotel_progress hp ON hp.order_item_id = oi.id
     WHERE oi.type = 'hotel'
       AND oi.product_ref_id = :productId
       AND oi.meta->>'room_type' = :roomType
@@ -175,6 +197,18 @@ function ymdFromMetaDate(val) {
   if (val == null || val === '') return null;
   const m = String(val).trim().match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : null;
+}
+
+/** Nilai DATE / string dari PG / Sequelize → YYYY-MM-DD (pakai UTC untuk objek Date). */
+function ymdFromDbDate(val) {
+  if (val == null || val === '') return null;
+  if (val instanceof Date) {
+    const y = val.getUTCFullYear();
+    const mo = String(val.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(val.getUTCDate()).padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  }
+  return ymdFromMetaDate(String(val));
 }
 
 function normalizeHotelTime(t, fallback) {
@@ -214,10 +248,15 @@ async function getBookingsForDate(productId, dateStr) {
       u.name AS owner_name,
       oi.meta->>'room_type' AS room_type,
       COALESCE(oi.quantity, 0)::int AS qty,
-      oi.meta AS meta_json
+      oi.meta AS meta_json,
+      hp.check_in_date AS hp_check_in_date,
+      hp.check_out_date AS hp_check_out_date,
+      hp.check_in_time AS hp_check_in_time,
+      hp.check_out_time AS hp_check_out_time
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id AND o.status != 'cancelled'
     INNER JOIN users u ON u.id = o.owner_id
+    LEFT JOIN hotel_progress hp ON hp.order_item_id = oi.id
     WHERE oi.type = 'hotel'
       AND oi.product_ref_id = :productId
       AND ${SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE}
@@ -229,10 +268,10 @@ async function getBookingsForDate(productId, dateStr) {
   for (const r of rows || []) {
     const key = r.order_id;
     const meta = parseOrderItemMeta(r.meta_json);
-    const ciYmd = ymdFromMetaDate(meta.check_in);
-    const coYmd = ymdFromMetaDate(meta.check_out);
-    const cit = normalizeHotelTime(meta.check_in_time, DEFAULT_HOTEL_CHECK_IN_TIME);
-    const cot = normalizeHotelTime(meta.check_out_time, DEFAULT_HOTEL_CHECK_OUT_TIME);
+    const ciYmd = ymdFromDbDate(r.hp_check_in_date) || ymdFromMetaDate(meta.check_in);
+    const coYmd = ymdFromDbDate(r.hp_check_out_date) || ymdFromMetaDate(meta.check_out);
+    const cit = normalizeHotelTime(r.hp_check_in_time || meta.check_in_time, DEFAULT_HOTEL_CHECK_IN_TIME);
+    const cot = normalizeHotelTime(r.hp_check_out_time || meta.check_out_time, DEFAULT_HOTEL_CHECK_OUT_TIME);
 
     if (!byOrder.has(key)) {
       byOrder.set(key, {
@@ -290,13 +329,13 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
       inventory = config.global_room_inventory;
       seasonName = 'Semua bulan';
     } else {
-      const season = await getSeasonForDate(productId, dateStr);
+      const { season, carried } = await getSeasonForCalendarDay(productId, dateStr);
       if (!season) {
         byDate[dateStr] = { _noSeason: true };
         return;
       }
       seasonId = season.id;
-      seasonName = season.name;
+      seasonName = carried ? `${season.name} *` : season.name;
       inventory = await getInventoryForSeason(season.id);
     }
 
@@ -348,13 +387,13 @@ async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
       inventory = config.global_room_inventory;
       seasonName = 'Semua bulan';
     } else {
-      const season = await getSeasonForDate(productId, dateStr);
+      const { season, carried } = await getSeasonForCalendarDay(productId, dateStr);
       if (!season) {
         byDate[dateStr] = { _noSeason: true };
         return;
       }
       seasonId = season.id;
-      seasonName = season.name || '';
+      seasonName = carried ? `${season.name || ''} *` : (season.name || '');
       inventory = await getInventoryForSeason(season.id);
     }
 
@@ -400,7 +439,7 @@ async function checkAvailability(productId, roomType, checkInStr, checkOutStr, q
     if (config.mode === 'global') {
       total = config.global_room_inventory[roomType] != null ? config.global_room_inventory[roomType] : 0;
     } else {
-      const season = await getSeasonForDate(productId, dateStr);
+      const { season } = await getSeasonForCalendarDay(productId, dateStr);
       if (!season) return { ok: false, message: `Tanggal ${dateStr} tidak ada musim yang terdefinisi` };
       const inv = await HotelRoomInventory.findOne({ where: { season_id: season.id, room_type: roomType } });
       total = inv ? inv.total_rooms : 0;
@@ -411,6 +450,7 @@ async function checkAvailability(productId, roomType, checkInStr, checkOutStr, q
       const [exRows] = await sequelize.query(`
         SELECT COALESCE(SUM(oi.quantity), 0)::int AS q
         FROM order_items oi
+        LEFT JOIN hotel_progress hp ON hp.order_item_id = oi.id
         WHERE oi.order_id = :excludeOrderId AND oi.type = 'hotel'
           AND oi.product_ref_id = :productId AND oi.meta->>'room_type' = :roomType
           AND ${SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE}
