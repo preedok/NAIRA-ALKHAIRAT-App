@@ -34,6 +34,7 @@ type AddQuantityPopup = {
   dateStr: string;
   seasonId: string;
   seasonName: string;
+  mode: 'global' | 'per_season';
   roomTypes: Record<string, { total: number; booked: number; available: number }>;
 };
 
@@ -65,17 +66,27 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
   const [addQuantityPopup, setAddQuantityPopup] = useState<AddQuantityPopup | null>(null);
   const [addQuantityInputs, setAddQuantityInputs] = useState<Record<string, string>>({});
   const [addQuantitySaving, setAddQuantitySaving] = useState(false);
+  const [calendarAvailabilityMode, setCalendarAvailabilityMode] = useState<'global' | 'per_season'>('per_season');
 
   const selectedHotel = useMemo(() => hotels.find((h) => h.id === selectedHotelId), [hotels, selectedHotelId]);
 
-  const monthStart = useMemo(() => new Date(calendarMonth.year, calendarMonth.month, 1), [calendarMonth]);
-  const monthEnd = useMemo(() => new Date(calendarMonth.year, calendarMonth.month + 1, 0), [calendarMonth]);
-  const fromStr = monthStart.toISOString().slice(0, 10);
-  const toStr = monthEnd.toISOString().slice(0, 10);
+  /** Rentang bulan dalam YYYY-MM-DD (tanggal lokal), hindari bug toISOString() di zona WIB. */
+  const fromStr = useMemo(() => {
+    const y = calendarMonth.year;
+    const m = calendarMonth.month + 1;
+    return `${y}-${String(m).padStart(2, '0')}-01`;
+  }, [calendarMonth]);
+  const toStr = useMemo(() => {
+    const y = calendarMonth.year;
+    const m = calendarMonth.month + 1;
+    const last = new Date(calendarMonth.year, calendarMonth.month + 1, 0).getDate();
+    return `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+  }, [calendarMonth]);
 
   useEffect(() => {
     if (!selectedHotelId) {
       setCalendarData(null);
+      setCalendarAvailabilityMode('per_season');
       return;
     }
     setLoading(true);
@@ -83,8 +94,14 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
       .getHotelCalendar(selectedHotelId, { from: fromStr, to: toStr })
       .then((res) => {
         if (res.data?.data) {
-          setCalendarData((res.data.data as { byDate: Record<string, CalendarDayData> }).byDate || null);
-          setProductName((res.data.data as { productName?: string }).productName || selectedHotel?.name || '');
+          const payload = res.data.data as {
+            byDate: Record<string, CalendarDayData>;
+            availability_mode?: string;
+            productName?: string;
+          };
+          setCalendarData(payload.byDate || null);
+          setCalendarAvailabilityMode(payload.availability_mode === 'global' ? 'global' : 'per_season');
+          setProductName(payload.productName || selectedHotel?.name || '');
         } else {
           setCalendarData(null);
         }
@@ -97,17 +114,19 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
   }, [selectedHotelId, fromStr, toStr, selectedHotel?.name, showToast, calendarRefreshKey]);
 
   const openAddQuantityPopup = useCallback((day: CalendarDayData, dateStr: string) => {
-    if (!day.seasonId || !day.roomTypes) return;
+    if (!day.roomTypes) return;
+    if (calendarAvailabilityMode !== 'global' && !day.seasonId) return;
     setAddQuantityPopup({
       dateStr,
-      seasonId: day.seasonId,
-      seasonName: day.seasonName || '',
+      seasonId: day.seasonId || '',
+      seasonName: day.seasonName || (calendarAvailabilityMode === 'global' ? 'Semua bulan' : ''),
+      mode: calendarAvailabilityMode,
       roomTypes: day.roomTypes
     });
     const initial: Record<string, string> = {};
     Object.keys(day.roomTypes).forEach((rt) => { initial[rt] = ''; });
     setAddQuantityInputs(initial);
-  }, []);
+  }, [calendarAvailabilityMode]);
 
   const handleSaveAddQuantity = useCallback(async () => {
     if (!selectedHotelId || !addQuantityPopup) return;
@@ -118,8 +137,20 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
         const add = Math.max(0, parseInt(addQuantityInputs[rt] ?? '', 10) || 0);
         return { room_type: rt, total_rooms: current + add };
       });
-      await adminPusatApi.setSeasonInventory(selectedHotelId, addQuantityPopup.seasonId, { inventory });
-      showToast('Inventori musim berhasil diperbarui', 'success');
+      if (addQuantityPopup.mode === 'global') {
+        const global_room_inventory: Record<string, number> = {};
+        inventory.forEach((row) => {
+          global_room_inventory[row.room_type] = row.total_rooms;
+        });
+        await adminPusatApi.setHotelAvailabilityConfig(selectedHotelId, {
+          availability_mode: 'global',
+          global_room_inventory
+        });
+        showToast('Kuota kamar (semua bulan) berhasil diperbarui', 'success');
+      } else {
+        await adminPusatApi.setSeasonInventory(selectedHotelId, addQuantityPopup.seasonId, { inventory });
+        showToast('Inventori musim berhasil diperbarui', 'success');
+      }
       setAddQuantityPopup(null);
       setCalendarRefreshKey((k) => k + 1);
     } catch (e: unknown) {
@@ -225,7 +256,12 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                 const a = r?.available ?? 0;
                 return t > 0 && a > 0 && a <= Math.max(1, Math.ceil(t * ALMOST_FULL_THRESHOLD));
               });
-              const showAddRoom = canAddRoomForRole && (full || anyAlmostFull) && selectedHotel && day?.seasonId && day?.roomTypes;
+              const showAddRoom =
+                canAddRoomForRole &&
+                (full || anyAlmostFull) &&
+                selectedHotel &&
+                day?.roomTypes &&
+                (calendarAvailabilityMode === 'global' || !!day.seasonId);
 
               return (
                 <>

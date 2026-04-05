@@ -342,7 +342,13 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [availabilityByHotelId, setAvailabilityByHotelId] = useState<Record<string, AvailabilityData | 'loading' | null>>({});
   const [availabilityPopupHotelId, setAvailabilityPopupHotelId] = useState<string | null>(null);
   /** Popup "Tambah jumlah kamar" di dalam popup Ketersediaan per tanggal (tanggal full) */
-  type AvailabilityAddQuantity = { dateStr: string; seasonId: string; seasonName: string; roomTypes: Record<string, { total: number; booked: number; available: number }> };
+  type AvailabilityAddQuantity = {
+    dateStr: string;
+    seasonId: string;
+    seasonName: string;
+    mode: 'global' | 'per_season';
+    roomTypes: Record<string, { total: number; booked: number; available: number }>;
+  };
   const [availabilityAddQuantity, setAvailabilityAddQuantity] = useState<AvailabilityAddQuantity | null>(null);
   const [availabilityAddQuantityInputs, setAvailabilityAddQuantityInputs] = useState<Record<string, string>>({});
   const [availabilityAddQuantitySaving, setAvailabilityAddQuantitySaving] = useState(false);
@@ -587,9 +593,16 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     return locationFilter === 'all' || matchesLocation;
   });
 
-  /** Fetch availability realtime untuk setiap hotel di halaman (rentang 30 hari), + refresh tiap 60s */
-  const availabilityFrom = (() => { const d = new Date(); return d.toISOString().slice(0, 10); })();
-  const availabilityTo = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
+  /** Fetch availability realtime (30 hari): pakai tanggal lokal agar tidak bergeser seperti toISOString() (WIB). */
+  const availabilityFrom = (() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  })();
+  const availabilityTo = (() => {
+    const t = new Date();
+    t.setDate(t.getDate() + 30);
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  })();
   const hotelIdsKey = hotels.map((h) => h.id).join(',');
   useEffect(() => {
     const list = filteredHotels.length ? filteredHotels : hotels;
@@ -1415,6 +1428,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const hotel = hotels.find((h) => h.id === availabilityPopupHotelId) || filteredHotels.find((h) => h.id === availabilityPopupHotelId);
         const availData = availabilityPopupHotelId ? availabilityByHotelId[availabilityPopupHotelId] : null;
         const byDate = availData && typeof availData === 'object' && availData.byDate ? availData.byDate : {};
+        const availabilityMode: 'global' | 'per_season' =
+          availData && typeof availData === 'object' && availData.availability_mode === 'global' ? 'global' : 'per_season';
         const dateKeys = Object.keys(byDate).sort();
         const formatDateLabel = (s: string) => {
           const d = new Date(s + 'T12:00:00');
@@ -1526,13 +1541,20 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                               const seasonName = !noSeason && day ? (day as { seasonName?: string }).seasonName : undefined;
                               const d = new Date(dateStr + 'T12:00:00');
                               const openAddQty = () => {
-                                if (!rec || !seasonId || !availabilityPopupHotelId) return;
+                                if (!rec || !availabilityPopupHotelId) return;
+                                if (availabilityMode === 'per_season' && !seasonId) return;
                                 const roomTypes: Record<string, { total: number; booked: number; available: number }> = {};
                                 ROOM_TYPES.forEach((rt) => {
                                   const r = rec[rt];
                                   roomTypes[rt] = r ? { total: r.total ?? 0, booked: r.booked ?? 0, available: r.available ?? 0 } : { total: 0, booked: 0, available: 0 };
                                 });
-                                setAvailabilityAddQuantity({ dateStr, seasonId, seasonName: seasonName || '', roomTypes });
+                                setAvailabilityAddQuantity({
+                                  dateStr,
+                                  seasonId: seasonId || '',
+                                  seasonName: seasonName || (availabilityMode === 'global' ? 'Semua bulan' : ''),
+                                  mode: availabilityMode,
+                                  roomTypes
+                                });
                                 const initial: Record<string, string> = {};
                                 ROOM_TYPES.forEach((rt) => { initial[rt] = ''; });
                                 setAvailabilityAddQuantityInputs(initial);
@@ -1566,7 +1588,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                     }
                                     const isFull = a <= 0;
                                     const isAlmostFull = a > 0 && a <= ALMOST_FULL_THRESHOLD;
-                                    const showAddBtn = canAddHotel && (isFull || isAlmostFull) && seasonId;
+                                    const showAddBtn = canAddHotel && (isFull || isAlmostFull) && (availabilityMode === 'global' || !!seasonId);
                                     const cellBg = isFull ? 'bg-red-100 text-red-800' : isAlmostFull ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800';
                                     return (
                                       <td key={rt} className="py-2 px-2 text-center align-middle">
@@ -1690,8 +1712,20 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                               const addVal = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
                               return { room_type: rt, total_rooms: current + addVal };
                             });
-                            await adminPusatApi.setSeasonInventory(availabilityPopupHotelId, availabilityAddQuantity.seasonId, { inventory });
-                            showToast('Inventori musim berhasil diperbarui', 'success');
+                            if (availabilityAddQuantity.mode === 'global') {
+                              const global_room_inventory: Record<string, number> = {};
+                              inventory.forEach((row) => {
+                                global_room_inventory[row.room_type] = row.total_rooms;
+                              });
+                              await adminPusatApi.setHotelAvailabilityConfig(availabilityPopupHotelId, {
+                                availability_mode: 'global',
+                                global_room_inventory
+                              });
+                              showToast('Kuota kamar (semua bulan) berhasil diperbarui', 'success');
+                            } else {
+                              await adminPusatApi.setSeasonInventory(availabilityPopupHotelId, availabilityAddQuantity.seasonId, { inventory });
+                              showToast('Inventori musim berhasil diperbarui', 'success');
+                            }
                             setAvailabilityAddQuantity(null);
                             refetchAvailabilityForHotel(availabilityPopupHotelId);
                           } catch (e: unknown) {

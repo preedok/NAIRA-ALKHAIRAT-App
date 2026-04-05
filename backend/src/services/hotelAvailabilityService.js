@@ -5,6 +5,44 @@ const { HotelSeason, HotelRoomInventory, ProductAvailability } = require('../mod
 const HOTEL_AVAILABILITY_MODES = ['global', 'per_season'];
 const ROOM_TYPES_LIST = ['single', 'double', 'triple', 'quad', 'quint'];
 
+/** Tanggal kalender YYYY-MM-DD + N hari (tanpa bug timezone Date.toISOString()). */
+function addDaysYmd(ymd, deltaDays) {
+  const parts = String(ymd).split('-').map((x) => parseInt(x, 10));
+  const y = parts[0];
+  const mo = parts[1];
+  const d = parts[2];
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return ymd;
+  const dt = new Date(y, mo - 1, d + deltaDays);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function compareYmd(a, b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+/** Loop setiap tanggal dari startYmd sampai endYmd inklusif. */
+function forEachDateInclusive(startYmd, endYmd, fn) {
+  let cur = startYmd;
+  while (compareYmd(cur, endYmd) <= 0) {
+    fn(cur);
+    cur = addDaysYmd(cur, 1);
+  }
+}
+
+/** Sama seperti di atas; fn boleh async (untuk query DB per tanggal). */
+async function forEachDateInclusiveAsync(startYmd, endYmd, fn) {
+  let cur = startYmd;
+  while (compareYmd(cur, endYmd) <= 0) {
+    await fn(cur);
+    cur = addDaysYmd(cur, 1);
+  }
+}
+
 /**
  * Ambil konfigurasi ketersediaan hotel: mode (global = satu set kamar untuk semua bulan, per_season = kuota per musim).
  * Ketika mode global, jumlah kamar diambil dari meta.room_types (sumber yang sama dengan Pengaturan Jumlah).
@@ -142,12 +180,9 @@ async function getBookingsForDate(productId, dateStr) {
 async function getHotelCalendar(productId, startDateStr, endDateStr) {
   const config = await getHotelAvailabilityConfig(productId);
   const byDate = {};
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
   const roomTypesSeen = new Set();
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().slice(0, 10);
+  await forEachDateInclusiveAsync(startDateStr, endDateStr, async (dateStr) => {
     let inventory = {};
     let seasonId = null;
     let seasonName = null;
@@ -159,7 +194,7 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
       const season = await getSeasonForDate(productId, dateStr);
       if (!season) {
         byDate[dateStr] = { _noSeason: true };
-        continue;
+        return;
       }
       seasonId = season.id;
       seasonName = season.name;
@@ -179,7 +214,7 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
       roomTypes,
       bookings
     };
-  }
+  });
 
   const byRoomType = {};
   for (const rt of roomTypesSeen) {
@@ -192,7 +227,7 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
     byRoomType[rt] = minAvail === Infinity ? 0 : minAvail;
   }
 
-  return { byDate, byRoomType };
+  return { availability_mode: config.mode, byDate, byRoomType };
 }
 
 /**
@@ -203,12 +238,9 @@ async function getHotelCalendar(productId, startDateStr, endDateStr) {
 async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
   const config = await getHotelAvailabilityConfig(productId);
   const byDate = {};
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
   const roomTypesSeen = new Set();
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().slice(0, 10);
+  await forEachDateInclusiveAsync(startDateStr, endDateStr, async (dateStr) => {
     let inventory = {};
     let seasonId = null;
     let seasonName = '';
@@ -220,7 +252,7 @@ async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
       const season = await getSeasonForDate(productId, dateStr);
       if (!season) {
         byDate[dateStr] = { _noSeason: true };
-        continue;
+        return;
       }
       seasonId = season.id;
       seasonName = season.name || '';
@@ -233,7 +265,7 @@ async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
       const booked = await getBookedForDateRaw(sequelize, productId, rt, dateStr);
       byDate[dateStr][rt] = { total, booked, available: Math.max(0, total - booked) };
     }
-  }
+  });
 
   const byRoomType = {};
   for (const rt of roomTypesSeen) {
@@ -256,12 +288,14 @@ async function getAvailabilityByDateRange(productId, startDateStr, endDateStr) {
  */
 async function checkAvailability(productId, roomType, checkInStr, checkOutStr, quantity, excludeOrderId = null) {
   const config = await getHotelAvailabilityConfig(productId);
-  const start = new Date(checkInStr);
-  const end = new Date(checkOutStr);
-  end.setDate(end.getDate() - 1); // last night is check_out - 1 day
+  const lastNightYmd = addDaysYmd(checkOutStr, -1);
+  if (compareYmd(checkInStr, lastNightYmd) > 0) {
+    return { ok: true };
+  }
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().slice(0, 10);
+  let cur = checkInStr;
+  while (compareYmd(cur, lastNightYmd) <= 0) {
+    const dateStr = cur;
     let total = 0;
 
     if (config.mode === 'global') {
@@ -290,7 +324,9 @@ async function checkAvailability(productId, roomType, checkInStr, checkOutStr, q
     if (available < quantity) {
       return { ok: false, message: `Tanggal ${dateStr}: tipe ${roomType} tersedia ${available} kamar, butuh ${quantity}` };
     }
+    cur = addDaysYmd(cur, 1);
   }
+
   return { ok: true };
 }
 

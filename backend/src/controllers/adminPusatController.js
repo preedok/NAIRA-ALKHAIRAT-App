@@ -672,6 +672,12 @@ const setHotelAvailabilityConfigHandler = asyncHandler(async (req, res) => {
       inv[rt] = Math.max(0, parseInt(global_room_inventory[rt], 10) || 0);
     }
     meta.global_room_inventory = inv;
+    // Samakan room_types agar getHotelAvailabilityConfig (prioritas room_types) tetap konsisten setelah tambah kuota dari kalender
+    const rtMeta = meta.room_types && typeof meta.room_types === 'object' ? { ...meta.room_types } : {};
+    for (const rt of roomTypes) {
+      rtMeta[rt] = inv[rt];
+    }
+    meta.room_types = rtMeta;
   }
   // When switching to per_season, keep existing global_room_inventory so user can switch back without re-entering
 
