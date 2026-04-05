@@ -15,6 +15,7 @@ export type UserRole =
   | 'visa_koordinator'
   | 'invoice_saudi'
   | 'handling'
+  | 'role_siskopatuh'
   | 'admin_cabang'
   | 'owner_mou'
   | 'owner_non_mou'
@@ -74,6 +75,7 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   visa_koordinator: 'Visa Koordinator',
   invoice_saudi: 'Invoice Saudi',
   handling: 'Handling',
+  role_siskopatuh: 'Siskopatuh',
   admin_cabang: 'Admin Cabang',
   owner_mou: 'Owner MOU',
   owner_non_mou: 'Owner Non-MOU',

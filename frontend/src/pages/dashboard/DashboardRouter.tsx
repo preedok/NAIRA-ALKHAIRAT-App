@@ -11,6 +11,7 @@ import InvoiceDashboard from './roles/InvoiceDashboard';
 import HotelDashboard from './roles/HotelDashboard';
 import BusDashboard from './roles/BusDashboard';
 import HandlingDashboard from './roles/HandlingDashboard';
+import SiskopatuhDashboard from './roles/SiskopatuhDashboard';
 import AccountingDashboard from './roles/AccountingDashboard';
 import { isKoordinatorRole } from '../../types';
 import Card from '../../components/common/Card';
@@ -61,6 +62,8 @@ const DashboardRouter: React.FC = () => {
       return <BusDashboard />;
     case 'handling':
       return <HandlingDashboard />;
+    case 'role_siskopatuh':
+      return <SiskopatuhDashboard />;
     case 'role_accounting':
       return <AccountingDashboard />;
     case 'role_rekap_hotel':

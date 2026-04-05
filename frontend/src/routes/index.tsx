@@ -27,6 +27,7 @@ import BusWorkPage from '../pages/dashboard/components/BusWorkPage';
 import PackagesPage from '../pages/dashboard/components/PackagesPage';
 import HandlingPage from '../pages/dashboard/components/HandlingPage';
 import HandlingWorkPage from '../pages/dashboard/components/HandlingWorkPage';
+import SiskopatuhWorkPage from '../pages/dashboard/components/SiskopatuhWorkPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
 import ReportsPage from '../pages/dashboard/components/ReportsPage';
@@ -125,6 +126,10 @@ const router = createBrowserRouter([
           {
             path: 'progress-handling',
             element: <HandlingWorkPage />
+          },
+          {
+            path: 'progress-siskopatuh',
+            element: <SiskopatuhWorkPage />
           },
           {
             path: 'rekap-hotel',

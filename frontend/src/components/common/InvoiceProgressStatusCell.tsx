@@ -1,6 +1,6 @@
 /**
  * Status progress per divisi (Visa, Tiket, Hotel, Bus) — satu sumber kebenaran.
- * Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket.
+ * Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Siskopatuh → Paket.
  */
 import React from 'react';
 import { getHotelLocationFromItem } from '../../utils/constants';
@@ -100,7 +100,14 @@ const defaultFormatDateWithTime = (d: string | null | undefined, time: string | 
   return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
 };
 
-export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'package';
+/** handling_status / siskopatuh_status di meta OrderItem */
+const SIMPLE_DIVISION_PROGRESS_LABELS: Record<string, string> = {
+  pending: 'Menunggu',
+  in_progress: 'Dalam Proses',
+  completed: 'Selesai'
+};
+
+export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'siskopatuh' | 'package';
 
 export interface InvoiceProgressStatusCellProps {
   /** Invoice row (dengan Order.OrderItems dan progress relations) */
@@ -130,6 +137,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
   const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
   const busItems = items.filter((i: any) => (i.type || i.product_type) === 'bus');
   const handlingItems = items.filter((i: any) => (i.type || i.product_type) === 'handling');
+  const siskopatuhItems = items.filter((i: any) => (i.type || i.product_type) === 'siskopatuh');
   const packageItems = items.filter((i: any) => (i.type || i.product_type) === 'package');
 
   type Section = { sortIndex: number; title: string; nodes: React.ReactNode[] };
@@ -310,9 +318,33 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
       nodes: handlingItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Handling';
         const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
+        const st = (item.meta && item.meta.handling_status) || 'pending';
+        const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
         return (
           <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className="text-slate-600">Qty {qty}</span>
+            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
+            <span className={st === 'completed' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{stLabel}</span>
+            <span className="text-slate-600"> · Qty {qty}</span>
+          </div>
+        );
+      })
+    });
+  }
+
+  if (siskopatuhItems.length > 0 && allow('siskopatuh')) {
+    sections.push({
+      sortIndex: 6,
+      title: 'Siskopatuh',
+      nodes: siskopatuhItems.map((item: any, idx: number) => {
+        const name = item.Product?.name || item.product_name || 'Siskopatuh';
+        const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
+        const st = (item.meta && item.meta.siskopatuh_status) || 'pending';
+        const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
+        return (
+          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
+            <span className={st === 'completed' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{stLabel}</span>
+            <span className="text-slate-600"> · Qty {qty}</span>
           </div>
         );
       })
@@ -321,7 +353,7 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
 
   if (packageItems.length > 0 && allow('package')) {
     sections.push({
-      sortIndex: 6,
+      sortIndex: 7,
       title: 'Paket',
       nodes: packageItems.map((item: any, idx: number) => {
         const name = item.Product?.name || item.product_name || 'Paket';

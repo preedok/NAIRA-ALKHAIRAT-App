@@ -37,7 +37,7 @@ router.use('/bus', busRouter);
 router.get('/', productController.list);
 // More specific /:id/... routes must come before generic /:id (Express first-match wins)
 // Role yang boleh akses baca detail produk (termasuk accounting untuk menu Product)
-const PRODUCT_READ_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_HOTEL, ROLES.ROLE_BUS, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU];
+const PRODUCT_READ_ROLES = [ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_HOTEL, ROLES.ROLE_BUS, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING, ROLES.ROLE_SISKOPATUH, ROLES.OWNER_MOU, ROLES.OWNER_NON_MOU];
 
 router.get('/:id/ticket-calendar', productController.getTicketCalendar);
 router.get('/:id/bus-calendar', productController.getBusCalendar);

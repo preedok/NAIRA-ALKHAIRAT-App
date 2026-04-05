@@ -810,7 +810,7 @@ const UsersPage: React.FC = () => {
                   { value: 'invoice_koordinator', label: 'Invoice Koordinator' },
                   { value: 'invoice_saudi', label: 'Invoice Saudi' },
                   { value: 'handling', label: 'Handling' },
-                  { value: 'role_rekap_hotel', label: 'Rekap Hotel' }
+                  { value: 'role_siskopatuh', label: 'Siskopatuh' }
                 ]}
                 placeholder={AUTOCOMPLETE_PILIH.PILIH_ROLE}
               />
@@ -1152,7 +1152,7 @@ const UsersPage: React.FC = () => {
                   { value: 'invoice_koordinator', label: 'Invoice Koordinator' },
                   { value: 'invoice_saudi', label: 'Invoice Saudi' },
                   { value: 'handling', label: 'Handling' },
-                  { value: 'role_rekap_hotel', label: 'Rekap Hotel' }
+                  { value: 'role_siskopatuh', label: 'Siskopatuh' }
                 ]}
                 placeholder={AUTOCOMPLETE_PILIH.PILIH_ROLE}
               />

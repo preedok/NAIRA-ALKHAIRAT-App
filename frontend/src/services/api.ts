@@ -405,6 +405,30 @@ export const handlingApi = {
     api.patch(`/handling/order-items/${orderItemId}/progress`, body)
 };
 
+export interface SiskopatuhDashboardData {
+  total_orders: number;
+  total_siskopatuh_items: number;
+  by_status: { pending?: number; in_progress?: number; completed?: number };
+  pending_list: Array<{
+    order_id: string;
+    order_number?: string;
+    invoice_id?: string;
+    invoice_number?: string;
+    order_item_id: string;
+    owner_name?: string;
+    product_name?: string;
+    quantity: number;
+    status: string;
+  }>;
+}
+
+export const siskopatuhApi = {
+  getDashboard: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<{ success: boolean; data: SiskopatuhDashboardData }>('/siskopatuh/dashboard', { params }),
+  updateOrderItemProgress: (orderItemId: string, body: { siskopatuh_status: 'pending' | 'in_progress' | 'completed' }) =>
+    api.patch(`/siskopatuh/order-items/${orderItemId}/progress`, body)
+};
+
 // Minimal types for ticket dashboard (invoice-based)
 export interface TicketDashboardData {
   total_invoices: number;

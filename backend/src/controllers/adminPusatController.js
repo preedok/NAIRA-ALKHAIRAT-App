@@ -398,6 +398,7 @@ const createUser = asyncHandler(async (req, res) => {
     ROLES.VISA_KOORDINATOR,
     ROLES.ROLE_INVOICE_SAUDI,
     ROLES.ROLE_HANDLING,
+    ROLES.ROLE_SISKOPATUH,
     ROLES.ROLE_REKAP_HOTEL
   ];
   if (!name || !email || !password || !role) {
@@ -444,7 +445,7 @@ const createUser = asyncHandler(async (req, res) => {
       const w = await Wilayah.findByPk(finalWilayahId, { attributes: ['id'] });
       if (!w) return res.status(400).json({ success: false, message: 'Wilayah tidak ditemukan' });
     }
-  } else if ([ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING, ROLES.ROLE_REKAP_HOTEL].includes(role)) {
+  } else if ([ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING, ROLES.ROLE_SISKOPATUH, ROLES.ROLE_REKAP_HOTEL].includes(role)) {
     // tidak perlu wilayah
   } else if (branch_id) {
     finalBranchId = branch_id;
@@ -526,6 +527,7 @@ const updateUser = asyncHandler(async (req, res) => {
     ROLES.VISA_KOORDINATOR,
     ROLES.ROLE_INVOICE_SAUDI,
     ROLES.ROLE_HANDLING,
+    ROLES.ROLE_SISKOPATUH,
     ROLES.ROLE_REKAP_HOTEL
   ];
   if (role !== undefined && allowedRoles.includes(role)) updates.role = role;
@@ -553,7 +555,7 @@ const updateUser = asyncHandler(async (req, res) => {
     } else if (KOORDINATOR_CREATE_ROLES.includes(currentRole) && region !== undefined) {
       updates.wilayah_id = (region || '').trim() || null;
       updates.branch_id = null;
-    } else if ([ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING, ROLES.ROLE_REKAP_HOTEL].includes(currentRole) && role !== undefined) {
+    } else if ([ROLES.ROLE_BUS, ROLES.ROLE_HOTEL, ROLES.ADMIN_PUSAT, ROLES.ROLE_ACCOUNTING, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_HANDLING, ROLES.ROLE_SISKOPATUH, ROLES.ROLE_REKAP_HOTEL].includes(currentRole) && role !== undefined) {
       updates.wilayah_id = null;
       updates.branch_id = null;
     }

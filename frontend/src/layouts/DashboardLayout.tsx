@@ -49,18 +49,19 @@ const productMenuRoles: UserRole[] = [
   'role_bus',
   'invoice_saudi',
   'handling',
+  'role_siskopatuh',
   'owner_mou',
   'owner_non_mou'
 ];
-// Siskopatuh: subset invoice + owner (tetap eksplisit agar jelas siapa yang mengisi dokumen ke order).
-const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'owner_mou', 'owner_non_mou'];
+// Siskopatuh: subset invoice + owner + divisi siskopatuh (lihat master harga).
+const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'owner_mou', 'owner_non_mou', 'role_siskopatuh'];
 
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling', 'role_siskopatuh']
   },
   {
     title: 'Asisten AI',
@@ -120,6 +121,12 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'handling']
   },
   {
+    title: 'Progress Siskopatuh',
+    icon: <FileText className="w-5 h-5" />,
+    path: '/dashboard/progress-siskopatuh',
+    roles: ['super_admin', 'role_siskopatuh']
+  },
+  {
     title: 'Rekap Hotel',
     icon: <BarChart3 className="w-5 h-5" />,
     path: '/dashboard/rekap-hotel',
@@ -129,7 +136,7 @@ const menuItems: MenuItem[] = [
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner_mou', 'owner_non_mou', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus']
+    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner_mou', 'owner_non_mou', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_siskopatuh']
   },
   {
     title: 'Refund',

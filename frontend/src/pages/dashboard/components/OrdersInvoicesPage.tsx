@@ -2704,7 +2704,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {orderItems.map((item: any, idx: number) => {
                                       const name = item.Product?.name || item.product_name || `${item.type || 'Item'} ${idx + 1}`;
                                       const typeKey = (item.type || item.product_type) as string;
-                                      const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
+                                      const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', siskopatuh: 'Siskopatuh', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
                                       const desc = item._mergedDesc != null ? item._mergedDesc : getItemDesc(item);
                                       const isMerged = !!item._merged;
                                       const qty = isMerged ? (item._mergedQty ?? item.quantity ?? 1) : (item.quantity != null ? item.quantity : 1);

@@ -24,7 +24,9 @@ const ROLES = {
   ADMIN_PROVINSI: 'admin_provinsi',
   ADMIN_WILAYAH: 'admin_wilayah',
   ADMIN_CABANG: 'admin_cabang',
-  ROLE_HANDLING: 'handling'
+  ROLE_HANDLING: 'handling',
+  /** Divisi Siskopatuh: proses item order tipe siskopatuh (meta.siskopatuh_status), pola sama handling */
+  ROLE_SISKOPATUH: 'role_siskopatuh'
 };
 
 // PROSES A - Registrasi & Aktivasi Owner (Partner)
@@ -127,6 +129,9 @@ const HANDLING_PROGRESS_STATUS = {
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed'
 };
+
+/** Sama alur dengan handling: pending → in_progress → completed di OrderItem.meta.siskopatuh_status */
+const SISKOPATUH_PROGRESS_STATUS = HANDLING_PROGRESS_STATUS;
 
 // Bus Saudi: workflow perjalanan (sama konsep tiket)
 const BUS_TRIP_TYPES = ['one_way', 'return_only', 'round_trip'];
@@ -321,6 +326,7 @@ module.exports = {
   OWNER_STATUS,
   INVOICE_STATUS,
   HANDLING_PROGRESS_STATUS,
+  SISKOPATUH_PROGRESS_STATUS,
   REFUND_STATUS,
   REFUND_SOURCE,
   ACCOUNTING_DOC_STATUS,
