@@ -656,64 +656,58 @@ const SiskopatuhWorkPage: React.FC = () => {
                           <p className="text-xs text-amber-700 mt-2 flex items-start gap-1.5">
                             <span className="shrink-0 font-semibold">!</span>
                             <span>
-                              Status &quot;Selesai&quot; di dropdown <strong>belum tersimpan di server</strong>. Klik <strong>Proses</strong> (atau Proses semua) dulu — baru kolom upload dokumen hasil di bawah aktif.
+                              Status &quot;Selesai&quot; di dropdown <strong>belum tersimpan di server</strong>. Klik <strong>Proses</strong> (atau Proses semua) — setelah tersimpan, bagian upload dokumen hasil akan muncul.
                             </span>
                           </p>
                         )}
                       </div>
 
-                      <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
-                          <Download className="w-3.5 h-3.5" /> Dokumen hasil Siskopatuh (untuk owner unduh)
-                        </p>
-                        {!serverCompleted ? (
-                          <p className="text-sm text-slate-600">
-                            Upload hanya diizinkan setelah status di server = <strong>Selesai</strong>. Set dropdown ke Selesai lalu klik <strong>Proses</strong>.
+                      {serverCompleted && (
+                        <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
+                          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
+                            <Download className="w-3.5 h-3.5" /> Dokumen hasil Siskopatuh (untuk owner unduh)
                           </p>
-                        ) : (
-                          <>
-                            <p className="text-xs text-slate-500">
-                              Unggah PDF/ZIP hasil proses. Owner mengunduh dari menu Invoice → tab Progress → <strong>Dokumen Siskopatuh</strong>.
-                            </p>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
-                              <input
-                                type="file"
-                                accept=".pdf,.zip,.xlsx,.xls,.doc,.docx,image/*"
-                                className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-800 hover:file:bg-violet-100 max-w-full"
-                                disabled={uploadingSiskopatuhDocId === item.id}
-                                onChange={(e) => {
-                                  const f = e.target.files?.[0];
-                                  if (f) handleUploadSiskopatuhDocument(item.id, f);
-                                  e.target.value = '';
-                                }}
-                              />
-                              {getSiskopatuhFileUrlFromItem(item) && detailInvoice?.id && (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={downloadingSiskopatuhDocId === item.id}
-                                  onClick={() => downloadSiskopatuhDocument(detailInvoice.id, item.id)}
-                                  className="inline-flex items-center gap-1.5 shrink-0"
-                                >
-                                  {downloadingSiskopatuhDocId === item.id ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Download className="w-4 h-4" />
-                                  )}
-                                  {downloadingSiskopatuhDocId === item.id ? 'Mengunduh...' : 'Unduh dokumen'}
-                                </Button>
-                              )}
-                            </div>
-                            {getSiskopatuhFileUrlFromItem(item) ? (
-                              <p className="text-xs text-emerald-700 font-medium">File hasil sudah tersimpan — owner bisa unduh dari Invoice.</p>
-                            ) : (
-                              <p className="text-xs text-slate-500">Belum ada file hasil di server — pilih file lalu unggah.</p>
+                          <p className="text-xs text-slate-500">
+                            Unggah PDF/ZIP hasil proses. Owner mengunduh dari menu Invoice → tab Progress → <strong>Dokumen Siskopatuh</strong>.
+                          </p>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+                            <input
+                              type="file"
+                              accept=".pdf,.zip,.xlsx,.xls,.doc,.docx,image/*"
+                              className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-800 hover:file:bg-violet-100 max-w-full"
+                              disabled={uploadingSiskopatuhDocId === item.id}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleUploadSiskopatuhDocument(item.id, f);
+                                e.target.value = '';
+                              }}
+                            />
+                            {getSiskopatuhFileUrlFromItem(item) && detailInvoice?.id && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={downloadingSiskopatuhDocId === item.id}
+                                onClick={() => downloadSiskopatuhDocument(detailInvoice.id, item.id)}
+                                className="inline-flex items-center gap-1.5 shrink-0"
+                              >
+                                {downloadingSiskopatuhDocId === item.id ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                                {downloadingSiskopatuhDocId === item.id ? 'Mengunduh...' : 'Unduh dokumen'}
+                              </Button>
                             )}
-                            {uploadingSiskopatuhDocId === item.id && <p className="text-xs text-slate-500">Mengunggah…</p>}
-                          </>
-                        )}
-                      </div>
+                          </div>
+                          {getSiskopatuhFileUrlFromItem(item) ? (
+                            <p className="text-xs text-emerald-700 font-medium">File hasil sudah tersimpan — owner bisa unduh dari Invoice.</p>
+                          ) : (
+                            <p className="text-xs text-slate-500">Belum ada file hasil di server — pilih file lalu unggah.</p>
+                          )}
+                          {uploadingSiskopatuhDocId === item.id && <p className="text-xs text-slate-500">Mengunggah…</p>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
