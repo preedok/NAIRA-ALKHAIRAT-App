@@ -31,6 +31,12 @@ import { invoicesApi, ownersApi, refundsApi, accountingApi, type InvoicesSummary
 
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
+/** Hilangkan sufiks ". Saldo ±…" dari catatan API supaya kolom Nominal tidak redundan. */
+function stripTrailingSaldoNote(notes: string): string {
+  if (!notes) return '';
+  return notes.replace(/\.\s*Saldo\s+[+-][\d.,\s]+$/, '').trim();
+}
+
 /** Teks riwayat saldo: bedakan pembatalan order vs penarikan vs alokasi agar tidak tertukar dengan tarik saldo. */
 function formatOwnerBalanceTransactionLine(t: { type?: string; notes?: string; amount?: number }): string {
   const ty = (t.type || '').toLowerCase();
@@ -51,6 +57,10 @@ function formatOwnerBalanceTransactionLine(t: { type?: string; notes?: string; a
     return notes || 'Penyesuaian saldo';
   }
   return notes || (Number(t.amount) >= 0 ? 'Kredit saldo' : 'Debit saldo');
+}
+
+function formatOwnerBalanceTableDescription(t: { type?: string; notes?: string; amount?: number }): string {
+  return formatOwnerBalanceTransactionLine({ ...t, notes: stripTrailingSaldoNote((t.notes || '').trim()) });
 }
 
 const OwnerDashboard: React.FC = () => {
@@ -302,17 +312,43 @@ const OwnerDashboard: React.FC = () => {
         {balanceData && balanceData.transactions.length > 0 && (
           <div className="mt-4 pt-4 border-t border-emerald-200/80">
             <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Riwayat terakhir</p>
-            <ul className="space-y-2 max-h-32 overflow-y-auto">
-              {balanceData.transactions.slice(0, 5).map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-2 text-sm py-1">
-                  <span className="text-stone-600 truncate flex-1 min-w-0" title={t.notes || ''}>{formatOwnerBalanceTransactionLine(t)}</span>
-                  <span className={`shrink-0 font-medium ${Number(t.amount) >= 0 ? 'text-emerald-600' : 'text-stone-700'}`}>
-                    {Number(t.amount) >= 0 ? '+' : ''}<NominalDisplay amount={Math.abs(Number(t.amount))} currency="IDR" />
-                  </span>
-                  <span className="text-stone-400 text-xs shrink-0">{formatDate(t.created_at)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto rounded-lg border border-emerald-200/70 bg-white/70 shadow-sm max-h-52 overflow-y-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="sticky top-0 z-[1] bg-emerald-100/95 backdrop-blur-sm border-b border-emerald-200/80">
+                  <tr>
+                    <th scope="col" className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-stone-600 whitespace-nowrap w-[1%]">
+                      Tanggal
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-stone-600 min-w-[10rem]">
+                      Keterangan
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-stone-600 text-right whitespace-nowrap w-[1%]">
+                      Nominal
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-emerald-100/90">
+                  {balanceData.transactions.slice(0, 5).map((t) => {
+                    const amt = Number(t.amount);
+                    const isCredit = amt >= 0;
+                    return (
+                      <tr key={t.id} className="bg-white/90 hover:bg-emerald-50/40 transition-colors">
+                        <td className="px-3 py-2 align-top text-stone-600 whitespace-nowrap tabular-nums">
+                          {formatDate(t.created_at)}
+                        </td>
+                        <td className="px-3 py-2 align-top text-stone-700 break-words max-w-[min(28rem,70vw)]">
+                          <span title={t.notes || formatOwnerBalanceTableDescription(t)}>{formatOwnerBalanceTableDescription(t)}</span>
+                        </td>
+                        <td className={`px-3 py-2 align-top text-right font-semibold whitespace-nowrap tabular-nums ${isCredit ? 'text-emerald-700' : 'text-stone-800'}`}>
+                          {isCredit ? '+' : '-'}
+                          <NominalDisplay amount={Math.abs(amt)} currency="IDR" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Card>
