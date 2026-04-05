@@ -111,6 +111,9 @@ async function sendMouToTravel(toEmail, travelName, newPassword, mouFilePath) {
  */
 async function sendRefundProofToOwner(toEmail, ownerName, amount, invoiceNumber, proofFilePath, opts = {}) {
   const isBalanceWithdrawal = opts && opts.balanceWithdrawal === true;
+  const payout = opts.payout || {};
+  const recipient = opts.recipient || {};
+  const esc = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   if (!toEmail || !toEmail.trim()) {
     logger.warn('Email pemesan kosong, bukti refund tidak dikirim');
     return false;
@@ -136,28 +139,52 @@ async function sendRefundProofToOwner(toEmail, ownerName, amount, invoiceNumber,
     ? `Bukti penarikan saldo akun | Bintang Global Group`
     : `Bukti Refund – Invoice ${invoiceNumber || ''} | Bintang Global Group`;
   const introHtml = isBalanceWithdrawal
-    ? `<p>Penarikan saldo akun Anda sebesar <strong>Rp ${amountStr}</strong> telah diproses oleh tim accounting.</p><p>Saldo akun Anda telah dikurangi sesuai jumlah tersebut.</p>`
-    : `<p>Refund untuk invoice <strong>${(invoiceNumber || '').replace(/</g, '&lt;')}</strong> telah diproses oleh tim accounting.</p>`;
+    ? `<p>Penarikan saldo akun Anda sebesar <strong>Rp ${amountStr}</strong> telah diproses.</p><p>Untuk penarikan saldo, nominal sudah dipotong dari saldo akun saat Anda mengajukan; email ini melengkapi data transfer ke rekening Anda.</p>`
+    : `<p>Refund untuk invoice <strong>${esc(invoiceNumber)}</strong> telah diproses oleh tim accounting.</p>`;
   const introText = isBalanceWithdrawal
-    ? `Penarikan saldo akun Anda sebesar Rp ${amountStr} telah diproses. Saldo akun telah dikurangi sesuai jumlah tersebut.`
+    ? `Penarikan saldo sebesar Rp ${amountStr}. Saldo akun telah dipotong saat pengajuan; berikut detail transfer ke rekening Anda.`
     : `Refund untuk invoice ${invoiceNumber || '-'} telah diproses.`;
+  const payoutBank = esc(payout.bankName);
+  const payoutHolder = esc(payout.accountHolder);
+  const payoutAcct = esc(payout.accountNumber);
+  const payoutBlock =
+    payoutBank || payoutHolder
+      ? `<div class="box"><p class="label">Rekening pengirim (Bintang Global Group)</p><p class="value">${payoutBank || '—'}</p>${payoutHolder ? `<p style="margin:8px 0 0;font-size:14px;color:#475569;">a.n. <strong>${payoutHolder}</strong>${payoutAcct ? `<br/>No. rekening: ${payoutAcct}` : ''}</p>` : ''}</div>`
+      : '';
+  const payoutTextBlock =
+    payoutBank || payoutHolder
+      ? `\nRekening pengirim (BGG): ${payout.bankName || ''}${payoutHolder ? ` a.n. ${payout.accountHolder}` : ''}${payout.accountNumber ? ` No. ${payout.accountNumber}` : ''}\n`
+      : '';
+  const recvBank = esc(recipient.bankName);
+  const recvNum = esc(recipient.accountNumber);
+  const recvHolder = esc(recipient.accountHolder);
+  const recvBlock =
+    recvBank || recvNum
+      ? `<div class="box"><p class="label">Rekening penerima (Anda)</p><p class="value">${recvBank || '—'} ${recvNum ? `· ${recvNum}` : ''}</p>${recvHolder ? `<p style="margin:8px 0 0;font-size:14px;color:#475569;">a.n. <strong>${recvHolder}</strong></p>` : ''}</div>`
+      : `<p>Dana dialihkan ke rekening yang Anda ajukan di aplikasi.</p>`;
+  const recvText =
+    recvBank || recvNum
+      ? `Rekening penerima: ${recipient.bankName || ''} ${recipient.accountNumber || ''} a.n. ${recipient.accountHolder || ''}`
+      : 'Dana ke rekening yang Anda ajukan.';
   const html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;line-height:1.6;color:#334155;max-width:560px;margin:0 auto;padding:24px;} .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin:16px 0;} .label{font-size:12px;color:#64748b;} .value{font-size:16px;font-weight:600;color:#0f172a;} h1{font-size:20px;color:#0f172a;} p{color:#475569;} .footer{font-size:12px;color:#94a3b8;margin-top:24px;}</style></head>
 <body>
   <h1>${isBalanceWithdrawal ? 'Penarikan saldo selesai' : 'Proses Refund Selesai'}</h1>
-  <p>Halo <strong>${(ownerName || 'Pemesan').replace(/</g, '&lt;')}</strong>,</p>
+  <p>Halo <strong>${esc(ownerName || 'Pemesan')}</strong>,</p>
   ${introHtml}
   <div class="box">
-    <p class="label">${isBalanceWithdrawal ? 'Jumlah ditransfer' : 'Jumlah yang direfund'}</p>
+    <p class="label">${isBalanceWithdrawal ? 'Jumlah transfer' : 'Jumlah yang direfund'}</p>
     <p class="value">Rp ${amountStr}</p>
   </div>
-  <p>Bukti transfer terlampir dalam email ini. Dana akan masuk ke rekening penerima yang Anda ajukan.</p>
+  ${payoutBlock}
+  ${recvBlock}
+  <p>Bukti transfer terlampir dalam email ini.</p>
   <p class="footer">Email ini dikirim otomatis oleh sistem Bintang Global Group.</p>
 </body>
 </html>`;
-  const text = `${isBalanceWithdrawal ? 'Penarikan saldo selesai' : 'Proses Refund Selesai'}\n\nHalo ${ownerName || 'Pemesan'},\n\n${introText}\n\nJumlah: Rp ${amountStr}.\n\nBukti transfer terlampir.\n\n— Bintang Global Group`;
+  const text = `${isBalanceWithdrawal ? 'Penarikan saldo selesai' : 'Proses Refund Selesai'}\n\nHalo ${ownerName || 'Pemesan'},\n\n${introText}\n\nJumlah: Rp ${amountStr}.${payoutTextBlock}\n${recvText}\n\nBukti transfer terlampir.\n\n— Bintang Global Group`;
   const fromAddr = emailConfig.from || emailConfig.user;
   if (!fromAddr) return false;
   try {

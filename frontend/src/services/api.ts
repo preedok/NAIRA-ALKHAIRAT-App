@@ -576,6 +576,11 @@ export const refundsApi = {
   updateStatus: (id: string, body: { status: string; rejection_reason?: string }) => api.patch(`/refunds/${id}`, body),
   /** Potong saldo penarikan jika belum tercatat (admin/accounting, idempoten). */
   syncBalanceDebit: (id: string) => api.post<{ success: boolean; message?: string; data?: { owner_balance: number | null } }>(`/refunds/${id}/sync-balance-debit`),
+  /** Selesaikan transfer: bank & nama rekening pengirim + bukti (multipart). */
+  completePayout: (id: string, formData: FormData) =>
+    api.post<{ success: boolean; message?: string; data?: unknown }>(`/refunds/${id}/complete-payout`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
   createFromBalance: (body: { amount: number; bank_name: string; account_number: string; account_holder_name: string }) => api.post('/refunds', body),
   /** Role accounting: upload bukti bayar refund. Setelah upload, status jadi refunded & bukti dikirim ke email pemesan. */
   uploadProof: (id: string, formData: FormData) => api.post(`/refunds/${id}/upload-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

@@ -77,6 +77,21 @@ const Refund = sequelize.define('Refund', {
     type: DataTypes.STRING(500),
     allowNull: true,
     comment: 'Bukti transfer refund (upload oleh accounting); dikirim ke email pemesan setelah proses selesai'
+  },
+  payout_sender_bank_name: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Bank pengirim (rekening BGG saat transfer ke owner)'
+  },
+  payout_sender_account_number: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Nomor rekening pengirim (opsional)'
+  },
+  payout_sender_account_holder: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Nama pemilik rekening pengirim'
   }
 }, {
   tableName: 'refunds',

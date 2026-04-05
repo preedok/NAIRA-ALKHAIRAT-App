@@ -7,13 +7,13 @@ import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import PageFilter from '../../../components/common/PageFilter';
-import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading, Modal, ModalHeader, ModalBody, ModalBoxLg, NominalDisplay } from '../../../components/common';
+import { FilterIconButton, Input, Autocomplete, StatCard, CardSectionHeader, ContentLoading, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, NominalDisplay } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
-import { refundsApi, accountingApi, type RefundStats } from '../../../services/api';
+import { refundsApi, accountingApi, type RefundStats, type BankItem } from '../../../services/api';
 import type { TableColumn } from '../../../types';
 
 /** Refund - halaman untuk admin pusat & role accounting (lihat & update status permintaan refund). */
@@ -48,6 +48,13 @@ const RefundsPage: React.FC = () => {
   const [limit, setLimit] = useState(25);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [syncingBalanceId, setSyncingBalanceId] = useState<string | null>(null);
+  const [payoutModalRow, setPayoutModalRow] = useState<any | null>(null);
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  const [payoutBank, setPayoutBank] = useState('');
+  const [payoutHolder, setPayoutHolder] = useState('');
+  const [payoutNumber, setPayoutNumber] = useState('');
+  const [payoutFile, setPayoutFile] = useState<File | null>(null);
+  const [payoutBanks, setPayoutBanks] = useState<BankItem[]>([]);
   const [statModal, setStatModal] = useState<'total' | 'requested' | 'approved' | 'rejected' | 'refunded' | 'amount_pending' | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -58,7 +65,8 @@ const RefundsPage: React.FC = () => {
     { id: 'invoice_order', label: 'Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'amount', label: 'Jumlah', align: 'right' },
-    { id: 'bank', label: 'Rekening', align: 'left' },
+    { id: 'bank', label: 'Rek. penerima', align: 'left' },
+    { id: 'payout_sender', label: 'Dari (BGG)', align: 'left' },
     { id: 'status', label: 'Status', align: 'left' },
     ...(isOwnerViewer ? [{ id: 'owner_followup', label: 'Tindak lanjut', align: 'left' as const }] : []),
     ...(canUpdateStatus ? [{ id: 'actions', label: 'Aksi', align: 'left' as const }] : [])
@@ -70,6 +78,21 @@ const RefundsPage: React.FC = () => {
       <div>
         <div>{r.bank_name} {r.account_number}</div>
         {r.account_holder_name ? <div className="text-xs text-slate-500 mt-0.5">a.n. {r.account_holder_name}</div> : null}
+      </div>
+    );
+  };
+
+  const renderPayoutSenderCell = (r: any) => {
+    if (r.status !== 'refunded' || !r.payout_sender_bank_name) return '–';
+    return (
+      <div className="text-sm">
+        <div className="font-medium text-slate-800">{r.payout_sender_bank_name}</div>
+        {r.payout_sender_account_holder ? (
+          <div className="text-xs text-slate-500 mt-0.5">a.n. {r.payout_sender_account_holder}</div>
+        ) : null}
+        {r.payout_sender_account_number ? (
+          <div className="text-xs text-slate-500">No. {r.payout_sender_account_number}</div>
+        ) : null}
       </div>
     );
   };
@@ -128,6 +151,53 @@ const RefundsPage: React.FC = () => {
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { fetchRefunds(); }, [fetchRefunds]);
+
+  useEffect(() => {
+    if (!payoutModalRow) return;
+    accountingApi
+      .getBanks({ is_active: 'true' })
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.data)) setPayoutBanks(res.data.data);
+        else setPayoutBanks([]);
+      })
+      .catch(() => setPayoutBanks([]));
+  }, [payoutModalRow]);
+
+  const openCompletePayoutModal = (r: any) => {
+    setPayoutModalRow(r);
+    setPayoutBank('');
+    setPayoutHolder('');
+    setPayoutNumber('');
+    setPayoutFile(null);
+  };
+
+  const submitCompletePayout = () => {
+    if (!payoutModalRow?.id) return;
+    if (!payoutBank.trim() || !payoutHolder.trim()) {
+      showToast('Bank pengirim dan nama pemilik rekening pengirim wajib diisi', 'error');
+      return;
+    }
+    if (!payoutFile) {
+      showToast('Unggah file bukti transfer', 'error');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('proof_file', payoutFile);
+    fd.append('payout_sender_bank_name', payoutBank.trim());
+    fd.append('payout_sender_account_holder', payoutHolder.trim());
+    if (payoutNumber.trim()) fd.append('payout_sender_account_number', payoutNumber.trim());
+    setPayoutSubmitting(true);
+    refundsApi
+      .completePayout(payoutModalRow.id, fd)
+      .then((res) => {
+        showToast((res.data as { message?: string })?.message || 'Transfer selesai. Owner menerima notifikasi & email.', 'success');
+        setPayoutModalRow(null);
+        fetchStats();
+        fetchRefunds();
+      })
+      .catch((e: any) => showToast(e.response?.data?.message || 'Gagal menyelesaikan transfer', 'error'))
+      .finally(() => setPayoutSubmitting(false));
+  };
 
   const handleUpdateStatus = (id: string, status: string, rejection_reason?: string) => {
     setUpdatingId(id);
@@ -205,8 +275,8 @@ const RefundsPage: React.FC = () => {
         title="Refund"
         subtitle={
           canUpdateStatus
-            ? 'Penarikan saldo: saldo owner berkurang langsung saat owner mengajukan (menunggu persetujuan). Setujui = konfirmasi proses; tolak = saldo dikembalikan. Upload bukti = Sudah direfund (tanpa potong saldo lagi). Tombol Potong saldo (sinkron) untuk data lama yang belum tercatat.'
-            : 'Penarikan saldo: saldo berkurang saat Anda mengajukan; jika ditolak, dikembalikan. Setelah disetujui, tunggu transfer & bukti di halaman ini.'
+            ? 'Selesaikan transfer: isi bank & nama rekening pengirim (BGG), unggah bukti — status jadi Sudah direfund; owner dapat notifikasi + email lengkap. Tolak = kembalikan saldo (penarikan). Potong saldo (sinkron) hanya untuk data lama.'
+            : 'Penarikan: saldo berkurang saat pengajuan. Admin mengirim dari rekening BGG; Anda melihat bank/nama pengirim + bukti di sini, notifikasi, dan email.'
         }
         right={
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -325,6 +395,7 @@ const RefundsPage: React.FC = () => {
                         <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
                         <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                         <td className="py-2 px-4 text-slate-600 text-sm">{renderBankCell(r)}</td>
+                        <td className="py-2 px-4 text-slate-600 text-sm">{renderPayoutSenderCell(r)}</td>
                         <td className="py-2 px-4">
                           <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                           {r.status === 'rejected' && r.rejection_reason ? (
@@ -334,13 +405,22 @@ const RefundsPage: React.FC = () => {
                         {isOwnerViewer && (
                           <td className="py-2 px-4 text-sm">
                             {r.status === 'refunded' && r.proof_file_url ? (
-                              <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
-                                <Download className="w-3.5 h-3.5" /> Unduh bukti
-                              </Button>
+                              <div className="space-y-2 max-w-[14rem]">
+                                {r.payout_sender_bank_name ? (
+                                  <p className="text-xs text-slate-600 leading-snug">
+                                    <span className="font-medium text-slate-700">Dari BGG:</span> {r.payout_sender_bank_name}
+                                    {r.payout_sender_account_holder ? ` a.n. ${r.payout_sender_account_holder}` : ''}
+                                    {r.payout_sender_account_number ? ` · ${r.payout_sender_account_number}` : ''}
+                                  </p>
+                                ) : null}
+                                <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
+                                  <Download className="w-3.5 h-3.5" /> Unduh bukti
+                                </Button>
+                              </div>
                             ) : isBalanceWithdrawalRow(r) && r.status === 'requested' ? (
-                              <span className="text-slate-500 text-xs">Menunggu persetujuan</span>
+                              <span className="text-slate-500 text-xs">Menunggu transfer dari BGG</span>
                             ) : isBalanceWithdrawalRow(r) && r.status === 'approved' ? (
-                              <span className="text-slate-500 text-xs">Menunggu transfer</span>
+                              <span className="text-slate-500 text-xs">Menunggu bukti transfer</span>
                             ) : null}
                           </td>
                         )}
@@ -359,7 +439,7 @@ const RefundsPage: React.FC = () => {
         <CardSectionHeader
           icon={<Receipt className="w-6 h-6" />}
           title="Daftar Permintaan Refund"
-          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Saldo owner sudah dipotong saat pengajuan. Setujui/tolak memproses administrasi; tolak mengembalikan saldo. Lalu upload bukti transfer.' : 'Lihat daftar permintaan refund Anda.'}`}
+          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Gunakan Selesaikan transfer untuk input rekening pengirim + bukti. Tolak mengembalikan saldo penarikan.' : 'Lihat detail transfer dari BGG setelah selesai.'}`}
           className="mb-4"
         />
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
@@ -400,6 +480,7 @@ const RefundsPage: React.FC = () => {
                 </td>
                 <td className="py-3 px-4 text-right font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                 <td className="py-3 px-4 text-slate-600">{renderBankCell(r)}</td>
+                <td className="py-3 px-4 text-slate-600">{renderPayoutSenderCell(r)}</td>
                 <td className="py-3 px-4">
                   <Badge variant={STATUS_VARIANT[r.status] || 'default'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                   {r.status === 'rejected' && r.rejection_reason ? (
@@ -409,13 +490,22 @@ const RefundsPage: React.FC = () => {
                 {isOwnerViewer && (
                   <td className="py-3 px-4 text-sm">
                     {r.status === 'refunded' && r.proof_file_url ? (
-                      <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
-                        <Download className="w-3.5 h-3.5" /> Unduh bukti
-                      </Button>
+                      <div className="space-y-2 max-w-xs">
+                        {r.payout_sender_bank_name ? (
+                          <p className="text-xs text-slate-600 leading-snug">
+                            <span className="font-medium text-slate-700">Dari BGG:</span> {r.payout_sender_bank_name}
+                            {r.payout_sender_account_holder ? ` a.n. ${r.payout_sender_account_holder}` : ''}
+                            {r.payout_sender_account_number ? ` · ${r.payout_sender_account_number}` : ''}
+                          </p>
+                        ) : null}
+                        <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
+                          <Download className="w-3.5 h-3.5" /> Unduh bukti
+                        </Button>
+                      </div>
                     ) : isBalanceWithdrawalRow(r) && r.status === 'requested' ? (
-                      <span className="text-slate-500 text-xs">Menunggu persetujuan</span>
+                      <span className="text-slate-500 text-xs">Menunggu transfer dari BGG</span>
                     ) : isBalanceWithdrawalRow(r) && r.status === 'approved' ? (
-                      <span className="text-slate-500 text-xs">Menunggu transfer</span>
+                      <span className="text-slate-500 text-xs">Menunggu bukti transfer</span>
                     ) : null}
                   </td>
                 )}
@@ -427,7 +517,18 @@ const RefundsPage: React.FC = () => {
                           <Download className="w-3.5 h-3.5" /> Unduh bukti
                         </Button>
                       )}
-                      {(r.status === 'requested' || r.status === 'approved') && (
+                      {(r.status === 'requested' || (r.status === 'approved' && !r.proof_file_url)) && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="inline-flex items-center gap-1"
+                          disabled={payoutSubmitting && payoutModalRow?.id === r.id}
+                          onClick={() => openCompletePayoutModal(r)}
+                        >
+                          <Upload className="w-3.5 h-3.5" /> Selesaikan transfer
+                        </Button>
+                      )}
+                      {r.status === 'approved' && r.proof_file_url && (
                         <>
                           <input
                             type="file"
@@ -440,16 +541,13 @@ const RefundsPage: React.FC = () => {
                               e.target.value = '';
                             }}
                           />
-                          <Button size="sm" variant="primary" disabled={uploadingProofId === r.id} onClick={() => fileInputRefs.current[r.id]?.click()} className="inline-flex items-center gap-1">
-                            <Upload className="w-3.5 h-3.5" /> {uploadingProofId === r.id ? 'Uploading...' : 'Upload bukti refund'}
+                          <Button size="sm" variant="outline" disabled={uploadingProofId === r.id} onClick={() => fileInputRefs.current[r.id]?.click()} className="inline-flex items-center gap-1">
+                            <Upload className="w-3.5 h-3.5" /> {uploadingProofId === r.id ? 'Uploading...' : 'Ganti bukti'}
                           </Button>
                         </>
                       )}
                       {r.status === 'requested' && (
-                        <>
-                          <Button size="sm" variant="outline" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'approved')}>Setujui</Button>
-                          <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
-                        </>
+                        <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
                       )}
                       {isBalanceWithdrawalRow(r) && (r.status === 'approved' || r.status === 'refunded') && (
                         <Button
@@ -472,6 +570,73 @@ const RefundsPage: React.FC = () => {
           )}
         </div>
       </Card>
+
+      {payoutModalRow && (
+        <Modal open onClose={() => !payoutSubmitting && setPayoutModalRow(null)}>
+          <ModalBox className="max-w-md w-full">
+            <ModalHeader
+              title="Selesaikan transfer"
+              subtitle={
+                <span>
+                  Transfer ke penerima: <strong>{payoutModalRow.bank_name || '—'}</strong>
+                  {payoutModalRow.account_number ? ` · ${payoutModalRow.account_number}` : ''}
+                  {payoutModalRow.account_holder_name ? ` a.n. ${payoutModalRow.account_holder_name}` : ''}. Jumlah{' '}
+                  <NominalDisplay amount={parseFloat(payoutModalRow.amount)} currency="IDR" />. Isi rekening pengirim BGG dan unggah bukti — owner dapat notifikasi & email.
+                </span>
+              }
+              onClose={() => !payoutSubmitting && setPayoutModalRow(null)}
+            />
+            <ModalBody className="space-y-3">
+              <Autocomplete
+                label="Bank pengirim (BGG) *"
+                value={payoutBank}
+                onChange={(v) => setPayoutBank(v || '')}
+                options={payoutBanks.map((b) => ({ value: b.name, label: b.name }))}
+                placeholder="Pilih bank"
+                emptyLabel="Pilih bank"
+                disabled={payoutSubmitting}
+              />
+              <Input
+                label="Nama pemilik rekening pengirim *"
+                type="text"
+                value={payoutHolder}
+                onChange={(e) => setPayoutHolder(e.target.value)}
+                placeholder="Sesuai rekening pengirim"
+                disabled={payoutSubmitting}
+                fullWidth
+              />
+              <Input
+                label="Nomor rekening pengirim (opsional)"
+                type="text"
+                value={payoutNumber}
+                onChange={(e) => setPayoutNumber(e.target.value)}
+                placeholder="Jika ingin ditampilkan ke owner"
+                disabled={payoutSubmitting}
+                fullWidth
+              />
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-1">Bukti transfer *</p>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  disabled={payoutSubmitting}
+                  className="block w-full text-sm text-slate-600"
+                  onChange={(e) => setPayoutFile(e.target.files?.[0] || null)}
+                />
+                {payoutFile ? <p className="text-xs text-slate-500 mt-1">{payoutFile.name}</p> : null}
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => !payoutSubmitting && setPayoutModalRow(null)} disabled={payoutSubmitting}>
+                Batal
+              </Button>
+              <Button variant="primary" onClick={submitCompletePayout} disabled={payoutSubmitting}>
+                {payoutSubmitting ? 'Mengirim…' : 'Simpan & kirim ke owner'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
+      )}
     </div>
   );
 };

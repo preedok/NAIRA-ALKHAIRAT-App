@@ -554,6 +554,167 @@ const updateStatus = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/refunds/:id/complete-payout
+ * Admin pusat/accounting: selesaikan transfer — wajib bank & nama rekening pengirim (BGG) + bukti. Status → refunded, owner dapat notifikasi & email lengkap.
+ */
+const completePayout = [
+  refundProofUpload.single('proof_file'),
+  asyncHandler(async (req, res) => {
+    const allowed = ['admin_pusat', 'super_admin', 'role_accounting'].includes(req.user.role);
+    if (!allowed) return res.status(403).json({ success: false, message: 'Hanya admin pusat dan accounting' });
+
+    const r = await Refund.findByPk(req.params.id, {
+      include: [
+        { model: User, as: 'Owner', attributes: ['id', 'name', 'email'], required: false },
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false }
+      ]
+    });
+    if (!r) return res.status(404).json({ success: false, message: 'Refund tidak ditemukan' });
+    if (r.status === REFUND_STATUS.REFUNDED && r.proof_file_url) {
+      return res.status(409).json({ success: false, message: 'Permintaan ini sudah diselesaikan dan memiliki bukti.' });
+    }
+    if (![REFUND_STATUS.REQUESTED, REFUND_STATUS.APPROVED].includes(r.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hanya status Menunggu atau Disetujui yang dapat diselesaikan dengan form transfer.'
+      });
+    }
+
+    const payoutBank = req.body && req.body.payout_sender_bank_name ? String(req.body.payout_sender_bank_name).trim() : '';
+    const payoutHolder = req.body && req.body.payout_sender_account_holder ? String(req.body.payout_sender_account_holder).trim() : '';
+    const payoutAcctRaw = req.body && req.body.payout_sender_account_number != null ? String(req.body.payout_sender_account_number).trim() : '';
+    const payoutAcct = payoutAcctRaw !== '' ? payoutAcctRaw : null;
+    if (!payoutBank || !payoutHolder) {
+      return res.status(400).json({ success: false, message: 'Bank pengirim dan nama pemilik rekening pengirim wajib diisi.' });
+    }
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ success: false, message: 'File bukti transfer wajib diunggah.' });
+    }
+
+    const finalName = uploadConfig.refundProofFilename(r.id, r.Invoice?.invoice_number, req.file.originalname);
+    const oldPath = req.file.path;
+    const newPath = path.join(refundProofDir, finalName);
+    try {
+      fs.renameSync(oldPath, newPath);
+    } catch (e) {
+      /* keep temp name */
+    }
+    const savedName = fs.existsSync(newPath) ? finalName : path.basename(oldPath);
+    const fileUrl = uploadConfig.toUrlPath(uploadConfig.SUBDIRS.REFUND_PROOFS, savedName);
+
+    const wasRefunded = r.status === REFUND_STATUS.REFUNDED;
+    try {
+      await sequelize.transaction(async (tx) => {
+        await r.update(
+          {
+            proof_file_url: fileUrl,
+            payout_sender_bank_name: payoutBank,
+            payout_sender_account_holder: payoutHolder,
+            payout_sender_account_number: payoutAcct,
+            status: REFUND_STATUS.REFUNDED,
+            refunded_at: new Date(),
+            approved_by: req.user.id,
+            approved_at: new Date()
+          },
+          { transaction: tx }
+        );
+
+        if (r.invoice_id) {
+          const inv = await Invoice.findByPk(r.invoice_id, { transaction: tx });
+          if (inv && !wasRefunded) {
+            await logInvoiceStatusChange({
+              invoice_id: inv.id,
+              from_status: inv.status,
+              to_status: INVOICE_STATUS.REFUNDED,
+              changed_by: req.user.id,
+              reason: 'refund_refunded',
+              meta: { refund_id: r.id, amount: parseFloat(r.amount) || 0 },
+              transaction: tx
+            });
+            await inv.update({ status: INVOICE_STATUS.REFUNDED }, { transaction: tx });
+          }
+        }
+
+        if (!wasRefunded) {
+          const debit = await applyBalanceRefundDebitIfNeeded(r, { transaction: tx });
+          if (!debit.ok) {
+            const err = new Error(debit.message);
+            err.debitCode = debit.code;
+            throw err;
+          }
+        }
+      });
+    } catch (e) {
+      if (e.debitCode) return res.status(e.debitCode).json({ success: false, message: e.message });
+      throw e;
+    }
+
+    const ownerEmail = r.Owner?.email || null;
+    const proofPath = fs.existsSync(newPath) ? newPath : oldPath;
+    const emailOpts = {
+      balanceWithdrawal: isBalanceWithdrawalRefund(r),
+      payout: { bankName: payoutBank, accountHolder: payoutHolder, accountNumber: payoutAcct || '' },
+      recipient: {
+        bankName: r.bank_name,
+        accountNumber: r.account_number,
+        accountHolder: r.account_holder_name
+      }
+    };
+    let emailSent = false;
+    if (ownerEmail) {
+      emailSent = await sendRefundProofToOwner(
+        ownerEmail,
+        r.Owner?.name || 'Pemesan',
+        parseFloat(r.amount) || 0,
+        r.Invoice?.invoice_number || '',
+        proofPath,
+        emailOpts
+      );
+    }
+
+    const amtStr = Number(parseFloat(r.amount) || 0).toLocaleString('id-ID');
+    const isBal = isBalanceWithdrawalRefund(r);
+    const inAppMsg = isBal
+      ? `Transfer penarikan saldo Rp ${amtStr} selesai. Pengirim: ${payoutBank}, a.n. ${payoutHolder}${payoutAcct ? `, No. ${payoutAcct}` : ''}. Penerima Anda: ${r.bank_name || '-'} · ${r.account_number || '-'} a.n. ${r.account_holder_name || '-'}. Bukti: menu Refund${ownerEmail ? ' & email Anda' : ''}.`
+      : `Refund Rp ${amtStr} selesai. Transfer dari ${payoutBank} a.n. ${payoutHolder}. Penerima: ${r.bank_name || '-'} · ${r.account_number || '-'}. Bukti di menu Refund${ownerEmail ? ' & email' : ''}.`;
+
+    if (r.owner_id) {
+      await Notification.create({
+        user_id: r.owner_id,
+        trigger: NOTIFICATION_TRIGGER.REFUND,
+        title: isBal ? 'Penarikan saldo — transfer selesai' : 'Refund — transfer selesai',
+        message: inAppMsg,
+        data: {
+          refund_id: r.id,
+          invoice_id: r.invoice_id,
+          proof_file_url: fileUrl,
+          source: r.source,
+          payout_sender_bank_name: payoutBank,
+          payout_sender_account_holder: payoutHolder,
+          payout_sender_account_number: payoutAcct
+        },
+        channel_in_app: true,
+        channel_email: true,
+        ...(emailSent ? { email_sent_at: new Date() } : {})
+      });
+    }
+
+    const updated = await Refund.findByPk(r.id, {
+      include: [
+        { model: User, as: 'Owner', attributes: ['id', 'name', 'email'], required: false },
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false }
+      ]
+    });
+    res.json({
+      success: true,
+      data: updated,
+      message:
+        'Transfer selesai. Owner menerima notifikasi lengkap' + (ownerEmail ? ' dan email berisi bukti.' : ' di aplikasi.')
+    });
+  })
+];
+
+/**
  * POST /api/v1/refunds/:id/upload-proof
  * Role accounting: upload bukti bayar refund. Setelah upload, bukti dikirim ke email pemesan (owner).
  */
@@ -620,8 +781,22 @@ const uploadProof = [
       throw e;
     }
 
+    const refreshed = await Refund.findByPk(r.id);
     const ownerEmail = r.Owner?.email || null;
     const proofPath = fs.existsSync(newPath) ? newPath : oldPath;
+    const emailOpts = {
+      balanceWithdrawal: isBalanceWithdrawalRefund(refreshed || r),
+      payout: {
+        bankName: refreshed?.payout_sender_bank_name || '',
+        accountHolder: refreshed?.payout_sender_account_holder || '',
+        accountNumber: refreshed?.payout_sender_account_number || ''
+      },
+      recipient: {
+        bankName: refreshed?.bank_name || r.bank_name,
+        accountNumber: refreshed?.account_number || r.account_number,
+        accountHolder: refreshed?.account_holder_name || r.account_holder_name
+      }
+    };
     let emailSent = false;
     if (ownerEmail) {
       emailSent = await sendRefundProofToOwner(
@@ -630,7 +805,7 @@ const uploadProof = [
         parseFloat(r.amount) || 0,
         r.Invoice?.invoice_number || '',
         proofPath,
-        { balanceWithdrawal: isBalanceWithdrawalRefund(r) }
+        emailOpts
       );
     }
     const isBalance = isBalanceWithdrawalRefund(r);
@@ -734,4 +909,4 @@ const syncBalanceDebit = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getStats, list, getById, updateStatus, createFromBalance, uploadProof, getProofFile, syncBalanceDebit };
+module.exports = { getStats, list, getById, updateStatus, createFromBalance, completePayout, uploadProof, getProofFile, syncBalanceDebit };
