@@ -140,7 +140,7 @@ function computeDpDeadlineFromOrder(order, graceHours) {
 /** Atribut PaymentProof untuk include (tanpa proof_file_name, proof_file_content_type, proof_file_data agar kompatibel dengan DB yang belum punya kolom tersebut; setelah migration 20260327000001 jalan, bisa tambah proof_file_name) */
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const archiver = require('archiver');
-const { buildInvoicePdfBuffer, getEffectiveStatusLabel } = require('../utils/invoicePdf');
+const { buildInvoicePdfBuffer, getEffectiveStatusLabel, getFirstInvoiceLineDescriptionForFilename } = require('../utils/invoicePdf');
 const { buildHotelInfoPdfBuffer } = require('../utils/hotelPdf');
 const { buildVisaSlipPdfBuffer } = require('../utils/visaSlipPdf');
 const { buildTicketSlipPdfBuffer } = require('../utils/ticketSlipPdf');
@@ -1575,12 +1575,13 @@ const getPdf = asyncHandler(async (req, res) => {
     generated_by: req.user?.id
   }, { conflictFields: ['invoice_id'] });
 
-  // Format: STATUS INVOICE_NOMOR INVOICE_Nama Owner_Tanggal Order Invoice.pdf (nomor invoice sudah berformat INV-YYYY-xxxxx)
+  // Format: STATUS_INV_NamaOwner_deskripsiBarisPertama_tanggal.pdf
   const statusLabel = getEffectiveStatusLabel(data);
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
   const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || invoice.owner_name_manual || invoice.Order?.owner_name_manual || 'Owner';
   const dateOrder = (invoice.issued_at || invoice.created_at) ? new Date(invoice.issued_at || invoice.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
-  const downloadName = `${safe(statusLabel)}_${safe(invoice.invoice_number)}_${safe(ownerName)}_${dateOrder}.pdf`;
+  const firstItemSeg = safe(getFirstInvoiceLineDescriptionForFilename(data));
+  const downloadName = `${safe(statusLabel)}_${safe(invoice.invoice_number)}_${safe(ownerName)}_${firstItemSeg}_${dateOrder}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -1623,6 +1624,7 @@ const getArchive = asyncHandler(async (req, res) => {
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
   const invNum = invoice.invoice_number || 'INV';
   const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || invoice.owner_name_manual || invoice.Order?.owner_name_manual || 'Owner';
+  const archiveFirstItemSeg = safe(getFirstInvoiceLineDescriptionForFilename(data));
 
   // Riwayat status invoice (urutan: dari yang terdahulu ke terbaru) untuk generate PDF per tahap
   const statusHistoryRows = await InvoiceStatusHistory.findAll({
@@ -1662,7 +1664,7 @@ const getArchive = asyncHandler(async (req, res) => {
     const dataForStatus = { ...data, status };
     const label = getEffectiveStatusLabel(dataForStatus);
     const buf = await buildInvoicePdfBuffer(dataForStatus);
-    const entryName = `01_Invoice_${String(i + 1).padStart(2, '0')}_${safe(invNum)}_${safe(label)}.pdf`;
+    const entryName = `01_Invoice_${String(i + 1).padStart(2, '0')}_${safe(invNum)}_${safe(label)}_${archiveFirstItemSeg}.pdf`;
     invoiceEntryNames.push(entryName);
     archive.append(buf, { name: entryName });
   }

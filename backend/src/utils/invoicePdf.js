@@ -246,6 +246,153 @@ function getRates(data) {
 }
 
 /**
+ * Baris tabel invoice (sama urutan/logika seperti PDF): merge hotel, urut Madinah/Mekkah, baris sintetis bus+visa.
+ * @param {object} data - payload invoice + Order.OrderItems
+ * @returns {Array<object>}
+ */
+function buildInvoiceDisplayItems(data) {
+  const items = data.Order?.OrderItems || [];
+  const rates = getRates(data);
+  const s2i = (rates && rates.SAR_TO_IDR != null) ? rates.SAR_TO_IDR : 4200;
+  const u2i = (rates && rates.USD_TO_IDR != null) ? rates.USD_TO_IDR : 15500;
+  const hotelKey = (it) => {
+    const meta = it.meta && typeof it.meta === 'object' ? it.meta : {};
+    const pid = it.product_ref_id || it.product_id || '';
+    const ci = (meta.check_in || '').toString().slice(0, 10);
+    const co = (meta.check_out || '').toString().slice(0, 10);
+    return `${pid}|${ci}|${co}`;
+  };
+  const groups = new Map();
+  items.forEach((it) => {
+    if ((it.type || '').toLowerCase() !== 'hotel') return;
+    const key = hotelKey(it);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(it);
+  });
+  const seen = new Set();
+  const result = [];
+  items.forEach((it) => {
+    if ((it.type || '').toLowerCase() !== 'hotel') {
+      result.push(it);
+      return;
+    }
+    const key = hotelKey(it);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const group = groups.get(key) || [];
+    if (group.length === 0) return;
+    if (group.length === 1) {
+      result.push(group[0]);
+      return;
+    }
+    const first = group[0];
+    const meta0 = first.meta && typeof first.meta === 'object' ? first.meta : {};
+    const ci = meta0.check_in ? formatDateShort(meta0.check_in) : '';
+    const co = meta0.check_out ? formatDateShort(meta0.check_out) : '';
+    const nights = meta0.nights != null ? Number(meta0.nights) : 0;
+    const roomParts = group.map((it2) => {
+      const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
+      const rt = (m.room_type || 'quad').toString().toLowerCase();
+      const q = it2.quantity != null ? Number(it2.quantity) : 1;
+      return `${roomTypeLabel(rt)} × ${q}`;
+    });
+    const totalSub = group.reduce((s, it2) => s + (parseFloat(String(it2.subtotal || 0)) || 0), 0);
+    const totalQty = group.reduce((s, it2) => s + (it2.quantity != null ? Number(it2.quantity) : 1), 0);
+    let mergedRoomSub = 0;
+    let mergedMealSub = 0;
+    let mergedOrangNights = 0;
+    group.forEach((it2) => {
+      const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
+      const q = it2.quantity != null ? Number(it2.quantity) : 1;
+      const rt = (m.room_type || 'quad').toString().toLowerCase();
+      const cap = ROOM_CAPACITY[String(rt)] ?? 1;
+      const totalOrang = q * cap;
+      const cur2 = (it2.unit_price_currency || 'IDR').toUpperCase();
+      const toIdr2 = (v) => (cur2 === 'SAR' ? v * s2i : cur2 === 'USD' ? v * u2i : v);
+      const roomUnitRaw2 = m.room_unit_price != null ? parseFloat(m.room_unit_price) : (it2.unit_price != null ? parseFloat(it2.unit_price) : 0);
+      const mealUnitRaw2 = m.meal_unit_price != null ? parseFloat(m.meal_unit_price) : NaN;
+      const roomUnitIdr2 = Number.isFinite(roomUnitRaw2) ? toIdr2(roomUnitRaw2) : 0;
+      let mealUnitIdr2 = Number.isFinite(mealUnitRaw2) ? toIdr2(mealUnitRaw2) : 0;
+      const withMeal2 = m.meal === true || m.with_meal === true;
+      const roomPart2 = nights > 0 ? roomUnitIdr2 * q * nights : 0;
+      let mealPart2 = (withMeal2 && nights > 0 && mealUnitIdr2 > 0) ? mealUnitIdr2 * totalOrang * nights : 0;
+      const itemSubtotal2 = parseFloat(String(it2.subtotal || 0)) || 0;
+      if (withMeal2 && nights > 0 && mealUnitIdr2 <= 0 && roomPart2 > 0 && itemSubtotal2 > roomPart2 && (totalOrang * nights) > 0) {
+        mealPart2 = itemSubtotal2 - roomPart2;
+        mealUnitIdr2 = mealPart2 / (totalOrang * nights);
+      }
+      mergedRoomSub += roomPart2 > 0 ? roomPart2 : Math.max(0, itemSubtotal2 - mealPart2);
+      mergedMealSub += mealPart2 > 0 ? mealPart2 : 0;
+      if (withMeal2 && nights > 0 && (totalOrang * nights) > 0) mergedOrangNights += (totalOrang * nights);
+    });
+    const mergedMealUnitIdr = mergedOrangNights > 0 ? (mergedMealSub / mergedOrangNights) : 0;
+    result.push({
+      ...first,
+      _merged: true,
+      _mergedDateLine: `Check-in: ${ci || '-'}, Check-out: ${co || '-'}`,
+      _mergedMealLine: `${nights ? `${nights} malam. ` : ''}${roomParts.join(', ')}`,
+      _mergedSubtotal: totalSub,
+      _mergedQty: totalQty,
+      _mergedNights: nights,
+      _mergedRoomSubtotal: mergedRoomSub,
+      _mergedMealSubtotal: mergedMealSub,
+      _mergedMealUnitIdr: mergedMealUnitIdr,
+      _mergedOrangNights: mergedOrangNights,
+      quantity: totalQty,
+      subtotal: totalSub
+    });
+  });
+  const getOrderItemSortIndex = (type, hotelLocation) => {
+    const t = (type || '').toLowerCase();
+    if (t === 'hotel') return ((hotelLocation || '').toLowerCase() === 'madinah') ? 0 : 1;
+    const order = ['visa', 'ticket', 'bus', 'handling', 'package'];
+    const idx = order.indexOf(t);
+    return idx >= 0 ? idx + 2 : 99;
+  };
+  result.sort((a, b) => {
+    const tA = (a.type || '').toLowerCase();
+    const tB = (b.type || b.product_type || '').toLowerCase();
+    const locA = tA === 'hotel' ? getHotelLocationFromItem(a) : null;
+    const locB = tB === 'hotel' ? getHotelLocationFromItem(b) : null;
+    return getOrderItemSortIndex(tA, locA) - getOrderItemSortIndex(tB, locB);
+  });
+  const hasVisa = items.some((it) => (it.type || '').toLowerCase() === 'visa');
+  const hasBusItems = items.some((it) => (it.type || '').toLowerCase() === 'bus');
+  if (hasVisa && !hasBusItems && data.Order) {
+    const penalty = parseFloat(String(data.Order.penalty_amount || 0)) || 0;
+    const waive = !!(data.Order.waive_bus_penalty);
+    const desc = waive ? 'Tanpa penalti (Hiace)' : (penalty > 0 ? `Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt (visa < 35 pack)` : 'Termasuk dengan visa');
+    result.push({
+      _busInclude: true,
+      type: 'bus',
+      penalty_amount: penalty,
+      waive_bus_penalty: waive,
+      _busIncludeDesc: desc,
+      subtotal: penalty > 0 && !waive ? penalty : 0
+    });
+  }
+  return result;
+}
+
+/** Deskripsi baris pertama tabel invoice (untuk segmen nama file unduhan). */
+function getFirstInvoiceLineDescriptionForFilename(data) {
+  const rows = buildInvoiceDisplayItems(data);
+  const first = rows[0];
+  if (!first) return 'Item';
+  if (first._busInclude) {
+    const sub = (first._busIncludeDesc || '').trim();
+    return sub ? `Bus include (${sub})` : 'Bus include (dengan visa)';
+  }
+  let desc = (first.Product?.name || first.product_name || `${typeLabel(first.type)} 1`).toString().trim();
+  if ((first.type || '').toLowerCase() === 'hotel') {
+    desc = `${hotelLocationInvoiceHeading(first)} ${desc}`;
+  }
+  const maxLen = 100;
+  if (desc.length > maxLen) desc = desc.slice(0, maxLen).trim();
+  return desc;
+}
+
+/**
  * @param {PDFDocument} doc
  * @param {object} data - invoice data (dari DB)
  * @param {Buffer} [logoBuffer] - optional logo buffer (background putih sudah dijadikan transparan)
@@ -378,129 +525,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   y = tableTop + headerRowH;
 
   const items = data.Order?.OrderItems || [];
-  /** Satu product hotel + banyak tipe kamar + tanggal sama → satu baris; rincian tipe kamar di Deskripsi. */
-  const displayItems = (() => {
-    const hotelKey = (it) => {
-      const meta = it.meta && typeof it.meta === 'object' ? it.meta : {};
-      const pid = it.product_ref_id || it.product_id || '';
-      const ci = (meta.check_in || '').toString().slice(0, 10);
-      const co = (meta.check_out || '').toString().slice(0, 10);
-      return `${pid}|${ci}|${co}`;
-    };
-    const groups = new Map();
-    items.forEach((it) => {
-      if ((it.type || '').toLowerCase() !== 'hotel') return;
-      const key = hotelKey(it);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(it);
-    });
-    const seen = new Set();
-    const result = [];
-    items.forEach((it) => {
-      if ((it.type || '').toLowerCase() !== 'hotel') {
-        result.push(it);
-        return;
-      }
-      const key = hotelKey(it);
-      if (seen.has(key)) return;
-      seen.add(key);
-      const group = groups.get(key) || [];
-      if (group.length === 0) return;
-      if (group.length === 1) {
-        result.push(group[0]);
-        return;
-      }
-      const first = group[0];
-      const meta0 = first.meta && typeof first.meta === 'object' ? first.meta : {};
-      const ci = meta0.check_in ? formatDateShort(meta0.check_in) : '';
-      const co = meta0.check_out ? formatDateShort(meta0.check_out) : '';
-      const nights = meta0.nights != null ? Number(meta0.nights) : 0;
-      const roomParts = group.map((it2) => {
-        const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
-        const rt = (m.room_type || 'quad').toString().toLowerCase();
-        const q = it2.quantity != null ? Number(it2.quantity) : 1;
-        return `${roomTypeLabel(rt)} × ${q}`;
-      });
-      const totalSub = group.reduce((s, it2) => s + (parseFloat(String(it2.subtotal || 0)) || 0), 0);
-      const totalQty = group.reduce((s, it2) => s + (it2.quantity != null ? Number(it2.quantity) : 1), 0);
-      // Breakdown subtotal kamar vs makan untuk baris gabungan (agar Harga Satuan Makan & Subtotal gabungan konsisten).
-      let mergedRoomSub = 0;
-      let mergedMealSub = 0;
-      let mergedOrangNights = 0;
-      group.forEach((it2) => {
-        const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
-        const q = it2.quantity != null ? Number(it2.quantity) : 1;
-        const rt = (m.room_type || 'quad').toString().toLowerCase();
-        const cap = ROOM_CAPACITY[String(rt)] ?? 1;
-        const totalOrang = q * cap;
-        const cur2 = (it2.unit_price_currency || 'IDR').toUpperCase();
-        const toIdr2 = (v) => (cur2 === 'SAR' ? v * s2i : cur2 === 'USD' ? v * u2i : v);
-        const roomUnitRaw2 = m.room_unit_price != null ? parseFloat(m.room_unit_price) : (it2.unit_price != null ? parseFloat(it2.unit_price) : 0);
-        const mealUnitRaw2 = m.meal_unit_price != null ? parseFloat(m.meal_unit_price) : NaN;
-        const roomUnitIdr2 = Number.isFinite(roomUnitRaw2) ? toIdr2(roomUnitRaw2) : 0;
-        let mealUnitIdr2 = Number.isFinite(mealUnitRaw2) ? toIdr2(mealUnitRaw2) : 0;
-        const withMeal2 = m.meal === true || m.with_meal === true;
-        const roomPart2 = nights > 0 ? roomUnitIdr2 * q * nights : 0;
-        let mealPart2 = (withMeal2 && nights > 0 && mealUnitIdr2 > 0) ? mealUnitIdr2 * totalOrang * nights : 0;
-        const itemSubtotal2 = parseFloat(String(it2.subtotal || 0)) || 0;
-        if (withMeal2 && nights > 0 && mealUnitIdr2 <= 0 && roomPart2 > 0 && itemSubtotal2 > roomPart2 && (totalOrang * nights) > 0) {
-          mealPart2 = itemSubtotal2 - roomPart2;
-          mealUnitIdr2 = mealPart2 / (totalOrang * nights);
-        }
-        mergedRoomSub += roomPart2 > 0 ? roomPart2 : Math.max(0, itemSubtotal2 - mealPart2);
-        mergedMealSub += mealPart2 > 0 ? mealPart2 : 0;
-        if (withMeal2 && nights > 0 && (totalOrang * nights) > 0) mergedOrangNights += (totalOrang * nights);
-      });
-      const mergedMealUnitIdr = mergedOrangNights > 0 ? (mergedMealSub / mergedOrangNights) : 0;
-      result.push({
-        ...first,
-        _merged: true,
-        _mergedDateLine: `Check-in: ${ci || '-'}, Check-out: ${co || '-'}`,
-        _mergedMealLine: `${nights ? `${nights} malam. ` : ''}${roomParts.join(', ')}`,
-        _mergedSubtotal: totalSub,
-        _mergedQty: totalQty,
-        _mergedNights: nights,
-        _mergedRoomSubtotal: mergedRoomSub,
-        _mergedMealSubtotal: mergedMealSub,
-        _mergedMealUnitIdr: mergedMealUnitIdr,
-        _mergedOrangNights: mergedOrangNights,
-        quantity: totalQty,
-        subtotal: totalSub
-      });
-    });
-    // Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket
-    const getOrderItemSortIndex = (type, hotelLocation) => {
-      const t = (type || '').toLowerCase();
-      if (t === 'hotel') return ((hotelLocation || '').toLowerCase() === 'madinah') ? 0 : 1;
-      const order = ['visa', 'ticket', 'bus', 'handling', 'package'];
-      const idx = order.indexOf(t);
-      return idx >= 0 ? idx + 2 : 99;
-    };
-    result.sort((a, b) => {
-      const tA = (a.type || '').toLowerCase();
-      const tB = (b.type || b.product_type || '').toLowerCase();
-      const locA = tA === 'hotel' ? getHotelLocationFromItem(a) : null;
-      const locB = tB === 'hotel' ? getHotelLocationFromItem(b) : null;
-      return getOrderItemSortIndex(tA, locA) - getOrderItemSortIndex(tB, locB);
-    });
-    // Baris sintetis: Bus include (dengan visa) bila order punya visa dan tidak ada item bus
-    const hasVisa = items.some((it) => (it.type || '').toLowerCase() === 'visa');
-    const hasBusItems = items.some((it) => (it.type || '').toLowerCase() === 'bus');
-    if (hasVisa && !hasBusItems && data.Order) {
-      const penalty = parseFloat(String(data.Order.penalty_amount || 0)) || 0;
-      const waive = !!(data.Order.waive_bus_penalty);
-      const desc = waive ? 'Tanpa penalti (Hiace)' : (penalty > 0 ? `Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt (visa < 35 pack)` : 'Termasuk dengan visa');
-      result.push({
-        _busInclude: true,
-        type: 'bus',
-        penalty_amount: penalty,
-        waive_bus_penalty: waive,
-        _busIncludeDesc: desc,
-        subtotal: penalty > 0 && !waive ? penalty : 0
-      });
-    }
-    return result;
-  })();
+  const displayItems = buildInvoiceDisplayItems(data);
 
   let totalAmount = parseFloat(String(data.total_amount || 0));
   if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
@@ -1113,4 +1138,13 @@ async function buildInvoicePdfBuffer(data) {
   });
 }
 
-module.exports = { renderInvoicePdf, buildInvoicePdfBuffer, formatIDR, formatDate, STATUS_LABELS, getEffectiveStatusLabel };
+module.exports = {
+  renderInvoicePdf,
+  buildInvoicePdfBuffer,
+  formatIDR,
+  formatDate,
+  STATUS_LABELS,
+  getEffectiveStatusLabel,
+  buildInvoiceDisplayItems,
+  getFirstInvoiceLineDescriptionForFilename
+};
