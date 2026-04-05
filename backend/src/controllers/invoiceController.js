@@ -127,6 +127,16 @@ async function loadBalanceAllocationsForInvoicePdf(invoiceId) {
   return rows.map(mapBalanceAllocRow);
 }
 
+/**
+ * Jatuh tempo DP & batas auto-block: dari waktu order dibuat + jam (bukan hari kalender).
+ * Pakai aturan `dp_grace_hours` (default 24).
+ */
+function computeDpDeadlineFromOrder(order, graceHours) {
+  const h = Math.max(1, parseInt(graceHours, 10) || 24);
+  const base = order && order.created_at != null ? new Date(order.created_at) : new Date();
+  return new Date(base.getTime() + h * 60 * 60 * 1000);
+}
+
 /** Atribut PaymentProof untuk include (tanpa proof_file_name, proof_file_content_type, proof_file_data agar kompatibel dengan DB yang belum punya kolom tersebut; setelah migration 20260327000001 jalan, bisa tambah proof_file_name) */
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const archiver = require('archiver');
@@ -1037,7 +1047,7 @@ const getSummary = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/invoices
- * Create invoice from order. Status tentative, auto_cancel_at = now + dp_grace_hours.
+ * Create invoice from order. Status tentative; jatuh tempo DP & auto_cancel = order.created_at + dp_grace_hours.
  */
 const create = asyncHandler(async (req, res) => {
   const { order_id, is_super_promo, dp_percentage: bodyDpPct, dp_amount: bodyDpAmount } = req.body;
@@ -1052,7 +1062,6 @@ const create = asyncHandler(async (req, res) => {
 
   const rules = await getRulesForBranch(order.branch_id);
   const dpGraceHours = rules.dp_grace_hours ?? 24;
-  const dpDueDays = rules.dp_due_days ?? 3;
   const totalAmount = parseFloat(order.total_amount);
   const minDpPct = Math.max(0, parseInt(rules.min_dp_percentage, 10) || 30);
   let dpPercentage = is_super_promo ? 50 : (parseInt(bodyDpPct, 10) || 30);
@@ -1063,10 +1072,8 @@ const create = asyncHandler(async (req, res) => {
     dpPercentage = Math.round((dpAmount / totalAmount) * 100);
   }
   if (dpPercentage < minDpPct) dpPercentage = minDpPct;
-  const dueDateDp = new Date();
-  dueDateDp.setDate(dueDateDp.getDate() + dpDueDays);
-  const autoCancelAt = new Date();
-  autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
+  const dueDateDp = computeDpDeadlineFromOrder(order, dpGraceHours);
+  const autoCancelAt = new Date(dueDateDp.getTime());
 
   const rates = await getOrderRatesForConversion(order.id);
   const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
@@ -1091,9 +1098,9 @@ const create = asyncHandler(async (req, res) => {
     auto_cancel_at: autoCancelAt,
     is_overdue: false,
     terms: [
-      `Invoice batal otomatis bila dalam ${dpGraceHours} jam setelah issued belum ada DP`,
+      `Invoice batal otomatis bila dalam ${dpGraceHours} jam setelah order dibuat belum ada DP`,
       `Minimal DP ${dpPercentage}% dari total`,
-      `Jatuh tempo DP ${dpDueDays} hari setelah issued`
+      `Jatuh tempo DP ${dpGraceHours} jam setelah order dibuat`
     ]
   });
   await updateOrderDpStatusFromInvoice(invoice);
@@ -1111,12 +1118,12 @@ const create = asyncHandler(async (req, res) => {
       user_id: order.owner_id,
       trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
       title: 'Invoice baru',
-      message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
+      message: `Invoice ${invoice.invoice_number}. Bayar DP paling lambat ${dpGraceHours} jam sejak order dibuat.`,
       data: { order_id: order.id, invoice_id: invoice.id },
       channel_in_app: true,
       channel_email: true
     });
-    const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
+    const dueInfo = `Bayar DP paling lambat ${dpGraceHours} jam sejak order dibuat.`;
     setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
   }
 
@@ -1141,7 +1148,6 @@ async function createInvoiceForOrder(order, opts = {}) {
     console.warn('createInvoiceForOrder getRulesForBranch failed, using defaults:', e?.message);
   }
   const dpGraceHours = rules.dp_grace_hours ?? 24;
-  const dpDueDays = rules.dp_due_days ?? 3;
   const totalAmount = parseFloat(order.total_amount);
   const minDpPct = Math.max(0, parseInt(rules.min_dp_percentage, 10) || 30);
   let dpPercentage = opts.is_super_promo ? 50 : (opts.dp_percentage != null ? parseInt(opts.dp_percentage, 10) : 30);
@@ -1152,10 +1158,8 @@ async function createInvoiceForOrder(order, opts = {}) {
     dpPercentage = Math.round((dpAmount / totalAmount) * 100);
   }
   if (dpPercentage < minDpPct) dpPercentage = minDpPct;
-  const dueDateDp = new Date();
-  dueDateDp.setDate(dueDateDp.getDate() + dpDueDays);
-  const autoCancelAt = new Date();
-  autoCancelAt.setHours(autoCancelAt.getHours() + dpGraceHours);
+  const dueDateDp = computeDpDeadlineFromOrder(order, dpGraceHours);
+  const autoCancelAt = new Date(dueDateDp.getTime());
   const rates = await getOrderRatesForConversion(orderId);
   const sarToIdr = rates.SAR_TO_IDR && rates.SAR_TO_IDR > 0 ? rates.SAR_TO_IDR : 4200;
   const currencyRatesSnapshot = (!order.currency_rates_override || typeof order.currency_rates_override !== 'object')
@@ -1184,9 +1188,9 @@ async function createInvoiceForOrder(order, opts = {}) {
     auto_cancel_at: autoCancelAt,
     is_overdue: false,
     terms: [
-      `Invoice batal otomatis bila dalam ${dpGraceHours} jam setelah issued belum ada DP`,
+      `Invoice batal otomatis bila dalam ${dpGraceHours} jam setelah order dibuat belum ada DP`,
       `Minimal DP ${dpPercentage}% dari total`,
-      `Jatuh tempo DP ${dpDueDays} hari setelah issued`
+      `Jatuh tempo DP ${dpGraceHours} jam setelah order dibuat`
     ],
     currency_rates_snapshot: currencyRatesSnapshot
   });
@@ -1204,12 +1208,12 @@ async function createInvoiceForOrder(order, opts = {}) {
       user_id: order.owner_id,
       trigger: NOTIFICATION_TRIGGER.INVOICE_CREATED,
       title: 'Invoice baru',
-      message: `Invoice ${invoice.invoice_number}. Silakan bayar DP dalam ${dpGraceHours} jam.`,
+      message: `Invoice ${invoice.invoice_number}. Bayar DP paling lambat ${dpGraceHours} jam sejak order dibuat.`,
       data: { order_id: orderId, invoice_id: invoice.id },
       channel_in_app: true,
       channel_email: true
     });
-    const dueInfo = `Silakan bayar DP dalam ${dpGraceHours} jam.`;
+    const dueInfo = `Bayar DP paling lambat ${dpGraceHours} jam sejak order dibuat.`;
     setImmediate(() => sendInvoiceCreatedNotificationEmail(invoice.id, notif.id, dueInfo));
   }
   return invoice;
@@ -1351,7 +1355,8 @@ const unblock = asyncHandler(async (req, res) => {
     is_blocked: false,
     unblocked_by: req.user.id,
     unblocked_at: new Date(),
-    auto_cancel_at: newAutoCancelAt
+    auto_cancel_at: newAutoCancelAt,
+    due_date_dp: newAutoCancelAt
   });
   const order = await Order.findByPk(invoice.order_id);
   if (order && order.status === 'blocked') {

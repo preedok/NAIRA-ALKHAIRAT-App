@@ -298,8 +298,8 @@ const ACCOUNT_MAPPING_TYPE = {
 const BUSINESS_RULES = {
   DP_PERCENTAGE_NORMAL: 30,
   DP_PERCENTAGE_SUPER_PROMO: 50,
-  DP_GRACE_HOURS: 24,        // Invoice tentative batal jika belum DP dalam 24 jam
-  DP_DUE_DAYS: 3,            // Tenggat DP 3 hari
+  DP_GRACE_HOURS: 24,        // Jatuh tempo DP & auto-block: order.created_at + jam ini (bukan hari kalender)
+  DP_DUE_DAYS: 3,            // Legacy key di business rules; perhitungan invoice memakai dp_grace_hours dari order
   BUS_MIN_PACK: 35,
   CURRENCY: ['IDR', 'SAR'],
   REGISTRATION_DEPOSIT_IDR: 25000000,

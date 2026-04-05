@@ -75,14 +75,14 @@ const Invoice = sequelize.define('Invoice', {
   },
   due_date_dp: {
     type: DataTypes.DATE,
-    comment: 'Tenggat DP max 3 hari'
+    comment: 'Tenggat DP: order.created_at + dp_grace_hours'
   },
   due_date_full: {
     type: DataTypes.DATE
   },
   auto_cancel_at: {
     type: DataTypes.DATE,
-    comment: '1x24 jam setelah issued jika belum DP'
+    comment: '1x24 jam (dp_grace_hours) setelah order dibuat jika belum DP'
   },
   is_overdue: {
     type: DataTypes.BOOLEAN,

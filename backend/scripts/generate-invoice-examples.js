@@ -43,8 +43,7 @@ function createSampleData(status) {
   const overpaidAmount = ['overpaid', 'overpaid_transferred', 'overpaid_received', 'overpaid_refund_pending'].includes(status) ? 2500000 : 0;
 
   const now = new Date();
-  const dueDateDp = new Date(now);
-  dueDateDp.setDate(dueDateDp.getDate() + 3);
+  const dueDateDp = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   return {
     id: '00000000-0000-0000-0000-000000000001',
@@ -64,9 +63,9 @@ function createSampleData(status) {
     created_at: now,
     updated_at: now,
     terms: [
-      'Invoice batal otomatis bila dalam 24 jam setelah issued belum ada DP',
+      'Invoice batal otomatis bila dalam 24 jam setelah order dibuat belum ada DP',
       'Minimal DP 30% dari total',
-      'Jatuh tempo DP 3 hari setelah issued'
+      'Jatuh tempo DP 24 jam setelah order dibuat'
     ],
     Order: {
       order_number: 'ORD-2025-00001',
