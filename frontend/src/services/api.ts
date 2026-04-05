@@ -543,7 +543,7 @@ export interface InvoicesSummaryData {
 }
 
 export const invoicesApi = {
-  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; order_ids?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/invoices', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   getDraftOrders: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: any[] }>('/invoices/draft-orders', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),

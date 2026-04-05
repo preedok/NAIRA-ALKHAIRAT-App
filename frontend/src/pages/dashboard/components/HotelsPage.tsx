@@ -7,7 +7,6 @@ import {
   Bed,
   Edit,
   Trash2,
-  XCircle,
   ShoppingCart,
   Calendar,
   Eye
@@ -20,7 +19,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE, HotelAddRoomQuantityModal } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -639,6 +638,45 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       })
       .catch(() => {});
   }, [availabilityFrom, availabilityTo]);
+
+  const handleSaveAvailabilityAddQuantity = useCallback(async () => {
+    if (!availabilityPopupHotelId || !availabilityAddQuantity) return;
+    setAvailabilityAddQuantitySaving(true);
+    try {
+      const inventory = ROOM_TYPES.map((rt) => {
+        const current = availabilityAddQuantity.roomTypes[rt]?.total ?? 0;
+        const addVal = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
+        return { room_type: rt, total_rooms: current + addVal };
+      });
+      if (availabilityAddQuantity.mode === 'global') {
+        const global_room_inventory: Record<string, number> = {};
+        inventory.forEach((row) => {
+          global_room_inventory[row.room_type] = row.total_rooms;
+        });
+        await adminPusatApi.setHotelAvailabilityConfig(availabilityPopupHotelId, {
+          availability_mode: 'global',
+          global_room_inventory
+        });
+        showToast('Kuota kamar (semua bulan) berhasil diperbarui', 'success');
+      } else {
+        await adminPusatApi.setSeasonInventory(availabilityPopupHotelId, availabilityAddQuantity.seasonId, { inventory });
+        showToast('Inventori musim berhasil diperbarui', 'success');
+      }
+      setAvailabilityAddQuantity(null);
+      refetchAvailabilityForHotel(availabilityPopupHotelId);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      showToast(err.response?.data?.message || 'Gagal menyimpan inventori', 'error');
+    } finally {
+      setAvailabilityAddQuantitySaving(false);
+    }
+  }, [
+    availabilityPopupHotelId,
+    availabilityAddQuantity,
+    availabilityAddQuantityInputs,
+    showToast,
+    refetchAvailabilityForHotel
+  ]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -1442,13 +1480,22 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const roomPriceTypeLabel = 'per malam';
         const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
         return (
-          <Modal open onClose={() => setAvailabilityPopupHotelId(null)}>
-            <ModalBoxLg className="relative">
+          <Modal
+            open
+            onClose={() => {
+              setAvailabilityAddQuantity(null);
+              setAvailabilityPopupHotelId(null);
+            }}
+          >
+            <ModalBoxLg>
               <ModalHeader
                 title="Ketersediaan per tanggal"
                 subtitle={<>{(hotel?.name ?? 'Hotel')} — data realtime per tipe kamar</>}
                 icon={<Calendar className="w-5 h-5" />}
-                onClose={() => setAvailabilityPopupHotelId(null)}
+                onClose={() => {
+                  setAvailabilityAddQuantity(null);
+                  setAvailabilityPopupHotelId(null);
+                }}
               />
               <ModalBody className="p-6 overflow-y-auto flex-1 min-h-0">
                 {/* Harga kamar per malam per tipe (referensi; operasional dari grid bulanan SAR) */}
@@ -1622,131 +1669,35 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   </div>
                 )}
 
-              {/* Sub-popup: Tambah jumlah kamar (di dalam popup Ketersediaan) */}
-              {availabilityAddQuantity && availabilityPopupHotelId && (
-                <div
-                  className="absolute inset-0 bg-black/40 flex items-center justify-center z-10 rounded-2xl"
-                  onClick={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)}
-                >
-                  <div
-                    className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
-                      <div className="flex items-center gap-2">
-                        <Plus className="w-5 h-5 text-emerald-600" />
-                        <h3 className="text-lg font-semibold text-slate-900">Tambah jumlah kamar</h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)}
-                        className="p-2 hover:bg-slate-200 rounded-xl transition-colors"
-                      >
-                        <XCircle className="w-5 h-5 text-slate-500" />
-                      </button>
-                    </div>
-                    <div className="p-5 space-y-4">
-                      <p className="text-sm text-slate-600">
-                        Tanggal <strong>{new Date(availabilityAddQuantity.dateStr + 'T12:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-                        {availabilityAddQuantity.seasonName && <> · Musim: <strong>{availabilityAddQuantity.seasonName}</strong></>}
-                      </p>
-                      <p className="text-xs text-slate-500">Isi jumlah tambahan per tipe. Total baru = total saat ini + tambahan.</p>
-                      <div className="rounded-xl border border-slate-200 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                              <th className="text-left py-2.5 px-3 font-semibold text-slate-700">Tipe</th>
-                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Total</th>
-                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Dipesan</th>
-                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Tersedia</th>
-                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Tambah</th>
-                              <th className="text-center py-2.5 px-2 font-semibold text-slate-700">Total baru</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ROOM_TYPES.map((rt) => {
-                              const r = availabilityAddQuantity.roomTypes[rt];
-                              const total = r?.total ?? 0;
-                              const booked = r?.booked ?? 0;
-                              const available = r?.available ?? 0;
-                              const add = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
-                              const newTotal = total + add;
-                              return (
-                                <tr key={rt} className="border-b border-slate-100 last:border-0">
-                                  <td className="py-2 px-3 font-medium text-slate-800 capitalize">{roomTypeLabels[rt] || rt}</td>
-                                  <td className="py-2 px-2 text-center tabular-nums text-slate-700">{total}</td>
-                                  <td className="py-2 px-2 text-center tabular-nums text-slate-600">{booked}</td>
-                                  <td className={`py-2 px-2 text-center tabular-nums font-medium ${available <= 0 ? 'text-red-600' : 'text-emerald-600'}`}>{available}</td>
-                                  <td className="py-2 px-2">
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      value={availabilityAddQuantityInputs[rt] ?? ''}
-                                      onChange={(e) => setAvailabilityAddQuantityInputs((prev) => ({ ...prev, [rt]: e.target.value }))}
-                                      className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                      placeholder="0"
-                                    />
-                                  </td>
-                                  <td className="py-2 px-2 text-center font-semibold tabular-nums text-slate-800">{newTotal}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 bg-slate-50">
-                      <Button variant="outline" size="sm" onClick={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)} disabled={availabilityAddQuantitySaving}>
-                        Batal
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={availabilityAddQuantitySaving}
-                        onClick={async () => {
-                          if (!availabilityPopupHotelId || !availabilityAddQuantity) return;
-                          setAvailabilityAddQuantitySaving(true);
-                          try {
-                            const inventory = ROOM_TYPES.map((rt) => {
-                              const current = availabilityAddQuantity.roomTypes[rt]?.total ?? 0;
-                              const addVal = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
-                              return { room_type: rt, total_rooms: current + addVal };
-                            });
-                            if (availabilityAddQuantity.mode === 'global') {
-                              const global_room_inventory: Record<string, number> = {};
-                              inventory.forEach((row) => {
-                                global_room_inventory[row.room_type] = row.total_rooms;
-                              });
-                              await adminPusatApi.setHotelAvailabilityConfig(availabilityPopupHotelId, {
-                                availability_mode: 'global',
-                                global_room_inventory
-                              });
-                              showToast('Kuota kamar (semua bulan) berhasil diperbarui', 'success');
-                            } else {
-                              await adminPusatApi.setSeasonInventory(availabilityPopupHotelId, availabilityAddQuantity.seasonId, { inventory });
-                              showToast('Inventori musim berhasil diperbarui', 'success');
-                            }
-                            setAvailabilityAddQuantity(null);
-                            refetchAvailabilityForHotel(availabilityPopupHotelId);
-                          } catch (e: unknown) {
-                            const err = e as { response?: { data?: { message?: string } } };
-                            showToast(err.response?.data?.message || 'Gagal menyimpan inventori', 'error');
-                          } finally {
-                            setAvailabilityAddQuantitySaving(false);
-                          }
-                        }}
-                      >
-                        {availabilityAddQuantitySaving ? 'Menyimpan…' : 'Simpan'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
               </ModalBody>
             </ModalBoxLg>
           </Modal>
         );
       })()}
+
+      {availabilityAddQuantity && availabilityPopupHotelId && (
+        <HotelAddRoomQuantityModal
+          open
+          zIndex={60}
+          saving={availabilityAddQuantitySaving}
+          onClose={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)}
+          dateStr={availabilityAddQuantity.dateStr}
+          seasonName={availabilityAddQuantity.seasonName}
+          helpText="Isi jumlah tambahan per tipe. Total baru = total saat ini + tambahan."
+          rows={ROOM_TYPES.map((rt) => {
+            const r = availabilityAddQuantity.roomTypes[rt];
+            return {
+              roomType: rt,
+              total: r?.total ?? 0,
+              booked: r?.booked ?? 0,
+              available: r?.available ?? 0
+            };
+          })}
+          addInputs={availabilityAddQuantityInputs}
+          onAddInputChange={(rt, v) => setAvailabilityAddQuantityInputs((prev) => ({ ...prev, [rt]: v }))}
+          onSave={handleSaveAvailabilityAddQuantity}
+        />
+      )}
 
       {showAddModal && (
         <Modal open onClose={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}>

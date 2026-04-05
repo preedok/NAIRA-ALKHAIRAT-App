@@ -516,6 +516,24 @@ const list = asyncHandler(async (req, res) => {
     orderInclude.where = { status: order_status };
   }
 
+  // Kalender hotel / filter order tertentu: UUID dipisah koma. Dipersempit dengan filter order_id yang sudah ada (role divisi, has_handling, dll.).
+  const orderIdsParam = req.query.order_ids;
+  if (orderIdsParam != null && String(orderIdsParam).trim() !== '') {
+    const requested = String(orderIdsParam).split(',').map((s) => s.trim()).filter(Boolean);
+    if (requested.length > 0) {
+      if (where.order_id == null) {
+        where.order_id = { [Op.in]: requested };
+      } else if (typeof where.order_id === 'object' && where.order_id[Op.in]) {
+        const allowed = new Set(where.order_id[Op.in]);
+        const inter = requested.filter((id) => allowed.has(id));
+        where.order_id = inter.length ? { [Op.in]: inter } : { [Op.in]: [] };
+      } else {
+        const single = where.order_id;
+        where.order_id = requested.includes(single) ? single : { [Op.in]: [] };
+      }
+    }
+  }
+
   const lim = Math.min(Math.max(parseInt(limit, 10) || 25, 1), 500);
   const pg = Math.max(parseInt(page, 10) || 1, 1);
   const offset = (pg - 1) * lim;
