@@ -446,7 +446,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                         const ids = Array.from(new Set(dayBookings.map((b) => b.order_id)));
                         setBookingsInvoiceModal({
                           dateStr,
-                          seasonName: day.seasonName,
+                          seasonName: day?.seasonName,
                           hotelProductId: selectedHotelId,
                           hotelLabel: productName || selectedHotel?.name || '',
                           orderIds: ids
