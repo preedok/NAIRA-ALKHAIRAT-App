@@ -1031,13 +1031,14 @@ const OrderFormPage: React.FC = () => {
     return sum;
   };
   const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+  /** Produk Hiace pertama (sama urutan backend getFirstHiaceProductAndPrice). */
+  const firstHiaceProduct=products.find(p=>p.type==='bus'&&(p.meta as { bus_kind?: string })?.bus_kind==='hiace');
   /** Estimasi IDR untuk 1× Hiace otomatis (sama intent backend getFirstHiaceProductAndPrice + trip round_trip) jika belum ada baris bus. */
   const autoHiaceSubtotalIdr=(()=>{
     if(busServiceOption!=='hiace') return 0;
     if(!items.some(r=>r.type==='visa')) return 0;
     if(items.some(r=>r.type==='bus')) return 0;
-    const hiaceProducts=products.filter(p=>p.type==='bus'&&(p.meta as { bus_kind?: string })?.bus_kind==='hiace');
-    const p=hiaceProducts[0];
+    const p=firstHiaceProduct;
     if(!p) return 0;
     const byTrip=p.meta?.route_prices_by_trip as Record<string,number>|undefined;
     let unitRaw:number;
@@ -1884,6 +1885,43 @@ const OrderFormPage: React.FC = () => {
                       </div>
                     );
                   })}
+                  {busServiceOption==='hiace'&&firstHiaceProduct&&!items.some(r=>r.type==='bus')&&(()=>{
+                    const hiaceTc=typeOf('bus');
+                    const HiaceTypeIcon=hiaceTc.Icon;
+                    return (
+                      <div className="rounded-xl border border-emerald-200/90 bg-white shadow-sm overflow-hidden ring-1 ring-emerald-100/80">
+                        <div className="flex flex-wrap items-end gap-2 p-3 bg-[#0D1A63] border-b border-white/20 [&_label]:text-white [&_p]:text-white">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 border border-white/30 text-white shrink-0" title="Otomatis dari opsi Bus Hiace">
+                            <HiaceTypeIcon size={16}/>
+                          </div>
+                          <div className="min-w-[90px] flex-1 sm:flex-initial sm:w-[120px]">
+                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Tipe</p>
+                            <p className="text-sm font-semibold">{hiaceTc.label}</p>
+                          </div>
+                          <div className="min-w-0 flex-1 basis-40">
+                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Produk</p>
+                            <p className="text-sm font-semibold">{firstHiaceProduct.name} ({firstHiaceProduct.code})</p>
+                          </div>
+                          <div className="text-right min-w-[80px] shrink-0 text-white">
+                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Qty</p>
+                            <p className="text-sm font-bold tabular-nums">1</p>
+                          </div>
+                          {autoHiaceSubtotalIdr>0&&(
+                            <div className="text-right min-w-[100px] shrink-0 text-white">
+                              <p className="text-xs font-medium uppercase tracking-wide opacity-90">Subtotal (est.)</p>
+                              <p className="text-sm font-bold tabular-nums"><NominalDisplay amount={autoHiaceSubtotalIdr} currency="IDR" /></p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3 bg-slate-50/50 border-t border-slate-100">
+                          <p className="text-xs text-slate-600">
+                            Baris bus ini ditambahkan otomatis saat simpan (opsi Bus Hiace, perjalanan pulang pergi mengikuti master).
+                            {!items.some(r=>r.type==='visa')&&' Tambahkan item visa agar baris ini ikut ke order.'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {items.some(r=>r.type==='visa')&&(
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
                       <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
