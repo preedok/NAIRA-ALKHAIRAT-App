@@ -116,6 +116,38 @@ type OwnerInputMode = 'registered' | 'manual';
 const uid  = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 const newLine = (): HotelRoomLine => ({ id:`rl-${uid()}`, room_type:'', quantity:0, unit_price:0, with_meal:false });
 const newRow  = (): OrderItemRow  => ({ id:`row-${uid()}`, type:'hotel', product_id:'', product_name:'', quantity:0, unit_price:0, room_breakdown:[newLine()] });
+/** Baris bus Hiace awal saat opsi Bus Hiace (harga mengikuti busRoutePriceImpl di form). */
+function createHiaceBusOrderRow(
+  products: ProductOption[],
+  busRoutePriceImpl: (p: ProductOption | undefined, route: BusRouteType, trip: TicketTripType) => number,
+  visaTravelDate?: string
+): OrderItemRow | null {
+  const p = products.find((x) => x.type === 'bus' && (x.meta as { bus_kind?: string })?.bus_kind === 'hiace');
+  if (!p) return null;
+  const rp = p.meta?.route_prices as Record<string, number> | undefined;
+  const routeOpt =
+    rp && Object.keys(rp).length
+      ? (Object.entries(rp).find(([, v]) => (v ?? 0) > 0)?.[0] as BusRouteType | undefined)
+      : undefined;
+  const route: BusRouteType = (p.meta?.route_type as BusRouteType) || routeOpt || 'full_route';
+  const tripType = (p.meta?.trip_type as TicketTripType) || 'round_trip';
+  const kind = String((p.meta as { bus_kind?: string })?.bus_kind || '');
+  const busType: BusType = BUS_KIND_TO_TYPE[kind] || 'menengah_hiace';
+  const unit = busRoutePriceImpl(p, route, tripType);
+  const cur = (p.currency ?? (p.meta as { currency?: string })?.currency ?? getDisplayCurrency('bus', p)) as DisplayCurrency;
+  const meta: Record<string, unknown> = { route_type: route, trip_type: tripType, bus_type: busType };
+  if (visaTravelDate) meta.travel_date = visaTravelDate;
+  return {
+    id: `row-${uid()}`,
+    type: 'bus',
+    product_id: p.id,
+    product_name: p.name || '',
+    quantity: 1,
+    unit_price: unit,
+    price_currency: cur,
+    meta,
+  };
+}
 const rCap = (rt?:RoomTypeId) => rt ? (ROOM_TYPES.find(t=>t.id===rt)?.cap??0) : 0;
 const canManage = (role?:string) => role==='owner_mou' || role==='owner_non_mou' || role==='invoice_koordinator' || role==='invoice_saudi';
 /** Jumlah malam dari check_in s/d check_out (tanggal saja). Return 0 jika invalid. */
@@ -815,7 +847,10 @@ const OrderFormPage: React.FC = () => {
           const routeOpt=rp&&Object.keys(rp).length?Object.entries(rp).find(([,v])=>(v??0)>0)?.[0] as BusRouteType|undefined:undefined;
           const route:BusRouteType=(next.meta?.route_type as BusRouteType)||routeOpt||'full_route';
           const tripType=(next.meta?.trip_type as TicketTripType)||(prod.meta?.trip_type as TicketTripType)||'round_trip';
-          next.meta={ ...(next.meta||{}), route_type:route, trip_type:tripType, bus_type:(next.meta?.bus_type as BusType)||'besar' };
+          const kind=String((prod.meta as { bus_kind?: string })?.bus_kind||'');
+          const busDefault:BusType=(kind&&BUS_KIND_TO_TYPE[kind])?BUS_KIND_TO_TYPE[kind]:'besar';
+          const busTypeResolved=upd.product_id!==r.product_id?busDefault:((next.meta?.bus_type as BusType)||busDefault);
+          next.meta={ ...(next.meta||{}), route_type:route, trip_type:tripType, bus_type:busTypeResolved };
           next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?busRoutePrice(prod,route,tripType):next.unit_price;
         } else if(next.type==='package'){
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=toRowCurrency(packageUnitPriceIdr(prod),next);
@@ -976,10 +1011,28 @@ const OrderFormPage: React.FC = () => {
 
   const applyBusServiceOption = useCallback((opt: BusServiceOption) => {
     setBusServiceOption(opt);
-    if (opt !== 'hiace') {
-      setItems((prev) => prev.filter((r) => !(r.type === 'bus' && (r.meta as { auto_hiace_waive?: boolean })?.auto_hiace_waive)));
-    }
-  }, []);
+    setItems((prev)=>{
+      const stripped=opt!=='hiace'?prev.filter(r=>!(r.type==='bus'&&(r.meta as { auto_hiace_waive?: boolean })?.auto_hiace_waive)):prev;
+      if(opt!=='hiace') return stripped;
+      if(stripped.some(r=>r.type==='bus')) return stripped;
+      const visaMeta=stripped.find(r=>r.type==='visa')?.meta as { travel_date?: string }|undefined;
+      const row=createHiaceBusOrderRow(products,busRoutePrice,visaMeta?.travel_date);
+      return row?[...stripped,row]:stripped;
+    });
+  }, [products, busRoutePrice]);
+
+  /** Jika Hiace dipilih sebelum master produk selesai dimuat, sisipkan baris bus setelah produk ada. */
+  useEffect(()=>{
+    if(busServiceOption!=='hiace'||loadingProd||products.length===0) return;
+    setItems((prev)=>{
+      if(prev.some(r=>r.type==='bus')) return prev;
+      const visaMeta=prev.find(r=>r.type==='visa')?.meta as { travel_date?: string }|undefined;
+      const row=createHiaceBusOrderRow(products,busRoutePrice,visaMeta?.travel_date);
+      return row?[...prev,row]:prev;
+    });
+  // busRoutePrice identitas berubah tiap render; yang memicu sync cukup master produk + opsi + loading
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sengaja tanpa busRoutePrice di deps
+  }, [busServiceOption, loadingProd, products]);
 
   const busOrderApiFields = useMemo(() => {
     if (!items.some((r) => r.type === 'visa')) return {};
@@ -1031,31 +1084,8 @@ const OrderFormPage: React.FC = () => {
     return sum;
   };
   const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
-  /** Produk Hiace pertama (sama urutan backend getFirstHiaceProductAndPrice). */
-  const firstHiaceProduct=products.find(p=>p.type==='bus'&&(p.meta as { bus_kind?: string })?.bus_kind==='hiace');
-  /** Estimasi IDR untuk 1× Hiace otomatis (sama intent backend getFirstHiaceProductAndPrice + trip round_trip) jika belum ada baris bus. */
-  const autoHiaceSubtotalIdr=(()=>{
-    if(busServiceOption!=='hiace') return 0;
-    if(!items.some(r=>r.type==='visa')) return 0;
-    if(items.some(r=>r.type==='bus')) return 0;
-    const p=firstHiaceProduct;
-    if(!p) return 0;
-    const byTrip=p.meta?.route_prices_by_trip as Record<string,number>|undefined;
-    let unitRaw:number;
-    if(byTrip&&typeof byTrip.round_trip==='number'&&!Number.isNaN(byTrip.round_trip)&&byTrip.round_trip>=0){
-      unitRaw=byTrip.round_trip;
-    }else{
-      const rp=p.meta?.route_prices as Record<string,number>|undefined;
-      const routeOpt=rp&&Object.keys(rp).length?Object.entries(rp).find(([,v])=>(v??0)>0)?.[0] as BusRouteType|undefined:undefined;
-      const route:BusRouteType=(p.meta?.route_type as BusRouteType)||routeOpt||'full_route';
-      unitRaw=busRoutePrice(p,route,'round_trip');
-    }
-    const cur=getDisplayCurrency('bus',p);
-    const fakeRow={ id:'_auto_hiace_est', type:'bus' as const, product_id:p.id, quantity:1, unit_price:unitRaw, price_currency:cur } as OrderItemRow;
-    return Math.max(0,toIDR(unitRaw,fakeRow));
-  })();
   const subtotalIDR=payloadSubtotalIDR(validForTotal);
-  const totalIDR=subtotalIDR+busPenaltyIDR+autoHiaceSubtotalIdr;
+  const totalIDR=subtotalIDR+busPenaltyIDR;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   /** Nilai dalam mata uang baris untuk ditampilkan pakai NominalDisplay */
@@ -1885,43 +1915,6 @@ const OrderFormPage: React.FC = () => {
                       </div>
                     );
                   })}
-                  {busServiceOption==='hiace'&&firstHiaceProduct&&!items.some(r=>r.type==='bus')&&(()=>{
-                    const hiaceTc=typeOf('bus');
-                    const HiaceTypeIcon=hiaceTc.Icon;
-                    return (
-                      <div className="rounded-xl border border-emerald-200/90 bg-white shadow-sm overflow-hidden ring-1 ring-emerald-100/80">
-                        <div className="flex flex-wrap items-end gap-2 p-3 bg-[#0D1A63] border-b border-white/20 [&_label]:text-white [&_p]:text-white">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 border border-white/30 text-white shrink-0" title="Otomatis dari opsi Bus Hiace">
-                            <HiaceTypeIcon size={16}/>
-                          </div>
-                          <div className="min-w-[90px] flex-1 sm:flex-initial sm:w-[120px]">
-                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Tipe</p>
-                            <p className="text-sm font-semibold">{hiaceTc.label}</p>
-                          </div>
-                          <div className="min-w-0 flex-1 basis-40">
-                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Produk</p>
-                            <p className="text-sm font-semibold">{firstHiaceProduct.name} ({firstHiaceProduct.code})</p>
-                          </div>
-                          <div className="text-right min-w-[80px] shrink-0 text-white">
-                            <p className="text-xs font-medium uppercase tracking-wide opacity-90">Qty</p>
-                            <p className="text-sm font-bold tabular-nums">1</p>
-                          </div>
-                          {autoHiaceSubtotalIdr>0&&(
-                            <div className="text-right min-w-[100px] shrink-0 text-white">
-                              <p className="text-xs font-medium uppercase tracking-wide opacity-90">Subtotal (est.)</p>
-                              <p className="text-sm font-bold tabular-nums"><NominalDisplay amount={autoHiaceSubtotalIdr} currency="IDR" /></p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-3 bg-slate-50/50 border-t border-slate-100">
-                          <p className="text-xs text-slate-600">
-                            Baris bus ini ditambahkan otomatis saat simpan (opsi Bus Hiace, perjalanan pulang pergi mengikuti master).
-                            {!items.some(r=>r.type==='visa')&&' Tambahkan item visa agar baris ini ikut ke order.'}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
                   {items.some(r=>r.type==='visa')&&(
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
                       <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
@@ -1930,7 +1923,7 @@ const OrderFormPage: React.FC = () => {
                       ) : busServiceOption === 'finality' ? (
                         <span className="text-slate-600"> Memenuhi minimum pack — tidak ada penalti Bus Finality.</span>
                       ) : busServiceOption === 'hiace' ? (
-                        <span className="text-slate-600"> Opsi Bus Hiace: tanpa penalti; satu unit Hiace dihitung otomatis di ringkasan.</span>
+                        <span className="text-slate-600"> Opsi Bus Hiace: tanpa penalti; isi baris Bus di atas (produk Hiace, tanggal, qty) — subtotal mengikuti harga master.</span>
                       ) : (
                         <span className="text-slate-600"> Tanpa layanan bus — hanya visa (tidak ada bus include / Hiace otomatis).</span>
                       )}
@@ -2023,12 +2016,7 @@ const OrderFormPage: React.FC = () => {
                     ) : busServiceOption === 'finality' ? (
                       <>Tidak ada penalti (pack memenuhi syarat Bus Finality).</>
                     ) : busServiceOption === 'hiace' ? (
-                      <>
-                        Tanpa penalti; sistem menambahkan 1 unit Bus Hiace untuk progress &amp; tagihan.
-                        {autoHiaceSubtotalIdr > 0 ? (
-                          <> Estimasi harga 1× Hiace dalam total: <NominalDisplay amount={autoHiaceSubtotalIdr} currency="IDR" />.</>
-                        ) : null}
-                      </>
+                      <>Tanpa penalti; tambah/ubah baris Bus Hiace di item pemesanan — harga &amp; subtotal mengikuti produk yang dipilih.</>
                     ) : (
                       <>Tidak ada penalti bus — trip hanya visa tanpa layanan bus.</>
                     )}
@@ -2059,7 +2047,7 @@ const OrderFormPage: React.FC = () => {
                     />
                     <span className="text-sm text-slate-700">
                       <span className="font-medium text-slate-900">Bus Hiace</span>
-                      {' — '}Tanpa penalti; satu Hiace (qty 1) ditambah otomatis dan tampil di progress bus.
+                      {' — '}Tanpa penalti; baris Bus (produk Hiace) di item bisa dipilih — tanggal, qty, dan harga mengikuti master.
                     </span>
                   </label>
                   <label className="flex items-start gap-2.5 cursor-pointer">
