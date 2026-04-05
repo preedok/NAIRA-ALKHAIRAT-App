@@ -353,6 +353,24 @@ const AccountingAgingPage: React.FC = () => {
     }
   };
 
+  const openPdfInNewTab = async (invoiceId: string) => {
+    try {
+      const res = await invoicesApi.getPdf(invoiceId);
+      const raw = res.data as Blob;
+      const blob = raw.type === 'application/pdf' ? raw : new Blob([raw], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) {
+        showToast('Popup diblokir. Izinkan popup untuk situs ini agar PDF bisa dibuka di tab baru.', 'error');
+        URL.revokeObjectURL(url);
+        return;
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 600000);
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal membuka PDF', 'error');
+    }
+  };
+
   const buckets = data?.buckets ?? { current: [], days_1_30: [], days_31_60: [], days_61_plus: [] };
   const totals = data?.totals ?? { current: 0, days_1_30: 0, days_31_60: 0, days_61_plus: 0 };
   const bucketCounts = data?.bucket_counts ?? {
@@ -688,7 +706,7 @@ const AccountingAgingPage: React.FC = () => {
                       <span className="font-semibold text-slate-700 flex items-center gap-2">
                         <LayoutGrid className="w-4 h-4" /> Preview Invoice PDF
                       </span>
-                      <Button size="sm" variant="outline" onClick={() => openPdf(viewInvoice.id)}>
+                      <Button size="sm" variant="outline" onClick={() => openPdfInNewTab(viewInvoice.id)}>
                         <ExternalLink className="w-4 h-4 mr-1" /> Buka di tab baru
                       </Button>
                     </div>
