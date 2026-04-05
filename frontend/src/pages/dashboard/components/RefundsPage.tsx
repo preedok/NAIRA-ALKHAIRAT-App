@@ -205,8 +205,8 @@ const RefundsPage: React.FC = () => {
         title="Refund"
         subtitle={
           canUpdateStatus
-            ? 'Penarikan saldo: saldo owner berkurang saat status Disetujui (Admin Pusat/Accounting). Upload bukti menandai Sudah direfund — tidak memotong saldo dua kali. Jika saldo belum turun setelah disetujui, gunakan Potong saldo (sinkron).'
-            : 'Riwayat refund & penarikan saldo Anda. Setelah Admin menyetujui penarikan, saldo berkurang; bukti transfer di menu ini setelah accounting mengunggahnya.'
+            ? 'Penarikan saldo: saldo owner berkurang langsung saat owner mengajukan (menunggu persetujuan). Setujui = konfirmasi proses; tolak = saldo dikembalikan. Upload bukti = Sudah direfund (tanpa potong saldo lagi). Tombol Potong saldo (sinkron) untuk data lama yang belum tercatat.'
+            : 'Penarikan saldo: saldo berkurang saat Anda mengajukan; jika ditolak, dikembalikan. Setelah disetujui, tunggu transfer & bukti di halaman ini.'
         }
         right={
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -359,7 +359,7 @@ const RefundsPage: React.FC = () => {
         <CardSectionHeader
           icon={<Receipt className="w-6 h-6" />}
           title="Daftar Permintaan Refund"
-          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Setujui penarikan saldo memotong saldo owner. Lalu upload bukti transfer; bukti dikirim ke email pemesan.' : 'Lihat daftar permintaan refund Anda.'}`}
+          subtitle={`${totalRefunds} permintaan. ${canUpdateStatus ? 'Saldo owner sudah dipotong saat pengajuan. Setujui/tolak memproses administrasi; tolak mengembalikan saldo. Lalu upload bukti transfer.' : 'Lihat daftar permintaan refund Anda.'}`}
           className="mb-4"
         />
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">

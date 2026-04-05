@@ -41,6 +41,9 @@ function formatOwnerBalanceTransactionLine(t: { type?: string; notes?: string; a
   if (ty === 'refund_debit') {
     return notes || 'Penarikan saldo ke rekening — saldo dikurangi';
   }
+  if (ty === 'withdrawal_pending') {
+    return notes || 'Penarikan saldo — menunggu persetujuan (saldo sementara dipotong)';
+  }
   if (ty === 'allocation') {
     return notes || 'Alokasi saldo ke invoice';
   }
@@ -317,7 +320,7 @@ const OwnerDashboard: React.FC = () => {
       {showWithdrawModal && (
         <Modal open onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)}>
           <ModalBox className="max-w-md w-full">
-            <ModalHeader title="Tarik saldo ke rekening" subtitle="Pengajuan masuk ke menu Refund. Setelah Admin Pusat/Accounting menekan Setujui, saldo akun berkurang sesuai jumlah penarikan (muncul di riwayat sebagai debit). Upload bukti = status Sudah direfund, tanpa memotong saldo dua kali. Jika sudah disetujui tapi saldo belum turun, minta admin klik Potong saldo (sinkron) di menu Refund." onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)} />
+            <ModalHeader title="Tarik saldo ke rekening" subtitle="Saat pengajuan dikirim, saldo langsung berkurang dan tercatat di riwayat (menunggu persetujuan). Jika Admin Pusat menolak, saldo dikembalikan otomatis. Setelah disetujui, accounting mentransfer lalu mengunggah bukti (Sudah direfund) — saldo tidak dipotong dua kali." onClose={() => !withdrawSubmitting && setShowWithdrawModal(false)} />
             <ModalBody className="space-y-3">
               <p className="text-sm text-slate-600">Saldo tersedia: <strong className="text-emerald-700"><NominalDisplay amount={accountBalance} currency="IDR" /></strong></p>
               <Input label="Jumlah penarikan (IDR)" type="number" min={1} max={accountBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Minimal 1" disabled={withdrawSubmitting} />
@@ -357,8 +360,8 @@ const OwnerDashboard: React.FC = () => {
                   }
                   setWithdrawSubmitting(true);
                   try {
-                    await refundsApi.createFromBalance({ amount: amt, bank_name: bank, account_number: acc, account_holder_name: holder });
-                    showToast('Pengajuan terkirim. Pantau status di menu Refund.', 'success');
+                    const res = await refundsApi.createFromBalance({ amount: amt, bank_name: bank, account_number: acc, account_holder_name: holder });
+                    showToast((res.data as { message?: string })?.message || 'Pengajuan terkirim. Saldo berkurang; pantau menu Refund.', 'success');
                     setShowWithdrawModal(false);
                     setWithdrawAmount('');
                     setWithdrawBank('');

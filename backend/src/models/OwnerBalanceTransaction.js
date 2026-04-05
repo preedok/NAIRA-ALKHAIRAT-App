@@ -22,7 +22,7 @@ const OwnerBalanceTransaction = sequelize.define('OwnerBalanceTransaction', {
   type: {
     type: DataTypes.STRING(30),
     allowNull: false,
-    comment: 'cancel_credit, allocation, refund_debit, adjustment'
+    comment: 'cancel_credit, allocation, refund_debit, withdrawal_pending, adjustment'
   },
   reference_type: {
     type: DataTypes.STRING(30),
