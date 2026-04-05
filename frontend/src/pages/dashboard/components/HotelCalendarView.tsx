@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Hotel, Users, Plus } from 'lucide-react';
+import { Hotel, Users, Plus, LogIn, LogOut } from 'lucide-react';
 import Autocomplete from '../../../components/common/Autocomplete';
 import ProductCalendar, { type ProductCalendarMonth } from '../../../components/common/ProductCalendar';
 import { productsApi, adminPusatApi } from '../../../services/api';
@@ -22,13 +22,90 @@ const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
 const ROOM_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
 const ROOM_SHORT: Record<string, string> = { single: 'S', double: 'D', triple: 'T', quad: 'Q', quint: '5' };
 
+type CalendarBooking = {
+  order_id: string;
+  owner_id: string;
+  owner_name: string;
+  total_jamaah: number;
+  by_room_type: Record<string, number>;
+  stay_check_in?: string;
+  stay_check_out?: string;
+  check_in_time?: string;
+  check_out_time?: string;
+};
+
 type CalendarDayData = {
   _noSeason?: boolean;
   seasonId?: string;
   seasonName?: string;
   roomTypes?: Record<string, { total: number; booked: number; available: number }>;
-  bookings?: { order_id: string; owner_id: string; owner_name: string; total_jamaah: number; by_room_type: Record<string, number> }[];
+  bookings?: CalendarBooking[];
 };
+
+function formatCalendarDayShort(ymd: string): string {
+  if (!ymd || ymd.length < 10) return ymd;
+  const d = new Date(`${ymd.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+}
+
+/** Penanda check-in / check-out per sel tanggal (selaras backend: jam default 16:00 / 12:00 WIB). */
+function HotelStayTimeMarker({ booking, dateStr }: { booking: CalendarBooking; dateStr: string }) {
+  const ci = booking.stay_check_in;
+  const co = booking.stay_check_out;
+  const cit = booking.check_in_time || '16:00';
+  const cot = booking.check_out_time || '12:00';
+  if (!ci || !co) {
+    return <span className="text-slate-400 italic">Tanpa tanggal in/out</span>;
+  }
+  if (ci === co) {
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="inline-flex items-center gap-0.5 rounded-md bg-blue-100 text-blue-900 px-1 py-0.5 font-semibold tabular-nums">
+          <LogIn className="w-2.5 h-2.5 shrink-0" /> in {cit}
+        </span>
+        <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 text-amber-950 px-1 py-0.5 font-semibold tabular-nums">
+          <LogOut className="w-2.5 h-2.5 shrink-0" /> out {cot}
+        </span>
+      </div>
+    );
+  }
+  if (dateStr === ci) {
+    return (
+      <div className="space-y-0.5">
+        <div className="inline-flex items-center gap-0.5 rounded-md bg-blue-100 text-blue-900 px-1 py-0.5 font-semibold tabular-nums">
+          <LogIn className="w-2.5 h-2.5 shrink-0" /> Check-in {cit} WIB
+        </div>
+        <div className="text-slate-500">
+          Check-out {formatCalendarDayShort(co)} {cot} WIB
+        </div>
+      </div>
+    );
+  }
+  if (dateStr === co) {
+    return (
+      <div className="space-y-0.5">
+        <div className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 text-amber-950 px-1 py-0.5 font-semibold tabular-nums">
+          <LogOut className="w-2.5 h-2.5 shrink-0" /> Check-out {cot} WIB
+        </div>
+        <div className="text-slate-500">
+          Check-in {formatCalendarDayShort(ci)} {cit} WIB
+        </div>
+      </div>
+    );
+  }
+  if (dateStr > ci && dateStr < co) {
+    return (
+      <div className="space-y-0.5 text-slate-600">
+        <div className="font-semibold text-slate-700">Menginap</div>
+        <div className="text-slate-500">
+          Out {formatCalendarDayShort(co)} {cot} WIB
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
 
 type AddQuantityPopup = {
   dateStr: string;
@@ -234,7 +311,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
             loading={loading}
             popoverDate={null}
             onPopoverToggle={() => {}}
-            minCellHeight={145}
+            minCellHeight={168}
             footer={
               <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                 <span className="flex items-center gap-2">
@@ -328,6 +405,23 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                   {day?._noSeason && (
                     <p className="mt-2 text-[11px] text-slate-400">—</p>
                   )}
+                  {canSeeBookingDetails && day?.bookings && day.bookings.length > 0 ? (
+                    <div className="mt-2 space-y-1.5">
+                      {day.bookings.map((b) => (
+                        <div
+                          key={b.order_id}
+                          className="rounded-lg border border-slate-200/80 bg-slate-50/90 px-1.5 py-1 text-[9px] leading-snug"
+                        >
+                          <div className="font-semibold text-slate-800 truncate" title={b.owner_name}>
+                            {b.owner_name}
+                          </div>
+                          <div className="mt-0.5">
+                            <HotelStayTimeMarker booking={b} dateStr={dateStr} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {canSeeBookingDetails && day?.bookings?.length ? (
                     <button
                       type="button"

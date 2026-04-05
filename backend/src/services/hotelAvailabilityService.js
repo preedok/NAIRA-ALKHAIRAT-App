@@ -168,24 +168,59 @@ async function getBookedForDateRaw(seq, productId, roomType, dateStr) {
 /** Kapasitas jamaah per tipe kamar: single=1, double=2, triple=3, quad=4, quint=5 */
 const ROOM_TYPE_JAMAAH = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
 
+const DEFAULT_HOTEL_CHECK_IN_TIME = '16:00';
+const DEFAULT_HOTEL_CHECK_OUT_TIME = '12:00';
+
+function ymdFromMetaDate(val) {
+  if (val == null || val === '') return null;
+  const m = String(val).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+function normalizeHotelTime(t, fallback) {
+  const s = (t != null && String(t).trim() !== '') ? String(t).trim() : '';
+  if (!s) return fallback;
+  const head = s.slice(0, 8);
+  const parts = head.split(':');
+  if (parts.length < 2) return fallback;
+  let h = parseInt(parts[0], 10);
+  let m = parseInt(parts[1], 10);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+  h = Math.max(0, Math.min(23, h));
+  m = Math.max(0, Math.min(59, m));
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function parseOrderItemMeta(raw) {
+  if (raw == null) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 /**
  * Daftar booking per tanggal untuk satu hotel: per order (owner, total jamaah, breakdown per room_type).
- * total_jamaah = jumlah kamar × kapasitas per tipe (mis. quint = 5 jamaah per kamar).
- * Returns [{ order_id, owner_id, owner_name, total_jamaah, by_room_type: { single: 2, double: 1, ... } }].
+ * + stay_check_in, stay_check_out (YYYY-MM-DD), check_in_time, check_out_time (HH:MM) untuk penanda kalender.
  */
 async function getBookingsForDate(productId, dateStr) {
   const [rows] = await sequelize.query(`
     SELECT o.id AS order_id, o.owner_id,
       u.name AS owner_name,
       oi.meta->>'room_type' AS room_type,
-      COALESCE(SUM(oi.quantity), 0)::int AS qty
+      COALESCE(oi.quantity, 0)::int AS qty,
+      oi.meta AS meta_json
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id AND o.status != 'cancelled'
     INNER JOIN users u ON u.id = o.owner_id
     WHERE oi.type = 'hotel'
       AND oi.product_ref_id = :productId
       AND ${SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE}
-    GROUP BY o.id, o.owner_id, u.name, oi.meta->>'room_type'
   `, {
     replacements: { productId, dateStr }
   });
@@ -193,19 +228,43 @@ async function getBookingsForDate(productId, dateStr) {
   const byOrder = new Map();
   for (const r of rows || []) {
     const key = r.order_id;
+    const meta = parseOrderItemMeta(r.meta_json);
+    const ciYmd = ymdFromMetaDate(meta.check_in);
+    const coYmd = ymdFromMetaDate(meta.check_out);
+    const cit = normalizeHotelTime(meta.check_in_time, DEFAULT_HOTEL_CHECK_IN_TIME);
+    const cot = normalizeHotelTime(meta.check_out_time, DEFAULT_HOTEL_CHECK_OUT_TIME);
+
     if (!byOrder.has(key)) {
       byOrder.set(key, {
         order_id: r.order_id,
         owner_id: r.owner_id,
         owner_name: r.owner_name || '',
         total_jamaah: 0,
-        by_room_type: {}
+        by_room_type: {},
+        stay_check_in: ciYmd,
+        stay_check_out: coYmd,
+        check_in_time: cit,
+        check_out_time: cot
       });
+    } else {
+      const entry = byOrder.get(key);
+      if (ciYmd) {
+        if (!entry.stay_check_in || ciYmd < entry.stay_check_in) {
+          entry.stay_check_in = ciYmd;
+          entry.check_in_time = cit;
+        }
+      }
+      if (coYmd) {
+        if (!entry.stay_check_out || coYmd > entry.stay_check_out) {
+          entry.stay_check_out = coYmd;
+          entry.check_out_time = cot;
+        }
+      }
     }
     const entry = byOrder.get(key);
     const rt = (r.room_type || 'quad').toLowerCase();
     const qty = parseInt(r.qty, 10) || 0;
-    const jamaahPerRoom = ROOM_TYPE_JAMAAH[rt] != null ? ROOM_TYPE_JAMAAH[rt] : 4; // default quad = 4
+    const jamaahPerRoom = ROOM_TYPE_JAMAAH[rt] != null ? ROOM_TYPE_JAMAAH[rt] : 4;
     entry.by_room_type[rt] = (entry.by_room_type[rt] || 0) + qty;
     entry.total_jamaah += qty * jamaahPerRoom;
   }
