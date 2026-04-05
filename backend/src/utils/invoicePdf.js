@@ -77,6 +77,24 @@ const hotelProgressStatusLabel = (s) => ({
 const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '-');
 /** Kapasitas orang per kamar per tipe (untuk hitung jumlah orang dari kamar) */
 const ROOM_CAPACITY = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+
+/** Lokasi hotel (urutan baris invoice & label deskripsi): madinah | makkah */
+function getHotelLocationFromItem(it) {
+  const fromMeta = (it?.meta?.hotel_location || '').toLowerCase();
+  if (fromMeta === 'madinah' || fromMeta === 'makkah') return fromMeta;
+  const prodMeta = it?.Product?.meta && typeof it.Product.meta === 'object' ? it.Product.meta : {};
+  const prodLoc = (prodMeta.location != null ? String(prodMeta.location) : '').trim().toLowerCase();
+  if (prodLoc === 'madinah' || prodLoc === 'makkah') return prodLoc;
+  const name = (it?.Product?.name || it?.product_name || '').toLowerCase();
+  if (/madinah/.test(name)) return 'madinah';
+  if (/mekkah|makkah/.test(name)) return 'makkah';
+  return 'makkah';
+}
+
+function hotelLocationInvoiceHeading(it) {
+  return getHotelLocationFromItem(it) === 'madinah' ? 'Hotel Madinah' : 'Hotel Mekkah';
+}
+
 const tripTypeLabel = (tt) => ({ one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' }[String(tt || '')] || tt || '');
 const busRouteLabel = (r) => ({ full_route: 'Full rute (Mekkah–Madinah)', bandara_makkah: 'Bandara–Mekkah', bandara_madinah: 'Bandara–Madinah', bandara_madinah_only: 'Bandara–Madinah saja', hotel_makkah_madinah: 'Hotel Mekkah–Madinah', hotel_madinah_makkah: 'Hotel Madinah–Mekkah' }[String(r || '')] || r || '');
 const busTypeLabel = (b) => ({ besar: 'Bus besar', menengah_hiace: 'Hiace', kecil: 'Mobil kecil' }[String(b || '')] || b || '');
@@ -429,14 +447,6 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       });
     });
     // Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket
-    const getHotelLocationFromItem = (it) => {
-      const fromMeta = (it?.meta?.hotel_location || '').toLowerCase();
-      if (fromMeta === 'madinah' || fromMeta === 'makkah') return fromMeta;
-      const name = (it?.Product?.name || it?.product_name || '').toLowerCase();
-      if (/madinah/.test(name)) return 'madinah';
-      if (/mekkah|makkah/.test(name)) return 'makkah';
-      return 'makkah';
-    };
     const getOrderItemSortIndex = (type, hotelLocation) => {
       const t = (type || '').toLowerCase();
       if (t === 'hotel') return ((hotelLocation || '').toLowerCase() === 'madinah') ? 0 : 1;
@@ -525,7 +535,11 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       }
       const itemType = (item.type || '').toLowerCase();
       const isMerged = !!item._merged;
-      const desc = (item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`).toString();
+      let desc = (item.Product?.name || item.product_name || `${typeLabel(item.type)} ${i + 1}`).toString();
+      if (itemType === 'hotel') {
+        const base = desc.trim();
+        desc = `${hotelLocationInvoiceHeading(item)} · ${base}`;
+      }
       let dateLine = '';
       let mealLine = '';
       let calcLine = '';
@@ -645,11 +659,14 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       } else if (!Number.isFinite(subtotalVal) || subtotalVal <= 0) {
         subtotalVal = unitPriceIdr * effectiveQty;
       }
-      const qtyLabel = (itemType === 'hotel' && nightsForDisplay > 0) ? `${qty} × ${nightsForDisplay}` : String(qty);
+      // NBSP agar PDFKit tidak memecah "7" dan "× 3" ke dua baris di kolom sempit
+      const qtyLabel = (itemType === 'hotel' && nightsForDisplay > 0)
+        ? `${qty}\u00A0×\u00A0${nightsForDisplay}`
+        : String(qty);
       const unitSarUsd = idrToSarUsd(unitPriceIdr, rates);
       const subSarUsd = idrToSarUsd(subtotalVal, rates);
       doc.fontSize(9);
-      const descStr = desc.slice(0, 55);
+      const descStr = itemType === 'hotel' ? desc : desc.slice(0, 55);
       const descHeight = doc.heightOfString(descStr, { width: w(2) });
       doc.fontSize(7);
       const dateHeight = dateLine ? doc.heightOfString(dateLine, { width: w(2) }) : 0;
@@ -686,7 +703,19 @@ function renderInvoicePdf(doc, data, logoBuffer) {
       }
       doc.fontSize(9).fillColor('#334155');
       const qtyY = y + Math.min(14, Math.floor(rowH / 2) - 6);
-      doc.text(qtyLabel, x(3), qtyY, { width: w(3) });
+      const qtyStr = qtyLabel;
+      let qtyFs = 9;
+      doc.fontSize(qtyFs);
+      let qtyTw = doc.widthOfString(qtyStr);
+      const qtyColW = w(3);
+      while (qtyTw > qtyColW && qtyFs > 6) {
+        qtyFs -= 0.5;
+        doc.fontSize(qtyFs);
+        qtyTw = doc.widthOfString(qtyStr);
+      }
+      const qtyDrawX = x(3) + Math.max(0, (qtyColW - qtyTw) / 2);
+      doc.text(qtyStr, qtyDrawX, qtyY);
+      doc.fontSize(9);
       // Kolom 4: Harga Satuan Kamar (pisah) + SAR/USD; baris gabungan pakai harga dari item pertama
       if (isMerged) {
         if (hotelRoomUnitIdr > 0) {
