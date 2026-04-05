@@ -312,7 +312,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
-  const [uploadDocTab, setUploadDocTab] = useState<'hotel' | 'visa' | 'ticket'>('hotel');
+  const [uploadDocTab, setUploadDocTab] = useState<'hotel' | 'visa' | 'ticket' | 'siskopatuh'>('hotel');
   const [uploadDocLoading, setUploadDocLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
@@ -459,9 +459,11 @@ const OrdersInvoicesPage: React.FC = () => {
         const hasHotel = items.some((i: any) => (i.type || i.product_type) === 'hotel');
         const hasVisa = items.some((i: any) => (i.type || i.product_type) === 'visa');
         const hasTicket = items.some((i: any) => (i.type || i.product_type) === 'ticket');
+        const hasSiskopatuh = items.some((i: any) => (i.type || i.product_type) === 'siskopatuh');
         if (hasHotel) setUploadDocTab('hotel');
         else if (hasVisa) setUploadDocTab('visa');
         else if (hasTicket) setUploadDocTab('ticket');
+        else if (hasSiskopatuh) setUploadDocTab('siskopatuh');
       }
     } catch {
       showToast('Gagal memuat data order', 'error');
@@ -1909,7 +1911,7 @@ const OrdersInvoicesPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Modal Upload Dokumen – Tabs: Hotel / Visa / Tiket */}
+      {/* Modal Upload Dokumen – Tabs: Hotel / Visa / Tiket / Siskopatuh */}
       {uploadDocInvoice && (
         <Modal open onClose={() => !uploadDocLoading && setUploadDocInvoice(null)} zIndex={55}>
           <ModalBox className="max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -1930,11 +1932,15 @@ const OrdersInvoicesPage: React.FC = () => {
               const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
               const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
               const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
-              const hasAny = hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0;
+              const siskopatuhItems = items.filter((i: any) => (i.type || i.product_type) === 'siskopatuh');
+              const hasAny =
+                hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0 || siskopatuhItems.length > 0;
               if (!hasAny) {
                 return (
                   <div className="p-6">
-                    <p className="text-slate-600 text-sm">Order ini tidak memiliki item hotel, visa, atau tiket. Tidak ada dokumen yang perlu diupload.</p>
+                    <p className="text-slate-600 text-sm">
+                      Order ini tidak memiliki item hotel, visa, tiket, atau siskopatuh. Tidak ada dokumen yang perlu diupload.
+                    </p>
                   </div>
                 );
               }
@@ -1948,10 +1954,13 @@ const OrdersInvoicesPage: React.FC = () => {
                 },
                 [] as HotelUploadGroup[]
               );
-              const tabs: { id: 'hotel' | 'visa' | 'ticket'; label: string; icon: React.ReactNode; count: number }[] = [
+              const tabs: { id: 'hotel' | 'visa' | 'ticket' | 'siskopatuh'; label: string; icon: React.ReactNode; count: number }[] = [
                 ...(hotelByProduct.length > 0 ? [{ id: 'hotel' as const, label: 'Hotel', icon: <Package className="w-4 h-4" />, count: hotelByProduct.length }] : []),
                 ...(visaItems.length > 0 ? [{ id: 'visa' as const, label: 'Visa', icon: <FileText className="w-4 h-4" />, count: visaItems.length }] : []),
                 ...(ticketItems.length > 0 ? [{ id: 'ticket' as const, label: 'Tiket', icon: <Plane className="w-4 h-4" />, count: ticketItems.length }] : []),
+                ...(siskopatuhItems.length > 0
+                  ? [{ id: 'siskopatuh' as const, label: 'Siskopatuh', icon: <FileText className="w-4 h-4 text-violet-600" />, count: siskopatuhItems.length }]
+                  : []),
               ];
               const activeTab = tabs.some((t) => t.id === uploadDocTab) ? uploadDocTab : (tabs[0]?.id ?? 'hotel');
 
@@ -2152,6 +2161,84 @@ const OrdersInvoicesPage: React.FC = () => {
                                       try {
                                         await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
                                         showToast('Dokumen tiket berhasil diupload', 'success');
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }
+                                    e.target.value = '';
+                                  }} disabled={!!uploadingJamaahItemId} />
+                                </label>
+                                <div className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
+                                  <div className="flex gap-2 flex-wrap">
+                                    <Input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px]" disabled={!!uploadingJamaahItemId} />
+                                    <Button size="sm" variant="outline" onClick={async () => {
+                                      if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
+                                        showToast('Link berhasil disimpan', 'success');
+                                        setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
+                                      {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'siskopatuh' && (
+                      <div className="space-y-4">
+                        <p className="text-sm text-slate-600">
+                          Upload dokumen siskopatuh (ZIP) atau masukkan link Google Drive — sama seperti visa/tiket.
+                        </p>
+                        {siskopatuhItems.map((item: any) => {
+                          const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
+                          return (
+                            <div key={item.id} className="rounded-xl border border-slate-200 bg-violet-50/40 p-4 space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-violet-600" /> {item.Product?.name || item.product_name || 'Siskopatuh'}
+                              </h3>
+                              {hasUploaded && (
+                                <div className="rounded-lg bg-white/80 border border-violet-200/60 p-3">
+                                  <p className="text-xs font-medium text-slate-600 mb-1.5">Dokumen terunggah</p>
+                                  {item.jamaah_data_type === 'link' ? (
+                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <LinkIcon className="w-4 h-4" /> Buka link
+                                    </a>
+                                  ) : uploadDocInvoice?.order_id ? (
+                                    <Button type="button" size="sm" variant="secondary" disabled={downloadingJamaahItemId === item.id} onClick={() => downloadJamaahFile(uploadDocInvoice.order_id, item.id, item.jamaah_data_value)} className="inline-flex items-center gap-1.5">
+                                      {downloadingJamaahItemId === item.id ? 'Mengunduh…' : <><Download className="w-4 h-4" /> Unduh file</>}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">File tersimpan</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-3">
+                                <label className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">{hasUploaded ? 'Upload ulang' : 'File ZIP'}</span>
+                                  <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700" onChange={async (e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f && uploadDocInvoice?.order_id) {
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                        showToast('Dokumen siskopatuh berhasil diupload', 'success');
                                         const res = await invoicesApi.getById(uploadDocInvoice.id);
                                         if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
                                       } catch (err: any) {

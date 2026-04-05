@@ -1950,7 +1950,8 @@ const uploadJamaahFile = multer({ storage: jamaahStorage, limits: { fileSize: 50
 
 /**
  * POST /api/v1/orders/:orderId/items/:itemId/jamaah-data
- * Owner atau Invoice: upload data jamaah (ZIP) atau kirim link Google Drive. Hanya untuk order item visa/tiket.
+ * Owner atau Invoice: upload data jamaah (ZIP / Excel hotel) atau link Google Drive.
+ * Untuk item: visa, tiket, hotel, siskopatuh.
  */
 const uploadJamaahData = [
   uploadJamaahFile.single('jamaah_file'),
@@ -1959,13 +1960,18 @@ const uploadJamaahData = [
     const order = await Order.findByPk(orderId, { include: [{ model: OrderItem, as: 'OrderItems' }] });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
     const canUpload = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
-      ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
-    if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice yang dapat mengupload data jamaah' });
+      ['invoice_koordinator', 'invoice_saudi', 'role_siskopatuh', 'admin_pusat', 'super_admin'].includes(req.user.role);
+    if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice/siskopatuh yang dapat mengupload data jamaah' });
 
     const item = order.OrderItems.find(i => i.id === itemId);
     if (!item) return res.status(404).json({ success: false, message: 'Order item tidak ditemukan' });
-    if (item.type !== ORDER_ITEM_TYPE.VISA && item.type !== ORDER_ITEM_TYPE.TICKET && item.type !== ORDER_ITEM_TYPE.HOTEL) {
-      return res.status(400).json({ success: false, message: 'Data jamaah hanya untuk item visa, tiket, atau hotel' });
+    const jamaahAllowed =
+      item.type === ORDER_ITEM_TYPE.VISA ||
+      item.type === ORDER_ITEM_TYPE.TICKET ||
+      item.type === ORDER_ITEM_TYPE.HOTEL ||
+      item.type === ORDER_ITEM_TYPE.SISKOPATUH;
+    if (!jamaahAllowed) {
+      return res.status(400).json({ success: false, message: 'Data jamaah hanya untuk item visa, tiket, hotel, atau siskopatuh' });
     }
 
     const link = (req.body.jamaah_data_link != null ? String(req.body.jamaah_data_link).trim() : '') || null;
@@ -2028,7 +2034,11 @@ const uploadJamaahData = [
         { model: HotelProgress, as: 'HotelProgress', required: false }
       ]
     });
-    res.json({ success: true, data: updated, message: 'Data jamaah berhasil disimpan. Divisi visa/tiket/hotel dapat mengambil dokumen untuk proses penerbitan.' });
+    res.json({
+      success: true,
+      data: updated,
+      message: 'Data jamaah berhasil disimpan. Divisi terkait dapat mengambil dokumen untuk proses selanjutnya.'
+    });
   })
 ];
 
@@ -2064,7 +2074,7 @@ const getJamaahFile = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'File data jamaah tidak tersedia' });
   }
   const canAccess = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
-    ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'visa_koordinator', 'tiket_koordinator'].includes(req.user.role);
+    ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'visa_koordinator', 'tiket_koordinator', 'role_siskopatuh'].includes(req.user.role);
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
 
   const filePath = resolveJamaahDataPath(item.jamaah_data_value);

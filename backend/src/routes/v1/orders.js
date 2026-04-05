@@ -8,7 +8,7 @@ router.use(auth);
 
 router.get('/', orderController.list);
 router.post('/', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), orderController.create);
-router.post('/:orderId/items/:itemId/jamaah-data', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), orderController.uploadJamaahData);
+router.post('/:orderId/items/:itemId/jamaah-data', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ROLE_SISKOPATUH, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), orderController.uploadJamaahData);
 router.get('/:orderId/items/:itemId/jamaah-file', orderController.getJamaahFile);
 router.post('/:id/cancellation-requests', requireRole(...OWNER_ROLES), orderController.createOrderCancellationRequest);
 router.get('/:id', orderController.getById);
