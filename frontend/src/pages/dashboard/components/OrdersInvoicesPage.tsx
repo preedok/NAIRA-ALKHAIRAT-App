@@ -114,6 +114,83 @@ function isOwnerWithinOrderCancelWindow(inv: any): boolean {
   return calendarDaysBetweenUtcDateOnly(d, new Date()) < OWNER_CANCEL_MAX_CALENDAR_DAYS;
 }
 
+/** Jumlah hari kalender dari ymd A ke ymd B (format YYYY-MM-DD). */
+function calendarDaysBetweenYmdStrings(fromYmd: string, toYmd: string): number {
+  const parse = (s: string) => {
+    const p = s.slice(0, 10).split('-').map(Number);
+    if (p.length !== 3 || p.some((n) => !Number.isFinite(n))) return NaN;
+    return Date.UTC(p[0], p[1] - 1, p[2]);
+  };
+  const a = parse(fromYmd);
+  const b = parse(toYmd);
+  if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+  return Math.round((b - a) / (24 * 60 * 60 * 1000));
+}
+
+function todayLocalYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function pushServiceYmd(bucket: string[], raw: unknown) {
+  if (raw == null || raw === '') return;
+  const s = String(raw).trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) bucket.push(s);
+}
+
+function getItemMetaObj(item: any): Record<string, unknown> {
+  const m = item?.meta;
+  if (!m) return {};
+  if (typeof m === 'string') {
+    try {
+      return JSON.parse(m) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof m === 'object') return m as Record<string, unknown>;
+  return {};
+}
+
+/** Tanggal layanan terawal dari item order (check-in hotel, berangkat tiket, travel visa/bus, dll.). */
+function getEarliestServiceYmdFromInvoice(inv: any): string | null {
+  const items = inv?.Order?.OrderItems;
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const all: string[] = [];
+  for (const it of items) {
+    const meta = getItemMetaObj(it);
+    pushServiceYmd(all, meta.check_in);
+    pushServiceYmd(all, meta.departure_date);
+    pushServiceYmd(all, meta.return_date);
+    pushServiceYmd(all, meta.travel_date);
+    const hp = it?.HotelProgress;
+    if (hp?.check_in_date) pushServiceYmd(all, hp.check_in_date);
+  }
+  if (all.length === 0) return null;
+  return all.sort()[0];
+}
+
+/** Hari kalender: owner tidak boleh batalkan jika layanan terawal sudah lewat atau dalam 7 hari ke depan (termasuk besok). */
+const OWNER_CANCEL_SERVICE_EXCLUSION_DAYS = 7;
+
+function isOwnerCancelBlockedByUpcomingService(inv: any): boolean {
+  const earliest = getEarliestServiceYmdFromInvoice(inv);
+  if (!earliest) return false;
+  const today = todayLocalYmd();
+  const daysUntil = calendarDaysBetweenYmdStrings(today, earliest);
+  if (!Number.isFinite(daysUntil)) return false;
+  if (daysUntil < 0) return true;
+  return daysUntil < OWNER_CANCEL_SERVICE_EXCLUSION_DAYS;
+}
+
+/** Gabungan aturan owner: jendela dari tanggal order + tidak dalam masa 7 hari menjelang layanan. */
+function canOwnerCancelInvoiceInUi(inv: any): boolean {
+  return isOwnerWithinOrderCancelWindow(inv) && !isOwnerCancelBlockedByUpcomingService(inv);
+}
+
 /**
  * Order & Invoice - Satu komponen untuk menu Invoice (admin pusat, koordinator, divisi hotel/bus/visa/tiket, accounting, owner).
  * Data dibatasi: koordinator & divisi visa/tiket = wilayah masing-masing; hotel & bus = semua wilayah.
@@ -397,8 +474,12 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const openCancelModal = (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
-    if (isOwnerRoleUser && !isInvoiceTeamUser && !isOwnerWithinOrderCancelWindow(inv)) {
-      showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+    if (isOwnerRoleUser && !isInvoiceTeamUser && !canOwnerCancelInvoiceInUi(inv)) {
+      if (isOwnerCancelBlockedByUpcomingService(inv)) {
+        showToast('Pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Hubungi tim invoice.', 'error');
+      } else {
+        showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+      }
       return;
     }
     const paid = parseFloat(inv.paid_amount || 0);
@@ -489,8 +570,12 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const handleDeleteOrder = async (inv: any) => {
     if (!canOrderAction || !inv?.order_id) return;
-    if (isOwnerRoleUser && !isInvoiceTeamUser && !isOwnerWithinOrderCancelWindow(inv)) {
-      showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+    if (isOwnerRoleUser && !isInvoiceTeamUser && !canOwnerCancelInvoiceInUi(inv)) {
+      if (isOwnerCancelBlockedByUpcomingService(inv)) {
+        showToast('Pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Hubungi tim invoice.', 'error');
+      } else {
+        showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+      }
       return;
     }
     const paidAmount = parseFloat(inv.paid_amount) || 0;
@@ -508,6 +593,8 @@ const OrdersInvoicesPage: React.FC = () => {
       const code = e.response?.data?.code;
       if (code === 'OWNER_CANCEL_WINDOW_EXPIRED') {
         showToast(e.response?.data?.message || 'Batas 7 hari pembatalan owner telah lewat.', 'error');
+      } else if (code === 'OWNER_CANCEL_SERVICE_TOO_SOON') {
+        showToast(e.response?.data?.message || 'Pembatalan tidak tersedia karena tanggal layanan sudah dekat.', 'error');
       } else {
         showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
       }
@@ -518,8 +605,12 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const submitCancelModal = async () => {
     if (!cancelTargetInv?.order_id) return;
-    if (isOwnerRoleUser && !isInvoiceTeamUser && !isOwnerWithinOrderCancelWindow(cancelTargetInv)) {
-      showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+    if (isOwnerRoleUser && !isInvoiceTeamUser && !canOwnerCancelInvoiceInUi(cancelTargetInv)) {
+      if (isOwnerCancelBlockedByUpcomingService(cancelTargetInv)) {
+        showToast('Pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Hubungi tim invoice.', 'error');
+      } else {
+        showToast('Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Hubungi tim invoice.', 'error');
+      }
       return;
     }
     const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
@@ -580,6 +671,8 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast(e.response?.data?.message || 'Pengajuan ke Admin Pusat diperlukan.', 'error');
       } else if (code === 'OWNER_CANCEL_WINDOW_EXPIRED') {
         showToast(e.response?.data?.message || 'Batas 7 hari pembatalan owner telah lewat.', 'error');
+      } else if (code === 'OWNER_CANCEL_SERVICE_TOO_SOON') {
+        showToast(e.response?.data?.message || 'Pembatalan tidak tersedia karena tanggal layanan sudah dekat.', 'error');
       } else {
         showToast(e.response?.data?.message || 'Gagal membatalkan order', 'error');
       }
@@ -1792,7 +1885,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 ? [{ id: 'view-refund', label: 'Lihat Invoice Refund', icon: <Receipt className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice_refund'); fetchInvoiceDetail(inv.id); } }]
                                 : []),
                               { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) },
-                              ...(canOrderAction && inv.order_id && !['canceled', 'cancelled', 'cancelled_refund'].includes((inv.status || '').toLowerCase()) && (isInvoiceTeamUser || !isOwnerRoleUser || isOwnerWithinOrderCancelWindow(inv))
+                              ...(canOrderAction && inv.order_id && !['canceled', 'cancelled', 'cancelled_refund'].includes((inv.status || '').toLowerCase()) && (isInvoiceTeamUser || !isOwnerRoleUser || canOwnerCancelInvoiceInUi(inv))
                                 ? [{ id: 'delete', label: 'Batalkan Invoice', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteOrder(inv), danger: true, disabled: deletingOrderId === inv.order_id }]
                                 : []),
                             ].filter(Boolean) as ActionsMenuItem[]}

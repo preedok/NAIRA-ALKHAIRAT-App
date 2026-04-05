@@ -100,6 +100,77 @@ function ownerCancelWindowExpired(order) {
   return days >= OWNER_CANCEL_MAX_CALENDAR_DAYS;
 }
 
+const OWNER_CANCEL_SERVICE_EXCLUSION_DAYS = 7;
+
+function todayLocalYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function pushServiceYmd(arr, val) {
+  if (val == null || val === '') return;
+  const s = String(val).trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) arr.push(s);
+}
+
+function collectItemMeta(it) {
+  const m = it.meta;
+  if (!m) return {};
+  if (typeof m === 'string') {
+    try {
+      return JSON.parse(m);
+    } catch (_) {
+      return {};
+    }
+  }
+  if (typeof m === 'object') return m;
+  return {};
+}
+
+function earliestServiceYmdFromOrderItems(items) {
+  const all = [];
+  for (const it of items || []) {
+    const meta = collectItemMeta(it);
+    pushServiceYmd(all, meta.check_in);
+    pushServiceYmd(all, meta.departure_date);
+    pushServiceYmd(all, meta.return_date);
+    pushServiceYmd(all, meta.travel_date);
+    const hp = it.HotelProgress;
+    if (hp) {
+      const cid = typeof hp.get === 'function' ? hp.get('check_in_date') : hp.check_in_date;
+      pushServiceYmd(all, cid);
+    }
+  }
+  if (all.length === 0) return null;
+  return all.sort()[0];
+}
+
+function calendarDaysBetweenYmd(fromYmd, toYmd) {
+  const parse = (s) => {
+    const x = String(s).slice(0, 10).split('-').map(Number);
+    if (x.length !== 3 || x.some((n) => Number.isNaN(n))) return NaN;
+    return Date.UTC(x[0], x[1] - 1, x[2]);
+  };
+  const a = parse(fromYmd);
+  const b = parse(toYmd);
+  if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+  return Math.round((b - a) / (24 * 60 * 60 * 1000));
+}
+
+async function ownerCancelBlockedByUpcomingServiceDb(orderId) {
+  const items = await OrderItem.findAll({
+    where: { order_id: orderId },
+    attributes: ['id', 'meta', 'type'],
+    include: [{ model: HotelProgress, as: 'HotelProgress', attributes: ['check_in_date'], required: false }]
+  });
+  const earliest = earliestServiceYmdFromOrderItems(items);
+  if (!earliest) return false;
+  const daysUntil = calendarDaysBetweenYmd(todayLocalYmd(), earliest);
+  if (Number.isNaN(daysUntil)) return false;
+  if (daysUntil < 0) return true;
+  return daysUntil < OWNER_CANCEL_SERVICE_EXCLUSION_DAYS;
+}
+
 async function validatePaidCancelBody(order, inv, body) {
   if (!inv) {
     return { ok: false, status: 400, message: 'Order tidak memiliki invoice.' };
@@ -1716,12 +1787,21 @@ const destroy = asyncHandler(async (req, res) => {
 
   const isStaffCancelRoleEarly = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
   const isOwnerSelfOrderEarly = isOwnerRole(req.user.role) && order.owner_id === req.user.id;
-  if (isOwnerSelfOrderEarly && !isStaffCancelRoleEarly && ownerCancelWindowExpired(order)) {
-    return res.status(403).json({
-      success: false,
-      code: 'OWNER_CANCEL_WINDOW_EXPIRED',
-      message: 'Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Silakan hubungi tim invoice untuk pembatalan selanjutnya.'
-    });
+  if (isOwnerSelfOrderEarly && !isStaffCancelRoleEarly) {
+    if (await ownerCancelBlockedByUpcomingServiceDb(order.id)) {
+      return res.status(403).json({
+        success: false,
+        code: 'OWNER_CANCEL_SERVICE_TOO_SOON',
+        message: 'Pembatalan oleh owner tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Silakan hubungi tim invoice.'
+      });
+    }
+    if (ownerCancelWindowExpired(order)) {
+      return res.status(403).json({
+        success: false,
+        code: 'OWNER_CANCEL_WINDOW_EXPIRED',
+        message: 'Pembatalan oleh owner hanya dalam 7 hari sejak order dibuat. Silakan hubungi tim invoice untuk pembatalan selanjutnya.'
+      });
+    }
   }
 
   const inv = await Invoice.findOne({ where: { order_id: order.id } });
@@ -1983,6 +2063,13 @@ const createOrderCancellationRequest = asyncHandler(async (req, res) => {
   }
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa dibatalkan saat draft/tentative/confirmed/processing' });
+  }
+  if (await ownerCancelBlockedByUpcomingServiceDb(order.id)) {
+    return res.status(403).json({
+      success: false,
+      code: 'OWNER_CANCEL_SERVICE_TOO_SOON',
+      message: 'Pengajuan pembatalan tidak tersedia karena tanggal layanan (check-in/keberangkatan) sudah dalam 7 hari. Silakan hubungi tim invoice.'
+    });
   }
   if (ownerCancelWindowExpired(order)) {
     return res.status(403).json({
