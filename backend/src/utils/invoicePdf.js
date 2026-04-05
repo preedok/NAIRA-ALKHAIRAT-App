@@ -5,6 +5,7 @@
 const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
+const uploadConfig = require('../config/uploads');
 
 /** Path logo dari assets */
 function getLogoPath() {
@@ -210,6 +211,27 @@ function checkNewPage(doc, y, margin, need) {
     return margin;
   }
   return y;
+}
+
+/** Path absolut file bukti transfer di disk (null jika URL eksternal / tidak ada). */
+function resolvePaymentProofFilePath(proofFileUrl) {
+  if (!proofFileUrl || proofFileUrl === 'issued-saudi') return null;
+  const u = String(proofFileUrl).replace(/\\/g, '/').trim();
+  if (/^https?:\/\//i.test(u)) return null;
+  const match = u.match(/payment-proofs\/?(.+)$/i);
+  if (match) {
+    const filename = match[1].replace(/^\/+/, '').split('/').pop();
+    if (!filename) return null;
+    const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.PAYMENT_PROOFS);
+    const fp = path.join(dir, filename);
+    if (fs.existsSync(fp)) return fp;
+  }
+  const norm = u.replace(/^\/?uploads\/?/i, '').replace(/^\/+/, '');
+  if (norm) {
+    const fp = path.join(uploadConfig.UPLOAD_ROOT, norm);
+    if (fs.existsSync(fp)) return fp;
+  }
+  return null;
 }
 
 /** Ambil kurs untuk konversi: prioritaskan order/invoice override, lalu branch rules */
@@ -967,6 +989,110 @@ function renderInvoicePdf(doc, data, logoBuffer) {
     } else {
       y += 8;
     }
+  }
+
+  // ---- Lampiran bukti transfer (gambar) di bagian paling bawah; halaman baru bila tidak muat ----
+  const proofsForAttach = (data.PaymentProofs || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  const hasAnyProofUrl = proofsForAttach.some((p) => p.proof_file_url && p.proof_file_url !== 'issued-saudi');
+  if (hasAnyProofUrl) {
+    y = checkNewPage(doc, y, margin, 72);
+    doc.fontSize(12).fillColor('#0f172a').font('Helvetica-Bold').text('Lampiran bukti transfer', margin, y);
+    y += 20;
+    doc.fontSize(8).fillColor('#64748b').font('Helvetica').text(
+      'Gambar bukti pembayaran sebagaimana diunggah. Jika tidak tampil, buka berkas asli dari menu invoice.',
+      margin,
+      y,
+      { width: pageWidth }
+    );
+    y += 26;
+
+    const bottomLimit = doc.page.height - 80;
+    const captionH = 26;
+    const gapAfterImg = 14;
+    let lampiranIdx = 0;
+
+    proofsForAttach.forEach((p) => {
+      const urlRaw = p.proof_file_url;
+      if (!urlRaw || urlRaw === 'issued-saudi') return;
+      lampiranIdx += 1;
+      const u = String(urlRaw).replace(/\\/g, '/').trim();
+      if (/^https?:\/\//i.test(u)) {
+        y = checkNewPage(doc, y, margin, 28);
+        doc.fontSize(8).fillColor('#64748b').font('Helvetica').text(
+          `Lampiran ${lampiranIdx} — ${paymentTypeLabel(p.payment_type)} — ${formatIDR(parseFloat(p.amount || 0))}: bukti di URL eksternal (tidak dimasukkan ke PDF).`,
+          margin,
+          y,
+          { width: pageWidth }
+        );
+        y += 26;
+        return;
+      }
+      const fp = resolvePaymentProofFilePath(urlRaw);
+      if (!fp) {
+        y = checkNewPage(doc, y, margin, 28);
+        doc.fontSize(8).fillColor('#94a3b8').font('Helvetica').text(
+          `Lampiran ${lampiranIdx} — ${paymentTypeLabel(p.payment_type)} — ${formatIDR(parseFloat(p.amount || 0))}: berkas tidak ditemukan di server.`,
+          margin,
+          y,
+          { width: pageWidth }
+        );
+        y += 26;
+        return;
+      }
+      const ext = path.extname(fp).toLowerCase();
+      if (ext === '.pdf') {
+        y = checkNewPage(doc, y, margin, 28);
+        doc.fontSize(8).fillColor('#64748b').font('Helvetica').text(
+          `Lampiran ${lampiranIdx} — ${paymentTypeLabel(p.payment_type)} — ${formatIDR(parseFloat(p.amount || 0))}: berkas PDF (${path.basename(fp)}) — buka dari aplikasi.`,
+          margin,
+          y,
+          { width: pageWidth }
+        );
+        y += 26;
+        return;
+      }
+      let img;
+      try {
+        img = doc.openImage(fp);
+      } catch (_) {
+        y = checkNewPage(doc, y, margin, 28);
+        doc.fontSize(8).fillColor('#b45309').font('Helvetica').text(
+          `Lampiran ${lampiranIdx} — ${path.basename(fp)}: format tidak didukung untuk pratinjau di PDF.`,
+          margin,
+          y,
+          { width: pageWidth }
+        );
+        y += 26;
+        return;
+      }
+      const maxImgW = pageWidth;
+      y = checkNewPage(doc, y, margin, captionH + 100);
+      if (bottomLimit - y - captionH - gapAfterImg < 80) {
+        doc.addPage();
+        y = margin;
+      }
+      let availableH = bottomLimit - y - captionH - gapAfterImg;
+      let maxImgH = Math.min(380, Math.max(80, availableH));
+      let ratio = Math.min(maxImgW / img.width, maxImgH / img.height, 1);
+      let drawW = img.width * ratio;
+      let drawH = img.height * ratio;
+      if (y + captionH + drawH + gapAfterImg > bottomLimit) {
+        doc.addPage();
+        y = margin;
+        availableH = bottomLimit - y - captionH - gapAfterImg;
+        maxImgH = Math.min(380, Math.max(80, availableH));
+        ratio = Math.min(maxImgW / img.width, maxImgH / img.height, 1);
+        drawW = img.width * ratio;
+        drawH = img.height * ratio;
+      }
+      const cap = `Lampiran ${lampiranIdx} — ${paymentTypeLabel(p.payment_type)} — ${formatIDR(parseFloat(p.amount || 0))} — ${formatDateTime(p.verified_at || p.created_at)}`;
+      doc.fontSize(8).fillColor('#334155').font('Helvetica-Bold').text(cap, margin, y, { width: pageWidth });
+      y += captionH - 2;
+      const imgX = margin + (pageWidth - drawW) / 2;
+      doc.rect(margin, y - 2, pageWidth, drawH + 4).stroke('#e2e8f0');
+      doc.image(img, imgX, y, { width: drawW, height: drawH });
+      y += drawH + gapAfterImg;
+    });
   }
 
   // ---- Footer ----
