@@ -46,7 +46,7 @@ const ProductHotelPage: React.FC = () => {
       })
       .catch(() => setHotels([]))
       .finally(() => setHotelsLoading(false));
-  }, [user?.role]);
+  }, [user?.role, user?.id]);
 
   useEffect(() => {
     fetchHotels();

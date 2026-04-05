@@ -6,7 +6,7 @@ const { Order, OrderItem, User, Branch, Provinsi, Wilayah, Product, ProductPrice
 const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 const { ORDER_ITEM_TYPE, ROLES, INVOICE_STATUS } = require('../constants');
 const { HOTEL_PROGRESS_STATUS } = require('../constants');
-const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
+const { getHotelBranchIds } = require('../utils/hotelBranchScope');
 const uploadConfig = require('../config/uploads');
 const { buildHotelInfoPdfBuffer } = require('../utils/hotelPdf');
 const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
@@ -59,26 +59,6 @@ function attachJamaahStatus(item) {
  * branch_id user TIDAK wajib: super_admin = semua cabang, koordinator (invoice/tiket/visa) = wilayah,
  * role_hotel tanpa cabang/wilayah = fallback semua cabang. Tidak ada pesan "Role hotel harus terikat cabang".
  */
-const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
-/** Scope cabang: super_admin = semua cabang, koordinator = wilayah, role hotel = cabang/wilayah. Fallback semua cabang agar tidak 403. */
-async function getHotelBranchIds(user) {
-  if (user.role === ROLES.SUPER_ADMIN) {
-    const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
-    return branches.map(b => b.id);
-  }
-  if (KOORDINATOR_ROLES.includes(user.role) && user.wilayah_id) {
-    const ids = await getBranchIdsForWilayah(user.wilayah_id);
-    if (ids.length > 0) return ids;
-  }
-  if (user.branch_id) return [user.branch_id];
-  if (user.wilayah_id) {
-    const ids = await getBranchIdsForWilayah(user.wilayah_id);
-    if (ids.length > 0) return ids;
-  }
-  const branches = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
-  return branches.map(b => b.id);
-}
-
 /**
  * GET /api/v1/hotel/invoices
  * List invoices that have hotel items (scope cabang). Sama pola dengan visa/ticket/bus.
@@ -250,6 +230,14 @@ const getInvoice = asyncHandler(async (req, res) => {
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name'] },
       { model: PaymentReallocation, as: 'ReallocationsOut', required: false, include: [{ model: Invoice, as: 'TargetInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
       { model: PaymentReallocation, as: 'ReallocationsIn', required: false, include: [{ model: Invoice, as: 'SourceInvoice', attributes: ['id', 'invoice_number'] }], order: [['created_at', 'DESC']] },
+      {
+        model: PaymentProof,
+        as: 'PaymentProofs',
+        required: false,
+        attributes: PAYMENT_PROOF_ATTRS,
+        separate: true,
+        order: [['created_at', 'ASC']]
+      },
       {
         model: Order,
         as: 'Order',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { RefreshCw, Eye, ClipboardList, Building2, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText, Play, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, Eye, ClipboardList, Building2, Search, Hotel, CheckCircle, DoorOpen, ListChecks, User, MapPin, Calendar, UtensilsCrossed, FileText, Play, FileSpreadsheet, Paperclip, Download, ExternalLink } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import Modal, { ModalHeader, ModalBody, ModalFooter, ModalBoxLg } from '../../../components/common/Modal';
@@ -11,7 +11,7 @@ import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import Table from '../../../components/common/Table';
 import { Input, Autocomplete, Textarea, ContentLoading, NominalDisplay } from '../../../components/common';
 import type { TableColumn } from '../../../types';
-import { hotelApi } from '../../../services/api';
+import { hotelApi, invoicesApi, ordersApi } from '../../../services/api';
 import { useToast } from '../../../contexts/ToastContext';
 import { INVOICE_STATUS_LABELS, AUTOCOMPLETE_FILTER, PROGRESS_INVOICE_TABLE_COLUMNS } from '../../../utils/constants';
 import { formatInvoiceNumberDisplay } from '../../../utils';
@@ -38,6 +38,12 @@ const ROOM_TYPE_LABELS = ROOM_TYPE_LABELS_SHARED;
 
 /** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang) */
 const ROOM_CAPACITY: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  dp: 'Pembayaran DP',
+  partial: 'Cicilan / sebagian',
+  full: 'Pelunasan'
+};
 
 const formatDate = (d: string | null | undefined) => {
   if (!d) return '–';
@@ -79,7 +85,8 @@ const HotelWorkPage: React.FC = () => {
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   type HotelItemDraft = { status?: string; room_number?: string; meal_status?: string; notes?: string };
   const [detailDraft, setDetailDraft] = useState<Record<string, HotelItemDraft>>({});
-  const [detailTab, setDetailTab] = useState<'detail' | 'slip'>('detail');
+  const [detailTab, setDetailTab] = useState<'detail' | 'slip' | 'files'>('detail');
+  const [fileLoadingKey, setFileLoadingKey] = useState<string | null>(null);
 
   useEffect(() => {
     setDetailTab('detail');
@@ -344,6 +351,81 @@ const HotelWorkPage: React.FC = () => {
   const [currencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({ SAR_TO_IDR: 4200, USD_TO_IDR: 15500 });
   const hasHotelInvoices = filteredInvoices.length > 0;
 
+  const orderIdForFiles = detailInvoice ? (detailInvoice.order_id || detailInvoice.Order?.id || '') : '';
+
+  const downloadBlobAsFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  const handleDownloadPaymentProof = async (proofId: string) => {
+    if (!detailInvoice?.id) return;
+    const key = `proof-${proofId}`;
+    setFileLoadingKey(key);
+    try {
+      const res = await invoicesApi.getPaymentProofFile(detailInvoice.id, proofId);
+      const blob = res.data as Blob;
+      const disp = String(res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'] || '');
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name =
+        (m && decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim())) || `bukti-${proofId.slice(-6)}`;
+      downloadBlobAsFile(blob, name || 'bukti-bayar');
+      showToast('Bukti bayar diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh bukti', 'error');
+    } finally {
+      setFileLoadingKey(null);
+    }
+  };
+
+  const handleDownloadJamaahFile = async (itemId: string) => {
+    if (!orderIdForFiles || !detailInvoice?.id) return;
+    const key = `jamaah-${itemId}`;
+    setFileLoadingKey(key);
+    try {
+      const res = await ordersApi.getJamaahFile(orderIdForFiles, itemId);
+      const blob = res.data as Blob;
+      const disp = String(res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'] || '');
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name =
+        (m && decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim())) || `data-jamaah-${itemId.slice(-6)}`;
+      downloadBlobAsFile(blob, name || 'data-jamaah');
+      showToast('Data jamaah diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh data jamaah', 'error');
+    } finally {
+      setFileLoadingKey(null);
+    }
+  };
+
+  const handleDownloadManifest = async (itemId: string) => {
+    if (!detailInvoice?.id) return;
+    const key = `manifest-${itemId}`;
+    setFileLoadingKey(key);
+    try {
+      const res = await invoicesApi.getManifestFile(detailInvoice.id, itemId);
+      const blob = res.data as Blob;
+      const disp = String(res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'] || '');
+      const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
+      const name =
+        (m && decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim())) || `manifest-${itemId.slice(-6)}`;
+      downloadBlobAsFile(blob, name || 'manifest');
+      showToast('Manifest diunduh', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal unduh manifest', 'error');
+    } finally {
+      setFileLoadingKey(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -488,13 +570,20 @@ const HotelWorkPage: React.FC = () => {
                 return (status === 'completed' || status === 'room_assigned') && !!room && meal === 'completed';
               });
               return (
-                <div className="border-b border-slate-200 bg-slate-50/60 px-6 flex gap-1">
+                <div className="border-b border-slate-200 bg-slate-50/60 px-6 flex gap-1 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setDetailTab('detail')}
                     className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${detailTab === 'detail' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
                   >
                     Detail
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab('files')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${detailTab === 'files' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+                  >
+                    <Paperclip className="w-4 h-4" /> Berkas
                   </button>
                   {hasSlipEligible && (
                     <button
@@ -509,7 +598,127 @@ const HotelWorkPage: React.FC = () => {
               );
             })()}
             <ModalBody className="space-y-6 bg-slate-50/30">
-              {detailTab === 'slip' ? (
+              {detailTab === 'files' ? (
+                <div className="space-y-6">
+                  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                      <Paperclip className="w-4 h-4 text-amber-600" /> Bukti pembayaran (owner)
+                    </p>
+                    {(!(detailInvoice.PaymentProofs || []).length) ? (
+                      <p className="text-sm text-slate-500">Belum ada bukti pembayaran yang diunggah.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {(detailInvoice.PaymentProofs || []).map((proof: any) => {
+                          const ptype = PAYMENT_TYPE_LABELS[proof.payment_type] || proof.payment_type || 'Pembayaran';
+                          const hasFile = proof.proof_file_url && proof.proof_file_url !== 'issued-saudi';
+                          return (
+                            <li key={proof.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 text-sm">
+                              <div>
+                                <span className="font-medium text-slate-900">{ptype}</span>
+                                {proof.transfer_date && (
+                                  <span className="text-slate-500 ml-2">{formatDate(proof.transfer_date)}</span>
+                                )}
+                                {!hasFile && proof.proof_file_url === 'issued-saudi' && (
+                                  <span className="block text-xs text-slate-500 mt-1">Dicatat tim Saudi (tanpa lampiran file)</span>
+                                )}
+                              </div>
+                              {hasFile ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="shrink-0"
+                                  disabled={fileLoadingKey === `proof-${proof.id}`}
+                                  onClick={() => handleDownloadPaymentProof(proof.id)}
+                                >
+                                  {fileLoadingKey === `proof-${proof.id}` ? (
+                                    <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Mengunduh...</>
+                                  ) : (
+                                    <><Download className="w-4 h-4 mr-1" /> Unduh</>
+                                  )}
+                                </Button>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Lampiran per item hotel (owner)</p>
+                    <p className="text-xs text-slate-500 mb-4">Data jamaah (file/link), manifest jamaah, dan dokumen terkait yang diunggah pemilik order.</p>
+                    {hotelItemsAll.length === 0 ? (
+                      <p className="text-sm text-slate-500">Tidak ada item hotel.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {hotelItemsAll.map((item: any) => {
+                          const productName = (item as any).product_name || item.Product?.name || item.Product?.code || 'Hotel';
+                          const roomTypeLabel = ROOM_TYPE_LABELS[(item.meta?.room_type || '').toString()] || (item.meta?.room_type || '–');
+                          const jt = (item.jamaah_data_type || '').toLowerCase();
+                          const jv = (item.jamaah_data_value || '').trim();
+                          const manifestUrl = (item.manifest_file_url || '').trim();
+                          return (
+                            <div key={item.id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 space-y-2">
+                              <p className="font-semibold text-slate-900">{productName}</p>
+                              <p className="text-xs text-slate-500">{roomTypeLabel}</p>
+                              <div className="pt-2 space-y-2 border-t border-slate-200">
+                                <p className="text-xs font-medium text-slate-600">Data jamaah</p>
+                                {jt === 'file' && jv ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!orderIdForFiles || fileLoadingKey === `jamaah-${item.id}`}
+                                    onClick={() => handleDownloadJamaahFile(item.id)}
+                                  >
+                                    {fileLoadingKey === `jamaah-${item.id}` ? (
+                                      <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Mengunduh...</>
+                                    ) : (
+                                      <><Download className="w-4 h-4 mr-1" /> Unduh file data jamaah</>
+                                    )}
+                                  </Button>
+                                ) : jt === 'link' && jv ? (
+                                  <a
+                                    href={jv}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:text-amber-900"
+                                  >
+                                    <ExternalLink className="w-4 h-4" /> Buka link (Google Drive / lainnya)
+                                  </a>
+                                ) : (
+                                  <p className="text-sm text-slate-500">Belum ada data jamaah.</p>
+                                )}
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-xs font-medium text-slate-600">Manifest jamaah</p>
+                                {manifestUrl ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={fileLoadingKey === `manifest-${item.id}`}
+                                    onClick={() => handleDownloadManifest(item.id)}
+                                  >
+                                    {fileLoadingKey === `manifest-${item.id}` ? (
+                                      <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Mengunduh...</>
+                                    ) : (
+                                      <><Download className="w-4 h-4 mr-1" /> Unduh manifest</>
+                                    )}
+                                  </Button>
+                                ) : (
+                                  <p className="text-sm text-slate-500">Tidak ada file manifest.</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : detailTab === 'slip' ? (
                 <div className="space-y-4">
                   {hotelItems
                     .filter((item: any) => {

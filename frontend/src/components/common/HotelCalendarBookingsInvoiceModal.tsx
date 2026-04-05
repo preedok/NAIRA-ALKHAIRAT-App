@@ -90,6 +90,8 @@ export interface HotelCalendarBookingsInvoiceModalProps {
   hotelProductId: string;
   hotelLabel?: string;
   orderIds: string[];
+  /** Jika diisi (mis. owner): hanya tampilkan baris invoice milik user ini. */
+  restrictToOwnerId?: string;
 }
 
 const columns: TableColumn[] = [
@@ -110,7 +112,8 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
   seasonName,
   hotelProductId,
   hotelLabel,
-  orderIds
+  orderIds,
+  restrictToOwnerId
 }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -130,8 +133,12 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
         businessRulesApi.get({}).catch(() => null)
       ]);
       if (invRes.data?.success) {
-        const rows = invRes.data.data;
-        setInvoices(Array.isArray(rows) ? rows : []);
+        let rows = invRes.data.data;
+        rows = Array.isArray(rows) ? rows : [];
+        if (restrictToOwnerId) {
+          rows = rows.filter((inv: any) => String(inv.owner_id || '') === String(restrictToOwnerId));
+        }
+        setInvoices(rows);
       } else {
         setInvoices([]);
       }
@@ -144,7 +151,7 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
     } finally {
       setLoading(false);
     }
-  }, [open, orderIds]);
+  }, [open, orderIds, restrictToOwnerId]);
 
   useEffect(() => {
     if (!open) {

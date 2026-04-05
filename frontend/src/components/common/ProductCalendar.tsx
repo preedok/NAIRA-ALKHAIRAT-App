@@ -4,6 +4,14 @@ import ContentLoading from './ContentLoading';
 
 const WEEKDAY_LABELS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
+/** YYYY-MM-DD di zona waktu lokal browser — jangan pakai toISOString() (UTC) agar tidak geser tanggal (mis. WIB: tgl 1 kosong, check-in tampil di hari salah). */
+function formatDateKeyLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export interface ProductCalendarMonth {
   year: number;
   month: number;
@@ -63,7 +71,7 @@ function ProductCalendarInner<T>({
     year: 'numeric'
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = formatDateKeyLocal(new Date());
 
   return (
     <div className={`rounded-3xl bg-white shadow-xl shadow-slate-200/50 overflow-hidden ${className}`}>
@@ -127,7 +135,7 @@ function ProductCalendarInner<T>({
               const date = isInMonth
                 ? new Date(month.year, month.month, dayIndex)
                 : null;
-              const dateStr = date ? date.toISOString().slice(0, 10) : '';
+              const dateStr = date ? formatDateKeyLocal(date) : '';
               const dayData = dateStr && data ? (data[dateStr] as T | undefined) : undefined;
               const isToday = dateStr === todayStr;
               const isPopoverOpen = popoverDate === dateStr;

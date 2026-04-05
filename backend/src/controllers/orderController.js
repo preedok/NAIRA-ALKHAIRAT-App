@@ -5,7 +5,8 @@ const multer = require('multer');
 const { Op } = require('sequelize');
 const { Order, OrderItem, User, Branch, Provinsi, OwnerProfile, Invoice, Notification, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerBalanceTransaction, InvoiceStatusHistory, OrderRevision, OrderCancellationRequest, PaymentProof, PaymentReallocation, InvoiceFile, sequelize } = require('../models');
 const { getRulesForBranch } = require('./businessRuleController');
-const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS, isOwnerRole } = require('../constants');
+const { NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, ROOM_CAPACITY, VISA_PROGRESS_STATUS, TICKET_PROGRESS_STATUS, REFUND_STATUS, REFUND_SOURCE, BANDARA_TIKET_CODES, TICKET_TRIP_TYPES, BUS_TRIP_TYPES, BUSINESS_RULES, DP_PAYMENT_STATUS, INVOICE_STATUS, ORDER_STATUS, isOwnerRole, ROLES } = require('../constants');
+const { getHotelBranchIds } = require('../utils/hotelBranchScope');
 const { getEffectivePrice } = require('./productController');
 const { checkAvailability } = require('../services/hotelAvailabilityService');
 const { calculateStayCostByNights } = require('../services/hotelMonthlyPricingService');
@@ -2066,7 +2067,7 @@ const MIME_JAMAAH = {
  */
 const getJamaahFile = asyncHandler(async (req, res) => {
   const { orderId, itemId } = req.params;
-  const order = await Order.findByPk(orderId, { attributes: ['id', 'owner_id'], include: [{ model: OrderItem, as: 'OrderItems', where: { id: itemId }, required: true, attributes: ['id', 'jamaah_data_type', 'jamaah_data_value'] }] });
+  const order = await Order.findByPk(orderId, { attributes: ['id', 'owner_id', 'branch_id'], include: [{ model: OrderItem, as: 'OrderItems', where: { id: itemId }, required: true, attributes: ['id', 'jamaah_data_type', 'jamaah_data_value'] }] });
   if (!order || !order.OrderItems || order.OrderItems.length === 0) {
     return res.status(404).json({ success: false, message: 'Order item tidak ditemukan' });
   }
@@ -2074,8 +2075,13 @@ const getJamaahFile = asyncHandler(async (req, res) => {
   if ((item.jamaah_data_type || '').toLowerCase() !== 'file' || !item.jamaah_data_value) {
     return res.status(404).json({ success: false, message: 'File data jamaah tidak tersedia' });
   }
-  const canAccess = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
+  let canAccess =
+    (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
     ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'visa_koordinator', 'tiket_koordinator', 'role_siskopatuh'].includes(req.user.role);
+  if (!canAccess && req.user.role === ROLES.ROLE_HOTEL) {
+    const branchIds = await getHotelBranchIds(req.user);
+    canAccess = !!(order.branch_id && branchIds.includes(order.branch_id));
+  }
   if (!canAccess) return res.status(403).json({ success: false, message: 'Akses ditolak' });
 
   const filePath = resolveJamaahDataPath(item.jamaah_data_value);

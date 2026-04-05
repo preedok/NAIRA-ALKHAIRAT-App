@@ -136,7 +136,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
   const { user } = useAuth();
   const { showToast } = useToast();
   const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
-  const canSeeBookingDetails = !isOwner;
+  /** Owner: lihat agregat ketersediaan semua booking; kartu & popup hanya order miliknya. */
   const canAddRoomForRole = canAddRoom && !isOwner;
   const [selectedHotelId, setSelectedHotelId] = useState<string>('');
   const [calendarMonth, setCalendarMonth] = useState<ProductCalendarMonth>(() => {
@@ -329,14 +329,24 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                     * Tanggal di luar rentang musim: kuota mengikuti musim terdekat (nama musim bertanda *).
                   </span>
                 )}
+                {isOwner && (
+                  <span className="text-slate-600">
+                    Sebagai owner: angka kamar mencerminkan semua pemesanan; kartu booking dan popup hanya untuk invoice Anda.
+                  </span>
+                )}
                 {canAddRoomForRole && (
                   <span className="flex items-center gap-1.5 text-amber-700 font-medium">
-                    <Plus className="w-3.5 h-3.5" /> Klik + pada tanggal kuning/merah untuk tambah kamar. Owner hanya lihat ketersediaan.
+                    <Plus className="w-3.5 h-3.5" /> Klik + pada tanggal kuning/merah untuk tambah kamar.
                   </span>
                 )}
               </div>
             }
             renderDayContent={({ dateStr, dayIndex, isToday, data: day }) => {
+              const rawBookings = day?.bookings ?? [];
+              const dayBookings =
+                isOwner && user?.id
+                  ? rawBookings.filter((b) => String(b.owner_id) === String(user.id))
+                  : rawBookings;
               const full = dateStr && isDateFull(dateStr);
               const roomEntries = day && !day._noSeason && day.roomTypes ? Object.entries(day.roomTypes) : [];
               const totalAvailable = roomEntries.reduce((s, [, r]) => s + (r?.available ?? 0), 0);
@@ -410,9 +420,9 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                   {day?._noSeason && (
                     <p className="mt-2 text-[11px] text-slate-400">—</p>
                   )}
-                  {canSeeBookingDetails && day?.bookings && day.bookings.length > 0 ? (
+                  {dayBookings.length > 0 ? (
                     <div className="mt-2 space-y-1.5">
-                      {day.bookings.map((b) => (
+                      {dayBookings.map((b) => (
                         <div
                           key={b.order_id}
                           className="rounded-lg border border-slate-200/80 bg-slate-50/90 px-1.5 py-1 text-[9px] leading-snug"
@@ -427,13 +437,13 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                       ))}
                     </div>
                   ) : null}
-                  {canSeeBookingDetails && day?.bookings?.length ? (
+                  {dayBookings.length > 0 ? (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!selectedHotelId) return;
-                        const ids = Array.from(new Set(day.bookings!.map((b) => b.order_id)));
+                        const ids = Array.from(new Set(dayBookings.map((b) => b.order_id)));
                         setBookingsInvoiceModal({
                           dateStr,
                           seasonName: day.seasonName,
@@ -445,7 +455,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                       className="mt-3 text-[11px] font-semibold flex items-center gap-1.5 rounded-lg py-1.5 px-2 w-full justify-center transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                     >
                       <Users className="w-3.5 h-3.5" />
-                      {day.bookings.length} owner
+                      {isOwner ? (dayBookings.length === 1 ? 'Invoice saya' : `${dayBookings.length} invoice saya`) : `${rawBookings.length} owner`}
                     </button>
                   ) : null}
                 </>
@@ -463,6 +473,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
               hotelProductId={bookingsInvoiceModal.hotelProductId}
               hotelLabel={bookingsInvoiceModal.hotelLabel}
               orderIds={bookingsInvoiceModal.orderIds}
+              restrictToOwnerId={isOwner ? user?.id : undefined}
             />
           )}
 
