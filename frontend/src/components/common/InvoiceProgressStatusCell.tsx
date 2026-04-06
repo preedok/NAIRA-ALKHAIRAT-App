@@ -7,6 +7,7 @@ import { getHotelLocationFromItem } from '../../utils/constants';
 
 /** Label status Visa (menu Progress Visa) */
 export const PROGRESS_LABELS_VISA: Record<string, string> = {
+  pending: 'Menunggu konfirmasi',
   document_received: 'Dokumen diterima',
   submitted: 'Dikirim',
   in_process: 'Diproses',
@@ -16,7 +17,7 @@ export const PROGRESS_LABELS_VISA: Record<string, string> = {
 
 /** Label status Tiket (menu Progress Tiket) */
 export const PROGRESS_LABELS_TICKET: Record<string, string> = {
-  pending: 'Menunggu',
+  pending: 'Menunggu konfirmasi',
   data_received: 'Data diterima',
   seat_reserved: 'Kursi reserved',
   booking: 'Booking',
@@ -34,14 +35,14 @@ export const PROGRESS_LABELS_HOTEL: Record<string, string> = {
 
 /** Label status makan (Hotel) */
 export const PROGRESS_LABELS_MEAL: Record<string, string> = {
-  pending: 'Menunggu',
+  pending: 'Menunggu konfirmasi',
   confirmed: 'Dikonfirmasi',
   completed: 'Selesai'
 };
 
 /** Label status Tiket Bus (menu Progress Bus) */
 export const PROGRESS_LABELS_BUS: Record<string, string> = {
-  pending: 'Pending',
+  pending: 'Menunggu konfirmasi',
   issued: 'Terbit'
 };
 
@@ -79,7 +80,7 @@ const BUS_TRIP_LABELS: Record<string, string> = {
 };
 
 const BUS_INCLUDE_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
+  pending: 'Menunggu konfirmasi',
   di_proses: 'Di proses',
   terbit: 'Terbit'
 };
@@ -102,7 +103,7 @@ const defaultFormatDateWithTime = (d: string | null | undefined, time: string | 
 
 /** handling_status / siskopatuh_status di meta OrderItem */
 const SIMPLE_DIVISION_PROGRESS_LABELS: Record<string, string> = {
-  pending: 'Menunggu',
+  pending: 'Menunggu konfirmasi',
   in_progress: 'Dalam Proses',
   completed: 'Selesai'
 };
@@ -223,7 +224,7 @@ export function buildInvoiceProgressSectionModels(
   if (visaItems.length > 0 && allow('visa')) {
     const rows = visaItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Visa';
-      const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+      const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu konfirmasi';
       const depDate = formatDate(item.meta?.travel_date ?? null);
       const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
       const detailLines: string[] = [];
@@ -243,7 +244,7 @@ export function buildInvoiceProgressSectionModels(
   if (ticketItems.length > 0 && allow('ticket')) {
     const rows = ticketItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Tiket';
-      const statusLabel = PROGRESS_LABELS_TICKET[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+      const statusLabel = PROGRESS_LABELS_TICKET[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu konfirmasi';
       const tripType = String(item.meta?.trip_type || 'round_trip');
       const dep = formatDate(item.meta?.departure_date ?? null);
       const ret = formatDate(item.meta?.return_date ?? null);
@@ -265,7 +266,7 @@ export function buildInvoiceProgressSectionModels(
   if (busItems.length > 0 && allow('bus')) {
     const rows = busItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Bus';
-      const statusLabel = PROGRESS_LABELS_BUS[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
+      const statusLabel = PROGRESS_LABELS_BUS[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Menunggu konfirmasi';
       const travelDate = formatDate(item.meta?.travel_date ?? null);
       const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
       const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
