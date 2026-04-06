@@ -201,6 +201,7 @@ const OrderFormPage: React.FC = () => {
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const [busServiceOption, setBusServiceOption] = useState<BusServiceOption>('finality');
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
+  const lastHiaceBusRowRef = useRef<OrderItemRow | null>(null);
 
   /** Tahun grid hotel terbesar dari tanggal di form (agar April 2027 memuat series 2027 dari API). */
   const hotelMonthlyListYear = useMemo(() => {
@@ -1015,9 +1016,13 @@ const OrderFormPage: React.FC = () => {
   const applyBusServiceOption = useCallback((opt: BusServiceOption) => {
     setBusServiceOption(opt);
     setItems((prev)=>{
-      const withoutBus = prev.filter((r) => r.type !== 'bus');
-      if (opt !== 'hiace') return withoutBus;
       const existingBus = prev.find((r) => r.type === 'bus');
+      const withoutBus = prev.filter((r) => r.type !== 'bus');
+      if (existingBus) {
+        // Keep the latest user-edited bus row so switching option does not lose manual price input.
+        lastHiaceBusRowRef.current = existingBus;
+      }
+      if (opt !== 'hiace') return withoutBus;
       const visaMeta = withoutBus.find((r) => r.type === 'visa')?.meta as { travel_date?: string } | undefined;
       if (existingBus) {
         const prod =
@@ -1039,6 +1044,20 @@ const OrderFormPage: React.FC = () => {
         };
         return [...withoutBus, refreshed];
       }
+      const cached = lastHiaceBusRowRef.current;
+      if (cached) {
+        return [
+          ...withoutBus,
+          {
+            ...cached,
+            meta: {
+              ...(cached.meta || {}),
+              auto_hiace_waive: true,
+              ...(visaMeta?.travel_date ? { travel_date: visaMeta.travel_date } : {})
+            }
+          }
+        ];
+      }
       const row = createHiaceBusOrderRow(products, busRoutePrice, visaMeta?.travel_date);
       return row ? [...withoutBus, row] : withoutBus;
     });
@@ -1050,6 +1069,20 @@ const OrderFormPage: React.FC = () => {
     setItems((prev)=>{
       if(prev.some(r=>r.type==='bus')) return prev;
       const visaMeta=prev.find(r=>r.type==='visa')?.meta as { travel_date?: string }|undefined;
+      const cached = lastHiaceBusRowRef.current;
+      if (cached) {
+        return [
+          ...prev,
+          {
+            ...cached,
+            meta: {
+              ...(cached.meta || {}),
+              auto_hiace_waive: true,
+              ...(visaMeta?.travel_date ? { travel_date: visaMeta.travel_date } : {})
+            }
+          }
+        ];
+      }
       const row=createHiaceBusOrderRow(products,busRoutePrice,visaMeta?.travel_date);
       return row?[...prev,row]:prev;
     });
