@@ -857,6 +857,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const remainingAmount = parseFloat(String(data.remaining_amount ?? (totalAmount - paidAmount)));
   const overpaidAmount = parseFloat(data.overpaid_amount || 0);
   const totalSarUsd = idrToSarUsd(totalAmount, rates);
+  const dpSarUsd = idrToSarUsd(dpAmount, rates);
   const remainingSarUsd = idrToSarUsd(remainingAmount, rates);
   doc.rect(boxLeft, y, boxW, 155).fillAndStroke('#eef2ff', '#93c5fd');
   let by = y + 12;
@@ -871,7 +872,10 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.fontSize(10).fillColor(colors.accent);
   doc.text(`DP (${dpPct}%)`, boxLeft + 14, by);
   doc.text(formatIDR(dpAmount), amountX, by, { width: amountBoxW, align: 'right' });
-  by += 18;
+  by += 11;
+  doc.fontSize(7).fillColor('#64748b');
+  doc.text(`${formatSAR(dpSarUsd.sar)}  |  ${formatUSD(dpSarUsd.usd)}`, amountX, by, { width: amountBoxW, align: 'right' });
+  by += 16;
   doc.font('Helvetica-Bold').text('Total Dibayar', boxLeft + 14, by);
   doc.text(formatIDR(paidAmount), amountX, by, { width: amountBoxW, align: 'right' });
   by += 18;
@@ -891,6 +895,21 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   // ---- Rincian Pembayaran (bukti transfer + alokasi saldo akun) ----
   const proofs = (data.PaymentProofs || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
   const balanceAllocs = (data.BalanceAllocations || []).slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  // Label tipe pembayaran untuk tabel "Rincian Pembayaran":
+  // bukti pertama = B-DP, berikutnya DP ke-1/2/3..., dan saat kumulatif mencapai total ditandai LUNAS.
+  const proofTypeLabelById = new Map();
+  {
+    const orderedProofs = [...proofs].sort((a, b) => new Date(a.transfer_date || a.created_at || 0) - new Date(b.transfer_date || b.created_at || 0));
+    const invoiceTotalIdr = Math.max(0, parseFloat(data.total_amount || 0));
+    let cumulativeIdr = 0;
+    let dpSeq = 0;
+    orderedProofs.forEach((p, index) => {
+      cumulativeIdr += parseFloat(p.amount || 0) || 0;
+      let lbl = index === 0 ? 'B-DP' : `DP ke-${dpSeq += 1}`;
+      if (invoiceTotalIdr > 0 && cumulativeIdr >= invoiceTotalIdr) lbl = 'LUNAS';
+      proofTypeLabelById.set(p.id, lbl);
+    });
+  }
   const payRows = [
     ...proofs.map((p) => ({ kind: 'proof', sort: new Date(p.transfer_date || p.created_at || 0).getTime(), p })),
     ...balanceAllocs.map((b) => ({ kind: 'alloc', sort: new Date(b.created_at || 0).getTime(), b }))
@@ -951,7 +970,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         doc.text(String(idx + 1), px(0), y + 8, { width: pw(0) });
         // transfer_date = DATEONLY (tanpa jam); tampilkan waktu verifikasi atau waktu upload agar konsisten dengan baris saldo akun
         doc.text(formatDateTime(p.verified_at || p.created_at), px(1), y + 8, { width: pw(1) });
-        doc.text(paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
+        doc.text(proofTypeLabelById.get(p.id) || paymentTypeLabel(p.payment_type), px(2), y + 8, { width: pw(2) });
         doc.text(amountDisplay, px(3), y + 8, { width: pw(3) });
         doc.text(currency || 'IDR', px(4), y + 8, { width: pw(4) });
         doc.text(statusBlock, px(5), y + 8, { width: pw(5) });
