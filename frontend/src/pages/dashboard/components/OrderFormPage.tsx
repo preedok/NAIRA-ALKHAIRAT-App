@@ -134,7 +134,7 @@ function createHiaceBusOrderRow(
   const busType: BusType = BUS_KIND_TO_TYPE[kind] || 'menengah_hiace';
   const unit = busRoutePriceImpl(p, route, tripType);
   const cur = (p.currency ?? (p.meta as { currency?: string })?.currency ?? getDisplayCurrency('bus', p)) as DisplayCurrency;
-  const meta: Record<string, unknown> = { route_type: route, trip_type: tripType, bus_type: busType };
+  const meta: Record<string, unknown> = { route_type: route, trip_type: tripType, bus_type: busType, auto_hiace_waive: true };
   if (visaTravelDate) meta.travel_date = visaTravelDate;
   return {
     id: `row-${uid()}`,
@@ -1015,12 +1015,32 @@ const OrderFormPage: React.FC = () => {
   const applyBusServiceOption = useCallback((opt: BusServiceOption) => {
     setBusServiceOption(opt);
     setItems((prev)=>{
-      const stripped=opt!=='hiace'?prev.filter(r=>!(r.type==='bus'&&(r.meta as { auto_hiace_waive?: boolean })?.auto_hiace_waive)):prev;
-      if(opt!=='hiace') return stripped;
-      if(stripped.some(r=>r.type==='bus')) return stripped;
-      const visaMeta=stripped.find(r=>r.type==='visa')?.meta as { travel_date?: string }|undefined;
-      const row=createHiaceBusOrderRow(products,busRoutePrice,visaMeta?.travel_date);
-      return row?[...stripped,row]:stripped;
+      const withoutBus = prev.filter((r) => r.type !== 'bus');
+      if (opt !== 'hiace') return withoutBus;
+      const existingBus = prev.find((r) => r.type === 'bus');
+      const visaMeta = withoutBus.find((r) => r.type === 'visa')?.meta as { travel_date?: string } | undefined;
+      if (existingBus) {
+        const prod =
+          products.find((p) => p.id === existingBus.product_id) ??
+          products.find((p) => p.type === 'bus' && (p.meta as { bus_kind?: string })?.bus_kind === 'hiace');
+        const route = (existingBus.meta?.route_type as BusRouteType) || 'full_route';
+        const tripType = (existingBus.meta?.trip_type as TicketTripType) || 'round_trip';
+        const refreshed: OrderItemRow = {
+          ...existingBus,
+          quantity: Math.max(1, existingBus.quantity || 1),
+          unit_price: busRoutePrice(prod, route, tripType),
+          meta: {
+            ...(existingBus.meta || {}),
+            route_type: route,
+            trip_type: tripType,
+            auto_hiace_waive: true,
+            ...(visaMeta?.travel_date ? { travel_date: visaMeta.travel_date } : {})
+          }
+        };
+        return [...withoutBus, refreshed];
+      }
+      const row = createHiaceBusOrderRow(products, busRoutePrice, visaMeta?.travel_date);
+      return row ? [...withoutBus, row] : withoutBus;
     });
   }, [products, busRoutePrice]);
 
