@@ -977,13 +977,34 @@ const OrdersInvoicesPage: React.FC = () => {
       const res = await invoicesApi.getPdf(invoiceId);
       const raw = res.data as Blob;
       const blob = raw.type === 'application/pdf' ? raw : new Blob([raw], { type: 'application/pdf' });
+      const disposition = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;\n]+)|filename="?([^";\n]+)"?/);
+      const filename = (match && (decodeURIComponent((match[1] || match[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || `invoice-${invoiceId}.pdf`;
       const url = URL.createObjectURL(blob);
-      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      const w = window.open('', '_blank', 'noopener,noreferrer');
       if (!w) {
         showToast('Popup diblokir. Izinkan popup untuk situs ini agar PDF bisa dibuka di tab baru.', 'error');
         URL.revokeObjectURL(url);
         return;
       }
+      const safeTitle = filename.replace(/[<>]/g, '');
+      w.document.write(`
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>${safeTitle}</title>
+            <style>
+              html, body { margin: 0; padding: 0; height: 100%; background: #0b1020; }
+              iframe { border: 0; width: 100%; height: 100%; }
+            </style>
+          </head>
+          <body>
+            <iframe src="${url}" title="${safeTitle}"></iframe>
+          </body>
+        </html>
+      `);
+      w.document.close();
       // Revoke setelah jeda panjang agar viewer PDF di tab baru sempat memuat blob
       setTimeout(() => URL.revokeObjectURL(url), 600000);
     } catch (e: any) {
