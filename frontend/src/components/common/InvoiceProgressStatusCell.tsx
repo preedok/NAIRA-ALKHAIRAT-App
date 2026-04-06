@@ -109,6 +109,32 @@ const SIMPLE_DIVISION_PROGRESS_LABELS: Record<string, string> = {
 
 export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'siskopatuh' | 'package';
 
+export type InvoiceProgressLayout = 'stack' | 'table';
+
+/** Satu baris progress (sumber tunggal untuk tabel ringkas & tumpukan kartu). */
+export type InvoiceProgressRowModel = {
+  key: string;
+  serviceLabel: string;
+  statusLabel: string;
+  detailLines: string[];
+  statusEmphasis: boolean;
+  variant?: 'default' | 'bus-include';
+  /** Untuk stack: suffix di baris yang sama setelah status (mis. "· 3 org"). */
+  statusInlineSuffix?: string;
+  /** Paket: teks "Qty n" di baris sama, gaya muted (bukan status progress). */
+  statusMuted?: boolean;
+  /** Hotel: baris pertama detail adalah room lines (warna lebih gelap di stack). */
+  hotelRoomLine?: string;
+  /** Hotel: baris meal jika ada. */
+  hotelMealLine?: string | null;
+};
+
+export type InvoiceProgressSectionModel = {
+  sortIndex: number;
+  title: string;
+  rows: InvoiceProgressRowModel[];
+};
+
 export interface InvoiceProgressStatusCellProps {
   /** Invoice row (dengan Order.OrderItems dan progress relations) */
   inv: any;
@@ -116,21 +142,20 @@ export interface InvoiceProgressStatusCellProps {
   formatDateWithTime?: (d: string | null | undefined, time?: string | null) => string;
   /** Jika diisi, hanya section dengan key ini yang ditampilkan (mis. role bus: hanya visa & bus). */
   allowedSections?: ProgressSectionKey[];
+  /** stack = kartu per layanan (default); table = tabel ringkas untuk kolom daftar invoice. */
+  layout?: InvoiceProgressLayout;
 }
 
-/**
- * Sel Status Progress untuk tabel Invoice. Menampilkan Visa, Tiket, Hotel, Bus, Handling, Paket
- * dengan label yang sama seperti di menu Progress masing-masing divisi.
- */
-const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
-  inv,
-  formatDate = defaultFormatDate,
-  formatDateWithTime = defaultFormatDateWithTime,
-  allowedSections
-}) => {
+/** Membangun model progress — dipakai komponen & bisa dipakai di pengujian. */
+export function buildInvoiceProgressSectionModels(
+  inv: any,
+  formatDate: (d: string | null | undefined) => string = defaultFormatDate,
+  formatDateWithTime: (d: string | null | undefined, time?: string | null) => string = defaultFormatDateWithTime,
+  allowedSections?: ProgressSectionKey[]
+): InvoiceProgressSectionModel[] {
   const allow = (key: ProgressSectionKey) => !allowedSections || allowedSections.includes(key);
   const items = inv?.Order?.OrderItems || [];
-  if (items.length === 0) return <span className="text-slate-400 text-xs">–</span>;
+  if (items.length === 0) return [];
 
   const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
   const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
@@ -140,16 +165,10 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
   const siskopatuhItems = items.filter((i: any) => (i.type || i.product_type) === 'siskopatuh');
   const packageItems = items.filter((i: any) => (i.type || i.product_type) === 'package');
 
-  type Section = { sortIndex: number; title: string; nodes: React.ReactNode[] };
-  const sections: Section[] = [];
+  const sections: InvoiceProgressSectionModel[] = [];
 
-  const renderHotelGroups = (hotelGroups: { key: string; name: string; items: any[] }[]) => {
-    const getCheckInOut = (item: any) => {
-      const ci = (item.HotelProgress?.check_in_date ?? item.meta?.check_in ?? '').toString().slice(0, 10);
-      const co = (item.HotelProgress?.check_out_date ?? item.meta?.check_out ?? '').toString().slice(0, 10);
-      return { ci, co };
-    };
-    return hotelGroups.map((group) => {
+  const hotelRowsForGroups = (hotelGroups: { key: string; name: string; items: any[] }[]): InvoiceProgressRowModel[] =>
+    hotelGroups.map((group) => {
       const first = group.items[0];
       const status = PROGRESS_LABELS_HOTEL[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
       const mealStatus = first?.HotelProgress?.meal_status;
@@ -164,17 +183,19 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
         const label = ROOM_TYPE_LABELS[rt] || rt || '–';
         return `${qty} ${label}${cap > 0 ? ` (${orang} org)` : ''}`;
       });
-      return (
-        <div key={group.key} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-          <span className="font-medium text-slate-800" title={group.name}>{group.name}:</span>{' '}
-          <span className={status === 'Selesai' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{status}</span>
-          {roomLines.length > 0 && <div className="text-slate-700 mt-0.5">{roomLines.join(', ')}</div>}
-          {mealLabel != null && <div className="text-slate-600 mt-0.5">Makan: {mealLabel}</div>}
-          <div className="text-slate-500 mt-0.5">CI {checkIn} · CO {checkOut}</div>
-        </div>
-      );
+      const roomJoined = roomLines.length > 0 ? roomLines.join(', ') : '';
+      const tailLines: string[] = [];
+      tailLines.push(`CI ${checkIn} · CO ${checkOut}`);
+      return {
+        key: group.key,
+        serviceLabel: group.name,
+        statusLabel: status,
+        detailLines: tailLines,
+        statusEmphasis: status === 'Selesai',
+        hotelRoomLine: roomJoined || undefined,
+        hotelMealLine: mealLabel != null ? `Makan: ${mealLabel}` : null,
+      };
     });
-  };
 
   if (hotelItems.length > 0 && allow('hotel')) {
     const getCheckInOut = (item: any) => {
@@ -195,77 +216,73 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     }, [] as HotelGroup[]);
     const hotelMadinah = allHotelGroups.filter((g) => getHotelLocationFromItem(g.items[0]) === 'madinah');
     const hotelMakkah = allHotelGroups.filter((g) => getHotelLocationFromItem(g.items[0]) === 'makkah');
-    if (hotelMadinah.length > 0) sections.push({ sortIndex: 0, title: 'Hotel Madinah', nodes: renderHotelGroups(hotelMadinah) });
-    if (hotelMakkah.length > 0) sections.push({ sortIndex: 1, title: 'Hotel Mekkah', nodes: renderHotelGroups(hotelMakkah) });
+    if (hotelMadinah.length > 0) sections.push({ sortIndex: 0, title: 'Hotel Madinah', rows: hotelRowsForGroups(hotelMadinah) });
+    if (hotelMakkah.length > 0) sections.push({ sortIndex: 1, title: 'Hotel Mekkah', rows: hotelRowsForGroups(hotelMakkah) });
   }
 
   if (visaItems.length > 0 && allow('visa')) {
-    sections.push({
-      sortIndex: 2,
-      title: 'Visa',
-      nodes: visaItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Visa';
-        const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
-        const depDate = formatDate(item.meta?.travel_date ?? null);
-        const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
-        return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
-            <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
-            {qty > 1 && <span className="text-slate-600 ml-1">· {qty} org</span>}
-            {depDate ? <div className="text-slate-500 mt-0.5">Tgl {depDate}</div> : null}
-          </div>
-        );
-      })
+    const rows = visaItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Visa';
+      const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+      const depDate = formatDate(item.meta?.travel_date ?? null);
+      const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
+      const detailLines: string[] = [];
+      if (depDate) detailLines.push(`Tgl ${depDate}`);
+      return {
+        key: String(item.id || `visa-${idx}`),
+        serviceLabel: name,
+        statusLabel,
+        detailLines,
+        statusEmphasis: statusLabel === 'Terbit',
+        statusInlineSuffix: qty > 1 ? `· ${qty} org` : undefined,
+      };
     });
+    sections.push({ sortIndex: 2, title: 'Visa', rows });
   }
 
   if (ticketItems.length > 0 && allow('ticket')) {
-    sections.push({
-      sortIndex: 3,
-      title: 'Tiket',
-      nodes: ticketItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Tiket';
-        const statusLabel = PROGRESS_LABELS_TICKET[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
-        const tripType = String(item.meta?.trip_type || 'round_trip');
-        const dep = formatDate(item.meta?.departure_date ?? null);
-        const ret = formatDate(item.meta?.return_date ?? null);
-        const dateLine = tripType === 'one_way' ? `Berangkat ${dep}` : tripType === 'return_only' ? `Pulang ${ret}` : `Berangkat ${dep} · Pulang ${ret}`;
-        const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
-        return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
-            <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
-            {qty > 1 && <span className="text-slate-600 ml-1">· {qty} tiket</span>}
-            {dateLine ? <div className="text-slate-500 mt-0.5">{dateLine}</div> : null}
-          </div>
-        );
-      })
+    const rows = ticketItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Tiket';
+      const statusLabel = PROGRESS_LABELS_TICKET[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+      const tripType = String(item.meta?.trip_type || 'round_trip');
+      const dep = formatDate(item.meta?.departure_date ?? null);
+      const ret = formatDate(item.meta?.return_date ?? null);
+      const dateLine =
+        tripType === 'one_way' ? `Berangkat ${dep}` : tripType === 'return_only' ? `Pulang ${ret}` : `Berangkat ${dep} · Pulang ${ret}`;
+      const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
+      return {
+        key: String(item.id || `ticket-${idx}`),
+        serviceLabel: name,
+        statusLabel,
+        detailLines: dateLine ? [dateLine] : [],
+        statusEmphasis: statusLabel === 'Tiket terbit',
+        statusInlineSuffix: qty > 1 ? `· ${qty} tiket` : undefined,
+      };
     });
+    sections.push({ sortIndex: 3, title: 'Tiket', rows });
   }
 
   if (busItems.length > 0 && allow('bus')) {
-    sections.push({
-      sortIndex: 4,
-      title: 'Bus',
-      nodes: busItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Bus';
-        const statusLabel = PROGRESS_LABELS_BUS[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
-        const travelDate = formatDate(item.meta?.travel_date ?? null);
-        const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
-        const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
-        const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
-        const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
-        const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel, qty > 1 ? `${qty} unit` : null].filter(Boolean).join(' · ');
-        return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
-            <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{statusLabel}</span>
-            {metaLine ? <div className="text-slate-500 mt-0.5">{metaLine}</div> : null}
-          </div>
-        );
-      })
+    const rows = busItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Bus';
+      const statusLabel = PROGRESS_LABELS_BUS[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
+      const travelDate = formatDate(item.meta?.travel_date ?? null);
+      const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
+      const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
+      const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
+      const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
+      const metaLine = [travelDate ? `Tgl ${travelDate}` : null, routeType ? `Rute ${routeType}` : null, tripTypeLabel, qty > 1 ? `${qty} unit` : null]
+        .filter(Boolean)
+        .join(' · ');
+      return {
+        key: String(item.id || `bus-${idx}`),
+        serviceLabel: name,
+        statusLabel,
+        detailLines: metaLine ? [metaLine] : [],
+        statusEmphasis: statusLabel === 'Terbit',
+      };
     });
+    sections.push({ sortIndex: 4, title: 'Bus', rows });
   } else if (visaItems.length > 0 && String(inv?.Order?.bus_service_option || '') !== 'visa_only') {
     const order = inv?.Order;
     const waive = order?.waive_bus_penalty === true;
@@ -276,112 +293,255 @@ const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
     const returnLabel = BUS_INCLUDE_STATUS_LABELS[returnStatus] || returnStatus;
     const arrivalTerbit = arrivalStatus === 'terbit';
     const returnTerbit = returnStatus === 'terbit';
+    const detailLines: string[] = [];
+    if (waive) detailLines.push('Bus Hiace (tanpa penalti) · 1 unit');
+    else if (penalty > 0) detailLines.push(`Penalti bus: Rp ${(penalty / 1e6).toFixed(0)} jt`);
+    const arrExtra =
+      arrivalTerbit && (order?.bus_include_arrival_bus_number || order?.bus_include_arrival_date || order?.bus_include_arrival_time)
+        ? [
+            order?.bus_include_arrival_bus_number && `No. ${order.bus_include_arrival_bus_number}`,
+            (order?.bus_include_arrival_date || order?.bus_include_arrival_time) &&
+              `${formatDate(order?.bus_include_arrival_date || null)}${order?.bus_include_arrival_time ? ` ${order.bus_include_arrival_time}` : ''}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '';
+    const retExtra =
+      returnTerbit && (order?.bus_include_return_bus_number || order?.bus_include_return_date || order?.bus_include_return_time)
+        ? [
+            order?.bus_include_return_bus_number && `No. ${order.bus_include_return_bus_number}`,
+            (order?.bus_include_return_date || order?.bus_include_return_time) &&
+              `${formatDate(order?.bus_include_return_date || null)}${order?.bus_include_return_time ? ` ${order.bus_include_return_time}` : ''}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '';
+    detailLines.push(`Kedatangan: ${arrivalLabel}${arrExtra ? ` · ${arrExtra}` : ''}`);
+    detailLines.push(`Kepulangan: ${returnLabel}${retExtra ? ` · ${retExtra}` : ''}`);
     sections.push({
       sortIndex: 4,
       title: 'Bus',
-      nodes: [
-        <div key="bus-include" className="rounded border border-amber-100 bg-amber-50/80 p-1.5 text-xs space-y-1">
-          {waive && <div className="text-slate-700">Bus Hiace (tanpa penalti) · 1 unit</div>}
-          {!waive && (
-            <>
-              <div className="font-medium text-slate-800">Bus include (dengan visa)</div>
-              {penalty > 0 && <div className="text-amber-800">Penalti bus: Rp {(penalty / 1e6).toFixed(0)} jt</div>}
-            </>
-          )}
-          <div className="text-slate-700">
-            <span className="font-medium">Kedatangan:</span> {arrivalLabel}
-            {arrivalTerbit && (order?.bus_include_arrival_bus_number || order?.bus_include_arrival_date || order?.bus_include_arrival_time) && (
-              <div className="text-slate-600 mt-0.5">
-                {order?.bus_include_arrival_bus_number && `No. ${order.bus_include_arrival_bus_number}`}
-                {(order?.bus_include_arrival_date || order?.bus_include_arrival_time) && ` · ${formatDate(order?.bus_include_arrival_date || null)}${order?.bus_include_arrival_time ? ` ${order.bus_include_arrival_time}` : ''}`}
-              </div>
-            )}
-          </div>
-          <div className="text-slate-700">
-            <span className="font-medium">Kepulangan:</span> {returnLabel}
-            {returnTerbit && (order?.bus_include_return_bus_number || order?.bus_include_return_date || order?.bus_include_return_time) && (
-              <div className="text-slate-600 mt-0.5">
-                {order?.bus_include_return_bus_number && `No. ${order.bus_include_return_bus_number}`}
-                {(order?.bus_include_return_date || order?.bus_include_return_time) && ` · ${formatDate(order?.bus_include_return_date || null)}${order?.bus_include_return_time ? ` ${order.bus_include_return_time}` : ''}`}
-              </div>
-            )}
-          </div>
-        </div>
-      ]
+      rows: [
+        {
+          key: 'bus-include',
+          serviceLabel: waive ? 'Bus Hiace (tanpa penalti)' : 'Bus include (dengan visa)',
+          statusLabel: `${arrivalLabel} / ${returnLabel}`,
+          detailLines,
+          statusEmphasis: arrivalStatus === 'terbit' && returnStatus === 'terbit',
+          variant: 'bus-include',
+        },
+      ],
     });
   }
 
   if (handlingItems.length > 0 && allow('handling')) {
-    sections.push({
-      sortIndex: 5,
-      title: 'Handling',
-      nodes: handlingItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Handling';
-        const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
-        const st = (item.meta && item.meta.handling_status) || 'pending';
-        const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
-        return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
-            <span className={st === 'completed' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{stLabel}</span>
-            <span className="text-slate-600"> · Qty {qty}</span>
-          </div>
-        );
-      })
+    const rows = handlingItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Handling';
+      const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
+      const st = (item.meta && item.meta.handling_status) || 'pending';
+      const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
+      return {
+        key: String(item.id || `handling-${idx}`),
+        serviceLabel: name,
+        statusLabel: stLabel,
+        detailLines: [],
+        statusEmphasis: st === 'completed',
+        statusInlineSuffix: `· Qty ${qty}`,
+      };
     });
+    sections.push({ sortIndex: 5, title: 'Handling', rows });
   }
 
   if (siskopatuhItems.length > 0 && allow('siskopatuh')) {
-    sections.push({
-      sortIndex: 6,
-      title: 'Siskopatuh',
-      nodes: siskopatuhItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Siskopatuh';
-        const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
-        const st = (item.meta && item.meta.siskopatuh_status) || 'pending';
-        const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
-        const hasDoc = !!(item.meta && item.meta.siskopatuh_file_url && String(item.meta.siskopatuh_file_url).trim());
-        const svcRaw = item.meta && item.meta.service_date ? String(item.meta.service_date).slice(0, 10) : '';
-        const svcLine = svcRaw && /^\d{4}-\d{2}-\d{2}$/.test(svcRaw) ? `Tgl layanan ${formatDate(svcRaw)}` : '';
-        return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span>{' '}
-            <span className={st === 'completed' ? 'text-[#0D1A63] font-medium' : 'text-slate-600'}>{stLabel}</span>
-            <span className="text-slate-600"> · Qty {qty}</span>
-            {svcLine ? <div className="text-slate-500 mt-0.5">{svcLine}</div> : null}
-            {hasDoc ? <div className="text-slate-500 mt-0.5">Dokumen hasil: tersedia (unduh di detail Invoice)</div> : null}
-          </div>
-        );
-      })
+    const rows = siskopatuhItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Siskopatuh';
+      const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
+      const st = (item.meta && item.meta.siskopatuh_status) || 'pending';
+      const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
+      const hasDoc = !!(item.meta && item.meta.siskopatuh_file_url && String(item.meta.siskopatuh_file_url).trim());
+      const svcRaw = item.meta && item.meta.service_date ? String(item.meta.service_date).slice(0, 10) : '';
+      const svcLine = svcRaw && /^\d{4}-\d{2}-\d{2}$/.test(svcRaw) ? `Tgl layanan ${formatDate(svcRaw)}` : '';
+      const detailLines: string[] = [];
+      if (svcLine) detailLines.push(svcLine);
+      if (hasDoc) detailLines.push('Dokumen hasil: tersedia (unduh di detail Invoice)');
+      return {
+        key: String(item.id || `sisko-${idx}`),
+        serviceLabel: name,
+        statusLabel: stLabel,
+        detailLines,
+        statusEmphasis: st === 'completed',
+        statusInlineSuffix: `· Qty ${qty}`,
+      };
     });
+    sections.push({ sortIndex: 6, title: 'Siskopatuh', rows });
   }
 
   if (packageItems.length > 0 && allow('package')) {
-    sections.push({
-      sortIndex: 7,
-      title: 'Paket',
-      nodes: packageItems.map((item: any, idx: number) => {
-        const name = item.Product?.name || item.product_name || 'Paket';
-        const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
-        return (
-          <div key={item.id || idx} className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
-            <span className="font-medium text-slate-800" title={name}>{name}:</span> <span className="text-slate-600">Qty {qty}</span>
-          </div>
-        );
-      })
+    const rows = packageItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Paket';
+      const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
+      return {
+        key: String(item.id || `pkg-${idx}`),
+        serviceLabel: name,
+        statusLabel: `Qty ${qty}`,
+        detailLines: [],
+        statusEmphasis: false,
+        statusMuted: true,
+      };
     });
+    sections.push({ sortIndex: 7, title: 'Paket', rows });
   }
+
+  sections.sort((a, b) => a.sortIndex - b.sortIndex);
+  return sections;
+}
+
+function renderStackRow(row: InvoiceProgressRowModel) {
+  const statusClass = row.statusMuted
+    ? 'text-slate-600'
+    : row.statusEmphasis
+      ? 'text-[#0D1A63] font-medium'
+      : 'text-slate-600';
+  return (
+    <div className="rounded border border-slate-100 bg-slate-50/50 p-1.5 text-xs">
+      <span className="font-medium text-slate-800" title={row.serviceLabel}>
+        {row.serviceLabel}:
+      </span>{' '}
+      <span className={statusClass}>{row.statusLabel}</span>
+      {row.statusInlineSuffix ? <span className="text-slate-600 ml-1">{row.statusInlineSuffix}</span> : null}
+      {row.hotelRoomLine ? <div className="text-slate-700 mt-0.5">{row.hotelRoomLine}</div> : null}
+      {row.hotelMealLine ? <div className="text-slate-600 mt-0.5">{row.hotelMealLine}</div> : null}
+      {row.detailLines.map((line, i) => (
+        <div key={i} className="text-slate-500 mt-0.5">
+          {line}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderBusIncludeStackFromModel(row: InvoiceProgressRowModel) {
+  const order = row.detailLines;
+  const waiveLine = order.find((l) => l.startsWith('Bus Hiace'));
+  const penaltyLine = order.find((l) => l.startsWith('Penalti'));
+  const ked = order.find((l) => l.startsWith('Kedatangan:')) || '';
+  const kep = order.find((l) => l.startsWith('Kepulangan:')) || '';
+  const kedBody = ked.replace(/^Kedatangan:\s*/, '');
+  const kepBody = kep.replace(/^Kepulangan:\s*/, '');
+  const arrivalLabel = kedBody.split(' · ')[0] || '';
+  const returnLabel = kepBody.split(' · ')[0] || '';
+  const arrivalRest = kedBody.includes(' · ') ? kedBody.slice(kedBody.indexOf(' · ') + 3) : '';
+  const returnRest = kepBody.includes(' · ') ? kepBody.slice(kepBody.indexOf(' · ') + 3) : '';
+  const arrivalTerbit = arrivalRest.length > 0;
+  const returnTerbit = returnRest.length > 0;
+
+  return (
+    <div className="rounded border border-amber-100 bg-amber-50/80 p-1.5 text-xs space-y-1">
+      {waiveLine && <div className="text-slate-700">{waiveLine}</div>}
+      {!waiveLine && (
+        <>
+          <div className="font-medium text-slate-800">Bus include (dengan visa)</div>
+          {penaltyLine ? <div className="text-amber-800">{penaltyLine}</div> : null}
+        </>
+      )}
+      <div className="text-slate-700">
+        <span className="font-medium">Kedatangan:</span> {arrivalLabel}
+        {arrivalTerbit && <div className="text-slate-600 mt-0.5">{arrivalRest}</div>}
+      </div>
+      <div className="text-slate-700">
+        <span className="font-medium">Kepulangan:</span> {returnLabel}
+        {returnTerbit && <div className="text-slate-600 mt-0.5">{returnRest}</div>}
+      </div>
+    </div>
+  );
+}
+
+function renderStackSectionRow(row: InvoiceProgressRowModel) {
+  if (row.variant === 'bus-include') return renderBusIncludeStackFromModel(row);
+  return renderStackRow(row);
+}
+
+function renderProgressTable(sections: InvoiceProgressSectionModel[]) {
+  const flat: { layanan: string; status: string; detail: string; key: string }[] = [];
+  sections.forEach((sec) => {
+    sec.rows.forEach((row) => {
+      const layanan = sec.title === row.serviceLabel ? row.serviceLabel : `${sec.title}: ${row.serviceLabel}`;
+      const suffixSansDot = row.statusInlineSuffix ? row.statusInlineSuffix.replace(/^\s*·\s*/, '').trim() : '';
+      const detailParts = [...(suffixSansDot ? [suffixSansDot] : [])];
+      if (row.hotelRoomLine) detailParts.push(row.hotelRoomLine);
+      if (row.hotelMealLine) detailParts.push(row.hotelMealLine);
+      detailParts.push(...row.detailLines.filter((l) => !l.startsWith('Kedatangan:') && !l.startsWith('Kepulangan:')));
+      if (row.variant === 'bus-include') {
+        flat.push({
+          key: `${sec.sortIndex}-${row.key}`,
+          layanan,
+          status: row.statusLabel,
+          detail: row.detailLines.join(' · '),
+        });
+      } else if (row.statusMuted) {
+        flat.push({
+          key: `${sec.sortIndex}-${row.key}`,
+          layanan,
+          status: '–',
+          detail: row.statusLabel,
+        });
+      } else {
+        flat.push({
+          key: `${sec.sortIndex}-${row.key}`,
+          layanan,
+          status: row.statusLabel,
+          detail: detailParts.filter(Boolean).join(' · '),
+        });
+      }
+    });
+  });
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200">
+      <table className="w-full text-[11px]">
+        <thead className="bg-slate-50 text-slate-600">
+          <tr>
+            <th className="px-2 py-1.5 text-left font-semibold">Layanan</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Status</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {flat.map((r) => (
+            <tr key={r.key} className="border-t border-slate-100">
+              <td className="px-2 py-1.5 text-slate-700">{r.layanan}</td>
+              <td className="px-2 py-1.5 text-slate-800">{r.status}</td>
+              <td className="px-2 py-1.5 text-slate-600">{r.detail || '–'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Sel Status Progress untuk tabel Invoice. Menampilkan Visa, Tiket, Hotel, Bus, Handling, Paket
+ * dengan label yang sama seperti di menu Progress masing-masing divisi.
+ */
+const InvoiceProgressStatusCell: React.FC<InvoiceProgressStatusCellProps> = ({
+  inv,
+  formatDate = defaultFormatDate,
+  formatDateWithTime = defaultFormatDateWithTime,
+  allowedSections,
+  layout = 'stack',
+}) => {
+  const sections = buildInvoiceProgressSectionModels(inv, formatDate, formatDateWithTime, allowedSections);
 
   if (sections.length === 0) return <span className="text-slate-400 text-xs">–</span>;
 
-  sections.sort((a, b) => a.sortIndex - b.sortIndex);
+  if (layout === 'table') return renderProgressTable(sections);
 
   return (
     <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 text-xs">
       {sections.map((sec) => (
         <div key={`${sec.sortIndex}-${sec.title}`}>
           <div className="font-semibold text-slate-600 uppercase tracking-wide mb-1 text-[10px]">{sec.title}</div>
-          <div className="space-y-1">{sec.nodes}</div>
+          <div className="space-y-1">{sec.rows.map((row) => <React.Fragment key={row.key}>{renderStackSectionRow(row)}</React.Fragment>)}</div>
         </div>
       ))}
     </div>
