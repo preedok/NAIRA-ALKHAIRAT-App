@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
@@ -67,6 +67,39 @@ const getFileUrl = (path: string) => {
   const base = UPLOAD_BASE || (typeof window !== 'undefined' ? window.location.origin : '');
   return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
 };
+
+/** Samakan dengan backend SISKOPATUH_PAYMENT_ACCOUNT_NUMBER (invoiceBankAccounts.js). */
+function nabielaAccountDigitsFrontend(): string {
+  const raw =
+    (typeof import.meta !== 'undefined' && (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_SISKOPATUH_PAYMENT_ACCOUNT_NUMBER) ||
+    (typeof process !== 'undefined' && process.env?.REACT_APP_SISKOPATUH_PAYMENT_ACCOUNT_NUMBER) ||
+    '1330020805941';
+  return String(raw).replace(/\D/g, '');
+}
+
+function isNabielaBankAccountRow(b: BankAccountItem): boolean {
+  const d = nabielaAccountDigitsFrontend();
+  if (!d || !b?.account_number) return false;
+  return String(b.account_number).replace(/\D/g, '') === d;
+}
+
+function splitBankAccountsForDualPayment(list: BankAccountItem[]) {
+  const nabiela = list.filter(isNabielaBankAccountRow);
+  const others = list.filter((row) => !isNabielaBankAccountRow(row));
+  return { nabiela, others, isDual: nabiela.length > 0 && others.length > 0 };
+}
+
+/** Bagi sisa pembayaran: bagian siskopatuh mengacu subtotal item siskopatuh (maks. sisa tagihan). */
+function suggestedDualPaymentAmounts(viewInv: any): { other: number; nabiela: number } {
+  const rem = Math.round(parseFloat(viewInv?.remaining_amount || 0));
+  const items = viewInv?.Order?.OrderItems || [];
+  const siskSubtotal = items
+    .filter((i: any) => (i.type || i.product_type || '').toLowerCase() === 'siskopatuh')
+    .reduce((s: number, i: any) => s + (parseFloat(i.subtotal) || 0), 0);
+  const nabiela = Math.min(Math.round(siskSubtotal), rem);
+  const other = Math.max(0, rem - nabiela);
+  return { other, nabiela };
+}
 
 /** Invoice boleh dipilih sebagai tujuan alokasi dana: sisa tagihan > 0, bukan batal/lunas, order aktif. */
 function isInvoiceReallocateTarget(inv: any, excludeInvoiceId?: string): boolean {
@@ -321,6 +354,19 @@ const OrdersInvoicesPage: React.FC = () => {
   const [payBankId, setPayBankId] = useState<string>('');
   const [paySenderAccountName, setPaySenderAccountName] = useState<string>('');
   const [paySenderAccountNumber, setPaySenderAccountNumber] = useState<string>('');
+  /** Dua transfer bank: produk lain vs siskopatuh (rekening Mandiri / Nabiela). */
+  const [payBankIndexOther, setPayBankIndexOther] = useState(0);
+  const [payBankIndexNabiela, setPayBankIndexNabiela] = useState(0);
+  const [payBankIdOther, setPayBankIdOther] = useState('');
+  const [payBankIdNabiela, setPayBankIdNabiela] = useState('');
+  const [paySenderAccountNameOther, setPaySenderAccountNameOther] = useState('');
+  const [paySenderAccountNumberOther, setPaySenderAccountNumberOther] = useState('');
+  const [paySenderAccountNameNabiela, setPaySenderAccountNameNabiela] = useState('');
+  const [paySenderAccountNumberNabiela, setPaySenderAccountNumberNabiela] = useState('');
+  const [payAmountIdrOther, setPayAmountIdrOther] = useState('');
+  const [payAmountIdrNabiela, setPayAmountIdrNabiela] = useState('');
+  const [payFileOther, setPayFileOther] = useState<File | null>(null);
+  const [payFileNabiela, setPayFileNabiela] = useState<File | null>(null);
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
   const [publishDraftModalInv, setPublishDraftModalInv] = useState<any | null>(null);
@@ -1321,17 +1367,21 @@ const OrdersInvoicesPage: React.FC = () => {
       ? (viewInvoice.bank_accounts as BankAccountItem[])
       : paymentBankAccounts;
 
+  const paymentBankAccountsSplit = useMemo(() => {
+    const nabiela = bankAccountsForPayment.filter(isNabielaBankAccountRow);
+    const others = bankAccountsForPayment.filter((b) => !isNabielaBankAccountRow(b));
+    return { nabiela, others, isDual: nabiela.length > 0 && others.length > 0 };
+  }, [bankAccountsForPayment]);
+
   const openPaymentModal = async () => {
     const remaining = parseFloat(viewInvoice?.remaining_amount || 0);
     const formatNum = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    if (remaining > 0) {
-      setPayAmountIdr(formatNum(remaining));
-      const sarRate = viewInvoice?.currency_rates?.SAR_TO_IDR || currencyRates?.SAR_TO_IDR || 4200;
-      setPayAmountSaudi(formatNum(Math.round(remaining / sarRate)));
-    } else {
-      setPayAmountIdr('');
-      setPayAmountSaudi('');
-    }
+    const list: BankAccountItem[] =
+      viewInvoice?.bank_accounts?.length > 0
+        ? (viewInvoice.bank_accounts as BankAccountItem[])
+        : paymentBankAccounts;
+    const splitOpen = splitBankAccountsForDualPayment(list);
+
     setPayTransferDate(new Date().toISOString().slice(0, 10));
     setPayTransferTime(new Date().toTimeString().slice(0, 8));
     setPayBankIndex(0);
@@ -1339,6 +1389,37 @@ const OrdersInvoicesPage: React.FC = () => {
     setPaySenderAccountName('');
     setPaySenderAccountNumber('');
     setPayFile(null);
+    setPayBankIndexOther(0);
+    setPayBankIndexNabiela(0);
+    setPayBankIdOther('');
+    setPayBankIdNabiela('');
+    setPaySenderAccountNameOther('');
+    setPaySenderAccountNumberOther('');
+    setPaySenderAccountNameNabiela('');
+    setPaySenderAccountNumberNabiela('');
+    setPayAmountIdrOther('');
+    setPayAmountIdrNabiela('');
+    setPayFileOther(null);
+    setPayFileNabiela(null);
+
+    if (remaining > 0) {
+      const sarRate = viewInvoice?.currency_rates?.SAR_TO_IDR || currencyRates?.SAR_TO_IDR || 4200;
+      setPayAmountSaudi(formatNum(Math.round(remaining / sarRate)));
+    } else {
+      setPayAmountSaudi('');
+    }
+
+    if (splitOpen.isDual) {
+      const { other, nabiela: nabAmt } = suggestedDualPaymentAmounts(viewInvoice);
+      setPayAmountIdr('');
+      setPayAmountIdrOther(formatNum(other));
+      setPayAmountIdrNabiela(formatNum(nabAmt));
+    } else if (remaining > 0) {
+      setPayAmountIdr(formatNum(remaining));
+    } else {
+      setPayAmountIdr('');
+    }
+
     setPaymentMethod(isInvoiceSaudi ? 'saudi' : 'bank');
     setShowPaymentModal(true);
     // Agar owner/role lain dapat daftar rekening: muat ulang detail invoice (getById mengembalikan bank_accounts dari accounting)
@@ -1397,6 +1478,101 @@ const OrdersInvoicesPage: React.FC = () => {
       }
       return;
     }
+
+    if (paymentMethod === 'bank' && paymentBankAccountsSplit.isDual) {
+      const { nabiela: nabRows, others: otherRows } = paymentBankAccountsSplit;
+      const amtOther = parseFloat(payAmountIdrOther.replace(/,/g, '').trim());
+      const amtNab = parseFloat(payAmountIdrNabiela.replace(/,/g, '').trim());
+      if (isNaN(amtOther) || amtOther <= 0 || isNaN(amtNab) || amtNab <= 0) {
+        showToast('Isi jumlah pembayaran untuk kedua transfer (produk lain dan siskopatuh ke rekening Mandiri / Nabiela).', 'warning');
+        return;
+      }
+      const remaining0 = parseFloat(viewInvoice.remaining_amount || 0);
+      if (amtOther + amtNab > remaining0 + 0.5) {
+        showToast(`Total kedua transfer melebihi sisa tagihan (${formatIDR(remaining0)}).`, 'warning');
+        return;
+      }
+      if (!payFileOther || !payFileNabiela) {
+        showToast('Upload bukti transfer wajib untuk kedua pembayaran (masing-masing satu file).', 'warning');
+        return;
+      }
+      if (!payTransferTime) {
+        showToast('Isi jam transfer sesuai bukti.', 'warning');
+        return;
+      }
+      if (!payBankIdOther?.trim() || !payBankIdNabiela?.trim()) {
+        showToast('Pilih bank pengirim untuk kedua transfer.', 'warning');
+        return;
+      }
+      if (!paySenderAccountNameOther?.trim() || !paySenderAccountNameNabiela?.trim()) {
+        showToast('Isi nama rekening pengirim untuk kedua transfer.', 'warning');
+        return;
+      }
+      if (!paySenderAccountNumberOther?.trim() || !paySenderAccountNumberNabiela?.trim()) {
+        showToast('Isi nomor rekening pengirim untuk kedua transfer.', 'warning');
+        return;
+      }
+      if (
+        !otherRows.length ||
+        payBankIndexOther < 0 ||
+        payBankIndexOther >= otherRows.length ||
+        !nabRows.length ||
+        payBankIndexNabiela < 0 ||
+        payBankIndexNabiela >= nabRows.length
+      ) {
+        showToast('Pilih rekening tujuan untuk kedua transfer.', 'warning');
+        return;
+      }
+      const bankOther = otherRows[payBankIndexOther];
+      const bankNab = nabRows[payBankIndexNabiela];
+
+      const postOneProof = async (
+        amount: number,
+        bank: BankAccountItem,
+        senderBankId: string,
+        senderName: string,
+        senderNumber: string,
+        file: File,
+        invRef: any
+      ) => {
+        const rem = parseFloat(invRef.remaining_amount || 0);
+        const paymentType = parseFloat(invRef.paid_amount || 0) === 0 ? 'dp' : (amount >= rem ? 'full' : 'partial');
+        const form = new FormData();
+        form.append('amount', String(Math.round(amount)));
+        form.append('payment_type', paymentType);
+        form.append('transfer_date', payTransferDate);
+        form.append('notes', `Jam transfer pada bukti: ${payTransferTime}`);
+        if (senderBankId) form.append('bank_id', senderBankId);
+        if (senderName?.trim()) form.append('sender_account_name', senderName.trim());
+        if (senderNumber?.trim()) form.append('sender_account_number', senderNumber.trim());
+        if (bank?.id) form.append('recipient_bank_account_id', bank.id);
+        form.append('proof_file', file);
+        const res = await invoicesApi.uploadPaymentProof(invRef.id, form);
+        let next = res.data?.invoice;
+        if (!next) {
+          const detailRes = await invoicesApi.getById(invRef.id);
+          if (detailRes.data?.success && detailRes.data?.data) next = detailRes.data.data;
+        }
+        return next || invRef;
+      };
+
+      setPaySubmitting(true);
+      try {
+        let invAfter = viewInvoice;
+        invAfter = await postOneProof(amtOther, bankOther, payBankIdOther, paySenderAccountNameOther, paySenderAccountNumberOther, payFileOther, invAfter);
+        invAfter = await postOneProof(amtNab, bankNab, payBankIdNabiela, paySenderAccountNameNabiela, paySenderAccountNumberNabiela, payFileNabiela, invAfter);
+        showToast('Kedua bukti bayar berhasil diupload. Menunggu verifikasi.', 'success');
+        setShowPaymentModal(false);
+        setViewInvoice(invAfter);
+        fetchInvoices();
+      } catch (e: any) {
+        showToast(e.response?.data?.message || 'Gagal upload salah satu bukti bayar', 'error');
+      } finally {
+        setPaySubmitting(false);
+      }
+      return;
+    }
+
     const amount = parseFloat(payAmountIdr.replace(/,/g, '').trim());
     if (isNaN(amount) || amount <= 0) {
       showToast('Masukkan jumlah pembayaran (IDR) yang valid.', 'warning');
@@ -4333,113 +4509,348 @@ const OrdersInvoicesPage: React.FC = () => {
               )}
               {paymentMethod === 'bank' && (
                 <>
-                  <div className="space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
-                    <p className="text-sm font-medium text-slate-700">Bank pengirim (asal transfer)</p>
-                    <Autocomplete
-                      label="Nama bank pengirim *"
-                      value={payBankId}
-                      onChange={(v) => setPayBankId(v || '')}
-                      options={paymentBanks.map((b) => ({ value: b.id, label: b.name }))}
-                      placeholder="Pilih bank pengirim..."
-                      emptyLabel="Pilih bank"
-                    />
-                    <Input
-                      label="Nama rekening pengirim *"
-                      type="text"
-                      value={paySenderAccountName}
-                      onChange={(e) => setPaySenderAccountName(e.target.value)}
-                      placeholder="Nama pemilik rekening pengirim"
-                    />
-                    <Input
-                      label="Nomor rekening pengirim *"
-                      type="text"
-                      value={paySenderAccountNumber}
-                      onChange={(e) => setPaySenderAccountNumber(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Nomor rekening pengirim"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Bank penerima (rekening tujuan — dari Data Rekening Bank)</label>
-                    {!bankAccountsForPayment.length && paymentBankAccountsLoading ? (
-                      <p className="text-sm text-slate-500 py-2">{CONTENT_LOADING_MESSAGE}</p>
-                    ) : bankAccountsForPayment.length === 0 ? (
-                      <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Belum ada rekening bank. Konfigurasi di menu <strong>Data Rekening Bank</strong> (Accounting).</p>
-                    ) : (
-                      <>
-                        <Autocomplete
-                          label=""
-                          value={String(payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex)}
-                          onChange={(v) => setPayBankIndex(parseInt(v || '0', 10))}
-                          options={bankAccountsForPayment.map((b, i) => ({
-                            value: String(i),
-                            label: `${b.bank_name} – ${b.account_number} · ${b.name} · ${b.currency || 'IDR'}`
-                          }))}
-                          placeholder="Pilih rekening tujuan transfer..."
-                          emptyLabel="Pilih rekening"
-                        />
-                        {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex] && (
-                          <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
-                            <p className="font-medium">{bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].bank_name}</p>
-                            <p className="font-mono text-slate-600">No. Rekening: {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].account_number}</p>
-                            <p className="text-slate-600">A.n. {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].name} · {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].currency || 'IDR'}</p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
-                    <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
+                  {paymentBankAccountsSplit.isDual && (
+                    <p className="text-sm text-slate-700 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 leading-relaxed">
+                      Pesanan ini memuat <strong>siskopatuh</strong> bersama produk lain. Lakukan <strong>dua transfer terpisah</strong>: satu ke rekening untuk produk lain, dan satu ke <strong>Bank Mandiri / Nabiela</strong> khusus siskopatuh. Isi data pengirim dan penerima serta unggah bukti untuk masing-masing transfer.
+                    </p>
                   )}
-                  <Input
-                    label="Jumlah bayar (IDR) *"
-                    type="text"
-                    value={payAmountIdr}
-                    onChange={(e) => setPayAmountIdr(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
-                    placeholder="Contoh: 5000000"
-                  />
-                  <div>
-                    {payAmountIdr && !isNaN(parseFloat(payAmountIdr.replace(/,/g, ''))) && (() => {
-                      const inputIdr = parseFloat(payAmountIdr.replace(/,/g, ''));
-                      const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
-                      const currentRemain = parseFloat(viewInvoice.remaining_amount || 0);
-                      const newPaid = currentPaid + inputIdr;
-                      const newRemain = currentRemain - inputIdr;
-                      const overpay = newRemain < 0;
-                      return (
-                        <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
-                          <p className="font-semibold text-slate-800">Validasi pembayaran (otomatis)</p>
-                          <p><span className="text-slate-600">Jumlah yang diinput:</span> <strong><NominalDisplay amount={inputIdr} currency="IDR" /></strong> ≈ <NominalDisplay amount={inputIdr / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={inputIdr / usdToIdr} currency="USD" /></p>
-                          <p><span className="text-slate-600">Setelah pembayaran ini —</span></p>
-                          <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]"><NominalDisplay amount={newPaid} currency="IDR" /></strong> ≈ <NominalDisplay amount={newPaid / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={newPaid / usdToIdr} currency="USD" /></p>
-                          <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" /></strong> ≈ <NominalDisplay amount={Math.max(0, newRemain) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={Math.max(0, newRemain) / usdToIdr} currency="USD" /></p>
-                          {overpay && <p className="text-amber-700 text-xs">Jumlah melebihi sisa tagihan. Sistem akan catat sebagai pelunasan; kelebihan tidak dikembalikan otomatis.</p>}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  <Input
-                    label="Tanggal transfer *"
-                    type="date"
-                    value={payTransferDate}
-                    onChange={(e) => setPayTransferDate(e.target.value)}
-                  />
-                  <Input
-                    label="Jam transfer *"
-                    type="time"
-                    step={1}
-                    value={payTransferTime}
-                    onChange={(e) => setPayTransferTime(e.target.value)}
-                  />
-                  <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                    Tanggal dan jam transfer (termasuk detik bila ada di bukti) harus sesuai yang tertera di bukti transfer.
-                  </p>
-                  <Input
-                    label="Upload bukti bayar *"
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => setPayFile(e.target.files?.[0] || null)}
-                    className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
-                  />
+                  {!paymentBankAccountsSplit.isDual ? (
+                    <>
+                      <div className="space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                        <p className="text-sm font-medium text-slate-700">Bank pengirim (asal transfer)</p>
+                        <Autocomplete
+                          label="Nama bank pengirim *"
+                          value={payBankId}
+                          onChange={(v) => setPayBankId(v || '')}
+                          options={paymentBanks.map((b) => ({ value: b.id, label: b.name }))}
+                          placeholder="Pilih bank pengirim..."
+                          emptyLabel="Pilih bank"
+                        />
+                        <Input
+                          label="Nama rekening pengirim *"
+                          type="text"
+                          value={paySenderAccountName}
+                          onChange={(e) => setPaySenderAccountName(e.target.value)}
+                          placeholder="Nama pemilik rekening pengirim"
+                        />
+                        <Input
+                          label="Nomor rekening pengirim *"
+                          type="text"
+                          value={paySenderAccountNumber}
+                          onChange={(e) => setPaySenderAccountNumber(e.target.value.replace(/\D/g, ''))}
+                          placeholder="Nomor rekening pengirim"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Bank penerima (rekening tujuan — dari Data Rekening Bank)</label>
+                        {!bankAccountsForPayment.length && paymentBankAccountsLoading ? (
+                          <p className="text-sm text-slate-500 py-2">{CONTENT_LOADING_MESSAGE}</p>
+                        ) : bankAccountsForPayment.length === 0 ? (
+                          <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Belum ada rekening bank. Konfigurasi di menu <strong>Data Rekening Bank</strong> (Accounting).</p>
+                        ) : (
+                          <>
+                            <Autocomplete
+                              label=""
+                              value={String(payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex)}
+                              onChange={(v) => setPayBankIndex(parseInt(v || '0', 10))}
+                              options={bankAccountsForPayment.map((b, i) => ({
+                                value: String(i),
+                                label: `${b.bank_name} – ${b.account_number} · ${b.name} · ${b.currency || 'IDR'}`
+                              }))}
+                              placeholder="Pilih rekening tujuan transfer..."
+                              emptyLabel="Pilih rekening"
+                            />
+                            {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex] && (
+                              <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
+                                <p className="font-medium">{bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].bank_name}</p>
+                                <p className="font-mono text-slate-600">No. Rekening: {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].account_number}</p>
+                                <p className="text-slate-600">A.n. {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].name} · {bankAccountsForPayment[payBankIndex >= bankAccountsForPayment.length ? 0 : payBankIndex].currency || 'IDR'}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
+                        <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">Sisa tagihan: <strong><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></strong> — jumlah bayar di bawah diisi otomatis dengan sisa (dapat diubah).</p>
+                      )}
+                      <Input
+                        label="Jumlah bayar (IDR) *"
+                        type="text"
+                        value={payAmountIdr}
+                        onChange={(e) => setPayAmountIdr(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                        placeholder="Contoh: 5000000"
+                      />
+                      <div>
+                        {payAmountIdr && !isNaN(parseFloat(payAmountIdr.replace(/,/g, ''))) && (() => {
+                          const inputIdr = parseFloat(payAmountIdr.replace(/,/g, ''));
+                          const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
+                          const currentRemain = parseFloat(viewInvoice.remaining_amount || 0);
+                          const newPaid = currentPaid + inputIdr;
+                          const newRemain = currentRemain - inputIdr;
+                          const overpay = newRemain < 0;
+                          return (
+                            <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
+                              <p className="font-semibold text-slate-800">Validasi pembayaran (otomatis)</p>
+                              <p><span className="text-slate-600">Jumlah yang diinput:</span> <strong><NominalDisplay amount={inputIdr} currency="IDR" /></strong> ≈ <NominalDisplay amount={inputIdr / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={inputIdr / usdToIdr} currency="USD" /></p>
+                              <p><span className="text-slate-600">Setelah pembayaran ini —</span></p>
+                              <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]"><NominalDisplay amount={newPaid} currency="IDR" /></strong> ≈ <NominalDisplay amount={newPaid / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={newPaid / usdToIdr} currency="USD" /></p>
+                              <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" /></strong> ≈ <NominalDisplay amount={Math.max(0, newRemain) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={Math.max(0, newRemain) / usdToIdr} currency="USD" /></p>
+                              {overpay && <p className="text-amber-700 text-xs">Jumlah melebihi sisa tagihan. Sistem akan catat sebagai pelunasan; kelebihan tidak dikembalikan otomatis.</p>}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <Input
+                        label="Tanggal transfer *"
+                        type="date"
+                        value={payTransferDate}
+                        onChange={(e) => setPayTransferDate(e.target.value)}
+                      />
+                      <Input
+                        label="Jam transfer *"
+                        type="time"
+                        step={1}
+                        value={payTransferTime}
+                        onChange={(e) => setPayTransferTime(e.target.value)}
+                      />
+                      <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                        Tanggal dan jam transfer (termasuk detik bila ada di bukti) harus sesuai yang tertera di bukti transfer.
+                      </p>
+                      <Input
+                        label="Upload bukti bayar *"
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => setPayFile(e.target.files?.[0] || null)}
+                        className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {!bankAccountsForPayment.length && paymentBankAccountsLoading ? (
+                        <p className="text-sm text-slate-500 py-2">{CONTENT_LOADING_MESSAGE}</p>
+                      ) : bankAccountsForPayment.length === 0 ? (
+                        <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">Belum ada rekening bank. Konfigurasi di menu <strong>Data Rekening Bank</strong> (Accounting).</p>
+                      ) : (
+                        <>
+                          {parseFloat(viewInvoice?.remaining_amount || 0) > 0 && (
+                            <p className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
+                              Sisa tagihan: <strong><NominalDisplay amount={parseFloat(viewInvoice.remaining_amount || 0)} currency="IDR" /></strong> — total kedua jumlah di bawah diisi otomatis sesuai pembagian (dapat diubah; jumlah keduanya tidak boleh melebihi sisa).
+                            </p>
+                          )}
+                          {/* Transfer 1: produk lain */}
+                          <div className="rounded-xl border-2 border-slate-200 bg-white p-4 space-y-3 shadow-sm">
+                            <p className="text-sm font-semibold text-[#0D1A63]">1. Produk selain siskopatuh</p>
+                            <div className="space-y-3 p-3 rounded-lg border border-slate-200 bg-slate-50/50">
+                              <p className="text-sm font-medium text-slate-700">Bank pengirim (asal transfer)</p>
+                              <Autocomplete
+                                label="Nama bank pengirim *"
+                                value={payBankIdOther}
+                                onChange={(v) => setPayBankIdOther(v || '')}
+                                options={paymentBanks.map((b) => ({ value: b.id, label: b.name }))}
+                                placeholder="Pilih bank pengirim..."
+                                emptyLabel="Pilih bank"
+                              />
+                              <Input
+                                label="Nama rekening pengirim *"
+                                type="text"
+                                value={paySenderAccountNameOther}
+                                onChange={(e) => setPaySenderAccountNameOther(e.target.value)}
+                                placeholder="Nama pemilik rekening pengirim"
+                              />
+                              <Input
+                                label="Nomor rekening pengirim *"
+                                type="text"
+                                value={paySenderAccountNumberOther}
+                                onChange={(e) => setPaySenderAccountNumberOther(e.target.value.replace(/\D/g, ''))}
+                                placeholder="Nomor rekening pengirim"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Bank penerima (rekening tujuan — produk lain)</label>
+                              <Autocomplete
+                                label=""
+                                value={String(
+                                  payBankIndexOther >= paymentBankAccountsSplit.others.length ? 0 : payBankIndexOther
+                                )}
+                                onChange={(v) => setPayBankIndexOther(parseInt(v || '0', 10))}
+                                options={paymentBankAccountsSplit.others.map((b, i) => ({
+                                  value: String(i),
+                                  label: `${b.bank_name} – ${b.account_number} · ${b.name} · ${b.currency || 'IDR'}`
+                                }))}
+                                placeholder="Pilih rekening tujuan..."
+                                emptyLabel="Pilih rekening"
+                              />
+                              {paymentBankAccountsSplit.others[
+                                payBankIndexOther >= paymentBankAccountsSplit.others.length ? 0 : payBankIndexOther
+                              ] && (
+                                <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
+                                  <p className="font-medium">
+                                    {paymentBankAccountsSplit.others[payBankIndexOther >= paymentBankAccountsSplit.others.length ? 0 : payBankIndexOther].bank_name}
+                                  </p>
+                                  <p className="font-mono text-slate-600">
+                                    No. Rekening:{' '}
+                                    {paymentBankAccountsSplit.others[payBankIndexOther >= paymentBankAccountsSplit.others.length ? 0 : payBankIndexOther].account_number}
+                                  </p>
+                                  <p className="text-slate-600">
+                                    A.n.{' '}
+                                    {paymentBankAccountsSplit.others[payBankIndexOther >= paymentBankAccountsSplit.others.length ? 0 : payBankIndexOther].name} ·{' '}
+                                    {paymentBankAccountsSplit.others[payBankIndexOther >= paymentBankAccountsSplit.others.length ? 0 : payBankIndexOther].currency || 'IDR'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            <Input
+                              label="Jumlah bayar transfer ini (IDR) *"
+                              type="text"
+                              value={payAmountIdrOther}
+                              onChange={(e) => setPayAmountIdrOther(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                              placeholder="Contoh: 5000000"
+                            />
+                            <Input
+                              label="Upload bukti transfer ini *"
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => setPayFileOther(e.target.files?.[0] || null)}
+                              className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
+                            />
+                          </div>
+                          {/* Transfer 2: siskopatuh / Nabiela */}
+                          <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/30 p-4 space-y-3 shadow-sm">
+                            <p className="text-sm font-semibold text-emerald-900">2. Siskopatuh — rekening Mandiri / Nabiela</p>
+                            <div className="space-y-3 p-3 rounded-lg border border-emerald-100 bg-white/80">
+                              <p className="text-sm font-medium text-slate-700">Bank pengirim (asal transfer)</p>
+                              <Autocomplete
+                                label="Nama bank pengirim *"
+                                value={payBankIdNabiela}
+                                onChange={(v) => setPayBankIdNabiela(v || '')}
+                                options={paymentBanks.map((b) => ({ value: b.id, label: b.name }))}
+                                placeholder="Pilih bank pengirim..."
+                                emptyLabel="Pilih bank"
+                              />
+                              <Input
+                                label="Nama rekening pengirim *"
+                                type="text"
+                                value={paySenderAccountNameNabiela}
+                                onChange={(e) => setPaySenderAccountNameNabiela(e.target.value)}
+                                placeholder="Nama pemilik rekening pengirim"
+                              />
+                              <Input
+                                label="Nomor rekening pengirim *"
+                                type="text"
+                                value={paySenderAccountNumberNabiela}
+                                onChange={(e) => setPaySenderAccountNumberNabiela(e.target.value.replace(/\D/g, ''))}
+                                placeholder="Nomor rekening pengirim"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Bank penerima (rekening tujuan — siskopatuh)</label>
+                              <Autocomplete
+                                label=""
+                                value={String(
+                                  payBankIndexNabiela >= paymentBankAccountsSplit.nabiela.length ? 0 : payBankIndexNabiela
+                                )}
+                                onChange={(v) => setPayBankIndexNabiela(parseInt(v || '0', 10))}
+                                options={paymentBankAccountsSplit.nabiela.map((b, i) => ({
+                                  value: String(i),
+                                  label: `${b.bank_name} – ${b.account_number} · ${b.name} · ${b.currency || 'IDR'}`
+                                }))}
+                                placeholder="Pilih rekening Nabiela..."
+                                emptyLabel="Pilih rekening"
+                              />
+                              {paymentBankAccountsSplit.nabiela[
+                                payBankIndexNabiela >= paymentBankAccountsSplit.nabiela.length ? 0 : payBankIndexNabiela
+                              ] && (
+                                <div className="mt-2 p-3 rounded-lg bg-white border border-emerald-200 text-sm text-slate-700">
+                                  <p className="font-medium">
+                                    {paymentBankAccountsSplit.nabiela[payBankIndexNabiela >= paymentBankAccountsSplit.nabiela.length ? 0 : payBankIndexNabiela].bank_name}
+                                  </p>
+                                  <p className="font-mono text-slate-600">
+                                    No. Rekening:{' '}
+                                    {paymentBankAccountsSplit.nabiela[payBankIndexNabiela >= paymentBankAccountsSplit.nabiela.length ? 0 : payBankIndexNabiela].account_number}
+                                  </p>
+                                  <p className="text-slate-600">
+                                    A.n.{' '}
+                                    {paymentBankAccountsSplit.nabiela[payBankIndexNabiela >= paymentBankAccountsSplit.nabiela.length ? 0 : payBankIndexNabiela].name} ·{' '}
+                                    {paymentBankAccountsSplit.nabiela[payBankIndexNabiela >= paymentBankAccountsSplit.nabiela.length ? 0 : payBankIndexNabiela].currency || 'IDR'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            <Input
+                              label="Jumlah bayar transfer ini (IDR) *"
+                              type="text"
+                              value={payAmountIdrNabiela}
+                              onChange={(e) => setPayAmountIdrNabiela(e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
+                              placeholder="Contoh: 5000000"
+                            />
+                            <Input
+                              label="Upload bukti transfer ini *"
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => setPayFileNabiela(e.target.files?.[0] || null)}
+                              className="file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-sm"
+                            />
+                          </div>
+                          {payAmountIdrOther &&
+                            payAmountIdrNabiela &&
+                            !isNaN(parseFloat(payAmountIdrOther.replace(/,/g, ''))) &&
+                            !isNaN(parseFloat(payAmountIdrNabiela.replace(/,/g, ''))) &&
+                            (() => {
+                              const a = parseFloat(payAmountIdrOther.replace(/,/g, ''));
+                              const b = parseFloat(payAmountIdrNabiela.replace(/,/g, ''));
+                              const totalIn = a + b;
+                              const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
+                              const currentRemain = parseFloat(viewInvoice.remaining_amount || 0);
+                              const newPaid = currentPaid + totalIn;
+                              const newRemain = currentRemain - totalIn;
+                              const overpay = newRemain < -0.5;
+                              return (
+                                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
+                                  <p className="font-semibold text-slate-800">Ringkasan kedua transfer</p>
+                                  <p>
+                                    <span className="text-slate-600">Total yang diinput:</span>{' '}
+                                    <strong>
+                                      <NominalDisplay amount={totalIn} currency="IDR" />
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    <span className="text-slate-600">Setelah keduanya tercatat — dibayar total:</span>{' '}
+                                    <strong className="text-[#0D1A63]">
+                                      <NominalDisplay amount={newPaid} currency="IDR" />
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    <span className="text-slate-600">Perkiraan sisa:</span>{' '}
+                                    <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>
+                                      <NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" />
+                                    </strong>
+                                  </p>
+                                  {overpay && (
+                                    <p className="text-amber-700 text-xs">Total melebihi sisa tagihan. Sesuaikan jumlah salah satu transfer.</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          <Input
+                            label="Tanggal transfer *"
+                            type="date"
+                            value={payTransferDate}
+                            onChange={(e) => setPayTransferDate(e.target.value)}
+                          />
+                          <Input
+                            label="Jam transfer *"
+                            type="time"
+                            step={1}
+                            value={payTransferTime}
+                            onChange={(e) => setPayTransferTime(e.target.value)}
+                          />
+                          <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                            Tanggal dan jam transfer (termasuk detik bila ada di bukti) harus sesuai yang tertera di bukti transfer.
+                          </p>
+                        </>
+                      )}
+                    </>
+                  )}
                 </>
               )}
               {paymentMethod === 'va' && (
@@ -4497,15 +4908,30 @@ const OrdersInvoicesPage: React.FC = () => {
                 onClick={handleSubmitPayment}
                 disabled={
                   paySubmitting ||
-                  (paymentMethod === 'bank' && (
-                    bankAccountsForPayment.length === 0 ||
-                    !payBankId?.trim() ||
-                    !paySenderAccountName?.trim() ||
-                    !paySenderAccountNumber?.trim()
-                  ))
+                  (paymentMethod === 'bank' &&
+                    (paymentBankAccountsSplit.isDual
+                      ? bankAccountsForPayment.length === 0 ||
+                        !payBankIdOther?.trim() ||
+                        !paySenderAccountNameOther?.trim() ||
+                        !paySenderAccountNumberOther?.trim() ||
+                        !payBankIdNabiela?.trim() ||
+                        !paySenderAccountNameNabiela?.trim() ||
+                        !paySenderAccountNumberNabiela?.trim()
+                      : bankAccountsForPayment.length === 0 ||
+                        !payBankId?.trim() ||
+                        !paySenderAccountName?.trim() ||
+                        !paySenderAccountNumber?.trim()))
                 }
               >
-                {paySubmitting ? 'Menyimpan...' : paymentMethod === 'saudi' ? 'Simpan Pembayaran Saudi' : paymentMethod === 'bank' ? 'Upload Bukti Bayar' : 'Lanjut'}
+                {paySubmitting
+                  ? 'Menyimpan...'
+                  : paymentMethod === 'saudi'
+                    ? 'Simpan Pembayaran Saudi'
+                    : paymentMethod === 'bank'
+                      ? paymentBankAccountsSplit.isDual
+                        ? 'Upload kedua bukti bayar'
+                        : 'Upload Bukti Bayar'
+                      : 'Lanjut'}
               </Button>
             </ModalFooter>
           </ModalBox>
