@@ -392,6 +392,7 @@ export interface HandlingDashboardData {
     invoice_number?: string;
     order_item_id: string;
     owner_name?: string;
+    pic_name?: string | null;
     product_name?: string;
     quantity: number;
     status: string;
@@ -416,6 +417,7 @@ export interface SiskopatuhDashboardData {
     invoice_number?: string;
     order_item_id: string;
     owner_name?: string;
+    pic_name?: string | null;
     product_name?: string;
     quantity: number;
     status: string;
@@ -448,6 +450,7 @@ export interface TicketDashboardData {
     order_number: string;
     order_item_id: string;
     owner_name?: string;
+    pic_name?: string | null;
     status: string;
     manifest_file_url?: string;
     ticket_file_url?: string;
@@ -493,9 +496,12 @@ export interface BusDashboardData {
   return: Record<string, number>;
   pending_list: Array<{
     order_id: string;
-    order_number: string;
+    order_number?: string;
+    invoice_id?: string;
+    invoice_number?: string | null;
     order_item_id: string;
     owner_name?: string;
+    pic_name?: string | null;
     quantity: number;
     bus_ticket_status: string;
     arrival_status: string;
@@ -522,9 +528,10 @@ export interface VisaDashboardData {
     invoice_id?: string;
     invoice_number?: string;
     order_id: string;
-    order_number: string;
+    order_number?: string;
     order_item_id: string;
     owner_name?: string;
+    pic_name?: string | null;
     status: string;
     manifest_file_url?: string;
     visa_file_url?: string;
@@ -555,7 +562,7 @@ export const invoicesApi = {
   getPdf: (id: string) => api.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
   /** Download ZIP: invoice PDF + semua bukti bayar (tagihan DP, pembayaran DP, lunas, dll) */
   getArchive: (id: string) => api.get(`/invoices/${id}/archive`, { responseType: 'blob' }),
-  create: (body: { order_id: string; is_super_promo?: boolean }) => api.post('/invoices', body),
+  create: (body: { order_id: string; pic_name?: string; is_super_promo?: boolean }) => api.post('/invoices', body),
   unblock: (id: string) => api.patch(`/invoices/${id}/unblock`),
   verifyPayment: (id: string, body: { payment_proof_id: string; verified: boolean; notes?: string }) => api.post(`/invoices/${id}/verify-payment`, body),
   handleOverpaid: (id: string, body: { handling: string; target_invoice_id?: string; target_order_id?: string }) => api.patch(`/invoices/${id}/overpaid`, body),

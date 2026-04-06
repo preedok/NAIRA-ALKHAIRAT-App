@@ -79,6 +79,7 @@ const DivisionStatCardsWithModal: React.FC<DivisionStatCardsWithModalProps> = ({
   const tableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice' },
     { id: 'owner', label: 'Owner' },
+    { id: 'pic', label: 'PIC' },
     { id: 'total', label: 'Total' },
     { id: 'status', label: 'Status' }
   ];
@@ -162,6 +163,9 @@ const DivisionStatCardsWithModal: React.FC<DivisionStatCardsWithModalProps> = ({
                     <td className="py-2 px-4 text-sm">{row.invoice_number || '–'}</td>
                     <td className="py-2 px-4 text-sm">
                       {row.Order?.User?.name ?? row.User?.name ?? '–'}
+                    </td>
+                    <td className="py-2 px-4 text-sm">
+                      {row.pic_name ?? row.Order?.pic_name ?? '–'}
                     </td>
                     <td className="py-2 px-4 text-sm">
                       <NominalDisplay amount={row.total_amount ?? 0} currency="IDR" />

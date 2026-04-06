@@ -200,6 +200,7 @@ const OrderFormPage: React.FC = () => {
   const [hotelAvailability, setHotelAvailability] = useState<Record<string, { byRoomType: Record<string, number> } | 'loading' | null>>({});
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const [busServiceOption, setBusServiceOption] = useState<BusServiceOption>('finality');
+  const [orderPicName, setOrderPicName] = useState('');
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
   const lastHiaceBusRowRef = useRef<OrderItemRow | null>(null);
 
@@ -259,6 +260,12 @@ const OrderFormPage: React.FC = () => {
   },[isEdit,isOwner,user?.branch_id,user?.role]);
 
   useEffect(()=>{ if(isEdit&&order?.branch_id) setBranchSel(order.branch_id); },[isEdit,order?.branch_id]);
+
+  useEffect(() => {
+    if (order?.pic_name != null && String(order.pic_name).trim()) {
+      setOrderPicName(String(order.pic_name).trim());
+    }
+  }, [order?.id, order?.pic_name]);
 
   useEffect(() => {
     if (!order?.currency_rates_override || typeof order.currency_rates_override !== 'object') return;
@@ -1203,6 +1210,11 @@ const OrderFormPage: React.FC = () => {
     e.preventDefault();
     const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
+    if (!orderPicName.trim()) { showToast('Nama PIC invoice wajib diisi', 'warning'); return; }
+    const visaWithoutTravel = valid.filter((r) => r.type === 'visa' && !(r.meta?.travel_date && String(r.meta.travel_date).trim()));
+    if (visaWithoutTravel.length) { showToast('Item visa wajib isi tanggal keberangkatan', 'warning'); return; }
+    const busWithoutTravel = valid.filter((r) => r.type === 'bus' && !(r.meta?.travel_date && String(r.meta.travel_date).trim()));
+    if (busWithoutTravel.length) { showToast('Item bus wajib isi tanggal keberangkatan', 'warning'); return; }
     const hotelWithoutDates=valid.filter(r=>r.type==='hotel'&&(!r.check_in||!r.check_out));
     if(hotelWithoutDates.length){ showToast('Item hotel wajib isi tanggal Check-in dan Check-out','warning'); return; }
     const ticketWithoutBandara=valid.filter(r=>r.type==='ticket'&&!r.meta?.bandara);
@@ -1228,12 +1240,12 @@ const OrderFormPage: React.FC = () => {
     const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,...ratesPayload,...busOrderApiFields})
+      ordersApi.update(orderId,{items:payload,pic_name:orderPicName.trim(),...ratesPayload,...busOrderApiFields})
         .then(()=>{ showToast('Invoice diperbarui. Tagihan ikut diperbarui.','success'); navigate('/dashboard/orders-invoices', { state: { refreshList: true } }); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal memperbarui','error'))
         .finally(()=>setSaving(false));
     } else {
-      const body:Record<string,any>={items:payload,...ratesPayload};
+      const body:Record<string,any>={items:payload,pic_name:orderPicName.trim(),...ratesPayload};
       if((!isOwner&&!canPickOwner&&branchId) || (canPickOwner&&ownerInputMode==='manual'&&branchSel)) body.branch_id=(canPickOwner&&ownerInputMode==='manual')?branchSel:branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
       if(canPickOwner&&ownerInputMode==='manual'){
@@ -1255,6 +1267,11 @@ const OrderFormPage: React.FC = () => {
     e?.preventDefault();
     const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
+    if (!orderPicName.trim()) { showToast('Nama PIC invoice wajib diisi', 'warning'); return; }
+    const visaWithoutTravelDraft = valid.filter((r) => r.type === 'visa' && !(r.meta?.travel_date && String(r.meta.travel_date).trim()));
+    if (visaWithoutTravelDraft.length) { showToast('Item visa wajib isi tanggal keberangkatan', 'warning'); return; }
+    const busWithoutTravelDraft = valid.filter((r) => r.type === 'bus' && !(r.meta?.travel_date && String(r.meta.travel_date).trim()));
+    if (busWithoutTravelDraft.length) { showToast('Item bus wajib isi tanggal keberangkatan', 'warning'); return; }
     const hotelWithoutDates=valid.filter(r=>r.type==='hotel'&&(!r.check_in||!r.check_out));
     if(hotelWithoutDates.length){ showToast('Item hotel wajib isi tanggal Check-in dan Check-out','warning'); return; }
     const ticketWithoutBandara=valid.filter(r=>r.type==='ticket'&&!r.meta?.bandara);
@@ -1280,12 +1297,12 @@ const OrderFormPage: React.FC = () => {
     const ratesPayload=getRatesPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,...ratesPayload,...busOrderApiFields})
+      ordersApi.update(orderId,{items:payload,pic_name:orderPicName.trim(),...ratesPayload,...busOrderApiFields})
         .then(()=>{ showToast('Draft disimpan. Invoice belum diterbitkan.','success'); setSaving(false); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menyimpan draft','error'))
         .finally(()=>setSaving(false));
     } else {
-      const body:Record<string,any>={items:payload,save_as_draft:true,...ratesPayload};
+      const body:Record<string,any>={items:payload,save_as_draft:true,pic_name:orderPicName.trim(),...ratesPayload};
       if((!isOwner&&!canPickOwner&&branchId) || (canPickOwner&&ownerInputMode==='manual'&&branchSel)) body.branch_id=(canPickOwner&&ownerInputMode==='manual')?branchSel:branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
       if(canPickOwner&&ownerInputMode==='manual'){
@@ -1312,8 +1329,12 @@ const OrderFormPage: React.FC = () => {
   const handleTerbitkanInvoice=(e?: React.MouseEvent)=>{
     e?.preventDefault();
     if(!orderId) return;
+    if (!orderPicName.trim()) {
+      showToast('Isi nama PIC invoice sebelum menerbitkan.', 'warning');
+      return;
+    }
     setSaving(true);
-    invoicesApi.create({order_id:orderId})
+    invoicesApi.create({ order_id: orderId, pic_name: orderPicName.trim() })
       .then(()=>{ showToast('Invoice diterbitkan.','success'); navigate('/dashboard/orders-invoices',{state:{refreshList:true}}); })
       .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menerbitkan invoice','error'))
       .finally(()=>setSaving(false));
@@ -1515,6 +1536,29 @@ const OrderFormPage: React.FC = () => {
             </div>
           </section>
         )}
+
+        {/* PIC invoice */}
+        <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 text-sm">PIC invoice</h2>
+              <p className="text-xs text-slate-500">Nama penanggung jawab invoice (wajib)</p>
+            </div>
+          </div>
+          <div className="p-4">
+            <Input
+              label="Nama PIC *"
+              type="text"
+              value={orderPicName}
+              onChange={(e) => setOrderPicName(e.target.value)}
+              placeholder="Nama lengkap PIC"
+              required
+            />
+          </div>
+        </section>
 
         {/* Item Pemesanan */}
         <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">

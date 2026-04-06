@@ -32,6 +32,11 @@ const Order = sequelize.define('Order', {
     allowNull: false,
     defaultValue: 'registered'
   },
+  pic_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Nama PIC order/invoice (disalin ke invoice saat diterbitkan)'
+  },
   branch_id: {
     type: DataTypes.UUID,
     allowNull: false,

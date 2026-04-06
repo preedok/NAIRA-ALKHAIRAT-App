@@ -476,6 +476,12 @@ const BusWorkPage: React.FC = () => {
                 <span className="font-mono text-stone-700">{p.invoice_number ?? '–'}</span>
                 <span className="text-stone-500">·</span>
                 <span className="text-stone-600">{p.owner_name || '–'}</span>
+                {p.pic_name ? (
+                  <>
+                    <span className="text-stone-500">·</span>
+                    <span className="text-stone-600">PIC {p.pic_name}</span>
+                  </>
+                ) : null}
                 <span className="text-amber-600">Qty {p.quantity}</span>
                 <ChevronRight className="w-4 h-4 text-stone-400" />
               </Button>

@@ -30,6 +30,10 @@ async function buildBusSlipPdfBuffer(item, opts = {}) {
   const productName = (Product.name || Product.code || 'Bus').trim() || 'Bus';
   const quantity = item.quantity != null ? Number(item.quantity) : 1;
   const ownerName = (Order.User && (Order.User.name || Order.User.company_name)) || (inv.User && (inv.User.name || inv.User.company_name)) || '–';
+  const picName =
+    (inv.pic_name != null && String(inv.pic_name).trim()) ||
+    (Order.pic_name != null && String(Order.pic_name).trim()) ||
+    '';
   const ticketStatus = busTicketStatusLabel(prog.bus_ticket_status);
   const ticketInfo = (prog.bus_ticket_info || '').trim() || '–';
   const arrival = busTripStatusLabel(prog.arrival_status);
@@ -62,6 +66,7 @@ async function buildBusSlipPdfBuffer(item, opts = {}) {
       ['No. Invoice', invoiceNumber],
       ['Produk / Paket Bus', productName],
       ['Pemesan (Owner)', ownerName],
+      ['Nama PIC', picName || '–'],
       ['Jumlah', String(quantity)],
       ['Rute', route],
       ['Status Tiket Bus', ticketStatus],

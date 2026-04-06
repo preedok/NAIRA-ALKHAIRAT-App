@@ -160,6 +160,22 @@ async function ensureOrderBusIncludeColumns(db) {
 }
 
 /** Ensure owner_profiles has is_mou_owner column (MOU vs non-MOU owner) */
+async function ensureInvoicesPicNameColumn(db) {
+  try {
+    await db.query('ALTER TABLE invoices ADD COLUMN IF NOT EXISTS pic_name VARCHAR(255) NULL');
+  } catch (e) {
+    logger.warn('ensureInvoicesPicNameColumn:', e.message);
+  }
+}
+
+async function ensureOrdersPicNameColumn(db) {
+  try {
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS pic_name VARCHAR(255) NULL');
+  } catch (e) {
+    logger.warn('ensureOrdersPicNameColumn:', e.message);
+  }
+}
+
 async function ensureOwnerProfilesIsMouOwnerColumn(db) {
   try {
     const [rows] = await db.query(`
@@ -216,6 +232,8 @@ sequelize.sync({ alter })
   .then(() => ensureOrdersBusServiceOptionColumn(sequelize))
   .then(() => ensureOrderBusIncludeColumns(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
+  .then(() => ensureInvoicesPicNameColumn(sequelize))
+  .then(() => ensureOrdersPicNameColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
   .then(async () => {
     logger.info('Database synchronized');

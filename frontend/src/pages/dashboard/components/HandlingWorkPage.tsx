@@ -66,9 +66,10 @@ const HandlingWorkPage: React.FC = () => {
   const invoiceLikeList = useMemo(() => pendingList.map((row: any) => ({
     id: row.invoice_id || row.order_item_id || row.order_id,
     invoice_number: row.invoice_number || '–',
+    pic_name: row.pic_name || null,
     total_amount: row.total_amount ?? 0,
     status: row.status || 'pending',
-    Order: { User: { name: row.owner_name || '–' } }
+    Order: { User: { name: row.owner_name || '–' }, pic_name: row.pic_name || null }
   })), [pendingList]);
 
   const divisionStats: DivisionStatItem[] = useMemo(() => [
@@ -129,6 +130,7 @@ const HandlingWorkPage: React.FC = () => {
                 <tr className="border-b border-slate-200 bg-slate-50/80">
                   <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Invoice / Order</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Pemesan</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">PIC</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Produk · Qty</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Status</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-slate-700">Aksi</th>
@@ -141,6 +143,7 @@ const HandlingWorkPage: React.FC = () => {
                       <InvoiceNumberCell inv={{ invoice_number: row.invoice_number, status: row.status, Refunds: [] }} statusLabels={INVOICE_STATUS_LABELS} compact />
                     </td>
                     <td className="py-3 px-4 text-slate-700">{row.owner_name || '–'}</td>
+                    <td className="py-3 px-4 text-slate-700">{row.pic_name || '–'}</td>
                     <td className="py-3 px-4 text-slate-700">
                       {row.product_name || 'Handling'} {row.quantity > 1 ? `× ${row.quantity}` : ''}
                     </td>

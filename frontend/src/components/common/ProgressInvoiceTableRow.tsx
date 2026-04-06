@@ -1,7 +1,7 @@
 /**
  * Satu baris tabel invoice untuk menu Progress (Visa, Tiket, Hotel, Bus, Handling).
  * View dan data sama dengan menu Invoice: No. Invoice, Owner, Tipe Owner, Perusahaan,
- * Total (IDR·SAR·USD), Status · Dibayar, Sisa, Status Progress, Bukti Bayar, Tgl, Aksi.
+ * PIC, Total (IDR·SAR·USD), Status · Dibayar, Sisa, Status Progress, Bukti Bayar, Tgl, Aksi.
  */
 import React from 'react';
 import { Eye } from 'lucide-react';
@@ -66,6 +66,7 @@ export function ProgressInvoiceTableRow({
         <div>{inv.User?.company_name || inv.User?.name || inv.Branch?.name || '–'}</div>
         <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
       </td>
+      <td className="py-3 px-4 text-slate-700 align-top text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
       <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
         <div><NominalDisplay amount={totalTriple.idr} currency="IDR" /></div>
         <div className="text-xs text-slate-500 mt-0.5">

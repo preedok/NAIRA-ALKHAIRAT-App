@@ -533,9 +533,11 @@ const updateItemProgress = asyncHandler(async (req, res) => {
         ]
       });
       if (fullItem && fullItem.HotelProgress) {
-        const buf = await buildHotelInfoPdfBuffer(fullItem);
-        const inv = fullItem.Order?.id ? await Invoice.findOne({ where: { order_id: fullItem.Order.id }, attributes: ['invoice_number'] }) : null;
+        const inv = fullItem.Order?.id ? await Invoice.findOne({ where: { order_id: fullItem.Order.id }, attributes: ['invoice_number', 'pic_name'] }) : null;
         const invoiceNumber = inv ? inv.invoice_number : 'INV';
+        const buf = await buildHotelInfoPdfBuffer(fullItem, {
+          invoice: { invoice_number: invoiceNumber, pic_name: inv?.pic_name }
+        });
         const fileName = uploadConfig.hotelDocFilename(invoiceNumber, fullItem.id);
         const dir = uploadConfig.getDir(uploadConfig.SUBDIRS.HOTEL_DOCS);
         const filePath = path.join(dir, fileName);
@@ -566,7 +568,7 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   const branchIds = await getHotelBranchIds(req.user);
   if (branchIds.length === 0) return res.status(403).json({ success: false, message: 'Tidak ada cabang aktif.' });
 
-  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id', 'invoice_number'] });
+  const invoice = await Invoice.findByPk(invoiceId, { attributes: ['id', 'order_id', 'branch_id', 'invoice_number', 'pic_name'] });
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   if (!branchIds.includes(invoice.branch_id)) return res.status(403).json({ success: false, message: 'Bukan invoice cabang/wilayah Anda' });
 
@@ -580,7 +582,9 @@ const getOrderItemSlip = asyncHandler(async (req, res) => {
   });
   if (!item) return res.status(404).json({ success: false, message: 'Item hotel tidak ditemukan' });
 
-  const buf = await buildHotelInfoPdfBuffer(item, { invoice: { invoice_number: invoice.invoice_number } });
+  const buf = await buildHotelInfoPdfBuffer(item, {
+    invoice: { invoice_number: invoice.invoice_number, pic_name: invoice.pic_name }
+  });
   const invNum = (invoice.invoice_number || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
   const filename = `Slip_Hotel_${invNum}_${String(orderItemId).slice(-6)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');

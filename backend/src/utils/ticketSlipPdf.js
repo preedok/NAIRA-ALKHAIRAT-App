@@ -33,6 +33,10 @@ async function buildTicketSlipPdfBuffer(item, opts = {}) {
   const issuedAt = prog.issued_at ? formatDateTime(prog.issued_at) : '–';
   const notes = (prog.notes || '').trim() || '–';
   const ownerName = (Order.User && (Order.User.name || Order.User.company_name)) || (inv.User && (inv.User.name || inv.User.company_name)) || '–';
+  const picName =
+    (inv.pic_name != null && String(inv.pic_name).trim()) ||
+    (Order.pic_name != null && String(Order.pic_name).trim()) ||
+    '';
   const hasDoc = !!(prog.ticket_file_url && prog.ticket_file_url.trim());
   const tripType = meta.trip_type || meta.tripType || '–';
 
@@ -60,6 +64,7 @@ async function buildTicketSlipPdfBuffer(item, opts = {}) {
       ['No. Invoice', invoiceNumber],
       ['Produk / Paket Tiket', productName],
       ['Pemesan (Owner)', ownerName],
+      ['Nama PIC', picName || '–'],
       ['Jumlah', String(quantity)],
       ['Tipe Perjalanan', String(tripType)],
       ['Status Progress', status],

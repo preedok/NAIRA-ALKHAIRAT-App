@@ -903,6 +903,7 @@ const listDraftOrders = asyncHandler(async (req, res) => {
       total_amount: total,
       paid_amount: 0,
       remaining_amount: total,
+      pic_name: plain.pic_name || null,
       Order: { ...plain, OrderItems: orderItems },
       User: plain.User,
       Branch: plain.Branch,
@@ -1068,7 +1069,7 @@ const getSummary = asyncHandler(async (req, res) => {
  * Create invoice from order. Status tentative; jatuh tempo DP & auto_cancel = order.created_at + dp_grace_hours.
  */
 const create = asyncHandler(async (req, res) => {
-  const { order_id, is_super_promo, dp_percentage: bodyDpPct, dp_amount: bodyDpAmount } = req.body;
+  const { order_id, is_super_promo, dp_percentage: bodyDpPct, dp_amount: bodyDpAmount, pic_name: bodyPicName } = req.body;
   const order = await Order.findByPk(order_id, { include: ['OrderItems'] });
   if (!order) return res.status(404).json({ success: false, message: 'Trip tidak ditemukan' });
   if (order.owner_id !== req.user.id && !['invoice_koordinator', 'invoice_saudi', 'super_admin'].includes(req.user.role)) {
@@ -1077,6 +1078,16 @@ const create = asyncHandler(async (req, res) => {
 
   const existing = await Invoice.findOne({ where: { order_id } });
   if (existing) return res.status(400).json({ success: false, message: 'Trip ini sudah memiliki invoice' });
+
+  const picFromBody = typeof bodyPicName === 'string' ? bodyPicName.trim() : '';
+  const picFromOrder = order.pic_name != null ? String(order.pic_name).trim() : '';
+  const picName = picFromBody || picFromOrder;
+  if (!picName) {
+    return res.status(400).json({ success: false, message: 'Nama PIC wajib diisi' });
+  }
+  if (picName !== picFromOrder) {
+    await order.update({ pic_name: picName });
+  }
 
   const rules = await getRulesForBranch(order.branch_id);
   const dpGraceHours = rules.dp_grace_hours ?? 24;
@@ -1103,6 +1114,7 @@ const create = asyncHandler(async (req, res) => {
     owner_phone_manual: order.owner_phone_manual || null,
     owner_input_mode: order.owner_input_mode || (order.owner_id ? 'registered' : 'manual'),
     branch_id: order.branch_id,
+    pic_name: picName,
     total_amount: totalAmount,
     total_amount_idr: totalAmount,
     total_amount_sar: totalAmount / sarToIdr,
@@ -1159,6 +1171,17 @@ async function createInvoiceForOrder(order, opts = {}) {
   const orderId = order.id;
   const existing = await Invoice.findOne({ where: { order_id: orderId } });
   if (existing) return existing;
+  let picName = (opts.pic_name != null && String(opts.pic_name).trim()) || '';
+  if (!picName && order.pic_name != null) picName = String(order.pic_name).trim();
+  if (!picName) {
+    const ordRow = await Order.findByPk(orderId, { attributes: ['pic_name'] });
+    if (ordRow?.pic_name) picName = String(ordRow.pic_name).trim();
+  }
+  if (!picName) {
+    const err = new Error('Nama PIC wajib diisi di form invoice sebelum invoice dapat diterbitkan.');
+    err.statusCode = 400;
+    throw err;
+  }
   let rules = {};
   try {
     rules = await getRulesForBranch(order.branch_id) || {};
@@ -1193,6 +1216,7 @@ async function createInvoiceForOrder(order, opts = {}) {
     owner_phone_manual: order.owner_phone_manual || null,
     owner_input_mode: order.owner_input_mode || (order.owner_id ? 'registered' : 'manual'),
     branch_id: order.branch_id,
+    pic_name: picName,
     total_amount: totalAmount,
     total_amount_idr: totalAmount,
     total_amount_sar: totalAmount / sarToIdr,
@@ -1980,6 +2004,11 @@ async function syncInvoiceFromOrder(order, opts = {}) {
   } else {
     newStatus = INVOICE_STATUS.TENTATIVE;
   }
+  const ordForPic = await Order.findByPk(order.id, { attributes: ['pic_name'] });
+  const picPatch = {};
+  if (ordForPic?.pic_name && String(ordForPic.pic_name).trim()) {
+    picPatch.pic_name = String(ordForPic.pic_name).trim();
+  }
   await updateInvoiceWithAudit(invoice, {
     total_amount: newTotal,
     total_amount_idr: totalAmountIdr,
@@ -1988,6 +2017,7 @@ async function syncInvoiceFromOrder(order, opts = {}) {
     remaining_amount: remainingAmount,
     overpaid_amount: overpaidAmount,
     status: newStatus,
+    ...picPatch,
     ...(opts.order_updated_at ? { order_updated_at: opts.order_updated_at } : {}),
     ...(opts.last_order_revision_id ? { last_order_revision_id: opts.last_order_revision_id } : {})
   }, {

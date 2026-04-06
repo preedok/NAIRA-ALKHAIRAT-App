@@ -460,7 +460,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   const col2StartX = margin + Math.floor(pageWidth * 0.5);
   const valW1 = col2StartX - margin - 90;
   const valW2 = pageWidth - (col2StartX - margin) - 20;
-  const boxH = 80;
+  const boxH = 94;
   doc.rect(margin, y, pageWidth, boxH).fillAndStroke('#f8fafc', '#e2e8f0');
   doc.moveTo(col2StartX, y).lineTo(col2StartX, y + boxH).stroke('#cbd5e1');
   y += 10;
@@ -490,6 +490,16 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.text(String(data.User?.email || '-'), margin + 92, y, { width: valW1 });
   doc.text('Kode Cabang', col2StartX + 12, y);
   doc.text(String(data.Branch?.code || '-'), col2StartX + 92, y, { width: valW2 - 82 });
+  y += 14;
+  const picForPdf = (() => {
+    const fromInv = data.pic_name != null && String(data.pic_name).trim();
+    if (fromInv) return fromInv;
+    const fromOrd = data.Order?.pic_name != null && String(data.Order.pic_name).trim();
+    return fromOrd || '-';
+  })();
+  doc.fontSize(8).fillColor('#64748b').text('PIC Invoice', margin + 12, y);
+  doc.fontSize(9).fillColor('#334155').text(String(picForPdf), margin + 92, y, { width: valW1 });
+  doc.text('', col2StartX + 12, y);
   y += 22;
 
   // ---- Tabel Item: No | Tipe | Deskripsi | Qty | Harga Satuan | Subtotal ----

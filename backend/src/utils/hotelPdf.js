@@ -42,6 +42,10 @@ async function buildHotelInfoPdfBuffer(item, opts = {}) {
   const checkOutTime = (prog.check_out_time || '12:00').toString().trim();
   const notes = (prog.notes || '').trim() || '–';
   const ownerName = Order.User ? (Order.User.name || Order.User.company_name) : '–';
+  const picName =
+    (inv.pic_name != null && String(inv.pic_name).trim()) ||
+    (Order.pic_name != null && String(Order.pic_name).trim()) ||
+    '';
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 48, size: 'A4' });
@@ -67,6 +71,7 @@ async function buildHotelInfoPdfBuffer(item, opts = {}) {
       ['No. Invoice', invoiceNumber],
       ['Produk / Paket Hotel', productName],
       ['Pemesan (Owner)', ownerName],
+      ['Nama PIC', picName || '–'],
       ['Tipe Kamar', roomType],
       ['Jumlah Kamar', String(quantity)],
       ['Malam', nights ? `${nights} malam` : '–'],

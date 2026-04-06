@@ -829,7 +829,7 @@ async function assertPackageIsInValidityWindow(productId, referenceDate) {
  * items format: [{ type, product_id, quantity, unit_price, currency?, meta?, check_in?, check_out?, room_type?, meal? }]
  * @returns {Promise<{ order: import('../models').Order, invoice: import('../models').Invoice|null }>}
  */
-async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items, createdByUserId, waive_bus_penalty, bus_service_option }) {
+async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items, createdByUserId, waive_bus_penalty, bus_service_option, pic_name: aiPicName }) {
   const finalBranchId = branchId && String(branchId).trim().length >= 10 ? String(branchId).trim() : null;
   if (!finalBranchId || !ownerId) {
     const err = new Error('Branch dan owner wajib.');
@@ -1028,10 +1028,12 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     ratesPayload = { currency_rates_override: crForPayload };
   }
 
+  const picResolved = (aiPicName != null && String(aiPicName).trim()) ? String(aiPicName).trim() : 'Owner (AI)';
   const order = await Order.create({
     order_number: generateOrderNumber(),
     owner_id: ownerId,
     branch_id: finalBranchId,
+    pic_name: picResolved,
     total_jamaah: totalJamaah,
     subtotal,
     penalty_amount: penaltyAmount,
@@ -1074,11 +1076,11 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
   }
 
   const orderForInvoice = await Order.findByPk(order.id, {
-    attributes: ['id', 'order_number', 'owner_id', 'branch_id', 'total_amount', 'currency_rates_override']
+    attributes: ['id', 'order_number', 'owner_id', 'branch_id', 'total_amount', 'owner_name_manual', 'owner_phone_manual', 'owner_input_mode', 'pic_name', 'currency_rates_override']
   });
   let invoice = null;
   try {
-    invoice = await createInvoiceForOrder(orderForInvoice, {});
+    invoice = await createInvoiceForOrder(orderForInvoice, { pic_name: picResolved });
   } catch (invErr) {
     console.error('Auto-create invoice after order create (AI flow) failed:', invErr);
   }
@@ -1092,13 +1094,17 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
  * Validasi: visa wajib hotel dari product.meta.require_hotel; bus min pack penalty from business rules.
  */
 const create = asyncHandler(async (req, res) => {
-  const { items, branch_id, owner_id, owner_name_manual, owner_phone_manual, owner_input_mode, notes, currency_rates_override, waive_bus_penalty } = req.body;
+  const { items, branch_id, owner_id, owner_name_manual, owner_phone_manual, owner_input_mode, notes, currency_rates_override, waive_bus_penalty, pic_name } = req.body;
   const isOwnerUser = isOwnerRole(req.user.role);
   const isInvoiceRole = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role);
   const ownerIdStr = typeof owner_id === 'string' && owner_id.trim() !== '' ? owner_id.trim() : null;
   const ownerInputMode = (owner_input_mode === 'manual' || owner_input_mode === 'registered') ? owner_input_mode : 'registered';
   const manualOwnerName = typeof owner_name_manual === 'string' ? owner_name_manual.trim() : '';
   const manualOwnerPhone = typeof owner_phone_manual === 'string' ? owner_phone_manual.trim() : '';
+  const picNameTrim = typeof pic_name === 'string' ? pic_name.trim() : '';
+  if (!picNameTrim) {
+    return res.status(400).json({ success: false, message: 'Nama PIC wajib diisi' });
+  }
   const effectiveOwnerId = isOwnerUser ? req.user.id : ownerIdStr;
   // Gunakan branch_id dari body hanya jika benar-benar string non-kosong (body tanpa branch_id = undefined)
   const bodyBranchOk = typeof branch_id === 'string' && branch_id.trim() !== '';
@@ -1403,6 +1409,7 @@ const create = asyncHandler(async (req, res) => {
       owner_phone_manual: !effectiveOwnerId ? (manualOwnerPhone || null) : null,
       owner_input_mode: effectiveOwnerId ? 'registered' : 'manual',
       branch_id: finalBranchId,
+      pic_name: picNameTrim,
       total_jamaah: totalJamaah,
       subtotal,
       penalty_amount: penaltyAmount,
@@ -1466,11 +1473,11 @@ const create = asyncHandler(async (req, res) => {
   const saveAsDraft = req.body.save_as_draft === true || req.body.save_as_draft === 'true';
   if (!saveAsDraft) {
     const orderForInvoice = await Order.findByPk(order.id, {
-      attributes: ['id', 'order_number', 'owner_id', 'branch_id', 'total_amount']
+      attributes: ['id', 'order_number', 'owner_id', 'branch_id', 'total_amount', 'owner_name_manual', 'owner_phone_manual', 'owner_input_mode', 'pic_name', 'currency_rates_override']
     });
     if (orderForInvoice) {
       try {
-        const opts = {};
+        const opts = { pic_name: picNameTrim };
         if (req.body.dp_percentage != null) opts.dp_percentage = req.body.dp_percentage;
         if (req.body.dp_amount != null) opts.dp_amount = req.body.dp_amount;
         const inv = await createInvoiceForOrder(orderForInvoice, opts);
@@ -1478,6 +1485,9 @@ const create = asyncHandler(async (req, res) => {
           console.log('Auto-created invoice', inv.invoice_number, 'for order', order.order_number);
         }
       } catch (invErr) {
+        if (invErr && invErr.statusCode === 400) {
+          return res.status(400).json({ success: false, message: invErr.message || 'Gagal membuat invoice' });
+        }
         console.error('Auto-create invoice after order create failed:', invErr);
       }
     }
@@ -1534,7 +1544,7 @@ const update = asyncHandler(async (req, res) => {
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa diubah saat draft/tentative/confirmed/processing' });
   }
-  const { items, notes, currency_rates_override, waive_bus_penalty, bus_service_option } = req.body;
+  const { items, notes, currency_rates_override, waive_bus_penalty, bus_service_option, pic_name: patchPicName } = req.body;
   const canSetRates = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
   const hasDpPayment = order.dp_payment_status === DP_PAYMENT_STATUS.PEMBAYARAN_DP;
   if (canSetRates && !hasDpPayment) {
@@ -1839,6 +1849,15 @@ const update = asyncHandler(async (req, res) => {
     });
   }
   if (notes !== undefined) await order.update({ notes });
+  if (patchPicName !== undefined) {
+    const p = typeof patchPicName === 'string' ? patchPicName.trim() : '';
+    if (!p) {
+      return res.status(400).json({ success: false, message: 'Nama PIC wajib diisi' });
+    }
+    await order.update({ pic_name: p });
+    const invPic = await Invoice.findOne({ where: { order_id: order.id } });
+    if (invPic) await invPic.update({ pic_name: p });
+  }
   const full = await Order.findByPk(req.params.id, {
     include: [{ model: OrderItem, as: 'OrderItems', include: [{ model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type'], required: false }] }]
   });

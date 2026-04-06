@@ -87,7 +87,7 @@ const getDashboard = asyncHandler(async (req, res) => {
 
   const invoices = await Invoice.findAll({
     where: { order_id: orderIdsFromVisa, branch_id: { [Op.in]: branchIds } },
-    attributes: ['id', 'invoice_number', 'order_id'],
+    attributes: ['id', 'invoice_number', 'order_id', 'pic_name'],
     raw: true
   });
   const orderIds = [...new Set(invoices.map(i => i.order_id))];
@@ -124,6 +124,7 @@ const getDashboard = asyncHandler(async (req, res) => {
           order_id: o.id,
           order_item_id: item.id,
           owner_name: o.User?.name,
+          pic_name: inv?.pic_name || o.pic_name || null,
           product_ref_id: item.product_ref_id,
           quantity: item.quantity,
           meta: item.meta,

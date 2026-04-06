@@ -39,6 +39,11 @@ const Invoice = sequelize.define('Invoice', {
     allowNull: false,
     defaultValue: 'registered'
   },
+  /** Nama PIC (penanggung jawab) invoice — wajib saat pembuatan dari UI */
+  pic_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
   branch_id: {
     type: DataTypes.UUID,
     allowNull: false,

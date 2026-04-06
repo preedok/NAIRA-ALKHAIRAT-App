@@ -111,7 +111,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   const orders = await Order.findAll({
     where: { id: orderIdsFromBus, branch_id: { [Op.in]: branchIds }, dp_payment_status: DP_PAYMENT_STATUS.PEMBAYARAN_DP },
     include: [
-      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number'], required: false },
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'pic_name'], required: false },
       { model: User, as: 'User', attributes: ['id', 'name'] },
       {
         model: OrderItem,
@@ -153,6 +153,7 @@ const getDashboard = asyncHandler(async (req, res) => {
           invoice_number: inv?.invoice_number || null,
           order_item_id: item.id,
           owner_name: o.User?.name,
+          pic_name: inv?.pic_name || o.pic_name || null,
           quantity: item.quantity,
           bus_ticket_status: ticketStatus,
           arrival_status: arr,

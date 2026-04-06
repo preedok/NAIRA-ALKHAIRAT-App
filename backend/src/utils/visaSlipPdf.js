@@ -31,6 +31,10 @@ async function buildVisaSlipPdfBuffer(item, opts = {}) {
   const issuedAt = prog.issued_at ? formatDateTime(prog.issued_at) : '–';
   const notes = (prog.notes || '').trim() || '–';
   const ownerName = (Order.User && (Order.User.name || Order.User.company_name)) || (inv.User && (inv.User.name || inv.User.company_name)) || '–';
+  const picName =
+    (inv.pic_name != null && String(inv.pic_name).trim()) ||
+    (Order.pic_name != null && String(Order.pic_name).trim()) ||
+    '';
   const hasDoc = !!(prog.visa_file_url && prog.visa_file_url.trim() && prog.visa_file_url !== 'issued-saudi');
 
   return new Promise((resolve, reject) => {
@@ -57,6 +61,7 @@ async function buildVisaSlipPdfBuffer(item, opts = {}) {
       ['No. Invoice', invoiceNumber],
       ['Produk / Paket Visa', productName],
       ['Pemesan (Owner)', ownerName],
+      ['Nama PIC', picName || '–'],
       ['Jumlah', String(quantity)],
       ['Status Progress', status],
       ['Tanggal Terbit', issuedAt],

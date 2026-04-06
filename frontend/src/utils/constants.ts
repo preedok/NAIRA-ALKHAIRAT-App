@@ -150,6 +150,7 @@ export const PROGRESS_INVOICE_TABLE_COLUMNS = [
   { id: 'owner', label: 'Owner', align: 'left' as const },
   { id: 'owner_type', label: 'Tipe Owner', align: 'left' as const },
   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' as const },
+  { id: 'pic_name', label: 'PIC', align: 'left' as const },
   { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' as const },
   { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' as const },
   { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' as const },

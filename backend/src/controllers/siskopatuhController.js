@@ -90,11 +90,11 @@ const getDashboard = asyncHandler(async (req, res) => {
       {
         model: Order,
         as: 'Order',
-        attributes: ['id', 'owner_id'],
+        attributes: ['id', 'owner_id', 'pic_name'],
         where: Object.keys(orderWhere).length > 0 ? orderWhere : undefined,
         include: [
           { model: User, as: 'User', attributes: ['id', 'name'] },
-          { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status'], required: false }
+          { model: Invoice, as: 'Invoice', attributes: ['id', 'invoice_number', 'status', 'pic_name'], required: false }
         ],
         required: true
       },
@@ -125,6 +125,7 @@ const getDashboard = asyncHandler(async (req, res) => {
         invoice_number: inv?.invoice_number,
         order_item_id: item.id,
         owner_name: item.Order?.User?.name,
+        pic_name: inv?.pic_name || item.Order?.pic_name || null,
         product_name: item.Product?.name || 'Siskopatuh',
         quantity: item.quantity,
         status: norm

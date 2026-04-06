@@ -314,6 +314,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [paySenderAccountNumber, setPaySenderAccountNumber] = useState<string>('');
   const [draftOrders, setDraftOrders] = useState<any[]>([]);
   const [publishingDraftOrderId, setPublishingDraftOrderId] = useState<string | null>(null);
+  const [publishDraftModalInv, setPublishDraftModalInv] = useState<any | null>(null);
+  const [publishDraftPicName, setPublishDraftPicName] = useState('');
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
   const [uploadDocTab, setUploadDocTab] = useState<'hotel' | 'visa' | 'ticket' | 'siskopatuh'>('hotel');
   const [uploadDocLoading, setUploadDocLoading] = useState(false);
@@ -572,12 +574,26 @@ const OrdersInvoicesPage: React.FC = () => {
     };
   }, [viewInvoice?.owner_id, canUseInvoiceOwnerBalance]);
 
-  const handleTerbitkanDraft = async (inv: any) => {
+  const handleTerbitkanDraft = (inv: any) => {
     if (!inv?.order_id || !isDraftRow(inv)) return;
+    const pref = String(inv.pic_name || inv.Order?.pic_name || '').trim();
+    setPublishDraftPicName(pref);
+    setPublishDraftModalInv(inv);
+  };
+
+  const submitPublishDraft = async () => {
+    const inv = publishDraftModalInv;
+    if (!inv?.order_id) return;
+    const pic = publishDraftPicName.trim();
+    if (!pic) {
+      showToast('Nama PIC wajib diisi.', 'error');
+      return;
+    }
     setPublishingDraftOrderId(inv.order_id);
     try {
-      await invoicesApi.create({ order_id: inv.order_id });
+      await invoicesApi.create({ order_id: inv.order_id, pic_name: pic });
       showToast('Invoice diterbitkan. Pembayaran dapat dilakukan sekarang.', 'success');
+      setPublishDraftModalInv(null);
       fetchInvoices();
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal menerbitkan invoice', 'error');
@@ -1496,6 +1512,7 @@ const OrdersInvoicesPage: React.FC = () => {
     { id: 'owner', label: 'Owner', align: 'left' },
     { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
     { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
+    { id: 'pic_name', label: 'PIC', align: 'left' },
     { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
     { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
     { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' },
@@ -1710,6 +1727,7 @@ const OrdersInvoicesPage: React.FC = () => {
               { id: 'owner', label: 'Owner', align: 'left' },
               { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
               { id: 'company', label: 'Perusahaan', align: 'left' },
+              { id: 'pic', label: 'PIC', align: 'left' },
               { id: 'total', label: 'Total', align: 'right' },
               { id: 'paid', label: 'Dibayar', align: 'right' },
               { id: 'remaining', label: 'Sisa', align: 'right' }
@@ -1747,6 +1765,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</td>
                               <td className="py-2 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></td>
                               <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
+                              <td className="py-2 px-4 text-slate-700 text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
                               <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
@@ -1769,6 +1788,7 @@ const OrdersInvoicesPage: React.FC = () => {
               { id: 'owner', label: 'Owner', align: 'left' },
               { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
               { id: 'company', label: 'Perusahaan', align: 'left' },
+              { id: 'pic', label: 'PIC', align: 'left' },
               { id: 'total', label: 'Total', align: 'right' },
               { id: 'paid', label: 'Dibayar', align: 'right' },
               { id: 'remaining', label: 'Sisa', align: 'right' }
@@ -1800,6 +1820,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</td>
                               <td className="py-2 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></td>
                               <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
+                              <td className="py-2 px-4 text-slate-700 text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
                               <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
@@ -1928,6 +1949,7 @@ const OrdersInvoicesPage: React.FC = () => {
                       <div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div>
                       <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
                     </td>
+                    <td className="py-3 px-4 text-slate-700 align-top text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
                       {(() => { const t = invoiceTotalTriple(inv); return <><div><NominalDisplay amount={t.idr} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>; })()}
                       {inv.Order?.currency_rates_override && (inv.Order.currency_rates_override.SAR_TO_IDR != null || inv.Order.currency_rates_override.USD_TO_IDR != null) && (
@@ -1996,6 +2018,36 @@ const OrdersInvoicesPage: React.FC = () => {
           )}
         </div>
       </Card>
+
+      {publishDraftModalInv && (
+        <Modal open onClose={() => !publishingDraftOrderId && setPublishDraftModalInv(null)} zIndex={55}>
+          <ModalBox className="max-w-md w-full">
+            <ModalHeader
+              title="Terbitkan invoice"
+              subtitle={publishDraftModalInv.invoice_number || publishDraftModalInv.Order?.invoice_number || 'Draft — isi nama PIC'}
+              onClose={() => !publishingDraftOrderId && setPublishDraftModalInv(null)}
+            />
+            <ModalBody className="space-y-4">
+              <Input
+                label="Nama PIC *"
+                type="text"
+                value={publishDraftPicName}
+                onChange={(e) => setPublishDraftPicName(e.target.value)}
+                placeholder="Nama penanggung jawab invoice"
+              />
+              <p className="text-xs text-slate-500">Nama PIC wajib sama dengan yang digunakan untuk invoice ini.</p>
+            </ModalBody>
+            <ModalFooter className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={!!publishingDraftOrderId} onClick={() => setPublishDraftModalInv(null)}>
+                Batal
+              </Button>
+              <Button type="button" variant="primary" disabled={!!publishingDraftOrderId} onClick={() => void submitPublishDraft()}>
+                Terbitkan
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
+      )}
 
       {/* Modal Upload Dokumen – Tabs: Hotel / Visa / Tiket / Siskopatuh */}
       {uploadDocInvoice && (
@@ -2509,6 +2561,7 @@ const OrdersInvoicesPage: React.FC = () => {
                             <dl className="space-y-4">
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.User?.name || viewInvoice.User?.company_name || viewInvoice.owner_name_manual || viewInvoice.Order?.owner_name_manual || '-'}</dd></div>
                               <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipe Owner</dt><dd className="mt-1"><span className={`inline-flex items-center px-2 py-0.5 rounded font-medium text-sm ${viewInvoice.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{viewInvoice.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Nama PIC</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.pic_name || viewInvoice.Order?.pic_name || '–'}</dd></div>
                               <div className="pt-2 border-t border-slate-100">
                                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lokasi</p>
                                 <div className="space-y-2">
