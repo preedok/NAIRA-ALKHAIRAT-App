@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const uploadConfig = require('../config/uploads');
+const { isNabielaAccountRow } = require('./invoiceBankAccounts');
 
 /** Path logo dari assets */
 function getLogoPath() {
@@ -97,6 +98,53 @@ function hotelLocationInvoiceHeading(it) {
 }
 
 const tripTypeLabel = (tt) => ({ one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' }[String(tt || '')] || tt || '');
+
+/** Kode / catatan tambahan dari data rekening (rules JSON bisa punya description, notes). */
+function extraBankMetaParts(row) {
+  if (!row || typeof row !== 'object') return [];
+  const parts = [];
+  if (row.code != null && String(row.code).trim()) parts.push(`Kode: ${String(row.code).trim()}`);
+  if (row.description != null && String(row.description).trim()) parts.push(String(row.description).trim());
+  if (row.notes != null && String(row.notes).trim()) parts.push(String(row.notes).trim());
+  return parts;
+}
+
+function formatBankRowDetailLine(row) {
+  const bank = (row.bank_name || '').trim();
+  const num = (row.account_number || '').trim();
+  const holder = (row.name || '').trim() || '—';
+  const cur = (row.currency || 'IDR').trim();
+  const meta = extraBankMetaParts(row);
+  let line = `${bank}, No. rekening ${num}, a.n. ${holder} (${cur})`;
+  if (meta.length) line += ` — ${meta.join('; ')}`;
+  return line;
+}
+
+/** Bullet tambahan untuk "Ketentuan & Catatan" berdasarkan data.bank_accounts (sudah difilter server). */
+function buildBankPaymentTermsLines(data) {
+  const rows = data.bank_accounts;
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const nabiela = rows.filter((r) => isNabielaAccountRow(r));
+  const others = rows.filter((r) => !isNabielaAccountRow(r));
+  const lines = [];
+  if (nabiela.length > 0) {
+    const r = nabiela[0];
+    lines.push(`• Siskopatuh: ${formatBankRowDetailLine(r)}.`);
+  }
+  if (others.length > 0) {
+    if (nabiela.length > 0) {
+      lines.push(
+        '• Selain Siskopatuh (visa, hotel, tiket, bus, handling, paket, dll.): transfer ke salah satu rekening berikut.'
+      );
+    } else {
+      lines.push('• Rekening tujuan pembayaran invoice ini:');
+    }
+    others.forEach((r) => {
+      lines.push(`  • ${formatBankRowDetailLine(r)}`);
+    });
+  }
+  return lines;
+}
 const busRouteLabel = (r) => ({ full_route: 'Full rute (Mekkah–Madinah)', bandara_makkah: 'Bandara–Mekkah', bandara_madinah: 'Bandara–Madinah', bandara_madinah_only: 'Bandara–Madinah saja', hotel_makkah_madinah: 'Hotel Mekkah–Madinah', hotel_madinah_makkah: 'Hotel Madinah–Mekkah' }[String(r || '')] || r || '');
 const busTypeLabel = (b) => ({ besar: 'Bus besar', menengah_hiace: 'Hiace', kecil: 'Mobil kecil' }[String(b || '')] || b || '');
 
@@ -1023,14 +1071,16 @@ function renderInvoicePdf(doc, data, logoBuffer) {
 
   // ---- Terms & Catatan (wrap teks agar tidak terpotong) ----
   const terms = Array.isArray(data.terms) ? data.terms : (data.terms ? [data.terms] : []);
-  if (terms.length > 0 || (data.notes && String(data.notes).trim())) {
+  const bankTerms = buildBankPaymentTermsLines(data);
+  const allTerms = [...terms, ...bankTerms];
+  if (allTerms.length > 0 || (data.notes && String(data.notes).trim())) {
     y = checkNewPage(doc, y, margin, 80);
     doc.fontSize(11).fillColor('#0f172a').font('Helvetica-Bold').text('Ketentuan & Catatan', margin, y);
     y += 20;
     doc.fontSize(9).fillColor('#64748b').font('Helvetica');
     const termsWidth = pageWidth - 24;
-    terms.forEach((t) => {
-      const line = `• ${String(t)}`;
+    allTerms.forEach((t) => {
+      const line = String(t).startsWith('•') || String(t).startsWith('  •') ? String(t) : `• ${String(t)}`;
       const h = doc.heightOfString(line, { width: termsWidth });
       doc.text(line, margin + 8, y, { width: termsWidth });
       y += h + 4;

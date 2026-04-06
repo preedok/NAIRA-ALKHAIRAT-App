@@ -21,21 +21,22 @@ import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant }
 import { PROGRESS_STATUS_OPTIONS_BUS } from '../../../components/common/InvoiceProgressStatusCell';
 import { DivisionStatCardsWithModal, type DivisionStatItem, ProgressInvoiceTableRow } from '../../../components/common';
 import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
+import { labelBusIncludeLeg, labelBusTripProgress } from '../../../utils/progressStatusUnified';
 
 /** Satu sumber kebenaran dengan tabel Invoice (InvoiceProgressStatusCell) */
 const TICKET_OPTIONS = PROGRESS_STATUS_OPTIONS_BUS;
 
 const TRIP_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'scheduled', label: 'Terjadwal' },
-  { value: 'completed', label: 'Selesai' }
+  { value: 'pending', label: labelBusTripProgress('pending') },
+  { value: 'scheduled', label: labelBusTripProgress('scheduled') },
+  { value: 'completed', label: labelBusTripProgress('completed') }
 ];
 
-/** Status Kedatangan / Kepulangan bus include: pending, di proses, terbit */
+/** Status Kedatangan / Kepulangan bus include: pending, di proses, terbit — label seragam */
 const BUS_INCLUDE_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'di_proses', label: 'Di proses' },
-  { value: 'terbit', label: 'Terbit' }
+  { value: 'pending', label: labelBusIncludeLeg('pending') },
+  { value: 'di_proses', label: labelBusIncludeLeg('di_proses') },
+  { value: 'terbit', label: labelBusIncludeLeg('terbit') }
 ];
 
 const INVOICE_STATUS_FILTER_OPTIONS = [

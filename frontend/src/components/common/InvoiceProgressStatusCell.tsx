@@ -1,49 +1,32 @@
 /**
  * Status progress per divisi (Visa, Tiket, Hotel, Bus) — satu sumber kebenaran.
  * Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Siskopatuh → Paket.
+ * Label tampilan diseragamkan (Menunggu / Dokumen diterima / Dalam proses / Selesai) di progressStatusUnified.
  */
 import React from 'react';
 import { getHotelLocationFromItem } from '../../utils/constants';
+import {
+  PROGRESS_LABELS_BUS,
+  PROGRESS_LABELS_HANDLING_SISKOPATUH,
+  PROGRESS_LABELS_HOTEL,
+  PROGRESS_LABELS_MEAL,
+  PROGRESS_LABELS_TICKET,
+  PROGRESS_LABELS_VISA,
+  UNIFIED_PROGRESS,
+  isUnifiedSelesai,
+  labelBusIncludeCombined,
+  labelBusIncludeLeg,
+  labelBusItemProgress,
+  labelHotelGroupProgress
+} from '../../utils/progressStatusUnified';
 
-/** Label status Visa (menu Progress Visa) */
-export const PROGRESS_LABELS_VISA: Record<string, string> = {
-  pending: 'Menunggu konfirmasi',
-  document_received: 'Dokumen diterima',
-  submitted: 'Dikirim',
-  in_process: 'Diproses',
-  approved: 'Disetujui',
-  issued: 'Terbit'
-};
-
-/** Label status Tiket (menu Progress Tiket) */
-export const PROGRESS_LABELS_TICKET: Record<string, string> = {
-  pending: 'Menunggu konfirmasi',
-  data_received: 'Data diterima',
-  seat_reserved: 'Kursi reserved',
-  booking: 'Booking',
-  payment_airline: 'Bayar maskapai',
-  ticket_issued: 'Tiket terbit'
-};
-
-/** Label status Hotel (menu Progress Hotel) */
-export const PROGRESS_LABELS_HOTEL: Record<string, string> = {
-  waiting_confirmation: 'Menunggu konfirmasi',
-  confirmed: 'Penetapan room',
-  room_assigned: 'Pemberian nomor room',
-  completed: 'Selesai'
-};
-
-/** Label status makan (Hotel) */
-export const PROGRESS_LABELS_MEAL: Record<string, string> = {
-  pending: 'Menunggu konfirmasi',
-  confirmed: 'Dikonfirmasi',
-  completed: 'Selesai'
-};
-
-/** Label status Tiket Bus (menu Progress Bus) */
-export const PROGRESS_LABELS_BUS: Record<string, string> = {
-  pending: 'Menunggu konfirmasi',
-  issued: 'Terbit'
+export {
+  PROGRESS_LABELS_VISA,
+  PROGRESS_LABELS_TICKET,
+  PROGRESS_LABELS_HOTEL,
+  PROGRESS_LABELS_MEAL,
+  PROGRESS_LABELS_BUS,
+  PROGRESS_LABELS_HANDLING_SISKOPATUH
 };
 
 /** Untuk detail tab & badge: gabungan per tipe */
@@ -79,12 +62,6 @@ const BUS_TRIP_LABELS: Record<string, string> = {
   round_trip: 'Pulang pergi'
 };
 
-const BUS_INCLUDE_STATUS_LABELS: Record<string, string> = {
-  pending: 'Menunggu konfirmasi',
-  di_proses: 'Di proses',
-  terbit: 'Terbit'
-};
-
 const defaultFormatDate = (d: string | null | undefined) => {
   if (!d) return '–';
   try {
@@ -101,13 +78,7 @@ const defaultFormatDateWithTime = (d: string | null | undefined, time: string | 
   return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
 };
 
-/** handling_status & siskopatuh_status di meta OrderItem — satu sumber dengan menu Progress Handling/Siskopatuh */
-export const PROGRESS_LABELS_HANDLING_SISKOPATUH: Record<string, string> = {
-  pending: 'Menunggu konfirmasi',
-  in_progress: 'Dalam Proses',
-  completed: 'Selesai'
-};
-
+/** handling_status & siskopatuh_status di meta OrderItem — label seragam di progressStatusUnified */
 export const PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH = Object.entries(PROGRESS_LABELS_HANDLING_SISKOPATUH).map(([value, label]) => ({
   value,
   label
@@ -176,7 +147,7 @@ export function buildInvoiceProgressSectionModels(
   const hotelRowsForGroups = (hotelGroups: { key: string; name: string; items: any[] }[]): InvoiceProgressRowModel[] =>
     hotelGroups.map((group) => {
       const first = group.items[0];
-      const status = PROGRESS_LABELS_HOTEL[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
+      const status = labelHotelGroupProgress(group.items);
       const mealStatus = first?.HotelProgress?.meal_status;
       const mealLabel = mealStatus ? (PROGRESS_LABELS_MEAL[mealStatus] || mealStatus) : null;
       const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
@@ -197,7 +168,7 @@ export function buildInvoiceProgressSectionModels(
         serviceLabel: group.name,
         statusLabel: status,
         detailLines: tailLines,
-        statusEmphasis: status === 'Selesai',
+        statusEmphasis: isUnifiedSelesai(status),
         hotelRoomLine: roomJoined || undefined,
         hotelMealLine: mealLabel != null ? `Makan: ${mealLabel}` : null,
       };
@@ -229,7 +200,7 @@ export function buildInvoiceProgressSectionModels(
   if (visaItems.length > 0 && allow('visa')) {
     const rows = visaItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Visa';
-      const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu konfirmasi';
+      const statusLabel = PROGRESS_LABELS_VISA[item.VisaProgress?.status] || UNIFIED_PROGRESS.MENUNGGU;
       const depDate = formatDate(item.meta?.travel_date ?? null);
       const qty = Math.max(1, parseInt(String(item.quantity ?? 1), 10) || 1);
       const detailLines: string[] = [];
@@ -239,7 +210,7 @@ export function buildInvoiceProgressSectionModels(
         serviceLabel: name,
         statusLabel,
         detailLines,
-        statusEmphasis: statusLabel === 'Terbit',
+        statusEmphasis: isUnifiedSelesai(statusLabel),
         statusInlineSuffix: qty > 1 ? `· ${qty} org` : undefined,
       };
     });
@@ -249,7 +220,7 @@ export function buildInvoiceProgressSectionModels(
   if (ticketItems.length > 0 && allow('ticket')) {
     const rows = ticketItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Tiket';
-      const statusLabel = PROGRESS_LABELS_TICKET[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu konfirmasi';
+      const statusLabel = PROGRESS_LABELS_TICKET[item.TicketProgress?.status] || UNIFIED_PROGRESS.MENUNGGU;
       const tripType = String(item.meta?.trip_type || 'round_trip');
       const dep = formatDate(item.meta?.departure_date ?? null);
       const ret = formatDate(item.meta?.return_date ?? null);
@@ -261,7 +232,7 @@ export function buildInvoiceProgressSectionModels(
         serviceLabel: name,
         statusLabel,
         detailLines: dateLine ? [dateLine] : [],
-        statusEmphasis: statusLabel === 'Tiket terbit',
+        statusEmphasis: isUnifiedSelesai(statusLabel),
         statusInlineSuffix: qty > 1 ? `· ${qty} tiket` : undefined,
       };
     });
@@ -271,7 +242,7 @@ export function buildInvoiceProgressSectionModels(
   if (busItems.length > 0 && allow('bus')) {
     const rows = busItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Bus';
-      const statusLabel = PROGRESS_LABELS_BUS[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Menunggu konfirmasi';
+      const statusLabel = labelBusItemProgress(item);
       const travelDate = formatDate(item.meta?.travel_date ?? null);
       const routeType = item.meta?.route_type ? String(item.meta.route_type) : '';
       const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
@@ -285,7 +256,7 @@ export function buildInvoiceProgressSectionModels(
         serviceLabel: name,
         statusLabel,
         detailLines: metaLine ? [metaLine] : [],
-        statusEmphasis: statusLabel === 'Terbit',
+        statusEmphasis: isUnifiedSelesai(statusLabel),
       };
     });
     sections.push({ sortIndex: 4, title: 'Bus', rows });
@@ -295,8 +266,8 @@ export function buildInvoiceProgressSectionModels(
     const penalty = Number(order?.penalty_amount) || 0;
     const arrivalStatus = order?.bus_include_arrival_status || 'pending';
     const returnStatus = order?.bus_include_return_status || 'pending';
-    const arrivalLabel = BUS_INCLUDE_STATUS_LABELS[arrivalStatus] || arrivalStatus;
-    const returnLabel = BUS_INCLUDE_STATUS_LABELS[returnStatus] || returnStatus;
+    const arrivalLabel = labelBusIncludeLeg(arrivalStatus);
+    const returnLabel = labelBusIncludeLeg(returnStatus);
     const arrivalTerbit = arrivalStatus === 'terbit';
     const returnTerbit = returnStatus === 'terbit';
     const detailLines: string[] = [];
@@ -331,7 +302,7 @@ export function buildInvoiceProgressSectionModels(
         {
           key: 'bus-include',
           serviceLabel: waive ? 'Bus Hiace (tanpa penalti)' : 'Bus include (dengan visa)',
-          statusLabel: `${arrivalLabel} / ${returnLabel}`,
+          statusLabel: labelBusIncludeCombined(arrivalStatus, returnStatus),
           detailLines,
           statusEmphasis: arrivalStatus === 'terbit' && returnStatus === 'terbit',
           variant: 'bus-include',
@@ -351,7 +322,7 @@ export function buildInvoiceProgressSectionModels(
         serviceLabel: name,
         statusLabel: stLabel,
         detailLines: [],
-        statusEmphasis: st === 'completed',
+        statusEmphasis: isUnifiedSelesai(stLabel),
         statusInlineSuffix: `· Qty ${qty}`,
       };
     });
@@ -375,7 +346,7 @@ export function buildInvoiceProgressSectionModels(
         serviceLabel: name,
         statusLabel: stLabel,
         detailLines,
-        statusEmphasis: st === 'completed',
+        statusEmphasis: isUnifiedSelesai(stLabel),
         statusInlineSuffix: `· Qty ${qty}`,
       };
     });

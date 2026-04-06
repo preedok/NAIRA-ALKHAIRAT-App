@@ -32,6 +32,15 @@ import { INVOICE_STATUS_LABELS, INVOICE_TABLE_COLUMN_PROOF } from '../../../util
 import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { invoicesApi, businessRulesApi } from '../../../services/api';
 import type { InvoicesSummaryData } from '../../../services/api';
+import {
+  PROGRESS_LABELS_HOTEL,
+  PROGRESS_LABELS_MEAL,
+  PROGRESS_LABELS_TICKET,
+  PROGRESS_LABELS_VISA,
+  isUnifiedSelesai,
+  labelBusItemProgress,
+  labelHotelGroupProgress
+} from '../../../utils/progressStatusUnified';
 
 const formatDate = (d: string | null | undefined) => {
   if (!d) return '–';
@@ -335,11 +344,10 @@ const InvoiceDashboard: React.FC = () => {
             const remaining = getDisplayRemaining(inv);
             const t = amountTriple(remaining);
             const totalTriple = invoiceTotalTriple(inv);
-            const labelsVisa: Record<string, string> = { document_received: 'Dokumen diterima', submitted: 'Dikirim', in_process: 'Diproses', approved: 'Disetujui', issued: 'Terbit' };
-            const labelsTicket: Record<string, string> = { pending: 'Menunggu', data_received: 'Data diterima', seat_reserved: 'Kursi reserved', booking: 'Booking', payment_airline: 'Bayar maskapai', ticket_issued: 'Tiket terbit' };
-            const labelsHotel: Record<string, string> = { waiting_confirmation: 'Menunggu konfirmasi', confirmed: 'Penetapan room', room_assigned: 'Pemberian nomor room', completed: 'Selesai' };
-            const mealLabels: Record<string, string> = { pending: 'Menunggu', confirmed: 'Dikonfirmasi', completed: 'Selesai' };
-            const labelsBus: Record<string, string> = { pending: 'Pending', issued: 'Terbit' };
+            const labelsVisa = PROGRESS_LABELS_VISA;
+            const labelsTicket = PROGRESS_LABELS_TICKET;
+            const labelsHotel = PROGRESS_LABELS_HOTEL;
+            const mealLabels = PROGRESS_LABELS_MEAL;
             return (
               <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
                 <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
@@ -369,12 +377,12 @@ const InvoiceDashboard: React.FC = () => {
                       <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                         {visaItems.map((item: any, idx: number) => {
                           const name = item.Product?.name || item.product_name || 'Visa';
-                          const statusLabel = labelsVisa[item.VisaProgress?.status] || item.VisaProgress?.status || 'Menunggu';
+                          const statusLabel = labelsVisa[item.VisaProgress?.status] || labelsVisa.pending;
                           return (
                             <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                               <div className="flex flex-wrap items-baseline gap-1">
                                 <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                                <span className={isUnifiedSelesai(statusLabel) ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
                               </div>
                             </div>
                           );
@@ -391,12 +399,12 @@ const InvoiceDashboard: React.FC = () => {
                       <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                         {ticketItems.map((item: any, idx: number) => {
                           const name = item.Product?.name || item.product_name || 'Tiket';
-                          const statusLabel = labelsTicket[item.TicketProgress?.status] || item.TicketProgress?.status || 'Menunggu';
+                          const statusLabel = labelsTicket[item.TicketProgress?.status] || labelsTicket.pending;
                           return (
                             <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                               <div className="flex flex-wrap items-baseline gap-1">
                                 <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                <span className={statusLabel === 'Tiket terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                                <span className={isUnifiedSelesai(statusLabel) ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
                               </div>
                             </div>
                           );
@@ -429,7 +437,7 @@ const InvoiceDashboard: React.FC = () => {
                       <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                         {hotelGroups.map((group: HotelGroup) => {
                           const first = group.items[0];
-                          const status = labelsHotel[first?.HotelProgress?.status] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
+                          const status = labelHotelGroupProgress(group.items);
                           const mealStatus = first?.HotelProgress?.meal_status;
                           const mealLabel = mealStatus ? (mealLabels[mealStatus] || mealStatus) : null;
                           const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
@@ -446,7 +454,7 @@ const InvoiceDashboard: React.FC = () => {
                             <div key={group.key} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                               <div className="flex flex-wrap items-baseline gap-1">
                                 <span className="font-medium text-slate-800 truncate max-w-[140px]" title={group.name}>{group.name}:</span>
-                                <span className={status === 'Selesai' ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
+                                <span className={isUnifiedSelesai(status) ? 'text-[#0D1A63]' : 'text-slate-600'}>{status}</span>
                               </div>
                               {roomLines.length > 0 && <div className="text-slate-700 pl-0.5 text-xs">{roomLines.join(', ')}</div>}
                               {mealLabel != null && <div className="text-slate-600 pl-0.5 text-xs">Status makan: {mealLabel}</div>}
@@ -466,7 +474,7 @@ const InvoiceDashboard: React.FC = () => {
                       <div className="max-h-[140px] overflow-y-auto text-xs space-y-2 pr-1">
                         {busItems.map((item: any, idx: number) => {
                           const name = item.Product?.name || item.product_name || 'Bus';
-                          const statusLabel = labelsBus[item.BusProgress?.bus_ticket_status] || item.BusProgress?.bus_ticket_status || 'Pending';
+                          const statusLabel = labelBusItemProgress(item);
                           const travelDate = formatDate(item.meta?.travel_date ?? null);
                           const tripTypeRaw = item.meta?.trip_type ? String(item.meta.trip_type) : '';
                           const tripTypeLabel = tripTypeRaw ? (BUS_TRIP_LABELS[tripTypeRaw] || tripTypeRaw) : '';
@@ -475,7 +483,7 @@ const InvoiceDashboard: React.FC = () => {
                             <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2 space-y-0.5">
                               <div className="flex flex-wrap items-baseline gap-1">
                                 <span className="font-medium text-slate-800 truncate max-w-[140px]" title={name}>{name}:</span>
-                                <span className={statusLabel === 'Terbit' ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
+                                <span className={isUnifiedSelesai(statusLabel) ? 'text-[#0D1A63]' : 'text-slate-600'}>{statusLabel}</span>
                               </div>
                               {metaLine ? <div className="text-slate-500 pl-0.5">{metaLine}</div> : null}
                             </div>

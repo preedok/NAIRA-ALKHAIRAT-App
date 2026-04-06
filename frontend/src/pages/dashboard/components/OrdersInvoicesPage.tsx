@@ -13,6 +13,15 @@ import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveIn
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLabel } from '../../../components/common/PaymentProofCell';
 import InvoiceProgressStatusCell, { PROGRESS_LABELS, ROOM_TYPE_LABELS, PROGRESS_LABELS_MEAL } from '../../../components/common/InvoiceProgressStatusCell';
+import {
+  UNIFIED_PROGRESS,
+  isUnifiedSelesai,
+  labelBusIncludeLeg,
+  labelBusItemProgress,
+  labelBusTripProgress,
+  labelHotelGroupProgress,
+  labelHandlingSiskopatuhProgress
+} from '../../../utils/progressStatusUnified';
 import { InvoiceRefundDocument } from '../../../components/common/InvoiceRefundDocument';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import type { TableColumn } from '../../../types';
@@ -449,6 +458,15 @@ const OrdersInvoicesPage: React.FC = () => {
     } catch {
       showToast('Gagal memuat detail invoice', 'error');
     }
+  };
+
+  /** Tutup modal ringkasan (card Total / Per Status) lalu buka modal Detail Invoice — sama dengan aksi di tabel utama. */
+  const openInvoiceDetailFromStatModal = (inv: any, tab: 'invoice' | 'invoice_refund' = 'invoice') => {
+    setStatModal(null);
+    setStatusModal(null);
+    setViewInvoice(inv);
+    setDetailTab(tab);
+    void fetchInvoiceDetail(inv.id);
   };
 
   const openUploadDocModal = async (inv: any) => {
@@ -1158,7 +1176,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const TICKET_STATUS_LABELS = PROGRESS_LABELS.ticket;
   const HOTEL_STATUS_LABELS = PROGRESS_LABELS.hotel;
   const BUS_TICKET_LABELS = PROGRESS_LABELS.bus;
-  const BUS_INCLUDE_STATUS_LABELS: Record<string, string> = { pending: 'Pending', di_proses: 'Di proses', terbit: 'Terbit' };
 
   const handleUploadJamaahData = async (orderId: string, itemId: string, file: File | null, link: string) => {
     if (!file && !link?.trim()) {
@@ -1730,7 +1747,8 @@ const OrdersInvoicesPage: React.FC = () => {
               { id: 'pic', label: 'PIC', align: 'left' },
               { id: 'total', label: 'Total', align: 'right' },
               { id: 'paid', label: 'Dibayar', align: 'right' },
-              { id: 'remaining', label: 'Sisa', align: 'right' }
+              { id: 'remaining', label: 'Sisa', align: 'right' },
+              { id: 'actions', label: 'Aksi', align: 'center' }
             ];
             const totalCount = pagination?.total ?? filteredList.length;
             const range = pagination ? `Halaman saat ini: ${filteredList.length} dari ${totalCount} invoice` : `${filteredList.length} invoice`;
@@ -1769,6 +1787,20 @@ const OrdersInvoicesPage: React.FC = () => {
                               <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
+                              <td className="py-2 px-4 text-center whitespace-nowrap">
+                                <div className="flex justify-center">
+                                  <ActionsMenu
+                                    align="right"
+                                    items={[
+                                      { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => openInvoiceDetailFromStatModal(inv, 'invoice') },
+                                      ...(['canceled', 'cancelled', 'cancelled_refund', 'refunded'].includes((inv.status || '').toLowerCase())
+                                        ? [{ id: 'view-refund', label: 'Lihat Invoice Refund', icon: <Receipt className="w-4 h-4" />, onClick: () => openInvoiceDetailFromStatModal(inv, 'invoice_refund') }]
+                                        : []),
+                                      { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) }
+                                    ].filter(Boolean) as ActionsMenuItem[]}
+                                  />
+                                </div>
+                              </td>
                             </tr>
                           );
                         }}
@@ -1783,7 +1815,7 @@ const OrdersInvoicesPage: React.FC = () => {
           {/* Modal Per Status Invoice: daftar invoice per status */}
           {statusModal && (() => {
             const byStatusList = invoices.filter((inv: any) => (inv.status || '') === statusModal);
-            const statModalColumns: TableColumn[] = [
+            const statusListModalColumns: TableColumn[] = [
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
               { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
@@ -1791,7 +1823,8 @@ const OrdersInvoicesPage: React.FC = () => {
               { id: 'pic', label: 'PIC', align: 'left' },
               { id: 'total', label: 'Total', align: 'right' },
               { id: 'paid', label: 'Dibayar', align: 'right' },
-              { id: 'remaining', label: 'Sisa', align: 'right' }
+              { id: 'remaining', label: 'Sisa', align: 'right' },
+              { id: 'actions', label: 'Aksi', align: 'center' }
             ];
             return (
               <Modal open onClose={() => setStatusModal(null)}>
@@ -1804,7 +1837,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   <ModalBody className="p-0 overflow-hidden flex flex-col min-h-0">
                     <div className="overflow-auto flex-1 min-h-0">
                       <Table
-                        columns={statModalColumns}
+                        columns={statusListModalColumns}
                         data={byStatusList}
                         emptyMessage="Tidak ada invoice dengan status ini."
                         renderRow={(inv: any) => {
@@ -1824,6 +1857,20 @@ const OrdersInvoicesPage: React.FC = () => {
                               <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-amber-600 font-medium text-sm"><NominalDisplay amount={remaining} currency="IDR" /></td>
+                              <td className="py-2 px-4 text-center whitespace-nowrap">
+                                <div className="flex justify-center">
+                                  <ActionsMenu
+                                    align="right"
+                                    items={[
+                                      { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => openInvoiceDetailFromStatModal(inv, 'invoice') },
+                                      ...(['canceled', 'cancelled', 'cancelled_refund', 'refunded'].includes((inv.status || '').toLowerCase())
+                                        ? [{ id: 'view-refund', label: 'Lihat Invoice Refund', icon: <Receipt className="w-4 h-4" />, onClick: () => openInvoiceDetailFromStatModal(inv, 'invoice_refund') }]
+                                        : []),
+                                      { id: 'pdf', label: 'Unduh PDF', icon: <FileText className="w-4 h-4" />, onClick: () => openPdf(inv.id) }
+                                    ].filter(Boolean) as ActionsMenuItem[]}
+                                  />
+                                </div>
+                              </td>
                             </tr>
                           );
                         }}
@@ -2083,11 +2130,13 @@ const OrdersInvoicesPage: React.FC = () => {
                 );
               }
               interface HotelUploadGroup { key: string; name: string; firstItem: any }
+              const hotelItemGroupKey = (item: any) =>
+                String(item.product_ref_id || item.product_id || item.id || '');
               const hotelByProduct: HotelUploadGroup[] = hotelItems.reduce(
                 (acc: HotelUploadGroup[], item: any) => {
-                  const pid = item.product_ref_id || item.product_id || '';
+                  const key = hotelItemGroupKey(item);
                   const name = item.Product?.name || (item as any).product_name || 'Hotel';
-                  if (!acc.find((g: HotelUploadGroup) => g.key === pid)) acc.push({ key: pid, name, firstItem: item });
+                  if (!acc.find((g: HotelUploadGroup) => g.key === key)) acc.push({ key, name, firstItem: item });
                   return acc;
                 },
                 [] as HotelUploadGroup[]
@@ -2128,9 +2177,12 @@ const OrdersInvoicesPage: React.FC = () => {
                       <div className="space-y-4">
                         <p className="text-sm text-slate-600">Satu file per hotel. Upload file Excel/spreadsheet berisi info paket untuk hotel tersebut.</p>
                         {hotelByProduct.map((group) => {
-                          const item = group.firstItem;
-                          const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
-                          const fileUrl = item.jamaah_data_type === 'link' ? item.jamaah_data_value : item.jamaah_data_value ? getFileUrl(item.jamaah_data_value) : null;
+                          const groupHotelItems = hotelItems.filter((hi: any) => hotelItemGroupKey(hi) === group.key);
+                          const itemWithDoc = groupHotelItems.find(
+                            (i: any) => i.jamaah_data_type && String(i.jamaah_data_value || '').trim()
+                          );
+                          const primaryItem = itemWithDoc || group.firstItem;
+                          const hasUploaded = !!(primaryItem.jamaah_data_type && String(primaryItem.jamaah_data_value || '').trim());
                           return (
                             <div key={group.key} className="rounded-xl border border-slate-200 bg-amber-50/30 p-4 space-y-3">
                               <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
@@ -2139,13 +2191,32 @@ const OrdersInvoicesPage: React.FC = () => {
                               {hasUploaded && (
                                 <div className="rounded-lg bg-white/80 border border-amber-200/60 p-3">
                                   <p className="text-xs font-medium text-slate-600 mb-1.5">Dokumen terunggah</p>
-                                  {item.jamaah_data_type === 'link' ? (
-                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                  {primaryItem.jamaah_data_type === 'link' ? (
+                                    <a href={primaryItem.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
                                       <LinkIcon className="w-4 h-4" /> Buka link
                                     </a>
                                   ) : uploadDocInvoice?.order_id ? (
-                                    <Button type="button" size="sm" variant="secondary" disabled={downloadingJamaahItemId === group.firstItem.id} onClick={() => downloadJamaahFile(uploadDocInvoice.order_id, group.firstItem.id, item.jamaah_data_value)} className="inline-flex items-center gap-1.5">
-                                      {downloadingJamaahItemId === group.firstItem.id ? 'Mengunduh…' : <><Download className="w-4 h-4" /> Unduh file</>}
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={downloadingJamaahItemId === primaryItem.id}
+                                      onClick={() =>
+                                        downloadJamaahFile(
+                                          uploadDocInvoice.order_id,
+                                          primaryItem.id,
+                                          primaryItem.jamaah_data_value
+                                        )
+                                      }
+                                      className="inline-flex items-center gap-1.5"
+                                    >
+                                      {downloadingJamaahItemId === primaryItem.id ? (
+                                        'Mengunduh…'
+                                      ) : (
+                                        <>
+                                          <Download className="w-4 h-4" /> Unduh file
+                                        </>
+                                      )}
                                     </Button>
                                   ) : (
                                     <span className="text-sm text-slate-500">File tersimpan</span>
@@ -2162,10 +2233,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                     onChange={async (e) => {
                                       const f = e.target.files?.[0];
                                       if (f && uploadDocInvoice?.order_id) {
-                                        setUploadingJamaahItemId(group.firstItem.id);
+                                        setUploadingJamaahItemId(primaryItem.id);
                                         try {
-                                          await handleUploadJamaahData(uploadDocInvoice.order_id, group.firstItem.id, f, '');
-                                          showToast('Paket info hotel berhasil diupload', 'success');
+                                          await handleUploadJamaahData(uploadDocInvoice.order_id, primaryItem.id, f, '');
                                           const res = await invoicesApi.getById(uploadDocInvoice.id);
                                           if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
                                         } catch (err: any) {
@@ -2178,9 +2248,51 @@ const OrdersInvoicesPage: React.FC = () => {
                                     }}
                                     disabled={!!uploadingJamaahItemId}
                                   />
-                                  {uploadingJamaahItemId === group.firstItem.id && <span className="text-xs text-slate-500">Mengunggah…</span>}
+                                  {uploadingJamaahItemId === primaryItem.id && <span className="text-xs text-slate-500">Mengunggah…</span>}
                                 </div>
                               </label>
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
+                                <div className="flex gap-2 flex-wrap">
+                                  <Input
+                                    type="url"
+                                    placeholder="https://drive.google.com/..."
+                                    value={jamaahLinkInput[primaryItem.id] || ''}
+                                    onChange={(e) =>
+                                      setJamaahLinkInput((p) => ({ ...p, [primaryItem.id]: e.target.value }))
+                                    }
+                                    className="flex-1 min-w-[200px]"
+                                    disabled={!!uploadingJamaahItemId}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[primaryItem.id] || '').trim()) return;
+                                      setUploadingJamaahItemId(primaryItem.id);
+                                      try {
+                                        await handleUploadJamaahData(
+                                          uploadDocInvoice.order_id,
+                                          primaryItem.id,
+                                          null,
+                                          jamaahLinkInput[primaryItem.id] || ''
+                                        );
+                                        showToast('Link berhasil disimpan', 'success');
+                                        setJamaahLinkInput((p) => ({ ...p, [primaryItem.id]: '' }));
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }}
+                                    disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[primaryItem.id] || '').trim()}
+                                  >
+                                    {uploadingJamaahItemId === primaryItem.id ? 'Mengunggah…' : 'Simpan link'}
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           );
                         })}
@@ -3517,8 +3629,8 @@ const OrdersInvoicesPage: React.FC = () => {
                             const o = viewInvoice?.Order as any;
                             const arrivalStatus = o?.bus_include_arrival_status || 'pending';
                             const returnStatus = o?.bus_include_return_status || 'pending';
-                            const arrivalLabel = BUS_INCLUDE_STATUS_LABELS[arrivalStatus] || arrivalStatus;
-                            const returnLabel = BUS_INCLUDE_STATUS_LABELS[returnStatus] || returnStatus;
+                            const arrivalLabel = labelBusIncludeLeg(arrivalStatus);
+                            const returnLabel = labelBusIncludeLeg(returnStatus);
                             return (
                               <div key={group.key} className="rounded-xl border border-amber-200 bg-amber-50/50 shadow-sm overflow-hidden">
                                 <div className="flex items-start gap-4 p-4">
@@ -3547,7 +3659,6 @@ const OrdersInvoicesPage: React.FC = () => {
                           const isHotel = group.type === 'hotel';
                           const isBus = group.type === 'bus';
                           const isSiskopatuh = group.type === 'siskopatuh';
-                          const SISKOPATUH_STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', in_progress: 'Dalam Proses', completed: 'Selesai' };
                           const skRaw =
                             isSiskopatuh && first.meta && typeof first.meta === 'object'
                               ? String((first.meta as { siskopatuh_status?: string }).siskopatuh_status || 'pending')
@@ -3555,28 +3666,16 @@ const OrdersInvoicesPage: React.FC = () => {
                           const progress = isVisa ? first.VisaProgress : isTicket ? first.TicketProgress : isHotel ? first.HotelProgress : isBus ? first.BusProgress : null;
                           const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
                           const status = isSiskopatuh
-                            ? SISKOPATUH_STATUS_LABELS[skRaw] || skRaw
+                            ? labelHandlingSiskopatuhProgress(skRaw)
                             : isBus
-                              ? progress?.bus_ticket_status
-                                ? BUS_TICKET_LABELS[progress.bus_ticket_status] || progress.bus_ticket_status
-                                : 'Pending'
-                              : progress?.status
-                                ? statusLabels[progress.status] || progress.status
-                                : isHotel
-                                  ? 'Menunggu konfirmasi'
-                                  : 'Menunggu data';
+                              ? labelBusItemProgress(first || {})
+                              : isHotel
+                                ? labelHotelGroupProgress(group.items)
+                                : progress?.status
+                                  ? statusLabels[progress.status] || UNIFIED_PROGRESS.MENUNGGU
+                                  : UNIFIED_PROGRESS.MENUNGGU;
                           const hasJamaah = itemWithJamaah.jamaah_data_type && itemWithJamaah.jamaah_data_value;
-                          const badgeVariant = isSiskopatuh
-                            ? skRaw === 'completed'
-                              ? 'success'
-                              : 'info'
-                            : isBus
-                              ? progress?.bus_ticket_status === 'issued'
-                                ? 'success'
-                                : 'info'
-                              : (isVisa ? progress?.status === 'issued' : isTicket ? progress?.status === 'ticket_issued' : progress?.status === 'completed')
-                                ? 'success'
-                                : 'info';
+                          const badgeVariant = isUnifiedSelesai(status) ? 'success' : 'info';
                           const typeIcon = isSiskopatuh ? (
                             <FileText className="w-4 h-4" />
                           ) : isVisa ? (
@@ -3689,7 +3788,13 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {slipItems.map((item: any) => {
                                       const prog = isVisa ? item.VisaProgress : isTicket ? item.TicketProgress : isHotel ? item.HotelProgress : item.BusProgress;
                                       const productName = item.Product?.name || (item as any).product_name || (isVisa ? 'Visa' : isTicket ? 'Tiket' : isHotel ? 'Hotel' : 'Bus');
-                                      const statusLabel = isBus ? (BUS_TICKET_LABELS[prog?.bus_ticket_status || ''] || prog?.bus_ticket_status) : (isHotel ? (HOTEL_STATUS_LABELS[prog?.status || ''] || prog?.status) : isVisa ? (VISA_STATUS_LABELS[prog?.status || ''] || prog?.status) : (TICKET_STATUS_LABELS[prog?.status || ''] || prog?.status));
+                                      const statusLabel = isBus
+                                        ? labelBusItemProgress(item)
+                                        : isHotel
+                                          ? HOTEL_STATUS_LABELS[prog?.status || ''] || UNIFIED_PROGRESS.MENUNGGU
+                                          : isVisa
+                                            ? VISA_STATUS_LABELS[prog?.status || ''] || UNIFIED_PROGRESS.MENUNGGU
+                                            : TICKET_STATUS_LABELS[prog?.status || ''] || UNIFIED_PROGRESS.MENUNGGU;
                                       const mealLabel = isHotel && prog ? (PROGRESS_LABELS_MEAL[prog.meal_status || ''] || prog.meal_status) : null;
                                       return (
                                         <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -3725,9 +3830,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                                 <div><dt className="text-slate-500">Jumlah</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
                                                 <div><dt className="text-slate-500">Rute</dt><dd className="font-medium text-slate-900">{(item.meta?.route || item.meta?.bus_route || '').toString() || '–'}</dd></div>
                                                 <div><dt className="text-slate-500">Info Tiket Bus</dt><dd className="font-medium text-slate-900">{(prog?.bus_ticket_info || '').trim() || '–'}</dd></div>
-                                                <div><dt className="text-slate-500">Kedatangan</dt><dd className="font-medium text-slate-900">{prog?.arrival_status || '–'}</dd></div>
-                                                <div><dt className="text-slate-500">Keberangkatan</dt><dd className="font-medium text-slate-900">{prog?.departure_status || '–'}</dd></div>
-                                                <div><dt className="text-slate-500">Kepulangan</dt><dd className="font-medium text-slate-900">{prog?.return_status || '–'}</dd></div>
+                                                <div><dt className="text-slate-500">Kedatangan</dt><dd className="font-medium text-slate-900">{labelBusTripProgress(String(prog?.arrival_status || ''))}</dd></div>
+                                                <div><dt className="text-slate-500">Keberangkatan</dt><dd className="font-medium text-slate-900">{labelBusTripProgress(String(prog?.departure_status || ''))}</dd></div>
+                                                <div><dt className="text-slate-500">Kepulangan</dt><dd className="font-medium text-slate-900">{labelBusTripProgress(String(prog?.return_status || ''))}</dd></div>
                                               </>
                                             )}
                                             <div><dt className="text-slate-500">Status Progress</dt><dd className="font-medium text-slate-900">{statusLabel || '–'}</dd></div>

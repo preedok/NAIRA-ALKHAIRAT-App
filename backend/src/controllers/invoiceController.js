@@ -8,6 +8,7 @@ const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS
 const { getRulesForBranch } = require('./businessRuleController');
 const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
 const { enrichBranchWithLocation } = require('../utils/locationMaster');
+const { resolveBankAccountsForInvoice } = require('../utils/invoiceBankAccounts');
 
 const KOORDINATOR_ROLES = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
 function isKoordinatorRole(role) {
@@ -22,98 +23,6 @@ function mapBalanceAllocRow(r) {
     notes: r.notes || null,
     created_at: r.created_at
   };
-}
-
-function normalizeAccountNumberDigits(n) {
-  return String(n || '').replace(/\D/g, '');
-}
-
-/**
- * Rekening khusus bagian siskopatuh (Mandiri / NABIELA — identifikasi lewat nomor di accounting_bank_accounts).
- * Override: env SISKOPATUH_PAYMENT_ACCOUNT_NUMBER (default 1330020805941).
- */
-const SISKOPATUH_PAYMENT_ACCOUNT_NUMBER =
-  (process.env.SISKOPATUH_PAYMENT_ACCOUNT_NUMBER || '1330020805941').trim();
-
-function nabielaAccountDigits() {
-  return normalizeAccountNumberDigits(SISKOPATUH_PAYMENT_ACCOUNT_NUMBER);
-}
-
-function orderInvoiceBankFlags(orderLike) {
-  const items = orderLike?.OrderItems || [];
-  const hasSiskopatuh = items.some((it) => (it.type || it.product_type) === ORDER_ITEM_TYPE.SISKOPATUH);
-  const hasNonSiskopatuh = items.some((it) => {
-    const t = it.type || it.product_type;
-    return t && t !== ORDER_ITEM_TYPE.SISKOPATUH;
-  });
-  return { hasSiskopatuh, hasNonSiskopatuh };
-}
-
-function isNabielaAccountRow(row) {
-  const d = nabielaAccountDigits();
-  if (!d || !row) return false;
-  return normalizeAccountNumberDigits(row.account_number) === d;
-}
-
-function accRowToJson(row) {
-  if (!row) return null;
-  return row.get ? row.get({ plain: true }) : row.toJSON();
-}
-
-function findNabielaInSequelizeRows(rows) {
-  if (!Array.isArray(rows)) return null;
-  return rows.find((a) => isNabielaAccountRow(a)) || null;
-}
-
-function findNabielaInPlainRows(rows) {
-  if (!Array.isArray(rows)) return null;
-  return rows.find((a) => isNabielaAccountRow(a)) || null;
-}
-
-/**
- * Hanya siskopatuh → hanya rekening Nabiela.
- * Tanpa siskopatuh → rekening lain (bukan Nabiela).
- * Campuran → Nabiela + rekening lain (tanpa duplikat).
- */
-function resolveBankAccountsForInvoice(orderLike, accountingInstances, rulesPlainAccounts) {
-  const { hasSiskopatuh, hasNonSiskopatuh } = orderInvoiceBankFlags(orderLike || {});
-  const inst = Array.isArray(accountingInstances) ? accountingInstances : [];
-  const rulesArr = Array.isArray(rulesPlainAccounts) ? rulesPlainAccounts : [];
-
-  const allJsonFromDb = inst.length > 0 ? inst.map((a) => accRowToJson(a)) : [];
-  const defaultMerged = allJsonFromDb.length > 0 ? allJsonFromDb : rulesArr;
-
-  const othersInst = inst.filter((a) => !isNabielaAccountRow(a));
-  const othersJsonFromDb = othersInst.map((a) => accRowToJson(a));
-  const othersRulesOnly = rulesArr.filter((a) => !isNabielaAccountRow(a));
-
-  const nabielaInst = findNabielaInSequelizeRows(inst);
-  const nabielaJsonFromDb = nabielaInst ? accRowToJson(nabielaInst) : findNabielaInPlainRows(allJsonFromDb.length ? allJsonFromDb : rulesArr);
-
-  if (hasSiskopatuh && !hasNonSiskopatuh) {
-    if (nabielaJsonFromDb) return [nabielaJsonFromDb];
-    return defaultMerged.length ? defaultMerged : [];
-  }
-
-  if (!hasSiskopatuh) {
-    if (othersJsonFromDb.length > 0) return othersJsonFromDb;
-    if (othersRulesOnly.length > 0) return othersRulesOnly;
-    const filtered = defaultMerged.filter((a) => !isNabielaAccountRow(a));
-    if (filtered.length > 0) return filtered;
-    return defaultMerged;
-  }
-
-  const out = [];
-  if (nabielaJsonFromDb) out.push(nabielaJsonFromDb);
-  const rest = othersJsonFromDb.length > 0 ? othersJsonFromDb : othersRulesOnly;
-  for (const r of rest) out.push(r);
-  const seen = new Set();
-  return out.filter((x) => {
-    const id = x && x.id ? String(x.id) : `${x?.bank_name}-${x?.account_number}`;
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
 }
 
 /** Alokasi saldo per invoice untuk PDF / email (sama bentuk dengan BalanceAllocations di API). */
@@ -150,6 +59,30 @@ const uploadConfig = require('../config/uploads');
 const { sendInvoiceCreatedEmail, sendPaymentReceivedEmail } = require('../utils/emailService');
 const logger = require('../config/logger');
 
+/** Isi data.bank_accounts untuk PDF / email (sama logika dengan GET invoice). */
+async function attachResolvedBankAccountsForPdf(data, invoice) {
+  try {
+    const rules = await getRulesForBranch(invoice.branch_id);
+    const accountingBankAccounts = await AccountingBankAccount.findAll({
+      where: { is_active: true },
+      order: [['bank_name', 'ASC'], ['account_number', 'ASC']],
+      attributes: ['id', 'code', 'name', 'bank_name', 'account_number', 'currency']
+    });
+    const rulesBankAccounts = Array.isArray(rules.bank_accounts)
+      ? rules.bank_accounts
+      : (typeof rules.bank_accounts === 'string'
+        ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })()
+        : []);
+    data.bank_accounts = resolveBankAccountsForInvoice(data.Order, accountingBankAccounts, rulesBankAccounts, {
+      paid_amount: parseFloat(data.paid_amount) || 0,
+      remaining_amount: parseFloat(data.remaining_amount) || 0
+    });
+  } catch (e) {
+    logger.error('attachResolvedBankAccountsForPdf: ' + (e.message || String(e)));
+    data.bank_accounts = [];
+  }
+}
+
 const generateInvoiceNumber = () => {
   const y = new Date().getFullYear();
   const n = Math.floor(Math.random() * 99999) + 1;
@@ -173,6 +106,7 @@ async function sendInvoiceCreatedNotificationEmail(invoiceId, notificationId, du
     data.currency_rates = effectiveRates;
     data.currency_rates_override = effectiveRates;
     data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
+    await attachResolvedBankAccountsForPdf(data, invoice);
     const pdfBuffer = await buildInvoicePdfBuffer(data);
     const sent = await sendInvoiceCreatedEmail(
       invoice.User.email,
@@ -219,6 +153,7 @@ async function sendPaymentReceivedNotificationEmail(invoiceId, notificationId, p
     data.currency_rates = effectiveRates;
     data.currency_rates_override = effectiveRates;
     data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
+    await attachResolvedBankAccountsForPdf(data, invoice);
     const pdfBuffer = await buildInvoicePdfBuffer(data);
     const paidAmount = parseFloat(invoice.paid_amount) || 0;
     const sent = await sendPaymentReceivedEmail(
@@ -598,7 +533,7 @@ const list = asyncHandler(async (req, res) => {
         { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_in_time', 'check_out_date', 'check_out_time'] },
         { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] }
       ],
-      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'manifest_file_url', 'meta']
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'manifest_file_url', 'meta', 'jamaah_data_type', 'jamaah_data_value']
     });
     for (const it of items) {
       const oid = it.order_id;
@@ -1345,19 +1280,7 @@ const getById = asyncHandler(async (req, res) => {
     const cancelRefund = data.Refunds.find((r) => r.source === REFUND_SOURCE.CANCEL);
     data.cancel_refund_amount = cancelRefund != null ? parseFloat(cancelRefund.amount) || null : null;
   }
-  // Rekening bank untuk pembayaran: dari Data Rekening Bank (accounting), agar owner/role lain dapat daftar tanpa akses API accounting
-  const rules = await getRulesForBranch(invoice.branch_id);
-  const accountingBankAccounts = await AccountingBankAccount.findAll({
-    where: { is_active: true },
-    order: [['bank_name', 'ASC'], ['account_number', 'ASC']],
-    attributes: ['id', 'code', 'name', 'bank_name', 'account_number', 'currency']
-  });
-  const rulesBankAccounts = Array.isArray(rules.bank_accounts)
-    ? rules.bank_accounts
-    : (typeof rules.bank_accounts === 'string'
-      ? (() => { try { return JSON.parse(rules.bank_accounts); } catch (e) { return []; } })()
-      : []);
-  data.bank_accounts = resolveBankAccountsForInvoice(data.Order, accountingBankAccounts, rulesBankAccounts);
+  await attachResolvedBankAccountsForPdf(data, invoice);
   if (data.Branch && (data.Branch.code || data.Branch.provinsi_id)) {
     try {
       const loc = await enrichBranchWithLocation(data.Branch, { syncDb: false });
@@ -1598,6 +1521,7 @@ const getPdf = asyncHandler(async (req, res) => {
   data.currency_rates = effectiveRates;
   data.currency_rates_override = effectiveRates;
   data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
+  await attachResolvedBankAccountsForPdf(data, invoice);
   const buf = await buildInvoicePdfBuffer(data);
 
   // Simpan ke disk (local - uploads/invoices/) — setiap request regenerate agar selalu terupdate
@@ -1642,7 +1566,7 @@ const getPdf = asyncHandler(async (req, res) => {
 const getArchive = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id, {
     include: [
-      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }, { model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value', 'meta'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type', 'meta'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_out_date', 'check_in_time', 'check_out_time', 'notes', 'hotel_document_url'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at', 'notes'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at', 'notes'] }, { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'bus_ticket_info', 'arrival_status', 'departure_status', 'return_status', 'notes'] }] }] },
+      { model: Order, as: 'Order', include: [{ model: User, as: 'User', attributes: ['id', 'name', 'company_name'], required: false }, { model: OrderItem, as: 'OrderItems', attributes: ['id', 'order_id', 'type', 'quantity', 'subtotal', 'manifest_file_url', 'jamaah_data_type', 'jamaah_data_value', 'meta'], include: [{ model: Product, as: 'Product', attributes: ['id', 'code', 'name', 'type', 'meta'], required: false }, { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_out_date', 'check_in_time', 'check_out_time', 'notes', 'hotel_document_url'] }, { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at', 'notes'] }, { model: TicketProgress, as: 'TicketProgress', required: false, attributes: ['id', 'status', 'ticket_file_url', 'issued_at', 'notes'] }, { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'bus_ticket_info', 'arrival_status', 'departure_status', 'return_status', 'notes'] }] }] },
       { model: User, as: 'User', attributes: ['id', 'name', 'email', 'company_name'], include: [{ model: OwnerProfile, as: 'OwnerProfile', attributes: ['is_mou_owner'], required: false }] },
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, order: [['created_at', 'ASC']], attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] },
@@ -1665,6 +1589,7 @@ const getArchive = asyncHandler(async (req, res) => {
   data.currency_rates = effectiveRates;
   data.currency_rates_override = effectiveRates;
   data.BalanceAllocations = await loadBalanceAllocationsForInvoicePdf(invoice.id);
+  await attachResolvedBankAccountsForPdf(data, invoice);
   const safe = (s) => (String(s || '').replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim() || 'invoice');
   const invNum = invoice.invoice_number || 'INV';
   const ownerName = (invoice.User && (invoice.User.name || invoice.User.company_name)) || invoice.owner_name_manual || invoice.Order?.owner_name_manual || 'Owner';

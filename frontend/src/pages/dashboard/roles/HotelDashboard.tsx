@@ -8,13 +8,7 @@ import { AutoRefreshControl } from '../../../components/common';
 import StatCard from '../../../components/common/StatCard';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { hotelApi } from '../../../services/api';
-
-const STATUS_LABELS: Record<string, string> = {
-  waiting_confirmation: 'Menunggu konfirmasi',
-  confirmed: 'Penetapan room',
-  room_assigned: 'Pemberian nomor room',
-  completed: 'Selesai'
-};
+import { PROGRESS_LABELS_HOTEL as STATUS_LABELS } from '../../../utils/progressStatusUnified';
 
 const HotelDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -44,7 +38,7 @@ const HotelDashboard: React.FC = () => {
   const stats = [
     { label: 'Total Order (Hotel)', value: d.total_orders ?? 0, subtitle: 'Order dengan item hotel', icon: <Hotel className="w-5 h-5" />, iconClassName: 'bg-slate-100 text-slate-600' },
     { label: 'Total Item Hotel', value: d.total_hotel_items ?? 0, subtitle: 'Baris item hotel', icon: <Hotel className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600' },
-    { label: 'Menunggu Konfirmasi', value: byStatus.waiting_confirmation ?? 0, subtitle: 'Perlu diproses', icon: <Clock className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600' },
+    { label: 'Menunggu', value: byStatus.waiting_confirmation ?? 0, subtitle: 'Perlu diproses', icon: <Clock className="w-5 h-5" />, iconClassName: 'bg-amber-100 text-amber-600' },
     { label: 'Selesai', value: (byStatus.room_assigned ?? 0) + (byStatus.completed ?? 0), subtitle: 'Kamar ditetapkan / selesai', icon: <CheckCircle className="w-5 h-5" />, iconClassName: 'bg-emerald-100 text-emerald-600' }
   ];
 
