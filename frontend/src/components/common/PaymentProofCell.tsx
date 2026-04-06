@@ -116,22 +116,15 @@ export function PaymentProofCell({
   }
 
   return (
-    <div className={`max-h-[280px] overflow-y-auto min-w-0 ${className}`}>
-      <table className="w-full min-w-[760px] text-[11px] border border-slate-200 rounded-lg border-collapse table-fixed">
-        <colgroup>
-          <col style={{ width: '12%' }} />
-          <col style={{ width: '18%' }} />
-          <col style={{ width: '38%' }} />
-          <col style={{ width: '14%' }} />
-          <col style={{ width: '18%' }} />
-        </colgroup>
+    <div className={`max-h-[240px] overflow-y-auto overflow-x-auto min-w-[160px] ${className}`}>
+      <table className="w-full text-[11px] border border-slate-200 rounded-lg overflow-hidden border-collapse">
         <thead>
           <tr className="bg-slate-50 text-slate-600 border-b border-slate-200">
-            <th className="px-2.5 py-2 text-left font-semibold align-top border-b border-slate-200">Tipe</th>
-            <th className="px-2.5 py-2 text-left font-semibold align-top border-b border-slate-200">Nominal</th>
-            <th className="px-2.5 py-2 text-left font-semibold align-top border-b border-slate-200">Rekening / keterangan</th>
-            <th className="px-2.5 py-2 text-left font-semibold align-top border-b border-slate-200">Diunggah</th>
-            <th className="px-2.5 py-2 text-left font-semibold align-top border-b border-slate-200">Status</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Tipe</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Nominal</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top min-w-[100px]">Rekening / keterangan</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top whitespace-nowrap">Diunggah</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Status</th>
           </tr>
         </thead>
         <tbody className="text-slate-700">
@@ -173,8 +166,8 @@ export function PaymentProofCell({
                     );
             return (
               <tr key={p.id} className="border-b border-slate-100 align-top">
-                <td className="px-2.5 py-2 font-semibold text-slate-800 align-top break-words">{getProofDisplayLabel(p)}</td>
-                <td className="px-2.5 py-2 align-top break-words">
+                <td className="px-2 py-1.5 font-semibold text-slate-800 align-top">{getProofDisplayLabel(p)}</td>
+                <td className="px-2 py-1.5 align-top">
                   {isKesNominal ? (
                     <div className="space-y-0.5">
                       <div>
@@ -191,8 +184,8 @@ export function PaymentProofCell({
                     </div>
                   )}
                 </td>
-                <td className="px-2.5 py-2 align-top break-words text-slate-700">{rekLines}</td>
-                <td className="px-2.5 py-2 text-slate-600 align-top whitespace-nowrap">
+                <td className="px-2 py-1.5 align-top max-w-[220px] break-words text-slate-700">{rekLines}</td>
+                <td className="px-2 py-1.5 text-slate-600 align-top whitespace-nowrap">
                   {p.created_at ? (
                     <>
                       {formatDate(p.created_at)}
@@ -203,14 +196,12 @@ export function PaymentProofCell({
                     '–'
                   )}
                 </td>
-                <td className="px-2.5 py-2 align-top">
-                  <div className="flex flex-col gap-0.5 items-start break-words">
-                    <Badge variant={ps.variant} className="text-xs whitespace-normal text-left max-w-full">
+                <td className="px-2 py-1.5 align-top max-w-[140px]">
+                  <div className="flex flex-col gap-0.5 items-start">
+                    <Badge variant={ps.variant} className="text-xs whitespace-normal text-left">
                       {statusLabel}
                     </Badge>
-                    {ps.status === 'verified' && p.VerifiedBy?.name && (
-                      <span className="text-slate-500 break-words">oleh {p.VerifiedBy.name}</span>
-                    )}
+                    {ps.status === 'verified' && p.VerifiedBy?.name && <span className="text-slate-500 break-words text-[10px]">oleh {p.VerifiedBy.name}</span>}
                   </div>
                 </td>
               </tr>
@@ -222,8 +213,8 @@ export function PaymentProofCell({
             const usd = amt / usdToIdr;
             return (
               <tr key={b.id} className="border-b border-emerald-100 bg-emerald-50/40 align-top">
-                <td className="px-2.5 py-2 font-semibold text-emerald-900 align-top break-words">Saldo akun</td>
-                <td className="px-2.5 py-2 align-top break-words">
+                <td className="px-2 py-1.5 font-semibold text-emerald-900 align-top">Saldo akun</td>
+                <td className="px-2 py-1.5 align-top">
                   <div className="space-y-0.5">
                     <div><NominalDisplay amount={amt} currency="IDR" /></div>
                     <div className="text-slate-500 text-[10px]">
@@ -231,13 +222,13 @@ export function PaymentProofCell({
                     </div>
                   </div>
                 </td>
-                <td className="px-2.5 py-2 align-top break-words">
+                <td className="px-2 py-1.5 align-top max-w-[220px] break-words">
                   <div className="space-y-0.5">
                     <div>Potongan saldo pemilik order (tanpa file bukti).</div>
                     {b.notes ? <div className="text-slate-600"><span className="text-slate-500">Cat:</span> {b.notes}</div> : null}
                   </div>
                 </td>
-                <td className="px-2.5 py-2 text-slate-600 align-top whitespace-nowrap">
+                <td className="px-2 py-1.5 text-slate-600 align-top whitespace-nowrap">
                   {b.created_at ? (
                     <>
                       {formatDate(b.created_at)}
@@ -248,7 +239,7 @@ export function PaymentProofCell({
                     '–'
                   )}
                 </td>
-                <td className="px-2.5 py-2 align-top">
+                <td className="px-2 py-1.5 align-top">
                   <Badge variant="success" className="text-xs whitespace-normal text-left">
                     Tercatat otomatis
                   </Badge>

@@ -2142,7 +2142,7 @@ const OrdersInvoicesPage: React.FC = () => {
         <CardSectionHeader
           icon={<Receipt className="w-6 h-6" />}
           title={`Daftar Invoice (${(pagination?.total ?? invoices.length) + draftOrders.length})`}
-          subtitle="Kolom Status Progress & Bukti Bayar memakai tabel lebar; pada layar kecil, scroll horizontal di area tabel."
+          subtitle="Geser horizontal jika tabel tidak muat"
           className="mb-5 px-1"
           right={
             <div className="flex items-center gap-2 shrink-0">
@@ -2229,7 +2229,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div><NominalDisplay amount={remaining} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top min-w-[460px]">
+                    <td className="py-3 px-4 align-top min-w-[280px] max-w-[380px]">
                       <InvoiceProgressStatusCell
                         inv={inv}
                         formatDate={formatDate}
@@ -2238,7 +2238,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         allowedSections={getProgressAllowedSectionsForRole(user?.role)}
                       />
                     </td>
-                    <td className="py-3 px-4 align-top min-w-[800px] max-h-[320px] overflow-y-auto overflow-x-visible">
+                    <td className="py-3 px-4 align-top min-w-[260px] max-w-[400px] max-h-[260px] overflow-y-auto">
                       <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
                     </td>
                     <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>

@@ -491,25 +491,20 @@ function renderProgressTable(sections: InvoiceProgressSectionModel[]) {
   });
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
-      <table className="w-full min-w-[440px] text-[11px] border-collapse table-fixed">
-        <colgroup>
-          <col style={{ width: '30%' }} />
-          <col style={{ width: '22%' }} />
-          <col style={{ width: '48%' }} />
-        </colgroup>
+      <table className="w-full text-[11px]">
         <thead className="bg-slate-50 text-slate-600">
           <tr>
-            <th className="px-2.5 py-2 text-left font-semibold border-b border-slate-200">Layanan</th>
-            <th className="px-2.5 py-2 text-left font-semibold border-b border-slate-200">Status</th>
-            <th className="px-2.5 py-2 text-left font-semibold border-b border-slate-200">Detail</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Layanan</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Status</th>
+            <th className="px-2 py-1.5 text-left font-semibold">Detail</th>
           </tr>
         </thead>
         <tbody>
           {flat.map((r) => (
             <tr key={r.key} className="border-t border-slate-100">
-              <td className="px-2.5 py-2 text-slate-700 align-top break-words">{r.layanan}</td>
-              <td className="px-2.5 py-2 text-slate-800 align-top break-words">{r.status}</td>
-              <td className="px-2.5 py-2 text-slate-600 align-top break-words">{r.detail || '–'}</td>
+              <td className="px-2 py-1.5 text-slate-700 align-top break-words">{r.layanan}</td>
+              <td className="px-2 py-1.5 text-slate-800 align-top break-words">{r.status}</td>
+              <td className="px-2 py-1.5 text-slate-600 align-top break-words">{r.detail || '–'}</td>
             </tr>
           ))}
         </tbody>
