@@ -30,7 +30,6 @@ const ITEM_TYPES = [
 ] as const;
 
 const ROOM_TYPES = [
-  { id:'single', label:'Single', cap:1 },
   { id:'double', label:'Double', cap:2 },
   { id:'triple', label:'Triple', cap:3 },
   { id:'quad',   label:'Quad',   cap:4 },
@@ -685,8 +684,12 @@ const OrderFormPage: React.FC = () => {
       for (let i = 0; i <= target; i++) dp[i] = next[i];
     }
 
-    // fallback (harusnya selalu bisa karena ada single), tapi jaga-jaga
-    if (!dp[target]) return { single: target } as unknown as Record<RoomTypeId, number>;
+    // fallback defensif jika kombinasi exact target tidak ketemu.
+    if (!dp[target]) {
+      const fallbackType = types[types.length - 1] || 'double';
+      const fallbackCap = Math.max(1, roomCap(fallbackType));
+      return { [fallbackType]: Math.max(1, Math.ceil(target / fallbackCap)) } as Record<RoomTypeId, number>;
+    }
     return dp[target]!.combo;
   }, []);
 
@@ -1723,7 +1726,12 @@ const OrderFormPage: React.FC = () => {
                                   <div className="flex-1 min-w-[100px]">
                                     {canEditPrice ? (
                                       <Input label={`Harga kamar / malam (${rowCur(row)})`} type="number" min={0}
-                                        value={(()=>{ const roomPrice=getEffectiveRoomPrice(row,line); const val=getInC(roomPrice,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()}
+                                        value={(()=>{
+                                          // Saat edit manual, pakai nilai raw line supaya tidak "snap back" ke harga fallback saat input dikosongkan.
+                                          const roomRaw = typeof line.unit_price === 'number' ? line.unit_price : getEffectiveRoomPrice(row,line);
+                                          const val=getInC(roomRaw,row,rowCur(row));
+                                          return String(Math.round(val*100)/100||'');
+                                        })()}
                                         placeholder="0"
                                         onChange={e=>setLP(row.id,line.id,rowCur(row),parseFloat(e.target.value)||0)}/>
                                     ) : (
@@ -1743,7 +1751,12 @@ const OrderFormPage: React.FC = () => {
                                     ) : canEditPrice ? (
                                       line.with_meal ? (
                                         <Input label={`Harga makan / malam (${rowCur(row)})`} type="number" min={0}
-                                          value={(()=>{ const mealPrice=getEffectiveMealPrice(row,line); const val=getInC(mealPrice,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()}
+                                          value={(()=>{
+                                            // Sama seperti harga kamar: prioritaskan nilai raw yang sedang diedit.
+                                            const mealRaw = typeof line.meal_unit_price === 'number' ? line.meal_unit_price : getEffectiveMealPrice(row,line);
+                                            const val=getInC(mealRaw,row,rowCur(row));
+                                            return String(Math.round(val*100)/100||'');
+                                          })()}
                                           placeholder="0"
                                           onChange={e=>setMealLP(row.id,line.id,rowCur(row),parseFloat(e.target.value)||0)}/>
                                       ) : (

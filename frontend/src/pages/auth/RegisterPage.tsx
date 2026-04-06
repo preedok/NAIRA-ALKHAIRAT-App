@@ -363,6 +363,11 @@ const RegisterPage: React.FC = () => {
     const emailErr = validateEmail(form.email);
     if (emailErr)           { setError(emailErr); return; }
     if (!form.password || form.password.length < 6) { setError('Password minimal 6 karakter'); return; }
+    if (!form.phone.trim()) { setError('Telepon wajib diisi'); return; }
+    if (!form.whatsapp.trim()) { setError('WhatsApp wajib diisi'); return; }
+    if (!form.company_name.trim()) { setError('Nama perusahaan / travel wajib diisi'); return; }
+    if (!form.address.trim()) { setError('Alamat kantor wajib diisi'); return; }
+    if (!form.preferred_branch_id) { setError('Kota operasional wajib dipilih'); return; }
     const isMou = ownerType === 'mou';
     if (isMou) {
       const amountNum = parseFloat(String(form.registration_payment_amount).replace(/[^\d.-]/g, ''));
@@ -557,8 +562,8 @@ const RegisterPage: React.FC = () => {
               <div className="rg-section">
                 <div className="rg-section-title">Informasi Kontak</div>
                 <div className="rg-form-row-3">
-                  <Input label="Telepon" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+62 812 ..." icon={<Phone size={16} style={{ color:'#64748b' }} />} />
-                  <Input label="WhatsApp" name="whatsapp" type="tel" value={form.whatsapp} onChange={handleChange} placeholder="Nomor WhatsApp" icon={<Phone size={16} style={{ color:'#64748b' }} />} />
+                  <Input label="Telepon" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+62 812 ..." icon={<Phone size={16} style={{ color:'#64748b' }} />} required />
+                  <Input label="WhatsApp" name="whatsapp" type="tel" value={form.whatsapp} onChange={handleChange} placeholder="Nomor WhatsApp" icon={<Phone size={16} style={{ color:'#64748b' }} />} required />
                   <Input label="NPWP" name="npwp" value={form.npwp} onChange={handleChange} placeholder="Opsional" icon={<FileText size={16} style={{ color:'#64748b' }} />} />
                 </div>
               </div>
@@ -567,11 +572,11 @@ const RegisterPage: React.FC = () => {
               <div className="rg-section">
                 <div className="rg-section-title">Informasi Perusahaan</div>
                 <div className="rg-form-row-3">
-                  <Input label="Nama Perusahaan / Travel" name="company_name" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" icon={<Building2 size={16} style={{ color:'#64748b' }} />} />
-                  <Input label="Alamat Kantor" name="address" value={form.address} onChange={handleChange} placeholder="Alamat kantor" icon={<MapPin size={16} style={{ color:'#64748b' }} />} />
+                  <Input label="Nama Perusahaan / Travel" name="company_name" value={form.company_name} onChange={handleChange} placeholder="PT / CV / Nama travel" icon={<Building2 size={16} style={{ color:'#64748b' }} />} required />
+                  <Input label="Alamat Kantor" name="address" value={form.address} onChange={handleChange} placeholder="Alamat kantor" icon={<MapPin size={16} style={{ color:'#64748b' }} />} required />
                   <div className="rg-autocomplete-wrap">
                     <Autocomplete
-                      label="Kota Operasional"
+                      label="Kota Operasional *"
                       value={form.preferred_branch_id}
                       onChange={handleBranchChange}
                       options={branchOptions.map(b => ({ value: b.value, label: b.label }))}

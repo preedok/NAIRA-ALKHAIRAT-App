@@ -41,9 +41,9 @@ const INVOICE_STATUS_CARD_CONFIG: Record<string, { icon: React.ReactNode }> = {
 };
 
 /** Urutan tampilan card Per Status Invoice (status utama dulu). Status utama selalu ditampilkan sebagai card. */
-const PER_STATUS_ORDER = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled', 'cancelled_refund', 'overdue', 'draft', 'refunded', 'order_updated', 'overpaid', 'overpaid_transferred', 'overpaid_received', 'refund_canceled', 'overpaid_refund_pending'];
+const PER_STATUS_ORDER = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled', 'overdue', 'draft', 'refunded', 'order_updated', 'overpaid', 'overpaid_transferred', 'overpaid_received', 'refund_canceled', 'overpaid_refund_pending'];
 /** Status yang selalu ditampilkan di card (meskipun count 0): Tagihan DP, Pembayaran DP, Lunas, Processing, Completed, Dibatalkan */
-const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled', 'cancelled_refund'];
+const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing', 'completed', 'canceled'];
 
 /** Label trip type bus: pergi saja / pulang saja / pulang pergi */
 const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
@@ -259,7 +259,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [statModal, setStatModal] = useState<'total_invoice' | 'total_trip' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
+  const [statModal, setStatModal] = useState<'total_invoice' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
   const [statusModal, setStatusModal] = useState<string | null>(null);
   const [exportingInvoicesExcel, setExportingInvoicesExcel] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
@@ -1598,7 +1598,7 @@ const OrdersInvoicesPage: React.FC = () => {
       {/* Summary cards & Per Status: tampil untuk semua role termasuk saat belum ada data */}
       {showInvoiceStatCards && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               icon={<Receipt className="w-5 h-5" />}
               label="Total Invoice"
@@ -1606,14 +1606,6 @@ const OrdersInvoicesPage: React.FC = () => {
               iconClassName="bg-sky-100 text-sky-600"
               onClick={() => setStatModal('total_invoice')}
               action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_invoice')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
-            />
-            <StatCard
-              icon={<Package className="w-5 h-5" />}
-              label="Total Trip"
-              value={loadingSummary ? '...' : s.total_orders.toLocaleString('id-ID')}
-              iconClassName="bg-[#0D1A63]/10 text-[#0D1A63]"
-              onClick={() => setStatModal('total_trip')}
-              action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => setStatModal('total_trip')}><Eye className="w-4 h-4" /> Lihat</Button></div>}
             />
             <StatCard
               icon={<DollarSign className="w-5 h-5" />}
@@ -1675,7 +1667,6 @@ const OrdersInvoicesPage: React.FC = () => {
                   <ModalHeader
                     title={
                       statModal === 'total_invoice' ? 'Total Invoice' :
-                      statModal === 'total_trip' ? 'Total Trip' :
                       statModal === 'total_tagihan' ? 'Total Tagihan' :
                       statModal === 'dibayar' ? 'Dibayar' : 'Sisa'
                     }
@@ -1780,6 +1771,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   const keys: string[] = [...PER_STATUS_ALWAYS_SHOW];
                   Object.keys(s.by_invoice_status).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
                   return keys
+                    .filter((status) => status !== 'cancelled_refund')
                     .sort((a, b) => {
                       const ia = PER_STATUS_ORDER.indexOf(a);
                       const ib = PER_STATUS_ORDER.indexOf(b);
