@@ -256,6 +256,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [loadingArchiveId, setLoadingArchiveId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [deletingProofId, setDeletingProofId] = useState<string | null>(null);
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [summary, setSummary] = useState<InvoicesSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -267,6 +268,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'va' | 'qris' | 'saudi'>('bank');
   const [payAmountIdr, setPayAmountIdr] = useState<string>('');
   const [payTransferDate, setPayTransferDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [payTransferTime, setPayTransferTime] = useState<string>(() => new Date().toTimeString().slice(0, 5));
   const [payBankIndex, setPayBankIndex] = useState<number>(0);
   const [payFile, setPayFile] = useState<File | null>(null);
   const [paySubmitting, setPaySubmitting] = useState(false);
@@ -912,6 +914,25 @@ const OrdersInvoicesPage: React.FC = () => {
     }
   };
 
+  const handleDeleteRejectedProof = async (invoiceId: string, paymentProofId: string) => {
+    if (!window.confirm('Hapus bukti bayar yang ditolak ini beserta file lampirannya? Tindakan tidak bisa dibatalkan.')) return;
+    setDeletingProofId(paymentProofId);
+    try {
+      const res = await invoicesApi.deleteRejectedPaymentProof(invoiceId, paymentProofId);
+      showToast(res.data?.message || 'Bukti bayar dihapus.', 'success');
+      if (res.data?.success && res.data?.data) {
+        const updated = res.data.data;
+        setViewInvoice((prev: any | null) => (prev && prev.id === invoiceId ? { ...prev, ...updated, PaymentProofs: updated.PaymentProofs ?? prev.PaymentProofs } : prev));
+        setInvoices((prev) => prev.map((inv) => (inv.id === invoiceId ? { ...inv, PaymentProofs: updated.PaymentProofs || inv.PaymentProofs } : inv)));
+      }
+      await fetchInvoices();
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Gagal menghapus bukti', 'error');
+    } finally {
+      setDeletingProofId(null);
+    }
+  };
+
   const handleUnblock = async (inv: any) => {
     try {
       const res = await invoicesApi.unblock(inv.id);
@@ -1154,6 +1175,8 @@ const OrdersInvoicesPage: React.FC = () => {
 
   // Hanya karyawan (bukan owner) yang boleh konfirmasi/tolak bukti bayar
   const canVerify = ['admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting', 'super_admin'].includes(user?.role || '');
+  const canDeleteRejectedProof = (inv: { owner_id?: string } | null) =>
+    canVerify || Boolean(inv?.owner_id && user?.id === inv.owner_id);
 
   const rates = viewInvoice?.currency_rates || currencyRates;
   const sarToIdr = rates.SAR_TO_IDR || 4200;
@@ -1256,6 +1279,7 @@ const OrdersInvoicesPage: React.FC = () => {
       setPayAmountSaudi('');
     }
     setPayTransferDate(new Date().toISOString().slice(0, 10));
+    setPayTransferTime(new Date().toTimeString().slice(0, 5));
     setPayBankIndex(0);
     setPayBankId('');
     setPaySenderAccountName('');
@@ -1285,6 +1309,10 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast('Upload bukti bayar wajib.', 'warning');
         return;
       }
+      if (!payTransferTime) {
+        showToast('Isi jam transfer sesuai bukti.', 'warning');
+        return;
+      }
       const paymentType = parseFloat(viewInvoice.paid_amount || 0) === 0 ? 'dp' : (amountS >= 1e9 ? 'full' : 'partial');
       const form = new FormData();
       form.append('payment_location', 'saudi');
@@ -1292,6 +1320,7 @@ const OrdersInvoicesPage: React.FC = () => {
       form.append('amount', String(amountS));
       form.append('payment_type', paymentType);
       form.append('transfer_date', payTransferDate);
+      form.append('notes', `Jam transfer pada bukti: ${payTransferTime}`);
       form.append('proof_file', payFile);
       setPaySubmitting(true);
       try {
@@ -1329,6 +1358,10 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast('Upload bukti transfer wajib untuk metode Transfer Bank.', 'warning');
         return;
       }
+      if (!payTransferTime) {
+        showToast('Isi jam transfer sesuai bukti.', 'warning');
+        return;
+      }
       if (!payBankId?.trim()) {
         showToast('Pilih bank pengirim.', 'warning');
         return;
@@ -1351,6 +1384,7 @@ const OrdersInvoicesPage: React.FC = () => {
       form.append('amount', String(Math.round(amount)));
       form.append('payment_type', paymentType);
       form.append('transfer_date', payTransferDate);
+      form.append('notes', `Jam transfer pada bukti: ${payTransferTime}`);
       if (payBankId) form.append('bank_id', payBankId);
       if (paySenderAccountName?.trim()) form.append('sender_account_name', paySenderAccountName.trim());
       if (paySenderAccountNumber?.trim()) form.append('sender_account_number', paySenderAccountNumber.trim());
@@ -3291,6 +3325,17 @@ const OrdersInvoicesPage: React.FC = () => {
                                 {p.payment_location === 'saudi' && (
                                   <span className="text-xs text-[#0D1A63] font-medium">Pembayaran KES — otomatis terverifikasi (tidak perlu konfirmasi admin)</span>
                                 )}
+                                {ps.status === 'rejected' && canDeleteRejectedProof(viewInvoice) && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-700 border-red-200 hover:bg-red-50"
+                                    onClick={() => handleDeleteRejectedProof(viewInvoice.id, p.id)}
+                                    disabled={deletingProofId === p.id || verifyingId === p.id}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" /> Hapus
+                                  </Button>
+                                )}
                               </div>
                             </div>
                             <div className="p-4 bg-slate-50/50 min-h-[280px]">
@@ -4085,6 +4130,15 @@ const OrdersInvoicesPage: React.FC = () => {
                     value={payTransferDate}
                     onChange={(e) => setPayTransferDate(e.target.value)}
                   />
+                  <Input
+                    label="Jam transfer *"
+                    type="time"
+                    value={payTransferTime}
+                    onChange={(e) => setPayTransferTime(e.target.value)}
+                  />
+                  <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                    Tanggal dan jam transfer harus sesuai yang tertera di bukti transfer.
+                  </p>
                   <div>
                     <Input
                       label="Upload bukti bayar *"
@@ -4189,6 +4243,15 @@ const OrdersInvoicesPage: React.FC = () => {
                     value={payTransferDate}
                     onChange={(e) => setPayTransferDate(e.target.value)}
                   />
+                  <Input
+                    label="Jam transfer *"
+                    type="time"
+                    value={payTransferTime}
+                    onChange={(e) => setPayTransferTime(e.target.value)}
+                  />
+                  <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                    Tanggal dan jam transfer harus sesuai yang tertera di bukti transfer.
+                  </p>
                   <Input
                     label="Upload bukti bayar *"
                     type="file"

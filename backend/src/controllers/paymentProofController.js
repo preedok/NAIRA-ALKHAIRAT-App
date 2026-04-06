@@ -4,12 +4,21 @@ const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
 const sequelize = require('../config/sequelize');
-const { PaymentProof, Invoice, Order, Notification, Bank, AccountingBankAccount } = require('../models');
+const { PaymentProof, Invoice, Order, Notification, Bank, AccountingBankAccount, User } = require('../models');
 const { ROLES } = require('../constants');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, DP_PAYMENT_STATUS } = require('../constants');
 const { sendPaymentReceivedNotificationEmail } = require('./invoiceController');
 const { getRulesForBranch } = require('./businessRuleController');
+const { invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
 const uploadConfig = require('../config/uploads');
+
+const KOORDINATOR_ROLES = ['invoice_koordinator', 'tiket_koordinator', 'visa_koordinator'];
+function isKoordinatorRole(role) {
+  return KOORDINATOR_ROLES.includes(role);
+}
+
+/** Sama dengan verify-payment: atribut bukti untuk response invoice */
+const PAYMENT_PROOF_ATTRS = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 
 const proofDir = uploadConfig.getDir(uploadConfig.SUBDIRS.PAYMENT_PROOFS);
 
@@ -240,4 +249,74 @@ const getFile = asyncHandler(async (req, res) => {
   fs.createReadStream(filePath).pipe(res);
 });
 
-module.exports = { create, upload, getFile };
+/**
+ * DELETE /api/v1/invoices/:id/payment-proofs/:proofId
+ * Hanya untuk bukti dengan verified_status = rejected. Menghapus baris DB dan file di disk (uploads/payment-proofs).
+ * Izin: pemilik invoice atau karyawan yang sama lingkup dengan verifikasi (admin pusat, invoice, accounting, super_admin, koordinator sesuai wilayah).
+ */
+const destroyRejected = asyncHandler(async (req, res) => {
+  const proof = await PaymentProof.findOne({
+    where: { id: req.params.proofId, invoice_id: req.params.id },
+    attributes: PAYMENT_PROOF_ATTRS
+  });
+  if (!proof) return res.status(404).json({ success: false, message: 'Bukti bayar tidak ditemukan' });
+  if (String(proof.verified_status || '') !== 'rejected') {
+    return res.status(400).json({ success: false, message: 'Hanya bukti yang ditolak bisa dihapus' });
+  }
+  const invoice = await Invoice.findByPk(proof.invoice_id, { attributes: ['id', 'owner_id', 'branch_id'] });
+  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+
+  const staffRoles = ['admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting', 'super_admin'];
+  const isStaff = staffRoles.includes(req.user.role);
+  const isOwner = invoice.owner_id === req.user.id;
+  if (!isStaff && !isOwner) {
+    return res.status(403).json({ success: false, message: 'Akses ditolak' });
+  }
+  if (isStaff && isKoordinatorRole(req.user.role)) {
+    const invFull = await Invoice.findByPk(invoice.id);
+    const inWilayah = await invoiceInKoordinatorWilayah(invFull, req.user.wilayah_id);
+    if (!inWilayah) return res.status(403).json({ success: false, message: 'Invoice bukan di wilayah Anda' });
+  }
+
+  try {
+    await sequelize.query('DELETE FROM reconciliation_logs WHERE payment_proof_id = :id', {
+      replacements: { id: proof.id }
+    });
+  } catch (e) {
+    // tabel opsional / skema beda
+  }
+
+  const urlNorm = (proof.proof_file_url || '').replace(/\\/g, '/').trim();
+  if (urlNorm && urlNorm !== 'issued-saudi') {
+    const match = urlNorm.match(/payment-proofs\/?(.+)$/i);
+    const filename = match ? match[1].replace(/^\/+/, '').split('/').pop() : null;
+    if (filename) {
+      const filePath = path.join(proofDir, filename);
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (e) {
+        /* teruskan hapus baris meski file gagal */
+      }
+    }
+  }
+
+  await proof.destroy();
+
+  const full = await Invoice.findByPk(invoice.id, {
+    include: [
+      {
+        model: PaymentProof,
+        as: 'PaymentProofs',
+        attributes: PAYMENT_PROOF_ATTRS,
+        include: [
+          { model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false },
+          { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false },
+          { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }
+        ]
+      }
+    ]
+  });
+  res.json({ success: true, data: full, message: 'Bukti bayar dan file terkait telah dihapus' });
+});
+
+module.exports = { create, upload, getFile, destroyRejected };

@@ -31,5 +31,6 @@ router.post('/:id/verify-payment', requireRole(ROLES.ADMIN_PUSAT, ROLES.INVOICE_
 router.patch('/:id/overpaid', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.SUPER_ADMIN), invoiceController.handleOverpaid);
 router.post('/:id/allocate-balance', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.allocateBalance);
 router.post('/:id/payment-proofs', paymentProofController.create);
+router.delete('/:id/payment-proofs/:proofId', paymentProofController.destroyRejected);
 
 module.exports = router;

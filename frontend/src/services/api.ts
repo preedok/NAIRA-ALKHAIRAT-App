@@ -561,6 +561,9 @@ export const invoicesApi = {
   handleOverpaid: (id: string, body: { handling: string; target_invoice_id?: string; target_order_id?: string }) => api.patch(`/invoices/${id}/overpaid`, body),
   uploadPaymentProof: (id: string, formData: FormData) => api.post(`/invoices/${id}/payment-proofs`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getPaymentProofFile: (invoiceId: string, proofId: string) => api.get(`/invoices/${invoiceId}/payment-proofs/${proofId}/file`, { responseType: 'blob' }),
+  /** Hapus bukti yang ditolak (server hapus DB + file uploads) */
+  deleteRejectedPaymentProof: (invoiceId: string, proofId: string) =>
+    api.delete<{ success: boolean; message?: string; data?: any }>(`/invoices/${invoiceId}/payment-proofs/${proofId}`),
   /** Unduh dokumen tiket terbit (ZIP/RAR) via API — file di-stream dari server */
   getTicketFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/ticket-file`, { responseType: 'blob' }),
   /** Unduh dokumen visa terbit via API — file di-stream dari server */
