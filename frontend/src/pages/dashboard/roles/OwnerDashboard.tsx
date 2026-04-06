@@ -251,10 +251,7 @@ const OwnerDashboard: React.FC = () => {
             </Button>
           </div>
           <div className="w-full min-w-0 lg:flex lg:justify-end">
-            <div className="w-full lg:max-w-[17rem] rounded-xl border border-stone-200/90 bg-white/95 p-3 shadow-sm">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500 mb-2">Perbarui dashboard</p>
-              <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" stacked />
-            </div>
+            <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" className="justify-start lg:justify-end" />
           </div>
         </div>
       </div>

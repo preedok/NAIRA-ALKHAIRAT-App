@@ -37,7 +37,7 @@ import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
-// Produk umum: operasional + owner (owner perlu lihat master harga seperti sub menu lain, bukan hanya Siskopatuh).
+// Produk umum: operasional internal (owner tidak perlu melihat menu Products).
 const productMenuRoles: UserRole[] = [
   'super_admin',
   'admin_pusat',
@@ -49,12 +49,10 @@ const productMenuRoles: UserRole[] = [
   'role_bus',
   'invoice_saudi',
   'handling',
-  'role_siskopatuh',
-  'owner_mou',
-  'owner_non_mou'
+  'role_siskopatuh'
 ];
-// Siskopatuh: subset invoice + owner + divisi siskopatuh (lihat master harga).
-const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'owner_mou', 'owner_non_mou', 'role_siskopatuh'];
+// Siskopatuh: subset invoice + divisi siskopatuh.
+const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'role_siskopatuh'];
 
 const menuItems: MenuItem[] = [
   {
@@ -497,15 +495,14 @@ const DashboardLayout: React.FC = () => {
   };
 
   /* Mobile bottom nav: key actions; owner bisa akses Profile (berisi MoU & ubah password) */
+  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
-    { path: '/dashboard/products/packages', label: 'Paket', icon: Package },
+    ...(!isOwner ? [{ path: '/dashboard/products/packages', label: 'Paket', icon: Package }] : []),
     ...((user?.role === 'owner_mou' || user?.role === 'owner_non_mou') ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
-  const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices' || m.path === '/dashboard/products');
-
-  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices');
   if (isOwner && user?.owner_status && user.owner_status !== 'active' && location.pathname !== '/dashboard/owner-activation') {
     return <Navigate to="/dashboard/owner-activation" replace />;
   }
