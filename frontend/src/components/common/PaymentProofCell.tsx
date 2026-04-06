@@ -123,19 +123,32 @@ export function PaymentProofCell({
         : variant === 'error'
           ? 'bg-red-100 text-red-800'
           : 'bg-amber-100 text-amber-900';
-    return <div className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold leading-snug break-words ${cls}`}>{children}</div>;
+    return (
+      <div className={`rounded-lg px-1.5 py-1 text-[10px] font-semibold leading-snug break-words max-w-full min-w-0 [overflow-wrap:anywhere] ${cls}`}>
+        {children}
+      </div>
+    );
   };
 
+  const cellBase = 'px-1.5 py-1.5 align-top break-words min-w-0 max-w-0';
+
   return (
-    <div className={`max-h-[300px] overflow-y-auto overflow-x-auto min-w-0 ${className}`}>
-      <table className="w-full min-w-[36rem] text-[11px] border border-slate-200 rounded-lg overflow-hidden border-collapse table-auto">
+    <div className={`max-h-[300px] overflow-y-auto overflow-x-hidden min-w-0 w-full max-w-full ${className}`}>
+      <table className="w-full max-w-full table-fixed text-[11px] border border-slate-200 rounded-lg overflow-hidden border-collapse">
+        <colgroup>
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '16%' }} />
+          <col style={{ width: '36%' }} />
+          <col style={{ width: '14%' }} />
+          <col style={{ width: '24%' }} />
+        </colgroup>
         <thead>
           <tr className="bg-slate-50 text-slate-600 border-b border-slate-200">
-            <th className="px-2 py-2 text-left font-semibold align-top w-[5.5rem] min-w-[5.5rem] max-w-[6rem]">Tipe</th>
-            <th className="px-2 py-2 text-left font-semibold align-top w-[7.25rem] min-w-[7rem] max-w-[8.5rem]">Nominal</th>
-            <th className="px-2 py-2 text-left font-semibold align-top min-w-0">Rekening / keterangan</th>
-            <th className="px-2 py-2 text-left font-semibold align-top w-[5.75rem] min-w-[5.5rem] max-w-[6.5rem]">Diunggah</th>
-            <th className="px-2 py-2 text-left font-semibold align-top w-[9.5rem] min-w-[9rem] max-w-[11rem]">Status</th>
+            <th className={`${cellBase} text-left font-semibold`}>Tipe</th>
+            <th className={`${cellBase} text-left font-semibold`}>Nominal</th>
+            <th className={`${cellBase} text-left font-semibold`}>Rekening / keterangan</th>
+            <th className={`${cellBase} text-left font-semibold`}>Diunggah</th>
+            <th className={`${cellBase} text-left font-semibold`}>Status</th>
           </tr>
         </thead>
         <tbody className="text-slate-700">
@@ -177,10 +190,8 @@ export function PaymentProofCell({
                     );
             return (
               <tr key={p.id} className="border-b border-slate-100 align-top">
-                <td className="px-2 py-2 font-semibold text-slate-800 align-top w-[5.5rem] min-w-[5.5rem] max-w-[6rem] break-words">
-                  {getProofDisplayLabel(p)}
-                </td>
-                <td className="px-2 py-2 align-top w-[7.25rem] min-w-[7rem] max-w-[8.5rem]">
+                <td className={`${cellBase} font-semibold text-slate-800`}>{getProofDisplayLabel(p)}</td>
+                <td className={cellBase}>
                   {isKesNominal ? (
                     <div className="space-y-0.5">
                       <div>
@@ -197,10 +208,8 @@ export function PaymentProofCell({
                     </div>
                   )}
                 </td>
-                <td className="px-2 py-2 align-top min-w-0 break-words text-slate-700">
-                  {rekLines}
-                </td>
-                <td className="px-2 py-2 text-slate-600 align-top w-[5.75rem] min-w-[5.5rem] max-w-[6.5rem] text-[10px] leading-snug whitespace-normal">
+                <td className={`${cellBase} text-slate-700 [overflow-wrap:anywhere]`}>{rekLines}</td>
+                <td className={`${cellBase} text-slate-600 text-[10px] leading-snug whitespace-normal`}>
                   {p.created_at ? (
                     <div className="space-y-0.5">
                       <div>{formatDate(p.created_at)}</div>
@@ -210,11 +219,13 @@ export function PaymentProofCell({
                     '–'
                   )}
                 </td>
-                <td className="px-2 py-2 align-top w-[9.5rem] min-w-[9rem] max-w-[11rem] overflow-hidden">
-                  <div className="flex flex-col gap-1 min-w-0">
+                <td className={`${cellBase} overflow-hidden`}>
+                  <div className="flex flex-col gap-1 min-w-0 max-w-full">
                     <StatusBlock variant={ps.variant}>{statusLabel}</StatusBlock>
                     {ps.status === 'verified' && p.VerifiedBy?.name && (
-                      <span className="text-slate-500 break-words text-[10px] leading-snug block">oleh {p.VerifiedBy.name}</span>
+                      <span className="text-slate-500 break-words text-[10px] leading-snug block [overflow-wrap:anywhere]">
+                        oleh {p.VerifiedBy.name}
+                      </span>
                     )}
                   </div>
                 </td>
@@ -227,8 +238,8 @@ export function PaymentProofCell({
             const usd = amt / usdToIdr;
             return (
               <tr key={b.id} className="border-b border-emerald-100 bg-emerald-50/40 align-top">
-                <td className="px-2 py-2 font-semibold text-emerald-900 align-top w-[5.5rem] min-w-[5.5rem] max-w-[6rem] break-words">Saldo akun</td>
-                <td className="px-2 py-2 align-top w-[7.25rem] min-w-[7rem] max-w-[8.5rem]">
+                <td className={`${cellBase} font-semibold text-emerald-900`}>Saldo akun</td>
+                <td className={cellBase}>
                   <div className="space-y-0.5">
                     <div><NominalDisplay amount={amt} currency="IDR" /></div>
                     <div className="text-slate-500 text-[10px]">
@@ -236,13 +247,13 @@ export function PaymentProofCell({
                     </div>
                   </div>
                 </td>
-                <td className="px-2 py-2 align-top min-w-0 break-words">
+                <td className={`${cellBase} [overflow-wrap:anywhere]`}>
                   <div className="space-y-0.5">
                     <div>Potongan saldo pemilik order (tanpa file bukti).</div>
                     {b.notes ? <div className="text-slate-600"><span className="text-slate-500">Cat:</span> {b.notes}</div> : null}
                   </div>
                 </td>
-                <td className="px-2 py-2 text-slate-600 align-top w-[5.75rem] min-w-[5.5rem] max-w-[6.5rem] text-[10px] leading-snug whitespace-normal">
+                <td className={`${cellBase} text-slate-600 text-[10px] leading-snug whitespace-normal`}>
                   {b.created_at ? (
                     <div className="space-y-0.5">
                       <div>{formatDate(b.created_at)}</div>
@@ -252,7 +263,7 @@ export function PaymentProofCell({
                     '–'
                   )}
                 </td>
-                <td className="px-2 py-2 align-top w-[9.5rem] min-w-[9rem] max-w-[11rem] overflow-hidden">
+                <td className={`${cellBase} overflow-hidden`}>
                   <StatusBlock variant="success">Tercatat otomatis</StatusBlock>
                 </td>
               </tr>
