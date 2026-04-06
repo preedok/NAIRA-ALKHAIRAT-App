@@ -12,7 +12,7 @@ import Table from '../../../components/common/Table';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, shouldHideInvoiceCancelAction } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLabel } from '../../../components/common/PaymentProofCell';
-import InvoiceProgressStatusCell, { PROGRESS_LABELS, ROOM_TYPE_LABELS, PROGRESS_LABELS_MEAL } from '../../../components/common/InvoiceProgressStatusCell';
+import { PROGRESS_LABELS, ROOM_TYPE_LABELS, PROGRESS_LABELS_MEAL } from '../../../components/common/InvoiceProgressStatusCell';
 import { InvoiceRefundDocument } from '../../../components/common/InvoiceRefundDocument';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import type { TableColumn } from '../../../types';
@@ -47,6 +47,7 @@ const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing
 
 /** Label trip type bus: pergi saja / pulang saja / pulang pergi */
 const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
+const SIMPLE_PROGRESS_LABELS: Record<string, string> = { pending: 'Menunggu', in_progress: 'Dalam Proses', completed: 'Selesai' };
 
 /** Base URL untuk file uploads (supaya foto bukti bayar tampil; pakai origin saat proxy) */
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -1199,6 +1200,101 @@ const OrdersInvoicesPage: React.FC = () => {
   const canDeleteRejectedProof = (inv: { owner_id?: string } | null) =>
     canVerify || Boolean(inv?.owner_id && user?.id === inv.owner_id);
 
+  const renderProgressTableCell = (inv: any) => {
+    const items = inv?.Order?.OrderItems || [];
+    if (!items.length) return <span className="text-slate-400 text-xs">-</span>;
+    const rows: Array<{ layanan: string; status: string; jadwal: string }> = [];
+
+    const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
+    if (visaItems.length) {
+      const first = visaItems[0];
+      const qty = visaItems.reduce((s: number, i: any) => s + Math.max(1, Number(i.quantity || 1)), 0);
+      const status = PROGRESS_LABELS.visa[first?.VisaProgress?.status as keyof typeof PROGRESS_LABELS.visa] || first?.VisaProgress?.status || 'Menunggu';
+      const jadwal = first?.meta?.travel_date ? `Berangkat ${formatDate(first.meta.travel_date)}` : '-';
+      rows.push({ layanan: `Visa (${qty})`, status, jadwal });
+    }
+
+    const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
+    if (ticketItems.length) {
+      const first = ticketItems[0];
+      const qty = ticketItems.reduce((s: number, i: any) => s + Math.max(1, Number(i.quantity || 1)), 0);
+      const status = PROGRESS_LABELS.ticket[first?.TicketProgress?.status as keyof typeof PROGRESS_LABELS.ticket] || first?.TicketProgress?.status || 'Menunggu';
+      const tt = String(first?.meta?.trip_type || 'round_trip');
+      const dep = formatDate(first?.meta?.departure_date ?? null);
+      const ret = formatDate(first?.meta?.return_date ?? null);
+      const jadwal = tt === 'one_way' ? `Pergi ${dep}` : tt === 'return_only' ? `Pulang ${ret}` : `${dep} -> ${ret}`;
+      rows.push({ layanan: `Tiket (${qty})`, status, jadwal });
+    }
+
+    const hotelItems = items.filter((i: any) => (i.type || i.product_type) === 'hotel');
+    if (hotelItems.length) {
+      const byLoc: Record<string, any[]> = { madinah: [], makkah: [] };
+      hotelItems.forEach((i: any) => {
+        const loc = getHotelLocationFromItem(i);
+        if (loc === 'madinah' || loc === 'makkah') byLoc[loc].push(i);
+      });
+      (['madinah', 'makkah'] as const).forEach((loc) => {
+        if (!byLoc[loc].length) return;
+        const first = byLoc[loc][0];
+        const status = PROGRESS_LABELS.hotel[first?.HotelProgress?.status as keyof typeof PROGRESS_LABELS.hotel] || first?.HotelProgress?.status || 'Menunggu konfirmasi';
+        const ci = first?.HotelProgress?.check_in_date ?? first?.meta?.check_in;
+        const co = first?.HotelProgress?.check_out_date ?? first?.meta?.check_out;
+        rows.push({
+          layanan: loc === 'madinah' ? 'Hotel Madinah' : 'Hotel Mekkah',
+          status,
+          jadwal: `${formatDateWithTime(ci ?? null, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00')} -> ${formatDateWithTime(co ?? null, first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time ?? '12:00')}`
+        });
+      });
+    }
+
+    const busItems = items.filter((i: any) => (i.type || i.product_type) === 'bus');
+    if (busItems.length) {
+      const first = busItems[0];
+      const status = PROGRESS_LABELS.bus[first?.BusProgress?.bus_ticket_status as keyof typeof PROGRESS_LABELS.bus] || first?.BusProgress?.bus_ticket_status || 'Pending';
+      const trip = BUS_TRIP_LABELS[String(first?.meta?.trip_type || 'round_trip')] || '';
+      const tgl = first?.meta?.travel_date ? formatDate(first.meta.travel_date) : '-';
+      rows.push({ layanan: 'Bus', status, jadwal: `${tgl}${trip ? ` · ${trip}` : ''}` });
+    }
+
+    const handlingItems = items.filter((i: any) => (i.type || i.product_type) === 'handling');
+    if (handlingItems.length) {
+      const first = handlingItems[0];
+      const st = String(first?.meta?.handling_status || 'pending');
+      rows.push({ layanan: 'Handling', status: SIMPLE_PROGRESS_LABELS[st] || st, jadwal: '-' });
+    }
+
+    const siskopatuhItems = items.filter((i: any) => (i.type || i.product_type) === 'siskopatuh');
+    if (siskopatuhItems.length) {
+      const first = siskopatuhItems[0];
+      const st = String(first?.meta?.siskopatuh_status || 'pending');
+      rows.push({ layanan: 'Siskopatuh', status: SIMPLE_PROGRESS_LABELS[st] || st, jadwal: first?.meta?.service_date ? formatDate(first.meta.service_date) : '-' });
+    }
+
+    if (!rows.length) return <span className="text-slate-400 text-xs">-</span>;
+    return (
+      <div className="overflow-hidden rounded-lg border border-slate-200">
+        <table className="w-full text-[11px]">
+          <thead className="bg-slate-50 text-slate-600">
+            <tr>
+              <th className="px-2 py-1.5 text-left font-semibold">Layanan</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Status</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Jadwal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => (
+              <tr key={`${r.layanan}-${idx}`} className="border-t border-slate-100">
+                <td className="px-2 py-1.5 text-slate-700">{r.layanan}</td>
+                <td className="px-2 py-1.5 text-slate-800">{r.status}</td>
+                <td className="px-2 py-1.5 text-slate-600">{r.jadwal}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const rates = viewInvoice?.currency_rates || currencyRates;
   const sarToIdr = rates.SAR_TO_IDR || 4200;
   const usdToIdr = rates.USD_TO_IDR || 15500;
@@ -1946,8 +2042,8 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div><NominalDisplay amount={remaining} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top max-w-[320px]">
-                      <InvoiceProgressStatusCell inv={inv} formatDate={(d) => formatDate(d ?? null)} formatDateWithTime={(d, t) => formatDateWithTime(d ?? null, t)} />
+                    <td className="py-3 px-4 align-top min-w-[360px] max-w-[420px]">
+                      {renderProgressTableCell(inv)}
                     </td>
                     <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
                       <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
