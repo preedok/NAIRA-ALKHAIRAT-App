@@ -28,6 +28,10 @@ import { formatInvoiceNumberDisplay } from '../../../utils';
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant } from '../../../components/common/InvoiceStatusRefundCell';
 import { DivisionStatCardsWithModal, type DivisionStatItem, ProgressInvoiceTableRow } from '../../../components/common';
 import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
+import {
+  PROGRESS_LABELS_HANDLING_SISKOPATUH,
+  PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH
+} from '../../../components/common/InvoiceProgressStatusCell';
 
 const formatDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '–';
@@ -38,17 +42,8 @@ const formatDateWithTime = (d: string | null | undefined, time: string | null | 
   return t ? `${dateStr}, ${t}` : dateStr;
 };
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'pending', label: 'Menunggu' },
-  { value: 'in_progress', label: 'Dalam Proses' },
-  { value: 'completed', label: 'Selesai' }
-];
-
-const RECAP_STATUS_LABELS: Record<string, string> = {
-  pending: 'Menunggu',
-  in_progress: 'Dalam Proses',
-  completed: 'Selesai'
-};
+const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH;
+const RECAP_STATUS_LABELS: Record<string, string> = { ...PROGRESS_LABELS_HANDLING_SISKOPATUH };
 
 const RECAP_STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <Clock className="w-5 h-5" />,

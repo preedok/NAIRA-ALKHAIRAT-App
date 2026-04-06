@@ -11,19 +11,16 @@ import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
 import { handlingApi } from '../../../services/api';
 import type { HandlingDashboardData } from '../../../services/api';
 import { DivisionStatCardsWithModal, type DivisionStatItem } from '../../../components/common';
+import {
+  PROGRESS_LABELS_HANDLING_SISKOPATUH,
+  PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH
+} from '../../../components/common/InvoiceProgressStatusCell';
 import { getProgressDateRange, PROGRESS_DATE_RANGE_OPTIONS, type ProgressDateRangeKey } from '../../../utils/progressDateFilter';
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Menunggu',
-  in_progress: 'Dalam Proses',
-  completed: 'Selesai'
-};
-
-const STATUS_OPTIONS: { value: 'pending' | 'in_progress' | 'completed'; label: string }[] = [
-  { value: 'pending', label: 'Menunggu' },
-  { value: 'in_progress', label: 'Dalam Proses' },
-  { value: 'completed', label: 'Selesai' }
-];
+const STATUS_OPTIONS = PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH as {
+  value: 'pending' | 'in_progress' | 'completed';
+  label: string;
+}[];
 
 const HandlingWorkPage: React.FC = () => {
   const navigate = useNavigate();
@@ -101,7 +98,7 @@ const HandlingWorkPage: React.FC = () => {
         invoices={invoiceLikeList}
         getFilteredInvoices={getFilteredForStat}
         loading={loading}
-        getStatusLabel={(row: any) => row.status === 'completed' ? 'Selesai' : row.status === 'in_progress' ? 'Dalam Proses' : 'Menunggu'}
+        getStatusLabel={(row: any) => PROGRESS_LABELS_HANDLING_SISKOPATUH[row.status] || row.status || '–'}
         getStatusBadgeVariant={(row: any) => (row.status === 'completed' ? 'success' : row.status === 'in_progress' ? 'warning' : 'default') as 'default' | 'success' | 'warning' | 'error' | 'info'}
       />
 

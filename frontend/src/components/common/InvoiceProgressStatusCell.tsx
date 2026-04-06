@@ -101,12 +101,17 @@ const defaultFormatDateWithTime = (d: string | null | undefined, time: string | 
   return t ? `${dateStr}, ${t}` : `${dateStr}, –`;
 };
 
-/** handling_status / siskopatuh_status di meta OrderItem */
-const SIMPLE_DIVISION_PROGRESS_LABELS: Record<string, string> = {
+/** handling_status & siskopatuh_status di meta OrderItem — satu sumber dengan menu Progress Handling/Siskopatuh */
+export const PROGRESS_LABELS_HANDLING_SISKOPATUH: Record<string, string> = {
   pending: 'Menunggu konfirmasi',
   in_progress: 'Dalam Proses',
   completed: 'Selesai'
 };
+
+export const PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH = Object.entries(PROGRESS_LABELS_HANDLING_SISKOPATUH).map(([value, label]) => ({
+  value,
+  label
+}));
 
 export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'siskopatuh' | 'package';
 
@@ -340,7 +345,7 @@ export function buildInvoiceProgressSectionModels(
       const name = item.Product?.name || item.product_name || 'Handling';
       const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
       const st = (item.meta && item.meta.handling_status) || 'pending';
-      const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
+        const stLabel = PROGRESS_LABELS_HANDLING_SISKOPATUH[st] || st;
       return {
         key: String(item.id || `handling-${idx}`),
         serviceLabel: name,
@@ -358,7 +363,7 @@ export function buildInvoiceProgressSectionModels(
       const name = item.Product?.name || item.product_name || 'Siskopatuh';
       const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
       const st = (item.meta && item.meta.siskopatuh_status) || 'pending';
-      const stLabel = SIMPLE_DIVISION_PROGRESS_LABELS[st] || st;
+        const stLabel = PROGRESS_LABELS_HANDLING_SISKOPATUH[st] || st;
       const hasDoc = !!(item.meta && item.meta.siskopatuh_file_url && String(item.meta.siskopatuh_file_url).trim());
       const svcRaw = item.meta && item.meta.service_date ? String(item.meta.service_date).slice(0, 10) : '';
       const svcLine = svcRaw && /^\d{4}-\d{2}-\d{2}$/.test(svcRaw) ? `Tgl layanan ${formatDate(svcRaw)}` : '';
