@@ -84,7 +84,7 @@ export function ProgressInvoiceTableRow({
           <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={remainingTriple.usd} currency="USD" showCurrency={false} />
         </div>
       </td>
-      <td className="py-3 px-4 align-top min-w-[320px] max-w-[440px]">
+      <td className="py-3 px-4 align-top min-w-[460px]">
         <InvoiceProgressStatusCell
           inv={inv}
           formatDate={formatDate}
@@ -93,7 +93,7 @@ export function ProgressInvoiceTableRow({
           layout="table"
         />
       </td>
-      <td className="py-3 px-4 align-top min-w-[300px] max-w-[480px] max-h-[260px] overflow-y-auto">
+      <td className="py-3 px-4 align-top min-w-[800px] max-h-[320px] overflow-y-auto overflow-x-visible">
         <PaymentProofCell paymentProofs={inv.PaymentProofs || []} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
       </td>
       <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
