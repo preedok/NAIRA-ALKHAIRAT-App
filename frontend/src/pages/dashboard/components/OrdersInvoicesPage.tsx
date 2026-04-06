@@ -4329,7 +4329,7 @@ const OrdersInvoicesPage: React.FC = () => {
             <ModalBox className="max-w-4xl w-full">
               <ModalHeader
                 title="Pemindahan Dana Antar Invoice"
-                subtitle="Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Bisa satu atau lebih sumber dan satu atau lebih penerima."
+                subtitle="Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Yang diterapkan ke penerima dibatasi sisa tagihannya; kelebihan tetap di invoice sumber (bisa dipindah lagi atau saldo via alur lain)."
                 icon={<ArrowRightLeft className="w-5 h-5" />}
                 onClose={() => !reallocateSubmitting && setShowReallocateModal(false)}
               />

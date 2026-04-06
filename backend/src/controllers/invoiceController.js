@@ -1417,13 +1417,26 @@ const handleOverpaid = asyncHandler(async (req, res) => {
   if (handling === 'transfer_invoice' && target_invoice_id) {
     const target = await Invoice.findByPk(target_invoice_id);
     if (target && target.owner_id === invoice.owner_id) {
-      const newPaid = parseFloat(target.paid_amount) + overpaid;
-      const remaining = Math.max(0, parseFloat(target.total_amount) - newPaid);
-      await updateInvoiceWithAudit(target, {
-        paid_amount: newPaid,
-        remaining_amount: remaining,
-        status: remaining <= 0 ? INVOICE_STATUS.PAID : target.status
-      }, { changedBy: req.user.id, reason: 'overpaid_transfer_in', meta: { source_invoice_id: invoice.id, amount: overpaid } });
+      const targetPaid = parseFloat(target.paid_amount) || 0;
+      const targetTotal = parseFloat(target.total_amount) || 0;
+      const need = Math.max(0, targetTotal - targetPaid);
+      const applied = Math.min(overpaid, need);
+      if (applied > 0) {
+        const newPaid = targetPaid + applied;
+        const remaining = Math.max(0, targetTotal - newPaid);
+        let newStatus = target.status;
+        if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
+        else if (newPaid >= (parseFloat(target.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
+        await updateInvoiceWithAudit(target, {
+          paid_amount: newPaid,
+          remaining_amount: remaining,
+          status: newStatus
+        }, { changedBy: req.user.id, reason: 'overpaid_transfer_in', meta: { source_invoice_id: invoice.id, amount: applied, requested_overpaid: overpaid, surplus_returned_to_source: overpaid - applied } });
+      }
+      const surplus = overpaid - applied;
+      if (surplus > 0) {
+        await invoice.update({ overpaid_amount: surplus });
+      }
     }
   }
   const full = await Invoice.findByPk(invoice.id);
@@ -2205,12 +2218,59 @@ const reallocatePayments = asyncHandler(async (req, res) => {
     }
   }
 
+  /** Hanya bagian yang mengisi sisa tagihan penerima yang boleh “keluar” dari sumber; sisanya tetap di invoice sumber. */
+  const targetSimPaid = new Map();
+  for (const id of targetIds) {
+    const t = invoiceMap.get(id);
+    targetSimPaid.set(id, parseFloat(t.paid_amount) || 0);
+  }
+  const effectiveRows = [];
+  let rowIdx = 0;
+  for (const p of parsed) {
+    rowIdx += 1;
+    const simPaid = targetSimPaid.get(p.target_invoice_id);
+    const tgt = invoiceMap.get(p.target_invoice_id);
+    const tgtTotal = parseFloat(tgt.total_amount) || 0;
+    const need = Math.max(0, tgtTotal - simPaid);
+    const applied = Math.min(p.amount, need);
+    if (applied <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Baris ${rowIdx}: invoice penerima ${tgt.invoice_number} sudah lunas atau tidak membutuhkan dana. Tidak dapat menerima Rp ${p.amount.toLocaleString('id-ID')} (sisa tagihan tersedia: Rp ${need.toLocaleString('id-ID')}). Kurangi jumlah atau pilih invoice lain.`
+      });
+    }
+    targetSimPaid.set(p.target_invoice_id, simPaid + applied);
+    const surplus = p.amount - applied;
+    effectiveRows.push({
+      source_invoice_id: p.source_invoice_id,
+      target_invoice_id: p.target_invoice_id,
+      requested: p.amount,
+      applied,
+      surplus
+    });
+  }
+
+  const sourceTotalApplied = {};
+  for (const row of effectiveRows) {
+    sourceTotalApplied[row.source_invoice_id] = (sourceTotalApplied[row.source_invoice_id] || 0) + row.applied;
+  }
+  for (const [invId, totalApplied] of Object.entries(sourceTotalApplied)) {
+    const inv = invoiceMap.get(invId);
+    const releasable = getReleasableAmount(inv);
+    if (totalApplied > releasable + 0.01) {
+      return res.status(400).json({
+        success: false,
+        message: `Invoice ${inv.invoice_number}: total yang dapat diterapkan ke penerima (Rp ${totalApplied.toLocaleString('id-ID')}) melebihi dana yang tersedia (Rp ${releasable.toLocaleString('id-ID')}).`
+      });
+    }
+  }
+
   const notes = (req.body?.notes && String(req.body.notes).trim()) || null;
 
   await sequelize.transaction(async (tx) => {
     const sourceDeduct = {};
-    for (const p of parsed) {
-      sourceDeduct[p.source_invoice_id] = (sourceDeduct[p.source_invoice_id] || 0) + p.amount;
+    for (const row of effectiveRows) {
+      sourceDeduct[row.source_invoice_id] = (sourceDeduct[row.source_invoice_id] || 0) + row.applied;
     }
     for (const [invId, deduct] of Object.entries(sourceDeduct)) {
       const inv = await Invoice.findByPk(invId, { transaction: tx });
@@ -2242,8 +2302,8 @@ const reallocatePayments = asyncHandler(async (req, res) => {
     }
 
     const targetAdd = {};
-    for (const p of parsed) {
-      targetAdd[p.target_invoice_id] = (targetAdd[p.target_invoice_id] || 0) + p.amount;
+    for (const row of effectiveRows) {
+      targetAdd[row.target_invoice_id] = (targetAdd[row.target_invoice_id] || 0) + row.applied;
     }
     for (const [invId, add] of Object.entries(targetAdd)) {
       const inv = await Invoice.findByPk(invId, { transaction: tx });
@@ -2261,22 +2321,56 @@ const reallocatePayments = asyncHandler(async (req, res) => {
       }, { changedBy: req.user.id, reason: 'reallocate_in', meta: { amount: add, notes }, transaction: tx });
     }
 
-    for (const p of parsed) {
+    for (const row of effectiveRows) {
+      const extra = row.surplus > 0
+        ? `Diminta Rp ${Number(row.requested).toLocaleString('id-ID')}; diterapkan Rp ${Number(row.applied).toLocaleString('id-ID')} (sesuai sisa tagihan penerima). Sisa Rp ${Number(row.surplus).toLocaleString('id-ID')} tetap di invoice sumber.`
+        : '';
+      const rowNotes = [notes, extra].filter(Boolean).join(' ').trim() || null;
       await PaymentReallocation.create({
-        source_invoice_id: p.source_invoice_id,
-        target_invoice_id: p.target_invoice_id,
-        amount: p.amount,
+        source_invoice_id: row.source_invoice_id,
+        target_invoice_id: row.target_invoice_id,
+        amount: row.applied,
         performed_by: req.user.id,
-        notes
+        notes: rowNotes
       }, { transaction: tx });
     }
   });
 
-  const totalAmount = parsed.reduce((s, p) => s + p.amount, 0);
+  const totalApplied = effectiveRows.reduce((s, r) => s + r.applied, 0);
+  const anySurplus = effectiveRows.some((r) => r.surplus > 0);
+  const uniqueTargets = [...new Set(effectiveRows.map((r) => r.target_invoice_id))];
+  for (const tid of uniqueTargets) {
+    const invReload = await Invoice.findByPk(tid, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
+    if (invReload) {
+      await updateOrderDpStatusFromInvoice(invReload);
+      if (invReload.status === INVOICE_STATUS.PAID) {
+        const targetOrder = await Order.findByPk(invReload.order_id, { attributes: ['id', 'status'] });
+        if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
+          await targetOrder.update({ status: 'processing' });
+        }
+      }
+    }
+  }
+
+  let message = `Pemindahan dana Rp ${totalApplied.toLocaleString('id-ID')} berhasil (${effectiveRows.length} alokasi; sesuai sisa tagihan penerima).`;
+  if (anySurplus) {
+    message += ' Kelebihan terhadap sisa tagihan penerima tetap di invoice sumber dan dapat dipindahkan lagi ke invoice lain atau dijadikan saldo melalui alur pembatalan/saldo.';
+  }
   res.json({
     success: true,
-    message: `Pemindahan dana Rp ${totalAmount.toLocaleString('id-ID')} berhasil (${parsed.length} alokasi).`,
-    data: { transfers: parsed.length, total_amount: totalAmount }
+    message,
+    data: {
+      transfers: effectiveRows.length,
+      total_requested: effectiveRows.reduce((s, r) => s + r.requested, 0),
+      total_applied: totalApplied,
+      rows: effectiveRows.map((r) => ({
+        source_invoice_id: r.source_invoice_id,
+        target_invoice_id: r.target_invoice_id,
+        requested: r.requested,
+        applied: r.applied,
+        surplus_stays_on_source: r.surplus
+      }))
+    }
   });
 });
 

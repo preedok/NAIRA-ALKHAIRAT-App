@@ -261,6 +261,11 @@ async function validatePaidCancelBody(order, inv, body) {
     });
     const check = validateCancelReallocateTargetInvoice(targetInv, order.owner_id);
     if (!check.ok) return { ok: false, status: check.code, message: check.message };
+    const tPaid = parseFloat(targetInv.paid_amount) || 0;
+    const tTotal = parseFloat(targetInv.total_amount) || 0;
+    if (tTotal - tPaid <= 0.01) {
+      return { ok: false, status: 400, message: 'Invoice tujuan sudah lunas; tidak dapat menerima pemindahan dana. Gunakan saldo akun atau invoice lain yang masih berutang.' };
+    }
   }
 
   const reason = body && body.reason ? String(body.reason).trim() || null : null;
@@ -339,28 +344,62 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
       if (targetInv && targetInv.owner_id === order.owner_id && remainderTargetStatus !== 'canceled' && remainderTargetStatus !== 'cancelled' && remainderTargetStatus !== 'cancelled_refund') {
         const targetPaid = parseFloat(targetInv.paid_amount) || 0;
         const targetTotal = parseFloat(targetInv.total_amount) || 0;
-        const newTargetPaid = targetPaid + remainder;
-        const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
-        let newTargetStatus = targetInv.status;
-        if (newTargetRemaining <= 0) newTargetStatus = INVOICE_STATUS.PAID;
-        else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = INVOICE_STATUS.PARTIAL_PAID;
-        const receivedNote = `Menerima pemindahan Rp ${Number(remainder).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan order).`;
-        const targetNotes = [receivedNote, (targetInv.notes || '').trim()].filter(Boolean).join('\n');
-        await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus, notes: targetNotes });
-        if (newTargetStatus === INVOICE_STATUS.PAID) {
-          const targetOrder = await Order.findByPk(targetInv.order_id, { attributes: ['id', 'status'] });
-          if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
-            await targetOrder.update({ status: ORDER_STATUS.PROCESSING });
+        const need = Math.max(0, targetTotal - targetPaid);
+        const applied = Math.min(remainder, need);
+        const surplusRemainder = remainder - applied;
+        if (applied > 0) {
+          const newTargetPaid = targetPaid + applied;
+          const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
+          let newTargetStatus = targetInv.status;
+          if (newTargetRemaining <= 0) newTargetStatus = INVOICE_STATUS.PAID;
+          else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = INVOICE_STATUS.PARTIAL_PAID;
+          const receivedNote =
+            applied < remainder
+              ? `Menerima pemindahan Rp ${Number(applied).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan; sesuai sisa tagihan).`
+              : `Menerima pemindahan Rp ${Number(remainder).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan order).`;
+          const targetNotes = [receivedNote, (targetInv.notes || '').trim()].filter(Boolean).join('\n');
+          await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus, notes: targetNotes });
+          if (newTargetStatus === INVOICE_STATUS.PAID) {
+            const targetOrder = await Order.findByPk(targetInv.order_id, { attributes: ['id', 'status'] });
+            if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
+              await targetOrder.update({ status: ORDER_STATUS.PROCESSING });
+            }
+          }
+          await PaymentReallocation.create({
+            source_invoice_id: inv.id,
+            target_invoice_id: remainderTargetInvoiceId,
+            amount: applied,
+            performed_by: performedById,
+            notes:
+              surplusRemainder > 0
+                ? `Pembatalan order ${order.order_number}; dialokasikan Rp ${Number(applied).toLocaleString('id-ID')} ke ${targetInv.invoice_number}. Sisa Rp ${Number(surplusRemainder).toLocaleString('id-ID')} masuk saldo akun.`
+                : `Pembatalan order ${order.order_number}; sisa setelah refund dialokasikan ke invoice ${targetInv.invoice_number}`
+          });
+          reallocationAdded = {
+            target_invoice_id: remainderTargetInvoiceId,
+            target_invoice_number: targetInv.invoice_number,
+            amount: applied,
+            surplus_to_balance: surplusRemainder
+          };
+        }
+        if (surplusRemainder > 0) {
+          const profile = await OwnerProfile.findOne({ where: { user_id: order.owner_id } });
+          if (profile) {
+            const currentBalance = parseFloat(profile.balance) || 0;
+            const newBalance = currentBalance + surplusRemainder;
+            await profile.update({ balance: newBalance });
+            await OwnerBalanceTransaction.create({
+              owner_id: order.owner_id,
+              amount: surplusRemainder,
+              type: 'cancel_credit',
+              reference_type: 'order',
+              reference_id: order.id,
+              notes: `Pembatalan order ${order.order_number}; kelebihan alokasi ke ${targetInv.invoice_number} (sisa tagihan penerima). Saldo +${Number(surplusRemainder).toLocaleString('id-ID')}`
+            });
+            if (!balanceAdded) balanceAdded = { previous: currentBalance, new: newBalance, amount: surplusRemainder };
+            else balanceAdded = { ...balanceAdded, amount: (balanceAdded.amount || 0) + surplusRemainder, new: newBalance };
           }
         }
-        await PaymentReallocation.create({
-          source_invoice_id: inv.id,
-          target_invoice_id: remainderTargetInvoiceId,
-          amount: remainder,
-          performed_by: performedById,
-          notes: `Pembatalan order ${order.order_number}; sisa setelah refund dialokasikan ke invoice ${targetInv.invoice_number}`
-        });
-        reallocationAdded = { target_invoice_id: remainderTargetInvoiceId, target_invoice_number: targetInv.invoice_number, amount: remainder };
       }
     }
     await inv.update({ paid_amount: 0, remaining_amount: 0 });
@@ -379,31 +418,69 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
     });
   } else if (inv && paidAmount > 0 && action === 'allocate_to_order' && targetInvoiceId) {
     const targetInv = await Invoice.findByPk(targetInvoiceId);
+    let surplusAllocate = 0;
     if (targetInv && targetInv.owner_id === order.owner_id) {
       const targetPaid = parseFloat(targetInv.paid_amount) || 0;
       const targetTotal = parseFloat(targetInv.total_amount) || 0;
-      const newTargetPaid = targetPaid + paidAmount;
-      const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
-      let newTargetStatus = targetInv.status;
-      if (newTargetRemaining <= 0) newTargetStatus = INVOICE_STATUS.PAID;
-      else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = INVOICE_STATUS.PARTIAL_PAID;
-      const receivedNote = `Menerima pemindahan Rp ${Number(paidAmount).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan order).`;
-      const targetNotes = [receivedNote, (targetInv.notes || '').trim()].filter(Boolean).join('\n');
-      await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus, notes: targetNotes });
-      if (newTargetStatus === INVOICE_STATUS.PAID) {
-        const targetOrder = await Order.findByPk(targetInv.order_id, { attributes: ['id', 'status'] });
-        if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
-          await targetOrder.update({ status: ORDER_STATUS.PROCESSING });
+      const need = Math.max(0, targetTotal - targetPaid);
+      const applied = Math.min(paidAmount, need);
+      surplusAllocate = paidAmount - applied;
+      if (applied > 0) {
+        const newTargetPaid = targetPaid + applied;
+        const newTargetRemaining = Math.max(0, targetTotal - newTargetPaid);
+        let newTargetStatus = targetInv.status;
+        if (newTargetRemaining <= 0) newTargetStatus = INVOICE_STATUS.PAID;
+        else if (newTargetPaid >= (parseFloat(targetInv.dp_amount) || 0)) newTargetStatus = INVOICE_STATUS.PARTIAL_PAID;
+        const receivedNote =
+          surplusAllocate > 0
+            ? `Menerima pemindahan Rp ${Number(applied).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan; sesuai sisa tagihan).`
+            : `Menerima pemindahan Rp ${Number(paidAmount).toLocaleString('id-ID')} dari invoice ${inv.invoice_number} (pembatalan order).`;
+        const targetNotes = [receivedNote, (targetInv.notes || '').trim()].filter(Boolean).join('\n');
+        await targetInv.update({ paid_amount: newTargetPaid, remaining_amount: newTargetRemaining, status: newTargetStatus, notes: targetNotes });
+        if (newTargetStatus === INVOICE_STATUS.PAID) {
+          const targetOrder = await Order.findByPk(targetInv.order_id, { attributes: ['id', 'status'] });
+          if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
+            await targetOrder.update({ status: ORDER_STATUS.PROCESSING });
+          }
         }
+        await PaymentReallocation.create({
+          source_invoice_id: inv.id,
+          target_invoice_id: targetInvoiceId,
+          amount: applied,
+          performed_by: performedById,
+          notes:
+            surplusAllocate > 0
+              ? `Pembatalan order ${order.order_number}; Rp ${Number(applied).toLocaleString('id-ID')} ke ${targetInv.invoice_number}. Kelebihan Rp ${Number(surplusAllocate).toLocaleString('id-ID')} masuk saldo akun owner.`
+              : `Pembatalan order ${order.order_number}; dana dialihkan ke invoice ${targetInv.invoice_number}`
+        });
+        reallocationAdded = {
+          target_invoice_id: targetInvoiceId,
+          target_invoice_number: targetInv.invoice_number,
+          amount: applied,
+          surplus_to_balance: surplusAllocate
+        };
+      } else {
+        surplusAllocate = paidAmount;
       }
-      await PaymentReallocation.create({
-        source_invoice_id: inv.id,
-        target_invoice_id: targetInvoiceId,
-        amount: paidAmount,
-        performed_by: performedById,
-        notes: `Pembatalan order ${order.order_number}; dana dialihkan ke invoice ${targetInv.invoice_number}`
-      });
-      reallocationAdded = { target_invoice_id: targetInvoiceId, target_invoice_number: targetInv.invoice_number, amount: paidAmount };
+    } else {
+      surplusAllocate = paidAmount;
+    }
+    if (surplusAllocate > 0) {
+      const profile = await OwnerProfile.findOne({ where: { user_id: order.owner_id } });
+      if (profile) {
+        const currentBalance = parseFloat(profile.balance) || 0;
+        const newBalance = currentBalance + surplusAllocate;
+        await profile.update({ balance: newBalance });
+        await OwnerBalanceTransaction.create({
+          owner_id: order.owner_id,
+          amount: surplusAllocate,
+          type: 'cancel_credit',
+          reference_type: 'order',
+          reference_id: order.id,
+          notes: `Pembatalan order ${order.order_number}; kelebihan pemindahan ke invoice tujuan (sisa tagihan penerima). Saldo +${Number(surplusAllocate).toLocaleString('id-ID')}`
+        });
+        balanceAdded = { previous: currentBalance, new: newBalance, amount: surplusAllocate };
+      }
     }
     await inv.update({ paid_amount: 0, remaining_amount: 0 });
   }
@@ -415,12 +492,22 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
       cancellationHandlingNote = `Dipindahkan ke saldo akun. Jumlah: Rp ${fmt(paidAmount)}`;
     } else if (action === 'refund') {
       if (reallocationAdded && reallocationAdded.target_invoice_number) {
-        cancellationHandlingNote = `Sisa Rp ${fmt(reallocationAdded.amount)} dialihkan ke invoice ${reallocationAdded.target_invoice_number}.`;
+        cancellationHandlingNote =
+          reallocationAdded.surplus_to_balance > 0
+            ? `Sisa Rp ${fmt(reallocationAdded.amount)} dialihkan ke invoice ${reallocationAdded.target_invoice_number}; Rp ${fmt(reallocationAdded.surplus_to_balance)} masuk saldo akun (kelebihan sisa tagihan penerima).`
+            : `Sisa Rp ${fmt(reallocationAdded.amount)} dialihkan ke invoice ${reallocationAdded.target_invoice_number}.`;
       } else if (balanceAdded != null && balanceAdded.amount != null) {
         cancellationHandlingNote = `Sisa Rp ${fmt(balanceAdded.amount)} dipindahkan ke saldo akun.`;
       }
-    } else if (action === 'allocate_to_order' && reallocationAdded) {
-      cancellationHandlingNote = `Dipindahkan ke invoice ${reallocationAdded.target_invoice_number || 'lain'}. Jumlah: Rp ${fmt(reallocationAdded.amount)}`;
+    } else if (action === 'allocate_to_order') {
+      if (reallocationAdded && reallocationAdded.target_invoice_number) {
+        cancellationHandlingNote =
+          reallocationAdded.surplus_to_balance > 0
+            ? `Dipindahkan ke invoice ${reallocationAdded.target_invoice_number}: Rp ${fmt(reallocationAdded.amount)}. Kelebihan Rp ${fmt(reallocationAdded.surplus_to_balance)} masuk saldo akun owner.`
+            : `Dipindahkan ke invoice ${reallocationAdded.target_invoice_number}. Jumlah: Rp ${fmt(reallocationAdded.amount)}`;
+      } else if (balanceAdded != null && balanceAdded.amount != null) {
+        cancellationHandlingNote = `Invoice tujuan tidak membutuhkan dana; Rp ${fmt(balanceAdded.amount)} masuk saldo akun owner.`;
+      }
     }
   }
 
@@ -458,15 +545,6 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
         reason: 'refund_requested',
         meta: { refund_id: refund.id, amount: refundAmount, bank_name: bankName, account_number: accountNumber }
       });
-    } else if (balanceAdded != null) {
-      await logInvoiceStatusChange({
-        invoice_id: inv.id,
-        from_status: newInvoiceStatus,
-        to_status: newInvoiceStatus,
-        changed_by: auditUserId,
-        reason: 'to_balance',
-        meta: { amount: balanceAdded.amount != null ? balanceAdded.amount : paidAmount }
-      });
     } else if (reallocationAdded) {
       await logInvoiceStatusChange({
         invoice_id: inv.id,
@@ -476,19 +554,49 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
         reason: 'allocate_to_order',
         meta: reallocationAdded
       });
+      if (balanceAdded != null && reallocationAdded.surplus_to_balance > 0) {
+        await logInvoiceStatusChange({
+          invoice_id: inv.id,
+          from_status: newInvoiceStatus,
+          to_status: newInvoiceStatus,
+          changed_by: auditUserId,
+          reason: 'to_balance',
+          meta: { amount: balanceAdded.amount, note: 'kelebihan alokasi ke invoice tujuan (sisa tagihan)' }
+        });
+      }
+    } else if (balanceAdded != null) {
+      await logInvoiceStatusChange({
+        invoice_id: inv.id,
+        from_status: newInvoiceStatus,
+        to_status: newInvoiceStatus,
+        changed_by: auditUserId,
+        reason: 'to_balance',
+        meta: { amount: balanceAdded.amount != null ? balanceAdded.amount : paidAmount }
+      });
     }
   }
 
   let message = 'Invoice dibatalkan.';
-  if (balanceAdded != null) {
+  if (action === 'refund' && refund) {
+    message = `Invoice dibatalkan. Permintaan refund Rp ${Number(refundAmount).toLocaleString('id-ID')} ke ${bankName} ${accountNumber} telah dicatat. Role accounting akan memproses.`;
+    if (reallocationAdded) {
+      message += ` Sisa Rp ${Number(reallocationAdded.amount).toLocaleString('id-ID')} dialokasikan ke invoice ${reallocationAdded.target_invoice_number || 'lain'}.`;
+      if (reallocationAdded.surplus_to_balance > 0) {
+        message += ` Kelebihan Rp ${Number(reallocationAdded.surplus_to_balance).toLocaleString('id-ID')} masuk saldo akun.`;
+      }
+    } else if (balanceAdded != null && balanceAdded.amount != null) {
+      message += ` Sisa Rp ${Number(balanceAdded.amount).toLocaleString('id-ID')} ditambahkan ke saldo akun.`;
+    }
+  } else if (action === 'allocate_to_order' && reallocationAdded) {
+    message = `Invoice dibatalkan. Rp ${Number(reallocationAdded.amount).toLocaleString('id-ID')} dialihkan ke invoice ${reallocationAdded.target_invoice_number || 'lain'}.`;
+    if (reallocationAdded.surplus_to_balance > 0) {
+      message += ` Kelebihan Rp ${Number(reallocationAdded.surplus_to_balance).toLocaleString('id-ID')} masuk saldo akun owner.`;
+    }
+  } else if (action === 'allocate_to_order' && balanceAdded != null) {
+    message = `Invoice dibatalkan. Rp ${Number(balanceAdded.amount != null ? balanceAdded.amount : paidAmount).toLocaleString('id-ID')} masuk saldo akun (invoice tujuan tidak membutuhkan dana atau tidak valid).`;
+  } else if (balanceAdded != null) {
     const amt = balanceAdded.amount != null ? balanceAdded.amount : paidAmount;
     message = `Invoice dibatalkan. Saldo akun +Rp ${Number(amt).toLocaleString('id-ID')}. Dapat digunakan untuk order baru atau alokasi ke tagihan.`;
-  } else if (refund) {
-    message = `Invoice dibatalkan. Permintaan refund Rp ${Number(refundAmount).toLocaleString('id-ID')} ke ${bankName} ${accountNumber} telah dicatat. Role accounting akan memproses.`;
-    if (reallocationAdded) message += ` Sisa Rp ${Number(reallocationAdded.amount).toLocaleString('id-ID')} dialokasikan ke invoice lain.`;
-    else if (balanceAdded != null) message += ` Sisa telah ditambahkan ke saldo akun.`;
-  } else if (reallocationAdded) {
-    message = `Invoice dibatalkan. Dana Rp ${Number(reallocationAdded.amount).toLocaleString('id-ID')} dialihkan ke invoice lain.`;
   }
 
   return { message, data: { order, refund, balance_added: balanceAdded, reallocation: reallocationAdded } };
