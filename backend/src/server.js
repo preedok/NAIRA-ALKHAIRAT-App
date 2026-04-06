@@ -126,6 +126,16 @@ async function ensureOrdersWaiveBusPenaltyColumn(db) {
   }
 }
 
+/** Ensure orders has bus_service_option column for bus handling mode. */
+async function ensureOrdersBusServiceOptionColumn(db) {
+  try {
+    await db.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS bus_service_option VARCHAR(20) NOT NULL DEFAULT 'finality'");
+    await db.query("UPDATE orders SET bus_service_option = 'hiace' WHERE waive_bus_penalty = true AND (bus_service_option IS NULL OR bus_service_option = '')");
+  } catch (e) {
+    logger.warn('ensureOrdersBusServiceOptionColumn:', e.message);
+  }
+}
+
 /** Ensure orders has bus_include_* columns (progress bus untuk order tanpa item bus) */
 async function ensureOrderBusIncludeColumns(db) {
   try {
@@ -203,6 +213,7 @@ sequelize.sync({ alter })
   .then(() => ensureMaintenanceBlockAppColumn(sequelize))
   .then(() => ensureInvoicesCurrencyRatesSnapshotColumn(sequelize))
   .then(() => ensureOrdersWaiveBusPenaltyColumn(sequelize))
+  .then(() => ensureOrdersBusServiceOptionColumn(sequelize))
   .then(() => ensureOrderBusIncludeColumns(sequelize))
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
