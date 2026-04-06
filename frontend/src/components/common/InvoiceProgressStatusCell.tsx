@@ -88,6 +88,23 @@ export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling
 
 export type InvoiceProgressLayout = 'stack' | 'table';
 
+/**
+ * Daftar invoice: tiap role divisi hanya melihat baris progress produknya (mis. Hotel tidak melihat Visa/Siskopatuh).
+ * Undefined = tampilkan semua section (owner, invoice team, admin, akuntansi).
+ */
+export function getProgressAllowedSectionsForRole(role: string | null | undefined): ProgressSectionKey[] | undefined {
+  if (!role) return undefined;
+  const byRole: Record<string, ProgressSectionKey[]> = {
+    role_hotel: ['hotel'],
+    visa_koordinator: ['visa'],
+    tiket_koordinator: ['ticket'],
+    role_bus: ['visa', 'bus'],
+    handling: ['handling'],
+    role_siskopatuh: ['siskopatuh'],
+  };
+  return byRole[role];
+}
+
 /** Satu baris progress (sumber tunggal untuk tabel ringkas & tumpukan kartu). */
 export type InvoiceProgressRowModel = {
   key: string;

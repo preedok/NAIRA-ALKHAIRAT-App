@@ -12,7 +12,12 @@ import Table from '../../../components/common/Table';
 import { InvoiceStatusRefundCell, getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, shouldHideInvoiceCancelAction } from '../../../components/common/InvoiceStatusRefundCell';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLabel } from '../../../components/common/PaymentProofCell';
-import InvoiceProgressStatusCell, { PROGRESS_LABELS, ROOM_TYPE_LABELS, PROGRESS_LABELS_MEAL } from '../../../components/common/InvoiceProgressStatusCell';
+import InvoiceProgressStatusCell, {
+  PROGRESS_LABELS,
+  ROOM_TYPE_LABELS,
+  PROGRESS_LABELS_MEAL,
+  getProgressAllowedSectionsForRole
+} from '../../../components/common/InvoiceProgressStatusCell';
 import {
   UNIFIED_PROGRESS,
   isUnifiedSelesai,
@@ -1281,6 +1286,28 @@ const OrdersInvoicesPage: React.FC = () => {
   const rates = viewInvoice?.currency_rates || currencyRates;
   const sarToIdr = rates.SAR_TO_IDR || 4200;
   const usdToIdr = rates.USD_TO_IDR || 15500;
+  const payRemainingIdr = parseFloat(viewInvoice?.remaining_amount || 0);
+
+  /** Blokir simpan jika jumlah melebihi sisa tagihan (transfer tunggal / ganda / Saudi setara IDR). */
+  const payBankSingleExceedsRemaining = useMemo(() => {
+    const amt = parseFloat(payAmountIdr.replace(/,/g, '').trim());
+    if (isNaN(amt) || amt <= 0) return false;
+    return amt > payRemainingIdr + 0.5;
+  }, [payAmountIdr, payRemainingIdr]);
+
+  const payBankDualExceedsRemaining = useMemo(() => {
+    const a = parseFloat(payAmountIdrOther.replace(/,/g, '').trim());
+    const b = parseFloat(payAmountIdrNabiela.replace(/,/g, '').trim());
+    if (isNaN(a) || isNaN(b) || a <= 0 || b <= 0) return false;
+    return a + b > payRemainingIdr + 0.5;
+  }, [payAmountIdrOther, payAmountIdrNabiela, payRemainingIdr]);
+
+  const paySaudiExceedsRemaining = useMemo(() => {
+    const amt = parseFloat(payAmountSaudi.replace(/,/g, '').trim());
+    if (isNaN(amt) || amt <= 0) return false;
+    const idr = payCurrencySaudi === 'IDR' ? amt : payCurrencySaudi === 'SAR' ? amt * sarToIdr : amt * usdToIdr;
+    return Math.round(idr) > payRemainingIdr + 0.5;
+  }, [payAmountSaudi, payCurrencySaudi, sarToIdr, usdToIdr, payRemainingIdr]);
 
   const paymentProofs = viewInvoice?.PaymentProofs || [];
   const balanceAllocationsDetail = viewInvoice?.BalanceAllocations || [];
@@ -1448,6 +1475,17 @@ const OrdersInvoicesPage: React.FC = () => {
         showToast('Isi jam transfer sesuai bukti.', 'warning');
         return;
       }
+      const remainingIdr = parseFloat(viewInvoice.remaining_amount || 0);
+      const amountIdrEquiv =
+        payCurrencySaudi === 'IDR'
+          ? Math.round(amountS)
+          : payCurrencySaudi === 'SAR'
+            ? Math.round(amountS * sarToIdr)
+            : Math.round(amountS * usdToIdr);
+      if (amountIdrEquiv > remainingIdr + 0.5) {
+        showToast(`Jumlah pembayaran melebihi sisa tagihan (${formatIDR(remainingIdr)}). Kurangi jumlah terlebih dahulu.`, 'warning');
+        return;
+      }
       const paymentType = parseFloat(viewInvoice.paid_amount || 0) === 0 ? 'dp' : (amountS >= 1e9 ? 'full' : 'partial');
       const form = new FormData();
       form.append('payment_location', 'saudi');
@@ -1489,7 +1527,7 @@ const OrdersInvoicesPage: React.FC = () => {
       }
       const remaining0 = parseFloat(viewInvoice.remaining_amount || 0);
       if (amtOther + amtNab > remaining0 + 0.5) {
-        showToast(`Total kedua transfer melebihi sisa tagihan (${formatIDR(remaining0)}).`, 'warning');
+        showToast(`Total kedua transfer melebihi sisa tagihan (${formatIDR(remaining0)}). Kurangi jumlah terlebih dahulu.`, 'warning');
         return;
       }
       if (!payFileOther || !payFileNabiela) {
@@ -1579,8 +1617,8 @@ const OrdersInvoicesPage: React.FC = () => {
       return;
     }
     const remaining = parseFloat(viewInvoice.remaining_amount || 0);
-    if (amount > remaining) {
-      showToast(`Jumlah melebihi sisa tagihan (${formatIDR(remaining)}).`, 'warning');
+    if (amount > remaining + 0.5) {
+      showToast(`Jumlah pembayaran melebihi sisa tagihan (${formatIDR(remaining)}). Kurangi jumlah terlebih dahulu.`, 'warning');
       return;
     }
     if (paymentMethod === 'bank') {
@@ -2191,10 +2229,16 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div><NominalDisplay amount={remaining} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top min-w-[360px] max-w-[420px]">
-                      <InvoiceProgressStatusCell inv={inv} formatDate={formatDate} formatDateWithTime={formatDateWithTime} layout="table" />
+                    <td className="py-3 px-4 align-top min-w-[320px] max-w-[440px]">
+                      <InvoiceProgressStatusCell
+                        inv={inv}
+                        formatDate={formatDate}
+                        formatDateWithTime={formatDateWithTime}
+                        layout="table"
+                        allowedSections={getProgressAllowedSectionsForRole(user?.role)}
+                      />
                     </td>
-                    <td className="py-3 px-4 align-top max-h-[180px] overflow-hidden">
+                    <td className="py-3 px-4 align-top min-w-[300px] max-w-[480px] max-h-[260px] overflow-y-auto">
                       <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
                     </td>
                     <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
@@ -3626,21 +3670,28 @@ const OrdersInvoicesPage: React.FC = () => {
                                     ? `Pembayaran KES${p.payment_currency && p.payment_currency !== 'IDR' ? ` (${p.payment_currency})` : ''}`
                                     : 'Transfer Bank'}
                                 </span>
-                                {p.payment_location !== 'saudi' && (() => {
-                                  const senderBank = (p as any).Bank?.name || p.bank_name;
-                                  const senderName = (p as any).sender_account_name;
-                                  const senderNo = (p as any).sender_account_number;
-                                  const rec = (p as any).RecipientAccount;
-                                  const hasSender = senderBank || senderName || senderNo;
-                                  const hasRec = rec ? (rec.bank_name || rec.account_number || rec.name) : (p.bank_name || p.account_number);
-                                  if (!hasSender && !hasRec) return null;
-                                  return (
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 mt-1">
-                                      {hasSender && <span><strong className="text-slate-500">Pengirim:</strong> {[senderBank, senderName, senderNo].filter(Boolean).join(' · ')}</span>}
-                                      {hasRec && <span><strong className="text-slate-500">Penerima:</strong> {rec ? [rec.bank_name, rec.account_number, rec.name ? `A.n. ${rec.name}` : ''].filter(Boolean).join(' · ') : [p.bank_name, p.account_number].filter(Boolean).join(' · ')}</span>}
-                                    </div>
-                                  );
-                                })()}
+                                {p.payment_location === 'saudi' ? (
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 mt-1 w-full">
+                                    <span><strong className="text-slate-500">Rek. pengirim / keterangan:</strong> Bagian Keuangan Kantor KSA</span>
+                                    <span><strong className="text-slate-500">Rek. penerima:</strong> Pembayaran KES</span>
+                                  </div>
+                                ) : (
+                                  (() => {
+                                    const senderBank = (p as any).Bank?.name || p.bank_name;
+                                    const senderName = (p as any).sender_account_name;
+                                    const senderNo = (p as any).sender_account_number;
+                                    const rec = (p as any).RecipientAccount;
+                                    const hasSender = senderBank || senderName || senderNo;
+                                    const hasRec = rec ? (rec.bank_name || rec.account_number || rec.name) : (p.bank_name || p.account_number);
+                                    if (!hasSender && !hasRec) return null;
+                                    return (
+                                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 mt-1">
+                                        {hasSender && <span><strong className="text-slate-500">Pengirim:</strong> {[senderBank, senderName, senderNo].filter(Boolean).join(' · ')}</span>}
+                                        {hasRec && <span><strong className="text-slate-500">Penerima:</strong> {rec ? [rec.bank_name, rec.account_number, rec.name ? `A.n. ${rec.name}` : ''].filter(Boolean).join(' · ') : [p.bank_name, p.account_number].filter(Boolean).join(' · ')}</span>}
+                                      </div>
+                                    );
+                                  })()
+                                )}
                                 {p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR' ? (
                                   <span className="text-[#0D1A63] font-semibold">
                                     Nominal diinput: {p.payment_currency === 'SAR' ? <NominalDisplay amount={Number(p.amount_original)} currency="SAR" /> : <NominalDisplay amount={Number(p.amount_original)} currency="USD" />} = <NominalDisplay amount={parseFloat(p.amount)} currency="IDR" />
@@ -4469,13 +4520,29 @@ const OrdersInvoicesPage: React.FC = () => {
                     const currentPaid = parseFloat(viewInvoice.paid_amount || 0);
                     const totalInvPay = viewInvoice.total_amount_idr != null ? parseFloat(viewInvoice.total_amount_idr) : parseFloat(viewInvoice.total_amount || 0);
                     const newPaid = currentPaid + Math.round(idr);
-                    const newRemain = Math.max(0, totalInvPay - newPaid);
+                    const newRemainRaw = totalInvPay - newPaid;
+                    const exceeds = newRemainRaw < -0.5;
+                    const newRemainDisplay = Math.max(0, newRemainRaw);
                     return (
-                      <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
+                      <div
+                        className={`mt-3 p-4 rounded-xl border space-y-2 text-sm ${
+                          exceeds ? 'border-red-300 bg-red-50/90' : 'border-emerald-200 bg-emerald-50/80'
+                        }`}
+                      >
                         {payCurrencySaudi !== 'IDR' && <p className="text-xs text-slate-600">≈ <NominalDisplay amount={Math.round(idr)} currency="IDR" /> IDR (konversi untuk tagihan)</p>}
                         <p className="font-semibold text-slate-800">Setelah pembayaran ini</p>
                         <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]"><NominalDisplay amount={newPaid} currency="IDR" /></strong></p>
-                        <p><span className="text-slate-600">Sisa tagihan:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={newRemain} currency="IDR" /></strong></p>
+                        <p>
+                          <span className="text-slate-600">Sisa tagihan:</span>{' '}
+                          <strong className={exceeds ? 'text-red-600' : newRemainDisplay <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>
+                            <NominalDisplay amount={newRemainDisplay} currency="IDR" />
+                          </strong>
+                        </p>
+                        {exceeds && (
+                          <p className="text-red-700 text-sm font-medium pt-1">
+                            Jumlah pembayaran melebihi sisa tagihan. Pembayaran tidak dapat disimpan; kurangi jumlah yang diinput.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
@@ -4587,15 +4654,23 @@ const OrdersInvoicesPage: React.FC = () => {
                           const currentRemain = parseFloat(viewInvoice.remaining_amount || 0);
                           const newPaid = currentPaid + inputIdr;
                           const newRemain = currentRemain - inputIdr;
-                          const overpay = newRemain < 0;
+                          const overpay = newRemain < -0.5;
                           return (
-                            <div className="mt-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
+                            <div
+                              className={`mt-3 p-4 rounded-xl border space-y-2 text-sm ${
+                                overpay ? 'border-red-300 bg-red-50/90' : 'border-emerald-200 bg-emerald-50/80'
+                              }`}
+                            >
                               <p className="font-semibold text-slate-800">Validasi pembayaran (otomatis)</p>
                               <p><span className="text-slate-600">Jumlah yang diinput:</span> <strong><NominalDisplay amount={inputIdr} currency="IDR" /></strong> ≈ <NominalDisplay amount={inputIdr / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={inputIdr / usdToIdr} currency="USD" /></p>
                               <p><span className="text-slate-600">Setelah pembayaran ini —</span></p>
                               <p><span className="text-slate-600">Dibayar total:</span> <strong className="text-[#0D1A63]"><NominalDisplay amount={newPaid} currency="IDR" /></strong> ≈ <NominalDisplay amount={newPaid / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={newPaid / usdToIdr} currency="USD" /></p>
-                              <p><span className="text-slate-600">Sisa:</span> <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" /></strong> ≈ <NominalDisplay amount={Math.max(0, newRemain) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={Math.max(0, newRemain) / usdToIdr} currency="USD" /></p>
-                              {overpay && <p className="text-amber-700 text-xs">Jumlah melebihi sisa tagihan. Sistem akan catat sebagai pelunasan; kelebihan tidak dikembalikan otomatis.</p>}
+                              <p><span className="text-slate-600">Sisa:</span> <strong className={overpay ? 'text-red-600' : newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}><NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" /></strong> ≈ <NominalDisplay amount={Math.max(0, newRemain) / sarToIdr} currency="SAR" /> · ≈ <NominalDisplay amount={Math.max(0, newRemain) / usdToIdr} currency="USD" /></p>
+                              {overpay && (
+                                <p className="text-red-700 text-sm font-medium">
+                                  Jumlah pembayaran melebihi sisa tagihan. Pembayaran tidak dapat disimpan; kurangi jumlah yang diinput.
+                                </p>
+                              )}
                             </div>
                           );
                         })()}
@@ -4805,7 +4880,11 @@ const OrdersInvoicesPage: React.FC = () => {
                               const newRemain = currentRemain - totalIn;
                               const overpay = newRemain < -0.5;
                               return (
-                                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-2 text-sm">
+                                <div
+                                  className={`p-4 rounded-xl border space-y-2 text-sm ${
+                                    overpay ? 'border-red-300 bg-red-50/90' : 'border-emerald-200 bg-emerald-50/80'
+                                  }`}
+                                >
                                   <p className="font-semibold text-slate-800">Ringkasan kedua transfer</p>
                                   <p>
                                     <span className="text-slate-600">Total yang diinput:</span>{' '}
@@ -4821,12 +4900,14 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </p>
                                   <p>
                                     <span className="text-slate-600">Perkiraan sisa:</span>{' '}
-                                    <strong className={newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>
+                                    <strong className={overpay ? 'text-red-600' : newRemain <= 0 ? 'text-[#0D1A63]' : 'text-red-600'}>
                                       <NominalDisplay amount={Math.max(0, newRemain)} currency="IDR" />
                                     </strong>
                                   </p>
                                   {overpay && (
-                                    <p className="text-amber-700 text-xs">Total melebihi sisa tagihan. Sesuaikan jumlah salah satu transfer.</p>
+                                    <p className="text-red-700 text-sm font-medium">
+                                      Total kedua transfer melebihi sisa tagihan. Pembayaran tidak dapat disimpan; sesuaikan jumlah salah satu transfer.
+                                    </p>
                                   )}
                                 </div>
                               );
@@ -4908,9 +4989,11 @@ const OrdersInvoicesPage: React.FC = () => {
                 onClick={handleSubmitPayment}
                 disabled={
                   paySubmitting ||
+                  (paymentMethod === 'saudi' && isInvoiceSaudi && paySaudiExceedsRemaining) ||
                   (paymentMethod === 'bank' &&
                     (paymentBankAccountsSplit.isDual
                       ? bankAccountsForPayment.length === 0 ||
+                        payBankDualExceedsRemaining ||
                         !payBankIdOther?.trim() ||
                         !paySenderAccountNameOther?.trim() ||
                         !paySenderAccountNumberOther?.trim() ||
@@ -4918,6 +5001,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         !paySenderAccountNameNabiela?.trim() ||
                         !paySenderAccountNumberNabiela?.trim()
                       : bankAccountsForPayment.length === 0 ||
+                        payBankSingleExceedsRemaining ||
                         !payBankId?.trim() ||
                         !paySenderAccountName?.trim() ||
                         !paySenderAccountNumber?.trim()))

@@ -430,6 +430,7 @@ const TicketWorkPage: React.FC = () => {
                   onViewDetail={(i) => setSearchParams({ invoice: i.id })}
                   getStatusLabel={getEffectiveInvoiceStatusLabel}
                   getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+                  progressAllowedSections={['ticket']}
                 />
               )}
               emptyMessage={invoices.length === 0 ? 'Belum ada invoice dengan item tiket' : 'Tidak ada hasil untuk filter ini'}

@@ -116,99 +116,139 @@ export function PaymentProofCell({
   }
 
   return (
-    <div className={`max-h-[140px] overflow-y-auto grid grid-cols-1 gap-2 min-w-[160px] pr-1 ${className}`}>
-      {list.map((p) => {
-        const ps = getProofStatus(p);
-        const amt = parseFloat(String(p.amount || 0));
-        const sar = amt / sarToIdr;
-        const usd = amt / usdToIdr;
-        const isKesNominal = p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR';
-        const statusLabel = ps.status === 'verified' ? 'Sudah konfirmasi' : ps.status === 'rejected' ? 'Ditolak' : 'Belum konfirmasi';
-        const senderBank = p.Bank?.name || p.bank_name;
-        const senderName = p.sender_account_name;
-        const senderNo = p.sender_account_number;
-        const rec = p.RecipientAccount;
-        const hasSender = !!(senderBank || senderName || senderNo);
-        const hasRec = !!(rec?.bank_name || rec?.account_number || rec?.name || (!rec && (p.bank_name || p.account_number)));
-        return (
-          <div key={p.id} className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2 text-xs">
-            <div className="font-semibold text-slate-700 truncate">{getProofDisplayLabel(p)}</div>
-            <div className="text-slate-600 mt-0.5 truncate">
-              {isKesNominal ? (
-                <>
-                  <span className="text-slate-500">Nominal:</span>{' '}
-                  {p.payment_currency === 'SAR' ? <NominalDisplay amount={Number(p.amount_original)} currency="SAR" /> : <NominalDisplay amount={Number(p.amount_original)} currency="USD" />} = <NominalDisplay amount={amt} currency="IDR" />
-                </>
-              ) : (
-                <>
-                  <span className="text-slate-500">IDR:</span> <NominalDisplay amount={amt} currency="IDR" /> · <span className="text-slate-500">SAR:</span> <NominalDisplay amount={sar} currency="SAR" showCurrency={false} /> · <span className="text-slate-500">USD:</span> <NominalDisplay amount={usd} currency="USD" showCurrency={false} />
-                </>
-              )}
-            </div>
-            {p.payment_location !== 'saudi' && (hasSender || hasRec) && (
-              <>
-                {hasSender && (
-                  <div className="text-slate-600 mt-0.5 space-y-0.5">
-                    <span className="text-slate-500 font-medium">Pengirim:</span> {[senderBank, senderName, senderNo].filter(Boolean).join(' · ')}
+    <div className={`max-h-[240px] overflow-y-auto overflow-x-auto min-w-[200px] ${className}`}>
+      <table className="w-full text-[11px] border border-slate-200 rounded-lg overflow-hidden border-collapse">
+        <thead>
+          <tr className="bg-slate-50 text-slate-600 border-b border-slate-200">
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Tipe</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Nominal</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top min-w-[120px]">Rekening / keterangan</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top whitespace-nowrap">Diunggah</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Status</th>
+          </tr>
+        </thead>
+        <tbody className="text-slate-700">
+          {list.map((p) => {
+            const ps = getProofStatus(p);
+            const amt = parseFloat(String(p.amount || 0));
+            const sar = amt / sarToIdr;
+            const usd = amt / usdToIdr;
+            const isKesNominal = p.payment_location === 'saudi' && p.amount_original != null && p.payment_currency && p.payment_currency !== 'IDR';
+            const statusLabel = ps.status === 'verified' ? 'Sudah konfirmasi' : ps.status === 'rejected' ? 'Ditolak' : 'Belum konfirmasi';
+            const senderBank = p.Bank?.name || p.bank_name;
+            const senderName = p.sender_account_name;
+            const senderNo = p.sender_account_number;
+            const rec = p.RecipientAccount;
+            const hasSender = !!(senderBank || senderName || senderNo);
+            const hasRec = !!(rec?.bank_name || rec?.account_number || rec?.name || (!rec && (p.bank_name || p.account_number)));
+            const rekLines =
+              p.payment_location === 'saudi'
+                ? (
+                    <div className="space-y-0.5">
+                      <div><span className="text-slate-500">Pengirim:</span> Bagian Keuangan Kantor KSA</div>
+                      <div><span className="text-slate-500">Penerima:</span> Pembayaran KES</div>
+                    </div>
+                  )
+                : (hasSender || hasRec)
+                  ? (
+                      <div className="space-y-0.5">
+                        {hasSender && <div><span className="text-slate-500">Pengirim:</span> {[senderBank, senderName, senderNo].filter(Boolean).join(' · ')}</div>}
+                        {hasRec && (
+                          <div>
+                            <span className="text-slate-500">Penerima:</span>{' '}
+                            {rec ? [rec.bank_name, rec.account_number, rec.name ? `A.n. ${rec.name}` : ''].filter(Boolean).join(' · ') : [p.bank_name, p.account_number].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  : (
+                    <span className="text-slate-400">–</span>
+                    );
+            return (
+              <tr key={p.id} className="border-b border-slate-100 align-top">
+                <td className="px-2 py-1.5 font-semibold text-slate-800">{getProofDisplayLabel(p)}</td>
+                <td className="px-2 py-1.5">
+                  {isKesNominal ? (
+                    <div className="space-y-0.5">
+                      <div>
+                        {p.payment_currency === 'SAR' ? <NominalDisplay amount={Number(p.amount_original)} currency="SAR" /> : <NominalDisplay amount={Number(p.amount_original)} currency="USD" />}
+                      </div>
+                      <div className="text-slate-600">= <NominalDisplay amount={amt} currency="IDR" /></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <div><NominalDisplay amount={amt} currency="IDR" /></div>
+                      <div className="text-slate-500 text-[10px]">
+                        SAR <NominalDisplay amount={sar} currency="SAR" showCurrency={false} /> · USD <NominalDisplay amount={usd} currency="USD" showCurrency={false} />
+                      </div>
+                    </div>
+                  )}
+                </td>
+                <td className="px-2 py-1.5">{rekLines}</td>
+                <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap">
+                  {p.created_at ? (
+                    <>
+                      {formatDate(p.created_at)}
+                      <br />
+                      <span className="text-slate-500">{formatTime(p.created_at)}</span>
+                    </>
+                  ) : (
+                    '–'
+                  )}
+                </td>
+                <td className="px-2 py-1.5">
+                  <div className="flex flex-col gap-0.5 items-start">
+                    <Badge variant={ps.variant} className="text-xs">
+                      {statusLabel}
+                    </Badge>
+                    {ps.status === 'verified' && p.VerifiedBy?.name && <span className="text-slate-500">oleh {p.VerifiedBy.name}</span>}
                   </div>
-                )}
-                {hasRec && (
-                  <div className="text-slate-600 mt-0.5 space-y-0.5">
-                    <span className="text-slate-500 font-medium">Penerima:</span>{' '}
-                    {rec ? [rec.bank_name, rec.account_number, rec.name ? `A.n. ${rec.name}` : ''].filter(Boolean).join(' · ') : [p.bank_name, p.account_number].filter(Boolean).join(' · ')}
+                </td>
+              </tr>
+            );
+          })}
+          {allocs.map((b) => {
+            const amt = parseFloat(String(b.amount || 0));
+            const sar = amt / sarToIdr;
+            const usd = amt / usdToIdr;
+            return (
+              <tr key={b.id} className="border-b border-emerald-100 bg-emerald-50/40 align-top">
+                <td className="px-2 py-1.5 font-semibold text-emerald-900">Saldo akun</td>
+                <td className="px-2 py-1.5">
+                  <div className="space-y-0.5">
+                    <div><NominalDisplay amount={amt} currency="IDR" /></div>
+                    <div className="text-slate-500 text-[10px]">
+                      SAR <NominalDisplay amount={sar} currency="SAR" showCurrency={false} /> · USD <NominalDisplay amount={usd} currency="USD" showCurrency={false} />
+                    </div>
                   </div>
-                )}
-              </>
-            )}
-            {p.created_at && (
-              <div className="text-slate-600 mt-0.5 truncate">
-                <span className="text-slate-500">Tanggal upload bukti:</span> {formatDate(p.created_at)}
-                <span className="text-slate-500"> · Jam:</span> {new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            )}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <Badge variant={ps.variant} className="text-xs">
-                {statusLabel}
-              </Badge>
-              {ps.status === 'verified' && p.VerifiedBy?.name && <span className="text-slate-500 truncate">oleh {p.VerifiedBy.name}</span>}
-            </div>
-          </div>
-        );
-      })}
-      {allocs.map((b) => {
-        const amt = parseFloat(String(b.amount || 0));
-        const sar = amt / sarToIdr;
-        const usd = amt / usdToIdr;
-        return (
-          <div key={b.id} className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 text-xs">
-            <div className="font-semibold text-emerald-900 truncate">Bayar dari saldo akun</div>
-            <div className="text-slate-700 mt-0.5 truncate">
-              <span className="text-slate-500">IDR:</span> <NominalDisplay amount={amt} currency="IDR" /> · <span className="text-slate-500">SAR:</span>{' '}
-              <NominalDisplay amount={sar} currency="SAR" showCurrency={false} /> · <span className="text-slate-500">USD:</span>{' '}
-              <NominalDisplay amount={usd} currency="USD" showCurrency={false} />
-            </div>
-            <div className="text-slate-600 mt-0.5 space-y-0.5">
-              <span className="text-slate-500 font-medium">Sumber:</span> potongan saldo pemilik order (tanpa upload bukti transfer).
-            </div>
-            {b.notes && (
-              <div className="text-slate-600 mt-0.5 truncate" title={b.notes}>
-                <span className="text-slate-500 font-medium">Keterangan:</span> {b.notes}
-              </div>
-            )}
-            {b.created_at && (
-              <div className="text-slate-600 mt-0.5 truncate">
-                <span className="text-slate-500">Tanggal:</span> {formatDate(b.created_at)}
-                <span className="text-slate-500"> · Jam:</span> {formatTime(b.created_at)}
-              </div>
-            )}
-            <div className="mt-1">
-              <Badge variant="success" className="text-xs">
-                Tercatat otomatis
-              </Badge>
-            </div>
-          </div>
-        );
-      })}
+                </td>
+                <td className="px-2 py-1.5">
+                  <div className="space-y-0.5">
+                    <div>Potongan saldo pemilik order (tanpa file bukti).</div>
+                    {b.notes ? <div className="text-slate-600"><span className="text-slate-500">Cat:</span> {b.notes}</div> : null}
+                  </div>
+                </td>
+                <td className="px-2 py-1.5 text-slate-600 whitespace-nowrap">
+                  {b.created_at ? (
+                    <>
+                      {formatDate(b.created_at)}
+                      <br />
+                      <span className="text-slate-500">{formatTime(b.created_at)}</span>
+                    </>
+                  ) : (
+                    '–'
+                  )}
+                </td>
+                <td className="px-2 py-1.5">
+                  <Badge variant="success" className="text-xs">
+                    Tercatat otomatis
+                  </Badge>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

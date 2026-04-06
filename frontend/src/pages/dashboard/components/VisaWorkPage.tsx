@@ -442,6 +442,7 @@ const VisaWorkPage: React.FC = () => {
                   onViewDetail={(i) => setSearchParams({ invoice: i.id })}
                   getStatusLabel={getEffectiveInvoiceStatusLabel}
                   getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+                  progressAllowedSections={['visa']}
                 />
               )}
               emptyMessage="Belum ada invoice dengan item visa"

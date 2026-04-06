@@ -8,6 +8,10 @@ const PDFDocument = require('pdfkit');
 const uploadConfig = require('../config/uploads');
 const { isNabielaAccountRow } = require('./invoiceBankAccounts');
 
+/** Kolom tabel rincian pembayaran PDF untuk bukti KES (payment_location = saudi). */
+const PDF_KES_SENDER_LABEL = 'Bagian Keuangan Kantor KSA';
+const PDF_KES_RECIPIENT_LABEL = 'Pembayaran KES';
+
 /** Path logo dari assets */
 function getLogoPath() {
   const candidates = [
@@ -1010,12 +1014,20 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         const amountDisplay = (currency !== 'IDR' && p.amount_original != null)
           ? formatAmount(p.amount_original, currency)
           : formatIDR(parseFloat(p.amount || 0));
+        const isKesPayment = String(p.payment_location || '').toLowerCase() === 'saudi';
         const senderBank = p.bank_name || p.Bank?.name || '';
         const senderName = p.sender_account_name || '';
         const senderNo = p.sender_account_number || p.account_number || '';
-        const senderStr = [senderBank, senderName, senderNo].filter(Boolean).join(' · ') || (p.payment_location === 'saudi' ? 'Pembayaran Saudi' : '–');
         const rec = p.RecipientAccount;
-        const recipientStr = rec ? [rec.bank_name, rec.name, rec.account_number].filter(Boolean).join(' · ') || '–' : '–';
+        let senderStr;
+        let recipientStr;
+        if (isKesPayment) {
+          senderStr = PDF_KES_SENDER_LABEL;
+          recipientStr = PDF_KES_RECIPIENT_LABEL;
+        } else {
+          senderStr = [senderBank, senderName, senderNo].filter(Boolean).join(' · ') || '–';
+          recipientStr = rec ? [rec.bank_name, rec.name, rec.account_number].filter(Boolean).join(' · ') || '–' : '–';
+        }
         const statusLabel = verifiedStatusLabel(p.verified_status);
         const verifier = p.VerifiedBy?.name || (p.verified_at ? 'Admin' : '');
         const statusBlock = verifier ? `${statusLabel}\noleh: ${verifier}` : statusLabel;

@@ -532,6 +532,7 @@ const HotelWorkPage: React.FC = () => {
                 onViewDetail={(i) => setSearchParams({ invoice: i.id })}
                 getStatusLabel={getEffectiveInvoiceStatusLabel}
                 getStatusBadgeVariant={getEffectiveInvoiceStatusBadgeVariant}
+                progressAllowedSections={['hotel']}
               />
             )}
           />
