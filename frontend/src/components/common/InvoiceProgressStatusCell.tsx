@@ -89,8 +89,9 @@ export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling
 export type InvoiceProgressLayout = 'stack' | 'table';
 
 /**
- * Daftar invoice: tiap role divisi hanya melihat baris progress produknya (mis. Hotel tidak melihat Visa/Siskopatuh).
- * Undefined = tampilkan semua section (owner, invoice team, admin, akuntansi).
+ * Filter section Status Progress untuk halaman **menu Progress** divisi (HotelWorkPage, VisaWorkPage, …).
+ * Di **menu Invoice** (OrdersInvoicesPage) jangan pakai ini — kolom progress harus menampilkan semua produk.
+ * Undefined = tampilkan semua section.
  */
 export function getProgressAllowedSectionsForRole(role: string | null | undefined): ProgressSectionKey[] | undefined {
   if (!role) return undefined;
@@ -277,7 +278,13 @@ export function buildInvoiceProgressSectionModels(
       };
     });
     sections.push({ sortIndex: 4, title: 'Bus', rows });
-  } else if (visaItems.length > 0 && String(inv?.Order?.bus_service_option || '') !== 'visa_only') {
+    // Bus include (tanpa line item bus): hanya jika allow('bus') — hindari bocor ke halaman progress divisi lain.
+  } else if (
+    allow('bus') &&
+    busItems.length === 0 &&
+    visaItems.length > 0 &&
+    String(inv?.Order?.bus_service_option || '') !== 'visa_only'
+  ) {
     const order = inv?.Order;
     const waive = order?.waive_bus_penalty === true;
     const penalty = Number(order?.penalty_amount) || 0;

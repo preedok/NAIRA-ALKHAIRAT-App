@@ -15,8 +15,7 @@ import { PaymentProofCell, getProofStatus, getProofTypeLabel, getProofDisplayLab
 import InvoiceProgressStatusCell, {
   PROGRESS_LABELS,
   ROOM_TYPE_LABELS,
-  PROGRESS_LABELS_MEAL,
-  getProgressAllowedSectionsForRole
+  PROGRESS_LABELS_MEAL
 } from '../../../components/common/InvoiceProgressStatusCell';
 import {
   UNIFIED_PROGRESS,
@@ -2235,7 +2234,6 @@ const OrdersInvoicesPage: React.FC = () => {
                         formatDate={formatDate}
                         formatDateWithTime={formatDateWithTime}
                         layout="table"
-                        allowedSections={getProgressAllowedSectionsForRole(user?.role)}
                       />
                     </td>
                     <td className="py-3 px-4 align-top min-w-[420px] max-w-[32rem] max-h-[300px] overflow-y-auto overflow-x-hidden">
