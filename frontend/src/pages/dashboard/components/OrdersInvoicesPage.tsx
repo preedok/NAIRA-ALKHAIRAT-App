@@ -268,7 +268,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'va' | 'qris' | 'saudi'>('bank');
   const [payAmountIdr, setPayAmountIdr] = useState<string>('');
   const [payTransferDate, setPayTransferDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [payTransferTime, setPayTransferTime] = useState<string>(() => new Date().toTimeString().slice(0, 5));
+  const [payTransferTime, setPayTransferTime] = useState<string>(() => new Date().toTimeString().slice(0, 8));
   const [payBankIndex, setPayBankIndex] = useState<number>(0);
   const [payFile, setPayFile] = useState<File | null>(null);
   const [paySubmitting, setPaySubmitting] = useState(false);
@@ -1300,7 +1300,7 @@ const OrdersInvoicesPage: React.FC = () => {
       setPayAmountSaudi('');
     }
     setPayTransferDate(new Date().toISOString().slice(0, 10));
-    setPayTransferTime(new Date().toTimeString().slice(0, 5));
+    setPayTransferTime(new Date().toTimeString().slice(0, 8));
     setPayBankIndex(0);
     setPayBankId('');
     setPaySenderAccountName('');
@@ -4154,11 +4154,12 @@ const OrdersInvoicesPage: React.FC = () => {
                   <Input
                     label="Jam transfer *"
                     type="time"
+                    step={1}
                     value={payTransferTime}
                     onChange={(e) => setPayTransferTime(e.target.value)}
                   />
                   <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                    Tanggal dan jam transfer harus sesuai yang tertera di bukti transfer.
+                    Tanggal dan jam transfer (termasuk detik bila ada di bukti) harus sesuai yang tertera di bukti transfer.
                   </p>
                   <div>
                     <Input
@@ -4267,11 +4268,12 @@ const OrdersInvoicesPage: React.FC = () => {
                   <Input
                     label="Jam transfer *"
                     type="time"
+                    step={1}
                     value={payTransferTime}
                     onChange={(e) => setPayTransferTime(e.target.value)}
                   />
                   <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                    Tanggal dan jam transfer harus sesuai yang tertera di bukti transfer.
+                    Tanggal dan jam transfer (termasuk detik bila ada di bukti) harus sesuai yang tertera di bukti transfer.
                   </p>
                   <Input
                     label="Upload bukti bayar *"
