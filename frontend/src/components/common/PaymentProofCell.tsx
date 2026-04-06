@@ -116,14 +116,21 @@ export function PaymentProofCell({
   }
 
   return (
-    <div className={`max-h-[240px] overflow-y-auto overflow-x-auto min-w-[160px] ${className}`}>
-      <table className="w-full text-[11px] border border-slate-200 rounded-lg overflow-hidden border-collapse">
+    <div className={`max-h-[280px] overflow-y-auto min-w-0 ${className}`}>
+      <table className="w-full text-[11px] border border-slate-200 rounded-lg overflow-hidden border-collapse table-fixed">
+        <colgroup>
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '18%' }} />
+          <col style={{ width: '44%' }} />
+          <col style={{ width: '14%' }} />
+          <col style={{ width: '12%' }} />
+        </colgroup>
         <thead>
           <tr className="bg-slate-50 text-slate-600 border-b border-slate-200">
             <th className="px-2 py-1.5 text-left font-semibold align-top">Tipe</th>
             <th className="px-2 py-1.5 text-left font-semibold align-top">Nominal</th>
-            <th className="px-2 py-1.5 text-left font-semibold align-top min-w-[100px]">Rekening / keterangan</th>
-            <th className="px-2 py-1.5 text-left font-semibold align-top whitespace-nowrap">Diunggah</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Rekening / keterangan</th>
+            <th className="px-2 py-1.5 text-left font-semibold align-top">Diunggah</th>
             <th className="px-2 py-1.5 text-left font-semibold align-top">Status</th>
           </tr>
         </thead>
@@ -166,8 +173,8 @@ export function PaymentProofCell({
                     );
             return (
               <tr key={p.id} className="border-b border-slate-100 align-top">
-                <td className="px-2 py-1.5 font-semibold text-slate-800 align-top">{getProofDisplayLabel(p)}</td>
-                <td className="px-2 py-1.5 align-top">
+                <td className="px-2 py-1.5 font-semibold text-slate-800 align-top min-w-0 break-words">{getProofDisplayLabel(p)}</td>
+                <td className="px-2 py-1.5 align-top min-w-0">
                   {isKesNominal ? (
                     <div className="space-y-0.5">
                       <div>
@@ -184,8 +191,8 @@ export function PaymentProofCell({
                     </div>
                   )}
                 </td>
-                <td className="px-2 py-1.5 align-top max-w-[220px] break-words text-slate-700">{rekLines}</td>
-                <td className="px-2 py-1.5 text-slate-600 align-top whitespace-nowrap">
+                <td className="px-2 py-1.5 align-top min-w-0 break-words text-slate-700">{rekLines}</td>
+                <td className="px-2 py-1.5 text-slate-600 align-top min-w-0 text-[10px] leading-snug">
                   {p.created_at ? (
                     <>
                       {formatDate(p.created_at)}
@@ -196,12 +203,14 @@ export function PaymentProofCell({
                     '–'
                   )}
                 </td>
-                <td className="px-2 py-1.5 align-top max-w-[140px]">
-                  <div className="flex flex-col gap-0.5 items-start">
-                    <Badge variant={ps.variant} className="text-xs whitespace-normal text-left">
+                <td className="px-2 py-1.5 align-top min-w-0">
+                  <div className="flex flex-col gap-0.5 items-stretch">
+                    <Badge variant={ps.variant} className="text-[10px] leading-tight whitespace-normal text-left">
                       {statusLabel}
                     </Badge>
-                    {ps.status === 'verified' && p.VerifiedBy?.name && <span className="text-slate-500 break-words text-[10px]">oleh {p.VerifiedBy.name}</span>}
+                    {ps.status === 'verified' && p.VerifiedBy?.name && (
+                      <span className="text-slate-500 break-words text-[10px] leading-snug">oleh {p.VerifiedBy.name}</span>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -222,7 +231,7 @@ export function PaymentProofCell({
                     </div>
                   </div>
                 </td>
-                <td className="px-2 py-1.5 align-top max-w-[220px] break-words">
+                <td className="px-2 py-1.5 align-top min-w-0 break-words">
                   <div className="space-y-0.5">
                     <div>Potongan saldo pemilik order (tanpa file bukti).</div>
                     {b.notes ? <div className="text-slate-600"><span className="text-slate-500">Cat:</span> {b.notes}</div> : null}

@@ -537,7 +537,7 @@ const InvoiceDashboard: React.FC = () => {
                     );
                   })()}
                 </td>
-                <td className="py-3 px-4 align-top max-h-[220px] overflow-y-auto">
+                <td className="py-3 px-4 align-top min-w-[420px] max-w-[32rem] max-h-[300px] overflow-y-auto overflow-x-hidden">
                   <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
                 </td>
                 <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>

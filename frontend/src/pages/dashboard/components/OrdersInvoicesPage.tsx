@@ -2229,7 +2229,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         return <><div><NominalDisplay amount={remaining} currency="IDR" /></div><div className="text-xs text-slate-500 mt-0.5"><span className="text-slate-400">SAR:</span> <NominalDisplay amount={t.sar} currency="SAR" showCurrency={false} /> <span className="text-slate-400 ml-1">USD:</span> <NominalDisplay amount={t.usd} currency="USD" showCurrency={false} /></div></>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 align-top min-w-[280px] max-w-[380px]">
+                    <td className="py-3 px-4 align-top min-w-[260px] max-w-[360px]">
                       <InvoiceProgressStatusCell
                         inv={inv}
                         formatDate={formatDate}
@@ -2238,7 +2238,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         allowedSections={getProgressAllowedSectionsForRole(user?.role)}
                       />
                     </td>
-                    <td className="py-3 px-4 align-top min-w-[260px] max-w-[400px] max-h-[260px] overflow-y-auto">
+                    <td className="py-3 px-4 align-top min-w-[420px] max-w-[32rem] max-h-[300px] overflow-y-auto overflow-x-hidden">
                       <PaymentProofCell paymentProofs={inv.PaymentProofs} balanceAllocations={inv.BalanceAllocations} currencyRates={currencyRates} isDraft={isDraftRow(inv)} />
                     </td>
                     <td className="py-3 px-4 text-slate-600 align-top whitespace-nowrap">{formatDate(inv.issued_at || inv.created_at)}</td>
