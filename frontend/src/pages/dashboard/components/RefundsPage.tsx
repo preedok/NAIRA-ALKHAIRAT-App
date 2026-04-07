@@ -62,10 +62,23 @@ const RefundsPage: React.FC = () => {
 
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
   const isOwnerViewer = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const formatDateTime = (value?: string) => {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   const refundColumns: TableColumn[] = [
     { id: 'invoice_order', label: 'Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
+    { id: 'tanggal', label: 'Tanggal', align: 'left' },
     { id: 'amount', label: 'Jumlah', align: 'right' },
     { id: 'bank', label: 'Rek. penerima', align: 'left' },
     { id: 'payout_sender', label: 'Dari (BGG)', align: 'left' },
@@ -400,6 +413,7 @@ const RefundsPage: React.FC = () => {
                           {r.Invoice ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact /> : isBalanceWithdrawalRow(r) ? 'Refund saldo' : '–'}
                         </td>
                         <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
+                        <td className="py-2 px-4 text-sm whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                         <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                         <td className="py-2 px-4 text-slate-600 text-sm">{renderBankCell(r)}</td>
                         <td className="py-2 px-4 text-slate-600 text-sm">{renderPayoutSenderCell(r)}</td>
@@ -420,8 +434,8 @@ const RefundsPage: React.FC = () => {
                                     {r.payout_sender_account_number ? ` · ${r.payout_sender_account_number}` : ''}
                                   </p>
                                 ) : null}
-                                <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
-                                  <Download className="w-3.5 h-3.5" /> Unduh bukti
+                                <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)} title="Unduh bukti">
+                                  <Download className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
                             ) : isBalanceWithdrawalRow(r) && r.status === 'requested' ? (
@@ -485,6 +499,7 @@ const RefundsPage: React.FC = () => {
                 <td className="py-3 px-4">
                   {r.Owner ? <span>{r.Owner.name || r.Owner.company_name}</span> : '-'}
                 </td>
+                <td className="py-3 px-4 whitespace-nowrap text-sm text-slate-600">{formatDateTime((r as any).created_at)}</td>
                 <td className="py-3 px-4 text-right font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                 <td className="py-3 px-4 text-slate-600">{renderBankCell(r)}</td>
                 <td className="py-3 px-4 text-slate-600">{renderPayoutSenderCell(r)}</td>
@@ -505,8 +520,8 @@ const RefundsPage: React.FC = () => {
                             {r.payout_sender_account_number ? ` · ${r.payout_sender_account_number}` : ''}
                           </p>
                         ) : null}
-                        <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)}>
-                          <Download className="w-3.5 h-3.5" /> Unduh bukti
+                        <Button size="sm" variant="outline" className="gap-1" onClick={() => handleDownloadProof(r.id)} title="Unduh bukti">
+                          <Download className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     ) : isBalanceWithdrawalRow(r) && r.status === 'requested' ? (
@@ -520,8 +535,8 @@ const RefundsPage: React.FC = () => {
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap items-center gap-2">
                       {r.proof_file_url && (
-                        <Button size="sm" variant="outline" onClick={() => handleDownloadProof(r.id)} className="inline-flex items-center gap-1">
-                          <Download className="w-3.5 h-3.5" /> Unduh bukti
+                        <Button size="sm" variant="outline" onClick={() => handleDownloadProof(r.id)} className="inline-flex items-center gap-1" title="Unduh bukti">
+                          <Download className="w-3.5 h-3.5" />
                         </Button>
                       )}
                       {(r.status === 'requested' || (r.status === 'approved' && !r.proof_file_url)) && (

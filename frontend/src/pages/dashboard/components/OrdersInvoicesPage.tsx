@@ -2859,7 +2859,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                       <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
                                         <div className="flex gap-2 items-end">
                                           <Input label="Alokasikan ke invoice ini" type="number" min={1} max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount || 0))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} placeholder="Jumlah (IDR)" className="flex-1 min-w-0" />
-                                          <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
+                                          <Button size="sm" variant="primary" className="h-10 px-4 self-stretch" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
                                             if (shouldHideInvoiceCancelAction(viewInvoice)) {
                                               showToast('Invoice sudah dibatalkan/refund. Pembayaran memakai saldo akun tidak dapat dilakukan.', 'error');
                                               return;
@@ -2920,49 +2920,49 @@ const OrdersInvoicesPage: React.FC = () => {
                                   <>
                                     <p className="text-2xl font-bold text-[#0D1A63]"><NominalDisplay amount={invoiceOwnerBalance} currency="IDR" /></p>
                                     <p className="text-xs text-slate-600 mt-1">Pembayaran memakai saldo milik pemilik invoice ini (bukan akun Anda).</p>
-                                    <div className="mt-4 pt-4 border-t border-indigo-200">
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Riwayat transaksi saldo akun owner</p>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => setShowOwnerBalanceHistory((v) => !v)}
-                                        >
-                                          <Eye className="w-4 h-4 mr-1" /> View
-                                        </Button>
-                                      </div>
-                                      {showOwnerBalanceHistory && invoiceOwnerTransactions.length > 0 ? (
-                                        <div className="rounded-lg border border-slate-200 bg-white">
-                                          <Table
-                                            className="rounded-lg"
-                                            columns={[
-                                              { id: 'tanggal', label: 'Tanggal', align: 'left' },
-                                              { id: 'tipe', label: 'Tipe', align: 'left' },
-                                              { id: 'nominal', label: 'Nominal', align: 'right' },
-                                              { id: 'catatan', label: 'Catatan', align: 'left' }
-                                            ]}
-                                            data={invoiceOwnerTransactions}
-                                            emptyMessage="Belum ada transaksi saldo akun owner."
-                                            renderRow={(tx) => {
-                                              const amt = Number(tx.amount || 0);
-                                              const isDebit = amt < 0;
-                                              return (
-                                                <tr key={tx.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                                                  <td className="py-2 px-4 whitespace-nowrap text-slate-700">{formatDateTimeFull(tx.created_at)}</td>
-                                                  <td className="py-2 px-4 text-slate-700 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
-                                                  <td className={`py-2 px-4 text-right font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                    {isDebit ? '-' : '+'}<NominalDisplay amount={Math.abs(amt)} currency="IDR" />
-                                                  </td>
-                                                  <td className="py-2 px-4 text-slate-600">{tx.notes || '—'}</td>
-                                                </tr>
-                                              );
-                                            }}
-                                          />
+                                    {invoiceOwnerTransactions.length > 0 && (
+                                      <div className="mt-4 pt-4 border-t border-indigo-200">
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                          <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Riwayat transaksi saldo akun owner</p>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setShowOwnerBalanceHistory((v) => !v)}
+                                          >
+                                            <Eye className="w-4 h-4 mr-1" /> View
+                                          </Button>
                                         </div>
-                                      ) : showOwnerBalanceHistory ? (
-                                        <p className="text-xs text-slate-500">Belum ada transaksi saldo akun owner.</p>
-                                      ) : null}
-                                    </div>
+                                        {showOwnerBalanceHistory && (
+                                          <div className="rounded-lg border border-slate-200 bg-white">
+                                            <Table
+                                              className="rounded-lg"
+                                              columns={[
+                                                { id: 'tanggal', label: 'Tanggal', align: 'left' },
+                                                { id: 'tipe', label: 'Tipe', align: 'left' },
+                                                { id: 'nominal', label: 'Nominal', align: 'right' },
+                                                { id: 'catatan', label: 'Catatan', align: 'left' }
+                                              ]}
+                                              data={invoiceOwnerTransactions}
+                                              emptyMessage="Belum ada transaksi saldo akun owner."
+                                              renderRow={(tx) => {
+                                                const amt = Number(tx.amount || 0);
+                                                const isDebit = amt < 0;
+                                                return (
+                                                  <tr key={tx.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                                                    <td className="py-2 px-4 whitespace-nowrap text-slate-700">{formatDateTimeFull(tx.created_at)}</td>
+                                                    <td className="py-2 px-4 text-slate-700 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
+                                                    <td className={`py-2 px-4 text-right font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                      {isDebit ? '-' : '+'}<NominalDisplay amount={Math.abs(amt)} currency="IDR" />
+                                                    </td>
+                                                    <td className="py-2 px-4 text-slate-600">{tx.notes || '—'}</td>
+                                                  </tr>
+                                                );
+                                              }}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
                                         <div className="flex gap-2 items-end">
@@ -2979,6 +2979,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <Button
                                             size="sm"
                                             variant="primary"
+                                            className="h-10 px-4 self-stretch"
                                             disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0}
                                             onClick={async () => {
                                               if (shouldHideInvoiceCancelAction(viewInvoice)) {
@@ -3093,6 +3094,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
+                                                className="h-10 px-4 self-stretch"
                                                 disabled={ownerWithdrawSubmitting}
                                                 onClick={async () => {
                                                   const ownerId = String(viewInvoice.owner_id || '').trim();
@@ -3118,6 +3120,14 @@ const OrdersInvoicesPage: React.FC = () => {
                                                     setOwnerWithdrawBank('');
                                                     setOwnerWithdrawAccountNumber('');
                                                     setOwnerWithdrawAccountHolder('');
+                                                    setShowOwnerWithdrawForm(false);
+                                                    setInvoiceOwnerBalance((prev) => Math.max(0, Number(prev || 0) - amount));
+                                                    ownersApi.getBalanceForUser(ownerId).then((r) => {
+                                                      if (r.data?.success && r.data?.data) {
+                                                        setInvoiceOwnerBalance(r.data.data.balance);
+                                                        setInvoiceOwnerTransactions(Array.isArray((r.data.data as any).transactions) ? (r.data.data as any).transactions : []);
+                                                      }
+                                                    }).catch(() => {});
                                                   } catch (e: any) {
                                                     showToast(e.response?.data?.message || 'Gagal mengajukan penarikan saldo', 'error');
                                                   } finally {

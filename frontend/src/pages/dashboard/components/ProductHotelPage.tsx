@@ -72,7 +72,7 @@ const ProductHotelPage: React.FC = () => {
       />
 
       <nav
-        className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
+        className="grid grid-cols-2 gap-2 w-full"
         aria-label="Tab Hotel"
       >
         {TABS.map(({ id, label, icon: Icon }) => (
@@ -80,7 +80,7 @@ const ProductHotelPage: React.FC = () => {
             key={id}
             type="button"
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 border-2 ${
+            className={`w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl text-sm font-medium transition-all duration-200 border-2 ${
               activeTab === id
                 ? 'border-[#0D1A63] bg-[#0D1A63]/5 text-[#0D1A63] shadow-sm'
                 : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50 hover:text-stone-800'

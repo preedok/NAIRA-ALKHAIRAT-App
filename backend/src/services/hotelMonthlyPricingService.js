@@ -1,10 +1,30 @@
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 const { HotelMonthlyPrice, Product, OwnerProfile } = require('../models');
 const { ROOM_CAPACITY } = require('../constants');
 
 const MEAL_ROOM_TYPE = '__meal__';
 const COMPONENT_ROOM = 'room';
 const COMPONENT_MEAL = 'meal';
+let ownerTypeScopeColumnExistsCache = null;
+
+async function hasOwnerTypeScopeColumn() {
+  if (ownerTypeScopeColumnExistsCache != null) return ownerTypeScopeColumnExistsCache;
+  try {
+    const rows = await HotelMonthlyPrice.sequelize.query(
+      `SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'hotel_monthly_prices'
+         AND column_name = 'owner_type_scope'
+       LIMIT 1`,
+      { type: QueryTypes.SELECT }
+    );
+    ownerTypeScopeColumnExistsCache = Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    ownerTypeScopeColumnExistsCache = false;
+  }
+  return ownerTypeScopeColumnExistsCache;
+}
 
 function toDateOnly(dateStr) {
   if (!dateStr) return null;
@@ -62,6 +82,7 @@ async function findMonthlyPrice({
   currency,
   component = COMPONENT_ROOM
 }) {
+  const supportsOwnerTypeScope = await hasOwnerTypeScopeColumn();
   const isMeal = component === COMPONENT_MEAL;
   const room = isMeal ? MEAL_ROOM_TYPE : (roomType || 'double');
   const withMealFlag = isMeal ? false : !!withMeal;
@@ -76,9 +97,12 @@ async function findMonthlyPrice({
     { branch_id: null, owner_id: null }
   ];
   const ownerScope = ownerTypeScope === 'mou' || ownerTypeScope === 'non_mou' ? ownerTypeScope : null;
-  const ownerScopeCandidates = ownerScope ? [ownerScope, 'all'] : ['all'];
+  const ownerScopeCandidates = supportsOwnerTypeScope
+    ? (ownerScope ? [ownerScope, 'all'] : ['all'])
+    : [null];
   for (const layer of layers) {
     for (const scope of ownerScopeCandidates) {
+      const ownerScopeFilter = supportsOwnerTypeScope ? { owner_type_scope: scope || 'all' } : {};
       const row = await HotelMonthlyPrice.findOne({
         where: {
           product_id: productId,
@@ -88,9 +112,10 @@ async function findMonthlyPrice({
           with_meal: withMealFlag,
           branch_id: layer.branch_id,
           owner_id: layer.owner_id,
-          owner_type_scope: scope,
+          ...ownerScopeFilter,
           ...componentFilter
         },
+        ...(supportsOwnerTypeScope ? {} : { attributes: { exclude: ['owner_type_scope'] } }),
         order: [['updated_at', 'DESC'], ['created_at', 'DESC']]
       });
       if (row) return row;

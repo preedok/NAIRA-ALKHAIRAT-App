@@ -478,7 +478,7 @@ const ReportsPage: React.FC = () => {
           )}
 
           {/* Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 shrink-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 shrink-0 mt-2">
             {breakdown.by_branch && breakdown.by_branch.length > 0 && (
               <Card className="travel-card min-w-0">
                 <CardSectionHeader title="Per Cabang" className="mb-4" />

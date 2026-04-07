@@ -1,5 +1,5 @@
 const asyncHandler = require('express-async-handler');
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile, HotelMonthlyPrice } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { calculateStayCostByNights, MEAL_ROOM_TYPE, COMPONENT_MEAL, COMPONENT_ROOM } = require('../services/hotelMonthlyPricingService');
@@ -12,6 +12,26 @@ const { getRulesForBranch } = require('./businessRuleController');
 const sequelize = require('../config/sequelize');
 
 const VISA_KIND_VALUES = Object.values(VISA_KIND);
+let ownerTypeScopeColumnExistsCache = null;
+
+async function hasOwnerTypeScopeColumn() {
+  if (ownerTypeScopeColumnExistsCache != null) return ownerTypeScopeColumnExistsCache;
+  try {
+    const rows = await sequelize.query(
+      `SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'hotel_monthly_prices'
+         AND column_name = 'owner_type_scope'
+       LIMIT 1`,
+      { type: QueryTypes.SELECT }
+    );
+    ownerTypeScopeColumnExistsCache = Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    ownerTypeScopeColumnExistsCache = false;
+  }
+  return ownerTypeScopeColumnExistsCache;
+}
 
 /** Senin dari minggu yang berisi dateStr (YYYY-MM-DD). Return YYYY-MM-DD. */
 function getWeekStart(dateStr) {
@@ -321,6 +341,7 @@ const list = asyncHandler(async (req, res) => {
     /** Untuk tabel hotel: grid SAR tahun (semua bulan) + snapshot bulan berjalan UTC untuk kompatibilitas. */
     const hotelIdsForMonthly = result.filter((p) => p.type === 'hotel').map((p) => p.id);
     if (hotelIdsForMonthly.length) {
+      const supportsOwnerTypeScope = await hasOwnerTypeScopeColumn();
       const ymNow = new Date().toISOString().slice(0, 7);
       const seriesYearRaw = hotel_monthly_year != null ? String(hotel_monthly_year).trim() : String(new Date().getFullYear());
       const seriesYear = /^\d{4}$/.test(seriesYearRaw) ? seriesYearRaw : String(new Date().getFullYear());
@@ -331,7 +352,6 @@ const list = asyncHandler(async (req, res) => {
         currency: { [Op.in]: ['SAR', 'IDR', 'USD'] },
         branch_id: null,
         owner_id: null,
-        owner_type_scope: ownerTypeScopeForMonthly ? { [Op.in]: [ownerTypeScopeForMonthly, 'all'] } : 'all',
         [Op.or]: ymNowYear === seriesYear
           ? [{ year_month: { [Op.like]: `${seriesYear}-%` } }]
           : [
@@ -339,8 +359,12 @@ const list = asyncHandler(async (req, res) => {
               { year_month: ymNow }
             ]
       };
+      if (supportsOwnerTypeScope) {
+        monthlyWhere.owner_type_scope = ownerTypeScopeForMonthly ? { [Op.in]: [ownerTypeScopeForMonthly, 'all'] } : 'all';
+      }
       const monthlyRowsAll = await HotelMonthlyPrice.findAll({
         where: monthlyWhere,
+        ...(supportsOwnerTypeScope ? {} : { attributes: { exclude: ['owner_type_scope'] } }),
         raw: true
       });
       const monthlyRates = await getCurrencyRates();
@@ -352,7 +376,7 @@ const list = asyncHandler(async (req, res) => {
         const vk = JSON.stringify([row.product_id, row.year_month, String(row.room_type || ''), !!row.with_meal]);
         const prev = monthlyMerged.get(vk);
         const rank = hotelMonthlyCurrencyRank(row.currency);
-        const scopeRank = ownerTypeScopeForMonthly && row.owner_type_scope === ownerTypeScopeForMonthly ? 0 : 1;
+        const scopeRank = supportsOwnerTypeScope && ownerTypeScopeForMonthly && row.owner_type_scope === ownerTypeScopeForMonthly ? 0 : 1;
         if (!prev || scopeRank < prev.scopeRank || (scopeRank === prev.scopeRank && rank < prev.rank)) {
           monthlyMerged.set(vk, { sar, rank, scopeRank });
         }
@@ -1297,11 +1321,13 @@ const listHotelMonthlyPrices = asyncHandler(async (req, res) => {
   const year = String(req.query.year || new Date().getFullYear());
   if (!/^\d{4}$/.test(year)) return res.status(400).json({ success: false, message: 'year harus format YYYY' });
 
+  const supportsOwnerTypeScope = await hasOwnerTypeScopeColumn();
   const rows = await HotelMonthlyPrice.findAll({
     where: {
       product_id: product.id,
       year_month: { [Op.like]: `${year}-%` }
     },
+    ...(supportsOwnerTypeScope ? {} : { attributes: { exclude: ['owner_type_scope'] } }),
     order: [['year_month', 'ASC'], ['currency', 'ASC'], ['room_type', 'ASC'], ['with_meal', 'ASC']]
   });
   res.json({ success: true, data: rows });
@@ -1319,6 +1345,7 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
 
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
   if (!rows.length) return res.status(400).json({ success: false, message: 'rows wajib diisi' });
+  const supportsOwnerTypeScope = await hasOwnerTypeScopeColumn();
 
   const roomTypes = ['double', 'triple', 'quad', 'quint'];
   const mealPlan = product.meta && typeof product.meta === 'object' ? product.meta.meal_plan : null;
@@ -1357,44 +1384,44 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
        * Tanpa ini, baris IDR/USD lama tetap ada lalu digabung ke SAR di API list produk → harga “tampak” belum hilang.
        */
       if (amount === 0) {
-        await HotelMonthlyPrice.destroy({
-          where: {
-            product_id: product.id,
-            year_month: yearMonth,
-            room_type: roomType,
-            with_meal: withMeal,
-            branch_id: branchId,
-            owner_id: ownerId,
-            component: componentValue,
-            owner_type_scope: ownerTypeScope
-          },
-          transaction: t
-        });
-        continue;
-      }
-
-      const existing = await HotelMonthlyPrice.findOne({
-        where: {
+        const destroyWhere = {
           product_id: product.id,
           year_month: yearMonth,
-          currency,
           room_type: roomType,
           with_meal: withMeal,
           branch_id: branchId,
           owner_id: ownerId,
-          component: componentValue,
-          owner_type_scope: ownerTypeScope
-        },
+          component: componentValue
+        };
+        if (supportsOwnerTypeScope) destroyWhere.owner_type_scope = ownerTypeScope;
+        await HotelMonthlyPrice.destroy({ where: destroyWhere, transaction: t });
+        continue;
+      }
+
+      const existingWhere = {
+        product_id: product.id,
+        year_month: yearMonth,
+        currency,
+        room_type: roomType,
+        with_meal: withMeal,
+        branch_id: branchId,
+        owner_id: ownerId,
+        component: componentValue
+      };
+      if (supportsOwnerTypeScope) existingWhere.owner_type_scope = ownerTypeScope;
+      const existing = await HotelMonthlyPrice.findOne({
+        where: existingWhere,
+        ...(supportsOwnerTypeScope ? {} : { attributes: { exclude: ['owner_type_scope'] } }),
         transaction: t
       });
       if (existing) {
         existing.amount = amount;
         existing.component = componentValue;
-        existing.owner_type_scope = ownerTypeScope;
+        if (supportsOwnerTypeScope) existing.owner_type_scope = ownerTypeScope;
         existing.created_by = req.user?.id || existing.created_by;
         await existing.save({ transaction: t });
       } else {
-        await HotelMonthlyPrice.create({
+        const payload = {
           product_id: product.id,
           branch_id: branchId,
           owner_id: ownerId,
@@ -1403,10 +1430,28 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           room_type: roomType,
           with_meal: withMeal,
           component: componentValue,
-          owner_type_scope: ownerTypeScope,
           amount,
           created_by: req.user?.id || null
-        }, { transaction: t });
+        };
+        if (supportsOwnerTypeScope) payload.owner_type_scope = ownerTypeScope;
+        const createOptions = supportsOwnerTypeScope
+          ? { transaction: t }
+          : {
+              transaction: t,
+              fields: [
+                'product_id',
+                'branch_id',
+                'owner_id',
+                'year_month',
+                'currency',
+                'room_type',
+                'with_meal',
+                'component',
+                'amount',
+                'created_by'
+              ]
+            };
+        await HotelMonthlyPrice.create(payload, createOptions);
       }
     }
     await t.commit();

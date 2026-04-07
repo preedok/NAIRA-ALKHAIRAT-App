@@ -289,7 +289,7 @@ const SettingsPage: React.FC = () => {
                   <CardSectionHeader title="Diskon MOU" subtitle="Persentase diskon harga produk untuk owner MOU (lebih murah dari harga non-MOU)." className="mb-6" />
                   <div className="space-y-6">
                     <p className="text-sm text-slate-600">Owner dengan status MOU akan melihat harga produk lebih murah. Nilai 10 = harga 10% lebih murah dari harga normal. Diatur oleh Admin Pusat.</p>
-                    <div className="p-4 bg-slate-50 rounded-lg max-w-xs">
+                    <div className="p-4 bg-slate-50 rounded-lg w-full">
                       <Input
                         label="Diskon MOU (%)"
                         type="number"
@@ -301,7 +301,7 @@ const SettingsPage: React.FC = () => {
                       />
                     </div>
                     {canEdit && (
-                      <Button variant="primary" onClick={handleSaveMouDiscount} disabled={saving}>
+                      <Button variant="primary" onClick={handleSaveMouDiscount} disabled={saving} fullWidth>
                         <Save className="w-5 h-5 mr-2" />
                         {saving ? 'Menyimpan...' : 'Simpan Diskon MOU'}
                       </Button>
