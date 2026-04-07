@@ -316,6 +316,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [ownerBalanceLoading, setOwnerBalanceLoading] = useState(false);
   const [invoiceOwnerBalance, setInvoiceOwnerBalance] = useState<number | null>(null);
   const [invoiceOwnerTransactions, setInvoiceOwnerTransactions] = useState<Array<{ id: string; amount: number; type: string; notes?: string; created_at: string }>>([]);
+  const [showOwnerBalanceHistory, setShowOwnerBalanceHistory] = useState(false);
   const [invoiceOwnerBalanceLoading, setInvoiceOwnerBalanceLoading] = useState(false);
   const [invoiceOwnerBalanceError, setInvoiceOwnerBalanceError] = useState(false);
   const [allocateAmount, setAllocateAmount] = useState('');
@@ -325,6 +326,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [ownerWithdrawAccountNumber, setOwnerWithdrawAccountNumber] = useState('');
   const [ownerWithdrawAccountHolder, setOwnerWithdrawAccountHolder] = useState('');
   const [ownerWithdrawSubmitting, setOwnerWithdrawSubmitting] = useState(false);
+  const [showOwnerWithdrawForm, setShowOwnerWithdrawForm] = useState(false);
   const [paymentBankAccounts, setPaymentBankAccounts] = useState<BankAccountItem[]>([]);
   const [paymentBankAccountsLoading, setPaymentBankAccountsLoading] = useState(false);
   const [paymentBanks, setPaymentBanks] = useState<BankItem[]>([]);
@@ -430,7 +432,7 @@ const OrdersInvoicesPage: React.FC = () => {
       if (filterOwnerId) params.owner_id = filterOwnerId;
       if (filterInvoiceNumber.trim()) params.invoice_number = filterInvoiceNumber.trim();
       if (filterDateFrom) params.date_from = filterDateFrom;
-      if (filterDateTo) params.date_to = filterDateTo;
+      if (filterDateTo) params.date_to = filterDateTo;  
       if (filterDueStatus) params.due_status = filterDueStatus;
       const res = await invoicesApi.getSummary(params);
       if (res.data.success && res.data.data) setSummary(res.data.data);
@@ -572,6 +574,7 @@ const OrdersInvoicesPage: React.FC = () => {
     if (!viewInvoice?.owner_id || !canUseInvoiceOwnerBalance) {
       setInvoiceOwnerBalance(null);
       setInvoiceOwnerTransactions([]);
+      setShowOwnerBalanceHistory(false);
       setInvoiceOwnerBalanceLoading(false);
       setInvoiceOwnerBalanceError(false);
       return;
@@ -922,6 +925,7 @@ const OrdersInvoicesPage: React.FC = () => {
       setOwnerWithdrawBank('');
       setOwnerWithdrawAccountNumber('');
       setOwnerWithdrawAccountHolder('');
+      setShowOwnerWithdrawForm(false);
     }
   }, [viewInvoice?.id]);
 
@@ -1183,6 +1187,20 @@ const OrdersInvoicesPage: React.FC = () => {
   };
 
   const formatDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
+  const formatDateTimeFull = (d: string | null | undefined) => {
+    if (!d) return '-';
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return '-';
+    return dt.toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  };
   const formatDateWithTime = (d: string | null | undefined, time: string | null | undefined) => {
     const dateStr = formatDate(d ?? null);
     if (dateStr === '-') return '–';
@@ -2903,8 +2921,17 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <p className="text-2xl font-bold text-[#0D1A63]"><NominalDisplay amount={invoiceOwnerBalance} currency="IDR" /></p>
                                     <p className="text-xs text-slate-600 mt-1">Pembayaran memakai saldo milik pemilik invoice ini (bukan akun Anda).</p>
                                     <div className="mt-4 pt-4 border-t border-indigo-200">
-                                      <p className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">Riwayat transaksi saldo akun owner</p>
-                                      {invoiceOwnerTransactions.length > 0 ? (
+                                      <div className="flex items-center justify-between gap-2 mb-2">
+                                        <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Riwayat transaksi saldo akun owner</p>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => setShowOwnerBalanceHistory((v) => !v)}
+                                        >
+                                          {showOwnerBalanceHistory ? 'Sembunyikan riwayat' : 'Lihat riwayat transaksi saldo akun owner'}
+                                        </Button>
+                                      </div>
+                                      {showOwnerBalanceHistory && invoiceOwnerTransactions.length > 0 ? (
                                         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
                                           <table className="w-full text-sm">
                                             <thead className="bg-slate-50 text-slate-600">
@@ -2921,7 +2948,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                                 const isDebit = amt < 0;
                                                 return (
                                                   <tr key={tx.id} className="border-t border-slate-100">
-                                                    <td className="px-3 py-2 whitespace-nowrap text-slate-700">{formatDate(tx.created_at)}</td>
+                                                    <td className="px-3 py-2 whitespace-nowrap text-slate-700">{formatDateTimeFull(tx.created_at)}</td>
                                                     <td className="px-3 py-2 text-slate-700 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
                                                     <td className={`px-3 py-2 text-right font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
                                                       {isDebit ? '-' : '+'}<NominalDisplay amount={Math.abs(amt)} currency="IDR" />
@@ -2933,9 +2960,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                             </tbody>
                                           </table>
                                         </div>
-                                      ) : (
+                                      ) : showOwnerBalanceHistory ? (
                                         <p className="text-xs text-slate-500">Belum ada transaksi saldo akun owner.</p>
-                                      )}
+                                      ) : null}
                                     </div>
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
@@ -3012,87 +3039,101 @@ const OrdersInvoicesPage: React.FC = () => {
                                     )}
                                     {canRequestOwnerWithdraw && invoiceOwnerBalance > 0 && (
                                       <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
-                                        <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Ajukan penarikan saldo owner ke rekening</p>
-                                        <Autocomplete
-                                          label="Bank penerima *"
-                                          value={ownerWithdrawBank}
-                                          onChange={(v) => setOwnerWithdrawBank(v || '')}
-                                          options={paymentBanks.map((b) => ({ value: b.name, label: b.name }))}
-                                          placeholder="Pilih bank"
-                                          emptyLabel="Pilih bank"
-                                          disabled={ownerWithdrawSubmitting}
-                                        />
-                                        <Input
-                                          label="Nama pemilik rekening *"
-                                          type="text"
-                                          value={ownerWithdrawAccountHolder}
-                                          onChange={(e) => setOwnerWithdrawAccountHolder(e.target.value)}
-                                          placeholder="Sesuai rekening penerima"
-                                          disabled={ownerWithdrawSubmitting}
-                                          fullWidth
-                                        />
-                                        <Input
-                                          label="Nomor rekening *"
-                                          type="text"
-                                          value={ownerWithdrawAccountNumber}
-                                          onChange={(e) => setOwnerWithdrawAccountNumber(e.target.value)}
-                                          placeholder="Nomor rekening penerima"
-                                          disabled={ownerWithdrawSubmitting}
-                                          fullWidth
-                                        />
-                                        <div className="flex gap-2 items-end">
-                                          <Input
-                                            label="Jumlah penarikan (IDR) *"
-                                            type="number"
-                                            min={1}
-                                            max={invoiceOwnerBalance}
-                                            value={ownerWithdrawAmount}
-                                            onChange={(e) => setOwnerWithdrawAmount(e.target.value)}
-                                            placeholder="Jumlah (IDR)"
-                                            className="flex-1 min-w-0"
-                                            disabled={ownerWithdrawSubmitting}
-                                          />
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Ajukan penarikan saldo owner ke rekening</p>
                                           <Button
                                             size="sm"
                                             variant="outline"
+                                            onClick={() => setShowOwnerWithdrawForm((v) => !v)}
                                             disabled={ownerWithdrawSubmitting}
-                                            onClick={async () => {
-                                              const ownerId = String(viewInvoice.owner_id || '').trim();
-                                              const amount = parseFloat(ownerWithdrawAmount);
-                                              const bank = ownerWithdrawBank.trim();
-                                              const accNo = ownerWithdrawAccountNumber.trim();
-                                              const accName = ownerWithdrawAccountHolder.trim();
-                                              if (!ownerId) return showToast('Owner invoice tidak ditemukan', 'error');
-                                              if (!Number.isFinite(amount) || amount <= 0) return showToast('Jumlah penarikan tidak valid', 'error');
-                                              if (amount > invoiceOwnerBalance) return showToast('Jumlah melebihi saldo owner', 'error');
-                                              if (!bank || !accNo || !accName) return showToast('Bank, nama rekening, dan nomor rekening wajib diisi', 'error');
-                                              setOwnerWithdrawSubmitting(true);
-                                              try {
-                                                const res = await refundsApi.createFromBalance({
-                                                  owner_id: ownerId,
-                                                  amount,
-                                                  bank_name: bank,
-                                                  account_number: accNo,
-                                                  account_holder_name: accName
-                                                });
-                                                showToast((res.data as { message?: string })?.message || 'Pengajuan penarikan berhasil dibuat', 'success');
-                                                setOwnerWithdrawAmount('');
-                                                setOwnerWithdrawBank('');
-                                                setOwnerWithdrawAccountNumber('');
-                                                setOwnerWithdrawAccountHolder('');
-                                              } catch (e: any) {
-                                                showToast(e.response?.data?.message || 'Gagal mengajukan penarikan saldo', 'error');
-                                              } finally {
-                                                setOwnerWithdrawSubmitting(false);
-                                              }
-                                            }}
                                           >
-                                            {ownerWithdrawSubmitting ? 'Mengirim...' : 'Ajukan penarikan'}
+                                            {showOwnerWithdrawForm ? 'Sembunyikan form' : 'Ajukan penarikan saldo owner ke rekening'}
                                           </Button>
                                         </div>
-                                        <p className="text-[11px] text-slate-500">
-                                          Pengajuan masuk ke menu Refund dengan status Menunggu persetujuan. Saldo owner langsung berkurang saat pengajuan, dan otomatis kembali jika ditolak.
-                                        </p>
+                                        {showOwnerWithdrawForm && (
+                                          <>
+                                            <Autocomplete
+                                              label="Bank penerima *"
+                                              value={ownerWithdrawBank}
+                                              onChange={(v) => setOwnerWithdrawBank(v || '')}
+                                              options={paymentBanks.map((b) => ({ value: b.name, label: b.name }))}
+                                              placeholder="Pilih bank"
+                                              emptyLabel="Pilih bank"
+                                              disabled={ownerWithdrawSubmitting}
+                                            />
+                                            <Input
+                                              label="Nama pemilik rekening *"
+                                              type="text"
+                                              value={ownerWithdrawAccountHolder}
+                                              onChange={(e) => setOwnerWithdrawAccountHolder(e.target.value)}
+                                              placeholder="Sesuai rekening penerima"
+                                              disabled={ownerWithdrawSubmitting}
+                                              fullWidth
+                                            />
+                                            <Input
+                                              label="Nomor rekening *"
+                                              type="text"
+                                              value={ownerWithdrawAccountNumber}
+                                              onChange={(e) => setOwnerWithdrawAccountNumber(e.target.value)}
+                                              placeholder="Nomor rekening penerima"
+                                              disabled={ownerWithdrawSubmitting}
+                                              fullWidth
+                                            />
+                                            <div className="flex gap-2 items-end">
+                                              <Input
+                                                label="Jumlah penarikan (IDR) *"
+                                                type="number"
+                                                min={1}
+                                                max={invoiceOwnerBalance}
+                                                value={ownerWithdrawAmount}
+                                                onChange={(e) => setOwnerWithdrawAmount(e.target.value)}
+                                                placeholder="Jumlah (IDR)"
+                                                className="flex-1 min-w-0"
+                                                disabled={ownerWithdrawSubmitting}
+                                              />
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={ownerWithdrawSubmitting}
+                                                onClick={async () => {
+                                                  const ownerId = String(viewInvoice.owner_id || '').trim();
+                                                  const amount = parseFloat(ownerWithdrawAmount);
+                                                  const bank = ownerWithdrawBank.trim();
+                                                  const accNo = ownerWithdrawAccountNumber.trim();
+                                                  const accName = ownerWithdrawAccountHolder.trim();
+                                                  if (!ownerId) return showToast('Owner invoice tidak ditemukan', 'error');
+                                                  if (!Number.isFinite(amount) || amount <= 0) return showToast('Jumlah penarikan tidak valid', 'error');
+                                                  if (amount > invoiceOwnerBalance) return showToast('Jumlah melebihi saldo owner', 'error');
+                                                  if (!bank || !accNo || !accName) return showToast('Bank, nama rekening, dan nomor rekening wajib diisi', 'error');
+                                                  setOwnerWithdrawSubmitting(true);
+                                                  try {
+                                                    const res = await refundsApi.createFromBalance({
+                                                      owner_id: ownerId,
+                                                      amount,
+                                                      bank_name: bank,
+                                                      account_number: accNo,
+                                                      account_holder_name: accName
+                                                    });
+                                                    showToast((res.data as { message?: string })?.message || 'Pengajuan penarikan berhasil dibuat', 'success');
+                                                    setOwnerWithdrawAmount('');
+                                                    setOwnerWithdrawBank('');
+                                                    setOwnerWithdrawAccountNumber('');
+                                                    setOwnerWithdrawAccountHolder('');
+                                                  } catch (e: any) {
+                                                    showToast(e.response?.data?.message || 'Gagal mengajukan penarikan saldo', 'error');
+                                                  } finally {
+                                                    setOwnerWithdrawSubmitting(false);
+                                                  }
+                                                }}
+                                              >
+                                                {ownerWithdrawSubmitting ? 'Mengirim...' : 'Ajukan penarikan'}
+                                              </Button>
+                                            </div>
+                                            <p className="text-[11px] text-slate-500">
+                                              Pengajuan masuk ke menu Refund dengan status Menunggu persetujuan. Saldo owner langsung berkurang saat pengajuan, dan otomatis kembali jika ditolak.
+                                            </p>
+                                          </>
+                                        )}
                                       </div>
                                     )}
                                   </>
