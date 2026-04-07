@@ -6,7 +6,18 @@ const refundController = require('../../controllers/refundController');
 
 router.use(auth);
 
-router.post('/', requireRole(...OWNER_ROLES), refundController.createFromBalance);
+router.post(
+  '/',
+  requireRole(
+    ...OWNER_ROLES,
+    ROLES.ADMIN_PUSAT,
+    ROLES.SUPER_ADMIN,
+    ROLES.ROLE_ACCOUNTING,
+    ROLES.INVOICE_KOORDINATOR,
+    ROLES.ROLE_INVOICE_SAUDI
+  ),
+  refundController.createFromBalance
+);
 router.get('/', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), refundController.list);
 router.get('/stats', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI), refundController.getStats);
 router.get('/:id', requireRole(...OWNER_ROLES, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN, ROLES.ROLE_ACCOUNTING), refundController.getById);

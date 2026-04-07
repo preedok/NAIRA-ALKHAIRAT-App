@@ -616,7 +616,7 @@ export const refundsApi = {
     api.post<{ success: boolean; message?: string; data?: unknown }>(`/refunds/${id}/complete-payout`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
-  createFromBalance: (body: { amount: number; bank_name: string; account_number: string; account_holder_name: string }) => api.post('/refunds', body),
+  createFromBalance: (body: { amount: number; bank_name: string; account_number: string; account_holder_name: string; owner_id?: string }) => api.post('/refunds', body),
   /** Role accounting: upload bukti bayar refund. Setelah upload, status jadi refunded & bukti dikirim ke email pemesan. */
   uploadProof: (id: string, formData: FormData) => api.post(`/refunds/${id}/upload-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getProofFile: (id: string) => api.get(`/refunds/${id}/proof/file`, { responseType: 'blob' })

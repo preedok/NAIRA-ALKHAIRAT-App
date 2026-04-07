@@ -192,12 +192,22 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
 
 /**
  * POST /api/v1/refunds (request refund dari saldo - owner)
- * Body: { amount, bank_name, account_number } untuk tarik saldo ke rekening.
+ * Body owner: { amount, bank_name, account_number, account_holder_name }.
+ * Body admin/tim invoice: + { owner_id } untuk ajukan atas nama owner.
  * Flow terbaru: saldo owner dipotong saat refund selesai (status refunded + bukti transfer).
  */
 const createFromBalance = asyncHandler(async (req, res) => {
-  if (!isOwnerRole(req.user.role)) return res.status(403).json({ success: false, message: 'Hanya owner yang dapat meminta refund dari saldo' });
-  const { amount: amountRaw, bank_name, account_number, account_holder_name } = req.body || {};
+  const requesterRole = String(req.user.role || '').toLowerCase();
+  const isOwnerRequester = isOwnerRole(requesterRole);
+  const isTeamRequester = ['admin_pusat', 'super_admin', 'role_accounting', 'invoice_koordinator', 'invoice_saudi'].includes(requesterRole);
+  if (!isOwnerRequester && !isTeamRequester) {
+    return res.status(403).json({ success: false, message: 'Akses ditolak untuk pengajuan penarikan saldo' });
+  }
+  const { amount: amountRaw, bank_name, account_number, account_holder_name, owner_id } = req.body || {};
+  const targetOwnerId = isOwnerRequester ? req.user.id : String(owner_id || '').trim();
+  if (!targetOwnerId) {
+    return res.status(400).json({ success: false, message: 'owner_id wajib diisi untuk pengajuan oleh tim internal' });
+  }
   const amount = parseFloat(amountRaw);
   if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, message: 'amount wajib angka positif' });
   const bank = bank_name ? String(bank_name).trim() : '';
@@ -210,7 +220,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
   try {
     await sequelize.transaction(async (tx) => {
       const profile = await OwnerProfile.findOne({
-        where: { user_id: req.user.id },
+        where: { user_id: targetOwnerId },
         transaction: tx,
         lock: Transaction.LOCK.UPDATE
       });
@@ -230,7 +240,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
         {
           invoice_id: null,
           order_id: null,
-          owner_id: req.user.id,
+          owner_id: targetOwnerId,
           amount,
           status: REFUND_STATUS.REQUESTED,
           source: REFUND_SOURCE.BALANCE,
@@ -254,7 +264,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
   }
 
   await Notification.create({
-    user_id: req.user.id,
+    user_id: targetOwnerId,
     trigger: NOTIFICATION_TRIGGER.REFUND,
     title: 'Penarikan saldo diajukan',
     message: `Permintaan penarikan Rp ${amount.toLocaleString('id-ID')} diterima. Menunggu persetujuan Admin Pusat. Saldo akan dipotong otomatis setelah transfer selesai dan bukti diunggah. Pantau status di menu Refund.`,
@@ -269,7 +279,9 @@ const createFromBalance = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     data: full,
-    message: 'Pengajuan terkirim. Menunggu persetujuan Admin Pusat. Saldo akan berkurang otomatis setelah transfer selesai.'
+    message: isOwnerRequester
+      ? 'Pengajuan terkirim. Menunggu persetujuan Admin Pusat. Saldo akan berkurang otomatis setelah transfer selesai.'
+      : 'Pengajuan penarikan atas nama owner berhasil dibuat. Menunggu persetujuan Admin Pusat.'
   });
 });
 
