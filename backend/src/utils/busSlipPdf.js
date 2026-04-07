@@ -3,6 +3,7 @@
  * Digabungkan ke arsip ZIP invoice.
  */
 const PDFDocument = require('pdfkit');
+const { drawCorporateLetterhead, COMPANY_NAME } = require('./pdfLetterhead');
 
 const busTicketStatusLabel = (s) => ({ pending: 'Menunggu', issued: 'Terbit' }[String(s).toLowerCase()] || s || '–');
 const busTripStatusLabel = (s) => ({ pending: 'Menunggu', scheduled: 'Terjadwal', completed: 'Selesai' }[String(s).toLowerCase()] || s || '–');
@@ -51,7 +52,7 @@ async function buildBusSlipPdfBuffer(item, opts = {}) {
 
     const margin = 48;
     const pageWidth = doc.page.width - margin * 2;
-    let y = margin;
+    let y = drawCorporateLetterhead(doc, { margin });
 
     doc.fontSize(18).fillColor('#0f172a');
     doc.text('Slip Informasi Bus', margin, y);
@@ -92,7 +93,7 @@ async function buildBusSlipPdfBuffer(item, opts = {}) {
     doc.fontSize(9).fillColor('#94a3b8');
     doc.text('Slip ini digenerate otomatis oleh sistem. Digabungkan ke arsip invoice.', margin, y, { width: pageWidth });
     y += 16;
-    doc.text('Bintang Global Group - Travel & Umroh', margin, y, { width: pageWidth });
+    doc.text(COMPANY_NAME, margin, y, { width: pageWidth });
 
     doc.end();
   });

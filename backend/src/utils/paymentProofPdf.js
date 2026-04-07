@@ -3,6 +3,7 @@
  * Layout modern dan rapi.
  */
 const PDFDocument = require('pdfkit');
+const { drawCorporateLetterhead, COMPANY_NAME } = require('./pdfLetterhead');
 
 const PAYMENT_TYPE_LABELS = {
   dp: 'Down Payment (DP)',
@@ -23,15 +24,9 @@ function formatDate(d) {
 function renderPaymentProofPdf(doc, data) {
   const margin = 50;
   const pageWidth = doc.page.width - margin * 2;
-  let y = margin;
-
-  // Header
-  doc.fontSize(22).fillColor('#0f766e').text('BINTANG GLOBAL GROUP', margin, y);
-  y += 28;
-  doc.fontSize(10).fillColor('#64748b').text('Travel & Umroh | Bukti Pembayaran', margin, y);
-  y += 24;
-  doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(margin, y).lineTo(doc.page.width - margin, y).stroke();
-  y += 24;
+  let y = drawCorporateLetterhead(doc, { margin });
+  doc.fontSize(15).fillColor('#0f766e').text('Dokumen Bukti Pembayaran', margin, y, { width: pageWidth, align: 'center' });
+  y += 26;
 
   const typeLabel = PAYMENT_TYPE_LABELS[data.payment_type] || data.payment_type;
   doc.fontSize(12).fillColor('#334155');
@@ -64,7 +59,7 @@ function renderPaymentProofPdf(doc, data) {
 
   // Footer
   doc.fontSize(8).fillColor('#94a3b8');
-  doc.text('Dokumen ini adalah contoh bukti pembayaran. File asli diupload oleh owner.', margin, y);
+  doc.text(`Dokumen ini adalah contoh bukti pembayaran. File asli diupload oleh owner. - ${COMPANY_NAME}`, margin, y);
   doc.text(`Dibuat: ${formatDate(new Date())}`, margin, y + 14);
 }
 

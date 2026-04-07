@@ -6,6 +6,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const uploadConfig = require('../config/uploads');
+const { drawCorporateLetterhead, COMPANY_NAME } = require('./pdfLetterhead');
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
@@ -29,7 +30,7 @@ async function generateMouPdf(opts) {
   const out = fs.createWriteStream(filepath);
   doc.pipe(out);
 
-  let y = margin;
+  let y = drawCorporateLetterhead(doc, { margin });
   const pageWidth = doc.page.width - margin * 2;
 
   doc.fontSize(18).fillColor('#0f172a').text('MEMORANDUM OF UNDERSTANDING (MoU)', margin, y, { align: 'center' });
@@ -72,7 +73,7 @@ async function generateMouPdf(opts) {
   doc.text('Password yang Anda buat saat pendaftaran tidak lagi berlaku. Gunakan password di atas.', margin + 12, y + 52);
   y += 90;
 
-  doc.fontSize(9).fillColor('#64748b').text('Dokumen ini sah dan digenerate otomatis oleh sistem Bintang Global Group.', margin, y);
+  doc.fontSize(9).fillColor('#64748b').text(`Dokumen ini sah dan digenerate otomatis oleh sistem ${COMPANY_NAME}.`, margin, y);
   y += 14;
   doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, margin, y);
 
