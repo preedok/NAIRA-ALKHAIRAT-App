@@ -36,6 +36,18 @@ const refundProofStorage = multer.diskStorage({
 });
 const refundProofUpload = multer({ storage: refundProofStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+/** ISO string dari frontend: tanggal/waktu di bukti transfer (waktu lokal → UTC). */
+function parseTransferProofAt(raw) {
+  if (raw == null || String(raw).trim() === '') {
+    return { ok: false, code: 400, message: 'Tanggal dan waktu di bukti transfer wajib diisi (sesuai struk).' };
+  }
+  const d = new Date(String(raw).trim());
+  if (Number.isNaN(d.getTime())) {
+    return { ok: false, code: 400, message: 'Format tanggal/waktu bukti transfer tidak valid.' };
+  }
+  return { ok: true, date: d };
+}
+
 /**
  * Potong saldo untuk penarikan: jika sudah ada refund_debit → lewati; jika ada withdrawal_pending → ubah jadi refund_debit (saldo sudah dipotong saat pengajuan);
  * selain itu potong saldo sekarang (data lama / sinkron).
@@ -594,6 +606,11 @@ const completePayout = [
       return res.status(400).json({ success: false, message: 'File bukti transfer wajib diunggah.' });
     }
 
+    const parsedProofAt = parseTransferProofAt(req.body && req.body.transfer_proof_at);
+    if (!parsedProofAt.ok) {
+      return res.status(parsedProofAt.code).json({ success: false, message: parsedProofAt.message });
+    }
+
     const finalName = uploadConfig.refundProofFilename(r.id, r.Invoice?.invoice_number, req.file.originalname);
     const oldPath = req.file.path;
     const newPath = path.join(refundProofDir, finalName);
@@ -615,7 +632,8 @@ const completePayout = [
             payout_sender_account_holder: payoutHolder,
             payout_sender_account_number: payoutAcct,
             status: REFUND_STATUS.REFUNDED,
-            refunded_at: new Date(),
+            proof_transfer_at: parsedProofAt.date,
+            refunded_at: parsedProofAt.date,
             approved_by: req.user.id,
             approved_at: new Date()
           },
@@ -736,6 +754,11 @@ const uploadProof = [
     if (!r) return res.status(404).json({ success: false, message: 'Refund tidak ditemukan' });
     if (!req.file || !req.file.path) return res.status(400).json({ success: false, message: 'File bukti refund wajib' });
 
+    const parsedProofAt = parseTransferProofAt(req.body && req.body.transfer_proof_at);
+    if (!parsedProofAt.ok) {
+      return res.status(parsedProofAt.code).json({ success: false, message: parsedProofAt.message });
+    }
+
     const finalName = uploadConfig.refundProofFilename(r.id, r.Invoice?.invoice_number, req.file.originalname);
     const oldPath = req.file.path;
     const newPath = path.join(refundProofDir, finalName);
@@ -749,7 +772,15 @@ const uploadProof = [
         await r.update(
           {
             proof_file_url: fileUrl,
-            ...(wasRefunded ? {} : { status: REFUND_STATUS.REFUNDED, refunded_at: new Date(), approved_by: req.user.id, approved_at: new Date() })
+            proof_transfer_at: parsedProofAt.date,
+            ...(wasRefunded
+              ? {}
+              : {
+                  status: REFUND_STATUS.REFUNDED,
+                  refunded_at: parsedProofAt.date,
+                  approved_by: req.user.id,
+                  approved_at: new Date()
+                })
           },
           { transaction: tx }
         );

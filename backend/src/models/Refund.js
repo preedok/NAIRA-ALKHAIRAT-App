@@ -73,6 +73,11 @@ const Refund = sequelize.define('Refund', {
   refunded_at: {
     type: DataTypes.DATE
   },
+  proof_transfer_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Tanggal/waktu di bukti transfer (diisi accounting; jam/menit/detik)'
+  },
   proof_file_url: {
     type: DataTypes.STRING(500),
     allowNull: true,

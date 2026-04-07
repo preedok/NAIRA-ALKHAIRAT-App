@@ -327,6 +327,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [ownerWithdrawAccountHolder, setOwnerWithdrawAccountHolder] = useState('');
   const [ownerWithdrawSubmitting, setOwnerWithdrawSubmitting] = useState(false);
   const [showOwnerWithdrawForm, setShowOwnerWithdrawForm] = useState(false);
+  const [exportOwnerBalanceType, setExportOwnerBalanceType] = useState<'pdf' | 'excel' | null>(null);
   const [paymentBankAccounts, setPaymentBankAccounts] = useState<BankAccountItem[]>([]);
   const [paymentBankAccountsLoading, setPaymentBankAccountsLoading] = useState(false);
   const [paymentBanks, setPaymentBanks] = useState<BankItem[]>([]);
@@ -1141,6 +1142,43 @@ const OrdersInvoicesPage: React.FC = () => {
     } catch (e: any) {
       const msg = e.response?.data?.message || (e.response?.status === 404 ? 'File tidak tersedia di server' : 'Gagal unduh manifest');
       showToast(msg, 'error');
+    }
+  };
+
+  /** Export riwayat saldo owner ke PDF/Excel (format resmi + kop surat untuk PDF). */
+  const exportOwnerBalanceHistory = async (format: 'pdf' | 'excel') => {
+    const ownerId = String(viewInvoice?.owner_id || '').trim();
+    if (!ownerId) {
+      showToast('Owner invoice tidak ditemukan', 'error');
+      return;
+    }
+    setExportOwnerBalanceType(format);
+    try {
+      const res = format === 'pdf'
+        ? await ownersApi.exportBalanceHistoryPdf(ownerId)
+        : await ownersApi.exportBalanceHistoryExcel(ownerId);
+      const blob = res.data as Blob;
+      const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
+      const m = typeof disp === 'string'
+        ? disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i)
+        : null;
+      const fallback = `riwayat-saldo-owner-${ownerId.slice(-6)}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      const name = (m && (decodeURIComponent((m[1] || m[2] || '').replace(/^["']|["']$/g, '').trim()) || '')) || fallback;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast(`Export ${format.toUpperCase()} berhasil`, 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || `Gagal export ${format.toUpperCase()}`, 'error');
+    } finally {
+      setExportOwnerBalanceType(null);
     }
   };
 
@@ -2912,6 +2950,23 @@ const OrdersInvoicesPage: React.FC = () => {
                                 <h4 className="text-sm font-semibold text-[#0D1A63] flex items-center gap-2 mb-3">
                                   <Wallet className="w-4 h-4" /> Saldo akun owner
                                 </h4>
+                                <div className="mb-3 rounded-xl border border-indigo-200/80 bg-white/80 px-3 py-2.5 text-xs text-slate-700">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-medium text-slate-800">Owner:</span>
+                                    <span>{viewInvoice.User?.name || viewInvoice.owner_name_manual || viewInvoice.Order?.owner_name_manual || '-'}</span>
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${viewInvoice.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                                      {viewInvoice.owner_is_mou ? 'MOU' : 'Non-MOU'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1">
+                                    <span className="font-medium text-slate-800">Perusahaan:</span>{' '}
+                                    <span>{viewInvoice.User?.company_name || viewInvoice.Branch?.name || viewInvoice.User?.name || '-'}</span>
+                                  </div>
+                                  <div className="mt-1">
+                                    <span className="font-medium text-slate-800">Wilayah:</span>{' '}
+                                    <span>{[viewInvoice.Branch?.Provinsi?.Wilayah?.name, viewInvoice.Branch?.Provinsi?.name, viewInvoice.Branch?.city].filter(Boolean).join(' · ') || '-'}</span>
+                                  </div>
+                                </div>
                                 {invoiceOwnerBalanceLoading || (invoiceOwnerBalance === null && !invoiceOwnerBalanceError) ? (
                                   <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                                 ) : invoiceOwnerBalanceError || invoiceOwnerBalance === null ? (
@@ -2924,13 +2979,31 @@ const OrdersInvoicesPage: React.FC = () => {
                                       <div className="mt-4 pt-4 border-t border-indigo-200">
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                           <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Riwayat transaksi saldo akun owner</p>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => setShowOwnerBalanceHistory((v) => !v)}
-                                          >
-                                            <Eye className="w-4 h-4 mr-1" /> View
-                                          </Button>
+                                          <div className="flex items-center gap-2">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              disabled={exportOwnerBalanceType != null}
+                                              onClick={() => exportOwnerBalanceHistory('excel')}
+                                            >
+                                              <FileSpreadsheet className="w-4 h-4 mr-1" /> {exportOwnerBalanceType === 'excel' ? 'Export...' : 'Excel'}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              disabled={exportOwnerBalanceType != null}
+                                              onClick={() => exportOwnerBalanceHistory('pdf')}
+                                            >
+                                              <FileText className="w-4 h-4 mr-1" /> {exportOwnerBalanceType === 'pdf' ? 'Export...' : 'PDF'}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => setShowOwnerBalanceHistory((v) => !v)}
+                                            >
+                                              <Eye className="w-4 h-4 mr-1" /> View
+                                            </Button>
+                                          </div>
                                         </div>
                                         {showOwnerBalanceHistory && (
                                           <div className="rounded-lg border border-slate-200 bg-white">
@@ -3091,52 +3164,55 @@ const OrdersInvoicesPage: React.FC = () => {
                                                 className="flex-1 min-w-0"
                                                 disabled={ownerWithdrawSubmitting}
                                               />
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-10 px-4 self-stretch"
-                                                disabled={ownerWithdrawSubmitting}
-                                                onClick={async () => {
-                                                  const ownerId = String(viewInvoice.owner_id || '').trim();
-                                                  const amount = parseFloat(ownerWithdrawAmount);
-                                                  const bank = ownerWithdrawBank.trim();
-                                                  const accNo = ownerWithdrawAccountNumber.trim();
-                                                  const accName = ownerWithdrawAccountHolder.trim();
-                                                  if (!ownerId) return showToast('Owner invoice tidak ditemukan', 'error');
-                                                  if (!Number.isFinite(amount) || amount <= 0) return showToast('Jumlah penarikan tidak valid', 'error');
-                                                  if (amount > invoiceOwnerBalance) return showToast('Jumlah melebihi saldo owner', 'error');
-                                                  if (!bank || !accNo || !accName) return showToast('Bank, nama rekening, dan nomor rekening wajib diisi', 'error');
-                                                  setOwnerWithdrawSubmitting(true);
-                                                  try {
-                                                    const res = await refundsApi.createFromBalance({
-                                                      owner_id: ownerId,
-                                                      amount,
-                                                      bank_name: bank,
-                                                      account_number: accNo,
-                                                      account_holder_name: accName
-                                                    });
-                                                    showToast((res.data as { message?: string })?.message || 'Pengajuan penarikan berhasil dibuat', 'success');
-                                                    setOwnerWithdrawAmount('');
-                                                    setOwnerWithdrawBank('');
-                                                    setOwnerWithdrawAccountNumber('');
-                                                    setOwnerWithdrawAccountHolder('');
-                                                    setShowOwnerWithdrawForm(false);
-                                                    setInvoiceOwnerBalance((prev) => Math.max(0, Number(prev || 0) - amount));
-                                                    ownersApi.getBalanceForUser(ownerId).then((r) => {
-                                                      if (r.data?.success && r.data?.data) {
-                                                        setInvoiceOwnerBalance(r.data.data.balance);
-                                                        setInvoiceOwnerTransactions(Array.isArray((r.data.data as any).transactions) ? (r.data.data as any).transactions : []);
-                                                      }
-                                                    }).catch(() => {});
-                                                  } catch (e: any) {
-                                                    showToast(e.response?.data?.message || 'Gagal mengajukan penarikan saldo', 'error');
-                                                  } finally {
-                                                    setOwnerWithdrawSubmitting(false);
-                                                  }
-                                                }}
-                                              >
-                                                {ownerWithdrawSubmitting ? 'Mengirim...' : 'Ajukan penarikan'}
-                                              </Button>
+                                              <div className="shrink-0">
+                                                <div className="h-[22px]" />
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-10 px-4"
+                                                  disabled={ownerWithdrawSubmitting}
+                                                  onClick={async () => {
+                                                    const ownerId = String(viewInvoice.owner_id || '').trim();
+                                                    const amount = parseFloat(ownerWithdrawAmount);
+                                                    const bank = ownerWithdrawBank.trim();
+                                                    const accNo = ownerWithdrawAccountNumber.trim();
+                                                    const accName = ownerWithdrawAccountHolder.trim();
+                                                    if (!ownerId) return showToast('Owner invoice tidak ditemukan', 'error');
+                                                    if (!Number.isFinite(amount) || amount <= 0) return showToast('Jumlah penarikan tidak valid', 'error');
+                                                    if (amount > invoiceOwnerBalance) return showToast('Jumlah melebihi saldo owner', 'error');
+                                                    if (!bank || !accNo || !accName) return showToast('Bank, nama rekening, dan nomor rekening wajib diisi', 'error');
+                                                    setOwnerWithdrawSubmitting(true);
+                                                    try {
+                                                      const res = await refundsApi.createFromBalance({
+                                                        owner_id: ownerId,
+                                                        amount,
+                                                        bank_name: bank,
+                                                        account_number: accNo,
+                                                        account_holder_name: accName
+                                                      });
+                                                      showToast((res.data as { message?: string })?.message || 'Pengajuan penarikan berhasil dibuat', 'success');
+                                                      setOwnerWithdrawAmount('');
+                                                      setOwnerWithdrawBank('');
+                                                      setOwnerWithdrawAccountNumber('');
+                                                      setOwnerWithdrawAccountHolder('');
+                                                      setShowOwnerWithdrawForm(false);
+                                                      setInvoiceOwnerBalance((prev) => Math.max(0, Number(prev || 0) - amount));
+                                                      ownersApi.getBalanceForUser(ownerId).then((r) => {
+                                                        if (r.data?.success && r.data?.data) {
+                                                          setInvoiceOwnerBalance(r.data.data.balance);
+                                                          setInvoiceOwnerTransactions(Array.isArray((r.data.data as any).transactions) ? (r.data.data as any).transactions : []);
+                                                        }
+                                                      }).catch(() => {});
+                                                    } catch (e: any) {
+                                                      showToast(e.response?.data?.message || 'Gagal mengajukan penarikan saldo', 'error');
+                                                    } finally {
+                                                      setOwnerWithdrawSubmitting(false);
+                                                    }
+                                                  }}
+                                                >
+                                                  {ownerWithdrawSubmitting ? 'Mengirim...' : 'Ajukan penarikan'}
+                                                </Button>
+                                              </div>
                                             </div>
                                             <p className="text-[11px] text-slate-500">
                                               Pengajuan masuk ke menu Refund dengan status Menunggu persetujuan. Saldo owner langsung berkurang saat pengajuan, dan otomatis kembali jika ditolak.

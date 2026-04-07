@@ -1265,6 +1265,10 @@ export const ownersApi = {
         }>;
       };
     }>(`/owners/user/${userId}/balance`),
+  exportBalanceHistoryExcel: (userId: string) =>
+    api.get(`/owners/user/${userId}/balance/export-excel`, { responseType: 'blob' }),
+  exportBalanceHistoryPdf: (userId: string) =>
+    api.get(`/owners/user/${userId}/balance/export-pdf`, { responseType: 'blob' }),
   /** Stream file bukti bayar pendaftaran (untuk preview; hindari 404 direct /uploads/). */
   getRegistrationPaymentFile: (ownerId: string) => api.get(`/owners/${ownerId}/registration-payment-file`, { responseType: 'blob' }),
   /** Stream file MOU (generated or signed) agar tidak 404. */

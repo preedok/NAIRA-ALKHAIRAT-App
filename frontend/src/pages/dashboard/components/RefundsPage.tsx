@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Receipt, Wallet, Clock, CheckCircle, XCircle, Banknote, Upload, Download, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
@@ -21,6 +21,46 @@ import type { TableColumn } from '../../../types';
 const STATUS_LABELS: Record<string, string> = { requested: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak', refunded: 'Sudah direfund' };
 const STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'error'> = { requested: 'warning', approved: 'default', rejected: 'error', refunded: 'success' };
 const SOURCE_LABELS: Record<string, string> = { cancel: 'Refund pembatalan order', balance: 'Penarikan saldo' };
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+function nowLocalDateTimeParts() {
+  const now = new Date();
+  return {
+    local: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+    seconds: pad2(now.getSeconds())
+  };
+}
+
+/** datetime-local "YYYY-MM-DDTHH:mm" + detik → ISO UTC untuk API */
+function transferLocalToISO(dateTimeLocal: string, secondsStr: string): string | null {
+  if (!dateTimeLocal?.trim()) return null;
+  const sec = Math.min(59, Math.max(0, parseInt(secondsStr, 10) || 0));
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(dateTimeLocal.trim());
+  if (!m) return null;
+  const y = parseInt(m[1], 10);
+  const mo = parseInt(m[2], 10);
+  const d = parseInt(m[3], 10);
+  const h = parseInt(m[4], 10);
+  const mi = parseInt(m[5], 10);
+  const dt = new Date(y, mo - 1, d, h, mi, sec, 0);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+}
+
+/** Tampilan tanggal di tabel: utamakan waktu di bukti transfer */
+function getRefundDisplayInstant(r: any): string | undefined {
+  const v =
+    r?.proof_transfer_at ??
+    r?.proofTransferAt ??
+    r?.refunded_at ??
+    r?.refundedAt ??
+    r?.created_at ??
+    r?.createdAt;
+  return v != null && v !== '' ? String(v) : undefined;
+}
 
 function isBalanceWithdrawalRow(r: any): boolean {
   if (String(r?.source || '').toLowerCase() === 'balance') return true;
@@ -46,7 +86,6 @@ const RefundsPage: React.FC = () => {
   const [owners, setOwners] = useState<{ id: string; name?: string }[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
-  const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [payoutModalRow, setPayoutModalRow] = useState<any | null>(null);
   const [payoutSubmitting, setPayoutSubmitting] = useState(false);
   const [payoutBank, setPayoutBank] = useState('');
@@ -57,8 +96,14 @@ const RefundsPage: React.FC = () => {
   const [payoutSenderMode, setPayoutSenderMode] = useState<'db' | 'manual'>('db');
   const [payoutBankAccounts, setPayoutBankAccounts] = useState<BankAccountItem[]>([]);
   const [payoutBankAccountId, setPayoutBankAccountId] = useState('');
+  const [payoutTransferAtLocal, setPayoutTransferAtLocal] = useState('');
+  const [payoutTransferSeconds, setPayoutTransferSeconds] = useState('00');
+  const [replaceProofRow, setReplaceProofRow] = useState<any | null>(null);
+  const [replaceProofFile, setReplaceProofFile] = useState<File | null>(null);
+  const [replaceTransferAtLocal, setReplaceTransferAtLocal] = useState('');
+  const [replaceTransferSeconds, setReplaceTransferSeconds] = useState('00');
+  const [replaceProofSubmitting, setReplaceProofSubmitting] = useState(false);
   const [statModal, setStatModal] = useState<'total' | 'requested' | 'approved' | 'rejected' | 'refunded' | 'amount_pending' | null>(null);
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const canUpdateStatus = user?.role === 'admin_pusat' || user?.role === 'super_admin' || user?.role === 'role_accounting';
   const isOwnerViewer = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
@@ -71,14 +116,16 @@ const RefundsPage: React.FC = () => {
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
     });
   };
 
   const refundColumns: TableColumn[] = [
     { id: 'invoice_order', label: 'Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'tanggal', label: 'Tanggal', align: 'left' },
+    { id: 'tanggal', label: 'Tanggal bukti', align: 'left' },
     { id: 'amount', label: 'Jumlah', align: 'right' },
     { id: 'bank', label: 'Rek. penerima', align: 'left' },
     { id: 'payout_sender', label: 'Dari (BGG)', align: 'left' },
@@ -198,6 +245,54 @@ const RefundsPage: React.FC = () => {
     setPayoutHolder('');
     setPayoutNumber('');
     setPayoutFile(null);
+    const { local, seconds } = nowLocalDateTimeParts();
+    setPayoutTransferAtLocal(local);
+    setPayoutTransferSeconds(seconds);
+  };
+
+  const openReplaceProofModal = (r: any) => {
+    setReplaceProofRow(r);
+    setReplaceProofFile(null);
+    const ex = r.proof_transfer_at ?? r.proofTransferAt ?? r.refunded_at ?? r.refundedAt;
+    if (ex) {
+      const d = new Date(ex);
+      if (!Number.isNaN(d.getTime())) {
+        setReplaceTransferAtLocal(
+          `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+        );
+        setReplaceTransferSeconds(pad2(d.getSeconds()));
+        return;
+      }
+    }
+    const { local, seconds } = nowLocalDateTimeParts();
+    setReplaceTransferAtLocal(local);
+    setReplaceTransferSeconds(seconds);
+  };
+
+  const submitReplaceProof = () => {
+    if (!replaceProofRow?.id || !replaceProofFile) {
+      showToast('Pilih file bukti dan isi tanggal/waktu di bukti transfer.', 'error');
+      return;
+    }
+    const iso = transferLocalToISO(replaceTransferAtLocal, replaceTransferSeconds);
+    if (!iso) {
+      showToast('Isi tanggal dan waktu bukti transfer dengan benar.', 'error');
+      return;
+    }
+    setReplaceProofSubmitting(true);
+    const form = new FormData();
+    form.append('proof_file', replaceProofFile);
+    form.append('transfer_proof_at', iso);
+    refundsApi
+      .uploadProof(replaceProofRow.id, form)
+      .then((res: any) => {
+        showToast(res.data?.message || 'Bukti berhasil diperbarui.', 'success');
+        setReplaceProofRow(null);
+        fetchStats();
+        fetchRefunds();
+      })
+      .catch((e: any) => showToast(e.response?.data?.message || 'Gagal mengunggah bukti', 'error'))
+      .finally(() => setReplaceProofSubmitting(false));
   };
 
   const submitCompletePayout = () => {
@@ -214,8 +309,14 @@ const RefundsPage: React.FC = () => {
       showToast('Unggah file bukti transfer', 'error');
       return;
     }
+    const transferIso = transferLocalToISO(payoutTransferAtLocal, payoutTransferSeconds);
+    if (!transferIso) {
+      showToast('Isi tanggal dan waktu di bukti transfer (jam, menit, detik) dengan benar.', 'error');
+      return;
+    }
     const fd = new FormData();
     fd.append('proof_file', payoutFile);
+    fd.append('transfer_proof_at', transferIso);
     fd.append('payout_sender_bank_name', payoutBank.trim());
     fd.append('payout_sender_account_holder', payoutHolder.trim());
     if (payoutNumber.trim()) fd.append('payout_sender_account_number', payoutNumber.trim());
@@ -242,21 +343,6 @@ const RefundsPage: React.FC = () => {
       })
       .catch((e: any) => showToast(e.response?.data?.message || 'Gagal update status', 'error'))
       .finally(() => setUpdatingId(null));
-  };
-
-  const handleUploadProof = (id: string, file: File) => {
-    if (!file) return;
-    setUploadingProofId(id);
-    const form = new FormData();
-    form.append('proof_file', file);
-    refundsApi.uploadProof(id, form)
-      .then((res: any) => {
-        showToast(res.data?.message || 'Bukti refund berhasil diupload. Email bukti telah dikirim ke pemesan.', 'success');
-        fetchStats();
-        fetchRefunds();
-      })
-      .catch((e: any) => showToast(e.response?.data?.message || 'Gagal upload bukti refund', 'error'))
-      .finally(() => setUploadingProofId(null));
   };
 
   const handleDownloadProof = (id: string) => {
@@ -413,7 +499,7 @@ const RefundsPage: React.FC = () => {
                           {r.Invoice ? <InvoiceNumberCell inv={r.Invoice} statusLabels={INVOICE_STATUS_LABELS} compact /> : isBalanceWithdrawalRow(r) ? 'Refund saldo' : '–'}
                         </td>
                         <td className="py-2 px-4 text-sm">{r.Owner ? (r.Owner.name || r.Owner.company_name) : '-'}</td>
-                        <td className="py-2 px-4 text-sm whitespace-nowrap">{formatDateTime(r.created_at)}</td>
+                        <td className="py-2 px-4 text-sm whitespace-nowrap">{formatDateTime(getRefundDisplayInstant(r))}</td>
                         <td className="py-2 px-4 text-right text-sm font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                         <td className="py-2 px-4 text-slate-600 text-sm">{renderBankCell(r)}</td>
                         <td className="py-2 px-4 text-slate-600 text-sm">{renderPayoutSenderCell(r)}</td>
@@ -499,7 +585,7 @@ const RefundsPage: React.FC = () => {
                 <td className="py-3 px-4">
                   {r.Owner ? <span>{r.Owner.name || r.Owner.company_name}</span> : '-'}
                 </td>
-                <td className="py-3 px-4 whitespace-nowrap text-sm text-slate-600">{formatDateTime((r as any).created_at)}</td>
+                <td className="py-3 px-4 whitespace-nowrap text-sm text-slate-600">{formatDateTime(getRefundDisplayInstant(r))}</td>
                 <td className="py-3 px-4 text-right font-semibold text-emerald-700"><NominalDisplay amount={parseFloat(r.amount)} currency="IDR" /></td>
                 <td className="py-3 px-4 text-slate-600">{renderBankCell(r)}</td>
                 <td className="py-3 px-4 text-slate-600">{renderPayoutSenderCell(r)}</td>
@@ -550,23 +636,16 @@ const RefundsPage: React.FC = () => {
                           <Upload className="w-3.5 h-3.5" /> Selesaikan transfer
                         </Button>
                       )}
-                      {r.status === 'approved' && r.proof_file_url && (
-                        <>
-                          <input
-                            type="file"
-                            ref={(el) => { fileInputRefs.current[r.id] = el; }}
-                            className="hidden"
-                            accept="image/*,.pdf"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) handleUploadProof(r.id, f);
-                              e.target.value = '';
-                            }}
-                          />
-                          <Button size="sm" variant="outline" disabled={uploadingProofId === r.id} onClick={() => fileInputRefs.current[r.id]?.click()} className="inline-flex items-center gap-1">
-                            <Upload className="w-3.5 h-3.5" /> {uploadingProofId === r.id ? 'Uploading...' : 'Ganti bukti'}
-                          </Button>
-                        </>
+                      {r.proof_file_url && (r.status === 'refunded' || r.status === 'approved') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={replaceProofSubmitting && replaceProofRow?.id === r.id}
+                          onClick={() => openReplaceProofModal(r)}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <Upload className="w-3.5 h-3.5" /> Ganti bukti
+                        </Button>
                       )}
                       {r.status === 'requested' && (
                         <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
@@ -661,6 +740,38 @@ const RefundsPage: React.FC = () => {
                 disabled={payoutSubmitting || payoutSenderMode === 'db'}
                 fullWidth
               />
+              <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 space-y-2">
+                <p className="text-sm font-medium text-slate-800">Waktu di bukti transfer *</p>
+                <p className="text-xs text-slate-600">Sesuai tanggal, jam, menit, dan detik pada bukti/bilyet (bukan waktu unggah file).</p>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                  <Input
+                    label="Tanggal & jam"
+                    type="datetime-local"
+                    value={payoutTransferAtLocal}
+                    onChange={(e) => setPayoutTransferAtLocal(e.target.value)}
+                    step={60}
+                    disabled={payoutSubmitting}
+                    fullWidth
+                  />
+                  <Input
+                    label="Detik"
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={payoutTransferSeconds}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') { setPayoutTransferSeconds(''); return; }
+                      const n = parseInt(v, 10);
+                      if (Number.isNaN(n)) return;
+                      setPayoutTransferSeconds(pad2(Math.min(59, Math.max(0, n))));
+                    }}
+                    disabled={payoutSubmitting}
+                    fullWidth={false}
+                    className="min-w-[5rem]"
+                  />
+                </div>
+              </div>
               <div>
                 <p className="text-sm font-medium text-slate-700 mb-1">Bukti transfer *</p>
                 <input
@@ -679,6 +790,70 @@ const RefundsPage: React.FC = () => {
               </Button>
               <Button variant="primary" onClick={submitCompletePayout} disabled={payoutSubmitting}>
                 {payoutSubmitting ? 'Mengirim…' : 'Simpan & kirim ke owner'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
+      )}
+
+      {replaceProofRow && (
+        <Modal open onClose={() => !replaceProofSubmitting && setReplaceProofRow(null)}>
+          <ModalBox className="max-w-md w-full">
+            <ModalHeader
+              title="Ganti bukti transfer"
+              subtitle="Unggah file baru dan isi tanggal/waktu sesuai bukti yang baru."
+              onClose={() => !replaceProofSubmitting && setReplaceProofRow(null)}
+            />
+            <ModalBody className="space-y-3">
+              <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 space-y-2">
+                <p className="text-sm font-medium text-slate-800">Waktu di bukti transfer *</p>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                  <Input
+                    label="Tanggal & jam"
+                    type="datetime-local"
+                    value={replaceTransferAtLocal}
+                    onChange={(e) => setReplaceTransferAtLocal(e.target.value)}
+                    step={60}
+                    disabled={replaceProofSubmitting}
+                    fullWidth
+                  />
+                  <Input
+                    label="Detik"
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={replaceTransferSeconds}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') { setReplaceTransferSeconds(''); return; }
+                      const n = parseInt(v, 10);
+                      if (Number.isNaN(n)) return;
+                      setReplaceTransferSeconds(pad2(Math.min(59, Math.max(0, n))));
+                    }}
+                    disabled={replaceProofSubmitting}
+                    fullWidth={false}
+                    className="min-w-[5rem]"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-1">File bukti *</p>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  disabled={replaceProofSubmitting}
+                  className="block w-full text-sm text-slate-600"
+                  onChange={(e) => setReplaceProofFile(e.target.files?.[0] || null)}
+                />
+                {replaceProofFile ? <p className="text-xs text-slate-500 mt-1">{replaceProofFile.name}</p> : null}
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="outline" onClick={() => !replaceProofSubmitting && setReplaceProofRow(null)} disabled={replaceProofSubmitting}>
+                Batal
+              </Button>
+              <Button variant="primary" onClick={submitReplaceProof} disabled={replaceProofSubmitting}>
+                {replaceProofSubmitting ? 'Mengunggah…' : 'Simpan'}
               </Button>
             </ModalFooter>
           </ModalBox>

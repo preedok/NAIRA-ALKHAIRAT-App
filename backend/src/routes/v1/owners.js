@@ -54,6 +54,16 @@ router.get(
   requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI),
   ownerController.getBalanceForUser
 );
+router.get(
+  '/user/:userId/balance/export-excel',
+  requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI),
+  ownerController.exportBalanceHistoryExcel
+);
+router.get(
+  '/user/:userId/balance/export-pdf',
+  requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI),
+  ownerController.exportBalanceHistoryPdf
+);
 router.get('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT, ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR, ROLES.ROLE_ACCOUNTING), ownerController.getById);
 router.patch('/:id', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), ownerController.updateProfile);
 router.patch('/:id/verify-mou', requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), ownerController.verifyMou);

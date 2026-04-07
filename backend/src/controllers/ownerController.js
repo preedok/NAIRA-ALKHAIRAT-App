@@ -4,11 +4,14 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-const { User, OwnerProfile, Branch, OwnerBalanceTransaction } = require('../models');
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
+const { User, OwnerProfile, Branch, Provinsi, Wilayah, OwnerBalanceTransaction } = require('../models');
 const { ROLES, OWNER_STATUS, MOU_REGISTRATION_FEE_IDR, isOwnerRole } = require('../constants');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { generateMouPdf } = require('../utils/mouPdf');
 const { sendMouToOwner } = require('../utils/emailService');
+const { drawCorporateLetterhead } = require('../utils/pdfLetterhead');
 
 const KOORDINATOR_ROLES = [ROLES.INVOICE_KOORDINATOR, ROLES.TIKET_KOORDINATOR, ROLES.VISA_KOORDINATOR];
 function isKoordinatorRole(role) {
@@ -300,6 +303,272 @@ const getBalanceForUser = asyncHandler(async (req, res) => {
       }))
     }
   });
+});
+
+function ensureOwnerBalanceAccess(role) {
+  const allowedStaff = [
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN_PUSAT,
+    ROLES.INVOICE_KOORDINATOR,
+    ROLES.ROLE_INVOICE_SAUDI
+  ];
+  return allowedStaff.includes(role);
+}
+
+async function getOwnerBalanceExportData(req) {
+  if (!ensureOwnerBalanceAccess(req.user.role)) {
+    return { error: { code: 403, message: 'Akses ditolak' } };
+  }
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return { error: { code: 400, message: 'userId wajib' } };
+
+  const ownerUser = await User.findByPk(userId, {
+    attributes: ['id', 'name', 'company_name', 'role'],
+    include: [
+      {
+        model: OwnerProfile,
+        as: 'OwnerProfile',
+        attributes: ['id', 'status', 'assigned_branch_id'],
+        required: false,
+        include: [
+          {
+            model: Branch,
+            as: 'AssignedBranch',
+            attributes: ['id', 'name', 'city', 'provinsi_id'],
+            required: false,
+            include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
+          }
+        ]
+      }
+    ]
+  });
+  if (!ownerUser || !ownerUser.OwnerProfile) {
+    return { error: { code: 404, message: 'Profil owner tidak ditemukan' } };
+  }
+  const profile = ownerUser.OwnerProfile;
+
+  const isKoord = isKoordinatorRole(req.user.role);
+  if (isKoord && req.user.wilayah_id) {
+    const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
+    const okBranch = profile.assigned_branch_id && branchIds.includes(profile.assigned_branch_id);
+    const okVerified = profile.status === OWNER_STATUS.DEPOSIT_VERIFIED;
+    if (!okBranch && !okVerified) return { error: { code: 403, message: 'Akses ditolak' } };
+  }
+
+  const txRows = await OwnerBalanceTransaction.findAll({
+    where: { owner_id: userId },
+    order: [['created_at', 'DESC']],
+    limit: 5000
+  });
+  const transactions = txRows.map((t) => ({
+    id: t.id,
+    amount: parseFloat(t.amount) || 0,
+    type: t.type || '-',
+    reference_type: t.reference_type || '-',
+    reference_id: t.reference_id || '-',
+    notes: t.notes || '',
+    created_at: t.created_at
+  }));
+  const balance = transactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+  const ownerType = ownerUser.role === ROLES.OWNER_MOU ? 'MOU' : ownerUser.role === ROLES.OWNER_NON_MOU ? 'Non-MOU' : '-';
+  const wilayah = profile.AssignedBranch?.Provinsi?.Wilayah?.name || '-';
+  const provinsi = profile.AssignedBranch?.Provinsi?.name || '-';
+  const kota = profile.AssignedBranch?.city || '-';
+
+  return {
+    userId,
+    owner: {
+      name: ownerUser.name || '-',
+      company_name: ownerUser.company_name || '-',
+      type: ownerType,
+      wilayah,
+      provinsi,
+      kota
+    },
+    balance,
+    transactions
+  };
+}
+
+/**
+ * GET /api/v1/owners/user/:userId/balance/export-excel
+ */
+const exportBalanceHistoryExcel = asyncHandler(async (req, res) => {
+  const payload = await getOwnerBalanceExportData(req);
+  if (payload.error) return res.status(payload.error.code).json({ success: false, message: payload.error.message });
+
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('Riwayat Saldo Owner');
+  ws.columns = [
+    { width: 6 },   // No
+    { width: 22 },  // Tanggal
+    { width: 16 },  // Tipe
+    { width: 18 },  // Ref type
+    { width: 22 },  // Ref id
+    { width: 20 },  // Nominal
+    { width: 60 }   // Catatan
+  ];
+
+  ws.mergeCells('A1:G1');
+  ws.getCell('A1').value = 'PT. BINTANG GLOBAL GRUP';
+  ws.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF0B4F82' } };
+  ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.mergeCells('A2:G2');
+  ws.getCell('A2').value = 'Laporan Resmi Riwayat Transaksi Saldo Owner';
+  ws.getCell('A2').font = { bold: true, size: 12 };
+  ws.getCell('A2').alignment = { horizontal: 'center' };
+  ws.mergeCells('A3:G3');
+  ws.getCell('A3').value = `Dicetak: ${new Date().toLocaleString('id-ID')}`;
+  ws.getCell('A3').alignment = { horizontal: 'center' };
+  ws.getCell('A3').font = { color: { argb: 'FF475569' } };
+
+  ws.mergeCells('A5:D5');
+  ws.getCell('A5').value = `Owner: ${payload.owner.name}`;
+  ws.mergeCells('E5:G5');
+  ws.getCell('E5').value = `Tipe: ${payload.owner.type}`;
+  ws.mergeCells('A6:D6');
+  ws.getCell('A6').value = `Perusahaan: ${payload.owner.company_name}`;
+  ws.mergeCells('E6:G6');
+  ws.getCell('E6').value = `Wilayah: ${payload.owner.wilayah}`;
+  ws.mergeCells('A7:D7');
+  ws.getCell('A7').value = `Provinsi: ${payload.owner.provinsi}`;
+  ws.mergeCells('E7:G7');
+  ws.getCell('E7').value = `Kota: ${payload.owner.kota}`;
+  ws.mergeCells('A8:G8');
+  ws.getCell('A8').value = `Saldo berjalan: Rp ${Number(payload.balance || 0).toLocaleString('id-ID')}`;
+  ws.getCell('A8').font = { bold: true, color: { argb: 'FF0D1A63' } };
+
+  const headerRow = ws.addRow(['No', 'Tanggal', 'Tipe', 'Ref Type', 'Ref ID', 'Nominal (IDR)', 'Catatan']);
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1A63' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+    };
+  });
+
+  if (!payload.transactions.length) {
+    const row = ws.addRow(['', 'Tidak ada transaksi', '', '', '', '', '']);
+    ws.mergeCells(`B${row.number}:G${row.number}`);
+    row.getCell(2).alignment = { horizontal: 'center' };
+    row.getCell(2).font = { italic: true, color: { argb: 'FF64748B' } };
+  } else {
+    payload.transactions.forEach((tx, idx) => {
+      const row = ws.addRow([
+        idx + 1,
+        tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID') : '-',
+        String(tx.type || '-').replace(/_/g, ' '),
+        tx.reference_type || '-',
+        tx.reference_id || '-',
+        tx.amount,
+        tx.notes || '-'
+      ]);
+      row.getCell(6).numFmt = '"Rp" #,##0';
+      row.getCell(6).font = { bold: true, color: { argb: tx.amount < 0 ? 'FFBE123C' : 'FF047857' } };
+      row.eachCell((cell) => {
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+      });
+    });
+  }
+
+  const safeName = String(payload.owner.name || payload.userId).replace(/[^\w.-]+/g, '_');
+  const filename = `riwayat-saldo-owner-${safeName}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+/**
+ * GET /api/v1/owners/user/:userId/balance/export-pdf
+ */
+const exportBalanceHistoryPdf = asyncHandler(async (req, res) => {
+  const payload = await getOwnerBalanceExportData(req);
+  if (payload.error) return res.status(payload.error.code).json({ success: false, message: payload.error.message });
+
+  const safeName = String(payload.owner.name || payload.userId).replace(/[^\w.-]+/g, '_');
+  const filename = `riwayat-saldo-owner-${safeName}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const doc = new PDFDocument({ size: 'A4', margin: 48 });
+  doc.pipe(res);
+
+  let y = drawCorporateLetterhead(doc, { margin: 48 });
+  doc.font('Helvetica-Bold').fontSize(13).fillColor('#0f172a').text('LAPORAN RESMI RIWAYAT TRANSAKSI SALDO OWNER', 48, y, { align: 'center' });
+  y += 24;
+  doc.font('Helvetica').fontSize(10).fillColor('#334155')
+    .text(`Owner: ${payload.owner.name}`, 48, y)
+    .text(`Tipe: ${payload.owner.type}`, 48, y + 14)
+    .text(`Perusahaan: ${payload.owner.company_name}`, 48, y + 28)
+    .text(`Wilayah/Provinsi/Kota: ${payload.owner.wilayah} / ${payload.owner.provinsi} / ${payload.owner.kota}`, 48, y + 42)
+    .text(`Saldo berjalan: Rp ${Number(payload.balance || 0).toLocaleString('id-ID')}`, 48, y + 56)
+    .text(`Tanggal cetak: ${new Date().toLocaleString('id-ID')}`, 48, y + 70);
+  y += 96;
+
+  const cols = { no: 48, tanggal: 78, tipe: 170, ref: 250, nominal: 350, catatan: 430 };
+  doc.rect(48, y, 499, 22).fill('#0D1A63');
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9)
+    .text('No', cols.no + 3, y + 7)
+    .text('Tanggal', cols.tanggal + 3, y + 7)
+    .text('Tipe', cols.tipe + 3, y + 7)
+    .text('Referensi', cols.ref + 3, y + 7)
+    .text('Nominal', cols.nominal + 3, y + 7)
+    .text('Catatan', cols.catatan + 3, y + 7);
+  y += 24;
+
+  const drawPageHeader = () => {
+    doc.rect(48, y, 499, 22).fill('#0D1A63');
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9)
+      .text('No', cols.no + 3, y + 7)
+      .text('Tanggal', cols.tanggal + 3, y + 7)
+      .text('Tipe', cols.tipe + 3, y + 7)
+      .text('Referensi', cols.ref + 3, y + 7)
+      .text('Nominal', cols.nominal + 3, y + 7)
+      .text('Catatan', cols.catatan + 3, y + 7);
+    y += 24;
+  };
+
+  if (!payload.transactions.length) {
+    doc.font('Helvetica-Oblique').fillColor('#64748b').fontSize(10).text('Tidak ada transaksi.', 48, y + 4);
+  } else {
+    payload.transactions.forEach((tx, idx) => {
+      const rowHeight = 34;
+      if (y + rowHeight > doc.page.height - 56) {
+        doc.addPage();
+        y = 48;
+        drawCorporateLetterhead(doc, { margin: 48 });
+        y = 132;
+        drawPageHeader();
+      }
+
+      doc.rect(48, y, 499, rowHeight).fill(idx % 2 === 0 ? '#f8fafc' : '#ffffff');
+      doc.strokeColor('#e2e8f0').lineWidth(0.6).rect(48, y, 499, rowHeight).stroke();
+      doc.font('Helvetica').fontSize(8.5).fillColor('#0f172a')
+        .text(String(idx + 1), cols.no + 3, y + 6, { width: 24 })
+        .text(tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID') : '-', cols.tanggal + 3, y + 6, { width: 88 })
+        .text(String(tx.type || '-').replace(/_/g, ' '), cols.tipe + 3, y + 6, { width: 76 })
+        .text(`${tx.reference_type || '-'}:${tx.reference_id || '-'}`, cols.ref + 3, y + 6, { width: 94 });
+      doc.font('Helvetica-Bold').fillColor(tx.amount < 0 ? '#be123c' : '#047857')
+        .text(`Rp ${Math.abs(Number(tx.amount || 0)).toLocaleString('id-ID')}${tx.amount < 0 ? ' (-)' : ' (+)'}`, cols.nominal + 3, y + 6, { width: 72 });
+      doc.font('Helvetica').fillColor('#334155')
+        .text(tx.notes || '-', cols.catatan + 3, y + 6, { width: 110, height: rowHeight - 10, ellipsis: true });
+      y += rowHeight;
+    });
+  }
+
+  doc.end();
 });
 
 /**
@@ -788,6 +1057,8 @@ module.exports = {
   getMyProfile,
   getMyBalance,
   getBalanceForUser,
+  exportBalanceHistoryExcel,
+  exportBalanceHistoryPdf,
   getRegistrationPaymentFile,
   getMouFile,
   getStats,
