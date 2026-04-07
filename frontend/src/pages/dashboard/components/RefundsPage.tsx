@@ -13,7 +13,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell';
 import { INVOICE_STATUS_LABELS } from '../../../utils/constants';
-import { refundsApi, accountingApi, type RefundStats, type BankItem } from '../../../services/api';
+import { refundsApi, accountingApi, type RefundStats, type BankItem, type BankAccountItem } from '../../../services/api';
 import type { TableColumn } from '../../../types';
 
 /** Refund - halaman untuk admin pusat & role accounting (lihat & update status permintaan refund). */
@@ -55,6 +55,9 @@ const RefundsPage: React.FC = () => {
   const [payoutNumber, setPayoutNumber] = useState('');
   const [payoutFile, setPayoutFile] = useState<File | null>(null);
   const [payoutBanks, setPayoutBanks] = useState<BankItem[]>([]);
+  const [payoutSenderMode, setPayoutSenderMode] = useState<'db' | 'manual'>('db');
+  const [payoutBankAccounts, setPayoutBankAccounts] = useState<BankAccountItem[]>([]);
+  const [payoutBankAccountId, setPayoutBankAccountId] = useState('');
   const [statModal, setStatModal] = useState<'total' | 'requested' | 'approved' | 'rejected' | 'refunded' | 'amount_pending' | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -154,17 +157,31 @@ const RefundsPage: React.FC = () => {
 
   useEffect(() => {
     if (!payoutModalRow) return;
-    accountingApi
-      .getBanks({ is_active: 'true' })
-      .then((res) => {
-        if (res.data?.success && Array.isArray(res.data.data)) setPayoutBanks(res.data.data);
-        else setPayoutBanks([]);
-      })
-      .catch(() => setPayoutBanks([]));
+    Promise.all([
+      accountingApi.getBanks({ is_active: 'true' }).catch(() => null),
+      accountingApi.getBankAccounts({ is_active: 'true' }).catch(() => null)
+    ]).then(([banksRes, accountsRes]) => {
+      const banks = banksRes?.data?.success && Array.isArray(banksRes.data.data) ? banksRes.data.data : [];
+      const accounts = accountsRes?.data?.success && Array.isArray(accountsRes.data.data) ? accountsRes.data.data : [];
+      setPayoutBanks(banks);
+      setPayoutBankAccounts(accounts);
+      if (!payoutBankAccountId && accounts.length > 0) setPayoutBankAccountId(accounts[0].id);
+    });
   }, [payoutModalRow]);
+
+  useEffect(() => {
+    if (!payoutModalRow || payoutSenderMode !== 'db') return;
+    const picked = payoutBankAccounts.find((a) => a.id === payoutBankAccountId);
+    if (!picked) return;
+    setPayoutBank(picked.bank_name || '');
+    setPayoutHolder((picked.name || '').trim());
+    setPayoutNumber((picked.account_number || '').trim());
+  }, [payoutModalRow, payoutSenderMode, payoutBankAccountId, payoutBankAccounts]);
 
   const openCompletePayoutModal = (r: any) => {
     setPayoutModalRow(r);
+    setPayoutSenderMode('db');
+    setPayoutBankAccountId('');
     setPayoutBank('');
     setPayoutHolder('');
     setPayoutNumber('');
@@ -173,6 +190,10 @@ const RefundsPage: React.FC = () => {
 
   const submitCompletePayout = () => {
     if (!payoutModalRow?.id) return;
+    if (payoutSenderMode === 'db' && !payoutBankAccountId) {
+      showToast('Pilih rekening pengirim dari database terlebih dahulu', 'error');
+      return;
+    }
     if (!payoutBank.trim() || !payoutHolder.trim()) {
       showToast('Bank pengirim dan nama pemilik rekening pengirim wajib diisi', 'error');
       return;
@@ -587,6 +608,43 @@ const RefundsPage: React.FC = () => {
               onClose={() => !payoutSubmitting && setPayoutModalRow(null)}
             />
             <ModalBody className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-1">Sumber data rekening pengirim *</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={payoutSenderMode === 'db' ? 'primary' : 'outline'}
+                    onClick={() => setPayoutSenderMode('db')}
+                    disabled={payoutSubmitting}
+                  >
+                    Dari database
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={payoutSenderMode === 'manual' ? 'primary' : 'outline'}
+                    onClick={() => setPayoutSenderMode('manual')}
+                    disabled={payoutSubmitting}
+                  >
+                    Input manual
+                  </Button>
+                </div>
+              </div>
+              {payoutSenderMode === 'db' && (
+                <Autocomplete
+                  label="Pilih rekening pengirim (database) *"
+                  value={payoutBankAccountId}
+                  onChange={(v) => setPayoutBankAccountId(v || '')}
+                  options={payoutBankAccounts.map((a) => ({
+                    value: a.id,
+                    label: `${a.bank_name} · ${a.account_number} · a.n. ${a.name}`
+                  }))}
+                  placeholder="Pilih rekening"
+                  emptyLabel="Pilih rekening"
+                  disabled={payoutSubmitting}
+                />
+              )}
               <Autocomplete
                 label="Bank pengirim (BGG) *"
                 value={payoutBank}
@@ -594,7 +652,7 @@ const RefundsPage: React.FC = () => {
                 options={payoutBanks.map((b) => ({ value: b.name, label: b.name }))}
                 placeholder="Pilih bank"
                 emptyLabel="Pilih bank"
-                disabled={payoutSubmitting}
+                disabled={payoutSubmitting || payoutSenderMode === 'db'}
               />
               <Input
                 label="Nama pemilik rekening pengirim *"
@@ -602,7 +660,7 @@ const RefundsPage: React.FC = () => {
                 value={payoutHolder}
                 onChange={(e) => setPayoutHolder(e.target.value)}
                 placeholder="Sesuai rekening pengirim"
-                disabled={payoutSubmitting}
+                disabled={payoutSubmitting || payoutSenderMode === 'db'}
                 fullWidth
               />
               <Input
@@ -611,7 +669,7 @@ const RefundsPage: React.FC = () => {
                 value={payoutNumber}
                 onChange={(e) => setPayoutNumber(e.target.value)}
                 placeholder="Jika ingin ditampilkan ke owner"
-                disabled={payoutSubmitting}
+                disabled={payoutSubmitting || payoutSenderMode === 'db'}
                 fullWidth
               />
               <div>
