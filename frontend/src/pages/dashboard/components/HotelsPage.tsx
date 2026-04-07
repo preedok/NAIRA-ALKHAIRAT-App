@@ -2055,97 +2055,105 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 <span className="text-slate-400 select-none" aria-hidden>↔</span>
                                 <span>Tabel lebar: gunakan scroll horizontal di layar kecil.</span>
                               </p>
-                              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
-                                <p className="text-[11px] font-medium text-slate-700 mb-2">1) Mode layanan hotel</p>
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setQuantityMealPlan('fullboard')}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                      quantityMealPlan === 'fullboard'
-                                        ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
-                                    }`}
-                                  >
-                                    Fullboard
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setQuantityMealPlan('room_only')}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                      quantityMealPlan === 'room_only'
-                                        ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
-                                    }`}
-                                  >
-                                    Room only + makan terpisah
-                                  </button>
+                              <div className="mt-3 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3 sm:p-4 space-y-3">
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                    <p className="text-[11px] font-semibold text-slate-800 mb-2">1) Mode layanan hotel</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setQuantityMealPlan('fullboard')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                          quantityMealPlan === 'fullboard'
+                                            ? 'bg-[#0D1A63] text-white border-[#0D1A63] shadow-sm'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                        }`}
+                                      >
+                                        Fullboard
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQuantityMealPlan('room_only')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                          quantityMealPlan === 'room_only'
+                                            ? 'bg-[#0D1A63] text-white border-[#0D1A63] shadow-sm'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                        }`}
+                                      >
+                                        Room only + makan terpisah
+                                      </button>
+                                    </div>
+                                    <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
+                                      {quantityMealPlan === 'fullboard'
+                                        ? 'Aktif: Fullboard. Baris harga makan disembunyikan.'
+                                        : 'Aktif: Room only + makan terpisah. Baris harga makan tampil per bulan.'}
+                                    </p>
+                                  </div>
+
+                                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                    <p className="text-[11px] font-semibold text-slate-800 mb-2">2) Metode hitung harga MOU</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setMouFullboardAutoCalc(true)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                          mouFullboardAutoCalc
+                                            ? 'bg-[#0D1A63] text-white border-[#0D1A63] shadow-sm'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                        }`}
+                                      >
+                                        Auto dari Quad MOU
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setMouFullboardAutoCalc(false)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                          !mouFullboardAutoCalc
+                                            ? 'bg-[#0D1A63] text-white border-[#0D1A63] shadow-sm'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                        }`}
+                                      >
+                                        Input manual
+                                      </button>
+                                    </div>
+                                    {!mouFullboardAutoCalc && (
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setMouManualHasMeal(true)}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                            mouManualHasMeal
+                                              ? 'bg-[#0D1A63] text-white border-[#0D1A63] shadow-sm'
+                                              : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                          }`}
+                                        >
+                                          Pisahkan harga makan MOU
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setMouManualHasMeal(false)}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                            !mouManualHasMeal
+                                              ? 'bg-[#0D1A63] text-white border-[#0D1A63] shadow-sm'
+                                              : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                          }`}
+                                        >
+                                          Gabung makan ke harga kamar MOU
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <p className="text-[11px] text-slate-600 mb-3">
-                                  {quantityMealPlan === 'fullboard'
-                                    ? 'Aktif: Fullboard. Baris harga makan tidak ditampilkan.'
-                                    : 'Aktif: Room only + makan terpisah. Baris harga makan ditampilkan per bulan.'}
-                                </p>
-                                <p className="text-[11px] font-medium text-slate-700 mb-2">2) Metode hitung harga MOU (khusus grid MOU)</p>
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setMouFullboardAutoCalc(true)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                      mouFullboardAutoCalc
-                                        ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
-                                    }`}
-                                  >
-                                    Auto dari Quad MOU
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setMouFullboardAutoCalc(false)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                      !mouFullboardAutoCalc
-                                        ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
-                                    }`}
-                                  >
-                                    Input manual
-                                  </button>
-                                </div>
-                                {!mouFullboardAutoCalc && (
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => setMouManualHasMeal(true)}
-                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                        mouManualHasMeal
-                                          ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
-                                          : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
-                                      }`}
-                                    >
-                                      Pisahkan harga makan MOU
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setMouManualHasMeal(false)}
-                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                        !mouManualHasMeal
-                                          ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
-                                          : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
-                                      }`}
-                                    >
-                                      Gabung makan ke harga kamar MOU
-                                    </button>
+
+                                {mouFullboardAutoCalc && (
+                                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-[11px] text-slate-700 leading-relaxed">
+                                    Mode auto aktif: <strong>Triple MOU = Quad MOU - Makan Non-MOU</strong>, <strong>Double MOU = Triple MOU - Makan Non-MOU</strong>, <strong>Quint MOU = Quad MOU + Makan Non-MOU</strong>. Harga makan MOU diset 0 saat simpan.
                                   </div>
                                 )}
-                                {mouFullboardAutoCalc && (
-                                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
-                                    Mode auto aktif: <strong>Triple MOU = Quad MOU - Makan Non-MOU</strong>, <strong>Double MOU = Triple MOU - Makan Non-MOU</strong>, <strong>Quint MOU = Quad MOU + Makan Non-MOU</strong>. Harga makan MOU diset 0 saat simpan.
-                                  </p>
-                                )}
                                 {!mouFullboardAutoCalc && !mouManualHasMeal && (
-                                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
+                                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-700 leading-relaxed">
                                     Input manual + gabung makan: harga makan MOU tidak diinput terpisah (sudah termasuk di harga kamar MOU).
-                                  </p>
+                                  </div>
                                 )}
                               </div>
                             </div>
