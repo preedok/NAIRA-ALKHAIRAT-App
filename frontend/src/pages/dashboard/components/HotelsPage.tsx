@@ -346,6 +346,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [monthlyPriceRowsByOwnerType, setMonthlyPriceRowsByOwnerType] = useState<Record<OwnerPriceType, Record<string, Record<string, string>>>>({ mou: {}, non_mou: {} });
   /** Harga makan SAR per orang per malam per bulan (room only) */
   const [monthlyMealByMonthByOwnerType, setMonthlyMealByMonthByOwnerType] = useState<Record<OwnerPriceType, Record<string, string>>>({ mou: {}, non_mou: {} });
+  /** Opsi: harga MOU otomatis (quad fullboard -> triple/double dikurangi makan Non-MOU). */
+  const [mouFullboardAutoCalc, setMouFullboardAutoCalc] = useState(false);
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
   /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
   const [quantityForm, setQuantityForm] = useState<Record<string, string>>({});
@@ -379,6 +381,16 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
   const getMonthKeys = (year: string) => Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const monthKeys = getMonthKeys(monthlyPriceYear);
+  const getMouDerivedSar = useCallback((roomType: string, ym: string): number | null => {
+    if (!mouFullboardAutoCalc) return null;
+    if (roomType !== 'triple' && roomType !== 'double') return null;
+    const quad = parseSarInputString(monthlyPriceRowsByOwnerType?.mou?.quad?.[ym] ?? '');
+    const mealNonMou = parseSarInputString(monthlyMealByMonthByOwnerType?.non_mou?.[ym] ?? '');
+    if (!(quad > 0) || !(mealNonMou > 0)) return null;
+    const triple = Math.max(0, quad - mealNonMou);
+    if (roomType === 'triple') return triple;
+    return Math.max(0, triple - mealNonMou);
+  }, [mouFullboardAutoCalc, monthlyMealByMonthByOwnerType, monthlyPriceRowsByOwnerType]);
   const initMonthlyRows = (year = monthlyPriceYear) => {
     const keys = getMonthKeys(year);
     const out: Record<string, Record<string, string>> = {};
@@ -506,6 +518,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           initial[rt] = String(num);
         });
         setQuantityForm(initial);
+        setMouFullboardAutoCalc(Boolean(meta.mou_fullboard_auto_calc));
       })
       .catch(() => {})
       .finally(() => setHotelAvailabilityConfigLoading(false));
@@ -515,6 +528,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const handleOpenUnifiedQuantityAndSeasonsModal = (hotel: HotelProduct) => {
     if (!canAddHotel) return;
     setSeasonsModalHotel(hotel);
+    setMouFullboardAutoCalc(Boolean((hotel.meta as Record<string, unknown> | undefined)?.mou_fullboard_auto_calc));
     setMonthlyPriceYear(String(new Date().getFullYear()));
     setSeasonForm({ name: '', start_date: '', end_date: '' });
     setEditingSeasonId(null);
@@ -857,7 +871,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           meal_price_type: 'per_day',
           room_price_type: 'per_day',
           pricing_mode: 'per_type',
-          room_types: ROOM_TYPES
+          room_types: ROOM_TYPES,
+          mou_fullboard_auto_calc: mouFullboardAutoCalc
         }
       });
 
@@ -866,6 +881,28 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
 
       if (/^\d{4}$/.test(monthlyPriceYear)) {
         const ymKeys = getMonthKeys(monthlyPriceYear);
+        if (!isFullboard) {
+          const requiredMealOwners: OwnerPriceType[] = mouFullboardAutoCalc ? ['non_mou'] : ['mou', 'non_mou'];
+          for (const ownerTypeScope of requiredMealOwners) {
+            for (const m of ymKeys) {
+              const nm = parseSarInputString(monthlyMealByMonthByOwnerType?.[ownerTypeScope]?.[m] ?? '');
+              if (!(nm > 0)) {
+                showToast(`Mode Makan: harga makan wajib diisi untuk ${OWNER_PRICE_LABELS[ownerTypeScope]} bulan ${formatMonthLabelId(m)}.`, 'error');
+                return;
+              }
+            }
+          }
+          if (mouFullboardAutoCalc) {
+            for (const m of ymKeys) {
+              const quadMou = parseSarInputString(monthlyPriceRowsByOwnerType?.mou?.quad?.[m] ?? '');
+              const mealNonMou = parseSarInputString(monthlyMealByMonthByOwnerType?.non_mou?.[m] ?? '');
+              if (!(quadMou > 0) || !(mealNonMou > 0)) {
+                showToast(`Mode auto MOU: isi Quad MOU dan Makan Non-MOU untuk bulan ${formatMonthLabelId(m)}.`, 'error');
+                return;
+              }
+            }
+          }
+        }
         const monthlyRowsPayload: Array<{
           year_month: string;
           room_type: 'double' | 'triple' | 'quad' | 'quint' | string;
@@ -879,11 +916,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           ROOM_TYPES.forEach((rt) => {
             ymKeys.forEach((m) => {
               const n = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
+              const derived = ownerTypeScope === 'mou' ? getMouDerivedSar(rt, m) : null;
               monthlyRowsPayload.push({
                 year_month: m,
                 room_type: rt,
                 with_meal: !!isFullboard,
-                amount: n,
+                amount: derived != null ? derived : n,
                 currency: 'SAR',
                 component: 'room',
                 owner_type_scope: ownerTypeScope
@@ -899,7 +937,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 year_month: m,
                 room_type: '__meal__',
                 with_meal: false,
-                amount: nm,
+                amount: mouFullboardAutoCalc && ownerTypeScope === 'mou' ? 0 : nm,
                 currency: 'SAR',
                 component: 'meal',
                 owner_type_scope: ownerTypeScope
@@ -1210,7 +1248,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   <div className="text-xs text-slate-600">
                     <span className="font-medium">{hotel.meta?.allotment_type === 'non_allotment' ? 'Non allotment' : hotel.meta?.allotment_type === 'allotment' ? 'Allotment' : '-'}</span>
                     <span className="text-slate-400 mx-1">/</span>
-                    <span>{hotel.meta?.meal_plan === 'room_only' ? 'Room only' : hotel.meta?.meal_plan === 'fullboard' ? 'Fullboard' : '-'}</span>
+                    <span>{hotel.meta?.meal_plan === 'room_only' ? 'Makan' : hotel.meta?.meal_plan === 'fullboard' ? 'Fullboard' : '-'}</span>
                   </div>
                 </td>
                 <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
@@ -1895,7 +1933,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
                       }`}
                     >
-                      Room only
+                      Makan
                     </button>
                   </div>
                 </div>
@@ -1947,7 +1985,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             <span className="text-slate-500">Bukan total sewa hotel untuk sebulan penuh.</span> Kolom kosong memakai fallback harga lama di sistem jika ada.
                           </li>
                           <li>
-                            Room only: isi <strong className="font-medium text-slate-800">harga makan SAR per orang per malam</strong> dengan pola yang sama per bulan kalender.
+                            Makan: isi <strong className="font-medium text-slate-800">harga makan SAR per orang per malam</strong> dengan pola yang sama per bulan kalender.
                           </li>
                           <li>Simpan. Form order menjumlahkan malam menginap × tarif per malam sesuai bulan masing-masing.</li>
                         </ol>
@@ -2022,6 +2060,38 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 <span className="text-slate-400 select-none" aria-hidden>↔</span>
                                 <span>Tabel lebar: gunakan scroll horizontal di layar kecil.</span>
                               </p>
+                              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                                <p className="text-[11px] font-medium text-slate-700 mb-2">Opsi perhitungan MOU</p>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setMouFullboardAutoCalc(true)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                      mouFullboardAutoCalc
+                                        ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                    }`}
+                                  >
+                                    Auto dari Quad MOU
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setMouFullboardAutoCalc(false)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                      !mouFullboardAutoCalc
+                                        ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                    }`}
+                                  >
+                                    Input manual
+                                  </button>
+                                </div>
+                                {mouFullboardAutoCalc && (
+                                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
+                                    Mode auto aktif: <strong>Triple MOU = Quad MOU - Makan Non-MOU</strong>, <strong>Double MOU = Triple MOU - Makan Non-MOU</strong>. Harga makan MOU diset 0 saat simpan.
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="w-full lg:w-44 shrink-0">
@@ -2060,20 +2130,28 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                     {ROOM_TYPES.map((rt) => (
                                       <tr key={`${ownerTypeScope}-${rt}`} className="border-b border-slate-100 last:border-0">
                                         <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white relative z-[2] border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                                          {ROOM_TYPE_LABELS[rt] || rt}
+                                          {(ROOM_TYPE_LABELS[rt] || rt)}
+                                          {mouFullboardAutoCalc && ownerTypeScope === 'mou' && (rt === 'triple' || rt === 'double') ? (
+                                            <span className="ml-1 text-[10px] text-[#0D1A63]">(auto)</span>
+                                          ) : null}
                                         </td>
                                         {monthKeys.map((m) => {
-                                          const sar = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
+                                          const derived = ownerTypeScope === 'mou' ? getMouDerivedSar(rt, m) : null;
+                                          const sar = derived != null
+                                            ? derived
+                                            : parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
                                           const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
                                           const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
-                                          const cellDisabled = quantityFormSaving || monthlyPriceLoading;
+                                          const isDerivedCell = mouFullboardAutoCalc && ownerTypeScope === 'mou' && (rt === 'triple' || rt === 'double');
+                                          const cellDisabled = quantityFormSaving || monthlyPriceLoading || isDerivedCell;
                                           return (
                                             <td key={`${ownerTypeScope}-${rt}-${m}`} className="px-2 py-2 align-top">
                                               <Input
                                                 type="text"
                                                 inputMode="decimal"
-                                                value={monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? ''}
+                                                value={isDerivedCell ? (sar > 0 ? formatSarId(sar) : '') : (monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '')}
                                                 onChange={(e) => {
+                                                  if (isDerivedCell) return;
                                                   const raw = e.target.value.replace(/[^\d.,]/g, '');
                                                   setMonthlyPriceRowsByOwnerType((prev) => ({
                                                     ...prev,
@@ -2084,6 +2162,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                                   }));
                                                 }}
                                                 onBlur={() => {
+                                                  if (isDerivedCell) return;
                                                   const n = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
                                                   setMonthlyPriceRowsByOwnerType((prev) => ({
                                                     ...prev,
@@ -2113,7 +2192,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                   </tbody>
                                 </table>
                               </div>
-                              {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && (
+                              {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && !(mouFullboardAutoCalc && ownerTypeScope === 'mou') && (
                                 <div className="mt-3 w-full min-w-0 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 max-h-[min(220px,40vh)] touch-pan-x bg-white">
                                   <table className="w-full text-sm min-w-[900px]">
                                     <thead className="sticky top-0 z-[3] bg-slate-100">

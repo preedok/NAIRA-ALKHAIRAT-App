@@ -37,6 +37,11 @@ const Product = sequelize.define('Product', {
     defaultValue: {},
     comment: 'room_types (hotel), meal_options, flight_routes, etc.'
   },
+  mou_fullboard_auto_calc: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

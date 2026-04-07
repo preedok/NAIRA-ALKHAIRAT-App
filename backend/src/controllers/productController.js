@@ -74,6 +74,27 @@ function hotelMonthlyCurrencyRank(currency) {
   return 3;
 }
 
+function toBoolLike(v) {
+  if (v === true || v === false) return v;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === 'true' || s === '1' || s === 'yes') return true;
+    if (s === 'false' || s === '0' || s === 'no') return false;
+  }
+  if (typeof v === 'number') return v === 1;
+  return null;
+}
+
+function decorateHotelMetaWithMouAutoFlag(row) {
+  if (!row || row.type !== 'hotel') return row;
+  const raw = row.toJSON ? row.toJSON() : row;
+  const nextMeta = raw.meta && typeof raw.meta === 'object' ? { ...raw.meta } : {};
+  const fromColumn = toBoolLike(raw.mou_fullboard_auto_calc);
+  const fromMeta = toBoolLike(nextMeta.mou_fullboard_auto_calc);
+  nextMeta.mou_fullboard_auto_calc = fromColumn != null ? fromColumn : (fromMeta ?? false);
+  return { ...raw, meta: nextMeta };
+}
+
 /** Dari satu nilai dan mata uang, isi idr, sar, usd */
 function fillTriple(sourceCurrency, value, rates) {
   const { SAR_TO_IDR, USD_TO_IDR } = rates;
@@ -562,7 +583,7 @@ const list = asyncHandler(async (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.json({
       success: true,
-      data: result,
+      data: result.map((r) => decorateHotelMetaWithMouAutoFlag(r)),
       pagination: { total: count, page: pg, limit: lim, totalPages }
     });
   }
@@ -571,7 +592,7 @@ const list = asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.json({
     success: true,
-    data: products,
+    data: products.map((p) => decorateHotelMetaWithMouAutoFlag(p)),
     pagination: { total: count, page: pg, limit: lim, totalPages }
   });
 });
@@ -587,7 +608,7 @@ const getById = asyncHandler(async (req, res) => {
     ]
   });
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
-  res.json({ success: true, data: product });
+  res.json({ success: true, data: decorateHotelMetaWithMouAutoFlag(product) });
 });
 
 /**
@@ -898,16 +919,18 @@ const createHotel = asyncHandler(async (req, res) => {
   if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
   const location = meta?.location || 'makkah';
   const code = await generateHotelCode(name, location);
+  const mouAutoFlag = toBoolLike(meta?.mou_fullboard_auto_calc) ?? false;
   const product = await Product.create({
     type: 'hotel',
     code,
     name: name.trim(),
     description: description || null,
     is_package: false,
-    meta: meta || {},
+    meta: { ...(meta || {}), mou_fullboard_auto_calc: mouAutoFlag },
+    mou_fullboard_auto_calc: mouAutoFlag,
     created_by: req.user.id
   });
-  res.status(201).json({ success: true, data: product });
+  res.status(201).json({ success: true, data: decorateHotelMetaWithMouAutoFlag(product) });
 });
 
 /**
@@ -949,14 +972,17 @@ const create = asyncHandler(async (req, res) => {
     if (vu) finalMeta.valid_until = vu; else delete finalMeta.valid_until;
   }
   if (!finalCode || finalCode.trim() === '') return res.status(400).json({ success: false, message: 'code wajib' });
+  const mouAutoFlag = type === 'hotel' ? (toBoolLike(finalMeta.mou_fullboard_auto_calc) ?? false) : null;
+  if (type === 'hotel') finalMeta = { ...finalMeta, mou_fullboard_auto_calc: mouAutoFlag };
   const product = await Product.create({
     type, code: finalCode, name,
     description: description || null,
     is_package: !!is_package,
     meta: finalMeta,
+    ...(type === 'hotel' ? { mou_fullboard_auto_calc: mouAutoFlag } : {}),
     created_by: req.user.id
   });
-  res.status(201).json({ success: true, data: product });
+  res.status(201).json({ success: true, data: decorateHotelMetaWithMouAutoFlag(product) });
 });
 
 /**
@@ -1018,11 +1044,18 @@ const update = asyncHandler(async (req, res) => {
         nextMeta.price_currency = String(nextMeta.price_currency).toUpperCase();
       }
     }
+    if (product.type === 'hotel') {
+      const mouAutoFlag = toBoolLike(nextMeta.mou_fullboard_auto_calc);
+      if (mouAutoFlag != null) {
+        nextMeta.mou_fullboard_auto_calc = mouAutoFlag;
+        product.mou_fullboard_auto_calc = mouAutoFlag;
+      }
+    }
     product.meta = nextMeta;
   }
   if (is_active !== undefined) product.is_active = is_active;
   await product.save();
-  res.json({ success: true, data: product });
+  res.json({ success: true, data: decorateHotelMetaWithMouAutoFlag(product) });
 });
 
 /**
