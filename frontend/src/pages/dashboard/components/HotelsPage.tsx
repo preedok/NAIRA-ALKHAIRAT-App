@@ -2056,7 +2056,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 <span>Tabel lebar: gunakan scroll horizontal di layar kecil.</span>
                               </p>
                               <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
-                                <p className="text-[11px] font-medium text-slate-700 mb-2">Mode meal hotel</p>
+                                <p className="text-[11px] font-medium text-slate-700 mb-2">1) Mode layanan hotel</p>
                                 <div className="flex flex-wrap gap-2 mb-2">
                                   <button
                                     type="button"
@@ -2078,10 +2078,15 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                         : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
                                     }`}
                                   >
-                                    Makan
+                                    Room only + makan terpisah
                                   </button>
                                 </div>
-                                <p className="text-[11px] font-medium text-slate-700 mb-2">Opsi perhitungan MOU</p>
+                                <p className="text-[11px] text-slate-600 mb-3">
+                                  {quantityMealPlan === 'fullboard'
+                                    ? 'Aktif: Fullboard. Baris harga makan tidak ditampilkan.'
+                                    : 'Aktif: Room only + makan terpisah. Baris harga makan ditampilkan per bulan.'}
+                                </p>
+                                <p className="text-[11px] font-medium text-slate-700 mb-2">2) Metode hitung harga MOU (khusus grid MOU)</p>
                                 <div className="flex flex-wrap gap-2">
                                   <button
                                     type="button"
@@ -2117,7 +2122,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                           : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
                                       }`}
                                     >
-                                      Makan
+                                      Pisahkan harga makan MOU
                                     </button>
                                     <button
                                       type="button"
@@ -2128,7 +2133,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                           : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
                                       }`}
                                     >
-                                      Tidak (Fullboard)
+                                      Gabung makan ke harga kamar MOU
                                     </button>
                                   </div>
                                 )}
@@ -2139,7 +2144,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 )}
                                 {!mouFullboardAutoCalc && !mouManualHasMeal && (
                                   <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
-                                    Input manual + Tidak makan: harga MOU dianggap <strong>fullboard</strong> (harga makan MOU tidak diinput).
+                                    Input manual + gabung makan: harga makan MOU tidak diinput terpisah (sudah termasuk di harga kamar MOU).
                                   </p>
                                 )}
                               </div>
