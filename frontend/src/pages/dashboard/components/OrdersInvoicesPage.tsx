@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ArrowRightLeft, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive, Bus
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive, Bus
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -103,29 +103,6 @@ function suggestedDualPaymentAmounts(viewInv: any): { other: number; nabiela: nu
   const nabiela = Math.min(Math.round(siskSubtotal), rem);
   const other = Math.max(0, rem - nabiela);
   return { other, nabiela };
-}
-
-/** Invoice boleh dipilih sebagai tujuan alokasi dana: sisa tagihan > 0, bukan batal/lunas, order aktif. */
-function isInvoiceReallocateTarget(inv: any, excludeInvoiceId?: string): boolean {
-  if (!inv?.id) return false;
-  if (excludeInvoiceId && inv.id === excludeInvoiceId) return false;
-  const st = (inv.status || '').toLowerCase();
-  const blocked =
-    st === 'canceled' ||
-    st === 'cancelled' ||
-    st === 'cancelled_refund' ||
-    st === 'refunded' ||
-    st === 'refund_canceled' ||
-    st === 'draft' ||
-    st === 'paid' ||
-    st === 'completed' ||
-    st === 'overpaid_transferred';
-  if (blocked) return false;
-  const remain = parseFloat(inv.remaining_amount ?? 0);
-  if (!Number.isFinite(remain) || remain <= 0) return false;
-  const ordSt = inv.Order?.status != null ? String(inv.Order.status).toLowerCase() : '';
-  if (ordSt === 'cancelled' || ordSt === 'canceled') return false;
-  return true;
 }
 
 /** Selaras backend: lunas (sisa ~0 atau status paid/completed) → owner mengajukan pembatalan ke Admin Pusat. */
@@ -325,16 +302,12 @@ const OrdersInvoicesPage: React.FC = () => {
   const [jamaahLinkInput, setJamaahLinkInput] = useState<Record<string, string>>({});
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelTargetInv, setCancelTargetInv] = useState<any | null>(null);
-  const [cancelAction, setCancelAction] = useState<'to_balance' | 'refund' | 'allocate_to_order'>('to_balance');
+  const [cancelAction, setCancelAction] = useState<'to_balance' | 'refund'>('to_balance');
   const [cancelReason, setCancelReason] = useState('');
   const [cancelBankName, setCancelBankName] = useState('');
   const [cancelAccountNumber, setCancelAccountNumber] = useState('');
   const [cancelAccountHolderName, setCancelAccountHolderName] = useState('');
   const [cancelRefundAmount, setCancelRefundAmount] = useState<string>('');
-  const [cancelRemainderAction, setCancelRemainderAction] = useState<'to_balance' | 'allocate_to_order'>('to_balance');
-  const [cancelRemainderTargetInvoiceId, setCancelRemainderTargetInvoiceId] = useState('');
-  const [cancelTargetInvoiceId, setCancelTargetInvoiceId] = useState('');
-  const [cancelTargetInvoiceOptions, setCancelTargetInvoiceOptions] = useState<any[]>([]);
   const [cancelModalTab, setCancelModalTab] = useState<'view_invoice' | 'invoice_refund'>('view_invoice');
   const [cancelModalPdfUrl, setCancelModalPdfUrl] = useState<string | null>(null);
   const [loadingCancelPdf, setLoadingCancelPdf] = useState(false);
@@ -346,12 +319,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const [invoiceOwnerBalanceError, setInvoiceOwnerBalanceError] = useState(false);
   const [allocateAmount, setAllocateAmount] = useState('');
   const [allocating, setAllocating] = useState(false);
-  const [showReallocateModal, setShowReallocateModal] = useState(false);
-  const [reallocateRows, setReallocateRows] = useState<Array<{ source_invoice_id: string; target_invoice_id: string; amount: string }>>([]);
-  const [reallocateNotes, setReallocateNotes] = useState('');
-  const [reallocateSubmitting, setReallocateSubmitting] = useState(false);
-  const [reallocateInvoiceList, setReallocateInvoiceList] = useState<any[]>([]);
-  const [reallocateListLoading, setReallocateListLoading] = useState(false);
   const [paymentBankAccounts, setPaymentBankAccounts] = useState<BankAccountItem[]>([]);
   const [paymentBankAccountsLoading, setPaymentBankAccountsLoading] = useState(false);
   const [paymentBanks, setPaymentBanks] = useState<BankItem[]>([]);
@@ -380,7 +347,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const [uploadDocLoading, setUploadDocLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
-  const canReallocate = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   const isAccounting = user?.role === 'role_accounting';
   const isInvoiceSaudi = user?.role === 'invoice_saudi';
   const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
@@ -579,22 +545,10 @@ const OrdersInvoicesPage: React.FC = () => {
     setCancelAccountNumber('');
     setCancelAccountHolderName('');
     setCancelRefundAmount(paid > 0 ? formatNum(paid) : '');
-    setCancelRemainderAction('to_balance');
-    setCancelRemainderTargetInvoiceId('');
-    setCancelTargetInvoiceId('');
     setCancelModalTab('view_invoice');
     setCancelModalPdfUrl(null);
     setCancelOwnerNote('');
     setShowCancelModal(true);
-    if (paid > 0 && inv.owner_id) {
-      invoicesApi.list({ owner_id: inv.owner_id, limit: 200 })
-        .then((r: any) => {
-          const list = (r.data?.data ?? []) as any[];
-          const options = list.filter((i: any) => isInvoiceReallocateTarget(i, inv.id));
-          setCancelTargetInvoiceOptions(options);
-        })
-        .catch(() => setCancelTargetInvoiceOptions([]));
-    } else setCancelTargetInvoiceOptions([]);
   };
 
   const fetchOwnerBalance = useCallback(() => {
@@ -736,10 +690,6 @@ const OrdersInvoicesPage: React.FC = () => {
         return;
       }
     }
-    if (paid > 0 && cancelAction === 'allocate_to_order' && !cancelTargetInvoiceId.trim()) {
-      showToast('Pilih invoice tujuan untuk mengalihkan dana', 'error');
-      return;
-    }
     setDeletingOrderId(cancelTargetInv.order_id);
     try {
       const body: Record<string, any> = {};
@@ -755,8 +705,6 @@ const OrdersInvoicesPage: React.FC = () => {
             body.refund_amount = refundAmt;
             body.remainder_action = 'to_balance';
           }
-        } else if (cancelAction === 'allocate_to_order' && cancelTargetInvoiceId.trim()) {
-          body.target_invoice_id = cancelTargetInvoiceId.trim();
         }
       }
       const isOwnerUser = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
@@ -967,8 +915,6 @@ const OrdersInvoicesPage: React.FC = () => {
     setCancelAccountNumber('');
     setCancelAccountHolderName('');
     setCancelRefundAmount('');
-    setCancelRemainderTargetInvoiceId('');
-    setCancelTargetInvoiceId('');
     setCancelOwnerNote('');
   }, []);
 
@@ -1767,14 +1713,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const scopeHint = isHotelOrBus ? ' Data: semua wilayah.' : isKoordinator ? ' Data: wilayah Anda.' : '';
   // Card statistik & Per Status selalu tampil untuk semua role (termasuk tiket, handling, bus, visa, hotel) meskipun belum ada data
   const showInvoiceStatCards = true;
-  // Tombol Pemindahan Dana hanya tampil jika ada invoice yang dibatalkan dan sudah ada pembayaran (paid_amount > 0)
-  const hasCancelledInvoiceWithPayment = invoices.some((inv: any) => {
-    const st = (inv.status || '').toLowerCase();
-    const paid = parseFloat(inv.paid_amount || 0);
-    const cancelledRefundAmt = parseFloat(inv.cancelled_refund_amount || 0);
-    return (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') && (paid > 0 || cancelledRefundAmt > 0);
-  });
-  const showReallocateButton = canReallocate && hasCancelledInvoiceWithPayment;
   const invoiceSubtitle = `Daftar invoice. Buka untuk detail, pembayaran, dan update status produk (Visa, Tiket, Hotel, Bus).${scopeHint}`;
 
   return (
@@ -2145,25 +2083,6 @@ const OrdersInvoicesPage: React.FC = () => {
           className="mb-5 px-1"
           right={
             <div className="flex items-center gap-2 shrink-0">
-              {showReallocateButton && (
-                <Button variant="outline" size="sm" onClick={() => {
-                  setShowReallocateModal(true);
-                  setReallocateRows([{ source_invoice_id: '', target_invoice_id: '', amount: '' }]);
-                  setReallocateNotes('');
-                  setReallocateListLoading(true);
-                  const params = { ...buildListParams(), limit: 300, page: 1 };
-                  invoicesApi.list(params)
-                    .then((r) => {
-                      const raw = r?.data;
-                      const arr = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
-                      setReallocateInvoiceList(arr);
-                    })
-                    .catch(() => setReallocateInvoiceList([]))
-                    .finally(() => setReallocateListLoading(false));
-                }}>
-                  <ArrowRightLeft className="w-5 h-5 mr-2" /> Pemindahan Dana
-                </Button>
-              )}
               {canOrderAction && (
                 <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders/new')}>
                   <Plus className="w-5 h-5 mr-2" /> Tambah Invoice
@@ -4107,7 +4026,7 @@ const OrdersInvoicesPage: React.FC = () => {
                 (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') &&
                 isInvoiceFullyPaidOwnerCancelFlow(cancelTargetInv) &&
                 (parseFloat(cancelTargetInv.paid_amount) || 0) > 0
-                  ? 'Invoice lunas: konfirmasi mengirim pengajuan ke Admin Pusat. Setelah disetujui, pembatalan diproses otomatis (saldo/refund/alokasi sesuai pilihan Anda).'
+                  ? 'Invoice lunas: konfirmasi mengirim pengajuan ke Admin Pusat. Setelah disetujui, pembatalan diproses otomatis (saldo akun atau refund ke rekening sesuai pilihan Anda).'
                   : 'Lihat invoice pembayaran sebelumnya dan konfirmasi pembatalan.'
               }
               icon={<X className="w-5 h-5" />}
@@ -4156,19 +4075,17 @@ const OrdersInvoicesPage: React.FC = () => {
                     inv={cancelTargetInv}
                     preview={(() => {
                       const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
-                      if (paid === 0) return { action: 'to_balance', reason: cancelReason };
+                      if (paid === 0) return { action: 'to_balance' as const, reason: cancelReason };
                       const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
-                      const targetOpt = cancelTargetInvoiceOptions.find((i: any) => i.id === cancelTargetInvoiceId);
-                      const remainderOpt = cancelTargetInvoiceOptions.find((i: any) => i.id === cancelRemainderTargetInvoiceId);
+                      const effRefund = Number.isFinite(refundAmt) ? refundAmt : paid;
+                      const partial = cancelAction === 'refund' && effRefund > 0 && effRefund < paid;
                       return {
                         action: cancelAction,
-                        refundAmount: Number.isFinite(refundAmt) ? refundAmt : paid,
-                        remainderAction: cancelAction === 'refund' ? 'to_balance' : cancelRemainderAction,
+                        refundAmount: effRefund,
+                        ...(partial ? { remainderAction: 'to_balance' as const } : {}),
                         bankName: cancelBankName || undefined,
                         accountNumber: cancelAccountNumber || undefined,
                         accountHolderName: cancelAccountHolderName || undefined,
-                        targetInvoiceNumber: cancelAction === 'allocate_to_order' ? targetOpt?.invoice_number : undefined,
-                        remainderTargetInvoiceNumber: cancelAction !== 'refund' && cancelRemainderAction === 'allocate_to_order' ? remainderOpt?.invoice_number : undefined,
                         reason: cancelReason || undefined,
                       };
                     })()}
@@ -4197,10 +4114,6 @@ const OrdersInvoicesPage: React.FC = () => {
                               <span className="font-medium">Refund ke rekening</span>
                               <span className="text-xs opacity-90 mt-0.5">Masukkan data bank & rekening. Role accounting akan memproses pengembalian dana.</span>
                             </Button>
-                            <Button type="button" variant={cancelAction === 'allocate_to_order' ? 'primary' : 'outline'} fullWidth onClick={() => setCancelAction('allocate_to_order')} className="flex flex-col items-start text-left h-auto py-3">
-                              <span className="font-medium">Pindah / alokasikan ke order lain</span>
-                              <span className="text-xs opacity-90 mt-0.5">Seluruh pembayaran dialihkan ke invoice lain (milik owner yang sama).</span>
-                            </Button>
                           </div>
                           {cancelAction === 'refund' && (
                             <div className="space-y-3 pt-3 border-t border-slate-200">
@@ -4208,11 +4121,11 @@ const OrdersInvoicesPage: React.FC = () => {
                               <Autocomplete label="Nama Bank (wajib)" value={cancelBankName} onChange={(v) => setCancelBankName(v || '')} options={paymentBanks.map((b) => ({ value: b.name, label: b.name }))} placeholder="Pilih bank" emptyLabel="Pilih bank" disabled={!!deletingOrderId} />
                               <Input label="Nomor Rekening (wajib)" type="text" value={cancelAccountNumber} onChange={(e) => setCancelAccountNumber(e.target.value)} placeholder="Nomor Rekening" disabled={!!deletingOrderId} />
                               <Input label="Nama pemilik rekening (opsional)" type="text" value={cancelAccountHolderName} onChange={(e) => setCancelAccountHolderName(e.target.value)} placeholder="A.n. nama pemilik" disabled={!!deletingOrderId} />
-                            </div>
-                          )}
-                          {cancelAction === 'allocate_to_order' && (
-                            <div className="pt-3 border-t border-slate-200">
-                              <Autocomplete label="Invoice tujuan (seluruh dana)" value={cancelTargetInvoiceId} onChange={(v) => setCancelTargetInvoiceId(v || '')} options={cancelTargetInvoiceOptions.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(parseFloat(i.remaining_amount) || 0)} sisa` }))} placeholder="Pilih invoice" emptyLabel="Pilih invoice" />
+                              {isPartialRefund && remainder > 0 && (
+                                <p className="text-xs text-slate-600">
+                                  Sisa <strong>{formatIDR(remainder)}</strong> setelah refund akan otomatis masuk <strong>saldo akun</strong> owner.
+                                </p>
+                              )}
                             </div>
                           )}
                           <Textarea label="Alasan pembatalan (opsional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Contoh: Order salah input..." rows={2} disabled={!!deletingOrderId} />
@@ -4250,210 +4163,13 @@ const OrdersInvoicesPage: React.FC = () => {
                       ? 'Ajukan ke Admin Pusat'
                       : cancelAction === 'to_balance'
                         ? 'Ya, batalkan & jadikan saldo'
-                        : cancelAction === 'refund'
-                          ? 'Ya, batalkan & minta refund'
-                          : 'Ya, batalkan & pindah ke invoice lain'
+                        : 'Ya, batalkan & minta refund'
                     : 'Ya, batalkan'}
               </Button>
             </ModalFooter>
           </ModalBox>
         </Modal>
       )}
-
-      {/* Modal Pemindahan Dana (alokasi dari invoice sumber ke penerima) */}
-      {showReallocateModal && (() => {
-        const list = reallocateInvoiceList || [];
-        const sourceCandidates = list.filter((i: any) => {
-          const st = (i.status || '').toLowerCase();
-          const paid = parseFloat(i.paid_amount || 0);
-          const overpaid = parseFloat(i.overpaid_amount || 0);
-          const cancelledRefundAmt = parseFloat(i.cancelled_refund_amount || 0);
-          if (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') return paid > 0 || cancelledRefundAmt > 0;
-          return overpaid > 0;
-        });
-        const targetCandidates = list.filter((i: any) => isInvoiceReallocateTarget(i));
-        const getReleasable = (inv: any) => {
-          const st = (inv?.status || '').toLowerCase();
-          if (st === 'canceled' || st === 'cancelled' || st === 'cancelled_refund') {
-            const paid = parseFloat(inv?.paid_amount || 0);
-            const cancelledRefundAmt = parseFloat(inv?.cancelled_refund_amount || 0);
-            return paid > 0 ? paid : cancelledRefundAmt;
-          }
-          return parseFloat(inv?.overpaid_amount || 0);
-        };
-        const addRow = () => setReallocateRows((prev) => [...prev, { source_invoice_id: '', target_invoice_id: '', amount: '' }]);
-        const removeRow = (idx: number) => setReallocateRows((prev) => prev.filter((_, i) => i !== idx));
-        const updateRow = (idx: number, field: 'source_invoice_id' | 'target_invoice_id' | 'amount', value: string) => {
-          setReallocateRows((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
-        };
-        const transfers = reallocateRows
-          .map((r) => ({ ...r, amount: parseFloat(String(r.amount).replace(/,/g, '')) || 0 }))
-          .filter((t) => t.source_invoice_id && t.target_invoice_id && t.amount > 0);
-        const totalFromSources: Record<string, number> = {};
-        const sourceReleasable: Record<string, number> = {};
-        sourceCandidates.forEach((i: any) => { sourceReleasable[i.id] = getReleasable(i); });
-        transfers.forEach((t) => { totalFromSources[t.source_invoice_id] = (totalFromSources[t.source_invoice_id] || 0) + t.amount; });
-        const sourceOk = Object.entries(totalFromSources).every(([id, sum]) => sum <= (sourceReleasable[id] || 0));
-        const totalAmount = transfers.reduce((s, t) => s + t.amount, 0);
-        const canSubmit = transfers.length > 0 && sourceOk;
-
-        const submitReallocate = async () => {
-          if (!canSubmit) return;
-          setReallocateSubmitting(true);
-          try {
-            const res = await invoicesApi.reallocatePayments({
-              transfers: transfers.map((t) => ({ source_invoice_id: t.source_invoice_id, target_invoice_id: t.target_invoice_id, amount: t.amount })),
-              notes: reallocateNotes.trim() || undefined
-            });
-            const msg = (res.data as any)?.message || 'Pemindahan dana berhasil.';
-            showToast(msg, 'success');
-            setShowReallocateModal(false);
-            setReallocateRows([]);
-            setReallocateNotes('');
-            fetchInvoices();
-            fetchSummary();
-            if (viewInvoice?.id) fetchInvoiceDetail(viewInvoice.id);
-          } catch (e: any) {
-            showToast(e.response?.data?.message || 'Gagal memindahkan dana', 'error');
-          } finally {
-            setReallocateSubmitting(false);
-          }
-        };
-
-        return (
-          <Modal
-            open={showReallocateModal}
-            onClose={() => !reallocateSubmitting && setShowReallocateModal(false)}
-            zIndex={60}
-          >
-            <ModalBox className="max-w-4xl w-full">
-              <ModalHeader
-                title="Pemindahan Dana Antar Invoice"
-                subtitle="Alokasikan dana dari invoice sumber (dibatalkan / kelebihan bayar) ke invoice penerima. Yang diterapkan ke penerima dibatasi sisa tagihannya; kelebihan tetap di invoice sumber (bisa dipindah lagi atau saldo via alur lain)."
-                icon={<ArrowRightLeft className="w-5 h-5" />}
-                onClose={() => !reallocateSubmitting && setShowReallocateModal(false)}
-              />
-              <ModalBody className="flex-1 space-y-4 min-h-0">
-                {reallocateListLoading ? (
-                  <p className="text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
-                ) : (
-                  <>
-                    {(sourceCandidates.length === 0 || targetCandidates.length === 0) && (
-                      <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-1.5">
-                        {sourceCandidates.length === 0 && (
-                          <p className="text-amber-800 text-sm">Tidak ada invoice sumber (invoice dibatalkan dengan pembayaran, atau invoice dengan kelebihan bayar).</p>
-                        )}
-                        {targetCandidates.length === 0 && (
-                          <p className="text-amber-800 text-sm">Tidak ada invoice penerima (invoice aktif dengan sisa tagihan).</p>
-                        )}
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-semibold text-slate-700">Detail alokasi</span>
-                        <Button variant="outline" size="sm" onClick={addRow}>Tambah baris</Button>
-                      </div>
-                      <div className="border border-slate-200 rounded-xl w-full">
-                        <table className="w-full text-sm table-fixed">
-                          <colgroup>
-                            <col className="w-[38%]" />
-                            <col className="w-[38%]" />
-                            <col className="w-[18%]" />
-                            <col className="w-[6%]" />
-                          </colgroup>
-                          <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                              <th className="text-left py-2.5 px-3 text-slate-600 font-medium">Invoice Sumber</th>
-                              <th className="text-left py-2.5 px-3 text-slate-600 font-medium">Invoice Penerima</th>
-                              <th className="text-left py-2.5 px-3 text-slate-600 font-medium">Jumlah (IDR)</th>
-                              <th className="w-10 py-2.5 px-1" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {reallocateRows.map((row, idx) => (
-                              <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                                <td className="py-2 px-3 align-middle">
-                                  <div className="w-full min-w-0">
-                                    <Autocomplete
-                                      value={row.source_invoice_id}
-                                      onChange={(v) => updateRow(idx, 'source_invoice_id', v)}
-                                      options={[
-                                        { value: '', label: 'Pilih sumber' },
-                                        ...sourceCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — ${formatIDR(getReleasable(i))} tersedia` }))
-                                      ]}
-                                      emptyLabel="Pilih sumber"
-                                      className="w-full"
-                                    />
-                                  </div>
-                                </td>
-                                <td className="py-2 px-3 align-middle">
-                                  <div className="w-full min-w-0">
-                                    <Autocomplete
-                                      value={row.target_invoice_id}
-                                      onChange={(v) => updateRow(idx, 'target_invoice_id', v)}
-                                      options={[
-                                        { value: '', label: 'Pilih penerima' },
-                                        ...targetCandidates.map((i: any) => ({ value: i.id, label: `${i.invoice_number} — sisa ${formatIDR(parseFloat(i.remaining_amount || 0))}` }))
-                                      ]}
-                                      emptyLabel="Pilih penerima"
-                                      className="w-full"
-                                    />
-                                  </div>
-                                </td>
-                                <td className="py-2 px-3 align-middle">
-                                  <div className="w-full min-w-0">
-                                    <Input
-                                      type="text"
-                                      value={row.amount}
-                                      onChange={(e) => updateRow(idx, 'amount', e.target.value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
-                                      placeholder="0"
-                                      fullWidth
-                                    />
-                                  </div>
-                                </td>
-                                <td className="py-2 px-1 align-middle text-center">
-                                  <button type="button" onClick={() => removeRow(idx)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 inline-flex" title="Hapus baris">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {reallocateRows.length === 0 && (
-                        <p className="text-slate-500 text-sm py-2">Klik &quot;Tambah baris&quot; untuk menambah alokasi.</p>
-                      )}
-                      {transfers.length > 0 && (
-                        <p className="text-sm text-slate-600">
-                          Total dipindahkan: <strong><NominalDisplay amount={totalAmount} currency="IDR" /></strong>
-                          {!sourceOk && <span className="text-red-600 ml-2">— Jumlah dari salah satu sumber melebihi dana yang tersedia.</span>}
-                        </p>
-                      )}
-                    </div>
-                    <div className="pt-1">
-                      <Textarea
-                        label="Catatan (opsional)"
-                        value={reallocateNotes}
-                        onChange={(e) => setReallocateNotes(e.target.value)}
-                        placeholder="Contoh: Alokasi dari pembatalan order #X ke invoice #Y"
-                        rows={3}
-                        fullWidth
-                      />
-                    </div>
-                  </>
-                )}
-              </ModalBody>
-              <ModalFooter>
-                <Button variant="outline" onClick={() => setShowReallocateModal(false)} disabled={reallocateSubmitting}>Batal</Button>
-                <Button variant="primary" onClick={submitReallocate} disabled={reallocateSubmitting || !canSubmit}>
-                  {reallocateSubmitting ? 'Memproses...' : 'Proses Pemindahan'}
-                </Button>
-              </ModalFooter>
-            </ModalBox>
-          </Modal>
-        );
-      })()}
 
       {/* Modal Pembayaran (Transfer Bank / VA / QRIS) */}
       {showPaymentModal && viewInvoice && (

@@ -30,16 +30,14 @@ export type InvoiceRefundDocumentInv = {
   Order?: { order_updated_at?: string | null };
 };
 
-/** Preview data saat user belum submit (modal batalkan): pilihan jadikan saldo / refund / pindah */
+/** Preview data saat user belum submit (modal batalkan): saldo akun atau refund rekening */
 export type InvoiceRefundDocumentPreview = {
-  action: 'to_balance' | 'refund' | 'allocate_to_order';
+  action: 'to_balance' | 'refund';
   refundAmount?: number;
-  remainderAction?: 'to_balance' | 'allocate_to_order';
+  remainderAction?: 'to_balance';
   bankName?: string;
   accountNumber?: string;
   accountHolderName?: string;
-  targetInvoiceNumber?: string;
-  remainderTargetInvoiceNumber?: string;
   reason?: string;
 };
 
@@ -70,7 +68,7 @@ export function InvoiceRefundDocument({
   const actionLabels: Record<string, string> = {
     to_balance: 'Jadikan saldo akun',
     refund: 'Refund ke rekening',
-    allocate_to_order: 'Pemindahan ke invoice lain',
+    allocate_to_order: 'Pemindahan ke invoice lain (riwayat lama)',
   };
 
   return (
@@ -82,7 +80,7 @@ export function InvoiceRefundDocument({
       <div className="bg-red-600 px-6 py-4 text-white">
         <h2 className="text-lg font-bold tracking-wide">INVOICE REFUND / DIBATALKAN</h2>
         <p className="text-sm text-red-100 mt-0.5 opacity-95">
-          Dokumen ini mencatat pembatalan invoice dan pengembalian/pemindahan dana
+          Dokumen ini mencatat pembatalan invoice dan pengembalian dana (saldo atau rekening)
         </p>
       </div>
 
@@ -125,13 +123,13 @@ export function InvoiceRefundDocument({
                     <p>Rekening: {[preview.bankName, preview.accountNumber].filter(Boolean).join(' · ')}</p>
                   )}
                   {preview.accountHolderName && <p>A.n. {preview.accountHolderName}</p>}
-                  {preview.remainderAction && preview.remainderAction === 'allocate_to_order' && preview.remainderTargetInvoiceNumber && (
-                    <p>Sisa dana dialokasikan ke invoice: <strong>{preview.remainderTargetInvoiceNumber}</strong></p>
+                  {preview.remainderAction === 'to_balance' &&
+                    preview.refundAmount != null &&
+                    paid > 0 &&
+                    preview.refundAmount < paid && (
+                    <p>Sisa setelah refund masuk <strong>saldo akun</strong>.</p>
                   )}
                 </div>
-              )}
-              {preview.action === 'allocate_to_order' && preview.targetInvoiceNumber && (
-                <p className="mt-1 text-sm">Seluruh dana dialihkan ke invoice: <strong className="text-white">{preview.targetInvoiceNumber}</strong></p>
               )}
             </div>
             {preview.reason && (

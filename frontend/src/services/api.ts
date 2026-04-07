@@ -267,17 +267,15 @@ export const ordersApi = {
   getById: (id: string) => api.get(`/orders/${id}`),
   create: (body: object) => api.post('/orders', body),
   update: (id: string, body: object) => api.patch(`/orders/${id}`, body),
-  /** Batalkan order. Jika ada pembayaran: action = 'to_balance' | 'refund' | 'allocate_to_order'. Refund: bank_name, account_number wajib; refund_amount opsional (default full); partial → remainder_action + remainder_target_invoice_id. allocate_to_order: target_invoice_id wajib. */
+  /** Batalkan order. Jika ada pembayaran: action = 'to_balance' | 'refund'. Refund: bank_name, account_number wajib; refund_amount opsional (default full); partial → sisa otomatis saldo akun (remainder_action: 'to_balance'). */
   delete: (id: string, body?: {
-    action?: 'to_balance' | 'refund' | 'allocate_to_order';
+    action?: 'to_balance' | 'refund';
     reason?: string;
     bank_name?: string;
     account_number?: string;
     account_holder_name?: string;
     refund_amount?: number;
-    remainder_action?: 'to_balance' | 'allocate_to_order';
-    remainder_target_invoice_id?: string;
-    target_invoice_id?: string;
+    remainder_action?: 'to_balance';
   }) => api.delete(`/orders/${id}`, { data: body }),
   sendResult: (orderId: string, channel?: 'email' | 'whatsapp' | 'both') => api.post(`/orders/${orderId}/send-result`, { channel }),
   /** Upload data jamaah (ZIP file atau link Google Drive) untuk order item visa/tiket */
@@ -290,15 +288,13 @@ export const ordersApi = {
     api.get(`/orders/${orderId}/items/${itemId}/jamaah-file`, { responseType: 'blob' }),
   /** Owner: ajukan pembatalan invoice lunas ke Admin Pusat (body sama seperti delete + opsional owner_note). */
   createCancellationRequest: (orderId: string, body: {
-    action: 'to_balance' | 'refund' | 'allocate_to_order';
+    action: 'to_balance' | 'refund';
     reason?: string;
     bank_name?: string;
     account_number?: string;
     account_holder_name?: string;
     refund_amount?: number;
-    remainder_action?: 'to_balance' | 'allocate_to_order';
-    remainder_target_invoice_id?: string;
-    target_invoice_id?: string;
+    remainder_action?: 'to_balance';
     owner_note?: string;
   }) => api.post<{ success: boolean; message?: string; data?: unknown }>(`/orders/${orderId}/cancellation-requests`, body)
 };
@@ -565,7 +561,7 @@ export const invoicesApi = {
   create: (body: { order_id: string; pic_name?: string; is_super_promo?: boolean }) => api.post('/invoices', body),
   unblock: (id: string) => api.patch(`/invoices/${id}/unblock`),
   verifyPayment: (id: string, body: { payment_proof_id: string; verified: boolean; notes?: string }) => api.post(`/invoices/${id}/verify-payment`, body),
-  handleOverpaid: (id: string, body: { handling: string; target_invoice_id?: string; target_order_id?: string }) => api.patch(`/invoices/${id}/overpaid`, body),
+  handleOverpaid: (id: string, body: { handling: 'refund' | 'transfer_order'; target_order_id?: string }) => api.patch(`/invoices/${id}/overpaid`, body),
   uploadPaymentProof: (id: string, formData: FormData) => api.post(`/invoices/${id}/payment-proofs`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getPaymentProofFile: (invoiceId: string, proofId: string) => api.get(`/invoices/${invoiceId}/payment-proofs/${proofId}/file`, { responseType: 'blob' }),
   /** Hapus bukti yang ditolak (server hapus DB + file uploads) */
@@ -581,13 +577,8 @@ export const invoicesApi = {
   /** Unduh file manifest jamaah via API (sama seperti invoice/visa/tiket) */
   getManifestFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/manifest-file`, { responseType: 'blob' }),
   allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body),
-  /** Pemindahan dana: banyak sumber -> banyak penerima. Body: { transfers: [{ source_invoice_id, target_invoice_id, amount }], notes? } */
-  reallocatePayments: (body: { transfers: Array<{ source_invoice_id: string; target_invoice_id: string; amount: number }>; notes?: string }) =>
-    api.post<{ success: boolean; message?: string; data?: { transfers: number; total_amount: number } }>('/invoices/reallocate-payments', body),
   listReallocations: (params?: { invoice_id?: string; limit?: number; page?: number }) =>
-    api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/invoices/reallocations', { params }),
-  getReleasable: (id: string) =>
-    api.get<{ success: boolean; data: { invoice_id: string; invoice_number: string; releasable_amount: number } }>(`/invoices/${id}/releasable`)
+    api.get<{ success: boolean; data: any[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/invoices/reallocations', { params })
 };
 
 export interface RefundStats {

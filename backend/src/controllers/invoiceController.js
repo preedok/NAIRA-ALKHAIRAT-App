@@ -1398,7 +1398,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
 /**
  * PATCH /api/v1/invoices/:id/overpaid
- * Body: { handling: 'refund'|'transfer_invoice'|'transfer_order', target_invoice_id?, target_order_id? }
+ * Body: { handling: 'refund'|'transfer_order', target_order_id? }
  */
 const handleOverpaid = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id);
@@ -1409,36 +1409,17 @@ const handleOverpaid = asyncHandler(async (req, res) => {
   }
   const overpaid = parseFloat(invoice.overpaid_amount || 0);
   if (overpaid <= 0) return res.status(400).json({ success: false, message: 'Tidak ada overpaid' });
-  const { handling, target_invoice_id, target_order_id } = req.body;
-  if (!['refund', 'transfer_invoice', 'transfer_order'].includes(handling)) {
-    return res.status(400).json({ success: false, message: 'handling harus refund, transfer_invoice, atau transfer_order' });
+  const { handling } = req.body;
+  if (handling === 'transfer_invoice' || req.body?.target_invoice_id) {
+    return res.status(400).json({
+      success: false,
+      message: 'Pemindahan kelebihan bayar ke invoice lain tidak digunakan. Gunakan refund (rekening) atau transfer_order sesuai kebijakan.'
+    });
+  }
+  if (!['refund', 'transfer_order'].includes(handling)) {
+    return res.status(400).json({ success: false, message: 'handling harus refund atau transfer_order' });
   }
   await invoice.update({ overpaid_handling: handling, overpaid_amount: 0 });
-  if (handling === 'transfer_invoice' && target_invoice_id) {
-    const target = await Invoice.findByPk(target_invoice_id);
-    if (target && target.owner_id === invoice.owner_id) {
-      const targetPaid = parseFloat(target.paid_amount) || 0;
-      const targetTotal = parseFloat(target.total_amount) || 0;
-      const need = Math.max(0, targetTotal - targetPaid);
-      const applied = Math.min(overpaid, need);
-      if (applied > 0) {
-        const newPaid = targetPaid + applied;
-        const remaining = Math.max(0, targetTotal - newPaid);
-        let newStatus = target.status;
-        if (remaining <= 0) newStatus = INVOICE_STATUS.PAID;
-        else if (newPaid >= (parseFloat(target.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-        await updateInvoiceWithAudit(target, {
-          paid_amount: newPaid,
-          remaining_amount: remaining,
-          status: newStatus
-        }, { changedBy: req.user.id, reason: 'overpaid_transfer_in', meta: { source_invoice_id: invoice.id, amount: applied, requested_overpaid: overpaid, surplus_returned_to_source: overpaid - applied } });
-      }
-      const surplus = overpaid - applied;
-      if (surplus > 0) {
-        await invoice.update({ overpaid_amount: surplus });
-      }
-    }
-  }
   const full = await Invoice.findByPk(invoice.id);
   res.json({ success: true, data: full });
 });
@@ -1981,17 +1962,6 @@ async function syncInvoiceFromOrder(order, opts = {}) {
 }
 
 /**
- * Jumlah yang bisa dialihkan dari invoice: canceled = paid_amount; else overpaid_amount.
- */
-function getReleasableAmount(invoice) {
-  const status = (invoice.status || '').toLowerCase();
-  const paid = parseFloat(invoice.paid_amount) || 0;
-  const overpaid = parseFloat(invoice.overpaid_amount) || 0;
-  if (status === 'canceled' || status === 'cancelled' || status === INVOICE_STATUS.CANCELLED_REFUND) return Math.max(0, paid);
-  return Math.max(0, overpaid);
-}
-
-/**
  * Cek apakah user boleh mengakses invoice untuk reallocation (sumber atau target).
  */
 async function canAccessInvoiceForReallocation(invoiceId, user) {
@@ -2156,225 +2126,6 @@ const getSiskopatuhFile = asyncHandler(async (req, res) => {
 });
 
 /**
- * POST /api/v1/invoices/reallocate-payments
- * Body: { transfers: [ { source_invoice_id, target_invoice_id, amount }, ... ], notes? }
- * Pemindahan dana dari invoice sumber (canceled/overpaid) ke invoice penerima. Bisa banyak sumber -> banyak penerima.
- */
-const reallocatePayments = asyncHandler(async (req, res) => {
-  const allowed = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
-  if (!allowed.includes(req.user.role)) {
-    return res.status(403).json({ success: false, message: 'Hanya owner atau role invoice yang dapat memindahkan dana' });
-  }
-  const transfers = req.body?.transfers;
-  if (!Array.isArray(transfers) || transfers.length === 0) {
-    return res.status(400).json({ success: false, message: 'Body harus berisi array transfers: [{ source_invoice_id, target_invoice_id, amount }]' });
-  }
-
-  const parsed = [];
-  for (const t of transfers) {
-    const amount = parseFloat(t?.amount);
-    if (!t?.source_invoice_id || !t?.target_invoice_id || !Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ success: false, message: 'Setiap transfer wajib: source_invoice_id, target_invoice_id, amount (angka positif)' });
-    }
-    if (t.source_invoice_id === t.target_invoice_id) {
-      return res.status(400).json({ success: false, message: 'Invoice sumber dan penerima tidak boleh sama' });
-    }
-    parsed.push({ source_invoice_id: t.source_invoice_id, target_invoice_id: t.target_invoice_id, amount });
-  }
-
-  const sourceIds = [...new Set(parsed.map(p => p.source_invoice_id))];
-  const targetIds = [...new Set(parsed.map(p => p.target_invoice_id))];
-  const allInvoiceIds = [...new Set([...sourceIds, ...targetIds])];
-  const invoices = await Invoice.findAll({ where: { id: { [Op.in]: allInvoiceIds } }, raw: true });
-  const invoiceMap = new Map(invoices.map(i => [i.id, i]));
-
-  for (const id of allInvoiceIds) {
-    const access = await canAccessInvoiceForReallocation(id, req.user);
-    if (!access.ok) return res.status(403).json({ success: false, message: access.message });
-  }
-
-  const sourceTotalByInvoice = {};
-  for (const p of parsed) {
-    sourceTotalByInvoice[p.source_invoice_id] = (sourceTotalByInvoice[p.source_invoice_id] || 0) + p.amount;
-  }
-  for (const [invId, totalDeduct] of Object.entries(sourceTotalByInvoice)) {
-    const inv = invoiceMap.get(invId);
-    if (!inv) return res.status(404).json({ success: false, message: 'Invoice sumber tidak ditemukan' });
-    const releasable = getReleasableAmount(inv);
-    if (totalDeduct > releasable) {
-      return res.status(400).json({
-        success: false,
-        message: `Invoice ${inv.invoice_number} hanya dapat dialihkan maksimal Rp ${releasable.toLocaleString('id-ID')}. Requested: Rp ${totalDeduct.toLocaleString('id-ID')}`
-      });
-    }
-  }
-
-  for (const p of parsed) {
-    const target = invoiceMap.get(p.target_invoice_id);
-    if (!target) return res.status(404).json({ success: false, message: 'Invoice penerima tidak ditemukan' });
-    const status = (target.status || '').toLowerCase();
-    if (status === 'canceled' || status === 'cancelled' || status === INVOICE_STATUS.CANCELLED_REFUND) {
-      return res.status(400).json({ success: false, message: `Invoice penerima ${target.invoice_number} dalam status dibatalkan` });
-    }
-  }
-
-  /** Hanya bagian yang mengisi sisa tagihan penerima yang boleh “keluar” dari sumber; sisanya tetap di invoice sumber. */
-  const targetSimPaid = new Map();
-  for (const id of targetIds) {
-    const t = invoiceMap.get(id);
-    targetSimPaid.set(id, parseFloat(t.paid_amount) || 0);
-  }
-  const effectiveRows = [];
-  let rowIdx = 0;
-  for (const p of parsed) {
-    rowIdx += 1;
-    const simPaid = targetSimPaid.get(p.target_invoice_id);
-    const tgt = invoiceMap.get(p.target_invoice_id);
-    const tgtTotal = parseFloat(tgt.total_amount) || 0;
-    const need = Math.max(0, tgtTotal - simPaid);
-    const applied = Math.min(p.amount, need);
-    if (applied <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Baris ${rowIdx}: invoice penerima ${tgt.invoice_number} sudah lunas atau tidak membutuhkan dana. Tidak dapat menerima Rp ${p.amount.toLocaleString('id-ID')} (sisa tagihan tersedia: Rp ${need.toLocaleString('id-ID')}). Kurangi jumlah atau pilih invoice lain.`
-      });
-    }
-    targetSimPaid.set(p.target_invoice_id, simPaid + applied);
-    const surplus = p.amount - applied;
-    effectiveRows.push({
-      source_invoice_id: p.source_invoice_id,
-      target_invoice_id: p.target_invoice_id,
-      requested: p.amount,
-      applied,
-      surplus
-    });
-  }
-
-  const sourceTotalApplied = {};
-  for (const row of effectiveRows) {
-    sourceTotalApplied[row.source_invoice_id] = (sourceTotalApplied[row.source_invoice_id] || 0) + row.applied;
-  }
-  for (const [invId, totalApplied] of Object.entries(sourceTotalApplied)) {
-    const inv = invoiceMap.get(invId);
-    const releasable = getReleasableAmount(inv);
-    if (totalApplied > releasable + 0.01) {
-      return res.status(400).json({
-        success: false,
-        message: `Invoice ${inv.invoice_number}: total yang dapat diterapkan ke penerima (Rp ${totalApplied.toLocaleString('id-ID')}) melebihi dana yang tersedia (Rp ${releasable.toLocaleString('id-ID')}).`
-      });
-    }
-  }
-
-  const notes = (req.body?.notes && String(req.body.notes).trim()) || null;
-
-  await sequelize.transaction(async (tx) => {
-    const sourceDeduct = {};
-    for (const row of effectiveRows) {
-      sourceDeduct[row.source_invoice_id] = (sourceDeduct[row.source_invoice_id] || 0) + row.applied;
-    }
-    for (const [invId, deduct] of Object.entries(sourceDeduct)) {
-      const inv = await Invoice.findByPk(invId, { transaction: tx });
-      const paid = parseFloat(inv.paid_amount) || 0;
-      const overpaid = parseFloat(inv.overpaid_amount) || 0;
-      const totalAmount = parseFloat(inv.total_amount) || 0;
-      const isCanceled = (inv.status || '').toLowerCase() === 'canceled' || (inv.status || '').toLowerCase() === 'cancelled' || inv.status === INVOICE_STATUS.CANCELLED_REFUND;
-      let newPaid = paid - deduct;
-      let newOverpaid = overpaid;
-      if (isCanceled) {
-        newPaid = Math.max(0, paid - deduct);
-      } else {
-        const fromOverpaid = Math.min(deduct, overpaid);
-        const fromPaid = deduct - fromOverpaid;
-        newOverpaid = Math.max(0, overpaid - fromOverpaid);
-        newPaid = Math.max(0, paid - fromPaid);
-      }
-      const newRemaining = Math.max(0, totalAmount - newPaid);
-      let newStatus = inv.status;
-      if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
-      else if (newPaid >= (parseFloat(inv.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-      else newStatus = INVOICE_STATUS.TENTATIVE;
-      await updateInvoiceWithAudit(inv, {
-        paid_amount: newPaid,
-        remaining_amount: newRemaining,
-        overpaid_amount: newOverpaid,
-        status: newStatus
-      }, { changedBy: req.user.id, reason: 'reallocate_out', meta: { amount: deduct, notes, is_canceled: isCanceled }, transaction: tx });
-    }
-
-    const targetAdd = {};
-    for (const row of effectiveRows) {
-      targetAdd[row.target_invoice_id] = (targetAdd[row.target_invoice_id] || 0) + row.applied;
-    }
-    for (const [invId, add] of Object.entries(targetAdd)) {
-      const inv = await Invoice.findByPk(invId, { transaction: tx });
-      const paid = parseFloat(inv.paid_amount) || 0;
-      const totalAmount = parseFloat(inv.total_amount) || 0;
-      const newPaid = paid + add;
-      const newRemaining = Math.max(0, totalAmount - newPaid);
-      let newStatus = inv.status;
-      if (newRemaining <= 0) newStatus = INVOICE_STATUS.PAID;
-      else if (newPaid >= (parseFloat(inv.dp_amount) || 0)) newStatus = INVOICE_STATUS.PARTIAL_PAID;
-      await updateInvoiceWithAudit(inv, {
-        paid_amount: newPaid,
-        remaining_amount: newRemaining,
-        status: newStatus
-      }, { changedBy: req.user.id, reason: 'reallocate_in', meta: { amount: add, notes }, transaction: tx });
-    }
-
-    for (const row of effectiveRows) {
-      const extra = row.surplus > 0
-        ? `Diminta Rp ${Number(row.requested).toLocaleString('id-ID')}; diterapkan Rp ${Number(row.applied).toLocaleString('id-ID')} (sesuai sisa tagihan penerima). Sisa Rp ${Number(row.surplus).toLocaleString('id-ID')} tetap di invoice sumber.`
-        : '';
-      const rowNotes = [notes, extra].filter(Boolean).join(' ').trim() || null;
-      await PaymentReallocation.create({
-        source_invoice_id: row.source_invoice_id,
-        target_invoice_id: row.target_invoice_id,
-        amount: row.applied,
-        performed_by: req.user.id,
-        notes: rowNotes
-      }, { transaction: tx });
-    }
-  });
-
-  const totalApplied = effectiveRows.reduce((s, r) => s + r.applied, 0);
-  const anySurplus = effectiveRows.some((r) => r.surplus > 0);
-  const uniqueTargets = [...new Set(effectiveRows.map((r) => r.target_invoice_id))];
-  for (const tid of uniqueTargets) {
-    const invReload = await Invoice.findByPk(tid, { attributes: ['id', 'order_id', 'total_amount', 'paid_amount', 'dp_amount', 'status'] });
-    if (invReload) {
-      await updateOrderDpStatusFromInvoice(invReload);
-      if (invReload.status === INVOICE_STATUS.PAID) {
-        const targetOrder = await Order.findByPk(invReload.order_id, { attributes: ['id', 'status'] });
-        if (targetOrder && !['completed', 'cancelled'].includes(targetOrder.status)) {
-          await targetOrder.update({ status: 'processing' });
-        }
-      }
-    }
-  }
-
-  let message = `Pemindahan dana Rp ${totalApplied.toLocaleString('id-ID')} berhasil (${effectiveRows.length} alokasi; sesuai sisa tagihan penerima).`;
-  if (anySurplus) {
-    message += ' Kelebihan terhadap sisa tagihan penerima tetap di invoice sumber dan dapat dipindahkan lagi ke invoice lain atau dijadikan saldo melalui alur pembatalan/saldo.';
-  }
-  res.json({
-    success: true,
-    message,
-    data: {
-      transfers: effectiveRows.length,
-      total_requested: effectiveRows.reduce((s, r) => s + r.requested, 0),
-      total_applied: totalApplied,
-      rows: effectiveRows.map((r) => ({
-        source_invoice_id: r.source_invoice_id,
-        target_invoice_id: r.target_invoice_id,
-        requested: r.requested,
-        applied: r.applied,
-        surplus_stays_on_source: r.surplus
-      }))
-    }
-  });
-});
-
-/**
  * GET /api/v1/invoices/reallocations
  * Query: invoice_id (optional, filter sebagai sumber atau target), limit, page
  */
@@ -2428,23 +2179,6 @@ const listReallocations = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/v1/invoices/:id/releasable
- * Mengembalikan jumlah yang bisa dialihkan dari invoice ini (untuk UI).
- */
-const getReleasable = asyncHandler(async (req, res) => {
-  const invoice = await Invoice.findByPk(req.params.id, { attributes: ['id', 'invoice_number', 'status', 'paid_amount', 'overpaid_amount', 'owner_id', 'branch_id'] });
-  if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
-  const access = await canAccessInvoiceForReallocation(invoice.id, req.user);
-  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
-  const allowed = ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'];
-  if (!allowed.includes(req.user.role)) {
-    return res.status(403).json({ success: false, message: 'Tidak berwenang' });
-  }
-  const releasable = getReleasableAmount(invoice);
-  res.json({ success: true, data: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, releasable_amount: releasable } });
-});
-
-/**
  * GET /api/v1/invoices/:id/status-history
  * Hanya kembalikan entri di mana status benar-benar berubah (from_status !== to_status).
  * Entri duplikat seperti "Pembayaran DP → Pembayaran DP" dari sync form order tidak ditampilkan.
@@ -2490,9 +2224,7 @@ module.exports = {
   allocateBalance,
   ensureBlockedStatus,
   syncInvoiceFromOrder,
-  reallocatePayments,
   listReallocations,
-  getReleasable,
   getStatusHistory,
   getOrderRevisions,
   sendPaymentReceivedNotificationEmail,

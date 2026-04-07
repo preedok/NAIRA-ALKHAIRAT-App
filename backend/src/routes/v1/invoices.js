@@ -13,7 +13,6 @@ router.get('/reallocations', invoiceController.listReallocations);
 router.get('/draft-orders', invoiceController.listDraftOrders);
 router.get('/', invoiceController.list);
 router.post('/', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
-router.post('/reallocate-payments', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.reallocatePayments);
 router.get('/:id/pdf', invoiceController.getPdf);
 router.get('/:id/archive', invoiceController.getArchive);
 router.get('/:id/status-history', invoiceController.getStatusHistory);
@@ -23,7 +22,6 @@ router.get('/:id/order-items/:orderItemId/ticket-file', invoiceController.getTic
 router.get('/:id/order-items/:orderItemId/visa-file', invoiceController.getVisaFile);
 router.get('/:id/order-items/:orderItemId/siskopatuh-file', invoiceController.getSiskopatuhFile);
 router.get('/:id/order-items/:orderItemId/manifest-file', invoiceController.getManifestFile);
-router.get('/:id/releasable', invoiceController.getReleasable);
 router.get('/:id', invoiceController.getById);
 router.patch('/:id/unblock', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.unblock);
 // Verifikasi hanya untuk karyawan (bukan owner/pembeli). invoice_koordinator + invoice_saudi + accounting + admin
