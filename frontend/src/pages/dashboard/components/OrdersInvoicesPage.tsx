@@ -2800,56 +2800,10 @@ const OrdersInvoicesPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Grid: Data Order | Data Invoice | Saldo + Kurs */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                          {/* Data Order */}
-                          <div className="lg:col-span-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-                            <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                              <span className="w-1 h-5 rounded-full bg-primary-500" /> Data Order
-                            </h4>
-                            <dl className="space-y-4">
-                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.User?.name || viewInvoice.User?.company_name || viewInvoice.owner_name_manual || viewInvoice.Order?.owner_name_manual || '-'}</dd></div>
-                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipe Owner</dt><dd className="mt-1"><span className={`inline-flex items-center px-2 py-0.5 rounded font-medium text-sm ${viewInvoice.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{viewInvoice.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></dd></div>
-                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Nama PIC</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.pic_name || viewInvoice.Order?.pic_name || '–'}</dd></div>
-                              <div className="pt-2 border-t border-slate-100">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lokasi</p>
-                                <div className="space-y-2">
-                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Kota</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
-                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Wilayah</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.Provinsi?.Wilayah?.name || '–'}</dd></div>
-                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Provinsi</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.Provinsi?.name || viewInvoice.Branch?.Provinsi?.nama || '–'}</dd></div>
-                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Kode Cabang</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.code || '–'}</dd></div>
-                                </div>
-                              </div>
-                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mata Uang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
-                            </dl>
-                          </div>
-
-                          {/* Data Invoice — tagihan & angka */}
-                          <div className="lg:col-span-5 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-                            <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                              <span className="w-1 h-5 rounded-full bg-primary-500" /> Data Invoice
-                            </h4>
-                            <div className="space-y-4">
-                              <div className="pb-4 border-b border-slate-100">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
-                                <p className="text-xl font-bold text-slate-900 mt-1"><NominalDisplay amount={totalInv} currency="IDR" /></p>
-                                <p className="text-sm text-slate-500 mt-0.5"><NominalDisplay amount={totalInvSar} currency="SAR" /> · <NominalDisplay amount={totalInv / usdToIdr} currency="USD" /></p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5"><NominalDisplay amount={Number(viewInvoice.dp_amount) || 0} currency="IDR" /></p></div>
-                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-[#0D1A63] mt-0.5"><NominalDisplay amount={displayPaid} currency="IDR" /></p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-[#0D1A63] mt-0.5">KES: <NominalDisplay amount={kesSar} currency="SAR" />{kesUsd > 0 ? <> · <NominalDisplay amount={kesUsd} currency="USD" /></> : ''}</p>}</div>
-                                <div><p className="text-xs text-slate-500">Sisa</p><p className="font-semibold text-red-600 mt-0.5"><NominalDisplay amount={displayRemaining} currency="IDR" /></p></div>
-                                <div><p className="text-xs text-slate-500">Terbayar</p><p className="font-semibold text-slate-900 mt-0.5">{(Number.isFinite(totalPct) ? totalPct.toFixed(1) : '0')}%</p></div>
-                              </div>
-                              <div className="flex flex-wrap gap-4 pt-2 text-sm text-slate-600">
-                                <span>Tgl invoice: <strong className="text-slate-800">{formatDate(viewInvoice.issued_at || viewInvoice.created_at)}</strong></span>
-                                <span>Jatuh tempo DP: <strong className="text-slate-800">{formatDate(viewInvoice.due_date_dp)}</strong></span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Saldo (owner) + Kurs */}
-                          <div className="lg:col-span-3 space-y-4">
+                        {/* Saldo owner diletakkan tepat di bawah ringkasan Tagihan DP */}
+                        {(((user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && viewInvoice?.owner_id === user?.id) ||
+                          (canUseInvoiceOwnerBalance && viewInvoice?.owner_id && !isDraftRow(viewInvoice))) && (
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                             {(user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && viewInvoice?.owner_id === user?.id && (
                               <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 shadow-sm">
                                 <h4 className="text-sm font-semibold text-emerald-800 flex items-center gap-2 mb-3">
@@ -2992,6 +2946,59 @@ const OrdersInvoicesPage: React.FC = () => {
                                 )}
                               </div>
                             )}
+                          </div>
+                        )}
+
+                        {/* Grid: Data Order | Data Invoice | Kurs */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                          {/* Data Order */}
+                          <div className="lg:col-span-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                              <span className="w-1 h-5 rounded-full bg-primary-500" /> Data Order
+                            </h4>
+                            <dl className="space-y-4">
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Owner</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.User?.name || viewInvoice.User?.company_name || viewInvoice.owner_name_manual || viewInvoice.Order?.owner_name_manual || '-'}</dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipe Owner</dt><dd className="mt-1"><span className={`inline-flex items-center px-2 py-0.5 rounded font-medium text-sm ${viewInvoice.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{viewInvoice.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></dd></div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Nama PIC</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.pic_name || viewInvoice.Order?.pic_name || '–'}</dd></div>
+                              <div className="pt-2 border-t border-slate-100">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lokasi</p>
+                                <div className="space-y-2">
+                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Kota</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
+                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Wilayah</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.Provinsi?.Wilayah?.name || '–'}</dd></div>
+                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Provinsi</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.Provinsi?.name || viewInvoice.Branch?.Provinsi?.nama || '–'}</dd></div>
+                                  <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Kode Cabang</dt><dd className="mt-0.5 font-semibold text-slate-900">{viewInvoice.Branch?.code || '–'}</dd></div>
+                                </div>
+                              </div>
+                              <div><dt className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mata Uang</dt><dd className="mt-1 font-semibold text-slate-900">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
+                            </dl>
+                          </div>
+
+                          {/* Data Invoice — tagihan & angka */}
+                          <div className="lg:col-span-5 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                              <span className="w-1 h-5 rounded-full bg-primary-500" /> Data Invoice
+                            </h4>
+                            <div className="space-y-4">
+                              <div className="pb-4 border-b border-slate-100">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
+                                <p className="text-xl font-bold text-slate-900 mt-1"><NominalDisplay amount={totalInv} currency="IDR" /></p>
+                                <p className="text-sm text-slate-500 mt-0.5"><NominalDisplay amount={totalInvSar} currency="SAR" /> · <NominalDisplay amount={totalInv / usdToIdr} currency="USD" /></p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div><p className="text-xs text-slate-500">DP ({viewInvoice.dp_percentage ?? 0}%)</p><p className="font-semibold text-slate-900 mt-0.5"><NominalDisplay amount={Number(viewInvoice.dp_amount) || 0} currency="IDR" /></p></div>
+                                <div><p className="text-xs text-slate-500">Dibayar</p><p className="font-semibold text-[#0D1A63] mt-0.5"><NominalDisplay amount={displayPaid} currency="IDR" /></p>{(kesSar > 0 || kesUsd > 0) && <p className="text-xs text-[#0D1A63] mt-0.5">KES: <NominalDisplay amount={kesSar} currency="SAR" />{kesUsd > 0 ? <> · <NominalDisplay amount={kesUsd} currency="USD" /></> : ''}</p>}</div>
+                                <div><p className="text-xs text-slate-500">Sisa</p><p className="font-semibold text-red-600 mt-0.5"><NominalDisplay amount={displayRemaining} currency="IDR" /></p></div>
+                                <div><p className="text-xs text-slate-500">Terbayar</p><p className="font-semibold text-slate-900 mt-0.5">{(Number.isFinite(totalPct) ? totalPct.toFixed(1) : '0')}%</p></div>
+                              </div>
+                              <div className="flex flex-wrap gap-4 pt-2 text-sm text-slate-600">
+                                <span>Tgl invoice: <strong className="text-slate-800">{formatDate(viewInvoice.issued_at || viewInvoice.created_at)}</strong></span>
+                                <span>Jatuh tempo DP: <strong className="text-slate-800">{formatDate(viewInvoice.due_date_dp)}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Kurs */}
+                          <div className="lg:col-span-3 space-y-4">
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Kurs pembayaran</p>
                               <p className="text-sm text-slate-700">1 SAR = <NominalDisplay amount={sarToIdr} currency="IDR" /></p>
