@@ -258,7 +258,7 @@ const list = asyncHandler(async (req, res) => {
         const avMeta = (av?.meta || {}) || {};
         const roomTypesMeta = avMeta.room_types || {};
         const rooms = {};
-        ['single', 'double', 'triple', 'quad', 'quint'].forEach(rt => {
+        ['double', 'triple', 'quad', 'quint'].forEach(rt => {
           const qty = Number(roomTypesMeta[rt]) || 0;
           rooms[rt] = { quantity: qty, price: 0 };
         });
@@ -364,12 +364,12 @@ const list = asyncHandler(async (req, res) => {
           continue;
         }
         const rt = String(roomTypeRaw || '').toLowerCase();
-        if (!['single', 'double', 'triple', 'quad', 'quint'].includes(rt)) continue;
+        if (!['double', 'triple', 'quad', 'quint'].includes(rt)) continue;
         if (withMeal) slot[`${rt}_bundle`] = sar;
         else slot[`${rt}_room`] = sar;
       }
       const pickRefRoomType = (_meta, breakdown) => {
-        const order = ['single', 'double', 'triple', 'quad', 'quint'];
+        const order = ['double', 'triple', 'quad', 'quint'];
         for (const rt of order) {
           const pr = breakdown && breakdown[rt];
           if (pr && Number(pr.quantity) > 0) return rt;
@@ -380,7 +380,7 @@ const list = asyncHandler(async (req, res) => {
         }
         return 'triple';
       };
-      const ROOM_TYPES_MONTHLY = ['single', 'double', 'triple', 'quad', 'quint'];
+      const ROOM_TYPES_MONTHLY = ['double', 'triple', 'quad', 'quint'];
       const buildRoomMonthsForType = (packForProduct, rt, isFb, yearStr) => {
         const months = [];
         for (let mo = 1; mo <= 12; mo += 1) {
@@ -467,7 +467,7 @@ const list = asyncHandler(async (req, res) => {
           return t.idr;
         };
         const roomsFromMonthly = {};
-        ['single', 'double', 'triple', 'quad', 'quint'].forEach((rtv) => {
+        ['double', 'triple', 'quad', 'quint'].forEach((rtv) => {
           const qtyRoom = Number((p.room_breakdown && p.room_breakdown[rtv] && p.room_breakdown[rtv].quantity) ?? 0) || 0;
           const roomSar = mNow[`${rtv}_room`];
           const bundleSar = mNow[`${rtv}_bundle`];
@@ -1315,7 +1315,7 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
   if (!rows.length) return res.status(400).json({ success: false, message: 'rows wajib diisi' });
 
-  const roomTypes = ['single', 'double', 'triple', 'quad', 'quint'];
+  const roomTypes = ['double', 'triple', 'quad', 'quint'];
   const mealPlan = product.meta && typeof product.meta === 'object' ? product.meta.meal_plan : null;
 
   const t = await sequelize.transaction();

@@ -353,7 +353,7 @@ Kurs saat ini: 1 SAR = ${sarToIdr} IDR, 1 USD = ${usdToIdr} IDR.
 
 Pemilik: ${ownerUser?.company_name || ownerUser?.name || 'Owner'}.
 Tipe akun: ${isMouOwner ? `Owner MOU (harga di bawah sudah termasuk diskon ${mouDiscountPercent}%)` : 'Owner Non-MOU (harga standar)'}. WAJIB gunakan hanya harga dari daftar ini; jangan mengarang atau mengubah angka.
-Kapasitas tipe kamar hotel (orang/kamar): single=${ROOM_CAPACITY?.single ?? 1}, double=${ROOM_CAPACITY?.double ?? 2}, triple=${ROOM_CAPACITY?.triple ?? 3}, quad=${ROOM_CAPACITY?.quad ?? 4}, quint=${ROOM_CAPACITY?.quint ?? 5}.
+Kapasitas tipe kamar hotel (orang/kamar): double=${ROOM_CAPACITY?.double ?? 2}, triple=${ROOM_CAPACITY?.triple ?? 3}, quad=${ROOM_CAPACITY?.quad ?? 4}, quint=${ROOM_CAPACITY?.quint ?? 5} (tipe single tidak dipakai).
 
 Daftar produk aktif — setiap baris berisi harga kamar (dan untuk hotel: harga makan per orang per hari) dalam IDR, SAR, dan USD (WAJIB gunakan id persis untuk product_id saat menyebut produk). Untuk produk hotel: tampilkan selalu harga kamar DAN harga makan (jika ada); jika tertulis "Harga makan: (belum diatur di data produk)" artinya data makan belum diisi di sistem—jangan jawab "belum tersedia informasi", melainkan "harga makan untuk hotel ini belum diatur di data produk; bisa ditanyakan ke admin."
 ${productLines}
@@ -411,7 +411,7 @@ KEMAMPUAN:
 2. PEMBAGIAN KAMAR OTOMATIS (untuk hotel): Jika owner menyebut JUMLAH ORANG/JAMAAH + hotel + tanggal check-in/out, tapi belum menentukan pembagian kamar:
    - Gunakan "Kapasitas tipe kamar" di konteks dan "Ketersediaan kamar hotel" untuk hotel tersebut pada periode yang diminta.
    - Buat rekomendasi pembagian kamar yang memenuhi semua orang, TANPA melebihi ketersediaan per room_type.
-   - Prioritas: minimalkan jumlah kamar (pilih kapasitas lebih besar dulu: quint→quad→triple→double→single), tapi jika tipe besar tidak tersedia, gunakan kombinasi yang tersedia.
+   - Prioritas: minimalkan jumlah kamar (pilih kapasitas lebih besar dulu: quint→quad→triple→double), tapi jika tipe besar tidak tersedia, gunakan kombinasi yang tersedia.
    - Jika lebih dari satu kombinasi memungkinkan, berikan 2–3 opsi dan minta owner memilih (mis. opsi hemat kamar vs opsi lebih nyaman).
    - Outputkan hasil dengan format jelas, contoh: "Untuk 9 orang: 1 quad + 1 triple + 1 double (total 3 kamar)" dan tanyakan konfirmasi.
 3. NEGOSIASI HARGA: Harga HANYA dari daftar produk di konteks (sudah sesuai tipe owner: MOU dapat diskon, Non-MOU harga standar). Jangan mengarang atau mengubah angka. Jika owner minta diskon atau nego:
@@ -428,7 +428,7 @@ ${contextText}
 
 ATURAN ITEM (untuk jawaban tentang pesanan):
 - type: hotel | visa | ticket | bus | handling | package.
-- Hotel: check_in, check_out, room_type (single/double/triple/quad/quint), with_meal (boolean).
+- Hotel: check_in, check_out, room_type (double/triple/quad/quint), with_meal (boolean).
 - Tiket: bandara (BTH/CGK/SBY/UPG), trip_type (one_way/return_only/round_trip), departure_date, return_date.
 - Visa: travel_date.
 - Bus: route_type, bus_type (besar/menengah_hiace/kecil), trip_type, travel_date.
@@ -534,7 +534,7 @@ Aturan:
 - product_id: copy UUID persis dari baris "id: <uuid>" di konteks. Jika tidak yakin, isi product_name dengan nama produk persis seperti di daftar.
 - product_name: nama produk seperti di konteks (untuk fallback). WAJIB isi jika ada produk disebut di obrolan.
 - type: hotel | visa | ticket | bus | handling | package.
-- Hotel: meta wajib check_in, check_out (format YYYY-MM-DD), room_type (single/double/triple/quad/quint), with_meal (boolean).
+- Hotel: meta wajib check_in, check_out (format YYYY-MM-DD), room_type (double/triple/quad/quint), with_meal (boolean).
 - Tiket: meta bandara, trip_type, departure_date, return_date jika round_trip.
 - Visa: meta travel_date.
 - Bus: meta route_type, bus_type, trip_type, travel_date.

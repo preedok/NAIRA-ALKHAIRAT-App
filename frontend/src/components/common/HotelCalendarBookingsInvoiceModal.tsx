@@ -25,11 +25,11 @@ import {
 import type { TableColumn } from '../../types';
 
 const ROOM_LABELS: Record<string, string> = {
-  single: 'Single',
   double: 'Double',
   triple: 'Triple',
   quad: 'Quad',
-  quint: 'Quint'
+  quint: 'Quint',
+  single: 'Double'
 };
 
 /** Waktu sekarang di WIB (selaras backend hotelAvailabilityService). */

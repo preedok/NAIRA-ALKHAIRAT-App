@@ -18,8 +18,8 @@ function getRoomStatus(total: number, available: number): AvailabilityStatus {
   return 'available';
 }
 
-const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
-const ROOM_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'] as const;
+const ROOM_LABELS: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
 type CalendarBooking = {
   order_id: string;
   owner_id: string;

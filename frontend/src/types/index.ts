@@ -120,7 +120,7 @@ export interface Branch {
 
 // ==================== HOTEL ====================
 
-export type RoomType = 'single' | 'double' | 'triple' | 'quad' | 'quint';
+export type RoomType = 'double' | 'triple' | 'quad' | 'quint';
 export type MealPlan = 'room_only' | 'BB' | 'FB';
 export type PriceVariant = 'lasten' | 'harian';
 export type HotelLocation = 'makkah' | 'madinah';

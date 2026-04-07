@@ -255,7 +255,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
     const cur = (hotel.currency || (hotel.meta as { currency?: string })?.currency || 'IDR').toString().toUpperCase();
     const priceCurrency = (cur === 'SAR' || cur === 'USD' || cur === 'IDR') ? cur : 'IDR';
     const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
-    const roomTypes: Array<'single'|'double'|'triple'|'quad'|'quint'> = ['single', 'double', 'triple', 'quad', 'quint'];
+    const roomTypes: Array<'double'|'triple'|'quad'|'quint'> = ['double', 'triple', 'quad', 'quint'];
     const firstRoomWithPrice = roomTypes.find((rt) => {
       const entry = breakdown[rt];
       const p = typeof entry === 'object' && entry != null && 'price' in entry ? Number((entry as { price?: number }).price) : typeof entry === 'number' ? entry : 0;
@@ -716,7 +716,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
                         const cur = (h.currency || h.meta?.currency || 'IDR').toString().toUpperCase();
                         const priceCur = (cur === 'SAR' || cur === 'USD' || cur === 'IDR') ? cur : 'IDR';
                         const breakdown = h.room_breakdown || h.prices_by_room || {};
-                        const roomTypes: Array<'single'|'double'|'triple'|'quad'|'quint'> = ['single', 'double', 'triple', 'quad', 'quint'];
+                        const roomTypes: Array<'double'|'triple'|'quad'|'quint'> = ['double', 'triple', 'quad', 'quint'];
                         const firstRoom = roomTypes.find((rt) => {
                           const entry = breakdown[rt];
                           const p = typeof entry === 'object' && entry != null && 'price' in entry ? Number((entry as { price?: number }).price) : 0;

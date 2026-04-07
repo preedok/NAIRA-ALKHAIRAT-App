@@ -17,7 +17,7 @@ module.exports = {
 
     await queryInterface.bulkInsert('products', [
       { id: productIds.handling, type: ORDER_ITEM_TYPE.HANDLING, code: 'HDL-01', name: 'Jasa Handling', description: 'Handling general', is_package: false, meta: '{}', is_active: true, created_at: now, updated_at: now },
-      { id: productIds.hotel1, type: ORDER_ITEM_TYPE.HOTEL, code: 'HTL-MKK-01', name: 'Hotel Makkah Sample', description: 'Hotel 3 bintang', is_package: false, meta: '{"room_types":["single","double","quad","quint"]}', is_active: true, created_at: now, updated_at: now },
+      { id: productIds.hotel1, type: ORDER_ITEM_TYPE.HOTEL, code: 'HTL-MKK-01', name: 'Hotel Makkah Sample', description: 'Hotel 3 bintang', is_package: false, meta: '{"room_types":["double","quad","quint"]}', is_active: true, created_at: now, updated_at: now },
       { id: productIds.visa1, type: ORDER_ITEM_TYPE.VISA, code: 'VIS-ONLY-01', name: 'Visa Umroh (Visa Only)', description: 'Visa umroh standar', is_package: false, meta: JSON.stringify({ visa_kind: VISA_KIND.ONLY }), is_active: true, created_at: now, updated_at: now },
       { id: productIds.visa2, type: ORDER_ITEM_TYPE.VISA, code: 'VIS-TASREH-01', name: 'Visa Umroh + Tasreh', description: 'Visa umroh dengan tasreh', is_package: false, meta: JSON.stringify({ visa_kind: VISA_KIND.TASREH }), is_active: true, created_at: now, updated_at: now },
       { id: productIds.visa3, type: ORDER_ITEM_TYPE.VISA, code: 'VIS-PREMIUM-01', name: 'Visa Umroh Premium', description: 'Visa umroh premium', is_package: false, meta: JSON.stringify({ visa_kind: VISA_KIND.PREMIUM }), is_active: true, created_at: now, updated_at: now },

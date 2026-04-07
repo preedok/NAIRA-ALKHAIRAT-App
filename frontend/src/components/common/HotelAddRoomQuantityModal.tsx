@@ -5,11 +5,11 @@ import Button from './Button';
 import Input from './Input';
 
 const ROOM_LABELS: Record<string, string> = {
-  single: 'Single',
   double: 'Double',
   triple: 'Triple',
   quad: 'Quad',
-  quint: 'Quint'
+  quint: 'Quint',
+  single: 'Double'
 };
 
 export type HotelAddRoomQuantityRow = {

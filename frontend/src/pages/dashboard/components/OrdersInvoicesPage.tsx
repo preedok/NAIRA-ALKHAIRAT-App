@@ -3007,8 +3007,8 @@ const OrdersInvoicesPage: React.FC = () => {
                         {(() => {
                           const rawItems = viewInvoice?.Order?.OrderItems || [];
                           if (rawItems.length === 0) return null;
-                          const ROOM_CAP: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
-                          const ROOM_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+                          const ROOM_CAP: Record<string, number> = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
+                          const ROOM_LABELS: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
                           /** Gabung item hotel yang sama product + check_in + check_out jadi satu baris; isi Deskripsi dengan breakdown tipe kamar. */
                           const orderItems: any[] = (() => {
                             const hotelKey = (it: any) => {
@@ -3190,7 +3190,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                       const nights = isMerged ? (item._mergedNights ?? meta.nights ?? 0) : (meta.nights != null ? Number(meta.nights) : 0);
                                       const cur = (item.unit_price_currency || 'IDR').toUpperCase();
                                       const toIdr = (v: number) => cur === 'SAR' ? v * sarToIdr : cur === 'USD' ? v * usdToIdr : v;
-                                      const ROOM_CAP_TBL = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 } as Record<string, number>;
+                                      const ROOM_CAP_TBL = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 } as Record<string, number>;
                                       const capacity = ROOM_CAP_TBL[String(meta.room_type || '').toLowerCase()] ?? 1;
                                       const totalOrang = qty * capacity;
                                       const roomUnitRaw = meta.room_unit_price != null ? Number(meta.room_unit_price) : (typeKey === 'hotel' ? Number(item.unit_price) : NaN);

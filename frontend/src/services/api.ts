@@ -169,7 +169,7 @@ export const productsApi = {
     body: {
       rows: Array<{
         year_month: string;
-        room_type?: 'single' | 'double' | 'triple' | 'quad' | 'quint' | string;
+        room_type?: 'double' | 'triple' | 'quad' | 'quint' | string;
         with_meal?: boolean;
         amount: number;
         currency: 'IDR' | 'SAR' | 'USD';

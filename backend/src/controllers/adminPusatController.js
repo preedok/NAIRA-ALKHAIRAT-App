@@ -661,7 +661,7 @@ const setHotelAvailabilityConfigHandler = asyncHandler(async (req, res) => {
 
   const validModes = ['global', 'per_season'];
   const mode = availability_mode && validModes.includes(availability_mode) ? availability_mode : 'per_season';
-  const roomTypes = ['single', 'double', 'triple', 'quad', 'quint'];
+  const roomTypes = ['double', 'triple', 'quad', 'quint'];
 
   let av = await ProductAvailability.findOne({ where: { product_id: productId } });
   const meta = av?.meta && typeof av.meta === 'object' ? { ...av.meta } : {};

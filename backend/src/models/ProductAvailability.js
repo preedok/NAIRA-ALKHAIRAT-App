@@ -25,7 +25,7 @@ const ProductAvailability = sequelize.define('ProductAvailability', {
   meta: {
     type: DataTypes.JSONB,
     defaultValue: {},
-    comment: 'Breakdown: room_types: { single: 10, double: 5 }, meal_available, routes, dll'
+    comment: 'Breakdown: room_types: { double, triple, quad, quint }, meal_available, routes, dll'
   },
   updated_by: {
     type: DataTypes.UUID,

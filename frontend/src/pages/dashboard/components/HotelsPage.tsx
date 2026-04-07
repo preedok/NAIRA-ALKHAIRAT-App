@@ -33,8 +33,8 @@ import { getPriceTripleForTable, formatUSD } from '../../../utils';
 import { CURRENCY_OPTIONS } from '../../../utils/constants';
 import { getProductListOwnerId } from '../../../utils/productHelpers';
 
-const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'] as const;
-const ROOM_TYPE_LABELS: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'] as const;
+const ROOM_TYPE_LABELS: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
 /** Kuota tersisa ≤ ini dianggap "hampir penuh"; admin pusat bisa tambah kuota di kalender untuk full dan hampir penuh */
 const ALMOST_FULL_THRESHOLD = 3;
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
@@ -260,7 +260,7 @@ export interface HotelProduct {
     year: string;
     months: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>;
   } | null;
-  /** Harga kamar per bulan per tipe (single … quint). */
+  /** Harga kamar per bulan per tipe (double … quint). */
   hotel_monthly_series_by_room_type?: {
     year: string;
     by_room_type: Record<string, { months: Array<{ year_month: string; sar_room_per_night: number | null }> }>;
@@ -319,7 +319,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [inventorySaving, setInventorySaving] = useState(false);
   /** Pengaturan jumlah kamar: global (satu set untuk semua bulan) vs per musim */
   const [hotelAvailabilityMode, setHotelAvailabilityMode] = useState<'global' | 'per_season'>('per_season');
-  const [globalRoomInventory, setGlobalRoomInventory] = useState<Record<string, number>>({ single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
+  const [globalRoomInventory, setGlobalRoomInventory] = useState<Record<string, number>>({ double: 0, triple: 0, quad: 0, quint: 0 });
   const [hotelAvailabilityConfigLoading, setHotelAvailabilityConfigLoading] = useState(false);
   const [hotelAvailabilityConfigSaving, setHotelAvailabilityConfigSaving] = useState(false);
   const [monthlyPriceYear, setMonthlyPriceYear] = useState<string>(String(new Date().getFullYear()));
@@ -446,7 +446,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const configData = (configRes.data as { data?: { mode: 'global' | 'per_season'; global_room_inventory?: Record<string, number> } })?.data;
         if (configData) {
           setHotelAvailabilityMode('global');
-          setGlobalRoomInventory(configData.global_room_inventory || { single: 0, double: 0, triple: 0, quad: 0, quint: 0 });
+          setGlobalRoomInventory(configData.global_room_inventory || { double: 0, triple: 0, quad: 0, quint: 0 });
         }
         setSeasonsList((seasonsRes.data as { data?: HotelSeason[] })?.data ?? []);
         const data = (productRes.data as { data?: ProductDetail })?.data;
@@ -731,7 +731,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   /** Agregat ketersediaan (30 hari) dari semua hotel yang sudah di-load */
   const availabilityStats = (() => {
     const list = filteredHotels.length ? filteredHotels : hotels;
-    const byRoom: Record<string, number> = { single: 0, double: 0, triple: 0, quad: 0, quint: 0 };
+    const byRoom: Record<string, number> = { double: 0, triple: 0, quad: 0, quint: 0 };
     let total = 0;
     list.forEach((h) => {
       const av = availabilityByHotelId[h.id];
@@ -822,7 +822,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         const ymKeys = getMonthKeys(monthlyPriceYear);
         const monthlyRowsPayload: Array<{
           year_month: string;
-          room_type: 'single' | 'double' | 'triple' | 'quad' | 'quint' | string;
+          room_type: 'double' | 'triple' | 'quad' | 'quint' | string;
           with_meal: boolean;
           amount: number;
           currency: 'SAR';
@@ -1315,8 +1315,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           (() => {
                             const repPrice =
                               Number(
-                                breakdown.single?.price ??
-                                  breakdown.double?.price ??
+                                breakdown.double?.price ??
                                   breakdown.triple?.price ??
                                   breakdown.quad?.price ??
                                   breakdown.quint?.price ??
@@ -1404,7 +1403,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           const s2i = currencyRates.SAR_TO_IDR ?? 4200;
                           const u2i = currencyRates.USD_TO_IDR ?? 15500;
                           const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
-                          const roomTypes: Array<'single'|'double'|'triple'|'quad'|'quint'> = ['single', 'double', 'triple', 'quad', 'quint'];
+                          const roomTypes: Array<'double'|'triple'|'quad'|'quint'> = ['double', 'triple', 'quad', 'quint'];
                           const firstRoomWithPrice = roomTypes.find((rt) => {
                             const entry = breakdown[rt];
                             const p = typeof entry === 'object' && entry != null && 'price' in entry ? Number((entry as { price?: number }).price) : typeof entry === 'number' ? entry : 0;
@@ -1473,7 +1472,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           const d = new Date(s + 'T12:00:00');
           return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
         };
-        const roomTypeLabels: Record<string, string> = { single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' };
+        const roomTypeLabels: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
         const popupCurrency = (hotel?.currency || hotel?.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
         const popupCurrInfo = CURRENCY_OPTIONS.find((c) => c.id === popupCurrency) || CURRENCY_OPTIONS[0];
         const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');

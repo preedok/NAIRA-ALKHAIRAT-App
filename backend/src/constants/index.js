@@ -189,9 +189,10 @@ const TICKET_TRIP_RETURN_ONLY = 'return_only';
 const TICKET_TRIP_ROUND_TRIP = 'round_trip';
 const TICKET_TRIP_TYPES = [TICKET_TRIP_ONE_WAY, TICKET_TRIP_RETURN_ONLY, TICKET_TRIP_ROUND_TRIP];
 
-// Room types for hotel (single, double, triple, quad, quint) → kapasitas jamaah per kamar
-const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'];
-const ROOM_CAPACITY = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+// Room types for hotel (double, triple, quad, quint) → kapasitas jamaah per kamar — tanpa single
+const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'];
+/** Legacy key `single` (deprecated) disamakan kapasitas dengan double untuk data lama / hingga migrasi selesai */
+const ROOM_CAPACITY = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
 // Order status (add blocked)
 const ORDER_STATUS = {

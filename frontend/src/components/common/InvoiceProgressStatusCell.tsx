@@ -46,15 +46,15 @@ export const PROGRESS_STATUS_OPTIONS_BUS = Object.entries(PROGRESS_LABELS_BUS).m
 export const PROGRESS_STATUS_OPTIONS_MEAL = Object.entries(PROGRESS_LABELS_MEAL).map(([value, label]) => ({ value, label }));
 
 export const ROOM_TYPE_LABELS: Record<string, string> = {
-  single: 'Single',
   double: 'Double',
   triple: 'Triple',
   quad: 'Quad',
-  quint: 'Quint'
+  quint: 'Quint',
+  single: 'Double'
 };
 
-/** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang) */
-const ROOM_CAPACITY: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+/** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang); legacy `single` ≈ double */
+const ROOM_CAPACITY: Record<string, number> = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
 const BUS_TRIP_LABELS: Record<string, string> = {
   one_way: 'Pergi saja',

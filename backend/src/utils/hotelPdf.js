@@ -14,7 +14,7 @@ const hotelProgressStatusLabel = (s) => ({
   room_assigned: 'Pemberian nomor room',
   completed: 'Selesai'
 }[String(s).toLowerCase()] || s || '–');
-const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '–');
+const roomTypeLabel = (r) => ({ double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' }[String(r).toLowerCase()] || r || '–');
 
 /**
  * @param {object} item - OrderItem dengan Order, Product, HotelProgress

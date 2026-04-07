@@ -45,7 +45,7 @@ const SQL_HOTEL_OCCUPIED_ON_CALENDAR_DATE = `(
 )`;
 
 const HOTEL_AVAILABILITY_MODES = ['global', 'per_season'];
-const ROOM_TYPES_LIST = ['single', 'double', 'triple', 'quad', 'quint'];
+const ROOM_TYPES_LIST = ['double', 'triple', 'quad', 'quint'];
 
 /** Tanggal kalender YYYY-MM-DD + N hari (tanpa bug timezone Date.toISOString()). */
 function addDaysYmd(ymd, deltaDays) {
@@ -154,7 +154,7 @@ async function getSeasonForCalendarDay(productId, dateStr) {
 
 /**
  * Ambil inventori kamar per room_type untuk suatu musim.
- * Returns { single: 10, double: 5, ... }
+ * Returns { double: 5, triple: …, … } per room_type di DB
  */
 async function getInventoryForSeason(seasonId) {
   const rows = await HotelRoomInventory.findAll({
@@ -187,8 +187,8 @@ async function getBookedForDateRaw(seq, productId, roomType, dateStr) {
   return (rows && rows[0] && rows[0].booked) ? parseInt(rows[0].booked, 10) : 0;
 }
 
-/** Kapasitas jamaah per tipe kamar: single=1, double=2, triple=3, quad=4, quint=5 */
-const ROOM_TYPE_JAMAAH = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+/** Kapasitas jamaah per tipe kamar (tanpa single di produk; legacy single diperlakukan seperti double) */
+const ROOM_TYPE_JAMAAH = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
 const DEFAULT_HOTEL_CHECK_IN_TIME = '16:00';
 const DEFAULT_HOTEL_CHECK_OUT_TIME = '12:00';

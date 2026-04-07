@@ -30,7 +30,7 @@ const { BUSINESS_RULE_KEYS } = require(path.join(__dirname, '../src/constants'))
 const HotelMonthlyPrice = require(path.join(__dirname, '../src/models/HotelMonthlyPrice'));
 
 const MEAL_ROOM_TYPE = '__meal__';
-const ROOM_TYPES = ['single', 'double', 'triple', 'quad', 'quint'];
+const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'];
 
 function parseArgs() {
   const out = { year: String(new Date().getFullYear()), dryRun: false, productId: null };
@@ -159,7 +159,7 @@ async function main() {
 
     for (const pp of prices) {
       const m = pp.meta && typeof pp.meta === 'object' ? pp.meta : {};
-      const rt = String(m.room_type || 'single').toLowerCase();
+      const rt = String(m.room_type || 'double').toLowerCase();
       if (!ROOM_TYPES.includes(rt)) continue;
       const wm = !!m.with_meal;
       const sar = amountToSar(pp.amount, pp.currency, rates);

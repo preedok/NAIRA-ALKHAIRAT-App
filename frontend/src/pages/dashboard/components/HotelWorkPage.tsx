@@ -37,7 +37,7 @@ const MEAL_OPTIONS = PROGRESS_STATUS_OPTIONS_MEAL;
 const ROOM_TYPE_LABELS = ROOM_TYPE_LABELS_SHARED;
 
 /** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang) */
-const ROOM_CAPACITY: Record<string, number> = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+const ROOM_CAPACITY: Record<string, number> = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   dp: 'Pembayaran DP',

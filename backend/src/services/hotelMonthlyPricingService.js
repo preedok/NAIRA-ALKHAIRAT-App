@@ -62,7 +62,7 @@ async function findMonthlyPrice({
   component = COMPONENT_ROOM
 }) {
   const isMeal = component === COMPONENT_MEAL;
-  const room = isMeal ? MEAL_ROOM_TYPE : (roomType || 'single');
+  const room = isMeal ? MEAL_ROOM_TYPE : (roomType || 'double');
   const withMealFlag = isMeal ? false : !!withMeal;
   const cur = String(currency || 'IDR').toUpperCase();
   /** Baris __meal__ lama bisa punya component default 'room' (satu migrasi); terima keduanya untuk lookup. */
@@ -186,7 +186,7 @@ async function calculateStayCostByNights({
 
   const qty = Math.max(1, parseInt(quantity, 10) || 1);
   const cur = String(currency || 'IDR').toUpperCase();
-  const rt = roomType || 'single';
+  const rt = roomType || 'double';
   const cap = Number(ROOM_CAPACITY[rt]) || 1;
 
   let roomSubtotalIdr = 0;

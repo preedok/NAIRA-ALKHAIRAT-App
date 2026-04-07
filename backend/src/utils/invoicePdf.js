@@ -80,9 +80,9 @@ const hotelProgressStatusLabel = (s) => ({
   room_assigned: 'Pemberian nomor room',
   completed: 'Selesai'
 }[String(s).toLowerCase()] || s || '-');
-const roomTypeLabel = (r) => ({ single: 'Single', double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint' }[String(r).toLowerCase()] || r || '-');
+const roomTypeLabel = (r) => ({ double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' }[String(r).toLowerCase()] || r || '-');
 /** Kapasitas orang per kamar per tipe (untuk hitung jumlah orang dari kamar) */
-const ROOM_CAPACITY = { single: 1, double: 2, triple: 3, quad: 4, quint: 5 };
+const ROOM_CAPACITY = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
 /** Lokasi hotel (urutan baris invoice & label deskripsi): madinah | makkah */
 function getHotelLocationFromItem(it) {
