@@ -2803,7 +2803,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         {/* Saldo owner diletakkan tepat di bawah ringkasan Tagihan DP */}
                         {(((user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && viewInvoice?.owner_id === user?.id) ||
                           (canUseInvoiceOwnerBalance && viewInvoice?.owner_id && !isDraftRow(viewInvoice))) && (
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                          <div className="space-y-5">
                             {(user?.role === 'owner_mou' || user?.role === 'owner_non_mou') && viewInvoice?.owner_id === user?.id && (
                               <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 shadow-sm">
                                 <h4 className="text-sm font-semibold text-emerald-800 flex items-center gap-2 mb-3">
