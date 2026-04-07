@@ -87,10 +87,7 @@ const ProductBusPage: React.FC = () => {
           <BusPage embedInProducts refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'calendar' && (
-          <BusCalendarView
-            busProducts={busLoading ? [] : busProducts}
-            onAddQuotaClick={() => setActiveTab('list')}
-          />
+          <BusCalendarView busProducts={busLoading ? [] : busProducts} />
         )}
       </div>
     </div>

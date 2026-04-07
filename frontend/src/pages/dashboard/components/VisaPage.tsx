@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, BarChart3, Layers, Hotel, Wallet, Calendar, Trash2, Eye } from 'lucide-react';
+import { ShoppingCart, Plus, FileText, Pencil, X, Package, Coins, Settings2, Layers, Hotel, Wallet, Trash2, Eye } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
@@ -12,7 +12,7 @@ import Badge from '../../../components/common/Badge';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
-import { businessRulesApi, productsApi, adminPusatApi, type VisaSeason } from '../../../services/api';
+import { businessRulesApi, productsApi } from '../../../services/api';
 import { fillFromSource, getEditPriceDisplay } from '../../../utils/currencyConversion';
 import Table from '../../../components/common/Table';
 import { getPriceTripleForTable, PRICE_COLUMN_LABEL } from '../../../utils';
@@ -42,7 +42,6 @@ interface VisaProduct {
   name: string;
   description?: string | null;
   meta?: { visa_kind?: VisaKind; require_hotel?: boolean; currency?: string } | null;
-  quota?: number;
   price_general_idr?: number | null;
   price_general_sar?: number | null;
   price_general_usd?: number | null;
@@ -100,7 +99,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
     name: '',
     description: '',
     visa_kind: 'only' as VisaKind,
-    quota: 0,
     require_hotel: false,
     price_value: 0,
     price_currency: 'IDR' as 'IDR' | 'SAR' | 'USD'
@@ -111,19 +109,11 @@ const VisaPage: React.FC<VisaPageProps> = ({
     name: '',
     description: '',
     visa_kind: 'only' as VisaKind,
-    quota: 0,
     require_hotel: false,
     price_value: 0,
     price_currency: 'IDR' as 'IDR' | 'SAR' | 'USD'
   });
   const [editVisaSaving, setEditVisaSaving] = useState(false);
-  const [visaSeasonsProduct, setVisaSeasonsProduct] = useState<VisaProduct | null>(null);
-  const [visaSeasons, setVisaSeasons] = useState<VisaSeason[]>([]);
-  const [visaSeasonsLoading, setVisaSeasonsLoading] = useState(false);
-  const [newSeasonForm, setNewSeasonForm] = useState({ name: '', start_date: '', end_date: '', quota: 0 });
-  const [addSeasonSaving, setAddSeasonSaving] = useState(false);
-  const [quotaEdit, setQuotaEdit] = useState<{ seasonId: string; value: string } | null>(null);
-  const [quotaSaving, setQuotaSaving] = useState(false);
   const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [searchName, setSearchName] = useState('');
   const [debouncedSearchName, setDebouncedSearchName] = useState('');
@@ -190,15 +180,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
   useEffect(() => {
     if (embedInProducts && refreshTrigger != null && refreshTrigger > 0) fetchVisaProducts();
   }, [embedInProducts, refreshTrigger, fetchVisaProducts]);
-
-  useEffect(() => {
-    if (!visaSeasonsProduct?.id) return;
-    setVisaSeasonsLoading(true);
-    adminPusatApi.listVisaSeasons(visaSeasonsProduct.id)
-      .then((res) => setVisaSeasons((res.data as { data?: VisaSeason[] })?.data ?? []))
-      .catch(() => setVisaSeasons([]))
-      .finally(() => setVisaSeasonsLoading(false));
-  }, [visaSeasonsProduct?.id]);
 
   useEffect(() => {
     if (!visaRequireHotelVisa) {
@@ -329,7 +310,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
       name: p.name || '',
       description: p.description || '',
       visa_kind: (p.meta?.visa_kind || 'only') as VisaKind,
-      quota: p.quota ?? (p as { meta?: { default_quota?: number } }).meta?.default_quota ?? 0,
       require_hotel: p.meta?.require_hotel === true,
       price_value: value > 0 ? value : 0,
       price_currency: currency
@@ -346,10 +326,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
       await productsApi.update(editingVisa.id, {
         name: editVisaForm.name.trim(),
         description: editVisaForm.description.trim() || null,
-        meta: { visa_kind: editVisaForm.visa_kind, require_hotel: editVisaForm.require_hotel, default_quota: editVisaForm.quota >= 0 ? editVisaForm.quota : null }
-      });
-      await adminPusatApi.setProductAvailability(editingVisa.id, {
-        quantity: Math.max(0, Math.floor(Number(editVisaForm.quota) || 0))
+        meta: { visa_kind: editVisaForm.visa_kind, require_hotel: editVisaForm.require_hotel, default_quota: null }
       });
       const pricesRes = await productsApi.listPrices({ product_id: editingVisa.id });
       const prices = (pricesRes.data as { data?: Array<{ id: string; branch_id: string | null; owner_id: string | null }> })?.data ?? [];
@@ -392,7 +369,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
         description: addVisaForm.description.trim() || undefined,
         visa_kind: addVisaForm.visa_kind,
         require_hotel: addVisaForm.require_hotel,
-        default_quota: addVisaForm.quota > 0 || addVisaForm.quota === 0 ? addVisaForm.quota : undefined,
         currency: addVisaForm.price_currency
       });
       const product = (createRes.data as { data?: { id: string } })?.data;
@@ -411,18 +387,11 @@ const VisaPage: React.FC<VisaPageProps> = ({
         });
       }
 
-      if (productId) {
-        await adminPusatApi.setProductAvailability(productId, {
-          quantity: Math.max(0, Math.floor(Number(addVisaForm.quota) || 0))
-        });
-      }
-
       const hasPrice = productId && addVisaForm.price_value > 0;
-      const hasQuota = productId && (addVisaForm.quota > 0 || addVisaForm.quota === 0);
-      const msg = hasPrice && hasQuota ? 'Produk visa, harga default, dan kuota berhasil ditambahkan' : hasPrice ? 'Produk visa dan harga default berhasil ditambahkan' : hasQuota ? 'Produk visa dan kuota berhasil ditambahkan' : 'Produk visa berhasil ditambahkan';
+      const msg = hasPrice ? 'Produk visa dan harga default berhasil ditambahkan' : 'Produk visa berhasil ditambahkan';
       showToast(msg, 'success');
       setShowAddVisaModal(false);
-      setAddVisaForm({ name: '', description: '', visa_kind: 'only', quota: 0, require_hotel: false, price_value: 0, price_currency: 'IDR' });
+      setAddVisaForm({ name: '', description: '', visa_kind: 'only', require_hotel: false, price_value: 0, price_currency: 'IDR' });
     fetchVisaProducts();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -436,8 +405,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
   const visaStats = React.useMemo(() => {
     const list = visaProducts;
     const byKind = { only: 0, tasreh: 0, premium: 0 };
-    let totalQuota = 0;
-    let withQuotaLimit = 0;
     let requireHotelCount = 0;
     let withPriceCount = 0;
     let totalValueIdr = 0;
@@ -447,11 +414,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
     list.forEach((p) => {
       const kind = (p.meta?.visa_kind || 'only') as VisaKind;
       if (kind in byKind) byKind[kind]++;
-      const q = p.quota ?? 0;
-      if (q > 0) {
-        withQuotaLimit++;
-        totalQuota += q;
-      }
       if (p.meta?.require_hotel === true) requireHotelCount++;
       const priceIdr = p.price_general_idr ?? (p.currency === 'IDR' || !p.currency ? p.price_general ?? p.price_branch : null) ?? 0;
       const numPrice = Number(priceIdr) || 0;
@@ -467,8 +429,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
     return {
       total: list.length,
       byKind,
-      totalQuota,
-      withQuotaLimit,
       requireHotelCount,
       withPriceCount,
       avgPriceIdr,
@@ -486,7 +446,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
       {!embedInProducts && (
         <PageHeader
           title="Visa"
-          subtitle="Produk visa umroh: kelola harga, kuota, dan periode. Admin pusat dapat edit dan hapus."
+          subtitle="Produk visa umroh: kelola harga dan aturan. Kalender (tab terpisah) untuk monitoring order per tanggal. Admin pusat dapat edit dan hapus."
           right={
             <AutoRefreshControl onRefresh={refetchAll} disabled={loadingVisaProducts} />
           }
@@ -500,7 +460,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
           <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Only" value={visaStats.byKind.only} subtitle="produk" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           <StatCard icon={<Layers className="w-5 h-5" />} label="Visa + Tasreh" value={visaStats.byKind.tasreh} subtitle="produk" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           <StatCard icon={<Layers className="w-5 h-5" />} label="Visa Premium" value={visaStats.byKind.premium} subtitle="produk" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-          <StatCard icon={<BarChart3 className="w-5 h-5" />} label="Total kuota" value={visaStats.totalQuota > 0 ? visaStats.totalQuota.toLocaleString('id-ID') : '—'} subtitle={visaStats.withQuotaLimit > 0 ? `${visaStats.withQuotaLimit} produk berkuota` : 'Tanpa batas'} onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           <StatCard icon={<Hotel className="w-5 h-5" />} label="Wajib hotel" value={visaStats.requireHotelCount} subtitle={`dari ${visaStats.total} produk`} onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           <StatCard icon={<Wallet className="w-5 h-5" />} label="Dengan harga" value={visaStats.withPriceCount} subtitle="produk punya harga" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
           <StatCard icon={<Coins className="w-5 h-5" />} label="Rata-rata harga" value={visaStats.avgPriceIdr > 0 ? `Rp ${visaStats.avgPriceIdr.toLocaleString('id-ID')}` : '—'} subtitle="IDR" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => tableSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
@@ -545,7 +504,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
                 { id: 'kind', label: 'Jenis', align: 'left' },
                 { id: 'name', label: 'Nama', align: 'left' },
                 { id: 'description', label: 'Deskripsi', align: 'left' },
-                { id: 'quota', label: 'Kuota', align: 'right' },
                 { id: 'require_hotel', label: 'Wajib hotel', align: 'center' },
                 { id: 'currency', label: 'Mata Uang', align: 'center' },
                 { id: 'price', label: PRICE_COLUMN_LABEL, align: 'right' },
@@ -558,14 +516,12 @@ const VisaPage: React.FC<VisaPageProps> = ({
                 const visaKind = (p.meta?.visa_kind || 'only') as VisaKind;
                 const kindLabel = VISA_KIND_LABELS[visaKind] || visaKind;
                 const requireHotel = p.meta?.require_hotel === true;
-                const quota = p.quota ?? 0;
                 return (
                   <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-[#0D1A63]/5 transition-colors">
                     <td className="py-3 px-4 font-mono text-slate-600">{p.code || '-'}</td>
                     <td className="py-3 px-4"><Badge variant="info" className="font-medium">{kindLabel}</Badge></td>
                     <td className="py-3 px-4 font-medium text-slate-900">{p.name}</td>
                     <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate" title={p.description || undefined}>{p.description || '—'}</td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-800">{quota === 0 ? '—' : quota}</td>
                     <td className="py-3 px-4 text-center">{requireHotel ? <Badge variant="info">Ya</Badge> : <span className="text-slate-500">Tidak</span>}</td>
                     <td className="py-3 px-4 text-center text-sm text-slate-700">{p.meta?.currency || p.currency || 'IDR'}</td>
                     <td className="py-3 px-4 text-right text-slate-800 align-top">
@@ -630,7 +586,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
                             <ActionsMenu
                               align="right"
                               items={[
-                                { id: 'periode', label: 'Periode & Kuota', icon: <Calendar className="w-4 h-4" />, onClick: () => { setVisaSeasonsProduct(p); setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 }); setQuotaEdit(null); } },
                                 { id: 'edit', label: 'Edit', icon: <Pencil className="w-4 h-4" />, onClick: () => handleOpenEdit(p) },
                                 { id: 'delete', label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteVisa(p), danger: true },
                               ]}
@@ -797,7 +752,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
           <ModalBox>
             <ModalHeader
               title="Tambah produk visa"
-              subtitle="Lengkapi jenis visa, nama, kuota, dan harga (opsional)"
+              subtitle="Lengkapi jenis visa, nama, dan harga (opsional)"
               icon={<Plus className="w-5 h-5" />}
               onClose={() => !addVisaSaving && setShowAddVisaModal(false)}
             />
@@ -852,28 +807,15 @@ const VisaPage: React.FC<VisaPageProps> = ({
                   </section>
                 </div>
 
-                {/* Kolom kanan: Kuota, aturan, harga */}
+                {/* Kolom kanan: aturan, harga */}
                 <div className="space-y-5">
                   <section>
                     <div className="flex items-center gap-2 mb-3">
                       <Settings2 className="w-4 h-4 text-[#0D1A63]" />
-                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Kuota & aturan</span>
+                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Aturan</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
                       <div>
-                        <Input
-                          label="Kuota tersedia"
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={addVisaForm.quota != null ? String(addVisaForm.quota) : ''}
-                          onChange={(e) => setAddVisaForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                          placeholder="0"
-                          fullWidth
-                        />
-                        <p className="text-xs text-slate-500 mt-1">Jumlah yang bisa dipesan. Isi 0 = tidak dibatasi.</p>
-                      </div>
-                      <div className="pt-2 border-t border-slate-200/80">
                         <label className="flex items-center gap-3 cursor-pointer group">
                           <input
                             type="checkbox"
@@ -923,7 +865,7 @@ const VisaPage: React.FC<VisaPageProps> = ({
           <ModalBox>
             <ModalHeader
               title="Edit produk visa"
-              subtitle="Ubah data produk, kuota, dan harga"
+              subtitle="Ubah data produk dan harga"
               icon={<Pencil className="w-5 h-5" />}
               onClose={() => !editVisaSaving && setEditingVisa(null)}
             />
@@ -981,28 +923,15 @@ const VisaPage: React.FC<VisaPageProps> = ({
                   </section>
                 </div>
 
-                {/* Kolom kanan: Kuota, aturan, harga */}
+                {/* Kolom kanan: aturan, harga */}
                 <div className="space-y-5">
                   <section>
                     <div className="flex items-center gap-2 mb-3">
                       <Settings2 className="w-4 h-4 text-[#0D1A63]" />
-                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Kuota & aturan</span>
+                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Aturan</span>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 border border-slate-100 p-4 space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Kuota tersedia</label>
-                        <p className="text-xs text-slate-500 mb-2">Jumlah yang bisa dipesan. Isi 0 = tidak dibatasi.</p>
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={editVisaForm.quota || ''}
-                          onChange={(e) => setEditVisaForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#0D1A63] focus:border-[#0D1A63] bg-white"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="pt-2 border-t border-slate-200/80">
                         <label className="flex items-center gap-3 cursor-pointer group">
                 <input
                   type="checkbox"
@@ -1046,120 +975,6 @@ const VisaPage: React.FC<VisaPageProps> = ({
         )}
       </Modal>
 
-      {/* Modal: Periode & Kuota */}
-      <Modal open={!!visaSeasonsProduct} onClose={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)}>
-        {visaSeasonsProduct && (
-          <ModalBox>
-            <ModalHeader
-              title="Periode & Kuota"
-              subtitle={visaSeasonsProduct.name}
-              icon={<Calendar className="w-5 h-5" />}
-              onClose={() => !addSeasonSaving && !quotaSaving && setVisaSeasonsProduct(null)}
-            />
-            <ModalBody className="space-y-4">
-              <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3">Tambah periode</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label="Nama periode" type="text" placeholder="Nama periode" value={newSeasonForm.name} onChange={(e) => setNewSeasonForm((f) => ({ ...f, name: e.target.value }))} />
-                  <Input label="Mulai" type="date" value={newSeasonForm.start_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, start_date: e.target.value }))} />
-                  <Input label="Selesai" type="date" value={newSeasonForm.end_date} onChange={(e) => setNewSeasonForm((f) => ({ ...f, end_date: e.target.value }))} />
-                  <Input label="Kuota" type="number" min={0} placeholder="Kuota" value={newSeasonForm.quota ? String(newSeasonForm.quota) : ''} onChange={(e) => setNewSeasonForm((f) => ({ ...f, quota: Math.max(0, parseInt(e.target.value, 10) || 0) }))} />
-                </div>
-                <Button size="sm" className="mt-3" disabled={addSeasonSaving || !newSeasonForm.name.trim() || !newSeasonForm.start_date || !newSeasonForm.end_date} onClick={async () => {
-                  if (!visaSeasonsProduct?.id) return;
-                  setAddSeasonSaving(true);
-                  try {
-                    await adminPusatApi.createVisaSeason(visaSeasonsProduct.id, { name: newSeasonForm.name.trim(), start_date: newSeasonForm.start_date, end_date: newSeasonForm.end_date, quota: newSeasonForm.quota });
-                    showToast('Periode ditambahkan', 'success');
-                    setNewSeasonForm({ name: '', start_date: '', end_date: '', quota: 0 });
-                    const res = await adminPusatApi.listVisaSeasons(visaSeasonsProduct.id);
-                    setVisaSeasons((res.data as { data?: VisaSeason[] })?.data ?? []);
-                  } catch (e: unknown) {
-                    const err = e as { response?: { data?: { message?: string } } };
-                    showToast(err.response?.data?.message || 'Gagal menambah periode', 'error');
-                  } finally { setAddSeasonSaving(false); }
-                }}>
-                  {addSeasonSaving ? 'Menyimpan...' : 'Tambah periode'}
-                </Button>
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-slate-700 mb-2">Daftar periode</h4>
-                {visaSeasonsLoading ? (
-                  <ContentLoading inline />
-                ) : visaSeasons.length === 0 ? (
-                  <p className="text-sm text-slate-500">Belum ada periode. Tambah periode di atas untuk kalender visa.</p>
-                ) : (
-                  <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Nama</th>
-                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Mulai</th>
-                          <th className="text-left py-2 px-3 font-semibold text-slate-600">Selesai</th>
-                          <th className="text-right py-2 px-3 font-semibold text-slate-600">Kuota</th>
-                          <th className="text-right py-2 px-3 font-semibold text-slate-600 sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                        {visaSeasons.map((s) => (
-                          <tr key={s.id} className="border-b border-slate-100 last:border-0">
-                            <td className="py-2 px-3 font-medium text-slate-800">{s.name}</td>
-                            <td className="py-2 px-3 text-slate-600">{s.start_date}</td>
-                            <td className="py-2 px-3 text-slate-600">{s.end_date}</td>
-                            <td className="py-2 px-3 text-right">
-                              {quotaEdit?.seasonId === s.id ? (
-                                <span className="flex items-center justify-end gap-1">
-                                  <Input type="number" min={0} value={quotaEdit.value} onChange={(e) => setQuotaEdit((q) => q ? { ...q, value: e.target.value } : null)} className="w-20" fullWidth={false} />
-                                  <Button size="sm" variant="primary" disabled={quotaSaving} onClick={async () => {
-                                    if (!visaSeasonsProduct?.id || !quotaEdit) return;
-                                    setQuotaSaving(true);
-                                    try {
-                                      await adminPusatApi.setVisaSeasonQuota(visaSeasonsProduct.id, s.id, { quota: Math.max(0, parseInt(quotaEdit.value, 10) || 0) });
-                                      showToast('Kuota disimpan', 'success');
-                                      setQuotaEdit(null);
-                                      const res = await adminPusatApi.listVisaSeasons(visaSeasonsProduct.id);
-                                      setVisaSeasons((res.data as { data?: VisaSeason[] })?.data ?? []);
-                                    } catch (e: unknown) {
-                                      const err = e as { response?: { data?: { message?: string } } };
-                                      showToast(err.response?.data?.message || 'Gagal', 'error');
-                                    } finally { setQuotaSaving(false); }
-                                  }}>Simpan</Button>
-                                </span>
-                              ) : (
-                                <span className="tabular-nums">{s.Quota?.quota ?? 0}</span>
-                              )}
-                          </td>
-                            <td className="py-2 px-3 text-right sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                              {quotaEdit?.seasonId === s.id ? (
-                                <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setQuotaEdit(null)}>Batal</button>
-                              ) : (
-                                <>
-                                  <button type="button" className="text-[#0D1A63] hover:underline text-xs mr-2" onClick={() => setQuotaEdit({ seasonId: s.id, value: String(s.Quota?.quota ?? 0) })}>Set kuota</button>
-                                  <button type="button" className="text-red-600 hover:underline text-xs" onClick={async () => {
-                                    if (!visaSeasonsProduct?.id || !window.confirm('Hapus periode ini?')) return;
-                                    try {
-                                      await adminPusatApi.deleteVisaSeason(visaSeasonsProduct.id, s.id);
-                                      showToast('Periode dihapus', 'success');
-                                      setVisaSeasons((prev) => prev.filter((x) => x.id !== s.id));
-                                    } catch (e: unknown) {
-                                      const err = e as { response?: { data?: { message?: string } } };
-                                      showToast(err.response?.data?.message || 'Gagal menghapus', 'error');
-                                    }
-                                  }}>Hapus</button>
-                                </>
-                              )}
-                            </td>
-                      </tr>
-                        ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-              </div>
-            </ModalBody>
-          </ModalBox>
-        )}
-      </Modal>
     </div>
   );
 };

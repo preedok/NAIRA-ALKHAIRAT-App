@@ -56,7 +56,7 @@ const ProductVisaPage: React.FC = () => {
     <div className="flex flex-col min-h-0 space-y-4">
       <PageHeader
         title="Visa"
-        subtitle="Produk visa umroh: kelola harga, kuota, dan periode. Admin pusat dapat edit dan hapus."
+        subtitle="Produk visa umroh: kelola harga dan aturan. Kalender untuk monitoring order per tanggal. Admin pusat dapat edit dan hapus."
         right={<AutoRefreshControl onRefresh={handleRefresh} disabled={visaLoading} />}
       />
 
@@ -86,10 +86,7 @@ const ProductVisaPage: React.FC = () => {
           <VisaPage embedInProducts refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'calendar' && (
-          <VisaCalendarView
-            visaProducts={visaLoading ? [] : visaProducts}
-            onAddQuotaClick={() => setActiveTab('list')}
-          />
+          <VisaCalendarView visaProducts={visaLoading ? [] : visaProducts} />
         )}
       </div>
     </div>
