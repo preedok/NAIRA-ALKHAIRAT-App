@@ -2928,7 +2928,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                           variant="outline"
                                           onClick={() => setShowOwnerBalanceHistory((v) => !v)}
                                         >
-                                          {showOwnerBalanceHistory ? 'Sembunyikan riwayat' : 'Lihat riwayat transaksi saldo akun owner'}
+                                          <Eye className="w-4 h-4 mr-1" /> View
                                         </Button>
                                       </div>
                                       {showOwnerBalanceHistory && invoiceOwnerTransactions.length > 0 ? (
@@ -3047,7 +3047,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                             onClick={() => setShowOwnerWithdrawForm((v) => !v)}
                                             disabled={ownerWithdrawSubmitting}
                                           >
-                                            {showOwnerWithdrawForm ? 'Sembunyikan form' : 'Ajukan penarikan saldo owner ke rekening'}
+                                            <Eye className="w-4 h-4 mr-1" /> View
                                           </Button>
                                         </div>
                                         {showOwnerWithdrawForm && (
