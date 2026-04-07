@@ -617,7 +617,7 @@ const deleteUser = asyncHandler(async (req, res) => {
 const setProductAvailability = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { quantity, meta } = req.body;
-  const product = await Product.findByPk(id);
+  const product = await Product.findByPk(id, { attributes: ['id', 'type'] });
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
 
   let availability = await ProductAvailability.findOne({ where: { product_id: id } });

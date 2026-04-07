@@ -11,6 +11,7 @@ const uploadConfig = require('../config/uploads');
 const { buildHotelInfoPdfBuffer } = require('../utils/hotelPdf');
 const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
 const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS, appendProgressExcludeCancelledOrders } = require('../utils/progressInvoiceFilters');
+const { productMouAutoAttrOption } = require('../utils/productSchemaSupport');
 
 /** Default jam check-in 16:00, check-out 12:00 (otomatis sistem, tidak perlu pilih jam) */
 const DEFAULT_CHECK_IN_TIME = '16:00';
@@ -377,10 +378,12 @@ const getOrder = asyncHandler(async (req, res) => {
 const listProducts = asyncHandler(async (req, res) => {
   const branchIds = await getHotelBranchIds(req.user);
   const branchId = branchIds[0] || req.user.branch_id; // untuk tampilan harga cabang
+  const mouOpt = await productMouAutoAttrOption();
   const products = await Product.findAll({
     where: { type: ORDER_ITEM_TYPE.HOTEL, is_active: true },
     include: [{ model: ProductPrice, as: 'ProductPrices', required: false }],
-    order: [['code', 'ASC']]
+    order: [['code', 'ASC']],
+    ...mouOpt
   });
 
   const result = products.map(p => {

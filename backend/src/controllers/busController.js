@@ -33,6 +33,7 @@ const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const { buildBusSlipPdfBuffer } = require('../utils/busSlipPdf');
 const { balanceAllocationsByInvoiceId } = require('../utils/balanceAllocationsBatch');
 const { PROGRESS_INVOICE_STATUS_BLOCKLIST, REFUND_STATUSES_HIDE_FROM_PROGRESS, appendProgressExcludeCancelledOrders } = require('../utils/progressInvoiceFilters');
+const { productMouAutoAttrOption } = require('../utils/productSchemaSupport');
 
 const busTicketDir = uploadConfig.getDir(uploadConfig.SUBDIRS.BUS_TICKET_DOCS);
 const busTicketStorage = multer.diskStorage({
@@ -473,12 +474,14 @@ const getOrder = asyncHandler(async (req, res) => {
 const listProducts = asyncHandler(async (req, res) => {
   const branchIds = await getBusBranchIds(req.user);
   const branchId = branchIds[0] || req.user.branch_id; // untuk tampilan harga cabang
+  const mouOpt = await productMouAutoAttrOption();
   const products = await Product.findAll({
     where: { type: ORDER_ITEM_TYPE.BUS, is_active: true },
     include: [
       { model: ProductPrice, as: 'ProductPrices', required: false, include: [{ model: User, as: 'Owner', attributes: ['id', 'name', 'company_name'], required: false }] }
     ],
-    order: [['code', 'ASC']]
+    order: [['code', 'ASC']],
+    ...mouOpt
   });
 
   const result = products.map(p => {

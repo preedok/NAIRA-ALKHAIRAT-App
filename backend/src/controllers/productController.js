@@ -10,6 +10,7 @@ const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPE
 const { BUSINESS_RULE_KEYS } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const sequelize = require('../config/sequelize');
+const { hasMouFullboardAutoCalcColumn, productCreateFieldsOption } = require('../utils/productSchemaSupport');
 
 const VISA_KIND_VALUES = Object.values(VISA_KIND);
 let ownerTypeScopeColumnExistsCache = null;
@@ -89,7 +90,9 @@ function decorateHotelMetaWithMouAutoFlag(row) {
   if (!row || row.type !== 'hotel') return row;
   const raw = row.toJSON ? row.toJSON() : row;
   const nextMeta = raw.meta && typeof raw.meta === 'object' ? { ...raw.meta } : {};
-  const fromColumn = toBoolLike(raw.mou_fullboard_auto_calc);
+  const fromColumn = Object.prototype.hasOwnProperty.call(raw, 'mou_fullboard_auto_calc')
+    ? toBoolLike(raw.mou_fullboard_auto_calc)
+    : null;
   const fromMeta = toBoolLike(nextMeta.mou_fullboard_auto_calc);
   nextMeta.mou_fullboard_auto_calc = fromColumn != null ? fromColumn : (fromMeta ?? false);
   return { ...raw, meta: nextMeta };
@@ -230,13 +233,16 @@ const list = asyncHandler(async (req, res) => {
         { model: ProductAvailability, as: 'ProductAvailability', required: false }
       ]
     : [];
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const mouColAttr = supportsMouAutoCol ? {} : { attributes: { exclude: ['mou_fullboard_auto_calc'] } };
   const { count, rows: products } = await Product.findAndCountAll({
     where,
     order: [[sortCol, sortDir]],
     include: includeList,
     limit: lim,
     offset,
-    distinct: true
+    distinct: true,
+    ...mouColAttr
   });
 
   if (with_prices === 'true') {
@@ -601,7 +607,10 @@ const list = asyncHandler(async (req, res) => {
  * GET /api/v1/products/:id
  */
 const getById = asyncHandler(async (req, res) => {
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const mouColAttr = supportsMouAutoCol ? {} : { attributes: { exclude: ['mou_fullboard_auto_calc'] } };
   const product = await Product.findByPk(req.params.id, {
+    ...mouColAttr,
     include: [
       { model: ProductPrice, as: 'ProductPrices' },
       { model: ProductAvailability, as: 'ProductAvailability', required: false }
@@ -681,7 +690,7 @@ const createVisa = asyncHandler(async (req, res) => {
     is_package: false,
     meta,
     created_by: req.user.id
-  });
+  }, await productCreateFieldsOption(false));
   res.status(201).json({ success: true, data: product });
 });
 
@@ -722,7 +731,7 @@ const createTicket = asyncHandler(async (req, res) => {
     is_package: false,
     meta,
     created_by: req.user.id
-  });
+  }, await productCreateFieldsOption(false));
   res.status(201).json({ success: true, data: product });
 });
 
@@ -803,7 +812,7 @@ const createBus = asyncHandler(async (req, res) => {
     is_package: false,
     meta,
     created_by: req.user.id
-  });
+  }, await productCreateFieldsOption(false));
   res.status(201).json({ success: true, data: product });
 });
 
@@ -813,7 +822,8 @@ const createBus = asyncHandler(async (req, res) => {
  * period_key: month = '2026-01', week = '2026-01-13' (Senin), day = '2026-01-15'
  */
 const setTicketBandara = asyncHandler(async (req, res) => {
-  const product = await Product.findByPk(req.params.id);
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const product = await Product.findByPk(req.params.id, supportsMouAutoCol ? {} : { attributes: { exclude: ['mou_fullboard_auto_calc'] } });
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
   if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
 
@@ -869,7 +879,8 @@ const setTicketBandara = asyncHandler(async (req, res) => {
  * Body: { bandara_defaults: { BTH: { price_idr?, seat_quota? }, CGK: {...}, SBY: {...}, UPG: {...} } }
  */
 const setTicketBandaraBulk = asyncHandler(async (req, res) => {
-  const product = await Product.findByPk(req.params.id);
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const product = await Product.findByPk(req.params.id, supportsMouAutoCol ? {} : { attributes: { exclude: ['mou_fullboard_auto_calc'] } });
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
   if (product.type !== 'ticket') return res.status(400).json({ success: false, message: 'Bukan product tiket' });
 
@@ -920,16 +931,18 @@ const createHotel = asyncHandler(async (req, res) => {
   const location = meta?.location || 'makkah';
   const code = await generateHotelCode(name, location);
   const mouAutoFlag = toBoolLike(meta?.mou_fullboard_auto_calc) ?? false;
-  const product = await Product.create({
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const createBody = {
     type: 'hotel',
     code,
     name: name.trim(),
     description: description || null,
     is_package: false,
     meta: { ...(meta || {}), mou_fullboard_auto_calc: mouAutoFlag },
-    mou_fullboard_auto_calc: mouAutoFlag,
+    ...(supportsMouAutoCol ? { mou_fullboard_auto_calc: mouAutoFlag } : {}),
     created_by: req.user.id
-  });
+  };
+  const product = await Product.create(createBody, await productCreateFieldsOption(true));
   res.status(201).json({ success: true, data: decorateHotelMetaWithMouAutoFlag(product) });
 });
 
@@ -974,14 +987,19 @@ const create = asyncHandler(async (req, res) => {
   if (!finalCode || finalCode.trim() === '') return res.status(400).json({ success: false, message: 'code wajib' });
   const mouAutoFlag = type === 'hotel' ? (toBoolLike(finalMeta.mou_fullboard_auto_calc) ?? false) : null;
   if (type === 'hotel') finalMeta = { ...finalMeta, mou_fullboard_auto_calc: mouAutoFlag };
-  const product = await Product.create({
+  const supportsMouAutoCol = type === 'hotel' ? await hasMouFullboardAutoCalcColumn() : false;
+  const createBodyGeneric = {
     type, code: finalCode, name,
     description: description || null,
     is_package: !!is_package,
     meta: finalMeta,
-    ...(type === 'hotel' ? { mou_fullboard_auto_calc: mouAutoFlag } : {}),
+    ...(type === 'hotel' && supportsMouAutoCol ? { mou_fullboard_auto_calc: mouAutoFlag } : {}),
     created_by: req.user.id
-  });
+  };
+  const product = await Product.create(
+    createBodyGeneric,
+    await productCreateFieldsOption(type === 'hotel')
+  );
   res.status(201).json({ success: true, data: decorateHotelMetaWithMouAutoFlag(product) });
 });
 
@@ -989,7 +1007,8 @@ const create = asyncHandler(async (req, res) => {
  * PATCH /api/v1/products/:id - admin pusat / admin cabang
  */
 const update = asyncHandler(async (req, res) => {
-  const product = await Product.findByPk(req.params.id);
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const product = await Product.findByPk(req.params.id, supportsMouAutoCol ? {} : { attributes: { exclude: ['mou_fullboard_auto_calc'] } });
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
   const { code, name, description, is_package, meta, is_active } = req.body;
   if (code !== undefined) product.code = code;
@@ -1048,7 +1067,7 @@ const update = asyncHandler(async (req, res) => {
       const mouAutoFlag = toBoolLike(nextMeta.mou_fullboard_auto_calc);
       if (mouAutoFlag != null) {
         nextMeta.mou_fullboard_auto_calc = mouAutoFlag;
-        product.mou_fullboard_auto_calc = mouAutoFlag;
+        if (supportsMouAutoCol) product.mou_fullboard_auto_calc = mouAutoFlag;
       }
     }
     product.meta = nextMeta;
@@ -1064,7 +1083,8 @@ const update = asyncHandler(async (req, res) => {
  * Tidak bisa dihapus jika masih dirujuk oleh order_items (order/invoice).
  */
 const remove = asyncHandler(async (req, res) => {
-  const product = await Product.findByPk(req.params.id);
+  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const product = await Product.findByPk(req.params.id, supportsMouAutoCol ? {} : { attributes: { exclude: ['mou_fullboard_auto_calc'] } });
   if (!product) return res.status(404).json({ success: false, message: 'Product tidak ditemukan' });
 
   const usedCount = await OrderItem.count({ where: { product_ref_id: product.id } });
