@@ -271,6 +271,19 @@ export interface HotelProduct {
     year: string;
     by_room_type: Record<string, { months: Array<{ year_month: string; sar_room_per_night: number | null }> }>;
   } | null;
+  hotel_monthly_series_by_owner_type?: {
+    year: string;
+    by_owner_type: {
+      mou?: {
+        by_room_type?: Record<string, { months: Array<{ year_month: string; sar_room_per_night: number | null }> }>;
+        meal_months?: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>;
+      };
+      non_mou?: {
+        by_room_type?: Record<string, { months: Array<{ year_month: string; sar_room_per_night: number | null }> }>;
+        meal_months?: Array<{ year_month: string; sar_meal_per_person_per_night: number | null }>;
+      };
+    };
+  } | null;
 }
 
 type HotelsPageProps = {
@@ -1152,6 +1165,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const mealYearLabel = hotel.hotel_monthly_meal_months?.year ?? series?.year;
             const byRoomType = hotel.hotel_monthly_series_by_room_type?.by_room_type;
             const roomTypesYear = hotel.hotel_monthly_series_by_room_type?.year;
+            const ownerSeries = hotel.hotel_monthly_series_by_owner_type?.by_owner_type;
             /** API mengirim grid per tipe (12 bulan tiap tipe) — tampilkan semua tipe, termasuk yang belum terisi grid. */
             const hasMonthlyByRoomTypePayload =
               !!byRoomType &&
@@ -1201,7 +1215,37 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 </td>
                 <td className="px-4 py-3.5 text-center text-sm text-slate-700 align-middle">{cur}</td>
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
-                  {byRoomTypeDisplay ? (
+                  {ownerSeries?.mou?.by_room_type || ownerSeries?.non_mou?.by_room_type ? (
+                    <div className="space-y-2">
+                      {(['mou', 'non_mou'] as const).map((ownerType) => {
+                        const ownerByRoom = ownerSeries?.[ownerType]?.by_room_type as HotelMonthlyByRoomTypeMap | undefined;
+                        if (!ownerByRoom) return null;
+                        const ownerMealMonths = ownerSeries?.[ownerType]?.meal_months || [];
+                        const ownerMonthKeys = (() => {
+                          for (const rt of ROOM_TYPES) {
+                            const mo = ownerByRoom[rt]?.months;
+                            if (mo?.length) return mo.map((m) => m.year_month);
+                          }
+                          return Array.from({ length: 12 }, (_, i) => `${hotelListMonthlyYear}-${String(i + 1).padStart(2, '0')}`);
+                        })();
+                        return (
+                          <div key={`${hotel.id}-${ownerType}`} className="rounded-md border border-slate-200 bg-slate-50/70 px-2 py-2">
+                            <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                              List harga {ownerType === 'mou' ? 'Owner MOU' : 'Owner Non-MOU'}
+                            </p>
+                            {renderHotelListMonthlyMatrixTable({
+                              monthKeys: ownerMonthKeys,
+                              isFullboard: isFullboardPlan,
+                              mealMonthsList: isFullboardPlan ? [] : ownerMealMonths,
+                              byRoomTypeDisplay: ownerByRoom,
+                              gridRates,
+                              roomYearDisplay: hotel.hotel_monthly_series_by_owner_type?.year
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : byRoomTypeDisplay ? (
                     <div className="min-w-0 space-y-2">
                       {(() => {
                         const monthKeysForMatrix = (() => {
@@ -1932,7 +1976,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             </span>
                           </div>
                         </div>
-                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           {ROOM_TYPES.map((rt) => (
                             <div
                               key={rt}
@@ -1992,7 +2036,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         {monthlyPriceLoading ? (
                           <p className="mt-3 text-xs text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                         ) : null}
-                        <div className="mt-4 grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                        <div className="mt-4 grid grid-cols-1 gap-4">
                           {OWNER_PRICE_TYPES.map((ownerTypeScope) => (
                             <div key={ownerTypeScope} className="rounded-xl border border-slate-200 p-3 bg-slate-50/40">
                               <h4 className="text-xs font-semibold text-[#0D1A63] uppercase tracking-wide mb-2">

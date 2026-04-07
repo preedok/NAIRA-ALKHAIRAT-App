@@ -368,35 +368,50 @@ const list = asyncHandler(async (req, res) => {
         raw: true
       });
       const monthlyRates = await getCurrencyRates();
-      /** Satu slot SAR per variant; jika ada SAR + IDR duplikat, utamakan SAR. */
-      const monthlyMerged = new Map();
-      for (const row of monthlyRowsAll) {
-        const sar = hotelMonthlyRowToSar(row.amount, row.currency, monthlyRates);
-        if (sar == null || sar <= 0) continue;
-        const vk = JSON.stringify([row.product_id, row.year_month, String(row.room_type || ''), !!row.with_meal]);
-        const prev = monthlyMerged.get(vk);
-        const rank = hotelMonthlyCurrencyRank(row.currency);
-        const scopeRank = supportsOwnerTypeScope && ownerTypeScopeForMonthly && row.owner_type_scope === ownerTypeScopeForMonthly ? 0 : 1;
-        if (!prev || scopeRank < prev.scopeRank || (scopeRank === prev.scopeRank && rank < prev.rank)) {
-          monthlyMerged.set(vk, { sar, rank, scopeRank });
+      const buildPackByScope = (targetScope = null) => {
+        const monthlyMerged = new Map();
+        for (const row of monthlyRowsAll) {
+          const sar = hotelMonthlyRowToSar(row.amount, row.currency, monthlyRates);
+          if (sar == null || sar <= 0) continue;
+          const vk = JSON.stringify([row.product_id, row.year_month, String(row.room_type || ''), !!row.with_meal]);
+          const prev = monthlyMerged.get(vk);
+          const rank = hotelMonthlyCurrencyRank(row.currency);
+          const rowScope = String(row.owner_type_scope || 'all');
+          let scopeRank = 0;
+          if (supportsOwnerTypeScope) {
+            if (targetScope === 'mou' || targetScope === 'non_mou') {
+              scopeRank = rowScope === targetScope ? 0 : (rowScope === 'all' ? 1 : 2);
+            } else if (ownerTypeScopeForMonthly) {
+              scopeRank = rowScope === ownerTypeScopeForMonthly ? 0 : (rowScope === 'all' ? 1 : 2);
+            } else {
+              scopeRank = rowScope === 'all' ? 0 : 1;
+            }
+            if (scopeRank >= 2) continue;
+          }
+          if (!prev || scopeRank < prev.scopeRank || (scopeRank === prev.scopeRank && rank < prev.rank)) {
+            monthlyMerged.set(vk, { sar, rank, scopeRank });
+          }
         }
-      }
-      /** pack[productId][yearMonth] = { single_room, single_bundle, ..., meal } (nilai SAR) */
-      const packByProductMonth = {};
-      for (const [vk, { sar }] of monthlyMerged) {
-        const [pid, ymKey, roomTypeRaw, withMeal] = JSON.parse(vk);
-        if (!packByProductMonth[pid]) packByProductMonth[pid] = {};
-        if (!packByProductMonth[pid][ymKey]) packByProductMonth[pid][ymKey] = {};
-        const slot = packByProductMonth[pid][ymKey];
-        if (String(roomTypeRaw || '') === MEAL_ROOM_TYPE) {
-          slot.meal = sar;
-          continue;
+        const packByProductMonth = {};
+        for (const [vk, { sar }] of monthlyMerged) {
+          const [pid, ymKey, roomTypeRaw, withMeal] = JSON.parse(vk);
+          if (!packByProductMonth[pid]) packByProductMonth[pid] = {};
+          if (!packByProductMonth[pid][ymKey]) packByProductMonth[pid][ymKey] = {};
+          const slot = packByProductMonth[pid][ymKey];
+          if (String(roomTypeRaw || '') === MEAL_ROOM_TYPE) {
+            slot.meal = sar;
+            continue;
+          }
+          const rt = String(roomTypeRaw || '').toLowerCase();
+          if (!['double', 'triple', 'quad', 'quint'].includes(rt)) continue;
+          if (withMeal) slot[`${rt}_bundle`] = sar;
+          else slot[`${rt}_room`] = sar;
         }
-        const rt = String(roomTypeRaw || '').toLowerCase();
-        if (!['double', 'triple', 'quad', 'quint'].includes(rt)) continue;
-        if (withMeal) slot[`${rt}_bundle`] = sar;
-        else slot[`${rt}_room`] = sar;
-      }
+        return packByProductMonth;
+      };
+      const packByProductMonth = buildPackByScope(null);
+      const packByProductMonthMou = supportsOwnerTypeScope ? buildPackByScope('mou') : packByProductMonth;
+      const packByProductMonthNonMou = supportsOwnerTypeScope ? buildPackByScope('non_mou') : packByProductMonth;
       const pickRefRoomType = (_meta, breakdown) => {
         const order = ['double', 'triple', 'quad', 'quint'];
         for (const rt of order) {
@@ -449,6 +464,27 @@ const list = asyncHandler(async (req, res) => {
         p.hotel_monthly_series_by_room_type = {
           year: seriesYear,
           by_room_type: byRoomType
+        };
+        const packPidMou = packByProductMonthMou[p.id] || {};
+        const packPidNonMou = packByProductMonthNonMou[p.id] || {};
+        const byRoomTypeMou = {};
+        const byRoomTypeNonMou = {};
+        for (const rtv of ROOM_TYPES_MONTHLY) {
+          byRoomTypeMou[rtv] = { months: buildRoomMonthsForType(packPidMou, rtv, isFb, seriesYear) };
+          byRoomTypeNonMou[rtv] = { months: buildRoomMonthsForType(packPidNonMou, rtv, isFb, seriesYear) };
+        }
+        p.hotel_monthly_series_by_owner_type = {
+          year: seriesYear,
+          by_owner_type: {
+            mou: {
+              by_room_type: byRoomTypeMou,
+              meal_months: buildMealMonths(packPidMou, isFb, seriesYear)
+            },
+            non_mou: {
+              by_room_type: byRoomTypeNonMou,
+              meal_months: buildMealMonths(packPidNonMou, isFb, seriesYear)
+            }
+          }
         };
         p.hotel_monthly_meal_months = {
           year: seriesYear,
