@@ -199,6 +199,7 @@ function getEarliestServiceYmdFromInvoice(inv: any): string | null {
 
 /** Hari kalender: owner tidak boleh batalkan jika layanan terawal sudah lewat atau dalam 7 hari ke depan (termasuk besok). */
 const OWNER_CANCEL_SERVICE_EXCLUSION_DAYS = 7;
+const INVOICE_LOCKED_EDIT_UPLOAD_STATUSES = new Set(['canceled', 'cancelled', 'cancelled_refund', 'refunded', 'refund_canceled']);
 
 function isOwnerCancelBlockedByUpcomingService(inv: any): boolean {
   const earliest = getEarliestServiceYmdFromInvoice(inv);
@@ -498,6 +499,10 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const openUploadDocModal = async (inv: any) => {
     if (!inv?.id || !inv?.order_id) return;
+    if (INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(String(inv?.status || '').toLowerCase())) {
+      showToast('Invoice sudah dibatalkan/refund. Upload dokumen tidak diperbolehkan.', 'error');
+      return;
+    }
     setUploadDocInvoice(inv);
     setUploadDocLoading(true);
     try {
@@ -2255,10 +2260,10 @@ const OrdersInvoicesPage: React.FC = () => {
                           <ActionsMenu
                             align="right"
                             items={[
-                              ...(canOrderAction && inv.order_id
+                              ...(canOrderAction && inv.order_id && !INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(String(inv.status || '').toLowerCase())
                                 ? [{ id: 'edit-order', label: 'Edit Invoice', icon: <Edit className="w-4 h-4" />, onClick: () => navigate(`/dashboard/orders/${inv.order_id}/edit`) }]
                                 : []),
-                              ...(canOrderAction && inv.order_id
+                              ...(canOrderAction && inv.order_id && !INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(String(inv.status || '').toLowerCase())
                                 ? [{ id: 'upload-doc', label: 'Upload dokumen', icon: <Upload className="w-4 h-4" />, onClick: () => openUploadDocModal(inv) }]
                                 : []),
                               { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },

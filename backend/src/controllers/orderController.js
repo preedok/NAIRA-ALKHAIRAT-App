@@ -21,6 +21,13 @@ const generateOrderNumber = () => {
 };
 
 const BUS_SERVICE_OPTION_VALUES = ['finality', 'hiace', 'visa_only'];
+const INVOICE_LOCKED_STATUSES = new Set([
+  'canceled',
+  'cancelled',
+  String(INVOICE_STATUS.CANCELLED_REFUND || '').toLowerCase(),
+  String(INVOICE_STATUS.REFUNDED || '').toLowerCase(),
+  String(INVOICE_STATUS.REFUND_CANCELED || '').toLowerCase()
+].filter(Boolean));
 
 function normalizeBusServiceOptionForCreate(body) {
   if (!body || typeof body !== 'object') return 'finality';
@@ -1410,11 +1417,20 @@ const getById = asyncHandler(async (req, res) => {
  * Owner boleh ubah order sebelum dan setelah DP/lunas; sistem update invoice terbaru.
  */
 const update = asyncHandler(async (req, res) => {
-  const order = await Order.findByPk(req.params.id, { include: [{ model: OrderItem, as: 'OrderItems' }] });
+  const order = await Order.findByPk(req.params.id, {
+    include: [
+      { model: OrderItem, as: 'OrderItems' },
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'status'], required: false }
+    ]
+  });
   if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
   const canUpdate = ['invoice_koordinator', 'invoice_saudi'].includes(req.user.role) || (isOwnerRole(req.user.role) && order.owner_id === req.user.id);
   if (!canUpdate) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau invoice koordinator/Saudi yang dapat mengubah order' });
+  }
+  const invStatus = String(order.Invoice?.status || '').toLowerCase();
+  if (invStatus && INVOICE_LOCKED_STATUSES.has(invStatus)) {
+    return res.status(400).json({ success: false, message: 'Invoice sudah dibatalkan/refund. Invoice tidak dapat diedit lagi.' });
   }
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
     return res.status(400).json({ success: false, message: 'Invoice hanya bisa diubah saat draft/tentative/confirmed/processing' });
@@ -1914,8 +1930,17 @@ const uploadJamaahData = [
   uploadJamaahFile.single('jamaah_file'),
   asyncHandler(async (req, res) => {
     const { orderId, itemId } = req.params;
-    const order = await Order.findByPk(orderId, { include: [{ model: OrderItem, as: 'OrderItems' }] });
+    const order = await Order.findByPk(orderId, {
+      include: [
+        { model: OrderItem, as: 'OrderItems' },
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'status'], required: false }
+      ]
+    });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+    const invStatus = String(order.Invoice?.status || '').toLowerCase();
+    if (invStatus && INVOICE_LOCKED_STATUSES.has(invStatus)) {
+      return res.status(400).json({ success: false, message: 'Invoice sudah dibatalkan/refund. Upload dokumen tidak diperbolehkan.' });
+    }
     const canUpload = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
       ['invoice_koordinator', 'invoice_saudi', 'role_siskopatuh', 'admin_pusat', 'super_admin'].includes(req.user.role);
     if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice/siskopatuh yang dapat mengupload data jamaah' });
