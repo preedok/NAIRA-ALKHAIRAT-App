@@ -3048,7 +3048,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                           </Button>
                                         </div>
                                         <p className="text-[11px] text-slate-500">
-                                          Pengajuan masuk ke menu Refund dengan status Menunggu persetujuan. Saldo owner berkurang saat status menjadi Sudah direfund.
+                                          Pengajuan masuk ke menu Refund dengan status Menunggu persetujuan. Saldo owner langsung berkurang saat pengajuan, dan otomatis kembali jika ditolak.
                                         </p>
                                       </div>
                                     )}

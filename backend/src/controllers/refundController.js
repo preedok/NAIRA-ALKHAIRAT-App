@@ -253,7 +253,18 @@ const createFromBalance = asyncHandler(async (req, res) => {
         { transaction: tx }
       );
 
-      // Tidak potong saldo saat pengajuan. Potong saat transfer benar-benar selesai (refunded).
+      await profile.update({ balance: balance - amount }, { transaction: tx });
+      await OwnerBalanceTransaction.create(
+        {
+          owner_id: targetOwnerId,
+          amount: -amount,
+          type: 'withdrawal_pending',
+          reference_type: 'refund',
+          reference_id: r.id,
+          notes: `Pengajuan penarikan saldo — menunggu persetujuan Admin Pusat. Saldo -${amount.toLocaleString('id-ID')}`
+        },
+        { transaction: tx }
+      );
       createdRefund = r;
     });
   } catch (e) {
@@ -267,7 +278,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
     user_id: targetOwnerId,
     trigger: NOTIFICATION_TRIGGER.REFUND,
     title: 'Penarikan saldo diajukan',
-    message: `Permintaan penarikan Rp ${amount.toLocaleString('id-ID')} diterima. Menunggu persetujuan Admin Pusat. Saldo akan dipotong otomatis setelah transfer selesai dan bukti diunggah. Pantau status di menu Refund.`,
+    message: `Permintaan penarikan Rp ${amount.toLocaleString('id-ID')} diterima. Saldo akun langsung berkurang dan menunggu persetujuan Admin Pusat. Jika ditolak, saldo dikembalikan otomatis. Pantau status di menu Refund.`,
     data: { refund_id: createdRefund.id, status: 'requested', source: REFUND_SOURCE.BALANCE },
     channel_in_app: true,
     channel_email: false
@@ -280,8 +291,8 @@ const createFromBalance = asyncHandler(async (req, res) => {
     success: true,
     data: full,
     message: isOwnerRequester
-      ? 'Pengajuan terkirim. Menunggu persetujuan Admin Pusat. Saldo akan berkurang otomatis setelah transfer selesai.'
-      : 'Pengajuan penarikan atas nama owner berhasil dibuat. Menunggu persetujuan Admin Pusat.'
+      ? 'Pengajuan terkirim. Saldo akun langsung berkurang dan menunggu persetujuan Admin Pusat.'
+      : 'Pengajuan penarikan atas nama owner berhasil dibuat. Saldo owner langsung berkurang dan menunggu persetujuan Admin Pusat.'
   });
 });
 
@@ -510,7 +521,7 @@ const updateStatus = asyncHandler(async (req, res) => {
         title: isBalanceWithdrawalRefund(r) ? 'Penarikan saldo disetujui' : 'Refund disetujui',
         message:
           isBalanceWithdrawalRefund(r)
-            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Accounting akan mentransfer ke rekening yang Anda ajukan. Saldo akan dipotong saat transfer selesai.`
+            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Accounting akan mentransfer ke rekening yang Anda ajukan.`
             : `Permintaan refund Rp ${amtStr} disetujui.`,
         data: { refund_id: r.id, status: 'approved' },
         channel_in_app: true,

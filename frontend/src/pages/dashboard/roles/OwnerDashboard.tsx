@@ -394,7 +394,7 @@ const OwnerDashboard: React.FC = () => {
                   setWithdrawSubmitting(true);
                   try {
                     const res = await refundsApi.createFromBalance({ amount: amt, bank_name: bank, account_number: acc, account_holder_name: holder });
-                    showToast((res.data as { message?: string })?.message || 'Pengajuan terkirim. Saldo akan berkurang setelah transfer selesai.', 'success');
+                    showToast((res.data as { message?: string })?.message || 'Pengajuan terkirim. Saldo langsung berkurang dan menunggu persetujuan.', 'success');
                     setShowWithdrawModal(false);
                     setWithdrawAmount('');
                     setWithdrawBank('');

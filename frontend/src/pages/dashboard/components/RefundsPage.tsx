@@ -283,7 +283,7 @@ const RefundsPage: React.FC = () => {
         subtitle={
           canUpdateStatus
             ? 'Selesaikan transfer: isi bank & nama rekening pengirim (BGG), unggah bukti — status jadi Sudah direfund; owner dapat notifikasi + email lengkap. Tolak = pengajuan dibatalkan.'
-            : 'Penarikan: menunggu persetujuan lalu transfer. Setelah transfer selesai (Sudah direfund), saldo owner berkurang otomatis. Detail pengirim + bukti tampil di sini, notifikasi, dan email.'
+            : 'Penarikan: saldo owner langsung berkurang saat pengajuan. Menunggu persetujuan lalu transfer. Jika ditolak saldo dikembalikan otomatis. Detail pengirim + bukti tampil di sini, notifikasi, dan email.'
         }
         right={
           <div className="flex items-center gap-2 flex-wrap justify-end">
