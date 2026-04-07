@@ -275,8 +275,8 @@ const RefundsPage: React.FC = () => {
         title="Refund"
         subtitle={
           canUpdateStatus
-            ? 'Selesaikan transfer: isi bank & nama rekening pengirim (BGG), unggah bukti — status jadi Sudah direfund; owner dapat notifikasi + email lengkap. Tolak = kembalikan saldo (penarikan). Potong saldo (sinkron) hanya untuk data lama.'
-            : 'Penarikan: saldo berkurang saat pengajuan. Admin mengirim dari rekening BGG; Anda melihat bank/nama pengirim + bukti di sini, notifikasi, dan email.'
+            ? 'Selesaikan transfer: isi bank & nama rekening pengirim (BGG), unggah bukti — status jadi Sudah direfund; owner dapat notifikasi + email lengkap. Tolak = pengajuan dibatalkan.'
+            : 'Penarikan: menunggu persetujuan lalu transfer. Setelah transfer selesai (Sudah direfund), saldo owner berkurang otomatis. Detail pengirim + bukti tampil di sini, notifikasi, dan email.'
         }
         right={
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -556,7 +556,7 @@ const RefundsPage: React.FC = () => {
                           className="text-emerald-800 border-emerald-300"
                           disabled={syncingBalanceId === r.id}
                           onClick={() => handleSyncBalanceDebit(r.id)}
-                          title="Jika saldo owner belum berkurang setelah disetujui, klik untuk memotong sekali (aman berulang)"
+                          title="Jika saldo owner belum berkurang setelah status Sudah direfund, klik sinkron sekali (aman berulang)"
                         >
                           {syncingBalanceId === r.id ? 'Sinkron…' : 'Potong saldo (sinkron)'}
                         </Button>

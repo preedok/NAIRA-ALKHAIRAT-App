@@ -193,6 +193,7 @@ async function logInvoiceStatusChange({ invoice_id, from_status, to_status, chan
 /**
  * POST /api/v1/refunds (request refund dari saldo - owner)
  * Body: { amount, bank_name, account_number } untuk tarik saldo ke rekening.
+ * Flow terbaru: saldo owner dipotong saat refund selesai (status refunded + bukti transfer).
  */
 const createFromBalance = asyncHandler(async (req, res) => {
   if (!isOwnerRole(req.user.role)) return res.status(403).json({ success: false, message: 'Hanya owner yang dapat meminta refund dari saldo' });
@@ -242,18 +243,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
         { transaction: tx }
       );
 
-      await profile.update({ balance: balance - amount }, { transaction: tx });
-      await OwnerBalanceTransaction.create(
-        {
-          owner_id: req.user.id,
-          amount: -amount,
-          type: 'withdrawal_pending',
-          reference_type: 'refund',
-          reference_id: r.id,
-          notes: `Pengajuan penarikan saldo — menunggu persetujuan Admin Pusat. Saldo -${amount.toLocaleString('id-ID')}`
-        },
-        { transaction: tx }
-      );
+      // Tidak potong saldo saat pengajuan. Potong saat transfer benar-benar selesai (refunded).
       createdRefund = r;
     });
   } catch (e) {
@@ -267,7 +257,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
     user_id: req.user.id,
     trigger: NOTIFICATION_TRIGGER.REFUND,
     title: 'Penarikan saldo diajukan',
-    message: `Permintaan penarikan Rp ${amount.toLocaleString('id-ID')} diterima. Saldo akun langsung berkurang; riwayat menampilkan debit sementara. Jika Admin Pusat menolak, saldo dikembalikan otomatis. Pantau status di menu Refund.`,
+    message: `Permintaan penarikan Rp ${amount.toLocaleString('id-ID')} diterima. Menunggu persetujuan Admin Pusat. Saldo akan dipotong otomatis setelah transfer selesai dan bukti diunggah. Pantau status di menu Refund.`,
     data: { refund_id: createdRefund.id, status: 'requested', source: REFUND_SOURCE.BALANCE },
     channel_in_app: true,
     channel_email: false
@@ -279,8 +269,7 @@ const createFromBalance = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     data: full,
-    message:
-      'Pengajuan terkirim. Saldo telah berkurang; jika ditolak Admin Pusat, saldo dikembalikan. Pantau status di menu Refund.'
+    message: 'Pengajuan terkirim. Menunggu persetujuan Admin Pusat. Saldo akan berkurang otomatis setelah transfer selesai.'
   });
 });
 
@@ -471,15 +460,6 @@ const updateStatus = asyncHandler(async (req, res) => {
         }
       }
 
-      if (status === REFUND_STATUS.APPROVED && isBalanceWithdrawalRefund(r) && r.owner_id) {
-        const debit = await applyBalanceRefundDebitIfNeeded(r, { transaction: tx });
-        if (!debit.ok) {
-          const err = new Error(debit.message);
-          err.debitCode = debit.code;
-          throw err;
-        }
-      }
-
       if (status === REFUND_STATUS.REJECTED && isBalanceWithdrawalRefund(r) && r.owner_id) {
         if (prevStatus !== REFUND_STATUS.REJECTED && [REFUND_STATUS.REQUESTED, REFUND_STATUS.APPROVED].includes(prevStatus)) {
           const rev = await reverseBalanceWithdrawalOnReject(r, {
@@ -518,7 +498,7 @@ const updateStatus = asyncHandler(async (req, res) => {
         title: isBalanceWithdrawalRefund(r) ? 'Penarikan saldo disetujui' : 'Refund disetujui',
         message:
           isBalanceWithdrawalRefund(r)
-            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Saldo sudah dipotong sejak pengajuan; riwayat diperbarui. Accounting akan mentransfer ke rekening yang Anda ajukan.`
+            ? `Permintaan penarikan saldo Rp ${amtStr} disetujui. Accounting akan mentransfer ke rekening yang Anda ajukan. Saldo akan dipotong saat transfer selesai.`
             : `Permintaan refund Rp ${amtStr} disetujui.`,
         data: { refund_id: r.id, status: 'approved' },
         channel_in_app: true,
@@ -879,10 +859,10 @@ const syncBalanceDebit = asyncHandler(async (req, res) => {
   if (!isBalanceWithdrawalRefund(r)) {
     return res.status(400).json({ success: false, message: 'Hanya untuk penarikan saldo (bukan refund invoice).' });
   }
-  if (![REFUND_STATUS.APPROVED, REFUND_STATUS.REFUNDED].includes(r.status)) {
+  if (r.status !== REFUND_STATUS.REFUNDED) {
     return res.status(400).json({
       success: false,
-      message: 'Setujui pengajuan terlebih dahulu (status Disetujui atau Sudah direfund) agar saldo dapat dipotong.'
+      message: 'Saldo hanya dapat dipotong setelah transfer selesai (status Sudah direfund).'
     });
   }
 
