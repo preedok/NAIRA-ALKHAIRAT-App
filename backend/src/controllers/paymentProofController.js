@@ -57,6 +57,10 @@ const create = [
     if (invoice.owner_id !== req.user.id && !['invoice_koordinator', 'invoice_saudi', 'super_admin'].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
+    const st = String(invoice.status || '').toLowerCase();
+    if (['canceled', 'cancelled', INVOICE_STATUS.CANCELLED_REFUND, INVOICE_STATUS.REFUNDED, INVOICE_STATUS.REFUND_CANCELED].map((s) => String(s).toLowerCase()).includes(st)) {
+      return res.status(400).json({ success: false, message: 'Invoice sudah dibatalkan / refund. Pembayaran tidak dapat dilakukan.' });
+    }
 
     const { payment_type, amount, bank_id, bank_name, account_number, transfer_date, notes, payment_currency, sender_account_name, sender_account_number, recipient_bank_account_id } = req.body;
     const payment_location = (req.body.payment_location != null ? String(req.body.payment_location) : '').trim().toLowerCase();

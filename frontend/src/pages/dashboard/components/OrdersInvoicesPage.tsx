@@ -352,6 +352,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
   const canPayInvoice = (inv: any) => {
     if (!inv || isDraftRow(inv) || parseFloat(inv.remaining_amount || 0) <= 0) return false;
+    if (shouldHideInvoiceCancelAction(inv)) return false;
     return inv.owner_id === user?.id || ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(user?.role || '');
   };
 
