@@ -28,6 +28,15 @@ const INVOICE_LOCKED_STATUSES = new Set([
   String(INVOICE_STATUS.REFUNDED || '').toLowerCase(),
   String(INVOICE_STATUS.REFUND_CANCELED || '').toLowerCase()
 ].filter(Boolean));
+const INVOICE_LOCKED_NOTE_KEYWORDS = ['saldo akun', 'dipindahkan ke saldo', 'dialihkan ke saldo', 'dipindahkan ke invoice', 'dialihkan ke invoice'];
+
+function isInvoiceLockedForMutation(inv) {
+  if (!inv) return false;
+  const st = String(inv.status || '').toLowerCase();
+  if (st && INVOICE_LOCKED_STATUSES.has(st)) return true;
+  const note = String(inv.cancellation_handling_note || '').toLowerCase();
+  return INVOICE_LOCKED_NOTE_KEYWORDS.some((kw) => note.includes(kw));
+}
 
 function normalizeBusServiceOptionForCreate(body) {
   if (!body || typeof body !== 'object') return 'finality';
@@ -1420,7 +1429,7 @@ const update = asyncHandler(async (req, res) => {
   const order = await Order.findByPk(req.params.id, {
     include: [
       { model: OrderItem, as: 'OrderItems' },
-      { model: Invoice, as: 'Invoice', attributes: ['id', 'status'], required: false }
+      { model: Invoice, as: 'Invoice', attributes: ['id', 'status', 'cancellation_handling_note'], required: false }
     ]
   });
   if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
@@ -1428,8 +1437,7 @@ const update = asyncHandler(async (req, res) => {
   if (!canUpdate) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau invoice koordinator/Saudi yang dapat mengubah order' });
   }
-  const invStatus = String(order.Invoice?.status || '').toLowerCase();
-  if (invStatus && INVOICE_LOCKED_STATUSES.has(invStatus)) {
+  if (isInvoiceLockedForMutation(order.Invoice)) {
     return res.status(400).json({ success: false, message: 'Invoice sudah dibatalkan/refund. Invoice tidak dapat diedit lagi.' });
   }
   if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
@@ -1933,12 +1941,11 @@ const uploadJamaahData = [
     const order = await Order.findByPk(orderId, {
       include: [
         { model: OrderItem, as: 'OrderItems' },
-        { model: Invoice, as: 'Invoice', attributes: ['id', 'status'], required: false }
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'status', 'cancellation_handling_note'], required: false }
       ]
     });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
-    const invStatus = String(order.Invoice?.status || '').toLowerCase();
-    if (invStatus && INVOICE_LOCKED_STATUSES.has(invStatus)) {
+    if (isInvoiceLockedForMutation(order.Invoice)) {
       return res.status(400).json({ success: false, message: 'Invoice sudah dibatalkan/refund. Upload dokumen tidak diperbolehkan.' });
     }
     const canUpload = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||

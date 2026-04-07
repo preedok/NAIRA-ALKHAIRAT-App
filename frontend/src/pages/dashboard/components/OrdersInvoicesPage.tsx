@@ -201,6 +201,12 @@ function getEarliestServiceYmdFromInvoice(inv: any): string | null {
 const OWNER_CANCEL_SERVICE_EXCLUSION_DAYS = 7;
 const INVOICE_LOCKED_EDIT_UPLOAD_STATUSES = new Set(['canceled', 'cancelled', 'cancelled_refund', 'refunded', 'refund_canceled']);
 
+function isInvoiceLockedForEditUpload(inv: any): boolean {
+  const st = String(inv?.status || '').toLowerCase();
+  if (INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(st)) return true;
+  return shouldHideInvoiceCancelAction(inv);
+}
+
 function isOwnerCancelBlockedByUpcomingService(inv: any): boolean {
   const earliest = getEarliestServiceYmdFromInvoice(inv);
   if (!earliest) return false;
@@ -499,7 +505,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const openUploadDocModal = async (inv: any) => {
     if (!inv?.id || !inv?.order_id) return;
-    if (INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(String(inv?.status || '').toLowerCase())) {
+    if (isInvoiceLockedForEditUpload(inv)) {
       showToast('Invoice sudah dibatalkan/refund. Upload dokumen tidak diperbolehkan.', 'error');
       return;
     }
@@ -2260,10 +2266,10 @@ const OrdersInvoicesPage: React.FC = () => {
                           <ActionsMenu
                             align="right"
                             items={[
-                              ...(canOrderAction && inv.order_id && !INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(String(inv.status || '').toLowerCase())
+                              ...(canOrderAction && inv.order_id && !isInvoiceLockedForEditUpload(inv)
                                 ? [{ id: 'edit-order', label: 'Edit Invoice', icon: <Edit className="w-4 h-4" />, onClick: () => navigate(`/dashboard/orders/${inv.order_id}/edit`) }]
                                 : []),
-                              ...(canOrderAction && inv.order_id && !INVOICE_LOCKED_EDIT_UPLOAD_STATUSES.has(String(inv.status || '').toLowerCase())
+                              ...(canOrderAction && inv.order_id && !isInvoiceLockedForEditUpload(inv)
                                 ? [{ id: 'upload-doc', label: 'Upload dokumen', icon: <Upload className="w-4 h-4" />, onClick: () => openUploadDocModal(inv) }]
                                 : []),
                               { id: 'view', label: 'Lihat Invoice', icon: <Eye className="w-4 h-4" />, onClick: () => { setViewInvoice(inv); setDetailTab('invoice'); fetchInvoiceDetail(inv.id); } },
