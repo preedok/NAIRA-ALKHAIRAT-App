@@ -47,7 +47,6 @@ const RefundsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
-  const [syncingBalanceId, setSyncingBalanceId] = useState<string | null>(null);
   const [payoutModalRow, setPayoutModalRow] = useState<any | null>(null);
   const [payoutSubmitting, setPayoutSubmitting] = useState(false);
   const [payoutBank, setPayoutBank] = useState('');
@@ -275,19 +274,6 @@ const RefundsPage: React.FC = () => {
   const onRefresh = () => {
     fetchStats();
     fetchRefunds();
-  };
-
-  const handleSyncBalanceDebit = (id: string) => {
-    setSyncingBalanceId(id);
-    refundsApi
-      .syncBalanceDebit(id)
-      .then((res) => {
-        showToast(res.data?.message || 'Saldo owner disinkronkan.', 'success');
-        fetchRefunds();
-        fetchStats();
-      })
-      .catch((e: any) => showToast(e.response?.data?.message || 'Gagal sinkron potong saldo', 'error'))
-      .finally(() => setSyncingBalanceId(null));
   };
 
   return (
@@ -569,18 +555,6 @@ const RefundsPage: React.FC = () => {
                       )}
                       {r.status === 'requested' && (
                         <Button size="sm" variant="outline" className="text-red-600" disabled={updatingId === r.id} onClick={() => handleUpdateStatus(r.id, 'rejected')}>Tolak</Button>
-                      )}
-                      {isBalanceWithdrawalRow(r) && (r.status === 'approved' || r.status === 'refunded') && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-emerald-800 border-emerald-300"
-                          disabled={syncingBalanceId === r.id}
-                          onClick={() => handleSyncBalanceDebit(r.id)}
-                          title="Jika saldo owner belum berkurang setelah status Sudah direfund, klik sinkron sekali (aman berulang)"
-                        >
-                          {syncingBalanceId === r.id ? 'Sinkron…' : 'Potong saldo (sinkron)'}
-                        </Button>
                       )}
                     </div>
                   </td>
