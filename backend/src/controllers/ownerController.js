@@ -279,7 +279,27 @@ const getBalanceForUser = asyncHandler(async (req, res) => {
   }
 
   const balance = parseFloat(profile.balance) || 0;
-  res.json({ success: true, data: { balance, user_id: userId } });
+  const transactions = await OwnerBalanceTransaction.findAll({
+    where: { owner_id: userId },
+    order: [['created_at', 'DESC']],
+    limit: 500
+  });
+  res.json({
+    success: true,
+    data: {
+      balance,
+      user_id: userId,
+      transactions: transactions.map((t) => ({
+        id: t.id,
+        amount: parseFloat(t.amount),
+        type: t.type,
+        reference_type: t.reference_type,
+        reference_id: t.reference_id,
+        notes: t.notes,
+        created_at: t.created_at
+      }))
+    }
+  });
 });
 
 /**

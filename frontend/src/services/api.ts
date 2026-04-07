@@ -1247,7 +1247,22 @@ export const ownersApi = {
   getMyBalance: () => api.get<{ success: boolean; data: { balance: number; transactions: Array<{ id: string; amount: number; type: string; reference_type?: string; reference_id?: string; notes?: string; created_at: string }> } }>('/owners/me/balance'),
   /** Saldo owner (user_id) untuk invoice koordinator / invoice saudi / admin — dipakai alokasi ke invoice */
   getBalanceForUser: (userId: string) =>
-    api.get<{ success: boolean; data: { balance: number; user_id: string } }>(`/owners/user/${userId}/balance`),
+    api.get<{
+      success: boolean;
+      data: {
+        balance: number;
+        user_id: string;
+        transactions: Array<{
+          id: string;
+          amount: number;
+          type: string;
+          reference_type?: string;
+          reference_id?: string;
+          notes?: string;
+          created_at: string;
+        }>;
+      };
+    }>(`/owners/user/${userId}/balance`),
   /** Stream file bukti bayar pendaftaran (untuk preview; hindari 404 direct /uploads/). */
   getRegistrationPaymentFile: (ownerId: string) => api.get(`/owners/${ownerId}/registration-payment-file`, { responseType: 'blob' }),
   /** Stream file MOU (generated or signed) agar tidak 404. */

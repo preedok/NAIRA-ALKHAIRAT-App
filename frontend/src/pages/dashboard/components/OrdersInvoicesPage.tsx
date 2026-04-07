@@ -315,6 +315,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [ownerBalance, setOwnerBalance] = useState<number | null>(null);
   const [ownerBalanceLoading, setOwnerBalanceLoading] = useState(false);
   const [invoiceOwnerBalance, setInvoiceOwnerBalance] = useState<number | null>(null);
+  const [invoiceOwnerTransactions, setInvoiceOwnerTransactions] = useState<Array<{ id: string; amount: number; type: string; notes?: string; created_at: string }>>([]);
   const [invoiceOwnerBalanceLoading, setInvoiceOwnerBalanceLoading] = useState(false);
   const [invoiceOwnerBalanceError, setInvoiceOwnerBalanceError] = useState(false);
   const [allocateAmount, setAllocateAmount] = useState('');
@@ -570,6 +571,7 @@ const OrdersInvoicesPage: React.FC = () => {
   useEffect(() => {
     if (!viewInvoice?.owner_id || !canUseInvoiceOwnerBalance) {
       setInvoiceOwnerBalance(null);
+      setInvoiceOwnerTransactions([]);
       setInvoiceOwnerBalanceLoading(false);
       setInvoiceOwnerBalanceError(false);
       return;
@@ -583,15 +585,18 @@ const OrdersInvoicesPage: React.FC = () => {
         if (cancelled) return;
         if (res.data?.success && res.data?.data) {
           setInvoiceOwnerBalance(res.data.data.balance);
+          setInvoiceOwnerTransactions(Array.isArray((res.data.data as any).transactions) ? (res.data.data as any).transactions : []);
           setInvoiceOwnerBalanceError(false);
         } else {
           setInvoiceOwnerBalance(null);
+          setInvoiceOwnerTransactions([]);
           setInvoiceOwnerBalanceError(true);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setInvoiceOwnerBalance(null);
+          setInvoiceOwnerTransactions([]);
           setInvoiceOwnerBalanceError(true);
         }
       })
@@ -2897,6 +2902,41 @@ const OrdersInvoicesPage: React.FC = () => {
                                   <>
                                     <p className="text-2xl font-bold text-[#0D1A63]"><NominalDisplay amount={invoiceOwnerBalance} currency="IDR" /></p>
                                     <p className="text-xs text-slate-600 mt-1">Pembayaran memakai saldo milik pemilik invoice ini (bukan akun Anda).</p>
+                                    <div className="mt-4 pt-4 border-t border-indigo-200">
+                                      <p className="text-xs font-medium text-slate-600 uppercase tracking-wide mb-2">Riwayat transaksi saldo akun owner</p>
+                                      {invoiceOwnerTransactions.length > 0 ? (
+                                        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                          <table className="w-full text-sm">
+                                            <thead className="bg-slate-50 text-slate-600">
+                                              <tr>
+                                                <th className="text-left px-3 py-2 font-medium">Tanggal</th>
+                                                <th className="text-left px-3 py-2 font-medium">Tipe</th>
+                                                <th className="text-right px-3 py-2 font-medium">Nominal</th>
+                                                <th className="text-left px-3 py-2 font-medium">Catatan</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {invoiceOwnerTransactions.map((tx) => {
+                                                const amt = Number(tx.amount || 0);
+                                                const isDebit = amt < 0;
+                                                return (
+                                                  <tr key={tx.id} className="border-t border-slate-100">
+                                                    <td className="px-3 py-2 whitespace-nowrap text-slate-700">{formatDate(tx.created_at)}</td>
+                                                    <td className="px-3 py-2 text-slate-700 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
+                                                    <td className={`px-3 py-2 text-right font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                      {isDebit ? '-' : '+'}<NominalDisplay amount={Math.abs(amt)} currency="IDR" />
+                                                    </td>
+                                                    <td className="px-3 py-2 text-slate-600">{tx.notes || '—'}</td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-slate-500">Belum ada transaksi saldo akun owner.</p>
+                                      )}
+                                    </div>
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
                                         <div className="flex gap-2 items-end">
@@ -2951,7 +2991,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                                 fetchInvoiceDetail(viewInvoice.id);
                                                 if (viewInvoice.owner_id) {
                                                   ownersApi.getBalanceForUser(viewInvoice.owner_id).then((r) => {
-                                                    if (r.data?.success && r.data?.data) setInvoiceOwnerBalance(r.data.data.balance);
+                                                    if (r.data?.success && r.data?.data) {
+                                                      setInvoiceOwnerBalance(r.data.data.balance);
+                                                      setInvoiceOwnerTransactions(Array.isArray((r.data.data as any).transactions) ? (r.data.data as any).transactions : []);
+                                                    }
                                                   }).catch(() => {});
                                                 }
                                                 fetchInvoices();
