@@ -50,6 +50,11 @@ const HotelMonthlyPrice = sequelize.define('HotelMonthlyPrice', {
     allowNull: false,
     defaultValue: 'room'
   },
+  owner_type_scope: {
+    type: DataTypes.STRING(16),
+    allowNull: false,
+    defaultValue: 'all'
+  },
   amount: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: false

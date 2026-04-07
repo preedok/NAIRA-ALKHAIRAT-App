@@ -2932,33 +2932,32 @@ const OrdersInvoicesPage: React.FC = () => {
                                         </Button>
                                       </div>
                                       {showOwnerBalanceHistory && invoiceOwnerTransactions.length > 0 ? (
-                                        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                                          <table className="w-full text-sm">
-                                            <thead className="bg-slate-50 text-slate-600">
-                                              <tr>
-                                                <th className="text-left px-3 py-2 font-medium">Tanggal</th>
-                                                <th className="text-left px-3 py-2 font-medium">Tipe</th>
-                                                <th className="text-right px-3 py-2 font-medium">Nominal</th>
-                                                <th className="text-left px-3 py-2 font-medium">Catatan</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {invoiceOwnerTransactions.map((tx) => {
-                                                const amt = Number(tx.amount || 0);
-                                                const isDebit = amt < 0;
-                                                return (
-                                                  <tr key={tx.id} className="border-t border-slate-100">
-                                                    <td className="px-3 py-2 whitespace-nowrap text-slate-700">{formatDateTimeFull(tx.created_at)}</td>
-                                                    <td className="px-3 py-2 text-slate-700 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
-                                                    <td className={`px-3 py-2 text-right font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                      {isDebit ? '-' : '+'}<NominalDisplay amount={Math.abs(amt)} currency="IDR" />
-                                                    </td>
-                                                    <td className="px-3 py-2 text-slate-600">{tx.notes || '—'}</td>
-                                                  </tr>
-                                                );
-                                              })}
-                                            </tbody>
-                                          </table>
+                                        <div className="rounded-lg border border-slate-200 bg-white">
+                                          <Table
+                                            className="rounded-lg"
+                                            columns={[
+                                              { id: 'tanggal', label: 'Tanggal', align: 'left' },
+                                              { id: 'tipe', label: 'Tipe', align: 'left' },
+                                              { id: 'nominal', label: 'Nominal', align: 'right' },
+                                              { id: 'catatan', label: 'Catatan', align: 'left' }
+                                            ]}
+                                            data={invoiceOwnerTransactions}
+                                            emptyMessage="Belum ada transaksi saldo akun owner."
+                                            renderRow={(tx) => {
+                                              const amt = Number(tx.amount || 0);
+                                              const isDebit = amt < 0;
+                                              return (
+                                                <tr key={tx.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                                                  <td className="py-2 px-4 whitespace-nowrap text-slate-700">{formatDateTimeFull(tx.created_at)}</td>
+                                                  <td className="py-2 px-4 text-slate-700 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
+                                                  <td className={`py-2 px-4 text-right font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                                    {isDebit ? '-' : '+'}<NominalDisplay amount={Math.abs(amt)} currency="IDR" />
+                                                  </td>
+                                                  <td className="py-2 px-4 text-slate-600">{tx.notes || '—'}</td>
+                                                </tr>
+                                              );
+                                            }}
+                                          />
                                         </div>
                                       ) : showOwnerBalanceHistory ? (
                                         <p className="text-xs text-slate-500">Belum ada transaksi saldo akun owner.</p>

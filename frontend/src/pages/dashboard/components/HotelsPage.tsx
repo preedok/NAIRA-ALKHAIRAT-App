@@ -35,6 +35,12 @@ import { getProductListOwnerId } from '../../../utils/productHelpers';
 
 const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'] as const;
 const ROOM_TYPE_LABELS: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
+const OWNER_PRICE_TYPES = ['mou', 'non_mou'] as const;
+type OwnerPriceType = (typeof OWNER_PRICE_TYPES)[number];
+const OWNER_PRICE_LABELS: Record<OwnerPriceType, string> = {
+  mou: 'Owner MOU',
+  non_mou: 'Owner Non-MOU'
+};
 /** Kuota tersisa ≤ ini dianggap "hampir penuh"; admin pusat bisa tambah kuota di kalender untuk full dan hampir penuh */
 const ALMOST_FULL_THRESHOLD = 3;
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
@@ -324,9 +330,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [hotelAvailabilityConfigSaving, setHotelAvailabilityConfigSaving] = useState(false);
   const [monthlyPriceYear, setMonthlyPriceYear] = useState<string>(String(new Date().getFullYear()));
   const [monthlyPriceLoading, setMonthlyPriceLoading] = useState(false);
-  const [monthlyPriceRows, setMonthlyPriceRows] = useState<Record<string, Record<string, string>>>({});
+  const [monthlyPriceRowsByOwnerType, setMonthlyPriceRowsByOwnerType] = useState<Record<OwnerPriceType, Record<string, Record<string, string>>>>({ mou: {}, non_mou: {} });
   /** Harga makan SAR per orang per malam per bulan (room only) */
-  const [monthlyMealByMonth, setMonthlyMealByMonth] = useState<Record<string, string>>({});
+  const [monthlyMealByMonthByOwnerType, setMonthlyMealByMonthByOwnerType] = useState<Record<OwnerPriceType, Record<string, string>>>({ mou: {}, non_mou: {} });
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
   /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
   const [quantityForm, setQuantityForm] = useState<Record<string, string>>({});
@@ -376,6 +382,16 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     return o;
   };
 
+  const initMonthlyRowsByOwnerType = (year = monthlyPriceYear): Record<OwnerPriceType, Record<string, Record<string, string>>> => ({
+    mou: initMonthlyRows(year),
+    non_mou: initMonthlyRows(year)
+  });
+
+  const initMonthlyMealByOwnerType = (year: string): Record<OwnerPriceType, Record<string, string>> => ({
+    mou: initMonthlyMeal(year),
+    non_mou: initMonthlyMeal(year)
+  });
+
   /** Harga bulanan (SAR): muat saat modal Pengaturan Jumlah Kamar terbuka */
   useEffect(() => {
     if (!seasonsModalHotel || !/^\d{4}$/.test(monthlyPriceYear)) return;
@@ -384,54 +400,71 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       setMonthlyPriceLoading(true);
       try {
         const res = await productsApi.getHotelMonthlyPrices(seasonsModalHotel.id, { year: monthlyPriceYear });
-        const data = (res.data as { data?: Array<{ year_month: string; room_type: string; currency: string; amount: number; with_meal: boolean; component?: string }> })?.data || [];
+        const data = (res.data as { data?: Array<{ year_month: string; room_type: string; currency: string; amount: number; with_meal: boolean; component?: string; owner_type_scope?: OwnerPriceType | 'all' }> })?.data || [];
         const isFullboard = (seasonsModalHotel.meta as Record<string, unknown> | undefined)?.meal_plan === 'fullboard';
-        const next = initMonthlyRows(monthlyPriceYear);
-        const mealNext = initMonthlyMeal(monthlyPriceYear);
+        const next = initMonthlyRowsByOwnerType(monthlyPriceYear);
+        const mealNext = initMonthlyMealByOwnerType(monthlyPriceYear);
         const gridRates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
-        const mealBest = new Map<string, { sar: number; rank: number }>();
-        const roomBest = new Map<string, { sar: number; rank: number }>();
+        const mealBest: Record<OwnerPriceType, Map<string, { sar: number; rank: number }>> = {
+          mou: new Map(),
+          non_mou: new Map()
+        };
+        const roomBest: Record<OwnerPriceType, Map<string, { sar: number; rank: number }>> = {
+          mou: new Map(),
+          non_mou: new Map()
+        };
         data.forEach((r) => {
           const comp = r.component || 'room';
           const rank = monthlyCurrencyRank(r.currency);
           const sar = monthlyRowAmountToSar(Number(r.amount), r.currency, gridRates);
           if (sar == null || sar <= 0) return;
+          const scope = String(r.owner_type_scope || 'all').toLowerCase();
+          const targetOwnerTypes: OwnerPriceType[] =
+            scope === 'mou' ? ['mou']
+              : scope === 'non_mou' ? ['non_mou']
+                : ['mou', 'non_mou'];
           if (comp === 'meal' || r.room_type === '__meal__') {
-            const prev = mealBest.get(r.year_month);
-            if (!prev || rank < prev.rank) mealBest.set(r.year_month, { sar, rank });
+            targetOwnerTypes.forEach((ot) => {
+              const prev = mealBest[ot].get(r.year_month);
+              if (!prev || rank < prev.rank) mealBest[ot].set(r.year_month, { sar, rank });
+            });
             return;
           }
           if (comp !== 'room') return;
           if (isFullboard ? !r.with_meal : r.with_meal) return;
           const slotKey = `${r.room_type}:${r.year_month}`;
-          const prev = roomBest.get(slotKey);
-          if (!prev || rank < prev.rank) roomBest.set(slotKey, { sar, rank });
+          targetOwnerTypes.forEach((ot) => {
+            const prev = roomBest[ot].get(slotKey);
+            if (!prev || rank < prev.rank) roomBest[ot].set(slotKey, { sar, rank });
+          });
         });
-        mealBest.forEach(({ sar }, ym) => {
-          mealNext[ym] = sar > 0 ? formatSarId(sar) : '';
-        });
-        roomBest.forEach(({ sar }, slotKey) => {
-          const colon = slotKey.indexOf(':');
-          if (colon < 0) return;
-          const rt = slotKey.slice(0, colon);
-          const ym = slotKey.slice(colon + 1);
-          if (next[rt] && next[rt][ym] !== undefined) next[rt][ym] = sar > 0 ? formatSarId(sar) : '';
+        OWNER_PRICE_TYPES.forEach((ot) => {
+          mealBest[ot].forEach(({ sar }, ym) => {
+            mealNext[ot][ym] = sar > 0 ? formatSarId(sar) : '';
+          });
+          roomBest[ot].forEach(({ sar }, slotKey) => {
+            const colon = slotKey.indexOf(':');
+            if (colon < 0) return;
+            const rt = slotKey.slice(0, colon);
+            const ym = slotKey.slice(colon + 1);
+            if (next[ot][rt] && next[ot][rt][ym] !== undefined) next[ot][rt][ym] = sar > 0 ? formatSarId(sar) : '';
+          });
         });
         if (!cancelled) {
-          setMonthlyPriceRows(next);
-          setMonthlyMealByMonth(mealNext);
+          setMonthlyPriceRowsByOwnerType(next);
+          setMonthlyMealByMonthByOwnerType(mealNext);
         }
       } catch {
         if (!cancelled) {
-          setMonthlyPriceRows(initMonthlyRows(monthlyPriceYear));
-          setMonthlyMealByMonth(initMonthlyMeal(monthlyPriceYear));
+          setMonthlyPriceRowsByOwnerType(initMonthlyRowsByOwnerType(monthlyPriceYear));
+          setMonthlyMealByMonthByOwnerType(initMonthlyMealByOwnerType(monthlyPriceYear));
         }
       } finally {
         if (!cancelled) setMonthlyPriceLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- initMonthlyRows stabil untuk year yang sama
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- init helpers stabil untuk year yang sama
   }, [seasonsModalHotel?.id, seasonsModalHotel?.meta, monthlyPriceYear, currencyRates.SAR_TO_IDR, currencyRates.USD_TO_IDR]);
 
   /** Load data untuk modal terpadu (config + musim + product untuk jumlah & harga) */
@@ -827,30 +860,37 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           amount: number;
           currency: 'SAR';
           component: 'room' | 'meal';
+          owner_type_scope: OwnerPriceType;
         }> = [];
-        ROOM_TYPES.forEach((rt) => {
-          ymKeys.forEach((m) => {
-            const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-            monthlyRowsPayload.push({
-              year_month: m,
-              room_type: rt,
-              with_meal: !!isFullboard,
-              amount: n,
-              currency: 'SAR',
-              component: 'room'
+        OWNER_PRICE_TYPES.forEach((ownerTypeScope) => {
+          ROOM_TYPES.forEach((rt) => {
+            ymKeys.forEach((m) => {
+              const n = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
+              monthlyRowsPayload.push({
+                year_month: m,
+                room_type: rt,
+                with_meal: !!isFullboard,
+                amount: n,
+                currency: 'SAR',
+                component: 'room',
+                owner_type_scope: ownerTypeScope
+              });
             });
           });
         });
         if (!isFullboard) {
-          ymKeys.forEach((m) => {
-            const nm = parseSarInputString(monthlyMealByMonth?.[m] ?? '');
-            monthlyRowsPayload.push({
-              year_month: m,
-              room_type: '__meal__',
-              with_meal: false,
-              amount: nm,
-              currency: 'SAR',
-              component: 'meal'
+          OWNER_PRICE_TYPES.forEach((ownerTypeScope) => {
+            ymKeys.forEach((m) => {
+              const nm = parseSarInputString(monthlyMealByMonthByOwnerType?.[ownerTypeScope]?.[m] ?? '');
+              monthlyRowsPayload.push({
+                year_month: m,
+                room_type: '__meal__',
+                with_meal: false,
+                amount: nm,
+                currency: 'SAR',
+                component: 'meal',
+                owner_type_scope: ownerTypeScope
+              });
             });
           });
         }
@@ -1952,148 +1992,152 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         {monthlyPriceLoading ? (
                           <p className="mt-3 text-xs text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
                         ) : null}
-                        <div className="mt-4 w-full min-w-0 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 max-h-[min(480px,60vh)] overscroll-x-contain touch-pan-x">
-                          <table className="w-full text-sm min-w-[1100px]">
-                            <thead className="sticky top-0 z-[1]">
-                              <tr className="bg-slate-100 border-b border-slate-200 shadow-sm">
-                                <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[1] border-r border-slate-200/80">
-                                  Tipe
-                                </th>
-                                {monthKeys.map((m) => (
-                                  <th key={m} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
-                                    {formatMonthLabelId(m)}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white">
-                              {ROOM_TYPES.map((rt) => (
-                                <tr key={rt} className="border-b border-slate-100 last:border-0">
-                                  <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white z-0 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                                    {ROOM_TYPE_LABELS[rt] || rt}
-                                  </td>
-                                  {monthKeys.map((m) => {
-                                    const sar = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-                                    const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
-                                    const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
-                                    const cellDisabled = quantityFormSaving || monthlyPriceLoading;
-                                    return (
-                                      <td key={`${rt}-${m}`} className="px-2 py-2 align-top">
-                                        <Input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={monthlyPriceRows?.[rt]?.[m] ?? ''}
-                                          onChange={(e) => {
-                                            const raw = e.target.value.replace(/[^\d.,]/g, '');
-                                            setMonthlyPriceRows((prev) => ({
-                                              ...prev,
-                                              [rt]: { ...(prev?.[rt] || {}), [m]: raw }
-                                            }));
-                                          }}
-                                          onBlur={() => {
-                                            const n = parseSarInputString(monthlyPriceRows?.[rt]?.[m] ?? '');
-                                            setMonthlyPriceRows((prev) => ({
-                                              ...prev,
-                                              [rt]: { ...(prev?.[rt] || {}), [m]: n > 0 ? formatSarId(n) : '' }
-                                            }));
-                                          }}
-                                          placeholder="0"
-                                          disabled={cellDisabled}
-                                          ariaLabel={`Harga SAR ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
-                                          className="min-w-[5.5rem]"
-                                          inputClassName="!px-2 !py-1.5 !rounded-lg text-right tabular-nums"
-                                        />
-                                        {conv && sar > 0 ? (
-                                          <div className="mt-1 text-[10px] leading-snug text-slate-500">
-                                            <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
-                                            <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
-                                          </div>
-                                        ) : null}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        <div className="mt-4 grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                          {OWNER_PRICE_TYPES.map((ownerTypeScope) => (
+                            <div key={ownerTypeScope} className="rounded-xl border border-slate-200 p-3 bg-slate-50/40">
+                              <h4 className="text-xs font-semibold text-[#0D1A63] uppercase tracking-wide mb-2">
+                                List harga {OWNER_PRICE_LABELS[ownerTypeScope]}
+                              </h4>
+                              <div className="w-full min-w-0 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 max-h-[min(420px,55vh)] overscroll-x-contain touch-pan-x bg-white">
+                                <table className="w-full text-sm min-w-[1100px]">
+                                  <thead className="sticky top-0 z-[1]">
+                                    <tr className="bg-slate-100 border-b border-slate-200 shadow-sm">
+                                      <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[1] border-r border-slate-200/80">
+                                        Tipe
+                                      </th>
+                                      {monthKeys.map((m) => (
+                                        <th key={m} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
+                                          {formatMonthLabelId(m)}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white">
+                                    {ROOM_TYPES.map((rt) => (
+                                      <tr key={`${ownerTypeScope}-${rt}`} className="border-b border-slate-100 last:border-0">
+                                        <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white z-0 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                                          {ROOM_TYPE_LABELS[rt] || rt}
+                                        </td>
+                                        {monthKeys.map((m) => {
+                                          const sar = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
+                                          const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
+                                          const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
+                                          const cellDisabled = quantityFormSaving || monthlyPriceLoading;
+                                          return (
+                                            <td key={`${ownerTypeScope}-${rt}-${m}`} className="px-2 py-2 align-top">
+                                              <Input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? ''}
+                                                onChange={(e) => {
+                                                  const raw = e.target.value.replace(/[^\d.,]/g, '');
+                                                  setMonthlyPriceRowsByOwnerType((prev) => ({
+                                                    ...prev,
+                                                    [ownerTypeScope]: {
+                                                      ...(prev?.[ownerTypeScope] || {}),
+                                                      [rt]: { ...(prev?.[ownerTypeScope]?.[rt] || {}), [m]: raw }
+                                                    }
+                                                  }));
+                                                }}
+                                                onBlur={() => {
+                                                  const n = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
+                                                  setMonthlyPriceRowsByOwnerType((prev) => ({
+                                                    ...prev,
+                                                    [ownerTypeScope]: {
+                                                      ...(prev?.[ownerTypeScope] || {}),
+                                                      [rt]: { ...(prev?.[ownerTypeScope]?.[rt] || {}), [m]: n > 0 ? formatSarId(n) : '' }
+                                                    }
+                                                  }));
+                                                }}
+                                                placeholder="0"
+                                                disabled={cellDisabled}
+                                                ariaLabel={`Harga SAR ${OWNER_PRICE_LABELS[ownerTypeScope]} ${ROOM_TYPE_LABELS[rt] || rt} ${formatMonthLabelId(m)}`}
+                                                className="min-w-[5.5rem]"
+                                                inputClassName="!px-2 !py-1.5 !rounded-lg text-right tabular-nums"
+                                              />
+                                              {conv && sar > 0 ? (
+                                                <div className="mt-1 text-[10px] leading-snug text-slate-500">
+                                                  <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
+                                                  <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
+                                                </div>
+                                              ) : null}
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && (
+                                <div className="mt-3 w-full min-w-0 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 max-h-[min(220px,40vh)] touch-pan-x bg-white">
+                                  <table className="w-full text-sm min-w-[900px]">
+                                    <thead className="sticky top-0 z-[1] bg-slate-100">
+                                      <tr className="border-b border-slate-200">
+                                        <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[1] border-r border-slate-200/80 w-[10rem]">
+                                          Item
+                                        </th>
+                                        {monthKeys.map((m) => (
+                                          <th key={`${ownerTypeScope}-meal-head-${m}`} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
+                                            {formatMonthLabelId(m)}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white">
+                                      <tr className="border-b border-slate-100">
+                                        <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white border-r border-slate-100">
+                                          Makan / orang / malam
+                                        </td>
+                                        {monthKeys.map((m) => {
+                                          const sar = parseSarInputString(monthlyMealByMonthByOwnerType?.[ownerTypeScope]?.[m] ?? '');
+                                          const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
+                                          const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
+                                          const cellDisabled = quantityFormSaving || monthlyPriceLoading;
+                                          return (
+                                            <td key={`${ownerTypeScope}-meal-${m}`} className="px-2 py-2 align-top">
+                                              <Input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={monthlyMealByMonthByOwnerType?.[ownerTypeScope]?.[m] ?? ''}
+                                                onChange={(e) => {
+                                                  const raw = e.target.value.replace(/[^\d.,]/g, '');
+                                                  setMonthlyMealByMonthByOwnerType((prev) => ({
+                                                    ...prev,
+                                                    [ownerTypeScope]: { ...(prev?.[ownerTypeScope] || {}), [m]: raw }
+                                                  }));
+                                                }}
+                                                onBlur={() => {
+                                                  const n = parseSarInputString(monthlyMealByMonthByOwnerType?.[ownerTypeScope]?.[m] ?? '');
+                                                  setMonthlyMealByMonthByOwnerType((prev) => ({
+                                                    ...prev,
+                                                    [ownerTypeScope]: { ...(prev?.[ownerTypeScope] || {}), [m]: n > 0 ? formatSarId(n) : '' }
+                                                  }));
+                                                }}
+                                                placeholder="0"
+                                                disabled={cellDisabled}
+                                                ariaLabel={`Harga makan SAR ${OWNER_PRICE_LABELS[ownerTypeScope]} ${formatMonthLabelId(m)}`}
+                                                className="min-w-[5.5rem]"
+                                                inputClassName="!px-2 !py-1.5 !rounded-lg text-right tabular-nums"
+                                              />
+                                              {conv && sar > 0 ? (
+                                                <div className="mt-1 text-[10px] leading-snug text-slate-500">
+                                                  <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
+                                                  <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
+                                                </div>
+                                              ) : null}
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </section>
-
-                      {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && (
-                        <section
-                          className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm"
-                          aria-labelledby="hotel-qty-monthly-meal-heading"
-                        >
-                          <div className="flex gap-3 min-w-0 flex-1 mb-3">
-                            {stepBadge(3)}
-                            <div className="min-w-0">
-                              <h3 id="hotel-qty-monthly-meal-heading" className="text-sm font-semibold text-slate-900">
-                                Makan: SAR per orang per malam, per bulan kalender
-                              </h3>
-                              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                                Hanya untuk <strong className="font-medium text-slate-700">room only</strong>. Tiap sel = tambahan makan untuk <strong className="font-medium text-slate-700">satu malam</strong> per orang, berlaku untuk malam di bulan kolom (bukan total makan sebulan). Di bawah sel: perkiraan IDR/USD. Kosongkan bulan yang memakai fallback (meta lama).
-                              </p>
-                            </div>
-                          </div>
-                          <div className="w-full min-w-0 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 max-h-[min(220px,40vh)] touch-pan-x">
-                            <table className="w-full text-sm min-w-[900px]">
-                              <thead className="sticky top-0 z-[1] bg-slate-100">
-                                <tr className="border-b border-slate-200">
-                                  <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[1] border-r border-slate-200/80 w-[10rem]">
-                                    Item
-                                  </th>
-                                  {monthKeys.map((m) => (
-                                    <th key={m} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
-                                      {formatMonthLabelId(m)}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white">
-                                <tr className="border-b border-slate-100">
-                                  <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white border-r border-slate-100">
-                                    Makan / orang / malam
-                                  </td>
-                                  {monthKeys.map((m) => {
-                                    const sar = parseSarInputString(monthlyMealByMonth?.[m] ?? '');
-                                    const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
-                                    const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
-                                    const cellDisabled = quantityFormSaving || monthlyPriceLoading;
-                                    return (
-                                      <td key={`meal-${m}`} className="px-2 py-2 align-top">
-                                        <Input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={monthlyMealByMonth?.[m] ?? ''}
-                                          onChange={(e) => {
-                                            const raw = e.target.value.replace(/[^\d.,]/g, '');
-                                            setMonthlyMealByMonth((prev) => ({ ...prev, [m]: raw }));
-                                          }}
-                                          onBlur={() => {
-                                            const n = parseSarInputString(monthlyMealByMonth?.[m] ?? '');
-                                            setMonthlyMealByMonth((prev) => ({ ...prev, [m]: n > 0 ? formatSarId(n) : '' }));
-                                          }}
-                                          placeholder="0"
-                                          disabled={cellDisabled}
-                                          ariaLabel={`Harga makan SAR ${formatMonthLabelId(m)}`}
-                                          className="min-w-[5.5rem]"
-                                          inputClassName="!px-2 !py-1.5 !rounded-lg text-right tabular-nums"
-                                        />
-                                        {conv && sar > 0 ? (
-                                          <div className="mt-1 text-[10px] leading-snug text-slate-500">
-                                            <div>≈ Rp {new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(conv.idr))}</div>
-                                            <div>≈ USD {new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(conv.usd)}</div>
-                                          </div>
-                                        ) : null}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </section>
-                      )}
                     </div>
                   );
                 })()

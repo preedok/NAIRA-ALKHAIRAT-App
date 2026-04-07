@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { HotelMonthlyPrice, Product } = require('../models');
+const { HotelMonthlyPrice, Product, OwnerProfile } = require('../models');
 const { ROOM_CAPACITY } = require('../constants');
 
 const MEAL_ROOM_TYPE = '__meal__';
@@ -56,6 +56,7 @@ async function findMonthlyPrice({
   yearMonth,
   branchId,
   ownerId,
+  ownerTypeScope,
   roomType,
   withMeal,
   currency,
@@ -74,21 +75,26 @@ async function findMonthlyPrice({
     { branch_id: branchId || null, owner_id: null },
     { branch_id: null, owner_id: null }
   ];
+  const ownerScope = ownerTypeScope === 'mou' || ownerTypeScope === 'non_mou' ? ownerTypeScope : null;
+  const ownerScopeCandidates = ownerScope ? [ownerScope, 'all'] : ['all'];
   for (const layer of layers) {
-    const row = await HotelMonthlyPrice.findOne({
-      where: {
-        product_id: productId,
-        year_month: yearMonth,
-        currency: cur,
-        room_type: room,
-        with_meal: withMealFlag,
-        branch_id: layer.branch_id,
-        owner_id: layer.owner_id,
-        ...componentFilter
-      },
-      order: [['updated_at', 'DESC'], ['created_at', 'DESC']]
-    });
-    if (row) return row;
+    for (const scope of ownerScopeCandidates) {
+      const row = await HotelMonthlyPrice.findOne({
+        where: {
+          product_id: productId,
+          year_month: yearMonth,
+          currency: cur,
+          room_type: room,
+          with_meal: withMealFlag,
+          branch_id: layer.branch_id,
+          owner_id: layer.owner_id,
+          owner_type_scope: scope,
+          ...componentFilter
+        },
+        order: [['updated_at', 'DESC'], ['created_at', 'DESC']]
+      });
+      if (row) return row;
+    }
   }
   return null;
 }
@@ -98,6 +104,7 @@ async function findMonthlyPriceRowForOrder({
   yearMonth,
   branchId,
   ownerId,
+  ownerTypeScope,
   roomType,
   withMeal,
   orderCurrency,
@@ -109,6 +116,7 @@ async function findMonthlyPriceRowForOrder({
     yearMonth,
     branchId,
     ownerId,
+    ownerTypeScope,
     roomType,
     withMeal,
     currency: cur,
@@ -121,6 +129,7 @@ async function findMonthlyPriceRowForOrder({
       yearMonth,
       branchId,
       ownerId,
+      ownerTypeScope,
       roomType,
       withMeal,
       currency: 'SAR',
@@ -136,6 +145,7 @@ async function findMonthlyMealRowForOrder({
   yearMonth,
   branchId,
   ownerId,
+  ownerTypeScope,
   orderCurrency
 }) {
   return findMonthlyPriceRowForOrder({
@@ -143,6 +153,7 @@ async function findMonthlyMealRowForOrder({
     yearMonth,
     branchId,
     ownerId,
+    ownerTypeScope,
     roomType: MEAL_ROOM_TYPE,
     withMeal: false,
     orderCurrency,
@@ -157,6 +168,7 @@ async function calculateStayCostByNights({
   productId,
   branchId,
   ownerId,
+  ownerTypeScope,
   roomType,
   withMeal,
   checkIn,
@@ -188,6 +200,11 @@ async function calculateStayCostByNights({
   const cur = String(currency || 'IDR').toUpperCase();
   const rt = roomType || 'double';
   const cap = Number(ROOM_CAPACITY[rt]) || 1;
+  let resolvedOwnerTypeScope = ownerTypeScope === 'mou' || ownerTypeScope === 'non_mou' ? ownerTypeScope : null;
+  if (!resolvedOwnerTypeScope && ownerId) {
+    const profile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
+    resolvedOwnerTypeScope = profile && profile.is_mou_owner ? 'mou' : 'non_mou';
+  }
 
   let roomSubtotalIdr = 0;
   let mealSubtotalIdr = 0;
@@ -206,6 +223,7 @@ async function calculateStayCostByNights({
       yearMonth,
       branchId,
       ownerId,
+      ownerTypeScope: resolvedOwnerTypeScope,
       roomType: rt,
       withMeal: roomMonthlyWithMeal,
       orderCurrency: cur,
@@ -241,6 +259,7 @@ async function calculateStayCostByNights({
         yearMonth,
         branchId,
         ownerId,
+        ownerTypeScope: resolvedOwnerTypeScope,
         orderCurrency: cur
       });
       const mealAmt = mf.row ? Number(mf.row.amount) || 0 : 0;

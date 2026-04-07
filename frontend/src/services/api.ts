@@ -160,6 +160,7 @@ export const productsApi = {
         with_meal: boolean;
         amount: number;
         component?: string;
+        owner_type_scope?: 'mou' | 'non_mou' | 'all';
         branch_id?: string | null;
         owner_id?: string | null;
       }>;
@@ -174,6 +175,7 @@ export const productsApi = {
         amount: number;
         currency: 'IDR' | 'SAR' | 'USD';
         component?: 'room' | 'meal';
+        owner_type_scope?: 'mou' | 'non_mou' | 'all';
         branch_id?: string | null;
         owner_id?: string | null;
       }>;

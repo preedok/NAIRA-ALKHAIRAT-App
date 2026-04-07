@@ -325,11 +325,13 @@ const list = asyncHandler(async (req, res) => {
       const seriesYearRaw = hotel_monthly_year != null ? String(hotel_monthly_year).trim() : String(new Date().getFullYear());
       const seriesYear = /^\d{4}$/.test(seriesYearRaw) ? seriesYearRaw : String(new Date().getFullYear());
       const ymNowYear = ymNow.slice(0, 4);
+      const ownerTypeScopeForMonthly = oid ? (ownerIsMou ? 'mou' : 'non_mou') : null;
       const monthlyWhere = {
         product_id: { [Op.in]: hotelIdsForMonthly },
         currency: { [Op.in]: ['SAR', 'IDR', 'USD'] },
         branch_id: null,
         owner_id: null,
+        owner_type_scope: ownerTypeScopeForMonthly ? { [Op.in]: [ownerTypeScopeForMonthly, 'all'] } : 'all',
         [Op.or]: ymNowYear === seriesYear
           ? [{ year_month: { [Op.like]: `${seriesYear}-%` } }]
           : [
@@ -350,7 +352,10 @@ const list = asyncHandler(async (req, res) => {
         const vk = JSON.stringify([row.product_id, row.year_month, String(row.room_type || ''), !!row.with_meal]);
         const prev = monthlyMerged.get(vk);
         const rank = hotelMonthlyCurrencyRank(row.currency);
-        if (!prev || rank < prev.rank) monthlyMerged.set(vk, { sar, rank });
+        const scopeRank = ownerTypeScopeForMonthly && row.owner_type_scope === ownerTypeScopeForMonthly ? 0 : 1;
+        if (!prev || scopeRank < prev.scopeRank || (scopeRank === prev.scopeRank && rank < prev.rank)) {
+          monthlyMerged.set(vk, { sar, rank, scopeRank });
+        }
       }
       /** pack[productId][yearMonth] = { single_room, single_bundle, ..., meal } (nilai SAR) */
       const packByProductMonth = {};
@@ -1342,6 +1347,9 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
 
       const branchId = r.branch_id || null;
       const ownerId = r.owner_id || null;
+      const ownerTypeScope = ['mou', 'non_mou', 'all'].includes(String(r.owner_type_scope || '').toLowerCase())
+        ? String(r.owner_type_scope).toLowerCase()
+        : 'all';
       const componentValue = component === COMPONENT_MEAL ? 'meal' : 'room';
 
       /**
@@ -1357,7 +1365,8 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
             with_meal: withMeal,
             branch_id: branchId,
             owner_id: ownerId,
-            component: componentValue
+            component: componentValue,
+            owner_type_scope: ownerTypeScope
           },
           transaction: t
         });
@@ -1373,13 +1382,15 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           with_meal: withMeal,
           branch_id: branchId,
           owner_id: ownerId,
-          component: componentValue
+          component: componentValue,
+          owner_type_scope: ownerTypeScope
         },
         transaction: t
       });
       if (existing) {
         existing.amount = amount;
         existing.component = componentValue;
+        existing.owner_type_scope = ownerTypeScope;
         existing.created_by = req.user?.id || existing.created_by;
         await existing.save({ transaction: t });
       } else {
@@ -1392,6 +1403,7 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
           room_type: roomType,
           with_meal: withMeal,
           component: componentValue,
+          owner_type_scope: ownerTypeScope,
           amount,
           created_by: req.user?.id || null
         }, { transaction: t });
