@@ -348,6 +348,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [monthlyMealByMonthByOwnerType, setMonthlyMealByMonthByOwnerType] = useState<Record<OwnerPriceType, Record<string, string>>>({ mou: {}, non_mou: {} });
   /** Opsi: harga MOU otomatis (quad fullboard -> triple/double dikurangi makan Non-MOU). */
   const [mouFullboardAutoCalc, setMouFullboardAutoCalc] = useState(false);
+  /** Saat mode input manual MOU: true = pakai makan terpisah, false = dianggap fullboard. */
+  const [mouManualHasMeal, setMouManualHasMeal] = useState(true);
   /** Modal Pengaturan Jumlah: ubah jumlah kamar (bisa ditambah saat full maupun available) */
   /** Jumlah kamar per tipe (string agar input bisa dikosongkan lalu diisi ulang) */
   const [quantityForm, setQuantityForm] = useState<Record<string, string>>({});
@@ -383,10 +385,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const monthKeys = getMonthKeys(monthlyPriceYear);
   const getMouDerivedSar = useCallback((roomType: string, ym: string): number | null => {
     if (!mouFullboardAutoCalc) return null;
-    if (roomType !== 'triple' && roomType !== 'double') return null;
+    if (roomType !== 'triple' && roomType !== 'double' && roomType !== 'quint') return null;
     const quad = parseSarInputString(monthlyPriceRowsByOwnerType?.mou?.quad?.[ym] ?? '');
     const mealNonMou = parseSarInputString(monthlyMealByMonthByOwnerType?.non_mou?.[ym] ?? '');
     if (!(quad > 0) || !(mealNonMou > 0)) return null;
+    if (roomType === 'quint') return Math.max(0, quad + mealNonMou);
     const triple = Math.max(0, quad - mealNonMou);
     if (roomType === 'triple') return triple;
     return Math.max(0, triple - mealNonMou);
@@ -519,6 +522,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         });
         setQuantityForm(initial);
         setMouFullboardAutoCalc(Boolean(meta.mou_fullboard_auto_calc));
+        setMouManualHasMeal(meta.mou_manual_has_meal !== false);
       })
       .catch(() => {})
       .finally(() => setHotelAvailabilityConfigLoading(false));
@@ -528,7 +532,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const handleOpenUnifiedQuantityAndSeasonsModal = (hotel: HotelProduct) => {
     if (!canAddHotel) return;
     setSeasonsModalHotel(hotel);
-    setMouFullboardAutoCalc(Boolean((hotel.meta as Record<string, unknown> | undefined)?.mou_fullboard_auto_calc));
+    const meta = (hotel.meta as Record<string, unknown> | undefined) || {};
+    setMouFullboardAutoCalc(Boolean(meta.mou_fullboard_auto_calc));
+    setMouManualHasMeal(meta.mou_manual_has_meal !== false);
     setMonthlyPriceYear(String(new Date().getFullYear()));
     setSeasonForm({ name: '', start_date: '', end_date: '' });
     setEditingSeasonId(null);
@@ -872,7 +878,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           room_price_type: 'per_day',
           pricing_mode: 'per_type',
           room_types: ROOM_TYPES,
-          mou_fullboard_auto_calc: mouFullboardAutoCalc
+          mou_fullboard_auto_calc: mouFullboardAutoCalc,
+          mou_manual_has_meal: mouManualHasMeal
         }
       });
 
@@ -882,7 +889,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       if (/^\d{4}$/.test(monthlyPriceYear)) {
         const ymKeys = getMonthKeys(monthlyPriceYear);
         if (!isFullboard) {
-          const requiredMealOwners: OwnerPriceType[] = mouFullboardAutoCalc ? ['non_mou'] : ['mou', 'non_mou'];
+          const requiredMealOwners: OwnerPriceType[] = mouFullboardAutoCalc
+            ? ['non_mou']
+            : (mouManualHasMeal ? ['mou', 'non_mou'] : ['non_mou']);
           for (const ownerTypeScope of requiredMealOwners) {
             for (const m of ymKeys) {
               const nm = parseSarInputString(monthlyMealByMonthByOwnerType?.[ownerTypeScope]?.[m] ?? '');
@@ -937,7 +946,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 year_month: m,
                 room_type: '__meal__',
                 with_meal: false,
-                amount: mouFullboardAutoCalc && ownerTypeScope === 'mou' ? 0 : nm,
+                amount: ((mouFullboardAutoCalc || !mouManualHasMeal) && ownerTypeScope === 'mou') ? 0 : nm,
                 currency: 'SAR',
                 component: 'meal',
                 owner_type_scope: ownerTypeScope
@@ -2086,9 +2095,40 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                     Input manual
                                   </button>
                                 </div>
+                                {!mouFullboardAutoCalc && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setMouManualHasMeal(true)}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                        mouManualHasMeal
+                                          ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                      }`}
+                                    >
+                                      Makan
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setMouManualHasMeal(false)}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                        !mouManualHasMeal
+                                          ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                                      }`}
+                                    >
+                                      Tidak (Fullboard)
+                                    </button>
+                                  </div>
+                                )}
                                 {mouFullboardAutoCalc && (
                                   <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
-                                    Mode auto aktif: <strong>Triple MOU = Quad MOU - Makan Non-MOU</strong>, <strong>Double MOU = Triple MOU - Makan Non-MOU</strong>. Harga makan MOU diset 0 saat simpan.
+                                    Mode auto aktif: <strong>Triple MOU = Quad MOU - Makan Non-MOU</strong>, <strong>Double MOU = Triple MOU - Makan Non-MOU</strong>, <strong>Quint MOU = Quad MOU + Makan Non-MOU</strong>. Harga makan MOU diset 0 saat simpan.
+                                  </p>
+                                )}
+                                {!mouFullboardAutoCalc && !mouManualHasMeal && (
+                                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
+                                    Input manual + Tidak makan: harga MOU dianggap <strong>fullboard</strong> (harga makan MOU tidak diinput).
                                   </p>
                                 )}
                               </div>
@@ -2131,7 +2171,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                       <tr key={`${ownerTypeScope}-${rt}`} className="border-b border-slate-100 last:border-0">
                                         <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white relative z-[2] border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                                           {(ROOM_TYPE_LABELS[rt] || rt)}
-                                          {mouFullboardAutoCalc && ownerTypeScope === 'mou' && (rt === 'triple' || rt === 'double') ? (
+                                          {mouFullboardAutoCalc && ownerTypeScope === 'mou' && (rt === 'triple' || rt === 'double' || rt === 'quint') ? (
                                             <span className="ml-1 text-[10px] text-[#0D1A63]">(auto)</span>
                                           ) : null}
                                         </td>
@@ -2142,7 +2182,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                             : parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
                                           const rates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
                                           const conv = sar > 0 ? fillFromSource('SAR', sar, rates) : null;
-                                          const isDerivedCell = mouFullboardAutoCalc && ownerTypeScope === 'mou' && (rt === 'triple' || rt === 'double');
+                                          const isDerivedCell = mouFullboardAutoCalc && ownerTypeScope === 'mou' && (rt === 'triple' || rt === 'double' || rt === 'quint');
                                           const cellDisabled = quantityFormSaving || monthlyPriceLoading || isDerivedCell;
                                           return (
                                             <td key={`${ownerTypeScope}-${rt}-${m}`} className="px-2 py-2 align-top">
@@ -2192,7 +2232,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                   </tbody>
                                 </table>
                               </div>
-                              {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && !(mouFullboardAutoCalc && ownerTypeScope === 'mou') && (
+                              {(seasonsModalHotel?.meta as Record<string, unknown>)?.meal_plan !== 'fullboard' && !((mouFullboardAutoCalc || !mouManualHasMeal) && ownerTypeScope === 'mou') && (
                                 <div className="mt-3 w-full min-w-0 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 max-h-[min(220px,40vh)] touch-pan-x bg-white">
                                   <table className="w-full text-sm min-w-[900px]">
                                     <thead className="sticky top-0 z-[3] bg-slate-100">
