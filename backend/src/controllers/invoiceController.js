@@ -1433,6 +1433,20 @@ const handleOverpaid = asyncHandler(async (req, res) => {
 const allocateBalance = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(req.params.id);
   if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+  const st = String(invoice.status || '').toLowerCase();
+  const blockedStatuses = [
+    'canceled',
+    'cancelled',
+    String(INVOICE_STATUS.CANCELLED_REFUND || '').toLowerCase(),
+    String(INVOICE_STATUS.REFUNDED || '').toLowerCase(),
+    String(INVOICE_STATUS.REFUND_CANCELED || '').toLowerCase()
+  ].filter(Boolean);
+  if (blockedStatuses.includes(st)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invoice sudah dibatalkan/refund. Pembayaran menggunakan saldo akun tidak dapat dilakukan.'
+    });
+  }
   const canAllocate = isOwnerRole(req.user.role) && invoice.owner_id === req.user.id ||
     ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
   if (!canAllocate) return res.status(403).json({ success: false, message: 'Tidak dapat mengalokasikan saldo ke invoice ini' });

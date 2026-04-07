@@ -2832,11 +2832,15 @@ const OrdersInvoicesPage: React.FC = () => {
                                   <>
                                     <p className="text-2xl font-bold text-emerald-700"><NominalDisplay amount={ownerBalance ?? 0} currency="IDR" /></p>
                                     <p className="text-xs text-slate-600 mt-1">Untuk order baru atau alokasi ke tagihan.</p>
-                                    {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && (
+                                    {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
                                         <div className="flex gap-2 items-end">
                                           <Input label="Alokasikan ke invoice ini" type="number" min={1} max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount || 0))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} placeholder="Jumlah (IDR)" className="flex-1 min-w-0" />
                                           <Button size="sm" variant="primary" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
+                                            if (shouldHideInvoiceCancelAction(viewInvoice)) {
+                                              showToast('Invoice sudah dibatalkan/refund. Pembayaran memakai saldo akun tidak dapat dilakukan.', 'error');
+                                              return;
+                                            }
                                             const remaining = parseFloat(viewInvoice.remaining_amount || 0) || 0;
                                             const balance = ownerBalance ?? 0;
                                             let amt = parseFloat(allocateAmount);
@@ -2893,7 +2897,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   <>
                                     <p className="text-2xl font-bold text-[#0D1A63]"><NominalDisplay amount={invoiceOwnerBalance} currency="IDR" /></p>
                                     <p className="text-xs text-slate-600 mt-1">Pembayaran memakai saldo milik pemilik invoice ini (bukan akun Anda).</p>
-                                    {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && (
+                                    {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
                                         <div className="flex gap-2 items-end">
                                           <Input
@@ -2911,6 +2915,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                             variant="primary"
                                             disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0}
                                             onClick={async () => {
+                                              if (shouldHideInvoiceCancelAction(viewInvoice)) {
+                                                showToast('Invoice sudah dibatalkan/refund. Pembayaran memakai saldo akun tidak dapat dilakukan.', 'error');
+                                                return;
+                                              }
                                               const remaining = parseFloat(viewInvoice.remaining_amount || 0) || 0;
                                               const balance = invoiceOwnerBalance;
                                               let amt = parseFloat(allocateAmount);
