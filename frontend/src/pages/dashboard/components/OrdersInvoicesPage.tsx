@@ -3346,35 +3346,92 @@ const OrdersInvoicesPage: React.FC = () => {
                       {auditLoading ? (
                         <div className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</div>
                       ) : (() => {
-                        const hasRefundCompleted = (viewInvoice?.Refunds || []).some((r: any) => r.status === 'refunded');
-                        const completedRefundRecord = hasRefundCompleted ? (viewInvoice?.Refunds as any[]).find((r: any) => r.status === 'refunded') : null;
-                        const refundedDate = completedRefundRecord?.updated_at || completedRefundRecord?.created_at;
-                        const syntheticRefundEntry = hasRefundCompleted ? { id: 'refund-completed', to_status: 'refunded', from_status: null, changed_at: refundedDate, _synthetic: true } : null;
-                        const combinedHistory = syntheticRefundEntry ? [syntheticRefundEntry, ...statusHistory] : statusHistory;
-                        const toShow = combinedHistory.slice().reverse();
+                        const refunds = (viewInvoice?.Refunds || []) as any[];
+                        const note = String((viewInvoice as any)?.cancellation_handling_note || '').toLowerCase();
+                        const hasBalanceSettlement = note.includes('saldo akun') || note.includes('dipindahkan ke saldo');
+                        const paidBeforeCancel = (parseFloat((viewInvoice as any)?.cancelled_refund_amount || 0) || parseFloat((viewInvoice as any)?.paid_amount || 0) || 0);
+                        const sumRefund = refunds.reduce((s: number, r: any) => s + (parseFloat(r.amount || 0) || 0), 0);
+                        const balanceAmount = hasBalanceSettlement ? Math.max(0, paidBeforeCancel - sumRefund) : 0;
+                        const syntheticBalanceEntry = balanceAmount > 0
+                          ? {
+                              id: 'refund-to-balance-done',
+                              to_status: 'to_balance_done',
+                              from_status: null,
+                              changed_at: (viewInvoice as any)?.Order?.order_updated_at || (viewInvoice as any)?.updated_at || (viewInvoice as any)?.created_at,
+                              _syntheticType: 'to_balance_done',
+                              amount: balanceAmount
+                            }
+                          : null;
+                        const syntheticRefundEntries = refunds.map((r: any, idx: number) => ({
+                          id: `refund-status-${r.id || idx}`,
+                          to_status: `refund_${String(r.status || '').toLowerCase()}`,
+                          from_status: null,
+                          changed_at: r.updated_at || r.created_at || null,
+                          _syntheticType: 'refund_status',
+                          refund_status: String(r.status || '').toLowerCase(),
+                          amount: parseFloat(r.amount || 0) || 0
+                        }));
+                        const combinedHistory = [
+                          ...(syntheticBalanceEntry ? [syntheticBalanceEntry] : []),
+                          ...syntheticRefundEntries,
+                          ...statusHistory
+                        ];
+                        const toShow = combinedHistory
+                          .slice()
+                          .sort((a: any, b: any) => {
+                            const ta = a?.changed_at ? new Date(a.changed_at).getTime() : 0;
+                            const tb = b?.changed_at ? new Date(b.changed_at).getTime() : 0;
+                            return ta - tb;
+                          })
+                          .reverse();
                         if (toShow.length === 0) return <div className="text-sm text-slate-500">Belum ada riwayat.</div>;
+                        const refundStatusLabel: Record<string, string> = {
+                          requested: 'Refund rekening: Menunggu proses',
+                          approved: 'Refund rekening: Disetujui',
+                          rejected: 'Refund rekening: Ditolak',
+                          refunded: 'Refund rekening: Sudah direfund'
+                        };
+                        const refundStatusBadge: Record<string, 'warning' | 'info' | 'error' | 'success'> = {
+                          requested: 'warning',
+                          approved: 'info',
+                          rejected: 'error',
+                          refunded: 'success'
+                        };
                         return (
                           <div className="space-y-2">
                             {toShow.map((h: any) => (
-                              <div key={h._synthetic ? 'refund-completed' : h.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/40">
+                              <div key={h.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/40">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge variant={h._synthetic || h.to_status === 'refunded' ? 'success' : getStatusBadge(h.to_status)} className="text-xs">
-                                      {h._synthetic ? 'Sudah direfund' : (INVOICE_STATUS_LABELS[h.to_status] || h.to_status)}
-                                    </Badge>
+                                    {h._syntheticType === 'to_balance_done' ? (
+                                      <Badge variant="success" className="text-xs">Refund saldo akun: Selesai</Badge>
+                                    ) : h._syntheticType === 'refund_status' ? (
+                                      <Badge variant={refundStatusBadge[h.refund_status] || 'info'} className="text-xs">
+                                        {refundStatusLabel[h.refund_status] || `Refund rekening: ${h.refund_status || '-'}`}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant={h.to_status === 'refunded' ? 'success' : getStatusBadge(h.to_status)} className="text-xs">
+                                        {INVOICE_STATUS_LABELS[h.to_status] || h.to_status}
+                                      </Badge>
+                                    )}
                                     <span className="text-xs text-slate-600">
-                                      {h._synthetic ? 'Status terbaru: Sudah direfund' : (h.from_status ? `${INVOICE_STATUS_LABELS[h.from_status] || h.from_status} → ` : '') + (INVOICE_STATUS_LABELS[h.to_status] || h.to_status)}
+                                      {h._syntheticType === 'to_balance_done'
+                                        ? `Dana masuk saldo akun owner · Rp ${(Number(h.amount || 0)).toLocaleString('id-ID')}`
+                                        : h._syntheticType === 'refund_status'
+                                          ? `Nominal refund rekening · Rp ${(Number(h.amount || 0)).toLocaleString('id-ID')}`
+                                          : (h.from_status ? `${INVOICE_STATUS_LABELS[h.from_status] || h.from_status} → ` : '') + (INVOICE_STATUS_LABELS[h.to_status] || h.to_status)}
                                     </span>
                                   </div>
                                   <span className="text-xs text-slate-500">{h.changed_at ? new Date(h.changed_at).toLocaleString('id-ID') : '–'}</span>
                                 </div>
-                                {!h._synthetic && (
+                                {!h._syntheticType && (
                                   <div className="text-xs text-slate-600 mt-1">
                                     {(h.ChangedBy?.name || h.ChangedBy?.email) ? <>oleh <strong className="text-slate-800">{h.ChangedBy?.name || h.ChangedBy?.email}</strong></> : <span className="text-slate-500">oleh sistem</span>}
                                     {h.reason ? <span className="text-slate-500"> · {String(h.reason).replace(/_/g, ' ')}</span> : null}
                                   </div>
                                 )}
-                                {h._synthetic && <div className="text-xs text-slate-600 mt-1"><span className="text-slate-500">Refund selesai (bukti diupload)</span></div>}
+                                {h._syntheticType === 'to_balance_done' && <div className="text-xs text-slate-600 mt-1"><span className="text-slate-500">Selesai otomatis saat pembatalan invoice.</span></div>}
+                                {h._syntheticType === 'refund_status' && <div className="text-xs text-slate-600 mt-1"><span className="text-slate-500">Mengikuti proses status refund di menu Refund.</span></div>}
                               </div>
                             ))}
                           </div>

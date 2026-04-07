@@ -26,6 +26,7 @@ export type InvoiceRefundDocumentInv = {
     account_number?: string;
     reason?: string;
     created_at?: string;
+    updated_at?: string;
   }>;
   Order?: { order_updated_at?: string | null };
 };
@@ -70,6 +71,43 @@ export function InvoiceRefundDocument({
     refund: 'Refund ke rekening',
     allocate_to_order: 'Pemindahan ke invoice lain (riwayat lama)',
   };
+  const refundStatusLabel: Record<string, string> = {
+    requested: 'Menunggu proses',
+    approved: 'Disetujui',
+    rejected: 'Ditolak',
+    refunded: 'Sudah direfund',
+  };
+  const refundStatusClass: Record<string, string> = {
+    requested: 'bg-amber-100 text-amber-800',
+    approved: 'bg-blue-100 text-blue-800',
+    rejected: 'bg-rose-100 text-rose-800',
+    refunded: 'bg-emerald-100 text-emerald-800',
+  };
+  const refunds = (inv.Refunds || []).map((r) => ({ ...r, amountNum: parseFloat(String(r.amount || 0)) || 0 }));
+  const sumRefund = refunds.reduce((s, r) => s + r.amountNum, 0);
+  const note = String(inv.cancellation_handling_note || '').toLowerCase();
+  const hasBalanceSettlement = note.includes('saldo akun') || note.includes('dipindahkan ke saldo');
+  const balanceAmount = hasBalanceSettlement ? Math.max(0, amountDisplay - sumRefund) : 0;
+  const refundHistoryRows = [
+    ...(balanceAmount > 0
+      ? [{
+          id: 'to-balance',
+          date: inv.Order?.order_updated_at || inv.created_at || inv.issued_at || null,
+          method: 'Refund ke saldo akun owner',
+          amount: balanceAmount,
+          status: 'done',
+          note: 'Selesai otomatis',
+        }]
+      : []),
+    ...refunds.map((r) => ({
+      id: r.id || `${r.status}-${r.created_at || ''}`,
+      date: r.updated_at || r.created_at || null,
+      method: 'Refund ke rekening',
+      amount: r.amountNum,
+      status: r.status,
+      note: [r.bank_name, r.account_number].filter(Boolean).join(' · ') || r.reason || '—',
+    })),
+  ];
 
   return (
     <div
@@ -162,6 +200,43 @@ export function InvoiceRefundDocument({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {refundHistoryRows.length > 0 && (
+              <div className="pt-3 border-t border-slate-500/50 space-y-2">
+                <p className="text-xs uppercase tracking-wider text-slate-300 mb-1">Riwayat Refund</p>
+                <div className="overflow-x-auto border border-slate-600/40 rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-800/60 text-slate-300">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Tanggal</th>
+                        <th className="text-left px-3 py-2 font-medium">Metode</th>
+                        <th className="text-left px-3 py-2 font-medium">Nominal</th>
+                        <th className="text-left px-3 py-2 font-medium">Status</th>
+                        <th className="text-left px-3 py-2 font-medium">Keterangan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {refundHistoryRows.map((row) => (
+                        <tr key={row.id} className="border-t border-slate-700/60">
+                          <td className="px-3 py-2 text-slate-200">{formatDate(row.date)}</td>
+                          <td className="px-3 py-2 text-slate-100">{row.method}</td>
+                          <td className="px-3 py-2 text-amber-300 font-medium"><NominalDisplay amount={row.amount} currency="IDR" /></td>
+                          <td className="px-3 py-2">
+                            {row.status === 'done' ? (
+                              <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Selesai</span>
+                            ) : (
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${refundStatusClass[row.status] || 'bg-slate-200 text-slate-800'}`}>
+                                {refundStatusLabel[row.status] || row.status}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-slate-300">{row.note || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </>
