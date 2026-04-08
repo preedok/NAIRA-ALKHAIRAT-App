@@ -1996,7 +1996,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
               ) : (
                 (() => {
+                  const isPerPackMode = seasonsModalHotel?.meta?.room_pricing_mode === 'per_person';
                   const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
+                  const perPackQty = Math.max(0, parseInt(quantityForm.double ?? '', 10) || 0);
                   const stepBadge = (n: number) => (
                     <span
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0D1A63]/10 text-sm font-bold text-[#0D1A63]"
@@ -2010,7 +2012,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-5">
                         <p className="text-sm font-medium text-slate-800">Alur pengisian</p>
                         <ol className="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-600 list-decimal list-inside marker:font-medium">
-                          <li>Isi kapasitas per tipe kamar.</li>
+                          <li>{isPerPackMode ? 'Isi kapasitas per pack.' : 'Isi kapasitas per tipe kamar.'}</li>
                           <li>
                             Isi <strong className="font-medium text-slate-800">tarif kamar SAR per malam</strong> untuk tiap kolom bulan kalender (mis. Januari = harga satu malam menginap jika tanggal inap jatuh di Januari).{' '}
                             <span className="text-slate-500">Bukan total sewa hotel untuk sebulan penuh.</span> Kolom kosong memakai fallback harga lama di sistem jika ada.
@@ -2032,42 +2034,67 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             <div className="min-w-0">
                               <h3 id="hotel-qty-capacity-heading" className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                 <Bed className="w-4 h-4 text-[#0D1A63] shrink-0" />
-                                Kapasitas kamar
+                                {isPerPackMode ? 'Kapasitas pack' : 'Kapasitas kamar'}
                               </h3>
-                              <p className="text-xs text-slate-500 mt-1">Jumlah kamar siap dijual untuk setiap tipe.</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {isPerPackMode ? 'Jumlah pack siap dijual.' : 'Jumlah kamar siap dijual untuk setiap tipe.'}
+                              </p>
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-btn-light px-3 py-2 sm:justify-center sm:min-w-[9rem]">
                             <span className="text-xs font-medium text-slate-600 sm:hidden">Total</span>
                             <span className="text-sm font-semibold tabular-nums text-[#0D1A63]">
                               <span className="hidden sm:inline">Total: </span>
-                              {totalRooms} kamar
+                              {isPerPackMode ? `${perPackQty} pack` : `${totalRooms} kamar`}
                             </span>
                           </div>
                         </div>
-                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          {ROOM_TYPES.map((rt) => (
-                            <div
-                              key={rt}
-                              className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow"
-                            >
-                              <label className="block text-xs font-medium text-slate-600 mb-2">
-                                {ROOM_TYPE_LABELS[rt] ?? rt}
-                              </label>
+                        {isPerPackMode ? (
+                          <div className="mt-4 max-w-xs">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow">
+                              <label className="block text-xs font-medium text-slate-600 mb-2">Per pack</label>
                               <Input
                                 type="number"
                                 min={0}
-                                value={quantityForm[rt] ?? ''}
+                                value={quantityForm.double ?? ''}
                                 onChange={(e) => {
                                   const v = e.target.value;
-                                  if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
+                                  if (!(v === '' || /^\d*$/.test(v))) return;
+                                  setQuantityForm((prev) => ({
+                                    ...prev,
+                                    ...Object.fromEntries(ROOM_TYPES.map((rt) => [rt, v]))
+                                  }));
                                 }}
                                 placeholder="0"
                                 className="tabular-nums"
                               />
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {ROOM_TYPES.map((rt) => (
+                              <div
+                                key={rt}
+                                className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow"
+                              >
+                                <label className="block text-xs font-medium text-slate-600 mb-2">
+                                  {ROOM_TYPE_LABELS[rt] ?? rt}
+                                </label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={quantityForm[rt] ?? ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
+                                  }}
+                                  placeholder="0"
+                                  className="tabular-nums"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </section>
 
                       <section

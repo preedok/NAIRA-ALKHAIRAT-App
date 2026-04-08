@@ -367,9 +367,9 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                       <div className="mt-2 space-y-1">
                         {isPerPackHotel ? (
                           (() => {
-                            const total = roomEntries.reduce((s, [, r]) => s + (r?.total ?? 0), 0);
-                            const booked = roomEntries.reduce((s, [, r]) => s + (r?.booked ?? 0), 0);
-                            const available = roomEntries.reduce((s, [, r]) => s + (r?.available ?? 0), 0);
+                            const total = roomEntries.reduce((mx, [, r]) => Math.max(mx, r?.total ?? 0), 0);
+                            const booked = roomEntries.reduce((mx, [, r]) => Math.max(mx, r?.booked ?? 0), 0);
+                            const available = roomEntries.reduce((mx, [, r]) => Math.max(mx, r?.available ?? 0), 0);
                             const roomStatus = getRoomStatus(total, available);
                             const rowStyle = roomStatus === 'full' ? 'text-rose-700 font-semibold' : roomStatus === 'almost_full' ? 'text-amber-700 font-medium' : 'text-slate-600';
                             const dotColor = roomStatus === 'full' ? 'bg-rose-400' : roomStatus === 'almost_full' ? 'bg-amber-400' : 'bg-emerald-400';
