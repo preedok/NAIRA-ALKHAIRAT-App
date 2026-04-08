@@ -66,7 +66,7 @@ type BusServiceOption = 'finality' | 'hiace' | 'visa_only';
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
 type HotelRoomInputMode = 'manual' | 'pax';
-type HotelPriceMode = 'auto' | 'mou' | 'non_mou';
+type HotelPriceMode = 'mou' | 'non_mou';
 
 type DisplayCurrency = 'SAR' | 'IDR' | 'USD';
 
@@ -610,13 +610,12 @@ const OrderFormPage: React.FC = () => {
   const hasCustomOrderKurs = !!(orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null));
   const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
   const hotelPriceMode = (row: OrderItemRow): HotelPriceMode => {
-    const mode = String((row.meta?.hotel_price_mode as string) || 'auto').toLowerCase();
+    const mode = String((row.meta?.hotel_price_mode as string) || 'non_mou').toLowerCase();
     if (mode === 'mou' || mode === 'non_mou') return mode;
-    return 'auto';
+    return 'non_mou';
   };
   const hotelOwnerTypeScopeParam = (row: OrderItemRow): 'mou' | 'non_mou' | undefined => {
-    const mode = hotelPriceMode(row);
-    return mode === 'auto' ? undefined : mode;
+    return hotelPriceMode(row);
   };
   const s2iEff=effectiveRates.SAR_TO_IDR||4200; const u2iEff=effectiveRates.USD_TO_IDR||15500;
   /** Konversi nilai dari satu mata uang ke mata uang lain (satu sumber kebenaran: kurs effectiveRates). */
@@ -1684,13 +1683,12 @@ const OrderFormPage: React.FC = () => {
                                       label="Sumber harga hotel"
                                       value={hotelPriceMode(row)}
                                       onChange={(v) => {
-                                        const next = (v as HotelPriceMode) || 'auto';
+                                        const next = (v as HotelPriceMode) || 'non_mou';
                                         updateRow(row.id, { meta: { ...(row.meta || {}), hotel_price_mode: next } });
                                       }}
                                       options={[
-                                        { value: 'auto', label: 'Auto (ikut tipe owner)' },
-                                        { value: 'mou', label: 'Paksa harga MOU' },
-                                        { value: 'non_mou', label: 'Paksa harga Non-MOU' }
+                                        { value: 'mou', label: 'Harga MOU' },
+                                        { value: 'non_mou', label: 'Harga Non-MOU' }
                                       ]}
                                       emptyLabel="Pilih sumber harga"
                                     />

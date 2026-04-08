@@ -219,7 +219,7 @@ async function calculateStayCostByNights({
 
   const product = await Product.findByPk(productId, { attributes: ['id', 'meta'] });
   const meta = product && product.meta && typeof product.meta === 'object' ? product.meta : {};
-  const mealPlan = meta.meal_plan === 'fullboard' ? 'fullboard' : 'room_only';
+  const mealPlan = 'room_only';
 
   const qty = Math.max(1, parseInt(quantity, 10) || 1);
   const cur = String(currency || 'IDR').toUpperCase();
@@ -235,8 +235,8 @@ async function calculateStayCostByNights({
   let mealSubtotalIdr = 0;
   const breakdown = [];
 
-  /** Untuk baris kamar: with_meal di DB bulanan (fullboard = true = paket) */
-  const roomMonthlyWithMeal = mealPlan === 'fullboard' && !!withMeal;
+  /** Simplifikasi: harga kamar selalu dari komponen room (tanpa flag fullboard). */
+  const roomMonthlyWithMeal = false;
 
   for (const night of nights) {
     const yearMonth = toYearMonth(night);

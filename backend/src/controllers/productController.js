@@ -90,11 +90,9 @@ function decorateHotelMetaWithMouAutoFlag(row) {
   if (!row || row.type !== 'hotel') return row;
   const raw = row.toJSON ? row.toJSON() : row;
   const nextMeta = raw.meta && typeof raw.meta === 'object' ? { ...raw.meta } : {};
-  const fromColumn = Object.prototype.hasOwnProperty.call(raw, 'mou_fullboard_auto_calc')
-    ? toBoolLike(raw.mou_fullboard_auto_calc)
-    : null;
-  const fromMeta = toBoolLike(nextMeta.mou_fullboard_auto_calc);
-  nextMeta.mou_fullboard_auto_calc = fromColumn != null ? fromColumn : (fromMeta ?? false);
+  delete nextMeta.meal_plan;
+  delete nextMeta.mou_fullboard_auto_calc;
+  delete nextMeta.mou_manual_has_meal;
   return { ...raw, meta: nextMeta };
 }
 
@@ -482,7 +480,7 @@ const list = asyncHandler(async (req, res) => {
         const meta = p.meta && typeof p.meta === 'object' ? p.meta : {};
         const breakdown = p.room_breakdown || p.prices_by_room || {};
         const rt = pickRefRoomType(meta, breakdown);
-        const isFb = meta.meal_plan === 'fullboard';
+        const isFb = false;
         const packPid = packByProductMonth[p.id] || {};
         const byRoomType = {};
         for (const rtv of ROOM_TYPES_MONTHLY) {
@@ -930,16 +928,17 @@ const createHotel = asyncHandler(async (req, res) => {
   if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'name wajib' });
   const location = meta?.location || 'makkah';
   const code = await generateHotelCode(name, location);
-  const mouAutoFlag = toBoolLike(meta?.mou_fullboard_auto_calc) ?? false;
-  const supportsMouAutoCol = await hasMouFullboardAutoCalcColumn();
+  const safeMeta = { ...(meta || {}) };
+  delete safeMeta.meal_plan;
+  delete safeMeta.mou_fullboard_auto_calc;
+  delete safeMeta.mou_manual_has_meal;
   const createBody = {
     type: 'hotel',
     code,
     name: name.trim(),
     description: description || null,
     is_package: false,
-    meta: { ...(meta || {}), mou_fullboard_auto_calc: mouAutoFlag },
-    ...(supportsMouAutoCol ? { mou_fullboard_auto_calc: mouAutoFlag } : {}),
+    meta: safeMeta,
     created_by: req.user.id
   };
   const product = await Product.create(createBody, await productCreateFieldsOption(true));
@@ -985,15 +984,16 @@ const create = asyncHandler(async (req, res) => {
     if (vu) finalMeta.valid_until = vu; else delete finalMeta.valid_until;
   }
   if (!finalCode || finalCode.trim() === '') return res.status(400).json({ success: false, message: 'code wajib' });
-  const mouAutoFlag = type === 'hotel' ? (toBoolLike(finalMeta.mou_fullboard_auto_calc) ?? false) : null;
-  if (type === 'hotel') finalMeta = { ...finalMeta, mou_fullboard_auto_calc: mouAutoFlag };
-  const supportsMouAutoCol = type === 'hotel' ? await hasMouFullboardAutoCalcColumn() : false;
+  if (type === 'hotel') {
+    delete finalMeta.meal_plan;
+    delete finalMeta.mou_fullboard_auto_calc;
+    delete finalMeta.mou_manual_has_meal;
+  }
   const createBodyGeneric = {
     type, code: finalCode, name,
     description: description || null,
     is_package: !!is_package,
     meta: finalMeta,
-    ...(type === 'hotel' && supportsMouAutoCol ? { mou_fullboard_auto_calc: mouAutoFlag } : {}),
     created_by: req.user.id
   };
   const product = await Product.create(
@@ -1064,11 +1064,9 @@ const update = asyncHandler(async (req, res) => {
       }
     }
     if (product.type === 'hotel') {
-      const mouAutoFlag = toBoolLike(nextMeta.mou_fullboard_auto_calc);
-      if (mouAutoFlag != null) {
-        nextMeta.mou_fullboard_auto_calc = mouAutoFlag;
-        if (supportsMouAutoCol) product.mou_fullboard_auto_calc = mouAutoFlag;
-      }
+      delete nextMeta.meal_plan;
+      delete nextMeta.mou_fullboard_auto_calc;
+      delete nextMeta.mou_manual_has_meal;
     }
     product.meta = nextMeta;
   }
@@ -1441,7 +1439,6 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
   const supportsOwnerTypeScope = await hasOwnerTypeScopeColumn();
 
   const roomTypes = ['double', 'triple', 'quad', 'quint'];
-  const mealPlan = product.meta && typeof product.meta === 'object' ? product.meta.meal_plan : null;
 
   const t = await sequelize.transaction();
   try {
@@ -1456,13 +1453,12 @@ const upsertHotelMonthlyPricesBulk = asyncHandler(async (req, res) => {
       let roomType;
       let withMeal;
       if (component === COMPONENT_MEAL) {
-        if (mealPlan === 'fullboard') throw new Error('Harga makan bulanan hanya untuk hotel room only');
         roomType = MEAL_ROOM_TYPE;
         withMeal = false;
       } else {
         roomType = String(r.room_type || '').trim().toLowerCase();
         if (!roomTypes.includes(roomType)) throw new Error(`room_type tidak valid: ${roomType}`);
-        withMeal = mealPlan === 'fullboard' ? true : !!r.with_meal;
+        withMeal = false;
       }
 
       const branchId = r.branch_id || null;
