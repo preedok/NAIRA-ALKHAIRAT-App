@@ -112,10 +112,15 @@ function renderHotelListMonthlyMatrixTable(props: {
   byRoomTypeDisplay: HotelMonthlyByRoomTypeMap;
   gridRates: GridRatesPair;
   roomYearDisplay: string | undefined;
+  roomPricingMode?: 'per_room' | 'per_person';
 }): React.ReactNode {
-  const { monthKeys, isFullboard, mealMonthsList, byRoomTypeDisplay, gridRates, roomYearDisplay } = props;
+  const { monthKeys, isFullboard, mealMonthsList, byRoomTypeDisplay, gridRates, roomYearDisplay, roomPricingMode } = props;
   const mealByYm = new Map((mealMonthsList || []).map((m) => [m.year_month, m.sar_meal_per_person_per_night]));
   const showMealRow = !isFullboard && Array.isArray(mealMonthsList) && mealMonthsList.length > 0;
+  const isPerPack = roomPricingMode === 'per_person';
+  const perPackSourceRoomType = ROOM_TYPES.find((rt) =>
+    (byRoomTypeDisplay?.[rt]?.months || []).some((m) => Number(m?.sar_room_per_night || 0) > 0)
+  ) || ROOM_TYPES[0];
 
   return (
     <div className="min-w-0 overflow-x-auto max-w-[min(52rem,92vw)] rounded-lg border border-slate-100 bg-slate-50/60 touch-pan-x overscroll-x-contain">
@@ -123,7 +128,7 @@ function renderHotelListMonthlyMatrixTable(props: {
         <thead>
           <tr className="bg-slate-100/90 border-b border-slate-200">
             <th className="sticky left-0 z-[1] bg-slate-100/90 text-left px-2 py-1.5 font-semibold text-slate-700 border-r border-slate-200/80 w-[4.75rem]">
-              Tipe
+              {isPerPack ? 'Harga' : 'Tipe'}
             </th>
             {monthKeys.map((ym) => (
               <th key={ym} className="px-1 py-1.5 font-medium text-slate-600 text-center whitespace-nowrap min-w-[3.25rem]">
@@ -145,13 +150,13 @@ function renderHotelListMonthlyMatrixTable(props: {
               ))}
             </tr>
           ) : null}
-          {ROOM_TYPES.map((rt) => {
+          {(isPerPack ? [perPackSourceRoomType] : ROOM_TYPES).map((rt) => {
             const block = byRoomTypeDisplay[rt];
             const roomByYm = new Map((block?.months || []).map((m) => [m.year_month, m.sar_room_per_night]));
             return (
               <tr key={rt} className="border-b border-slate-100 last:border-0">
                 <td className="sticky left-0 z-0 bg-white px-2 py-1 font-medium text-slate-800 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                  {ROOM_TYPE_LABELS[rt] || rt}
+                  {isPerPack ? 'Per pack' : (ROOM_TYPE_LABELS[rt] || rt)}
                 </td>
                 {monthKeys.map((ym) => (
                   <td key={`${rt}-${ym}`} className="align-top">
@@ -165,11 +170,11 @@ function renderHotelListMonthlyMatrixTable(props: {
       </table>
       {isFullboard ? (
         <p className="text-[10px] text-slate-500 px-2 py-1 border-t border-slate-100 bg-white/80">
-          Makan termasuk (fullboard) · {roomYearDisplay ?? ''}
+          {isPerPack ? 'Harga per pack' : 'Makan termasuk (fullboard)'} · {roomYearDisplay ?? ''}
         </p>
       ) : (
         <p className="text-[10px] text-slate-400 px-2 py-1 border-t border-slate-100 bg-white/80">
-          Per malam menginap (bukan total sebulan) · {roomYearDisplay ?? ''}
+          {isPerPack ? 'Harga per pack per malam menginap (bukan total sebulan)' : 'Per malam menginap (bukan total sebulan)'} · {roomYearDisplay ?? ''}
         </p>
       )}
     </div>
@@ -233,6 +238,7 @@ export interface HotelProduct {
     meal_price?: number;
     meal_price_type?: 'per_day' | 'per_trip';
     room_price_type?: 'per_day' | 'per_lasten';
+    room_pricing_mode?: 'per_room' | 'per_person';
     pricing_mode?: 'single' | 'per_type';
     mou_fullboard_auto_calc?: boolean;
     mou_manual_has_meal?: boolean;
@@ -1300,7 +1306,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                               mealMonthsList: isFullboardView ? [] : ownerMealMonths,
                               byRoomTypeDisplay: ownerByRoom,
                               gridRates,
-                              roomYearDisplay: hotel.hotel_monthly_series_by_owner_type?.year
+                              roomYearDisplay: hotel.hotel_monthly_series_by_owner_type?.year,
+                              roomPricingMode: hotel.meta?.room_pricing_mode
                             })}
                           </div>
                         );
@@ -1322,7 +1329,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           mealMonthsList: isFullboardView ? [] : mealMonthsList,
                           byRoomTypeDisplay,
                           gridRates,
-                          roomYearDisplay
+                          roomYearDisplay,
+                          roomPricingMode: hotel.meta?.room_pricing_mode
                         });
                       })()}
                       {!isFullboardView && !(mealMonthsList?.length) ? (
