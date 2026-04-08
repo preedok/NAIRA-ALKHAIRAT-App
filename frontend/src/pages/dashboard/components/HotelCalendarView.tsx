@@ -72,6 +72,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
   /** Owner: lihat agregat ketersediaan semua booking; kartu & popup hanya order miliknya. */
   const canAddRoomForRole = canAddRoom && !isOwner;
   const [selectedHotelId, setSelectedHotelId] = useState<string>('');
+  const [calendarLocation, setCalendarLocation] = useState<'makkah' | 'madinah'>('makkah');
   const [calendarMonth, setCalendarMonth] = useState<ProductCalendarMonth>(() => {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
@@ -86,7 +87,17 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
   const [addQuantitySaving, setAddQuantitySaving] = useState(false);
   const [calendarAvailabilityMode, setCalendarAvailabilityMode] = useState<'global' | 'per_season'>('per_season');
 
+  const hotelsByLocation = useMemo(
+    () => hotels.filter((h) => String(h.meta?.location || '').toLowerCase() === calendarLocation),
+    [hotels, calendarLocation]
+  );
   const selectedHotel = useMemo(() => hotels.find((h) => h.id === selectedHotelId), [hotels, selectedHotelId]);
+
+  useEffect(() => {
+    if (!selectedHotelId) return;
+    const existsInTab = hotelsByLocation.some((h) => h.id === selectedHotelId);
+    if (!existsInTab) setSelectedHotelId('');
+  }, [selectedHotelId, hotelsByLocation]);
 
   /** Rentang bulan dalam YYYY-MM-DD (tanggal lokal), hindari bug toISOString() di zona WIB. */
   const fromStr = useMemo(() => {
@@ -212,19 +223,41 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 border border-slate-200 p-1">
+          <button
+            type="button"
+            onClick={() => setCalendarLocation('makkah')}
+            className={`py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+              calendarLocation === 'makkah'
+                ? 'bg-white text-[#0D1A63] border border-btn shadow-sm'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Mekkah
+          </button>
+          <button
+            type="button"
+            onClick={() => setCalendarLocation('madinah')}
+            className={`py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+              calendarLocation === 'madinah'
+                ? 'bg-white text-[#0D1A63] border border-btn shadow-sm'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Madinah
+          </button>
+        </div>
         <Autocomplete
           label="Pilih Hotel"
           value={selectedHotelId}
           onChange={setSelectedHotelId}
-          options={hotels.map((h) => ({ value: h.id, label: `${h.name} ${h.meta?.location ? `(${h.meta.location})` : ''}` }))}
+          options={hotelsByLocation.map((h) => ({ value: h.id, label: h.name }))}
           placeholder="-- Pilih hotel --"
-          className="min-w-[220px]"
-          fullWidth={false}
+          className="w-full"
+          fullWidth
         />
-        {selectedHotelId && productName && (
-          <span className="text-sm text-slate-600 font-medium pb-1">{productName}</span>
-        )}
+        {selectedHotelId && productName ? <p className="text-sm text-slate-600">{productName}</p> : null}
       </div>
 
       {!selectedHotelId && (
