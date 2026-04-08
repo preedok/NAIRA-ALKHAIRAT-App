@@ -2050,8 +2050,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                           </div>
                         </div>
                         {isPerPackMode ? (
-                          <div className="mt-4 max-w-xs">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow">
+                          <div className="mt-3 w-full">
+                            <div className="w-full rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow">
                               <label className="block text-xs font-medium text-slate-600 mb-2">Per pack</label>
                               <Input
                                 type="number"
