@@ -2082,7 +2082,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 Tarif per malam (SAR) per bulan kalender
                               </h3>
                               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                                Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong> per kamar untuk tipe baris tersebut, berlaku untuk malam yang jatuh pada bulan kolom (bukan total sewa satu bulan penuh). Di bawah sel: perkiraan IDR/USD mengikuti kurs pengaturan. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
+                                Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong> {seasonsModalHotel?.meta?.room_pricing_mode === 'per_person' ? 'per pack' : 'per kamar untuk tipe baris tersebut'}, berlaku untuk malam yang jatuh pada bulan kolom (bukan total sewa satu bulan penuh). Di bawah sel: perkiraan IDR/USD mengikuti kurs pengaturan. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
                               </p>
                               <p className="text-xs text-slate-500 mt-2">
                                 Mata uang grid: <strong className="font-medium text-slate-700">SAR</strong>.
@@ -2150,7 +2150,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                   <thead className="sticky top-0 z-[3]">
                                     <tr className="bg-slate-100 border-b border-slate-200 shadow-sm">
                                       <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[4] border-r border-slate-200/80">
-                                        Tipe
+                                        {seasonsModalHotel?.meta?.room_pricing_mode === 'per_person' ? 'Harga' : 'Tipe'}
                                       </th>
                                       {monthKeys.map((m) => (
                                         <th key={m} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
@@ -2160,10 +2160,17 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                     </tr>
                                   </thead>
                                   <tbody className="bg-white">
-                                    {ROOM_TYPES.map((rt) => (
+                                    {(() => {
+                                      const isPerPackMode = seasonsModalHotel?.meta?.room_pricing_mode === 'per_person';
+                                      const perPackSourceRoomType =
+                                        ROOM_TYPES.find((candidateRt) =>
+                                          monthKeys.some((m) => parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[candidateRt]?.[m] ?? '') > 0)
+                                        ) || ROOM_TYPES[0];
+                                      const tableRoomTypes = isPerPackMode ? [perPackSourceRoomType] : ROOM_TYPES;
+                                      return tableRoomTypes.map((rt) => (
                                       <tr key={`${ownerTypeScope}-${rt}`} className="border-b border-slate-100 last:border-0">
                                         <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white relative z-[2] border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                                          {(ROOM_TYPE_LABELS[rt] || rt)}
+                                          {isPerPackMode ? 'Per pack' : (ROOM_TYPE_LABELS[rt] || rt)}
                                         </td>
                                         {monthKeys.map((m) => {
                                           const derived = ownerTypeScope === 'mou' ? getMouDerivedSar(rt, m) : null;
@@ -2183,6 +2190,21 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                                 onChange={(e) => {
                                                   if (isDerivedCell) return;
                                                   const raw = e.target.value.replace(/[^\d.,]/g, '');
+                                                  if (isPerPackMode) {
+                                                    setMonthlyPriceRowsByOwnerType((prev) => ({
+                                                      ...prev,
+                                                      [ownerTypeScope]: {
+                                                        ...(prev?.[ownerTypeScope] || {}),
+                                                        ...Object.fromEntries(
+                                                          ROOM_TYPES.map((roomType) => [
+                                                            roomType,
+                                                            { ...(prev?.[ownerTypeScope]?.[roomType] || {}), [m]: raw }
+                                                          ])
+                                                        )
+                                                      }
+                                                    }));
+                                                    return;
+                                                  }
                                                   setMonthlyPriceRowsByOwnerType((prev) => ({
                                                     ...prev,
                                                     [ownerTypeScope]: {
@@ -2194,6 +2216,21 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                                 onBlur={() => {
                                                   if (isDerivedCell) return;
                                                   const n = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
+                                                  if (isPerPackMode) {
+                                                    setMonthlyPriceRowsByOwnerType((prev) => ({
+                                                      ...prev,
+                                                      [ownerTypeScope]: {
+                                                        ...(prev?.[ownerTypeScope] || {}),
+                                                        ...Object.fromEntries(
+                                                          ROOM_TYPES.map((roomType) => [
+                                                            roomType,
+                                                            { ...(prev?.[ownerTypeScope]?.[roomType] || {}), [m]: n > 0 ? formatSarId(n) : '' }
+                                                          ])
+                                                        )
+                                                      }
+                                                    }));
+                                                    return;
+                                                  }
                                                   setMonthlyPriceRowsByOwnerType((prev) => ({
                                                     ...prev,
                                                     [ownerTypeScope]: {
@@ -2218,7 +2255,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                           );
                                         })}
                                       </tr>
-                                    ))}
+                                      ));
+                                    })()}
                                   </tbody>
                                 </table>
                               </div>

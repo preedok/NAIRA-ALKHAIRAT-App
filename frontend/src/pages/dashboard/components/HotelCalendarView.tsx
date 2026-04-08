@@ -92,6 +92,7 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
     [hotels, calendarLocation]
   );
   const selectedHotel = useMemo(() => hotels.find((h) => h.id === selectedHotelId), [hotels, selectedHotelId]);
+  const isPerPackHotel = selectedHotel?.meta?.room_pricing_mode === 'per_person';
 
   useEffect(() => {
     if (!selectedHotelId) return;
@@ -289,7 +290,11 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-rose-400" /> Penuh
                 </span>
-                <span>Tipe: Single, Double, Triple, Quad, Quint · Angka = dipesan/total</span>
+                <span>
+                  {isPerPackHotel
+                    ? 'Mode harga: Per pack · Angka = dipesan/total'
+                    : 'Tipe: Single, Double, Triple, Quad, Quint · Angka = dipesan/total'}
+                </span>
                 {calendarAvailabilityMode === 'per_season' && (
                   <span className="text-slate-500">
                     * Tanggal di luar rentang musim: kuota mengikuti musim terdekat (nama musim bertanda *).
@@ -360,23 +365,43 @@ const HotelCalendarView: React.FC<HotelCalendarViewProps> = ({
                   {roomEntries.length > 0 ? (
                     <>
                       <div className="mt-2 space-y-1">
-                        {roomEntries.map(([rt, r]) => {
-                          const total = r?.total ?? 0;
-                          const booked = r?.booked ?? 0;
-                          const available = r?.available ?? 0;
-                          const roomStatus = getRoomStatus(total, available);
-                          const rowStyle = roomStatus === 'full' ? 'text-rose-700 font-semibold' : roomStatus === 'almost_full' ? 'text-amber-700 font-medium' : 'text-slate-600';
-                          const dotColor = roomStatus === 'full' ? 'bg-rose-400' : roomStatus === 'almost_full' ? 'bg-amber-400' : 'bg-emerald-400';
-                          return (
-                            <div key={rt} className={`flex items-center justify-between gap-1 text-[10px] tabular-nums ${rowStyle}`}>
-                              <span className="flex items-center gap-1 min-w-0">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-                                <span className="capitalize truncate">{ROOM_LABELS[rt] || rt}</span>
-                              </span>
-                              <span>{booked}/{total}</span>
-                            </div>
-                          );
-                        })}
+                        {isPerPackHotel ? (
+                          (() => {
+                            const total = roomEntries.reduce((s, [, r]) => s + (r?.total ?? 0), 0);
+                            const booked = roomEntries.reduce((s, [, r]) => s + (r?.booked ?? 0), 0);
+                            const available = roomEntries.reduce((s, [, r]) => s + (r?.available ?? 0), 0);
+                            const roomStatus = getRoomStatus(total, available);
+                            const rowStyle = roomStatus === 'full' ? 'text-rose-700 font-semibold' : roomStatus === 'almost_full' ? 'text-amber-700 font-medium' : 'text-slate-600';
+                            const dotColor = roomStatus === 'full' ? 'bg-rose-400' : roomStatus === 'almost_full' ? 'bg-amber-400' : 'bg-emerald-400';
+                            return (
+                              <div className={`flex items-center justify-between gap-1 text-[10px] tabular-nums ${rowStyle}`}>
+                                <span className="flex items-center gap-1 min-w-0">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                  <span className="truncate">Per pack</span>
+                                </span>
+                                <span>{booked}/{total}</span>
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          roomEntries.map(([rt, r]) => {
+                            const total = r?.total ?? 0;
+                            const booked = r?.booked ?? 0;
+                            const available = r?.available ?? 0;
+                            const roomStatus = getRoomStatus(total, available);
+                            const rowStyle = roomStatus === 'full' ? 'text-rose-700 font-semibold' : roomStatus === 'almost_full' ? 'text-amber-700 font-medium' : 'text-slate-600';
+                            const dotColor = roomStatus === 'full' ? 'bg-rose-400' : roomStatus === 'almost_full' ? 'bg-amber-400' : 'bg-emerald-400';
+                            return (
+                              <div key={rt} className={`flex items-center justify-between gap-1 text-[10px] tabular-nums ${rowStyle}`}>
+                                <span className="flex items-center gap-1 min-w-0">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                  <span className="capitalize truncate">{ROOM_LABELS[rt] || rt}</span>
+                                </span>
+                                <span>{booked}/{total}</span>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                       <p className={`mt-1.5 text-[10px] font-medium tabular-nums ${
                         allFull ? 'text-rose-600' : anyAlmostFull ? 'text-amber-600' : 'text-slate-500'
