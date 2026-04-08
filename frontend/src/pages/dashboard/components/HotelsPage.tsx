@@ -37,6 +37,7 @@ const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'] as const;
 const ROOM_TYPE_LABELS: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
 const OWNER_PRICE_TYPES = ['mou', 'non_mou'] as const;
 type OwnerPriceType = (typeof OWNER_PRICE_TYPES)[number];
+type OwnerPriceView = OwnerPriceType | 'all';
 const OWNER_PRICE_LABELS: Record<OwnerPriceType, string> = {
   mou: 'Owner MOU',
   non_mou: 'Owner Non-MOU'
@@ -145,8 +146,7 @@ function renderHotelListMonthlyMatrixTable(props: {
           ) : null}
           {ROOM_TYPES.map((rt) => {
             const block = byRoomTypeDisplay[rt];
-            if (!block?.months?.length) return null;
-            const roomByYm = new Map(block.months.map((m) => [m.year_month, m.sar_room_per_night]));
+            const roomByYm = new Map((block?.months || []).map((m) => [m.year_month, m.sar_room_per_night]));
             return (
               <tr key={rt} className="border-b border-slate-100 last:border-0">
                 <td className="sticky left-0 z-0 bg-white px-2 py-1 font-medium text-slate-800 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
@@ -345,6 +345,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [monthlyPriceRowsByOwnerType, setMonthlyPriceRowsByOwnerType] = useState<Record<OwnerPriceType, Record<string, Record<string, string>>>>({ mou: {}, non_mou: {} });
   /** Harga makan SAR per orang per malam per bulan (room only) */
   const [monthlyMealByMonthByOwnerType, setMonthlyMealByMonthByOwnerType] = useState<Record<OwnerPriceType, Record<string, string>>>({ mou: {}, non_mou: {} });
+  /** Tabel harga di daftar hotel: tampilkan semua / MOU / Non-MOU sesuai tombol pilihan. */
+  const [ownerPriceViewByHotel, setOwnerPriceViewByHotel] = useState<Record<string, OwnerPriceView>>({});
   /** Opsi: harga MOU otomatis (quad fullboard -> triple/double dikurangi makan Non-MOU). */
   const [mouFullboardAutoCalc, setMouFullboardAutoCalc] = useState(false);
   const [quantityMealPlan, setQuantityMealPlan] = useState<'fullboard' | 'room_only'>('fullboard');
@@ -1277,7 +1279,32 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   </div>
                   {ownerSeries?.mou?.by_room_type || ownerSeries?.non_mou?.by_room_type ? (
                     <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {([
+                          { id: 'all', label: 'Semua' },
+                          { id: 'mou', label: 'Owner MOU' },
+                          { id: 'non_mou', label: 'Owner Non-MOU' }
+                        ] as Array<{ id: OwnerPriceView; label: string }>).map((opt) => {
+                          const active = (ownerPriceViewByHotel[hotel.id] || 'all') === opt.id;
+                          return (
+                            <button
+                              key={`${hotel.id}-owner-view-${opt.id}`}
+                              type="button"
+                              onClick={() => setOwnerPriceViewByHotel((prev) => ({ ...prev, [hotel.id]: opt.id }))}
+                              className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${
+                                active
+                                  ? 'bg-[#0D1A63] text-white border-[#0D1A63]'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-[#0D1A63]/40'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                       {(['mou', 'non_mou'] as const).map((ownerType) => {
+                        const selected = ownerPriceViewByHotel[hotel.id] || 'all';
+                        if (selected !== 'all' && selected !== ownerType) return null;
                         const ownerByRoom = ownerSeries?.[ownerType]?.by_room_type as HotelMonthlyByRoomTypeMap | undefined;
                         if (!ownerByRoom) return null;
                         const ownerMealMonths = ownerSeries?.[ownerType]?.meal_months || [];
