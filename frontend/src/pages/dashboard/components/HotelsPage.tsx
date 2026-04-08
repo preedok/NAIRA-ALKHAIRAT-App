@@ -233,6 +233,8 @@ export interface HotelProduct {
     meal_price_type?: 'per_day' | 'per_trip';
     room_price_type?: 'per_day' | 'per_lasten';
     pricing_mode?: 'single' | 'per_type';
+    mou_fullboard_auto_calc?: boolean;
+    mou_manual_has_meal?: boolean;
   } | null;
   is_active: boolean;
   price_general?: number | null;
@@ -1276,6 +1278,41 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     }`}>
                       {isFullboardPlan ? 'Mode: Fullboard (FB)' : 'Mode: Pakai makan'}
                     </span>
+                  </div>
+                  <div className="mb-2 rounded-md border border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
+                    <p className="text-[10px] font-semibold text-slate-600">1) Mode layanan hotel</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                        isFullboardPlan ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
+                      }`}>Fullboard</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                        !isFullboardPlan ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
+                      }`}>Room only + makan terpisah</span>
+                    </div>
+                    <p className="text-[10px] text-slate-600">
+                      Aktif: {isFullboardPlan ? 'Fullboard. Baris harga makan disembunyikan.' : 'Room only + makan terpisah. Baris harga makan tampil per bulan.'}
+                    </p>
+                  </div>
+                  <div className="mb-2 rounded-md border border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
+                    <p className="text-[10px] font-semibold text-slate-600">2) Metode hitung harga MOU</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                        Boolean(hotel.meta?.mou_fullboard_auto_calc) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
+                      }`}>Auto dari Quad MOU</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                        !Boolean(hotel.meta?.mou_fullboard_auto_calc) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
+                      }`}>Input manual</span>
+                    </div>
+                    {!Boolean(hotel.meta?.mou_fullboard_auto_calc) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                          Boolean(hotel.meta?.mou_manual_has_meal) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
+                        }`}>Pisahkan harga makan MOU</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                          !Boolean(hotel.meta?.mou_manual_has_meal) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
+                        }`}>Gabung makan ke harga kamar MOU</span>
+                      </div>
+                    )}
                   </div>
                   {ownerSeries?.mou?.by_room_type || ownerSeries?.non_mou?.by_room_type ? (
                     <div className="space-y-2">
