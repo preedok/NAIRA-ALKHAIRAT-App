@@ -293,6 +293,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [statModal, setStatModal] = useState<'total_invoice' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
   const [statusModal, setStatusModal] = useState<string | null>(null);
   const [exportingInvoicesExcel, setExportingInvoicesExcel] = useState(false);
+  const [exportingInvoiceListExcel, setExportingInvoiceListExcel] = useState(false);
+  const [exportingInvoiceListPdf, setExportingInvoiceListPdf] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'va' | 'qris' | 'saudi'>('bank');
@@ -427,6 +429,12 @@ const OrdersInvoicesPage: React.FC = () => {
     if (filterDateTo) params.date_to = filterDateTo;
     if (filterDueStatus) params.due_status = filterDueStatus;
     return params;
+  };
+
+  /** Parameter filter + urutan sama daftar; tanpa paginasi (server ekspor maks. 5000 baris). */
+  const buildExportListParams = () => {
+    const { limit: _l, page: _p, ...rest } = buildListParams();
+    return rest;
   };
 
   const fetchSummary = async () => {
@@ -2171,7 +2179,61 @@ const OrdersInvoicesPage: React.FC = () => {
           subtitle="Geser horizontal jika tabel tidak muat"
           className="mb-5 px-1"
           right={
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-200/90"
+                disabled={exportingInvoiceListExcel || loading}
+                onClick={async () => {
+                  setExportingInvoiceListExcel(true);
+                  try {
+                    const res = await invoicesApi.exportListExcel(buildExportListParams() as Parameters<typeof invoicesApi.exportListExcel>[0]);
+                    const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('Export Excel berhasil diunduh.', 'success');
+                  } catch {
+                    showToast('Gagal mengunduh Excel.', 'error');
+                  } finally {
+                    setExportingInvoiceListExcel(false);
+                  }
+                }}
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+                {exportingInvoiceListExcel ? 'Mengunduh...' : 'Export Excel'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-200/90"
+                disabled={exportingInvoiceListPdf || loading}
+                onClick={async () => {
+                  setExportingInvoiceListPdf(true);
+                  try {
+                    const res = await invoicesApi.exportListPdf(buildExportListParams() as Parameters<typeof invoicesApi.exportListPdf>[0]);
+                    const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('Export PDF berhasil diunduh.', 'success');
+                  } catch {
+                    showToast('Gagal mengunduh PDF.', 'error');
+                  } finally {
+                    setExportingInvoiceListPdf(false);
+                  }
+                }}
+              >
+                <FileText className="w-4 h-4 mr-1.5" />
+                {exportingInvoiceListPdf ? 'Mengunduh...' : 'Export PDF'}
+              </Button>
               {canOrderAction && (
                 <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders/new')}>
                   <Plus className="w-5 h-5 mr-2" /> Tambah Invoice
