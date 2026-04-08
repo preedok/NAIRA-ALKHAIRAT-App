@@ -38,6 +38,11 @@ const ROOM_TYPE_LABELS: Record<string, string> = { double: 'Double', triple: 'Tr
 const OWNER_PRICE_TYPES = ['mou', 'non_mou'] as const;
 type OwnerPriceType = (typeof OWNER_PRICE_TYPES)[number];
 type OwnerPriceView = OwnerPriceType | 'all';
+type HotelListPriceOptionState = {
+  mealPlan: 'fullboard' | 'room_only';
+  mouAuto: boolean;
+  mouManualHasMeal: boolean;
+};
 const OWNER_PRICE_LABELS: Record<OwnerPriceType, string> = {
   mou: 'Owner MOU',
   non_mou: 'Owner Non-MOU'
@@ -173,6 +178,26 @@ function renderHotelListMonthlyMatrixTable(props: {
       )}
     </div>
   );
+}
+
+function monthKeysFromByRoomType(byRoomType?: HotelMonthlyByRoomTypeMap | null): string[] {
+  if (!byRoomType) return [];
+  for (const rt of ROOM_TYPES) {
+    const months = byRoomType[rt]?.months;
+    if (months?.length) return months.map((m) => m.year_month);
+  }
+  return [];
+}
+
+function toRoomMonthMap(byRoomType?: HotelMonthlyByRoomTypeMap | null): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  if (!byRoomType) return out;
+  for (const rt of ROOM_TYPES) {
+    out[rt] = {};
+    const months = byRoomType[rt]?.months || [];
+    for (const m of months) out[rt][m.year_month] = Number(m.sar_room_per_night || 0);
+  }
+  return out;
 }
 
 function parseSarInputString(s: string): number {
@@ -349,6 +374,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [monthlyMealByMonthByOwnerType, setMonthlyMealByMonthByOwnerType] = useState<Record<OwnerPriceType, Record<string, string>>>({ mou: {}, non_mou: {} });
   /** Tabel harga di daftar hotel: tampilkan semua / MOU / Non-MOU sesuai tombol pilihan. */
   const [ownerPriceViewByHotel, setOwnerPriceViewByHotel] = useState<Record<string, OwnerPriceView>>({});
+  /** Opsi tampilan interaktif di tabel daftar hotel (preview, tidak langsung menyimpan setting). */
+  const [listPriceOptionByHotel, setListPriceOptionByHotel] = useState<Record<string, HotelListPriceOptionState>>({});
   /** Opsi: harga MOU otomatis (quad fullboard -> triple/double dikurangi makan Non-MOU). */
   const [mouFullboardAutoCalc, setMouFullboardAutoCalc] = useState(false);
   const [quantityMealPlan, setQuantityMealPlan] = useState<'fullboard' | 'room_only'>('fullboard');
@@ -1197,6 +1224,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const tripleMeal = fillFromSource(cur, mealPrice, currencyRates);
             const md = hotel.hotel_monthly_display;
             const isFullboardPlan = hotel.meta?.meal_plan === 'fullboard';
+            const listOpt = listPriceOptionByHotel[hotel.id] || {
+              mealPlan: isFullboardPlan ? 'fullboard' : 'room_only',
+              mouAuto: Boolean(hotel.meta?.mou_fullboard_auto_calc),
+              mouManualHasMeal: hotel.meta?.mou_manual_has_meal == null ? true : Boolean(hotel.meta?.mou_manual_has_meal)
+            };
+            const isFullboardView = listOpt.mealPlan === 'fullboard';
             /** SAR per malam dari grid bulanan (sumber utama tabel) */
             const monthlyRoomSar =
               md && (isFullboardPlan
@@ -1272,45 +1305,81 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <td className="px-4 py-3.5 text-sm text-slate-700 align-top">
                   <div className="mb-2">
                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ${
-                      isFullboardPlan
+                      isFullboardView
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}>
-                      {isFullboardPlan ? 'Mode: Fullboard (FB)' : 'Mode: Pakai makan'}
+                      {isFullboardView ? 'Mode: Fullboard (FB)' : 'Mode: Pakai makan'}
                     </span>
                   </div>
                   <div className="mb-2 rounded-md border border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
                     <p className="text-[10px] font-semibold text-slate-600">1) Mode layanan hotel</p>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                        isFullboardPlan ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
-                      }`}>Fullboard</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                        !isFullboardPlan ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
-                      }`}>Room only + makan terpisah</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setListPriceOptionByHotel((prev) => ({ ...prev, [hotel.id]: { ...listOpt, mealPlan: 'fullboard' } })); }}
+                        className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
+                          isFullboardView ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#0D1A63]/40'
+                        }`}
+                      >
+                        Fullboard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setListPriceOptionByHotel((prev) => ({ ...prev, [hotel.id]: { ...listOpt, mealPlan: 'room_only' } })); }}
+                        className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
+                          !isFullboardView ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#0D1A63]/40'
+                        }`}
+                      >
+                        Room only + makan terpisah
+                      </button>
                     </div>
                     <p className="text-[10px] text-slate-600">
-                      Aktif: {isFullboardPlan ? 'Fullboard. Baris harga makan disembunyikan.' : 'Room only + makan terpisah. Baris harga makan tampil per bulan.'}
+                      Aktif: {isFullboardView ? 'Fullboard. Baris harga makan disembunyikan.' : 'Room only + makan terpisah. Baris harga makan tampil per bulan.'}
                     </p>
                   </div>
                   <div className="mb-2 rounded-md border border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
                     <p className="text-[10px] font-semibold text-slate-600">2) Metode hitung harga MOU</p>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                        Boolean(hotel.meta?.mou_fullboard_auto_calc) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
-                      }`}>Auto dari Quad MOU</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                        !Boolean(hotel.meta?.mou_fullboard_auto_calc) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
-                      }`}>Input manual</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setListPriceOptionByHotel((prev) => ({ ...prev, [hotel.id]: { ...listOpt, mouAuto: true } })); }}
+                        className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
+                          listOpt.mouAuto ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#0D1A63]/40'
+                        }`}
+                      >
+                        Auto dari Quad MOU
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setListPriceOptionByHotel((prev) => ({ ...prev, [hotel.id]: { ...listOpt, mouAuto: false } })); }}
+                        className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
+                          !listOpt.mouAuto ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#0D1A63]/40'
+                        }`}
+                      >
+                        Input manual
+                      </button>
                     </div>
-                    {!Boolean(hotel.meta?.mou_fullboard_auto_calc) && (
+                    {!listOpt.mouAuto && (
                       <div className="flex flex-wrap gap-1.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                          Boolean(hotel.meta?.mou_manual_has_meal) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
-                        }`}>Pisahkan harga makan MOU</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                          !Boolean(hotel.meta?.mou_manual_has_meal) ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200'
-                        }`}>Gabung makan ke harga kamar MOU</span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setListPriceOptionByHotel((prev) => ({ ...prev, [hotel.id]: { ...listOpt, mouManualHasMeal: true } })); }}
+                          className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
+                            listOpt.mouManualHasMeal ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#0D1A63]/40'
+                          }`}
+                        >
+                          Pisahkan harga makan MOU
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setListPriceOptionByHotel((prev) => ({ ...prev, [hotel.id]: { ...listOpt, mouManualHasMeal: false } })); }}
+                          className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
+                            !listOpt.mouManualHasMeal ? 'bg-[#0D1A63] text-white border-[#0D1A63]' : 'bg-white text-slate-600 border-slate-200 hover:border-[#0D1A63]/40'
+                          }`}
+                        >
+                          Gabung makan ke harga kamar MOU
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1342,9 +1411,33 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       {(['mou', 'non_mou'] as const).map((ownerType) => {
                         const selected = ownerPriceViewByHotel[hotel.id] || 'all';
                         if (selected !== 'all' && selected !== ownerType) return null;
-                        const ownerByRoom = ownerSeries?.[ownerType]?.by_room_type as HotelMonthlyByRoomTypeMap | undefined;
+                        const ownerByRoomRaw = ownerSeries?.[ownerType]?.by_room_type as HotelMonthlyByRoomTypeMap | undefined;
+                        const nonMouByRoomRaw = ownerSeries?.non_mou?.by_room_type as HotelMonthlyByRoomTypeMap | undefined;
+                        const nonMouMealMonths = ownerSeries?.non_mou?.meal_months || [];
+                        let ownerByRoom = ownerByRoomRaw;
                         if (!ownerByRoom) return null;
-                        const ownerMealMonths = ownerSeries?.[ownerType]?.meal_months || [];
+                        let ownerMealMonths = ownerSeries?.[ownerType]?.meal_months || [];
+                        if (ownerType === 'mou' && listOpt.mouAuto) {
+                          const mouMap = toRoomMonthMap(ownerByRoomRaw);
+                          const nonMouMealMap = Object.fromEntries(nonMouMealMonths.map((m) => [m.year_month, Number(m.sar_meal_per_person_per_night || 0)]));
+                          const keys = monthKeysFromByRoomType(ownerByRoomRaw);
+                          const toN = (x?: number) => Number.isFinite(Number(x)) ? Number(x) : 0;
+                          const derived: HotelMonthlyByRoomTypeMap = Object.fromEntries(
+                            ROOM_TYPES.map((rt) => [rt, { months: keys.map((ym) => {
+                              const quad = toN(mouMap.quad?.[ym]);
+                              const meal = toN(nonMouMealMap[ym]);
+                              let v = toN(mouMap[rt]?.[ym]);
+                              if (rt === 'triple') v = Math.max(0, quad - meal);
+                              if (rt === 'double') v = Math.max(0, quad - (meal * 2));
+                              if (rt === 'quint') v = Math.max(0, quad + meal);
+                              return { year_month: ym, sar_room_per_night: v > 0 ? v : null };
+                            }) }])
+                          ) as HotelMonthlyByRoomTypeMap;
+                          ownerByRoom = derived;
+                          ownerMealMonths = [];
+                        } else if (ownerType === 'mou' && !listOpt.mouManualHasMeal) {
+                          ownerMealMonths = [];
+                        }
                         const ownerMonthKeys = (() => {
                           for (const rt of ROOM_TYPES) {
                             const mo = ownerByRoom[rt]?.months;
@@ -1359,8 +1452,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             </p>
                             {renderHotelListMonthlyMatrixTable({
                               monthKeys: ownerMonthKeys,
-                              isFullboard: isFullboardPlan,
-                              mealMonthsList: isFullboardPlan ? [] : ownerMealMonths,
+                              isFullboard: isFullboardView,
+                              mealMonthsList: isFullboardView ? [] : ownerMealMonths,
                               byRoomTypeDisplay: ownerByRoom,
                               gridRates,
                               roomYearDisplay: hotel.hotel_monthly_series_by_owner_type?.year
@@ -1381,14 +1474,14 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                         })();
                         return renderHotelListMonthlyMatrixTable({
                           monthKeys: monthKeysForMatrix,
-                          isFullboard: isFullboardPlan,
-                          mealMonthsList: isFullboardPlan ? [] : mealMonthsList,
+                          isFullboard: isFullboardView,
+                          mealMonthsList: isFullboardView ? [] : mealMonthsList,
                           byRoomTypeDisplay,
                           gridRates,
                           roomYearDisplay
                         });
                       })()}
-                      {!isFullboardPlan && !(mealMonthsList?.length) ? (
+                      {!isFullboardView && !(mealMonthsList?.length) ? (
                         <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/80 px-2 py-1.5 text-xs space-y-1">
                           <p className="text-[10px] font-semibold text-slate-500">Makan (ringkas / fallback)</p>
                           {md?.sar_meal_per_person_per_night != null && md.sar_meal_per_person_per_night > 0 ? (
