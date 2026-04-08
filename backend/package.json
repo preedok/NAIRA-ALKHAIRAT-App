@@ -35,6 +35,7 @@
     "clean:data-keep-users-banks-wilayah": "node scripts/clean-data-keep-users-banks-wilayah.js",
     "clear:orders-invoices": "node scripts/clear-orders-invoices.js",
     "clear:invoices-database-clean": "node scripts/clear-invoices-database-clean.js",
+    "clear:hotel-products": "node scripts/clear-hotel-products.js",
     "clear:orders-invoices-owners": "node scripts/clear-orders-and-owner-accounts.js",
     "ensure:owner-manual-columns": "node scripts/ensure-invoice-order-owner-manual-columns.js",
     "ensure:hotel-monthly-component": "node scripts/ensure-hotel-monthly-component-column.js",
