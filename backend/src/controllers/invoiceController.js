@@ -361,8 +361,6 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
   return {};
 }
 
-const EXPORT_LIST_MAX = 5000;
-
 function serializeInvoiceRows(rows) {
   return rows.map((row) => {
     const plain = row.get ? row.get({ plain: true }) : (typeof row.toJSON === 'function' ? row.toJSON() : row);
@@ -681,6 +679,46 @@ function summarizeReallocForExport(inv) {
   return parts.length ? parts.join('; ') : '-';
 }
 
+function getInvoiceStatusLabelForExport(inv) {
+  try {
+    const labeled = getEffectiveStatusLabel(inv);
+    if (typeof labeled === 'string' && labeled.trim()) return labeled;
+  } catch (_) { /* fallback */ }
+  return inv.status || '-';
+}
+
+function getOrderItemStatusForExport(item) {
+  const t = String(item?.type || '').toLowerCase();
+  if (t === ORDER_ITEM_TYPE.VISA) return item?.VisaProgress?.status || 'belum diproses';
+  if (t === ORDER_ITEM_TYPE.TICKET) return item?.TicketProgress?.status || 'belum diproses';
+  if (t === ORDER_ITEM_TYPE.HOTEL) return item?.HotelProgress?.status || 'belum diproses';
+  if (t === ORDER_ITEM_TYPE.BUS) {
+    const p = item?.BusProgress || {};
+    const parts = [p.bus_ticket_status, p.arrival_status, p.departure_status, p.return_status].filter(Boolean);
+    return parts.length ? parts.join('/') : 'belum diproses';
+  }
+  if (t === ORDER_ITEM_TYPE.SISKOPATUH || t === ORDER_ITEM_TYPE.HANDLING || t === ORDER_ITEM_TYPE.PACKAGE) {
+    return (item?.meta && item.meta.status) ? String(item.meta.status) : 'sesuai progress invoice';
+  }
+  return 'belum diproses';
+}
+
+function summarizeOrderItemsForExport(inv) {
+  const items = inv?.Order?.OrderItems || [];
+  if (!items.length) return '-';
+  return items
+    .map((it) => `${String(it.type || '-').toUpperCase()}:${it.product_name || it.Product?.name || '-'} x${parseInt(it.quantity, 10) || 0}`)
+    .join(' | ');
+}
+
+function summarizeOrderItemsStatusForExport(inv) {
+  const items = inv?.Order?.OrderItems || [];
+  if (!items.length) return '-';
+  return items
+    .map((it) => `${String(it.type || '-').toUpperCase()}:${getOrderItemStatusForExport(it)}`)
+    .join(' | ');
+}
+
 function buildInvoiceListExportFilterSummary(req) {
   const q = req.query || {};
   const parts = [];
@@ -697,7 +735,7 @@ function buildInvoiceListExportFilterSummary(req) {
 
 const exportListExcel = asyncHandler(async (req, res) => {
   const ctx = await buildInvoiceListFilters(req);
-  const { rows } = await Invoice.findAndCountAll({
+  const rows = await Invoice.findAll({
     where: ctx.where,
     include: [
       ctx.orderInclude,
@@ -705,10 +743,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] }
     ],
-    order: ctx.orderBy,
-    limit: EXPORT_LIST_MAX,
-    offset: 0,
-    distinct: true
+    order: ctx.orderBy
   });
   const data = serializeInvoiceRows(rows);
   await loadInvoiceListRelations(data);
@@ -720,22 +755,22 @@ const exportListExcel = asyncHandler(async (req, res) => {
     { width: 18 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 14 },
     { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 12 },
     { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
-    { width: 28 }, { width: 24 }, { width: 28 }
+    { width: 28 }, { width: 24 }, { width: 28 }, { width: 44 }, { width: 44 }
   ];
 
-  ws.mergeCells('A1:AC1');
+  ws.mergeCells('A1:AE1');
   ws.getCell('A1').value = 'PT. BINTANG GLOBAL GRUP';
   ws.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF0B4F82' } };
   ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.mergeCells('A2:AC2');
+  ws.mergeCells('A2:AE2');
   ws.getCell('A2').value = 'Laporan Resmi Daftar Invoice / Order';
   ws.getCell('A2').font = { bold: true, size: 12 };
   ws.getCell('A2').alignment = { horizontal: 'center' };
-  ws.mergeCells('A3:AC3');
+  ws.mergeCells('A3:AE3');
   ws.getCell('A3').value = `Dicetak: ${new Date().toLocaleString('id-ID')}`;
   ws.getCell('A3').alignment = { horizontal: 'center' };
   ws.getCell('A3').font = { color: { argb: 'FF475569' } };
-  ws.mergeCells('A4:AC4');
+  ws.mergeCells('A4:AE4');
   ws.getCell('A4').value = buildInvoiceListExportFilterSummary(req);
   ws.getCell('A4').alignment = { horizontal: 'center', wrapText: true };
   ws.getCell('A4').font = { italic: true, color: { argb: 'FF64748B' } };
@@ -745,7 +780,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
     'Cabang', 'Wilayah', 'Provinsi', 'Kota', 'Status Invoice', 'Status Order', 'No. Order',
     'Total IDR', 'Total SAR', 'Total USD', 'Kurs SAR→IDR', 'Kurs USD→IDR',
     'Dibayar IDR', 'Dibayar SAR', 'Dibayar USD', 'Sisa IDR', 'Sisa SAR', 'Sisa USD',
-    'Alokasi saldo', 'Refund', 'Realokasi pembayaran', 'Catatan'
+    'Alokasi saldo', 'Refund', 'Realokasi pembayaran', 'Catatan', 'Rincian Item (Nama x Qty)', 'Status Progress Item'
   ];
   const headerRow = ws.addRow(headers);
   headerRow.eachCell((cell) => {
@@ -761,8 +796,8 @@ const exportListExcel = asyncHandler(async (req, res) => {
   });
 
   if (!data.length) {
-    const row = ws.addRow(['', 'Tidak ada data', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    ws.mergeCells(`B${row.number}:AC${row.number}`);
+    const row = ws.addRow(['', 'Tidak ada data', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    ws.mergeCells(`B${row.number}:AE${row.number}`);
     row.getCell(2).alignment = { horizontal: 'center' };
     row.getCell(2).font = { italic: true, color: { argb: 'FF64748B' } };
   } else {
@@ -780,6 +815,8 @@ const exportListExcel = asyncHandler(async (req, res) => {
       const orderNo = (inv.Order && inv.Order.order_number) ? String(inv.Order.order_number) : '-';
       const orderSt = (inv.Order && inv.Order.status) ? String(inv.Order.status) : '-';
       const notes = [inv.notes, inv.cancellation_handling_note].filter(Boolean).join(' | ') || '-';
+      const itemSummary = summarizeOrderItemsForExport(inv);
+      const itemStatusSummary = summarizeOrderItemsStatusForExport(inv);
       const row = ws.addRow([
         idx + 1,
         inv.invoice_number || '-',
@@ -792,7 +829,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
         wilayah,
         prov,
         kota,
-        inv.status || '-',
+        getInvoiceStatusLabelForExport(inv),
         orderSt,
         orderNo,
         tot.idr,
@@ -809,7 +846,9 @@ const exportListExcel = asyncHandler(async (req, res) => {
         summarizeBalanceAllocForExport(inv),
         summarizeRefundsForExport(inv),
         summarizeReallocForExport(inv),
-        notes
+        notes,
+        itemSummary,
+        itemStatusSummary
       ]);
       row.getCell(15).numFmt = '"Rp" #,##0';
       row.getCell(16).numFmt = '#,##0.00';
@@ -843,7 +882,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
 
 const exportListPdf = asyncHandler(async (req, res) => {
   const ctx = await buildInvoiceListFilters(req);
-  const { rows } = await Invoice.findAndCountAll({
+  const rows = await Invoice.findAll({
     where: ctx.where,
     include: [
       ctx.orderInclude,
@@ -851,10 +890,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       { model: Branch, as: 'Branch', attributes: ['id', 'code', 'name', 'city'], required: false, include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }] },
       { model: PaymentProof, as: 'PaymentProofs', required: false, attributes: PAYMENT_PROOF_ATTRS, include: [{ model: User, as: 'VerifiedBy', attributes: ['id', 'name'], required: false }, { model: Bank, as: 'Bank', attributes: ['id', 'name'], required: false }, { model: AccountingBankAccount, as: 'RecipientAccount', attributes: ['id', 'name', 'bank_name', 'account_number', 'currency'], required: false }] }
     ],
-    order: ctx.orderBy,
-    limit: EXPORT_LIST_MAX,
-    offset: 0,
-    distinct: true
+    order: ctx.orderBy
   });
   const data = serializeInvoiceRows(rows);
   await loadInvoiceListRelations(data);
@@ -872,33 +908,32 @@ const exportListPdf = asyncHandler(async (req, res) => {
   doc.font('Helvetica').fontSize(9).fillColor('#334155')
     .text(`Filter: ${buildInvoiceListExportFilterSummary(req)}`, 36, y, { width: doc.page.width - 72, align: 'center' });
   y += 28;
-  doc.font('Helvetica').fontSize(9).fillColor('#475569').text(`Jumlah baris: ${data.length} (maks. ${EXPORT_LIST_MAX}) · Tanggal cetak: ${new Date().toLocaleString('id-ID')}`, 36, y, { align: 'center', width: doc.page.width - 72 });
+  doc.font('Helvetica').fontSize(9).fillColor('#475569').text(`Jumlah baris: ${data.length} · Tanggal cetak: ${new Date().toLocaleString('id-ID')}`, 36, y, { align: 'center', width: doc.page.width - 72 });
   y += 22;
 
   const col = {
     no: 36,
     inv: 52,
-    owner: 128,
-    cabang: 218,
-    st: 288,
-    tot: 348,
-    paid: 418,
-    sisa: 488,
-    extra: 558
+    owner: 116,
+    status: 220,
+    order: 290,
+    item: 360,
+    total: 545,
+    paid: 615,
+    remain: 685
   };
-  const rowH = 22;
   const drawTableHeader = () => {
     doc.rect(36, y, doc.page.width - 72, 20).fill('#0D1A63');
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7.5)
       .text('No', col.no + 2, y + 6)
       .text('Invoice', col.inv + 2, y + 6)
       .text('Owner / Perusahaan', col.owner + 2, y + 6)
-      .text('Cabang', col.cabang + 2, y + 6)
-      .text('Status', col.st + 2, y + 6)
-      .text('Total IDR', col.tot + 2, y + 6)
-      .text('Dibayar IDR', col.paid + 2, y + 6)
-      .text('Sisa IDR', col.sisa + 2, y + 6)
-      .text('Saldo·Refund·Realok', col.extra + 2, y + 6);
+      .text('Status', col.status + 2, y + 6)
+      .text('Order', col.order + 2, y + 6)
+      .text('Item & Qty + Status', col.item + 2, y + 6)
+      .text('Total', col.total + 2, y + 6)
+      .text('Dibayar', col.paid + 2, y + 6)
+      .text('Sisa', col.remain + 2, y + 6);
     y += 22;
   };
   drawTableHeader();
@@ -914,9 +949,13 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const company = (inv.User && inv.User.company_name) || '';
       const ownerLine = company ? `${ownerName} · ${company}` : ownerName;
       const branch = inv.Branch || {};
-      const cabang = (branch.name || branch.code || '-').slice(0, 22);
-      const extra = `${summarizeBalanceAllocForExport(inv).slice(0, 18)} | ${summarizeRefundsForExport(inv).slice(0, 14)}`;
-      const blockH = 36;
+      const cabang = (branch.name || branch.code || '-');
+      const orderNo = (inv.Order && inv.Order.order_number) ? String(inv.Order.order_number) : '-';
+      const orderSt = (inv.Order && inv.Order.status) ? String(inv.Order.status) : '-';
+      const itemLine = summarizeOrderItemsForExport(inv);
+      const itemStatusLine = summarizeOrderItemsStatusForExport(inv);
+      const itemCombined = `${itemLine}\nStatus: ${itemStatusLine}`;
+      const blockH = 56;
       if (y + blockH > doc.page.height - 48) {
         doc.addPage();
         y = drawCorporateLetterhead(doc, { margin: 36 });
@@ -927,16 +966,15 @@ const exportListPdf = asyncHandler(async (req, res) => {
       doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(36, y, doc.page.width - 72, blockH).stroke();
       doc.font('Helvetica').fontSize(7).fillColor('#0f172a')
         .text(String(idx + 1), col.no + 2, y + 4, { width: 14 })
-        .text(String(inv.invoice_number || '-').slice(0, 18), col.inv + 2, y + 4, { width: 72 })
-        .text(ownerLine.slice(0, 80), col.owner + 2, y + 4, { width: 86, height: 30 })
-        .text(cabang, col.cabang + 2, y + 4, { width: 66 })
-        .text(String(inv.status || '-').slice(0, 16), col.st + 2, y + 4, { width: 56 });
+        .text(String(inv.invoice_number || '-').slice(0, 16), col.inv + 2, y + 4, { width: 60 })
+        .text(ownerLine.slice(0, 80), col.owner + 2, y + 4, { width: 100, height: 48 })
+        .text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 20), col.status + 2, y + 4, { width: 66 })
+        .text(`No: ${orderNo}\nSt: ${orderSt}\nCab: ${cabang}`.slice(0, 90), col.order + 2, y + 4, { width: 66, height: 48 })
+        .text(itemCombined.slice(0, 250), col.item + 2, y + 4, { width: 180, height: 48 });
       doc.font('Helvetica-Bold').fontSize(7).fillColor('#0f172a')
-        .text(`Rp ${tot.idr.toLocaleString('id-ID')}`, col.tot + 2, y + 4, { width: 66 })
-        .text(`Rp ${paid.idr.toLocaleString('id-ID')}`, col.paid + 2, y + 4, { width: 66 })
-        .text(`Rp ${rem.idr.toLocaleString('id-ID')}`, col.sisa + 2, y + 4, { width: 66 });
-      doc.font('Helvetica').fontSize(6.5).fillColor('#475569')
-        .text(extra.slice(0, 90), col.extra + 2, y + 4, { width: doc.page.width - col.extra - 40, height: 32 });
+        .text(`Rp ${tot.idr.toLocaleString('id-ID')}\nSAR ${tot.sar.toFixed(2)}\nUSD ${tot.usd.toFixed(2)}`, col.total + 2, y + 4, { width: 66, height: 48 })
+        .text(`Rp ${paid.idr.toLocaleString('id-ID')}\nSAR ${paid.sar.toFixed(2)}\nUSD ${paid.usd.toFixed(2)}`, col.paid + 2, y + 4, { width: 66, height: 48 })
+        .text(`Rp ${rem.idr.toLocaleString('id-ID')}\nSAR ${rem.sar.toFixed(2)}\nUSD ${rem.usd.toFixed(2)}`, col.remain + 2, y + 4, { width: 66, height: 48 });
       y += blockH;
     });
   }
