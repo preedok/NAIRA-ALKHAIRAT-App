@@ -66,6 +66,7 @@ type BusServiceOption = 'finality' | 'hiace' | 'visa_only';
 type ItemType   = typeof ITEM_TYPES[number]['id'];
 type RoomTypeId = typeof ROOM_TYPES[number]['id'];
 type HotelRoomInputMode = 'manual' | 'pax';
+type HotelPriceMode = 'auto' | 'mou' | 'non_mou';
 
 type DisplayCurrency = 'SAR' | 'IDR' | 'USD';
 
@@ -608,6 +609,15 @@ const OrderFormPage: React.FC = () => {
   /** Ada input kurs khusus order → total & subtotal hotel (IDR dari master SAR) dihitung ulang pakai kurs ini, bukan nilai IDR tersimpan dari kurs admin. */
   const hasCustomOrderKurs = !!(orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null));
   const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
+  const hotelPriceMode = (row: OrderItemRow): HotelPriceMode => {
+    const mode = String((row.meta?.hotel_price_mode as string) || 'auto').toLowerCase();
+    if (mode === 'mou' || mode === 'non_mou') return mode;
+    return 'auto';
+  };
+  const hotelOwnerTypeScopeParam = (row: OrderItemRow): 'mou' | 'non_mou' | undefined => {
+    const mode = hotelPriceMode(row);
+    return mode === 'auto' ? undefined : mode;
+  };
   const s2iEff=effectiveRates.SAR_TO_IDR||4200; const u2iEff=effectiveRates.USD_TO_IDR||15500;
   /** Konversi nilai dari satu mata uang ke mata uang lain (satu sumber kebenaran: kurs effectiveRates). */
   const convertAmount=(value:number,fromCur:DisplayCurrency,toCur:DisplayCurrency):number=>{
@@ -752,7 +762,7 @@ const OrderFormPage: React.FC = () => {
           .filter((l) => l.room_type)
           .map((l) => `${l.id}:${l.room_type}:${l.quantity}:${l.with_meal ? 1 : 0}`)
           .join('|');
-        return `${r.id}|${r.product_id}|${r.check_in}|${r.check_out}|${cur}|${lines}|${branchId ?? ''}|${ownerId ?? ''}|${s2iEff}|${u2iEff}`;
+        return `${r.id}|${r.product_id}|${r.check_in}|${r.check_out}|${cur}|${lines}|${hotelPriceMode(r)}|${branchId ?? ''}|${ownerId ?? ''}|${s2iEff}|${u2iEff}`;
       })
       .sort()
       .join('##');
@@ -777,7 +787,8 @@ const OrderFormPage: React.FC = () => {
               quantity: q,
               currency: cur,
               branch_id: branchId,
-              owner_id: ownerId
+              owner_id: ownerId,
+              owner_type_scope: hotelOwnerTypeScopeParam(row)
             })
             .then((res) => {
               const d = (res.data as { data?: { nights?: number; room_unit_per_night?: number; meal_unit_per_person_per_night?: number } })?.data;
@@ -1164,7 +1175,7 @@ const OrderFormPage: React.FC = () => {
         for(const l of r.room_breakdown){
           if(l.quantity<=0||!l.room_type) continue;
           const meal=l.with_meal??false;
-          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location; if (r.meta?.hotel_price_mode) meta.hotel_price_mode = r.meta.hotel_price_mode;
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
@@ -1173,7 +1184,7 @@ const OrderFormPage: React.FC = () => {
           out.push(item);
         }
       } else if(r.type==='hotel'&&r.room_type){
-        const meta:Record<string,unknown>={room_type:r.room_type,room_unit_price:r.unit_price??0,meal_unit_price:0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+        const meta:Record<string,unknown>={room_type:r.room_type,room_unit_price:r.unit_price??0,meal_unit_price:0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location; if (r.meta?.hotel_price_mode) meta.hotel_price_mode = r.meta.hotel_price_mode;
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
@@ -1667,6 +1678,25 @@ const OrderFormPage: React.FC = () => {
                                   <div className="min-w-0">
                                     <Input label="Check-out" type="date" value={row.check_out ?? ''} onChange={e => updateRow(row.id, { check_out: e.target.value || undefined })} />
                                     <p className="text-xs text-slate-400 mt-1">Jam 12:00</p>
+                                  </div>
+                                  <div className="min-w-0 sm:col-span-2">
+                                    <Autocomplete
+                                      label="Sumber harga hotel"
+                                      value={hotelPriceMode(row)}
+                                      onChange={(v) => {
+                                        const next = (v as HotelPriceMode) || 'auto';
+                                        updateRow(row.id, { meta: { ...(row.meta || {}), hotel_price_mode: next } });
+                                      }}
+                                      options={[
+                                        { value: 'auto', label: 'Auto (ikut tipe owner)' },
+                                        { value: 'mou', label: 'Paksa harga MOU' },
+                                        { value: 'non_mou', label: 'Paksa harga Non-MOU' }
+                                      ]}
+                                      emptyLabel="Pilih sumber harga"
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      Gunakan opsi ini bila ingin memilih harga yang dipakai di invoice (MOU/Non-MOU) per item hotel.
+                                    </p>
                                   </div>
                                   {row.check_in && row.check_out && (
                                     <div className="flex items-center gap-2 py-2.5 px-4 rounded-lg bg-slate-100 border border-slate-200/80 text-sm font-medium text-slate-700 col-span-full">

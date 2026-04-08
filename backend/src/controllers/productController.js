@@ -1355,6 +1355,9 @@ const getHotelStayQuote = asyncHandler(async (req, res) => {
     : 'SAR';
   const branchId = req.query.branch_id || req.user?.branch_id || null;
   const ownerId = req.query.owner_id || null;
+  const ownerTypeScope = ['mou', 'non_mou'].includes(String(req.query.owner_type_scope || '').toLowerCase())
+    ? String(req.query.owner_type_scope).toLowerCase()
+    : null;
 
   if (!checkIn || !checkOut) {
     return res.status(400).json({ success: false, message: 'Query check_in dan check_out wajib (YYYY-MM-DD)' });
@@ -1373,7 +1376,8 @@ const getHotelStayQuote = asyncHandler(async (req, res) => {
       checkOut,
       quantity,
       currency,
-      rates
+      rates,
+      ownerTypeScope
     });
   } catch (e) {
     if (e && (e.code === 'MISSING_HOTEL_MONTHLY_ROOM' || e.code === 'MISSING_HOTEL_MONTHLY_MEAL')) {

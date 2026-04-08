@@ -126,6 +126,7 @@ export const productsApi = {
       currency?: string;
       branch_id?: string;
       owner_id?: string;
+      owner_type_scope?: 'mou' | 'non_mou';
     }
   ) =>
     api.get<{
