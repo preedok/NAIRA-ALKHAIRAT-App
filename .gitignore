@@ -36,3 +36,6 @@ android/build/
 # misc
 *.keystore
 *.jks
+
+# Deploy scripts with secrets (keep local only)
+deploy/deploy-vps-password.ps1
