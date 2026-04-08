@@ -39,6 +39,7 @@
     "clear:orders-invoices-owners": "node scripts/clear-orders-and-owner-accounts.js",
     "ensure:owner-manual-columns": "node scripts/ensure-invoice-order-owner-manual-columns.js",
     "ensure:hotel-monthly-component": "node scripts/ensure-hotel-monthly-component-column.js",
+    "ensure:hotel-monthly-owner-type-scope": "node scripts/ensure-hotel-monthly-owner-type-scope-column.js",
     "ensure:product-mou-fullboard-column": "node scripts/ensure-product-mou-fullboard-column.js",
     "ensure:refunds-payout-sender": "node scripts/ensure-refunds-payout-sender-columns.js",
     "backfill:hotel-monthly": "node scripts/backfill-hotel-monthly-from-prices.js",

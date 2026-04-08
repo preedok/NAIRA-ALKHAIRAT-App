@@ -1203,6 +1203,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const gridMonthLabel = md?.year_month ? formatYmShortId(md.year_month) : '';
             const gridRtLabel = md?.room_type ? (ROOM_TYPE_LABELS[md.room_type] || md.room_type) : '';
             const avail = availabilityByHotelId[hotel.id];
+            const isPerPackHotel = hotel.meta?.room_pricing_mode === 'per_person';
             const gridRates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
             const series = hotel.hotel_monthly_series;
             const mealMonthsList = hotel.hotel_monthly_meal_months?.months ?? series?.months;
@@ -1505,31 +1506,49 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       title="Klik untuk lihat tanggal dengan kamar tersedia"
                     >
                       <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(avail.byRoomType).map(([rt, n]) => {
-                          const isFullboard = false;
-                          const showPriceHere = isFullboard;
-                          const rtEntry = breakdown[rt as keyof typeof breakdown];
-                          const priceVal = typeof rtEntry === 'object' && rtEntry != null && 'price' in rtEntry ? Number((rtEntry as { price?: number }).price) : 0;
-                          const tripleRt = fillFromSource(cur, priceVal, currencyRates);
-                          const tRt = getPriceTripleForTable(tripleRt.idr, tripleRt.sar, tripleRt.usd);
-                          const priceLabel = showPriceHere && tRt.hasPrice ? (cur === 'SAR' ? tRt.sarText : cur === 'USD' ? tRt.usdText : tRt.idrText) : null;
-                          return (
-                            <div
-                              key={rt}
-                              className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[56px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
-                            >
-                              <p className="text-[10px] font-medium text-slate-500 uppercase capitalize">{rt}</p>
-                              {n === 0 ? (
-                                <p className="text-xs font-bold text-red-600">Penuh</p>
-                              ) : (
-                                <p className="text-xs font-bold text-emerald-600 tabular-nums">{n}</p>
-                              )}
-                              {priceLabel != null && (
-                                <p className="text-[10px] text-slate-600 mt-0.5 tabular-nums">{priceLabel}</p>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {isPerPackHotel ? (
+                          (() => {
+                            const perPackAvailable = Object.values(avail.byRoomType).reduce((mx, n) => Math.max(mx, Number(n) || 0), 0);
+                            return (
+                              <div
+                                className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[84px] ${perPackAvailable === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
+                              >
+                                <p className="text-[10px] font-medium text-slate-500 uppercase">Per pack</p>
+                                {perPackAvailable === 0 ? (
+                                  <p className="text-xs font-bold text-red-600">Penuh</p>
+                                ) : (
+                                  <p className="text-xs font-bold text-emerald-600 tabular-nums">{perPackAvailable}</p>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          Object.entries(avail.byRoomType).map(([rt, n]) => {
+                            const isFullboard = false;
+                            const showPriceHere = isFullboard;
+                            const rtEntry = breakdown[rt as keyof typeof breakdown];
+                            const priceVal = typeof rtEntry === 'object' && rtEntry != null && 'price' in rtEntry ? Number((rtEntry as { price?: number }).price) : 0;
+                            const tripleRt = fillFromSource(cur, priceVal, currencyRates);
+                            const tRt = getPriceTripleForTable(tripleRt.idr, tripleRt.sar, tripleRt.usd);
+                            const priceLabel = showPriceHere && tRt.hasPrice ? (cur === 'SAR' ? tRt.sarText : cur === 'USD' ? tRt.usdText : tRt.idrText) : null;
+                            return (
+                              <div
+                                key={rt}
+                                className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[56px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
+                              >
+                                <p className="text-[10px] font-medium text-slate-500 uppercase capitalize">{rt}</p>
+                                {n === 0 ? (
+                                  <p className="text-xs font-bold text-red-600">Penuh</p>
+                                ) : (
+                                  <p className="text-xs font-bold text-emerald-600 tabular-nums">{n}</p>
+                                )}
+                                {priceLabel != null && (
+                                  <p className="text-[10px] text-slate-600 mt-0.5 tabular-nums">{priceLabel}</p>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                       <p className="text-[10px] text-slate-500 mt-1.5 group-hover:text-emerald-600">Klik untuk lihat per tanggal →</p>
                     </button>
