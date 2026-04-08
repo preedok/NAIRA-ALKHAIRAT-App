@@ -719,6 +719,39 @@ function summarizeOrderItemsStatusForExport(inv) {
     .join(' | ');
 }
 
+function computeInvoiceExportTotals(data) {
+  const totals = {
+    total_idr: 0,
+    total_sar: 0,
+    total_usd: 0,
+    paid_idr: 0,
+    paid_sar: 0,
+    paid_usd: 0,
+    remaining_idr: 0,
+    remaining_sar: 0,
+    remaining_usd: 0,
+    allocation_idr: 0,
+    refund_idr: 0
+  };
+  for (const inv of data || []) {
+    const t = invoiceListAmountTriple(inv);
+    const p = paidTripleForList(inv);
+    const r = remainingTripleForList(inv);
+    totals.total_idr += t.idr || 0;
+    totals.total_sar += t.sar || 0;
+    totals.total_usd += t.usd || 0;
+    totals.paid_idr += p.idr || 0;
+    totals.paid_sar += p.sar || 0;
+    totals.paid_usd += p.usd || 0;
+    totals.remaining_idr += r.idr || 0;
+    totals.remaining_sar += r.sar || 0;
+    totals.remaining_usd += r.usd || 0;
+    totals.allocation_idr += (inv.BalanceAllocations || []).reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+    totals.refund_idr += (inv.Refunds || []).reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+  }
+  return totals;
+}
+
 function buildInvoiceListExportFilterSummary(req) {
   const q = req.query || {};
   const parts = [];
@@ -747,6 +780,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
   });
   const data = serializeInvoiceRows(rows);
   await loadInvoiceListRelations(data);
+  const totals = computeInvoiceExportTotals(data);
 
   const workbook = new ExcelJS.Workbook();
   const ws = workbook.addWorksheet('Daftar Invoice');
@@ -871,6 +905,56 @@ const exportListExcel = asyncHandler(async (req, res) => {
         };
       });
     });
+
+    // Ringkasan total seluruh data (semua baris hasil filter)
+    const spacer = ws.addRow(new Array(31).fill(''));
+    spacer.height = 6;
+    const totalRow = ws.addRow([
+      '', '', '', '', '', '', '', '', '', '', '', '', '', 'TOTAL SELURUH DATA',
+      totals.total_idr,
+      totals.total_sar,
+      totals.total_usd,
+      '',
+      '',
+      totals.paid_idr,
+      totals.paid_sar,
+      totals.paid_usd,
+      totals.remaining_idr,
+      totals.remaining_sar,
+      totals.remaining_usd,
+      totals.allocation_idr,
+      totals.refund_idr,
+      '-',
+      '-',
+      '-',
+      '-'
+    ]);
+    ws.mergeCells(`A${totalRow.number}:N${totalRow.number}`);
+    totalRow.getCell(1).value = 'TOTAL SELURUH DATA';
+    totalRow.getCell(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    totalRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+    totalRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1A63' } };
+    totalRow.getCell(15).numFmt = '"Rp" #,##0';
+    totalRow.getCell(16).numFmt = '#,##0.00';
+    totalRow.getCell(17).numFmt = '#,##0.00';
+    totalRow.getCell(20).numFmt = '"Rp" #,##0';
+    totalRow.getCell(21).numFmt = '#,##0.00';
+    totalRow.getCell(22).numFmt = '#,##0.00';
+    totalRow.getCell(23).numFmt = '"Rp" #,##0';
+    totalRow.getCell(24).numFmt = '#,##0.00';
+    totalRow.getCell(25).numFmt = '#,##0.00';
+    totalRow.getCell(26).numFmt = '"Rp" #,##0';
+    totalRow.getCell(27).numFmt = '"Rp" #,##0';
+    totalRow.eachCell((cell, colNumber) => {
+      cell.font = { ...(cell.font || {}), bold: true, color: { argb: colNumber <= 14 ? 'FFFFFFFF' : 'FF0D1A63' } };
+      if (colNumber >= 15) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+      };
+    });
   }
 
   const filename = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -894,6 +978,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
   });
   const data = serializeInvoiceRows(rows);
   await loadInvoiceListRelations(data);
+  const totals = computeInvoiceExportTotals(data);
 
   const filename = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
@@ -978,6 +1063,23 @@ const exportListPdf = asyncHandler(async (req, res) => {
       y += blockH;
     });
   }
+
+  if (y + 58 > doc.page.height - 36) {
+    doc.addPage();
+    y = drawCorporateLetterhead(doc, { margin: 36 });
+    y += 8;
+  }
+  doc.rect(36, y, doc.page.width - 72, 52).fill('#E0E7FF');
+  doc.strokeColor('#94A3B8').lineWidth(0.7).rect(36, y, doc.page.width - 72, 52).stroke();
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#0D1A63')
+    .text('TOTAL SELURUH DATA', 42, y + 7);
+  doc.font('Helvetica').fontSize(8).fillColor('#0f172a')
+    .text(
+      `Total Tagihan: Rp ${totals.total_idr.toLocaleString('id-ID')} | SAR ${totals.total_sar.toFixed(2)} | USD ${totals.total_usd.toFixed(2)}\n` +
+      `Total Dibayar: Rp ${totals.paid_idr.toLocaleString('id-ID')} | SAR ${totals.paid_sar.toFixed(2)} | USD ${totals.paid_usd.toFixed(2)}\n` +
+      `Total Sisa: Rp ${totals.remaining_idr.toLocaleString('id-ID')} | SAR ${totals.remaining_sar.toFixed(2)} | USD ${totals.remaining_usd.toFixed(2)}`,
+      190, y + 7, { width: doc.page.width - 230 }
+    );
 
   doc.end();
 });
