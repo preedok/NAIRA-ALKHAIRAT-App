@@ -325,7 +325,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [addForm, setAddForm] = useState({
     name: '',
     location: 'makkah' as 'makkah' | 'madinah',
-    allotment_type: 'allotment' as 'allotment' | 'non_allotment'
+    allotment_type: 'allotment' as 'allotment' | 'non_allotment',
+    room_pricing_mode: 'per_room' as 'per_room' | 'per_person'
   });
   const [currencyRates, setCurrencyRates] = useState<{ SAR_TO_IDR?: number; USD_TO_IDR?: number }>({});
   const [seasonsModalHotel, setSeasonsModalHotel] = useState<HotelProduct | null>(null);
@@ -824,7 +825,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     setAddForm({
       name: '',
       location: 'makkah',
-      allotment_type: 'allotment'
+      allotment_type: 'allotment',
+      room_pricing_mode: 'per_room'
     });
     setShowAddModal(true);
   };
@@ -842,7 +844,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       setAddForm({
         name: data.name || '',
         location: (meta.location as 'makkah' | 'madinah') || 'makkah',
-        allotment_type: (meta.allotment_type as 'allotment' | 'non_allotment') || 'allotment'
+        allotment_type: (meta.allotment_type as 'allotment' | 'non_allotment') || 'allotment',
+        room_pricing_mode: (meta.room_pricing_mode as 'per_room' | 'per_person') || 'per_room'
       });
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -993,6 +996,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         location: addForm.location,
         room_types: ROOM_TYPES,
         allotment_type: addForm.allotment_type,
+        room_pricing_mode: addForm.room_pricing_mode,
         pricing_mode: 'per_type'
       };
       await productsApi.createHotel({
@@ -1023,7 +1027,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         ...existingMeta,
         location: addForm.location,
         room_types: existingMeta.room_types ?? ROOM_TYPES,
-        allotment_type: addForm.allotment_type
+        allotment_type: addForm.allotment_type,
+        room_pricing_mode: addForm.room_pricing_mode
       };
       await productsApi.update(editingHotel.id, { name: addForm.name.trim(), meta });
       showToast('Hotel berhasil diubah', 'success');
@@ -1925,6 +1930,33 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       }`}
                     >
                       Non allotment
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">Mode harga kamar</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, room_pricing_mode: 'per_room' }))}
+                      className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+                        addForm.room_pricing_mode === 'per_room'
+                          ? 'bg-btn text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
+                      }`}
+                    >
+                      Per room
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, room_pricing_mode: 'per_person' }))}
+                      className={`w-full py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+                        addForm.room_pricing_mode === 'per_person'
+                          ? 'bg-btn text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:border-btn hover:bg-btn-light'
+                      }`}
+                    >
+                      Per orang
                     </button>
                   </div>
                 </div>

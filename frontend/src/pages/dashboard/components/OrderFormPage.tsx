@@ -75,7 +75,7 @@ interface ProductOption {
   is_package?:boolean; price_general?:number|null;
   price_general_idr?:number|null; price_general_sar?:number|null; price_general_usd?:number|null;
   price_branch?:number|null; price_owner?:number|null;
-  currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
+  currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';room_pricing_mode?:'per_room'|'per_person';route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
   room_breakdown?:Record<string,{ price: number; quantity?: number }>; prices_by_room?:Record<string,{ price: number; quantity?: number }>;
   /** Backend: nilai suplemen makan dalam mata uang referensi produk (bukan selalu IDR meski namanya _idr). */
   meal_price_idr?: number | null;
@@ -660,6 +660,16 @@ const OrderFormPage: React.FC = () => {
   const isFullboardHotel=(p:ProductOption|undefined):boolean=>!!(p?.meta?.meal_plan==='fullboard');
 
   const roomCap = (rt: RoomTypeId) => ROOM_TYPES.find((t) => t.id === rt)?.cap ?? 0;
+  const hotelRoomPricingMode = (p: ProductOption | undefined): 'per_room' | 'per_person' =>
+    p?.meta?.room_pricing_mode === 'per_person' ? 'per_person' : 'per_room';
+  const hotelRoomPricingLabel = (p: ProductOption | undefined): string =>
+    hotelRoomPricingMode(p) === 'per_person' ? 'Per pack' : 'Per room';
+  const hotelRoomUnitMultiplier = (p: ProductOption | undefined, rt: RoomTypeId | ''): number => {
+    if (!p || !rt) return 1;
+    return hotelRoomPricingMode(p) === 'per_person' ? Math.max(1, roomCap(rt as RoomTypeId)) : 1;
+  };
+  const hotelRoomUnitSar = (p: ProductOption | undefined, rt: RoomTypeId | '', checkIn?: string): number =>
+    hrp(p, rt, false, checkIn) * hotelRoomUnitMultiplier(p, rt);
 
   /** Generate kombinasi tipe kamar terbaik (min kamar, lalu prefer kamar besar) dengan batas ketersediaan jika tersedia. */
   const bestRoomCombo = useCallback((pax: number, roomTypes: RoomTypeId[], availability?: Record<string, number>) => {
@@ -736,8 +746,8 @@ const OrderFormPage: React.FC = () => {
         .map(([rtRaw, qty]) => {
           const rt = rtRaw as RoomTypeId;
           const withMeal = fullboard ? true : withMealDefault;
-          const roomOnlySar = hrp(prod, rt, false, r.check_in);
-          const withMealSar = hrp(prod, rt, true, r.check_in);
+          const roomOnlySar = hotelRoomUnitSar(prod, rt, r.check_in);
+          const withMealSar = roomOnlySar + (withMeal ? mealPSar : 0);
           const roomP = toCurrencyFromSAR(roomOnlySar, rowCurrency);
           const mealP = toCurrencyFromSAR(mealPSar, rowCurrency);
           const unitP = fullboard ? toCurrencyFromSAR(withMealSar, rowCurrency) : (withMeal ? toCurrencyFromSAR(withMealSar, rowCurrency) : roomP);
@@ -888,11 +898,11 @@ const OrderFormPage: React.FC = () => {
           next.room_breakdown=next.room_breakdown.map(l=>{
             if(!l.room_type) return l;
             const withMeal=fullboard?true:(l.with_meal??false);
-            const roomPSar=hrp(prod,l.room_type as RoomTypeId,false,next.check_in);
+            const roomPSar=hotelRoomUnitSar(prod,l.room_type as RoomTypeId,next.check_in);
             const mealPSar=getMealPriceSar(prod,next.check_in);
             const roomP=toCurrencyFromSAR(roomPSar,rowCurHotel);
             const mealP=toCurrencyFromSAR(mealPSar,rowCurHotel);
-            const combinedP=fullboard?toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,next.check_in),rowCurHotel):(roomP+(withMeal?mealP:0));
+            const combinedP=fullboard?roomP:(roomP+(withMeal?mealP:0));
             return { ...l, with_meal: withMeal, unit_price: l.unit_price||(fullboard?combinedP:roomP), meal_unit_price: withMeal && !fullboard ? (l.meal_unit_price??mealP) : 0 };
           });
         }
@@ -924,13 +934,13 @@ const OrderFormPage: React.FC = () => {
     if (prod?.type === 'hotel') {
       const hasSplitMeal = typeof l.meal_unit_price === 'number';
       if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
-      const roomPart = l.unit_price || toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      const roomPart = l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in), cur);
       const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, r.check_in), cur)) : 0;
       return roomPart + mealPart;
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur);
-    const roomPart=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false,r.check_in),cur);
+    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur);
+    const roomPart=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur);
     const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur)):0;
     return roomPart+mealPart;
   };
@@ -944,11 +954,11 @@ const OrderFormPage: React.FC = () => {
         const meal = toCurrencyFromSAR(getMealPriceSar(prod, r.check_in), cur);
         return Math.max(0, combined - meal);
       }
-      return l.unit_price || toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      return l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in), cur);
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur); return Math.max(0,combined-meal); }
-    return l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false,r.check_in),cur);
+    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur); return Math.max(0,combined-meal); }
+    return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur);
   };
   const getEffectiveMealPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.with_meal) return 0;
@@ -957,11 +967,11 @@ const OrderFormPage: React.FC = () => {
     if (prod?.type === 'hotel') {
       if (typeof l.meal_unit_price === 'number') return l.meal_unit_price;
       const combined = l.unit_price || 0;
-      const room = toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      const room = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in), cur);
       return Math.max(0, combined - room);
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
+    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
     return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur);
   };
   /** Untuk ringkasan total & header: jika kurs order diisi, harga kamar dihitung lagi dari master SAR × kurs order (bukan IDR tersimpan dari kurs settings). */
@@ -973,13 +983,13 @@ const OrderFormPage: React.FC = () => {
     if (prod?.type === 'hotel') {
       const hasSplitMeal = typeof l.meal_unit_price === 'number';
       if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
-      const roomPart = toCurrencyFromSAR(hrp(prod, l.room_type as RoomTypeId, false, r.check_in), cur);
+      const roomPart = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in), cur);
       const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, r.check_in), cur)) : 0;
       return roomPart + mealPart;
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,true,r.check_in),cur);
-    const roomPart=toCurrencyFromSAR(hrp(prod,l.room_type as RoomTypeId,false,r.check_in),cur);
+    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur);
+    const roomPart=toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in),cur);
     const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in),cur)):0;
     return roomPart+mealPart;
   };
@@ -1001,7 +1011,7 @@ const OrderFormPage: React.FC = () => {
       const cur=rowCur(r);
       const fullboard=!!(prod && (prod.meta?.meal_plan as string)==='fullboard');
       const unit=hasCustomOrderKurs&&prod&&r.room_type
-        ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard,r.check_in),cur)
+        ? toCurrencyFromSAR(hotelRoomUnitSar(prod,r.room_type as RoomTypeId,r.check_in),cur)
         :(r.unit_price||0);
       return Math.max(0,r.quantity)*unit*multiplier;
     }
@@ -1138,9 +1148,8 @@ const OrderFormPage: React.FC = () => {
         const useLatestRates=hasDpPayment&&isNew;
         const prod=byType('hotel').find(p=>p.id===r.product_id);
         const cur=rowCur(r);
-        const fullboard=!!(prod && (prod.meta?.meal_plan as string)==='fullboard');
         const lineRowCur=hasCustomOrderKurs&&prod&&r.room_type
-          ? toCurrencyFromSAR(hrp(prod,r.room_type as RoomTypeId,fullboard,r.check_in),cur)
+          ? toCurrencyFromSAR(hotelRoomUnitSar(prod,r.room_type as RoomTypeId,r.check_in),cur)
           :(r.unit_price||0);
         const unitPriceIdr=useLatestRates?toIDRWithRates(lineRowCur,r,latestRates):toIDR(lineRowCur,r);
         const nights=nightsFor(r)||1;
@@ -1818,7 +1827,9 @@ const OrderFormPage: React.FC = () => {
                                 if (!showRoomLines) return null;
                                 return (
                                   <>
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipe kamar & harga</p>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                      Tipe kamar & harga ({hotelRoomPricingLabel(hProd)})
+                                    </p>
                                     {(row.room_breakdown||[]).map(line=>(
                                       <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
                                         {(() => {
@@ -1827,7 +1838,7 @@ const OrderFormPage: React.FC = () => {
                                           return (
                                             <>
                                   <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
-                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hrp(hProd,rt,false,row.check_in); const withMealSar=hrp(hProd,rt,true,row.check_in); const unitP=rt?(fullboard?toCurrencyFromSAR(withMealSar,cur):toCurrencyFromSAR(withMeal?withMealSar:roomOnlySar,cur)):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd,row.check_in),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
+                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=!!(hProd&&(hProd.meta?.meal_plan as string)==='fullboard'); const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hotelRoomUnitSar(hProd,rt,row.check_in); const unitP=rt?toCurrencyFromSAR(roomOnlySar,cur):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd,row.check_in),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
                                   </div>
                                   <div className="w-16 min-w-[60px]">
                                     <Input label="Jumlah" type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ if(locked) return; const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
