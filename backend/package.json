@@ -42,6 +42,7 @@
     "ensure:hotel-monthly-owner-type-scope": "node scripts/ensure-hotel-monthly-owner-type-scope-column.js",
     "ensure:product-mou-fullboard-column": "node scripts/ensure-product-mou-fullboard-column.js",
     "ensure:refunds-payout-sender": "node scripts/ensure-refunds-payout-sender-columns.js",
+    "ensure:refunds-proof-transfer-at": "node scripts/ensure-refunds-proof-transfer-at-column.js",
     "backfill:hotel-monthly": "node scripts/backfill-hotel-monthly-from-prices.js",
     "generate:payment-proofs": "node scripts/generate-payment-proof-examples.js"
   },
