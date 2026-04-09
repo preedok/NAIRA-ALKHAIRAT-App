@@ -292,8 +292,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [statModal, setStatModal] = useState<'total_invoice' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
   const [statusModal, setStatusModal] = useState<string | null>(null);
-  const [exportingInvoicesExcel, setExportingInvoicesExcel] = useState(false);
-  const [exportingInvoiceListExcel, setExportingInvoiceListExcel] = useState(false);
   const [exportingInvoiceListPdf, setExportingInvoiceListPdf] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1821,44 +1819,6 @@ const OrdersInvoicesPage: React.FC = () => {
           <>
             <AutoRefreshControl onRefresh={fetchInvoices} disabled={loading} />
             <FilterIconButton open={showFilters} onToggle={() => setShowFilters((v) => !v)} hasActiveFilters={hasActiveFilters} />
-            {isAccounting && (
-            <Button
-              variant="outline"
-              disabled={exportingInvoicesExcel}
-              onClick={async () => {
-                setExportingInvoicesExcel(true);
-                try {
-                  const params = buildListParams();
-                  const res = await accountingApi.exportInvoicesExcel({
-                    branch_id: params.branch_id as string | undefined,
-                    provinsi_id: params.provinsi_id as string | undefined,
-                    wilayah_id: params.wilayah_id as string | undefined,
-                    owner_id: params.owner_id as string | undefined,
-                    status: params.status as string | undefined,
-                    date_from: params.date_from as string | undefined,
-                    date_to: params.date_to as string | undefined,
-                    invoice_number: params.invoice_number as string | undefined
-                  });
-                  const blob = res.data instanceof Blob ? res.data : new Blob([res.data]);
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.xlsx`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  showToast('Export Excel berhasil diunduh.', 'success');
-                } catch {
-                  showToast('Gagal export Excel.', 'error');
-                } finally {
-                  setExportingInvoicesExcel(false);
-                }
-              }}
-              className="shrink-0"
-            >
-              <FileSpreadsheet className="w-5 h-5 mr-2" />
-              {exportingInvoicesExcel ? 'Mengunduh...' : 'Export Excel'}
-            </Button>
-          )}
         </>
       }
       />
@@ -2180,33 +2140,6 @@ const OrdersInvoicesPage: React.FC = () => {
           className="mb-5 px-1"
           right={
             <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-slate-200/90"
-                disabled={exportingInvoiceListExcel || loading}
-                onClick={async () => {
-                  setExportingInvoiceListExcel(true);
-                  try {
-                    const res = await invoicesApi.exportListExcel(buildExportListParams() as Parameters<typeof invoicesApi.exportListExcel>[0]);
-                    const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.xlsx`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    showToast('Export Excel berhasil diunduh.', 'success');
-                  } catch {
-                    showToast('Gagal mengunduh Excel.', 'error');
-                  } finally {
-                    setExportingInvoiceListExcel(false);
-                  }
-                }}
-              >
-                <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-                {exportingInvoiceListExcel ? 'Mengunduh...' : 'Export Excel'}
-              </Button>
               <Button
                 variant="outline"
                 size="sm"

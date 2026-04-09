@@ -11,7 +11,6 @@ router.use(auth);
 router.get('/summary', invoiceController.getSummary);
 router.get('/reallocations', invoiceController.listReallocations);
 router.get('/draft-orders', invoiceController.listDraftOrders);
-router.get('/export-excel', invoiceController.exportListExcel);
 router.get('/export-pdf', invoiceController.exportListPdf);
 router.get('/', invoiceController.list);
 router.post('/', requireRole(...OWNER_ROLES, ROLES.INVOICE_KOORDINATOR, ROLES.ROLE_INVOICE_SAUDI, ROLES.SUPER_ADMIN), invoiceController.create);
