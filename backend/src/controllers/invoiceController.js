@@ -1226,8 +1226,9 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const invoiceDate = inv.issued_at || inv.created_at || inv.createdAt || inv.date;
       const items = buildPdfOrderItemsDetailed(inv);
       const paymentHistory = buildPaymentHistoryLines(inv);
-      const itemRows = Math.max(1, Math.min(items.length, 3));
-      const historyRows = Math.max(1, Math.min(paymentHistory.length, 3));
+      // Tampilkan item invoice lebih lengkap (visa/bus/tiket/handling tidak terpotong terlalu cepat).
+      const itemRows = Math.max(1, Math.min(items.length, 6));
+      const historyRows = Math.max(1, Math.min(paymentHistory.length, 4));
       const lines = Math.max(itemRows, historyRows);
       const rowCellH = 28;
       const contentBlockH = 30 + lines * rowCellH;
