@@ -899,17 +899,17 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     });
   }
 
-  // Penalti bus: finality = bus include visa; hiace = tanpa penalti + Hiace auto; visa_only = tanpa bus & tanpa penalti.
+  // Bus Finality: biaya per-pack visa; Hiace/Visa only tanpa biaya finality.
   const busOptAi = bus_service_option && BUS_SERVICE_OPTION_VALUES.includes(String(bus_service_option))
     ? String(bus_service_option)
     : ((waive_bus_penalty === true || waive_bus_penalty === 'true') ? 'hiace' : 'finality');
   const waiveBusPenaltyAi = busOptAi === 'hiace';
   const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
-  const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-  const penaltyPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
-  const shortfall = hasVisaItems && totalVisaPacks < minPack ? minPack - totalVisaPacks : 0;
-  const penaltyAmount = busOptAi === 'visa_only' ? 0 : (!waiveBusPenaltyAi && shortfall > 0 ? shortfall * penaltyPerPackIdr : 0);
+  const finalityPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
+  const penaltyAmount = (busOptAi === 'finality' && !waiveBusPenaltyAi && hasVisaItems)
+    ? totalVisaPacks * finalityPerPackIdr
+    : 0;
 
   let ratesPayload = {};
   const crForPayload = typeof rules.currency_rates === 'object' && rules.currency_rates != null
@@ -1250,15 +1250,15 @@ const create = asyncHandler(async (req, res) => {
     });
   }
 
-  // Opsi bus: finality (include visa + penalti jika pack kurang), hiace (Hiace auto), visa_only (tanpa bus / tanpa penalti).
+  // Opsi bus: finality (biaya per-pack visa), hiace (Hiace auto), visa_only (tanpa biaya bus finality).
   const busOptCreate = normalizeBusServiceOptionForCreate(req.body);
   const waiveBusPenaltyCreate = busOptCreate === 'hiace';
   const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
-  const minPack = parseInt(rules.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-  const penaltyPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
-  const shortfallCreate = hasVisaItems && totalVisaPacks < minPack ? minPack - totalVisaPacks : 0;
-  const penaltyAmount = busOptCreate === 'visa_only' ? 0 : (!waiveBusPenaltyCreate && shortfallCreate > 0 ? shortfallCreate * penaltyPerPackIdr : 0);
+  const finalityPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
+  const penaltyAmount = (busOptCreate === 'finality' && !waiveBusPenaltyCreate && hasVisaItems)
+    ? totalVisaPacks * finalityPerPackIdr
+    : 0;
 
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
@@ -1652,7 +1652,7 @@ const update = asyncHandler(async (req, res) => {
         ...itemRatesPayload
       });
     }
-    // Opsi bus: hiace → tambah Hiace auto; visa_only → tanpa penalti; finality → penalti per pack shortfall.
+    // Opsi bus: hiace → tambah Hiace auto; visa_only → tanpa biaya finality; finality → biaya per-pack visa.
     const busOptUpdate = normalizeBusServiceOptionForUpdate(req.body, order);
     const waiveBusPenaltyUpdate = busOptUpdate === 'hiace';
     let penaltyAmountUpdate;
@@ -1681,10 +1681,8 @@ const update = asyncHandler(async (req, res) => {
       const hasVisaItemsUpdate = items.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
       const totalVisaPacksUpdate = items.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
       const rulesUpdate = await getRulesForBranch(order.branch_id);
-      const minPackUpdate = parseInt(rulesUpdate.bus_min_pack, 10) || BUSINESS_RULES.BUS_MIN_PACK || 35;
-      const penaltyPerPackIdrUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
-      const shortfallUpdate = hasVisaItemsUpdate && totalVisaPacksUpdate < minPackUpdate ? minPackUpdate - totalVisaPacksUpdate : 0;
-      penaltyAmountUpdate = shortfallUpdate > 0 ? shortfallUpdate * penaltyPerPackIdrUpdate : 0;
+      const finalityPerPackIdrUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
+      penaltyAmountUpdate = hasVisaItemsUpdate ? totalVisaPacksUpdate * finalityPerPackIdrUpdate : 0;
     }
     await order.update({
       subtotal,

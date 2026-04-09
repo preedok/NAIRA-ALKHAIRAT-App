@@ -1153,9 +1153,9 @@ const OrderFormPage: React.FC = () => {
     return Object.entries(byMonth).map(([yearMonth,nights])=>({ yearMonth, nights, est: perNight*nights }));
   };
   const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
-  const wouldHaveBusPenalty=totalVisaPacks>0&&totalVisaPacks<busPenaltyRule.bus_min_pack;
-  const busPenaltyShortfall=wouldHaveBusPenalty?busPenaltyRule.bus_min_pack-totalVisaPacks:0;
-  const busPenaltyIDR=busServiceOption==='finality'&&busPenaltyShortfall>0?busPenaltyShortfall*busPenaltyRule.bus_penalty_idr:0;
+  const busFinalityPerPackIDR = busServiceOption === 'finality' && totalVisaPacks > 0
+    ? totalVisaPacks * busPenaltyRule.bus_penalty_idr
+    : 0;
 
   const applyBusServiceOption = useCallback((opt: BusServiceOption) => {
     setBusServiceOption(opt);
@@ -1284,7 +1284,7 @@ const OrderFormPage: React.FC = () => {
   };
   const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
   const subtotalIDR=payloadSubtotalIDR(validForTotal);
-  const totalIDR=subtotalIDR+busPenaltyIDR;
+  const totalIDR=subtotalIDR+busFinalityPerPackIDR;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
   const totalPax=items.reduce((s,r)=>s+rowPax(r),0);
   /** Nilai dalam mata uang baris untuk ditampilkan pakai NominalDisplay */
@@ -2347,10 +2347,10 @@ const OrderFormPage: React.FC = () => {
                   {items.some(r=>r.type==='visa')&&(
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
                       <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
-                      {busServiceOption === 'finality' && wouldHaveBusPenalty ? (
-                        <span className="text-amber-800"> Kurang {busPenaltyShortfall} pack dari min {busPenaltyRule.bus_min_pack} → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" />.</span>
+                      {busServiceOption === 'finality' && totalVisaPacks > 0 ? (
+                        <span className="text-amber-800"> Biaya Bus Finality otomatis: {totalVisaPacks} pack × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busFinalityPerPackIDR} currency="IDR" /> (langsung masuk Ringkasan Total).</span>
                       ) : busServiceOption === 'finality' ? (
-                        <span className="text-slate-600"> Memenuhi minimum pack — tidak ada penalti Bus Finality.</span>
+                        <span className="text-slate-600"> Belum ada pack visa — biaya Bus Finality belum dihitung.</span>
                       ) : busServiceOption === 'hiace' ? (
                         <span className="text-slate-600"> Opsi Bus Hiace: tanpa penalti; isi baris Bus di atas (produk Hiace, tanggal, qty) — subtotal mengikuti harga master.</span>
                       ) : (
@@ -2438,12 +2438,12 @@ const OrderFormPage: React.FC = () => {
             {items.some(r=>r.type==='visa')&&(
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm space-y-3">
                 <div>
-                  <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack (min {busPenaltyRule.bus_min_pack} pack)</p>
+                  <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack</p>
                   <p className="text-slate-600 text-xs mt-0.5">
-                    {busServiceOption === 'finality' && wouldHaveBusPenalty ? (
-                      <>Kurang {busPenaltyShortfall} pack → penalti {busPenaltyShortfall} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busPenaltyIDR} currency="IDR" /></>
+                    {busServiceOption === 'finality' && totalVisaPacks > 0 ? (
+                      <>Biaya Bus Finality: {totalVisaPacks} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busFinalityPerPackIDR} currency="IDR" /> (otomatis digabung ke Total SAR/IDR/USD).</>
                     ) : busServiceOption === 'finality' ? (
-                      <>Tidak ada penalti (pack memenuhi syarat Bus Finality).</>
+                      <>Belum ada pack visa, jadi biaya Bus Finality belum terbentuk.</>
                     ) : busServiceOption === 'hiace' ? (
                       <>Tanpa penalti; tambah/ubah baris Bus Hiace di item pemesanan — harga &amp; subtotal mengikuti produk yang dipilih.</>
                     ) : (
@@ -2463,7 +2463,7 @@ const OrderFormPage: React.FC = () => {
                     />
                     <span className="text-sm text-slate-700">
                       <span className="font-medium text-slate-900">Bus Finality</span>
-                      {' — '}Bus besar include dengan visa; penalti flat per pack kurang jika di bawah minimum.
+                      {' — '}Bus include visa; biaya otomatis per pack visa dan langsung masuk total ringkasan.
                     </span>
                   </label>
                   <label className="flex items-start gap-2.5 cursor-pointer">
