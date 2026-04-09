@@ -16,7 +16,7 @@ set -e
 cd /var/www/bgg-app
 git fetch origin master
 git reset --hard origin/master
-cd backend && npm ci && npm run migrate 2>/dev/null || true
+cd backend && npm ci && (npm run migrate 2>/dev/null || true) && npm run ensure:refunds-proof-transfer-at
 pm2 restart bgg-backend --update-env || pm2 start src/server.js --name bgg-backend
 cd /var/www/bgg-app/frontend && npm ci && npm run build
 if [ -f /var/www/bgg-app/deploy/nginx.conf ]; then
