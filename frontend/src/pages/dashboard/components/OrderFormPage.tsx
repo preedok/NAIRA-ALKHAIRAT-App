@@ -854,11 +854,21 @@ const OrderFormPage: React.FC = () => {
       };
       return {
         ...r,
-        meta: { ...(r.meta || {}), hotel_pack_input_mode: 'pax', hotel_pack_pax: Math.max(0, Math.floor(pax || 0)) },
+        meta: {
+          ...(r.meta || {}),
+          hotel_pack_input_mode: 'pax',
+          hotel_pack_pax: Math.max(0, Math.floor(pax || 0)),
+          hotel_pack_total: packs
+        },
         room_breakdown: [line]
       };
     }));
   }, [products, getMealPriceSar]);
+  const perPackTargetForRow = useCallback((row: OrderItemRow): number => {
+    const fromMeta = Number((row.meta as { hotel_pack_total?: number } | undefined)?.hotel_pack_total ?? 0);
+    if (Number.isFinite(fromMeta) && fromMeta > 0) return Math.max(0, Math.floor(fromMeta));
+    return Math.max(0, Math.floor((row.room_breakdown || []).reduce((s, l) => s + Math.max(0, Number(l.quantity) || 0), 0)));
+  }, []);
 
   /** Sinkron harga baris hotel dengan grid bulanan backend (check-in/out + tipe + qty). */
   const hotelStayQuoteKey = useMemo(() => {
@@ -957,7 +967,7 @@ const OrderFormPage: React.FC = () => {
       return next;
     });
   };
-  const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const hProd=byType('hotel').find(p=>p.id===row.product_id); if(hProd&&hotelRoomPricingMode(hProd)==='per_person') return; const withMealDefault=hProd?isFullboardHotelForRow(hProd,row):false; const line:HotelRoomLine={id:`rl-${uid()}`,room_type:'',quantity:0,unit_price:0,with_meal:withMealDefault}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
+  const addLine  =(rowId:string)=>{ const row=items.find(r=>r.id===rowId); if(!row||row.type!=='hotel') return; const hProd=byType('hotel').find(p=>p.id===row.product_id); const withMealDefault=hProd?isFullboardHotelForRow(hProd,row):false; const line:HotelRoomLine={id:`rl-${uid()}`,room_type:'',quantity:0,unit_price:0,with_meal:withMealDefault}; setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:[...(r.room_breakdown||[]),line]})); };
   const removeLine=(rowId:string,lineId:string)=>setItems(p=>p.map(r=>r.id!==rowId?r:{...r,room_breakdown:(r.room_breakdown||[]).filter(l=>l.id!==lineId)}));
   const updLine=(rowId:string,lineId:string,upd:Partial<HotelRoomLine>)=>setItems(p=>p.map(r=>{ if(r.id!==rowId||!r.room_breakdown) return r; return{...r,room_breakdown:r.room_breakdown.map(l=>l.id!==lineId?l:{...l,...upd})}; }));
   const updateRow=(rowId:string,upd:Partial<OrderItemRow>)=>setItems(p=>p.map(r=>{
@@ -1301,6 +1311,9 @@ const OrderFormPage: React.FC = () => {
           if(l.quantity<=0||!l.room_type) continue;
           const meal=l.with_meal??false;
           const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+          if ((r.meta as { hotel_pack_input_mode?: string } | undefined)?.hotel_pack_input_mode) meta.hotel_pack_input_mode = (r.meta as { hotel_pack_input_mode?: string }).hotel_pack_input_mode;
+          if ((r.meta as { hotel_pack_pax?: number } | undefined)?.hotel_pack_pax != null) meta.hotel_pack_pax = (r.meta as { hotel_pack_pax?: number }).hotel_pack_pax;
+          if ((r.meta as { hotel_pack_total?: number } | undefined)?.hotel_pack_total != null) meta.hotel_pack_total = (r.meta as { hotel_pack_total?: number }).hotel_pack_total;
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
@@ -1310,6 +1323,9 @@ const OrderFormPage: React.FC = () => {
         }
       } else if(r.type==='hotel'&&r.room_type){
         const meta:Record<string,unknown>={room_type:r.room_type,room_unit_price:r.unit_price??0,meal_unit_price:0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+        if ((r.meta as { hotel_pack_input_mode?: string } | undefined)?.hotel_pack_input_mode) meta.hotel_pack_input_mode = (r.meta as { hotel_pack_input_mode?: string }).hotel_pack_input_mode;
+        if ((r.meta as { hotel_pack_pax?: number } | undefined)?.hotel_pack_pax != null) meta.hotel_pack_pax = (r.meta as { hotel_pack_pax?: number }).hotel_pack_pax;
+        if ((r.meta as { hotel_pack_total?: number } | undefined)?.hotel_pack_total != null) meta.hotel_pack_total = (r.meta as { hotel_pack_total?: number }).hotel_pack_total;
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
@@ -1967,7 +1983,7 @@ const OrderFormPage: React.FC = () => {
                                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       <button
                                         type="button"
-                                        onClick={() => updateRow(row.id, { meta: { ...(row.meta || {}), hotel_pack_input_mode: 'manual', hotel_pack_pax: undefined } })}
+                                        onClick={() => updateRow(row.id, { meta: { ...(row.meta || {}), hotel_pack_input_mode: 'manual', hotel_pack_pax: undefined, hotel_pack_total: perPackTargetForRow(row) } })}
                                         className={`text-left rounded-2xl p-4 border transition-all ${
                                           packMode === 'manual'
                                             ? 'border-[#0D1A63]/40 ring-2 ring-[#0D1A63]/20 bg-[#0D1A63]/5'
@@ -2037,6 +2053,39 @@ const OrderFormPage: React.FC = () => {
                                         </div>
                                       </div>
                                     )}
+                                    {packMode === 'manual' && (
+                                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                        <div className="sm:col-span-1">
+                                          <Input
+                                            label="Jumlah pack total"
+                                            type="number"
+                                            min={0}
+                                            value={String(perPackTargetForRow(row))}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              const nextTarget = raw === '' ? 0 : Math.max(0, Math.floor(parseInt(raw, 10) || 0));
+                                              const lines = (row.room_breakdown || []).map((l) => ({ ...l }));
+                                              let remain = nextTarget;
+                                              const nextLines = lines.map((l) => {
+                                                const q = Math.max(0, Math.floor(Number(l.quantity) || 0));
+                                                const take = Math.min(q, remain);
+                                                remain -= take;
+                                                return { ...l, quantity: take };
+                                              });
+                                              updateRow(row.id, {
+                                                meta: { ...(row.meta || {}), hotel_pack_input_mode: 'manual', hotel_pack_total: nextTarget },
+                                                room_breakdown: nextLines
+                                              });
+                                            }}
+                                          />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                          <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                                            Total pack dibagi ke tipe kamar. Jumlah semua baris tidak boleh melebihi jumlah pack total.
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })()}
@@ -2075,7 +2124,14 @@ const OrderFormPage: React.FC = () => {
                                             const v = e.target.value;
                                             if (v === '') { updLine(row.id, line.id, { quantity: 0 }); return; }
                                             const n = parseInt(v, 10);
-                                            if (!isNaN(n) && n >= 0) updLine(row.id, line.id, { quantity: n });
+                                            if (!isNaN(n) && n >= 0) {
+                                              const target = perPackTargetForRow(row);
+                                              const otherQty = Math.max(0, (row.room_breakdown || [])
+                                                .filter((x) => x.id !== line.id)
+                                                .reduce((s, x) => s + Math.max(0, Number(x.quantity) || 0), 0));
+                                              const maxForLine = Math.max(0, target - otherQty);
+                                              updLine(row.id, line.id, { quantity: Math.min(n, maxForLine) });
+                                            }
                                           }}
                                         />
                                       </div>
@@ -2190,7 +2246,7 @@ const OrderFormPage: React.FC = () => {
                                       return <><p className="text-sm font-bold text-slate-900 tabular-nums">{perNightLabel}</p><p className="text-xs text-slate-500 mt-0.5">Isi check-in & check-out untuk total</p></>;
                                     })()}
                                   </div>
-                                  {!isPerPackHotel && (
+                                  {(!isPerPackHotel || packMode === 'manual') && (
                                   <Button type="button" variant="ghost" size="sm" onClick={()=>{ if(locked) return; removeLine(row.id,line.id); }} className="text-slate-500 hover:text-red-600">
                                     <Trash2 size={14}/>
                                   </Button>
@@ -2242,7 +2298,8 @@ const OrderFormPage: React.FC = () => {
                                 </div>
                                 );
                               })()}
-                              {!isPerPackHotel && (((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode) === 'manual' && (
+                              {((!isPerPackHotel && (((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode) === 'manual')
+                                || (isPerPackHotel && String((row.meta as { hotel_pack_input_mode?: string } | undefined)?.hotel_pack_input_mode || 'manual') === 'manual')) && (
                                 <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="w-full border-2 border-dashed border-slate-200 rounded-lg text-slate-600 hover:border-[#0D1A63]/50 hover:bg-[#0D1A63]/5 text-sm py-2">
                                   <Plus size={14} className="mr-1"/> Tambah tipe kamar
                                 </Button>

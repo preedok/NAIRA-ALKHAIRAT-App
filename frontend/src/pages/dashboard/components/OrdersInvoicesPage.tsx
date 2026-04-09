@@ -3402,11 +3402,16 @@ const OrdersInvoicesPage: React.FC = () => {
                               const nights = meta.nights != null ? Number(meta.nights) : 0;
                               const qty = item.quantity != null ? Number(item.quantity) : 1;
                               const meal = meta.meal || meta.with_meal ? 'Ya' : 'Tidak';
+                              const packByPax = String(meta.hotel_pack_input_mode || '') === 'pax';
                               const roomType = meta.room_type ? String(meta.room_type) : '';
                               const cap = ROOM_CAP[roomType.toLowerCase()] ?? 1;
                               const totalOrang = qty * cap;
-                              const line1 = [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, roomType ? `Tipe kamar: ${roomType}` : null].filter(Boolean).join(' · ');
-                              const line2 = nights > 0 ? `${qty} kamar × ${nights} malam | Paket makan: ${meal} | Tipe kamar: ${roomType || '–'}` : '';
+                              const line1 = [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, (!packByPax && roomType) ? `Tipe kamar: ${roomType}` : null].filter(Boolean).join(' · ');
+                              const line2 = nights > 0
+                                ? (packByPax
+                                  ? `${qty} pack × ${nights} malam | Paket makan: ${meal}`
+                                  : `${qty} kamar × ${nights} malam | Paket makan: ${meal} | Tipe kamar: ${roomType || '–'}`)
+                                : '';
                               const line3 = (meta.meal || meta.with_meal) && nights > 0 && totalOrang > 0 ? `Perhitungan: ${totalOrang} orang × ${nights} malam = ${totalOrang * nights} (paket makan: Ya)` : '';
                               return [line1, line2, line3].filter(Boolean).join('\n');
                             }
@@ -4195,11 +4200,18 @@ const OrdersInvoicesPage: React.FC = () => {
                                   </div>
                                   {isHotel && (
                                     <p className="text-xs text-slate-500">
-                                      {group.items.map((it: any) => {
-                                        const rt = (it.meta?.room_type || '').toString() || '–';
-                                        const label = ROOM_TYPE_LABELS[rt] || rt;
-                                        return `${label} × ${it.quantity || 1}`;
-                                      }).join(', ')} kamar
+                                      {(() => {
+                                        const packByPaxOnly = group.items.length > 0 && group.items.every((it: any) => String(it?.meta?.hotel_pack_input_mode || '') === 'pax');
+                                        if (packByPaxOnly) {
+                                          const totalPack = group.items.reduce((s: number, it: any) => s + (Number(it?.quantity) || 0), 0);
+                                          return `${totalPack} pack`;
+                                        }
+                                        return `${group.items.map((it: any) => {
+                                          const rt = (it.meta?.room_type || '').toString() || '–';
+                                          const label = ROOM_TYPE_LABELS[rt] || rt;
+                                          return `${label} × ${it.quantity || 1}`;
+                                        }).join(', ')} kamar`;
+                                      })()}
                                     </p>
                                   )}
                                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
@@ -4288,8 +4300,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                             <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
                                             {isHotel && (
                                               <>
-                                                <div><dt className="text-slate-500">Tipe Kamar</dt><dd className="font-medium text-slate-900">{ROOM_TYPE_LABELS[(item.meta?.room_type || '').toString()] || item.meta?.room_type || '–'}</dd></div>
-                                                <div><dt className="text-slate-500">Jumlah Kamar</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                                                {String(item?.meta?.hotel_pack_input_mode || '') !== 'pax' && (
+                                                  <div><dt className="text-slate-500">Tipe Kamar</dt><dd className="font-medium text-slate-900">{ROOM_TYPE_LABELS[(item.meta?.room_type || '').toString()] || item.meta?.room_type || '–'}</dd></div>
+                                                )}
+                                                <div><dt className="text-slate-500">{String(item?.meta?.hotel_pack_input_mode || '') === 'pax' ? 'Jumlah Pack' : 'Jumlah Kamar'}</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
                                                 <div><dt className="text-slate-500">Nomor Kamar</dt><dd className="font-medium text-slate-900">{(prog?.room_number || '').trim() || '–'}</dd></div>
                                                 {mealLabel != null && <div><dt className="text-slate-500">Status Makan</dt><dd className="font-medium text-slate-900">{mealLabel}</dd></div>}
                                                 <div><dt className="text-slate-500">Check-in</dt><dd className="font-medium text-slate-900">{prog?.check_in_date ? formatDate(prog.check_in_date) + ' 16:00' : '–'}</dd></div>
