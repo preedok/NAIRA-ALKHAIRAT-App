@@ -253,7 +253,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const canOrderAction = (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') || user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
+  // Owner hanya boleh lihat invoice + bayar; tambah/edit/hapus khusus tim invoice.
+  const canOrderAction = user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const isOwnerRoleUser = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
   const isInvoiceTeamUser = user?.role === 'invoice_koordinator' || user?.role === 'invoice_saudi';
   const [branchId, setBranchId] = useState<string>('');
