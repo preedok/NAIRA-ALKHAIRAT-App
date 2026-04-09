@@ -385,7 +385,9 @@ const list = asyncHandler(async (req, res) => {
             ]
       };
       if (supportsOwnerTypeScope) {
-        monthlyWhere.owner_type_scope = ownerTypeScopeForMonthly ? { [Op.in]: [ownerTypeScopeForMonthly, 'all'] } : 'all';
+        monthlyWhere.owner_type_scope = ownerTypeScopeForMonthly
+          ? { [Op.in]: [ownerTypeScopeForMonthly, 'all'] }
+          : { [Op.in]: ['all', 'mou', 'non_mou'] };
       }
       const monthlyRowsAll = await HotelMonthlyPrice.findAll({
         where: monthlyWhere,
