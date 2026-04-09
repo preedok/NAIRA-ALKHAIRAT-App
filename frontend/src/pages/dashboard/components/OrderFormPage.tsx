@@ -467,6 +467,11 @@ const OrderFormPage: React.FC = () => {
           const hotelMeta: Record<string, unknown> = {};
           if (firstMeta.hotel_location) hotelMeta.hotel_location = firstMeta.hotel_location;
           if (firstMeta.hotel_stay_date_mode) hotelMeta.hotel_stay_date_mode = firstMeta.hotel_stay_date_mode;
+          if (firstMeta.hotel_stay_check_in_month != null) hotelMeta.hotel_stay_check_in_month = firstMeta.hotel_stay_check_in_month;
+          if (firstMeta.hotel_stay_check_in_year != null) hotelMeta.hotel_stay_check_in_year = firstMeta.hotel_stay_check_in_year;
+          if (firstMeta.hotel_stay_check_out_month != null) hotelMeta.hotel_stay_check_out_month = firstMeta.hotel_stay_check_out_month;
+          if (firstMeta.hotel_stay_check_out_year != null) hotelMeta.hotel_stay_check_out_year = firstMeta.hotel_stay_check_out_year;
+          if (firstMeta.hotel_stay_nights != null) hotelMeta.hotel_stay_nights = firstMeta.hotel_stay_nights;
           if (firstMeta.hotel_stay_month != null) hotelMeta.hotel_stay_month = firstMeta.hotel_stay_month;
           if (firstMeta.hotel_stay_year != null) hotelMeta.hotel_stay_year = firstMeta.hotel_stay_year;
           rows.push({ id:oi.id||`row-${uid()}`, type:'hotel', product_id:productRefId, product_name:productName,
@@ -490,10 +495,13 @@ const OrderFormPage: React.FC = () => {
       const m = typeof oi.meta==='object'?oi.meta:{};
       if (t==='hotel') {
         const stayMode = String((m as { hotel_stay_date_mode?: string }).hotel_stay_date_mode || 'dated');
-        const month = (m as { hotel_stay_month?: number }).hotel_stay_month;
-        const year = (m as { hotel_stay_year?: number }).hotel_stay_year;
+        const inMonth = (m as { hotel_stay_check_in_month?: number; hotel_stay_month?: number }).hotel_stay_check_in_month ?? (m as { hotel_stay_month?: number }).hotel_stay_month;
+        const inYear = (m as { hotel_stay_check_in_year?: number; hotel_stay_year?: number }).hotel_stay_check_in_year ?? (m as { hotel_stay_year?: number }).hotel_stay_year;
+        const outMonth = (m as { hotel_stay_check_out_month?: number }).hotel_stay_check_out_month;
+        const outYear = (m as { hotel_stay_check_out_year?: number }).hotel_stay_check_out_year;
+        const nights = (m as { hotel_stay_nights?: number }).hotel_stay_nights;
         const stayPart = stayMode === 'month_year'
-          ? `month_year:${year || ''}-${month || ''}`
+          ? `month_year:${inYear || ''}-${inMonth || ''}:${outYear || ''}-${outMonth || ''}:${nights || ''}`
           : `dated:${m.check_in || ''}:${m.check_out || ''}`;
         keys.add(`hotel:${pid}:${m.room_type||''}:${stayPart}`);
       }
@@ -706,31 +714,45 @@ const OrderFormPage: React.FC = () => {
     String((row.meta as { hotel_stay_date_mode?: string } | undefined)?.hotel_stay_date_mode || 'dated') === 'month_year'
       ? 'month_year'
       : 'dated';
-  const hotelStayMonthYearForRow = (row: OrderItemRow): { month?: number; year?: number } => {
-    const monthRaw = Number((row.meta as { hotel_stay_month?: number } | undefined)?.hotel_stay_month ?? 0);
-    const yearRaw = Number((row.meta as { hotel_stay_year?: number } | undefined)?.hotel_stay_year ?? 0);
-    const month = Number.isFinite(monthRaw) && monthRaw >= 1 && monthRaw <= 12 ? Math.floor(monthRaw) : undefined;
-    const year = Number.isFinite(yearRaw) && yearRaw >= 1900 ? Math.floor(yearRaw) : undefined;
-    return { month, year };
+  const hotelStayMonthYearForRow = (row: OrderItemRow): {
+    checkInMonth?: number; checkInYear?: number; checkOutMonth?: number; checkOutYear?: number; nights?: number;
+  } => {
+    const checkInMonthRaw = Number((row.meta as { hotel_stay_check_in_month?: number; hotel_stay_month?: number } | undefined)?.hotel_stay_check_in_month ?? (row.meta as { hotel_stay_month?: number } | undefined)?.hotel_stay_month ?? 0);
+    const checkInYearRaw = Number((row.meta as { hotel_stay_check_in_year?: number; hotel_stay_year?: number } | undefined)?.hotel_stay_check_in_year ?? (row.meta as { hotel_stay_year?: number } | undefined)?.hotel_stay_year ?? 0);
+    const checkOutMonthRaw = Number((row.meta as { hotel_stay_check_out_month?: number } | undefined)?.hotel_stay_check_out_month ?? 0);
+    const checkOutYearRaw = Number((row.meta as { hotel_stay_check_out_year?: number } | undefined)?.hotel_stay_check_out_year ?? 0);
+    const nightsRaw = Number((row.meta as { hotel_stay_nights?: number } | undefined)?.hotel_stay_nights ?? 0);
+    const checkInMonth = Number.isFinite(checkInMonthRaw) && checkInMonthRaw >= 1 && checkInMonthRaw <= 12 ? Math.floor(checkInMonthRaw) : undefined;
+    const checkInYear = Number.isFinite(checkInYearRaw) && checkInYearRaw >= 1900 ? Math.floor(checkInYearRaw) : undefined;
+    const checkOutMonth = Number.isFinite(checkOutMonthRaw) && checkOutMonthRaw >= 1 && checkOutMonthRaw <= 12 ? Math.floor(checkOutMonthRaw) : undefined;
+    const checkOutYear = Number.isFinite(checkOutYearRaw) && checkOutYearRaw >= 1900 ? Math.floor(checkOutYearRaw) : undefined;
+    const nights = Number.isFinite(nightsRaw) && nightsRaw > 0 ? Math.floor(nightsRaw) : undefined;
+    return { checkInMonth, checkInYear, checkOutMonth, checkOutYear, nights };
   };
   const hotelPricingCheckInForRow = (row: OrderItemRow): string | undefined => {
     const mode = hotelStayDateModeForRow(row);
     if (mode === 'dated') return row.check_in;
-    const { month, year } = hotelStayMonthYearForRow(row);
-    if (!month || !year) return undefined;
-    return `${String(year)}-${String(month).padStart(2, '0')}-01`;
+    const { checkInMonth, checkInYear } = hotelStayMonthYearForRow(row);
+    if (!checkInMonth || !checkInYear) return undefined;
+    return `${String(checkInYear)}-${String(checkInMonth).padStart(2, '0')}-01`;
+  };
+  const hotelStayNightsForRow = (row: OrderItemRow): number => {
+    const mode = hotelStayDateModeForRow(row);
+    if (mode === 'dated') return getNights(row.check_in, row.check_out);
+    const { nights } = hotelStayMonthYearForRow(row);
+    return nights || 0;
   };
   const hasValidHotelStayInput = (row: OrderItemRow): boolean => {
     const mode = hotelStayDateModeForRow(row);
     if (mode === 'dated') return !!(row.check_in && row.check_out);
-    const { month, year } = hotelStayMonthYearForRow(row);
-    return !!(month && year);
+    const { checkInMonth, checkInYear, checkOutMonth, checkOutYear, nights } = hotelStayMonthYearForRow(row);
+    return !!(checkInMonth && checkInYear && checkOutMonth && checkOutYear && nights);
   };
   const hotelStayKeyPart = (row: OrderItemRow): string => {
     const mode = hotelStayDateModeForRow(row);
     if (mode === 'month_year') {
-      const { month, year } = hotelStayMonthYearForRow(row);
-      return `month_year:${year || ''}-${month || ''}`;
+      const { checkInMonth, checkInYear, checkOutMonth, checkOutYear, nights } = hotelStayMonthYearForRow(row);
+      return `month_year:${checkInYear || ''}-${checkInMonth || ''}:${checkOutYear || ''}-${checkOutMonth || ''}:${nights || ''}`;
     }
     return `dated:${row.check_in || ''}:${row.check_out || ''}`;
   };
@@ -1059,48 +1081,51 @@ const OrderFormPage: React.FC = () => {
     if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    const effectiveCheckIn = hotelPricingCheckInForRow(r);
     if (prod?.type === 'hotel') {
       const hasSplitMeal = typeof l.meal_unit_price === 'number';
       if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
-      const roomPart = l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in, r), cur);
-      const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, r.check_in, r), cur)) : 0;
+      const roomPart = l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
+      const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, effectiveCheckIn, r), cur)) : 0;
       return roomPart + mealPart;
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur);
-    const roomPart=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur);
-    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in,r),cur)):0;
+    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    const roomPart=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur)):0;
     return roomPart+mealPart;
   };
   const getEffectiveRoomPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    const effectiveCheckIn = hotelPricingCheckInForRow(r);
     if (prod?.type === 'hotel') {
       if (l.with_meal && typeof l.meal_unit_price !== 'number') {
         const combined = l.unit_price || 0;
-        const meal = toCurrencyFromSAR(getMealPriceSar(prod, r.check_in, r), cur);
+        const meal = toCurrencyFromSAR(getMealPriceSar(prod, effectiveCheckIn, r), cur);
         return Math.max(0, combined - meal);
       }
-      return l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in, r), cur);
+      return l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,r.check_in,r),cur); return Math.max(0,combined-meal); }
-    return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur);
+    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur); return Math.max(0,combined-meal); }
+    return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
   };
   const getEffectiveMealPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.with_meal) return 0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
+    const effectiveCheckIn = hotelPricingCheckInForRow(r);
     if (prod?.type === 'hotel') {
       if (typeof l.meal_unit_price === 'number') return l.meal_unit_price;
       const combined = l.unit_price || 0;
-      const room = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in, r), cur);
+      const room = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
       return Math.max(0, combined - room);
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
-    return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in,r),cur);
+    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
+    return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur);
   };
   /** Untuk ringkasan total & header: jika kurs order diisi, harga kamar dihitung lagi dari master SAR × kurs order (bukan IDR tersimpan dari kurs settings). */
   const getEffectiveLinePriceForTotals=(r:OrderItemRow,l:HotelRoomLine):number=>{
@@ -1111,17 +1136,19 @@ const OrderFormPage: React.FC = () => {
     if (prod?.type === 'hotel') {
       const hasSplitMeal = typeof l.meal_unit_price === 'number';
       if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
-      const roomPart = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, r.check_in, r), cur);
-      const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, r.check_in, r), cur)) : 0;
+      const effectiveCheckIn = hotelPricingCheckInForRow(r);
+      const roomPart = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
+      const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, effectiveCheckIn, r), cur)) : 0;
       return roomPart + mealPart;
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur);
-    const roomPart=toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,r.check_in,r),cur);
-    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,r.check_in,r),cur)):0;
+    const effectiveCheckIn = hotelPricingCheckInForRow(r);
+    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    const roomPart=toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur)):0;
     return roomPart+mealPart;
   };
-  const nightsFor=(r:OrderItemRow)=> r.type==='hotel' ? getNights(r.check_in,r.check_out) : 0;
+  const nightsFor=(r:OrderItemRow)=> r.type==='hotel' ? hotelStayNightsForRow(r) : 0;
   const rowSub=(r:OrderItemRow)=>{
     if(r.type==='hotel'&&r.room_breakdown?.length){
       const hasDates = !!(r.check_in && r.check_out);
@@ -1319,6 +1346,11 @@ const OrderFormPage: React.FC = () => {
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
           if ((r.meta as { hotel_stay_date_mode?: string } | undefined)?.hotel_stay_date_mode) meta.hotel_stay_date_mode = (r.meta as { hotel_stay_date_mode?: string }).hotel_stay_date_mode;
+          if ((r.meta as { hotel_stay_check_in_month?: number } | undefined)?.hotel_stay_check_in_month != null) meta.hotel_stay_check_in_month = (r.meta as { hotel_stay_check_in_month?: number }).hotel_stay_check_in_month;
+          if ((r.meta as { hotel_stay_check_in_year?: number } | undefined)?.hotel_stay_check_in_year != null) meta.hotel_stay_check_in_year = (r.meta as { hotel_stay_check_in_year?: number }).hotel_stay_check_in_year;
+          if ((r.meta as { hotel_stay_check_out_month?: number } | undefined)?.hotel_stay_check_out_month != null) meta.hotel_stay_check_out_month = (r.meta as { hotel_stay_check_out_month?: number }).hotel_stay_check_out_month;
+          if ((r.meta as { hotel_stay_check_out_year?: number } | undefined)?.hotel_stay_check_out_year != null) meta.hotel_stay_check_out_year = (r.meta as { hotel_stay_check_out_year?: number }).hotel_stay_check_out_year;
+          if ((r.meta as { hotel_stay_nights?: number } | undefined)?.hotel_stay_nights != null) meta.hotel_stay_nights = (r.meta as { hotel_stay_nights?: number }).hotel_stay_nights;
           if ((r.meta as { hotel_stay_month?: number } | undefined)?.hotel_stay_month != null) meta.hotel_stay_month = (r.meta as { hotel_stay_month?: number }).hotel_stay_month;
           if ((r.meta as { hotel_stay_year?: number } | undefined)?.hotel_stay_year != null) meta.hotel_stay_year = (r.meta as { hotel_stay_year?: number }).hotel_stay_year;
           const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:l.unit_price??0,currency:cur,room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta};
@@ -1334,6 +1366,11 @@ const OrderFormPage: React.FC = () => {
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
         if ((r.meta as { hotel_stay_date_mode?: string } | undefined)?.hotel_stay_date_mode) meta.hotel_stay_date_mode = (r.meta as { hotel_stay_date_mode?: string }).hotel_stay_date_mode;
+        if ((r.meta as { hotel_stay_check_in_month?: number } | undefined)?.hotel_stay_check_in_month != null) meta.hotel_stay_check_in_month = (r.meta as { hotel_stay_check_in_month?: number }).hotel_stay_check_in_month;
+        if ((r.meta as { hotel_stay_check_in_year?: number } | undefined)?.hotel_stay_check_in_year != null) meta.hotel_stay_check_in_year = (r.meta as { hotel_stay_check_in_year?: number }).hotel_stay_check_in_year;
+        if ((r.meta as { hotel_stay_check_out_month?: number } | undefined)?.hotel_stay_check_out_month != null) meta.hotel_stay_check_out_month = (r.meta as { hotel_stay_check_out_month?: number }).hotel_stay_check_out_month;
+        if ((r.meta as { hotel_stay_check_out_year?: number } | undefined)?.hotel_stay_check_out_year != null) meta.hotel_stay_check_out_year = (r.meta as { hotel_stay_check_out_year?: number }).hotel_stay_check_out_year;
+        if ((r.meta as { hotel_stay_nights?: number } | undefined)?.hotel_stay_nights != null) meta.hotel_stay_nights = (r.meta as { hotel_stay_nights?: number }).hotel_stay_nights;
         if ((r.meta as { hotel_stay_month?: number } | undefined)?.hotel_stay_month != null) meta.hotel_stay_month = (r.meta as { hotel_stay_month?: number }).hotel_stay_month;
         if ((r.meta as { hotel_stay_year?: number } | undefined)?.hotel_stay_year != null) meta.hotel_stay_year = (r.meta as { hotel_stay_year?: number }).hotel_stay_year;
         const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:Math.max(1,r.quantity),unit_price:r.unit_price??0,currency:cur,room_type:r.room_type,check_in:r.check_in,check_out:r.check_out,meta};
@@ -1867,11 +1904,11 @@ const OrderFormPage: React.FC = () => {
                                           <>
                                             <div className="min-w-0">
                                               <Autocomplete
-                                                label="Bulan menginap"
-                                                value={stayMonthYear.month ? String(stayMonthYear.month) : ''}
+                                                label="Check-in (bulan)"
+                                                value={stayMonthYear.checkInMonth ? String(stayMonthYear.checkInMonth) : ''}
                                                 onChange={(v) => {
                                                   const nextMonth = Number(v || 0);
-                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_month: nextMonth || undefined } });
+                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_check_in_month: nextMonth || undefined } });
                                                 }}
                                                 options={monthOptions}
                                                 emptyLabel="— Pilih bulan —"
@@ -1879,14 +1916,50 @@ const OrderFormPage: React.FC = () => {
                                             </div>
                                             <div className="min-w-0">
                                               <Autocomplete
-                                                label="Tahun menginap"
-                                                value={stayMonthYear.year ? String(stayMonthYear.year) : ''}
+                                                label="Check-in (tahun)"
+                                                value={stayMonthYear.checkInYear ? String(stayMonthYear.checkInYear) : ''}
                                                 onChange={(v) => {
                                                   const nextYear = Number(v || 0);
-                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_year: nextYear || undefined } });
+                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_check_in_year: nextYear || undefined } });
                                                 }}
                                                 options={yearOptions.map((y) => ({ value: y, label: y }))}
                                                 emptyLabel="— Pilih tahun —"
+                                              />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <Autocomplete
+                                                label="Check-out (bulan)"
+                                                value={stayMonthYear.checkOutMonth ? String(stayMonthYear.checkOutMonth) : ''}
+                                                onChange={(v) => {
+                                                  const nextMonth = Number(v || 0);
+                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_check_out_month: nextMonth || undefined } });
+                                                }}
+                                                options={monthOptions}
+                                                emptyLabel="— Pilih bulan —"
+                                              />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <Autocomplete
+                                                label="Check-out (tahun)"
+                                                value={stayMonthYear.checkOutYear ? String(stayMonthYear.checkOutYear) : ''}
+                                                onChange={(v) => {
+                                                  const nextYear = Number(v || 0);
+                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_check_out_year: nextYear || undefined } });
+                                                }}
+                                                options={yearOptions.map((y) => ({ value: y, label: y }))}
+                                                emptyLabel="— Pilih tahun —"
+                                              />
+                                            </div>
+                                            <div className="min-w-0 sm:col-span-2">
+                                              <Autocomplete
+                                                label="Malam"
+                                                value={stayMonthYear.nights ? String(stayMonthYear.nights) : ''}
+                                                onChange={(v) => {
+                                                  const nextNights = Number(v || 0);
+                                                  updateRow(row.id, { meta: { ...(row.meta || {}), hotel_stay_date_mode: 'month_year', hotel_stay_nights: nextNights || undefined } });
+                                                }}
+                                                options={Array.from({ length: 30 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} malam` }))}
+                                                emptyLabel="— Pilih malam —"
                                               />
                                             </div>
                                           </>
@@ -1905,6 +1978,12 @@ const OrderFormPage: React.FC = () => {
                                       <span>Malam:</span>
                                       <span className="tabular-nums font-semibold text-slate-900">{getNights(row.check_in, row.check_out)}</span>
                                       {getNights(row.check_in, row.check_out) === 0 && <span className="text-amber-600 text-xs">(Check-out &gt; Check-in)</span>}
+                                    </div>
+                                  )}
+                                  {hotelStayDateModeForRow(row) === 'month_year' && !!hotelStayMonthYearForRow(row).nights && (
+                                    <div className="flex items-center gap-2 py-2.5 px-4 rounded-lg bg-slate-100 border border-slate-200/80 text-sm font-medium text-slate-700 col-span-full">
+                                      <span>Malam:</span>
+                                      <span className="tabular-nums font-semibold text-slate-900">{hotelStayMonthYearForRow(row).nights}</span>
                                     </div>
                                   )}
                                   {row.product_id && row.check_in && row.check_out && (
@@ -2190,14 +2269,14 @@ const OrderFormPage: React.FC = () => {
                                   ? !!(row.product_id && (row.room_breakdown?.length ?? 0) > 0)
                                   : (mode === 'manual' || (mode === 'pax' && paxVal > 0));
                                 if (!showHitung) return null;
-                                if (!row.check_in || !row.check_out || (row.room_breakdown?.length ?? 0) === 0 || getNights(row.check_in, row.check_out) <= 0) return null;
+                                if ((row.room_breakdown?.length ?? 0) === 0 || nightsFor(row) <= 0) return null;
                                 return (
                                 <div className="rounded-lg bg-slate-100/80 border border-slate-200 p-3 text-sm text-slate-700 space-y-1">
                                   <p className="font-semibold text-slate-800 text-xs">
                                     {isPerPackHotel ? 'Hitungan (harga/malam × malam × pack)' : 'Hitungan (harga/malam × malam × kamar)'}
                                   </p>
                                   {(row.room_breakdown||[]).filter(l=>l.quantity>0&&l.room_type).map(line=>{
-                                    const nights = getNights(row.check_in!, row.check_out!);
+                                    const nights = nightsFor(row);
                                     const roomPerNight = getEffectiveRoomPrice(row, line);
                                     const mealPerNight = getEffectiveMealPrice(row, line);
                                     const lineTotalRoom = roomPerNight * line.quantity * nights;
