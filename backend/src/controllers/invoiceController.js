@@ -1121,23 +1121,24 @@ const exportListPdf = asyncHandler(async (req, res) => {
   doc.font('Helvetica').fontSize(9).fillColor('#475569').text(`Jumlah baris: ${data.length} · Tanggal cetak: ${formatDateTimeJakartaForExport(new Date())}`, 36, y, { align: 'center', width: doc.page.width - 72 });
   y += 22;
 
+  const ownerFilterActive = !!(req.query?.owner_id || req.query?.owner || req.query?.owner_name);
   const col = {
     no: 36,
     inv: 52,
-    owner: 116,
-    status: 270,
-    item: 342,
+    owner: ownerFilterActive ? null : 116,
+    status: ownerFilterActive ? 116 : 270,
+    item: ownerFilterActive ? 188 : 342,
     total: 600,
     paid: 675,
     remain: 750
   };
   const drawTableHeader = () => {
     doc.rect(36, y, doc.page.width - 72, 20).fill('#0D1A63');
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7.5)
-      .text('No', col.no + 2, y + 6)
-      .text('Invoice', col.inv + 2, y + 6)
-      .text('Owner', col.owner + 2, y + 6)
-      .text('Status', col.status + 2, y + 6)
+    const h = doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7.5);
+    h.text('No', col.no + 2, y + 6)
+      .text('Invoice', col.inv + 2, y + 6);
+    if (!ownerFilterActive && col.owner != null) h.text('Owner', col.owner + 2, y + 6);
+    h.text('Status', col.status + 2, y + 6)
       .text('Item & Qty', col.item + 2, y + 6)
       .text('Total', col.total + 2, y + 6)
       .text('Dibayar', col.paid + 2, y + 6)
@@ -1170,11 +1171,13 @@ const exportListPdf = asyncHandler(async (req, res) => {
       }
       doc.rect(36, y, doc.page.width - 72, blockH).fill(idx % 2 === 0 ? '#f8fafc' : '#ffffff');
       doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(36, y, doc.page.width - 72, blockH).stroke();
-      doc.font('Helvetica').fontSize(7).fillColor('#0f172a')
-        .text(String(idx + 1), col.no + 2, y + 4, { width: 14 })
-        .text(String(inv.invoice_number || '-').slice(0, 16), col.inv + 2, y + 4, { width: 60 })
-        .text(`${ownerLines.join('\n')}\nCab: ${cabang}\nTgl Inv: ${formatDateOnlyForExport(invoiceDate)}`.slice(0, 220), col.owner + 2, y + 4, { width: (col.status - col.owner - 6), height: blockH - 8 })
-        .text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 26), col.status + 2, y + 4, { width: (col.item - col.status - 6) });
+      const r = doc.font('Helvetica').fontSize(7).fillColor('#0f172a');
+      r.text(String(idx + 1), col.no + 2, y + 4, { width: 14 })
+        .text(String(inv.invoice_number || '-').slice(0, 16), col.inv + 2, y + 4, { width: 60 });
+      if (!ownerFilterActive && col.owner != null) {
+        r.text(`${ownerLines.join('\n')}\nCab: ${cabang}\nTgl Inv: ${formatDateOnlyForExport(invoiceDate)}`.slice(0, 220), col.owner + 2, y + 4, { width: (col.status - col.owner - 6), height: blockH - 8 });
+      }
+      r.text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 26), col.status + 2, y + 4, { width: (col.item - col.status - 6) });
 
       // Mini-table: Item | Qty | CI-CO | Harga/item | Subtotal (maks 4 baris agar rapih).
       const itemX = col.item + 2;
