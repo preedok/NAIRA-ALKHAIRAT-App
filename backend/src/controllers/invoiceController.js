@@ -1111,8 +1111,9 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const amtHeaderH = 12;
       doc.rect(amtX, amtY, amtW, amtHeaderH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(amtX, amtY, amtW, amtH).stroke();
-      const aw1 = col.paid - col.total;
-      const aw2 = col.remain - col.paid;
+      // Pakai lebar seimbang agar angka di kolom "Sisa" tidak terpotong (sebelumnya terlalu sempit).
+      const aw1 = Math.floor(amtW / 3);
+      const aw2 = Math.floor(amtW / 3);
       const aw3 = amtW - aw1 - aw2;
       const ax2 = amtX + aw1;
       const ax3 = amtX + aw1 + aw2;
@@ -1135,9 +1136,9 @@ const exportListPdf = asyncHandler(async (req, res) => {
         const ry = amtY + amtHeaderH + i * rowH;
         doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(amtX, ry).lineTo(amtX + amtW, ry).stroke();
         doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.8)
-          .text(vals[0], amtX + 2, ry + 2, { width: aw1 - 4, height: rowH - 2 })
-          .text(vals[1], ax2 + 2, ry + 2, { width: aw2 - 4, height: rowH - 2 })
-          .text(vals[2], ax3 + 2, ry + 2, { width: aw3 - 4, height: rowH - 2 });
+          .text(vals[0], amtX + 2, ry + 2, { width: aw1 - 4, height: rowH - 2, align: 'left' })
+          .text(vals[1], ax2 + 2, ry + 2, { width: aw2 - 4, height: rowH - 2, align: 'left' })
+          .text(vals[2], ax3 + 2, ry + 2, { width: aw3 - 4, height: rowH - 2, align: 'left' });
       });
       y += blockH;
     });
