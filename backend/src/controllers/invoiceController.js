@@ -720,6 +720,14 @@ function orderItemQtyUnitForExport(item) {
   return 'qty';
 }
 
+function getNights(checkIn, checkOut) {
+  if (!checkIn || !checkOut) return 0;
+  const a = new Date(String(checkIn).slice(0, 10));
+  const b = new Date(String(checkOut).slice(0, 10));
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b <= a) return 0;
+  return Math.floor((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000));
+}
+
 function formatDateTimeJakartaForExport(value = new Date()) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '-';
