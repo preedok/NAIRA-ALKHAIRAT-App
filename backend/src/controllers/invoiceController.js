@@ -384,7 +384,7 @@ async function loadInvoiceListRelations(data) {
         { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_in_time', 'check_out_date', 'check_out_time'] },
         { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] }
       ],
-      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'product_name', 'unit_price', 'currency', 'check_in', 'check_out', 'manifest_file_url', 'meta', 'jamaah_data_type', 'jamaah_data_value']
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'unit_price', 'currency', 'check_in', 'check_out', 'manifest_file_url', 'meta', 'jamaah_data_type', 'jamaah_data_value']
     });
     for (const it of items) {
       const oid = it.order_id;
