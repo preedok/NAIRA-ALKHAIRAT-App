@@ -824,52 +824,6 @@ const OrderFormPage: React.FC = () => {
     }));
   }, [products, hotelAvailability, bestRoomCombo, getMealPriceSar]);
 
-  /** Untuk hotel per-pack: konversi jumlah orang -> jumlah pack sesuai kapasitas tipe kamar acuan. */
-  const applyAutoHotelPacks = useCallback((rowId: string, pax: number) => {
-    setItems((prev) => prev.map((r) => {
-      if (r.id !== rowId || r.type !== 'hotel') return r;
-      const prod = products.find((p) => p.type === 'hotel' && p.id === r.product_id);
-      if (!prod) return r;
-      if (hotelRoomPricingMode(prod) !== 'per_person') return r;
-
-      const rt = (r.room_breakdown?.[0]?.room_type as RoomTypeId | '' | undefined) || defaultRoomTypeForHotelGrid(prod, r);
-      const cap = rt ? Math.max(1, roomCap(rt as RoomTypeId)) : 1;
-      const packs = pax > 0 ? Math.max(1, Math.ceil(pax / cap)) : 0;
-      const cur = rowCur(r);
-      const fullboard = isFullboardHotelForRow(prod, r);
-      const withMeal = fullboard ? true : !!(r.room_breakdown || []).find((l) => l.with_meal)?.with_meal;
-      const roomOnlySar = hotelRoomUnitSar(prod, rt as RoomTypeId, r.check_in, r);
-      const mealPSar = getMealPriceSar(prod, r.check_in, r);
-      const roomP = toCurrencyFromSAR(roomOnlySar, cur);
-      const mealP = toCurrencyFromSAR(mealPSar, cur);
-      const combinedP = fullboard ? roomP : (roomP + (withMeal ? mealP : 0));
-
-      const line: HotelRoomLine = {
-        id: r.room_breakdown?.[0]?.id || `rl-${uid()}`,
-        room_type: rt as RoomTypeId,
-        quantity: packs,
-        with_meal: withMeal,
-        unit_price: (fullboard ? combinedP : roomP),
-        meal_unit_price: withMeal && !fullboard ? mealP : 0
-      };
-      return {
-        ...r,
-        meta: {
-          ...(r.meta || {}),
-          hotel_pack_input_mode: 'pax',
-          hotel_pack_pax: Math.max(0, Math.floor(pax || 0)),
-          hotel_pack_total: packs
-        },
-        room_breakdown: [line]
-      };
-    }));
-  }, [products, getMealPriceSar]);
-  const perPackTargetForRow = useCallback((row: OrderItemRow): number => {
-    const fromMeta = Number((row.meta as { hotel_pack_total?: number } | undefined)?.hotel_pack_total ?? 0);
-    if (Number.isFinite(fromMeta) && fromMeta > 0) return Math.max(0, Math.floor(fromMeta));
-    return Math.max(0, Math.floor((row.room_breakdown || []).reduce((s, l) => s + Math.max(0, Number(l.quantity) || 0), 0)));
-  }, []);
-
   /** Sinkron harga baris hotel dengan grid bulanan backend (check-in/out + tipe + qty). */
   const hotelStayQuoteKey = useMemo(() => {
     return items
@@ -1952,133 +1906,6 @@ const OrderFormPage: React.FC = () => {
                                   </div>
                                 );
                               })()}
-                              {isPerPackHotel && (hProd && row.product_id) && (
-                                <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/40 px-3 py-2 text-sm text-slate-700">
-                                  <span className="font-medium text-slate-800">Harga per pack</span>
-                                  <span className="text-slate-500"> — isi jumlah pack di bawah (tarif dari grid sesuai sumber harga MOU/Non-MOU).</span>
-                                </div>
-                              )}
-
-                              {isPerPackHotel && (hProd && row.product_id) && (() => {
-                                const packMode = String((row.meta as any)?.hotel_pack_input_mode || 'manual') as 'manual' | 'pax';
-                                const paxVal = Math.max(0, Math.floor(Number((row.meta as any)?.hotel_pack_pax ?? 0) || 0));
-                                const line0 = (row.room_breakdown || [])[0];
-                                const rt = (line0?.room_type as RoomTypeId | '' | undefined) || defaultRoomTypeForHotelGrid(hProd, row);
-                                const cap = rt ? Math.max(1, roomCap(rt as RoomTypeId)) : 1;
-                                const packs = paxVal > 0 ? Math.max(1, Math.ceil(paxVal / cap)) : 0;
-                                return (
-                                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
-                                    <div className="flex items-start justify-end gap-3">
-                                      {packMode === 'pax' && paxVal > 0 && (
-                                        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-100">
-                                          Auto aktif
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      <button
-                                        type="button"
-                                        onClick={() => updateRow(row.id, { meta: { ...(row.meta || {}), hotel_pack_input_mode: 'manual', hotel_pack_pax: undefined, hotel_pack_total: perPackTargetForRow(row) } })}
-                                        className={`text-left rounded-2xl p-4 border transition-all ${
-                                          packMode === 'manual'
-                                            ? 'border-[#0D1A63]/40 ring-2 ring-[#0D1A63]/20 bg-[#0D1A63]/5'
-                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                      >
-                                        <p className="text-sm font-semibold text-slate-900">Manual</p>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const nextPax = Math.max(0, Math.floor(paxVal || rowPax(row) || 0));
-                                          updateRow(row.id, { meta: { ...(row.meta || {}), hotel_pack_input_mode: 'pax', hotel_pack_pax: nextPax } });
-                                          if (nextPax > 0) applyAutoHotelPacks(row.id, nextPax);
-                                        }}
-                                        className={`text-left rounded-2xl p-4 border transition-all ${
-                                          packMode === 'pax'
-                                            ? 'border-[#0D1A63]/40 ring-2 ring-[#0D1A63]/20 bg-[#0D1A63]/5'
-                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                        }`}
-                                      >
-                                        <p className="text-sm font-semibold text-slate-900">Otomatis</p>
-                                      </button>
-                                    </div>
-
-                                    {packMode === 'pax' && (
-                                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                                        <div className="sm:col-span-1">
-                                          <Input
-                                            label="Jumlah orang"
-                                            type="number"
-                                            min={0}
-                                            value={String(paxVal)}
-                                            onChange={(e) => {
-                                              const v = e.target.value;
-                                              const n = v === '' ? 0 : Math.max(0, Math.floor(parseInt(v, 10) || 0));
-                                              updateRow(row.id, { meta: { ...(row.meta || {}), hotel_pack_input_mode: 'pax', hotel_pack_pax: n } });
-                                              if (n > 0) applyAutoHotelPacks(row.id, n);
-                                            }}
-                                          />
-                                        </div>
-                                        <div className="sm:col-span-1">
-                                          <Autocomplete
-                                            label="Tipe kamar (acuan pack)"
-                                            value={rt || ''}
-                                            onChange={(v) => {
-                                              const nextRt = (v as RoomTypeId | '') || defaultRoomTypeForHotelGrid(hProd, row);
-                                              if (!row.room_breakdown?.length) {
-                                                updateRow(row.id, { room_breakdown: [{ id: `rl-${uid()}`, room_type: nextRt, quantity: 0, unit_price: 0, with_meal: fullboardRow, meal_unit_price: 0 }] });
-                                              } else {
-                                                updLine(row.id, row.room_breakdown[0].id, { room_type: nextRt as any });
-                                              }
-                                              if (paxVal > 0) applyAutoHotelPacks(row.id, paxVal);
-                                            }}
-                                            options={ROOM_TYPES.map((t) => ({ value: t.id, label: `${t.label} · ${t.cap}px` }))}
-                                            emptyLabel="— Pilih —"
-                                          />
-                                        </div>
-                                        <div className="sm:col-span-1">
-                                          <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-700">
-                                            Auto pack: <span className="font-semibold tabular-nums">{paxVal}</span> orang → <span className="font-semibold tabular-nums">{packs}</span> pack
-                                            <span className="block text-xs text-slate-500 mt-1">Rumus: ceil(jumlah orang / kapasitas kamar acuan).</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {packMode === 'manual' && (
-                                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                                        <div className="sm:col-span-1">
-                                          <Input
-                                            label="Jumlah pack"
-                                            type="number"
-                                            min={0}
-                                            value={String(perPackTargetForRow(row))}
-                                            onChange={(e) => {
-                                              const raw = e.target.value;
-                                              const nextTarget = raw === '' ? 0 : Math.max(0, Math.floor(parseInt(raw, 10) || 0));
-                                              const lines = (row.room_breakdown || []).map((l) => ({ ...l }));
-                                              let remain = nextTarget;
-                                              const nextLines = lines.map((l) => {
-                                                const q = Math.max(0, Math.floor(Number(l.quantity) || 0));
-                                                const take = Math.min(q, remain);
-                                                remain -= take;
-                                                return { ...l, quantity: take };
-                                              });
-                                              updateRow(row.id, {
-                                                meta: { ...(row.meta || {}), hotel_pack_input_mode: 'manual', hotel_pack_total: nextTarget },
-                                                room_breakdown: nextLines
-                                              });
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-
                               {(() => {
                                 const mode = ((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode;
                                 const paxVal = Math.max(0, Math.floor(Number(row.meta?.hotel_pax ?? 0) || 0));
@@ -2095,7 +1922,6 @@ const OrderFormPage: React.FC = () => {
                                       <div key={line.id} className="flex flex-wrap items-end gap-2 p-3 rounded-xl bg-slate-50/60 border border-slate-100">
                                         {(() => {
                                           const locked = !isPerPackHotel && mode === 'pax';
-                                          const packMode = String((row.meta as any)?.hotel_pack_input_mode || 'manual') as 'manual' | 'pax';
                                           const rowPaxTotal = rowPax(row);
                                           return (
                                             <>
@@ -2106,20 +1932,13 @@ const OrderFormPage: React.FC = () => {
                                           label="Jumlah pack"
                                           type="number"
                                           min={0}
-                                          disabled={packMode === 'pax'}
                                           value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)}
                                           onChange={(e) => {
-                                            if (packMode === 'pax') return;
                                             const v = e.target.value;
                                             if (v === '') { updLine(row.id, line.id, { quantity: 0 }); return; }
                                             const n = parseInt(v, 10);
                                             if (!isNaN(n) && n >= 0) {
-                                              const target = perPackTargetForRow(row);
-                                              const otherQty = Math.max(0, (row.room_breakdown || [])
-                                                .filter((x) => x.id !== line.id)
-                                                .reduce((s, x) => s + Math.max(0, Number(x.quantity) || 0), 0));
-                                              const maxForLine = Math.max(0, target - otherQty);
-                                              updLine(row.id, line.id, { quantity: Math.min(n, maxForLine) });
+                                              updLine(row.id, line.id, { quantity: n });
                                             }
                                           }}
                                         />
@@ -2128,9 +1947,6 @@ const OrderFormPage: React.FC = () => {
                                         <Package size={14} className="text-slate-400 shrink-0" />
                                         <span>Per pack</span>
                                       </div>
-                                      {packMode === 'pax' && (
-                                        <span className="text-xs font-medium text-slate-600 py-2 px-3 rounded-lg bg-slate-100">Auto (dari jumlah orang)</span>
-                                      )}
                                       {fullboardRow ? (
                                         <span className="text-xs font-medium text-slate-600 py-2 px-3 rounded-lg bg-slate-100">Fullboard (termasuk makan)</span>
                                       ) : (
@@ -2235,11 +2051,9 @@ const OrderFormPage: React.FC = () => {
                                       return <><p className="text-sm font-bold text-slate-900 tabular-nums">{perNightLabel}</p><p className="text-xs text-slate-500 mt-0.5">Isi check-in & check-out untuk total</p></>;
                                     })()}
                                   </div>
-                                  {(!isPerPackHotel || packMode === 'manual') && (
                                   <Button type="button" variant="ghost" size="sm" onClick={()=>{ if(locked) return; removeLine(row.id,line.id); }} className="text-slate-500 hover:text-red-600">
                                     <Trash2 size={14}/>
                                   </Button>
-                                  )}
                                   {locked && rowPaxTotal > 0 && (
                                     <span className="text-xs text-slate-400 pb-2.5">Auto</span>
                                   )}
@@ -2288,7 +2102,7 @@ const OrderFormPage: React.FC = () => {
                                 );
                               })()}
                               {((!isPerPackHotel && (((row.meta?.hotel_room_input_mode as HotelRoomInputMode) || 'manual') as HotelRoomInputMode) === 'manual')
-                                || (isPerPackHotel && String((row.meta as { hotel_pack_input_mode?: string } | undefined)?.hotel_pack_input_mode || 'manual') === 'manual')) && (
+                                || isPerPackHotel) && (
                                 <Button type="button" variant="outline" size="sm" onClick={()=>addLine(row.id)} className="w-full border-2 border-dashed border-slate-200 rounded-lg text-slate-600 hover:border-[#0D1A63]/50 hover:bg-[#0D1A63]/5 text-sm py-2">
                                   <Plus size={14} className="mr-1"/> Tambah tipe kamar
                                 </Button>
