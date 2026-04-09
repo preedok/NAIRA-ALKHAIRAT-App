@@ -778,28 +778,36 @@ function buildPaymentHistoryLines(inv) {
   proofs
     .sort((a, b) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime())
     .forEach((p) => {
-      const dt = formatDateOnlyForExport(p?.transfer_date || p?.created_at);
+      const dt = formatDateTimeJakartaForExport(p?.transfer_date || p?.created_at);
       const method = String(p?.payment_type || 'transfer').toUpperCase();
       const status = String(p?.verified_status || 'pending').toUpperCase();
       const currency = String(p?.payment_currency || 'IDR').toUpperCase();
       const amt = Number(p?.amount_original ?? p?.amount ?? p?.amount_idr ?? 0);
-      const bank = p?.bank_name || p?.Bank?.name || '-';
+      const bankSender = p?.bank_name || p?.Bank?.name || '-';
+      const bankRecipient = p?.RecipientAccount?.bank_name || '-';
+      const recipientAccNo = p?.RecipientAccount?.account_number || '-';
       const sender = p?.sender_account_name || '-';
+      const proofUrl = String(p?.proof_file_url || '').trim();
+      const proofName = proofUrl ? (proofUrl.split('/').pop() || proofUrl) : '-';
       lines.push({
-        line1: `${dt} | ${method} | ${status}`,
-        line2: `${formatMoneyForExport(amt, currency)} | ${sender} (${bank})`
+        info1: `${dt} | ${method} | ${status}`,
+        info2: `${formatMoneyForExport(amt, currency)} | Pengirim: ${sender} (${bankSender})`,
+        info3: `Penerima: ${bankRecipient} ${recipientAccNo}`,
+        proof: proofName
       });
     });
   const allocs = Array.isArray(inv?.BalanceAllocations) ? inv.BalanceAllocations : [];
   allocs.forEach((a) => {
-    const dt = formatDateOnlyForExport(a?.created_at);
+    const dt = formatDateTimeJakartaForExport(a?.created_at);
     const amt = Number(a?.amount || 0);
     lines.push({
-      line1: `${dt} | ALOKASI SALDO | VERIFIED`,
-      line2: `${formatMoneyForExport(amt, 'IDR')}`
+      info1: `${dt} | ALOKASI SALDO | VERIFIED`,
+      info2: `${formatMoneyForExport(amt, 'IDR')}`,
+      info3: 'Penerima: -',
+      proof: '-'
     });
   });
-  if (!lines.length) lines.push({ line1: '-', line2: '' });
+  if (!lines.length) lines.push({ info1: '-', info2: '', info3: '', proof: '-' });
   return lines;
 }
 
@@ -820,6 +828,7 @@ function buildPdfOrderItemsDetailed(inv) {
     const checkIn = it?.check_in || it?.meta?.check_in || it?.HotelProgress?.check_in_date;
     const checkOut = it?.check_out || it?.meta?.check_out || it?.HotelProgress?.check_out_date;
     const location = String(it?.meta?.hotel_location || '').trim();
+    const roomTypeRaw = String(it?.meta?.room_type || it?.meta?.hotel_room_type || '').trim();
     const hotelNameFromMeta = String(it?.meta?.hotel_name || '').trim();
     const normalizedHotelName = (hotelNameFromMeta || productNameRaw)
       .replace(/\s*[-|]\s*(single|double|triple|quad|quint|sextuple|family|suite|deluxe|superior)\b.*$/i, '')
@@ -828,6 +837,7 @@ function buildPdfOrderItemsDetailed(inv) {
     const productName = type === ORDER_ITEM_TYPE.HOTEL ? (normalizedHotelName || productNameRaw) : productNameRaw;
     const nights = (type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) ? Math.max(1, getNights(checkIn, checkOut)) : 1;
     const subtotal = qty * unitPrice * nights;
+    const displayUnitPrice = unitPrice * nights;
     const typeText = type === ORDER_ITEM_TYPE.HOTEL ? 'HTL' : typeLabel;
     const itemLabel = location
       ? `${typeText} - ${location} - ${productName}`
@@ -842,19 +852,30 @@ function buildPdfOrderItemsDetailed(inv) {
     if (prev) {
       prev.qty += qty;
       prev.subtotal += subtotal;
+      if (type === ORDER_ITEM_TYPE.HOTEL && roomTypeRaw) prev.roomTypes.add(roomTypeRaw);
     } else {
       grouped.set(key, {
         itemLabel,
         qty,
         unit,
         stayLabel,
+        nights,
         unitPrice,
+        displayUnitPrice,
         currency,
-        subtotal
+        subtotal,
+        roomTypes: type === ORDER_ITEM_TYPE.HOTEL ? new Set(roomTypeRaw ? [roomTypeRaw] : []) : null
       });
     }
   }
-  return Array.from(grouped.values());
+  return Array.from(grouped.values()).map((entry) => {
+    if (entry.roomTypes instanceof Set) {
+      const types = Array.from(entry.roomTypes).filter(Boolean);
+      entry.roomTypeLabel = types.length ? `Tipe: ${types.join(', ')}` : '';
+      delete entry.roomTypes;
+    }
+    return entry;
+  });
 }
 
 function summarizeOrderItemsStatusForExport(inv) {
@@ -1208,7 +1229,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const itemRows = Math.max(1, Math.min(items.length, 3));
       const historyRows = Math.max(1, Math.min(paymentHistory.length, 3));
       const lines = Math.max(itemRows, historyRows);
-      const rowCellH = 24;
+      const rowCellH = 28;
       const contentBlockH = 30 + lines * rowCellH;
       const blockH = contentBlockH + 10;
       if (y + blockH > doc.page.height - 48) {
@@ -1251,12 +1272,16 @@ const exportListPdf = asyncHandler(async (req, res) => {
         doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(itemX, ry, itemW, rowH).stroke();
         doc.strokeColor('#e2e8f0').lineWidth(0.5)
           .moveTo(xPrice, ry).lineTo(xPrice, ry + rowH).stroke();
-        const unitTriple = amountTripleForDisplay(it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
+        const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
         const subtotalTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
         doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.2).text(String(it.itemLabel || '-').slice(0, 72), itemX + 2, ry + 2, {
           width: subItemW - 4, height: 10, lineBreak: false
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(6).text(`${it.qty} ${it.unit} | ${String(it.stayLabel || '-')}`.slice(0, 58), itemX + 2, ry + 12, {
+        const nightLabel = Number(it.nights || 1) > 1 ? `${it.nights} malam` : '';
+        const detailText = [ `${it.qty} ${it.unit}`, String(it.stayLabel || '-'), nightLabel, String(it.roomTypeLabel || '') ]
+          .filter((v) => String(v || '').trim() !== '')
+          .join(' | ');
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(6).text(detailText.slice(0, 68), itemX + 2, ry + 12, {
           width: subItemW - 4, height: 10, lineBreak: false
         });
         doc.fillColor('#0f172a').fontSize(5.8).text(
@@ -1274,19 +1299,34 @@ const exportListPdf = asyncHandler(async (req, res) => {
       });
       const historyX = col.payment + 2;
       const historyW = col.total - col.payment - 8;
+      const historyProofW = Math.max(36, Math.floor(historyW * 0.26));
+      const historyInfoW = historyW - historyProofW;
+      const historyProofX = historyX + historyInfoW;
       doc.rect(historyX, rowTop, historyW, headerH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(historyX, rowTop, historyW, headerH).stroke();
-      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.6).text('Transaksi', historyX + 2, rowTop + 3, { width: historyW - 4 });
+      doc.strokeColor('#cbd5e1').lineWidth(0.5)
+        .moveTo(historyProofX, rowTop).lineTo(historyProofX, rowTop + headerH).stroke();
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.4)
+        .text('Informasi Transaksi', historyX + 2, rowTop + 3, { width: historyInfoW - 4, lineBreak: false })
+        .text('Bukti', historyProofX + 2, rowTop + 3, { width: historyProofW - 4, lineBreak: false });
       const showHistory = paymentHistory.slice(0, historyRows);
       showHistory.forEach((entry, i) => {
         const rowH = rowCellH;
         const ry = rowTop + headerH + i * rowH;
         doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(historyX, ry, historyW, rowH).stroke();
-        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6).text(String(entry?.line1 || '-').slice(0, 40), historyX + 2, ry + 2, {
-          width: historyW - 4, height: 10, lineBreak: false
+        doc.strokeColor('#e2e8f0').lineWidth(0.5)
+          .moveTo(historyProofX, ry).lineTo(historyProofX, ry + rowH).stroke();
+        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(5.8).text(String(entry?.info1 || '-').slice(0, 50), historyX + 2, ry + 2, {
+          width: historyInfoW - 4, height: 9, lineBreak: false
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.8).text(String(entry?.line2 || '').slice(0, 44), historyX + 2, ry + 12, {
-          width: historyW - 4, height: 10, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info2 || '').slice(0, 62), historyX + 2, ry + 11, {
+          width: historyInfoW - 4, height: 8, lineBreak: false
+        });
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info3 || '').slice(0, 62), historyX + 2, ry + 19, {
+          width: historyInfoW - 4, height: 8, lineBreak: false
+        });
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.proof || '-').slice(0, 16), historyProofX + 2, ry + 10, {
+          width: historyProofW - 4, height: 9, align: 'center', lineBreak: false
         });
       });
       // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
