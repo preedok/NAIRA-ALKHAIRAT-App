@@ -1,6 +1,14 @@
+const fs = require('fs');
+const path = require('path');
+
 const COMPANY_NAME = 'PT. BINTANG GLOBAL GRUP';
 const COMPANY_ADDRESS = 'Jl. Raya Condet No.8, RT.5/RW.3, Cililitan, Kec. Kramat jati, Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13530.';
 const COMPANY_CONTACT = 'Hotline: 0858 5058 1030   www.bintangglobalgrup.com   bintangglobalgrup@gmail.com';
+
+function getLetterheadLogoPath() {
+  const p = path.join(__dirname, '..', 'assets', 'logo-bg-hotel.png');
+  return fs.existsSync(p) ? p : null;
+}
 
 /**
  * Draw standardized corporate letterhead and return next Y position.
@@ -10,13 +18,16 @@ function drawCorporateLetterhead(doc, { margin = 48 } = {}) {
   const pageWidth = doc.page.width - margin * 2;
   const x = margin;
   let y = margin;
-
-  // Simple emblem block (image-free, deterministic in all environments).
-  const logoBoxW = 72;
-  const logoBoxH = 58;
-  doc.roundedRect(x, y + 2, logoBoxW, logoBoxH, 6).lineWidth(1).strokeColor('#0b4f82').stroke();
-  doc.font('Helvetica-Bold').fontSize(24).fillColor('#0b4f82').text('BG', x + 14, y + 14, { width: 44, align: 'center' });
-  doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a').text('PT. BINTANG GLOBAL GRUP', x + 2, y + 46, { width: logoBoxW - 4, align: 'center' });
+  const logoBoxW = 86;
+  const logoBoxH = 64;
+  const logoPath = getLetterheadLogoPath();
+  if (logoPath) {
+    doc.image(logoPath, x, y, { fit: [logoBoxW, logoBoxH], align: 'left', valign: 'top' });
+  } else {
+    doc.roundedRect(x, y + 2, logoBoxW, logoBoxH, 6).lineWidth(1).strokeColor('#0b4f82').stroke();
+    doc.font('Helvetica-Bold').fontSize(24).fillColor('#0b4f82').text('BG', x + 21, y + 18, { width: 44, align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a').text('PT. BINTANG GLOBAL GRUP', x + 3, y + 50, { width: logoBoxW - 6, align: 'center' });
+  }
 
   const headerX = x + logoBoxW + 12;
   const headerW = pageWidth - logoBoxW - 12;
