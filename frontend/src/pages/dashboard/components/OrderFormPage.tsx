@@ -1968,11 +1968,7 @@ const OrderFormPage: React.FC = () => {
                                 const packs = paxVal > 0 ? Math.max(1, Math.ceil(paxVal / cap)) : 0;
                                 return (
                                   <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div>
-                                        <p className="text-sm font-semibold text-slate-900">Cara input pack</p>
-                                        <p className="text-xs text-slate-500 mt-0.5">Pilih manual (jumlah pack) atau otomatis dari jumlah orang.</p>
-                                      </div>
+                                    <div className="flex items-start justify-end gap-3">
                                       {packMode === 'pax' && paxVal > 0 && (
                                         <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-100">
                                           Auto aktif
@@ -1990,8 +1986,7 @@ const OrderFormPage: React.FC = () => {
                                             : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                         }`}
                                       >
-                                        <p className="text-sm font-semibold text-slate-900">Isi jumlah pack</p>
-                                        <p className="text-xs text-slate-500 mt-1">Anda tentukan jumlah pack sesuai kebutuhan.</p>
+                                        <p className="text-sm font-semibold text-slate-900">Manual</p>
                                       </button>
 
                                       <button
@@ -2007,8 +2002,7 @@ const OrderFormPage: React.FC = () => {
                                             : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                         }`}
                                       >
-                                        <p className="text-sm font-semibold text-slate-900">Masukkan jumlah orang</p>
-                                        <p className="text-xs text-slate-500 mt-1">Sistem otomatis menghitung jumlah pack.</p>
+                                        <p className="text-sm font-semibold text-slate-900">Otomatis</p>
                                       </button>
                                     </div>
 
@@ -2057,7 +2051,7 @@ const OrderFormPage: React.FC = () => {
                                       <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                                         <div className="sm:col-span-1">
                                           <Input
-                                            label="Jumlah pack total"
+                                            label="Jumlah pack"
                                             type="number"
                                             min={0}
                                             value={String(perPackTargetForRow(row))}
@@ -2078,11 +2072,6 @@ const OrderFormPage: React.FC = () => {
                                               });
                                             }}
                                           />
-                                        </div>
-                                        <div className="sm:col-span-2">
-                                          <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-700">
-                                            Total pack dibagi ke tipe kamar. Jumlah semua baris tidak boleh melebihi jumlah pack total.
-                                          </div>
                                         </div>
                                       </div>
                                     )}
