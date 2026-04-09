@@ -988,7 +988,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
   doc.pipe(res);
 
   let y = drawCorporateLetterhead(doc, { margin: 36 });
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text('LAPORAN RESMI DAFTAR INVOICE / ORDER', 36, y, { align: 'center', width: doc.page.width - 72 });
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text('LAPORAN RESMI DAFTAR INVOICE', 36, y, { align: 'center', width: doc.page.width - 72 });
   y += 20;
   doc.font('Helvetica').fontSize(9).fillColor('#334155')
     .text(`Filter: ${buildInvoiceListExportFilterSummary(req)}`, 36, y, { width: doc.page.width - 72, align: 'center' });
@@ -1000,12 +1000,11 @@ const exportListPdf = asyncHandler(async (req, res) => {
     no: 36,
     inv: 52,
     owner: 116,
-    status: 220,
-    order: 290,
-    item: 360,
-    total: 545,
-    paid: 615,
-    remain: 685
+    status: 270,
+    item: 342,
+    total: 600,
+    paid: 675,
+    remain: 750
   };
   const drawTableHeader = () => {
     doc.rect(36, y, doc.page.width - 72, 20).fill('#0D1A63');
@@ -1014,7 +1013,6 @@ const exportListPdf = asyncHandler(async (req, res) => {
       .text('Invoice', col.inv + 2, y + 6)
       .text('Owner / Perusahaan', col.owner + 2, y + 6)
       .text('Status', col.status + 2, y + 6)
-      .text('Order', col.order + 2, y + 6)
       .text('Item & Qty + Status', col.item + 2, y + 6)
       .text('Total', col.total + 2, y + 6)
       .text('Dibayar', col.paid + 2, y + 6)
@@ -1035,12 +1033,14 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const ownerLine = company ? `${ownerName} · ${company}` : ownerName;
       const branch = inv.Branch || {};
       const cabang = (branch.name || branch.code || '-');
-      const orderNo = (inv.Order && inv.Order.order_number) ? String(inv.Order.order_number) : '-';
-      const orderSt = (inv.Order && inv.Order.status) ? String(inv.Order.status) : '-';
-      const itemLine = summarizeOrderItemsForExport(inv);
-      const itemStatusLine = summarizeOrderItemsStatusForExport(inv);
-      const itemCombined = `${itemLine}\nStatus: ${itemStatusLine}`;
-      const blockH = 56;
+      const items = (inv?.Order?.OrderItems || []).map((it) => ({
+        type: String(it.type || '-').toUpperCase(),
+        name: (it.product_name || it.Product?.name || '-'),
+        qty: parseInt(it.quantity, 10) || 0,
+        status: String(getOrderItemStatusForExport(it) || '-')
+      }));
+      const lines = Math.max(1, Math.min(items.length, 3));
+      const blockH = 28 + lines * 12;
       if (y + blockH > doc.page.height - 48) {
         doc.addPage();
         y = drawCorporateLetterhead(doc, { margin: 36 });
@@ -1052,34 +1052,100 @@ const exportListPdf = asyncHandler(async (req, res) => {
       doc.font('Helvetica').fontSize(7).fillColor('#0f172a')
         .text(String(idx + 1), col.no + 2, y + 4, { width: 14 })
         .text(String(inv.invoice_number || '-').slice(0, 16), col.inv + 2, y + 4, { width: 60 })
-        .text(ownerLine.slice(0, 80), col.owner + 2, y + 4, { width: 100, height: 48 })
-        .text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 20), col.status + 2, y + 4, { width: 66 })
-        .text(`No: ${orderNo}\nSt: ${orderSt}\nCab: ${cabang}`.slice(0, 90), col.order + 2, y + 4, { width: 66, height: 48 })
-        .text(itemCombined.slice(0, 250), col.item + 2, y + 4, { width: 180, height: 48 });
+        .text(`${ownerLine}\nCab: ${cabang}`.slice(0, 120), col.owner + 2, y + 4, { width: (col.status - col.owner - 6), height: blockH - 8 })
+        .text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 26), col.status + 2, y + 4, { width: (col.item - col.status - 6) });
+
+      // Mini-table: Item | Qty | Status (maks 3 baris agar rapih).
+      const itemX = col.item + 2;
+      const itemW = col.total - col.item - 8;
+      const headerH = 12;
+      const rowTop = y + 4;
+      doc.rect(itemX, rowTop, itemW, headerH).fill('#E0E7FF');
+      doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(itemX, rowTop, itemW, headerH).stroke();
+      const subQtyW = 26;
+      const subStatusW = 72;
+      const subItemW = Math.max(60, itemW - subQtyW - subStatusW);
+      const xQty = itemX + subItemW;
+      const xStatus = itemX + subItemW + subQtyW;
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.6)
+        .text('Item', itemX + 2, rowTop + 3, { width: subItemW - 4 })
+        .text('Qty', xQty + 2, rowTop + 3, { width: subQtyW - 4, align: 'right' })
+        .text('Status', xStatus + 2, rowTop + 3, { width: subStatusW - 4 });
+      doc.strokeColor('#cbd5e1').lineWidth(0.5)
+        .moveTo(xQty, rowTop).lineTo(xQty, rowTop + headerH).stroke()
+        .moveTo(xStatus, rowTop).lineTo(xStatus, rowTop + headerH).stroke();
+
+      doc.font('Helvetica').fontSize(6.8).fillColor('#0f172a');
+      const showItems = items.length ? items.slice(0, 3) : [{ type: '-', name: '-', qty: 0, status: '-' }];
+      showItems.forEach((it, i) => {
+        const ry = rowTop + headerH + i * 12;
+        doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(itemX, ry, itemW, 12).stroke();
+        doc.strokeColor('#e2e8f0').lineWidth(0.5)
+          .moveTo(xQty, ry).lineTo(xQty, ry + 12).stroke()
+          .moveTo(xStatus, ry).lineTo(xStatus, ry + 12).stroke();
+        const label = `${it.type}:${it.name}`.slice(0, 90);
+        doc.fillColor('#0f172a').text(label, itemX + 2, ry + 2, { width: subItemW - 4, height: 10 });
+        doc.fillColor('#0f172a').text(String(it.qty), xQty + 2, ry + 2, { width: subQtyW - 4, align: 'right' });
+        doc.fillColor('#0f172a').text(String(it.status).slice(0, 22), xStatus + 2, ry + 2, { width: subStatusW - 4 });
+      });
       doc.font('Helvetica-Bold').fontSize(7).fillColor('#0f172a')
-        .text(`Rp ${tot.idr.toLocaleString('id-ID')}\nSAR ${tot.sar.toFixed(2)}\nUSD ${tot.usd.toFixed(2)}`, col.total + 2, y + 4, { width: 66, height: 48 })
-        .text(`Rp ${paid.idr.toLocaleString('id-ID')}\nSAR ${paid.sar.toFixed(2)}\nUSD ${paid.usd.toFixed(2)}`, col.paid + 2, y + 4, { width: 66, height: 48 })
-        .text(`Rp ${rem.idr.toLocaleString('id-ID')}\nSAR ${rem.sar.toFixed(2)}\nUSD ${rem.usd.toFixed(2)}`, col.remain + 2, y + 4, { width: 66, height: 48 });
+        .text(`Rp ${tot.idr.toLocaleString('id-ID')}\nSAR ${tot.sar.toFixed(2)}\nUSD ${tot.usd.toFixed(2)}`, col.total + 2, y + 4, { width: 72, height: blockH - 8 })
+        .text(`Rp ${paid.idr.toLocaleString('id-ID')}\nSAR ${paid.sar.toFixed(2)}\nUSD ${paid.usd.toFixed(2)}`, col.paid + 2, y + 4, { width: 72, height: blockH - 8 })
+        .text(`Rp ${rem.idr.toLocaleString('id-ID')}\nSAR ${rem.sar.toFixed(2)}\nUSD ${rem.usd.toFixed(2)}`, col.remain + 2, y + 4, { width: 72, height: blockH - 8 });
       y += blockH;
     });
   }
 
-  if (y + 58 > doc.page.height - 36) {
+  if (y + 92 > doc.page.height - 36) {
     doc.addPage();
     y = drawCorporateLetterhead(doc, { margin: 36 });
     y += 8;
   }
-  doc.rect(36, y, doc.page.width - 72, 52).fill('#E0E7FF');
-  doc.strokeColor('#94A3B8').lineWidth(0.7).rect(36, y, doc.page.width - 72, 52).stroke();
-  doc.font('Helvetica-Bold').fontSize(9).fillColor('#0D1A63')
-    .text('TOTAL SELURUH DATA', 42, y + 7);
-  doc.font('Helvetica').fontSize(8).fillColor('#0f172a')
-    .text(
-      `Total Tagihan: Rp ${totals.total_idr.toLocaleString('id-ID')} | SAR ${totals.total_sar.toFixed(2)} | USD ${totals.total_usd.toFixed(2)}\n` +
-      `Total Dibayar: Rp ${totals.paid_idr.toLocaleString('id-ID')} | SAR ${totals.paid_sar.toFixed(2)} | USD ${totals.paid_usd.toFixed(2)}\n` +
-      `Total Sisa: Rp ${totals.remaining_idr.toLocaleString('id-ID')} | SAR ${totals.remaining_sar.toFixed(2)} | USD ${totals.remaining_usd.toFixed(2)}`,
-      190, y + 7, { width: doc.page.width - 230 }
-    );
+  // TOTAL SELURUH DATA sebagai tabel agar mudah dibaca.
+  const boxH = 86;
+  doc.rect(36, y, doc.page.width - 72, boxH).fill('#E0E7FF');
+  doc.strokeColor('#94A3B8').lineWidth(0.7).rect(36, y, doc.page.width - 72, boxH).stroke();
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#0D1A63').text('TOTAL SELURUH DATA', 42, y + 10);
+
+  const tx = 190;
+  const tw = doc.page.width - 72 - (tx - 36);
+  const th = 60;
+  const ty = y + 16;
+  doc.rect(tx, ty, tw, th).fill('#ffffff');
+  doc.strokeColor('#94A3B8').lineWidth(0.7).rect(tx, ty, tw, th).stroke();
+
+  const c0 = tx;
+  const c1 = tx + 120;
+  const c2 = c1 + 170;
+  const c3 = c2 + 120;
+  const c4 = tx + tw;
+  // header row
+  doc.rect(tx, ty, tw, 16).fill('#0D1A63');
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8)
+    .text('Keterangan', c0 + 6, ty + 4, { width: 110 })
+    .text('IDR', c1 + 6, ty + 4, { width: 160 })
+    .text('SAR', c2 + 6, ty + 4, { width: 110 })
+    .text('USD', c3 + 6, ty + 4, { width: c4 - c3 - 8 });
+  doc.strokeColor('#94A3B8').lineWidth(0.7)
+    .moveTo(c1, ty).lineTo(c1, ty + th).stroke()
+    .moveTo(c2, ty).lineTo(c2, ty + th).stroke()
+    .moveTo(c3, ty).lineTo(c3, ty + th).stroke();
+
+  const rowsTotals = [
+    { label: 'Total Tagihan', idr: totals.total_idr, sar: totals.total_sar, usd: totals.total_usd },
+    { label: 'Total Dibayar', idr: totals.paid_idr, sar: totals.paid_sar, usd: totals.paid_usd },
+    { label: 'Total Sisa', idr: totals.remaining_idr, sar: totals.remaining_sar, usd: totals.remaining_usd }
+  ];
+  doc.fillColor('#0f172a').font('Helvetica').fontSize(8);
+  rowsTotals.forEach((r, i) => {
+    const ry = ty + 16 + i * 14;
+    doc.strokeColor('#e2e8f0').lineWidth(0.6).moveTo(tx, ry).lineTo(tx + tw, ry).stroke();
+    doc.fillColor('#0f172a').text(r.label, c0 + 6, ry + 3, { width: 110 });
+    doc.font('Helvetica-Bold').text(`Rp ${Number(r.idr || 0).toLocaleString('id-ID')}`, c1 + 6, ry + 3, { width: 160 });
+    doc.font('Helvetica-Bold').text(`${Number(r.sar || 0).toFixed(2)} SAR`, c2 + 6, ry + 3, { width: 110 });
+    doc.font('Helvetica-Bold').text(`${Number(r.usd || 0).toFixed(2)} USD`, c3 + 6, ry + 3, { width: c4 - c3 - 8 });
+    doc.font('Helvetica');
+  });
 
   doc.end();
 });
