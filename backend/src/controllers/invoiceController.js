@@ -384,7 +384,7 @@ async function loadInvoiceListRelations(data) {
         { model: HotelProgress, as: 'HotelProgress', required: false, attributes: ['id', 'status', 'room_number', 'meal_status', 'check_in_date', 'check_in_time', 'check_out_date', 'check_out_time'] },
         { model: BusProgress, as: 'BusProgress', required: false, attributes: ['id', 'bus_ticket_status', 'arrival_status', 'departure_status', 'return_status'] }
       ],
-      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'manifest_file_url', 'meta', 'jamaah_data_type', 'jamaah_data_value']
+      attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'product_name', 'unit_price', 'currency', 'check_in', 'check_out', 'manifest_file_url', 'meta', 'jamaah_data_type', 'jamaah_data_value']
     });
     for (const it of items) {
       const oid = it.order_id;
@@ -770,6 +770,31 @@ function amountTripleForDisplay(amount, fromCurrency, sarToIdr = 4200, usdToIdr 
   return { idr, sar, usd };
 }
 
+function buildPaymentHistoryLines(inv) {
+  const lines = [];
+  const proofs = Array.isArray(inv?.PaymentProofs) ? inv.PaymentProofs : [];
+  proofs
+    .sort((a, b) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime())
+    .forEach((p) => {
+      const dt = formatDateOnlyForExport(p?.transfer_date || p?.created_at);
+      const method = String(p?.payment_type || 'transfer').toUpperCase();
+      const status = String(p?.verified_status || 'pending').toUpperCase();
+      const currency = String(p?.payment_currency || 'IDR').toUpperCase();
+      const amt = Number(p?.amount_original ?? p?.amount ?? p?.amount_idr ?? 0);
+      const bank = p?.bank_name || p?.Bank?.name || '-';
+      const sender = p?.sender_account_name || '-';
+      lines.push(`${dt} | ${method} | ${formatMoneyForExport(amt, currency)} | ${status} | ${sender} (${bank})`);
+    });
+  const allocs = Array.isArray(inv?.BalanceAllocations) ? inv.BalanceAllocations : [];
+  allocs.forEach((a) => {
+    const dt = formatDateOnlyForExport(a?.created_at);
+    const amt = Number(a?.amount || 0);
+    lines.push(`${dt} | ALOKASI SALDO | ${formatMoneyForExport(amt, 'IDR')} | VERIFIED`);
+  });
+  if (!lines.length) lines.push('-');
+  return lines;
+}
+
 function buildPdfOrderItemsDetailed(inv) {
   const src = inv?.Order?.OrderItems || [];
   if (!src.length) return [];
@@ -781,9 +806,11 @@ function buildPdfOrderItemsDetailed(inv) {
     const unit = orderItemQtyUnitForExport(it);
     const qty = Math.max(0, parseInt(it?.quantity, 10) || 0);
     const currency = String(it?.currency || 'IDR').toUpperCase();
-    const unitPrice = Number(it?.unit_price || 0);
-    const checkIn = it?.check_in || it?.meta?.check_in;
-    const checkOut = it?.check_out || it?.meta?.check_out;
+    const unitPriceRaw = Number(it?.unit_price || it?.meta?.room_unit_price || 0);
+    const mealUnitPriceRaw = Number(it?.meta?.meal_unit_price || 0);
+    const unitPrice = unitPriceRaw + mealUnitPriceRaw;
+    const checkIn = it?.check_in || it?.meta?.check_in || it?.HotelProgress?.check_in_date;
+    const checkOut = it?.check_out || it?.meta?.check_out || it?.HotelProgress?.check_out_date;
     const location = String(it?.meta?.hotel_location || '').trim();
     const nights = (type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) ? Math.max(1, getNights(checkIn, checkOut)) : 1;
     const subtotal = qty * unitPrice * nights;
@@ -1128,6 +1155,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
     owner: ownerFilterActive ? null : 116,
     status: ownerFilterActive ? 116 : 270,
     item: ownerFilterActive ? 188 : 342,
+    payment: ownerFilterActive ? 430 : 500,
     total: 600,
     paid: 675,
     remain: 750
@@ -1140,6 +1168,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
     if (!ownerFilterActive && col.owner != null) h.text('Owner', col.owner + 2, y + 6);
     h.text('Status', col.status + 2, y + 6)
       .text('Item & Qty', col.item + 2, y + 6)
+      .text('Riwayat Pembayaran', col.payment + 2, y + 6)
       .text('Total', col.total + 2, y + 6)
       .text('Dibayar', col.paid + 2, y + 6)
       .text('Sisa', col.remain + 2, y + 6);
@@ -1161,8 +1190,12 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const cabang = (branch.name || branch.code || '-');
       const invoiceDate = inv.issued_at || inv.created_at || inv.createdAt || inv.date;
       const items = buildPdfOrderItemsDetailed(inv);
-      const lines = Math.max(1, Math.min(items.length, 3));
-      const blockH = 30 + lines * 16;
+      const paymentHistory = buildPaymentHistoryLines(inv);
+      const itemRows = Math.max(1, Math.min(items.length, 3));
+      const historyRows = Math.max(1, Math.min(paymentHistory.length, 3));
+      const lines = Math.max(itemRows, historyRows);
+      const contentBlockH = 30 + lines * 16;
+      const blockH = contentBlockH + 10;
       if (y + blockH > doc.page.height - 48) {
         doc.addPage();
         y = drawCorporateLetterhead(doc, { margin: 36 });
@@ -1181,7 +1214,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
 
       // Mini-table: Item | Qty | CI-CO | Harga/item | Subtotal (maks 4 baris agar rapih).
       const itemX = col.item + 2;
-      const itemW = col.total - col.item - 8;
+      const itemW = col.payment - col.item - 6;
       const headerH = 12;
       const rowTop = y + 4;
       doc.rect(itemX, rowTop, itemW, headerH).fill('#E0E7FF');
@@ -1208,7 +1241,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
         .moveTo(xSubtotal, rowTop).lineTo(xSubtotal, rowTop + headerH).stroke();
 
       doc.font('Helvetica').fontSize(6.8).fillColor('#0f172a');
-      const showItems = items.length ? items.slice(0, 3) : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
+      const showItems = items.length ? items.slice(0, itemRows) : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
       showItems.forEach((it, i) => {
         const rowH = 16;
         const ry = rowTop + headerH + i * rowH;
@@ -1236,11 +1269,23 @@ const exportListPdf = asyncHandler(async (req, res) => {
           { width: subSubtotalW - 4, align: 'right' }
         );
       });
+      const historyX = col.payment + 2;
+      const historyW = col.total - col.payment - 8;
+      doc.rect(historyX, rowTop, historyW, headerH).fill('#E0E7FF');
+      doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(historyX, rowTop, historyW, headerH).stroke();
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.6).text('Transaksi', historyX + 2, rowTop + 3, { width: historyW - 4 });
+      const showHistory = paymentHistory.slice(0, historyRows);
+      showHistory.forEach((line, i) => {
+        const rowH = 16;
+        const ry = rowTop + headerH + i * rowH;
+        doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(historyX, ry, historyW, rowH).stroke();
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(6.2).text(String(line).slice(0, 98), historyX + 2, ry + 2, { width: historyW - 4, height: rowH - 2 });
+      });
       // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
       const amtX = col.total + 2;
       const amtY = y + 4;
       const amtW = (doc.page.width - 36) - amtX - 2;
-      const amtH = blockH - 8;
+      const amtH = contentBlockH - 8;
       const amtHeaderH = 12;
       doc.rect(amtX, amtY, amtW, amtHeaderH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(amtX, amtY, amtW, amtH).stroke();
@@ -1262,8 +1307,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const amountRows = [
         [`Rp ${tot.idr.toLocaleString('id-ID')}`, `Rp ${paid.idr.toLocaleString('id-ID')}`, `Rp ${rem.idr.toLocaleString('id-ID')}`],
         [`SAR ${tot.sar.toFixed(2)}`, `SAR ${paid.sar.toFixed(2)}`, `SAR ${rem.sar.toFixed(2)}`],
-        [`USD ${tot.usd.toFixed(2)}`, `USD ${paid.usd.toFixed(2)}`, `USD ${rem.usd.toFixed(2)}`],
-        [`Kurs: SAR ${Number(tot.sarToIdr || 0).toLocaleString('id-ID')}`, `USD ${Number(tot.usdToIdr || 0).toLocaleString('id-ID')}`, '']
+        [`USD ${tot.usd.toFixed(2)}`, `USD ${paid.usd.toFixed(2)}`, `USD ${rem.usd.toFixed(2)}`]
       ];
       const rowH = Math.max(10, (amtH - amtHeaderH) / amountRows.length);
       amountRows.forEach((vals, i) => {
@@ -1274,6 +1318,8 @@ const exportListPdf = asyncHandler(async (req, res) => {
           .text(vals[1], ax2 + 2, ry + 2, { width: aw2 - 4, height: rowH - 2, align: 'left' })
           .text(vals[2], ax3 + 2, ry + 2, { width: aw3 - 4, height: rowH - 2, align: 'left' });
       });
+      doc.font('Helvetica-Oblique').fontSize(6.6).fillColor('#0b4f82')
+        .text(`Kurs dipakai: SAR ${Number(tot.sarToIdr || 0).toLocaleString('id-ID')} | USD ${Number(tot.usdToIdr || 0).toLocaleString('id-ID')}`, amtX + 2, y + contentBlockH + 1, { width: amtW - 4, align: 'right' });
       y += blockH;
     });
   }
