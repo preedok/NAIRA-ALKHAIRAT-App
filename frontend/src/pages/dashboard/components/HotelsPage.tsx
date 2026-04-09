@@ -8,7 +8,6 @@ import {
   Edit,
   Trash2,
   ShoppingCart,
-  Calendar,
   Eye
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
@@ -19,7 +18,7 @@ import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE, HotelAddRoomQuantityModal } from '../../../components/common';
+import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -30,7 +29,6 @@ import { productsApi, adminPusatApi, businessRulesApi } from '../../../services/
 import type { HotelSeason } from '../../../services/api';
 import { fillFromSource } from '../../../utils/currencyConversion';
 import { getPriceTripleForTable, formatUSD } from '../../../utils';
-import { CURRENCY_OPTIONS } from '../../../utils/constants';
 import { getProductListOwnerId } from '../../../utils/productHelpers';
 
 const ROOM_TYPES = ['double', 'triple', 'quad', 'quint'] as const;
@@ -43,8 +41,6 @@ const OWNER_PRICE_LABELS: Record<OwnerPriceType, string> = {
   mou: 'Owner MOU',
   non_mou: 'Owner Non-MOU'
 };
-/** Kuota tersisa ≤ ini dianggap "hampir penuh"; admin pusat bisa tambah kuota di kalender untuk full dan hampir penuh */
-const ALMOST_FULL_THRESHOLD = 3;
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
 
 /** Label bulan untuk kolom matriks harga (id-ID, teks saja). */
@@ -371,18 +367,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
     byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>>;
   };
   const [availabilityByHotelId, setAvailabilityByHotelId] = useState<Record<string, AvailabilityData | 'loading' | null>>({});
-  const [availabilityPopupHotelId, setAvailabilityPopupHotelId] = useState<string | null>(null);
-  /** Popup "Tambah jumlah kamar" di dalam popup Ketersediaan per tanggal (tanggal full) */
-  type AvailabilityAddQuantity = {
-    dateStr: string;
-    seasonId: string;
-    seasonName: string;
-    mode: 'global' | 'per_season';
-    roomTypes: Record<string, { total: number; booked: number; available: number }>;
-  };
-  const [availabilityAddQuantity, setAvailabilityAddQuantity] = useState<AvailabilityAddQuantity | null>(null);
-  const [availabilityAddQuantityInputs, setAvailabilityAddQuantityInputs] = useState<Record<string, string>>({});
-  const [availabilityAddQuantitySaving, setAvailabilityAddQuantitySaving] = useState(false);
 
   const canAddHotel = user?.role === 'super_admin' || user?.role === 'admin_pusat' || user?.role === 'role_accounting';
   /** Owner tidak boleh edit/hapus product; hanya role yang diizinkan backend */
@@ -707,55 +691,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         .catch(() => setAvailabilityByHotelId((prev) => ({ ...prev, [h.id]: null })));
     });
   }, [hotelIdsKey, availabilityFrom, availabilityTo]);
-
-  const refetchAvailabilityForHotel = useCallback((productId: string) => {
-    productsApi.getAvailability(productId, { from: availabilityFrom, to: availabilityTo })
-      .then((res) => {
-        const data = (res.data as { data?: { availability_mode?: 'global' | 'per_season'; byRoomType?: Record<string, number>; byDate?: Record<string, Record<string, { total: number; booked: number; available: number }>> } })?.data;
-        if (!data?.byRoomType) return;
-        setAvailabilityByHotelId((prev) => ({ ...prev, [productId]: { availability_mode: data.availability_mode, byRoomType: data.byRoomType!, byDate: data.byDate ?? {} } }));
-      })
-      .catch(() => {});
-  }, [availabilityFrom, availabilityTo]);
-
-  const handleSaveAvailabilityAddQuantity = useCallback(async () => {
-    if (!availabilityPopupHotelId || !availabilityAddQuantity) return;
-    setAvailabilityAddQuantitySaving(true);
-    try {
-      const inventory = ROOM_TYPES.map((rt) => {
-        const current = availabilityAddQuantity.roomTypes[rt]?.total ?? 0;
-        const addVal = Math.max(0, parseInt(availabilityAddQuantityInputs[rt] ?? '', 10) || 0);
-        return { room_type: rt, total_rooms: current + addVal };
-      });
-      if (availabilityAddQuantity.mode === 'global') {
-        const global_room_inventory: Record<string, number> = {};
-        inventory.forEach((row) => {
-          global_room_inventory[row.room_type] = row.total_rooms;
-        });
-        await adminPusatApi.setHotelAvailabilityConfig(availabilityPopupHotelId, {
-          availability_mode: 'global',
-          global_room_inventory
-        });
-        showToast('Kuota kamar (semua bulan) berhasil diperbarui', 'success');
-      } else {
-        await adminPusatApi.setSeasonInventory(availabilityPopupHotelId, availabilityAddQuantity.seasonId, { inventory });
-        showToast('Inventori musim berhasil diperbarui', 'success');
-      }
-      setAvailabilityAddQuantity(null);
-      refetchAvailabilityForHotel(availabilityPopupHotelId);
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      showToast(err.response?.data?.message || 'Gagal menyimpan inventori', 'error');
-    } finally {
-      setAvailabilityAddQuantitySaving(false);
-    }
-  }, [
-    availabilityPopupHotelId,
-    availabilityAddQuantity,
-    availabilityAddQuantityInputs,
-    showToast,
-    refetchAvailabilityForHotel
-  ]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -1174,7 +1109,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const gridMonthLabel = md?.year_month ? formatYmShortId(md.year_month) : '';
             const gridRtLabel = md?.room_type ? (ROOM_TYPE_LABELS[md.room_type] || md.room_type) : '';
             const avail = availabilityByHotelId[hotel.id];
-            const isPerPackHotel = hotel.meta?.room_pricing_mode === 'per_person';
             const gridRates = { SAR_TO_IDR: currencyRates.SAR_TO_IDR ?? 4200, USD_TO_IDR: currencyRates.USD_TO_IDR ?? 15500 };
             const series = hotel.hotel_monthly_series;
             const mealMonthsList = hotel.hotel_monthly_meal_months?.months ?? series?.months;
@@ -1469,61 +1403,27 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                     <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-700 text-xs">{CONTENT_LOADING_MESSAGE}</div>
                   )}
                   {avail === null && <span className="text-slate-400 text-sm">—</span>}
-                  {avail && typeof avail === 'object' && avail.byRoomType && (
-                    <button
-                      type="button"
-                      onClick={() => setAvailabilityPopupHotelId(hotel.id)}
-                      className="w-full text-left rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-emerald-50/80 hover:border-emerald-200 transition-colors p-2 group"
-                      title="Klik untuk lihat tanggal dengan kamar tersedia"
-                    >
-                      <div className="flex flex-wrap gap-1.5">
-                        {isPerPackHotel ? (
-                          (() => {
-                            const perPackAvailable = Object.values(avail.byRoomType).reduce((mx, n) => Math.max(mx, Number(n) || 0), 0);
-                            return (
-                              <div
-                                className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[84px] ${perPackAvailable === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
-                              >
-                                <p className="text-[10px] font-medium text-slate-500 uppercase">Per pack</p>
-                                {perPackAvailable === 0 ? (
-                                  <p className="text-xs font-bold text-red-600">Penuh</p>
-                                ) : (
-                                  <p className="text-xs font-bold text-emerald-600 tabular-nums">{perPackAvailable}</p>
-                                )}
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          Object.entries(avail.byRoomType).map(([rt, n]) => {
-                            const isFullboard = false;
-                            const showPriceHere = isFullboard;
-                            const rtEntry = breakdown[rt as keyof typeof breakdown];
-                            const priceVal = typeof rtEntry === 'object' && rtEntry != null && 'price' in rtEntry ? Number((rtEntry as { price?: number }).price) : 0;
-                            const tripleRt = fillFromSource(cur, priceVal, currencyRates);
-                            const tRt = getPriceTripleForTable(tripleRt.idr, tripleRt.sar, tripleRt.usd);
-                            const priceLabel = showPriceHere && tRt.hasPrice ? (cur === 'SAR' ? tRt.sarText : cur === 'USD' ? tRt.usdText : tRt.idrText) : null;
-                            return (
-                              <div
-                                key={rt}
-                                className={`shrink-0 rounded-lg border px-2 py-1.5 min-w-[56px] ${n === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
-                              >
-                                <p className="text-[10px] font-medium text-slate-500 uppercase capitalize">{rt}</p>
-                                {n === 0 ? (
-                                  <p className="text-xs font-bold text-red-600">Penuh</p>
-                                ) : (
-                                  <p className="text-xs font-bold text-emerald-600 tabular-nums">{n}</p>
-                                )}
-                                {priceLabel != null && (
-                                  <p className="text-[10px] text-slate-600 mt-0.5 tabular-nums">{priceLabel}</p>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
+                  {avail && typeof avail === 'object' && avail.byRoomType && (() => {
+                    /** Kuota operasional di backend per tipe; untuk daftar hotel ditampilkan agregat per pack (maks antar tipe). */
+                    const perPackAvailable = Object.values(avail.byRoomType).reduce((mx, n) => Math.max(mx, Number(n) || 0), 0);
+                    return (
+                      <div
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2"
+                        title="Ketersediaan realtime per pack (ringkas)"
+                      >
+                        <div
+                          className={`inline-flex flex-col rounded-lg border px-2 py-1.5 min-w-[84px] ${perPackAvailable === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
+                        >
+                          <p className="text-[10px] font-medium text-slate-500 uppercase">Per pack</p>
+                          {perPackAvailable === 0 ? (
+                            <p className="text-xs font-bold text-red-600">Penuh</p>
+                          ) : (
+                            <p className="text-xs font-bold text-emerald-600 tabular-nums">{perPackAvailable}</p>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-1.5 group-hover:text-emerald-600">Klik untuk lihat per tanggal →</p>
-                    </button>
-                  )}
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3.5 text-center align-middle">
                   <Badge variant={hotel.is_active ? 'success' : 'error'}>
@@ -1602,244 +1502,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         </div>
       </Card>
       </div>
-
-      {/* Popup Ketersediaan per tanggal: lebar, layout rapi, per tipe kamar */}
-      {availabilityPopupHotelId && (() => {
-        const hotel = hotels.find((h) => h.id === availabilityPopupHotelId) || filteredHotels.find((h) => h.id === availabilityPopupHotelId);
-        const availData = availabilityPopupHotelId ? availabilityByHotelId[availabilityPopupHotelId] : null;
-        const byDate = availData && typeof availData === 'object' && availData.byDate ? availData.byDate : {};
-        const availabilityMode: 'global' | 'per_season' =
-          availData && typeof availData === 'object' && availData.availability_mode === 'global' ? 'global' : 'per_season';
-        const dateKeys = Object.keys(byDate).sort();
-        const formatDateLabel = (s: string) => {
-          const d = new Date(s + 'T12:00:00');
-          return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-        };
-        const roomTypeLabels: Record<string, string> = { double: 'Double', triple: 'Triple', quad: 'Quad', quint: 'Quint', single: 'Double' };
-        const popupCurrency = (hotel?.currency || hotel?.meta?.currency || 'IDR') as 'IDR' | 'SAR' | 'USD';
-        const popupCurrInfo = CURRENCY_OPTIONS.find((c) => c.id === popupCurrency) || CURRENCY_OPTIONS[0];
-        const formatPrice = (n: number) => (n > 0 ? `${popupCurrInfo.symbol} ${Number(n).toLocaleString(popupCurrInfo.locale)}` : '—');
-        const roomPriceTypeLabel = 'per malam';
-        const breakdown = hotel?.room_breakdown || hotel?.prices_by_room || {};
-        return (
-          <Modal
-            open
-            onClose={() => {
-              setAvailabilityAddQuantity(null);
-              setAvailabilityPopupHotelId(null);
-            }}
-          >
-            <ModalBoxLg>
-              <ModalHeader
-                title="Ketersediaan per tanggal"
-                subtitle={<>{(hotel?.name ?? 'Hotel')} — data realtime per tipe kamar</>}
-                icon={<Calendar className="w-5 h-5" />}
-                onClose={() => {
-                  setAvailabilityAddQuantity(null);
-                  setAvailabilityPopupHotelId(null);
-                }}
-              />
-              <ModalBody className="p-6 overflow-y-auto flex-1 min-h-0">
-                {/* Harga kamar per malam per tipe (referensi; operasional dari grid bulanan SAR) */}
-                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
-                  <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50">
-                    <h4 className="text-sm font-semibold text-slate-800">Harga kamar {roomPriceTypeLabel}</h4>
-                  </div>
-                  <div className="px-4 py-3">
-                    <div className="flex flex-wrap gap-x-6 gap-y-2">
-                      {ROOM_TYPES.map((rt) => {
-                        const pr = breakdown[rt]?.price;
-                        if (pr == null) return null;
-                        return (
-                          <span key={rt} className="inline-flex items-center gap-2">
-                            <span className="text-slate-500 text-sm">{roomTypeLabels[rt]}:</span>
-                            <span className="font-semibold tabular-nums text-slate-800">{formatPrice(pr)}</span>
-                          </span>
-                        );
-                      })}
-                      {ROOM_TYPES.every((rt) => breakdown[rt]?.price == null) && (
-                        <span className="text-slate-400 text-sm">Belum diatur di Pengaturan Jumlah</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {dateKeys.length === 0 ? (
-                  <div className="py-16 text-center rounded-2xl bg-slate-50 border border-slate-200">
-                    <Calendar className="w-14 h-14 text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-600 font-medium">Belum ada data per tanggal</p>
-                    <p className="text-slate-400 text-sm mt-1">Ketersediaan dihitung otomatis dari booking order pada periode yang dipilih.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Legenda & kode tipe — satu bar rapi */}
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
-                      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Legenda:</span>
-                      <span className="inline-flex items-center gap-2">
-                        <span className="w-6 h-5 rounded bg-emerald-200 border border-emerald-300" />
-                        <span className="text-sm text-slate-700">Tersedia</span>
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <span className="w-6 h-5 rounded bg-amber-200 border border-amber-300" />
-                        <span className="text-sm text-slate-700">Hampir penuh (≤{ALMOST_FULL_THRESHOLD} kamar)</span>
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <span className="w-6 h-5 rounded bg-red-200 border border-red-300" />
-                        <span className="text-sm text-slate-700">Full</span>
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <span className="w-6 h-5 rounded bg-slate-100 border border-slate-200" />
-                        <span className="text-sm text-slate-500">Tanpa musim</span>
-                      </span>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-xs text-slate-500">Kode: S=Single · D=Double · T=Triple · Q=Quad · Qu=Quint</span>
-                      {canAddHotel && (
-                        <>
-                          <span className="text-slate-300">|</span>
-                          <span className="text-xs text-emerald-600">Admin: klik <Plus className="w-3 h-3 inline" /> di sel full/hampir penuh untuk tambah kuota langsung</span>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Satu tampilan: Kalender + detail per tanggal (tabel gabungan) */}
-                    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                        <h4 className="text-sm font-semibold text-slate-800">Ketersediaan 30 hari</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">Tanggal + jumlah tersedia per tipe. Hijau = tersedia, kuning = hampir penuh, merah = full. Admin pusat bisa tambah kuota di sel full/hampir penuh.</p>
-                      </div>
-                      <div className="overflow-auto max-h-[min(60vh,420px)]">
-                        <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-slate-100 border-b-2 border-slate-200 z-10 shadow-sm">
-                            <tr>
-                              <th className="text-left py-3 px-3 font-semibold text-slate-700 w-[100px]">Tanggal</th>
-                              {ROOM_TYPES.map((rt) => (
-                                <th key={rt} className="text-center py-3 px-2 font-semibold text-slate-700 min-w-[72px]">{roomTypeLabels[rt] || rt}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dateKeys.map((dateStr, idx) => {
-                              const day = byDate[dateStr] as (Record<string, { total?: number; booked?: number; available?: number }> & { _noSeason?: boolean; seasonId?: string; seasonName?: string }) | undefined;
-                              const noSeason = day && (day as { _noSeason?: boolean })._noSeason;
-                              const rec = noSeason ? null : (day as Record<string, { total?: number; booked?: number; available?: number }> | undefined);
-                              const getAvail = (rt: string) => (rec && rec[rt] != null ? (rec[rt]?.available ?? 0) : 0);
-                              const hasAvailable = !noSeason && rec && ROOM_TYPES.some((rt) => getAvail(rt) > 0);
-                              const hasAlmostFull = !noSeason && rec && ROOM_TYPES.some((rt) => { const av = getAvail(rt); return av > 0 && av <= ALMOST_FULL_THRESHOLD; });
-                              const allFull = !noSeason && rec && ROOM_TYPES.every((rt) => getAvail(rt) <= 0);
-                              const seasonId = !noSeason && day ? (day as { seasonId?: string }).seasonId : undefined;
-                              const seasonName = !noSeason && day ? (day as { seasonName?: string }).seasonName : undefined;
-                              const d = new Date(dateStr + 'T12:00:00');
-                              const openAddQty = () => {
-                                if (!rec || !availabilityPopupHotelId) return;
-                                if (availabilityMode === 'per_season' && !seasonId) return;
-                                const roomTypes: Record<string, { total: number; booked: number; available: number }> = {};
-                                ROOM_TYPES.forEach((rt) => {
-                                  const r = rec[rt];
-                                  roomTypes[rt] = r ? { total: r.total ?? 0, booked: r.booked ?? 0, available: r.available ?? 0 } : { total: 0, booked: 0, available: 0 };
-                                });
-                                setAvailabilityAddQuantity({
-                                  dateStr,
-                                  seasonId: seasonId || '',
-                                  seasonName: seasonName || (availabilityMode === 'global' ? 'Semua bulan' : ''),
-                                  mode: availabilityMode,
-                                  roomTypes
-                                });
-                                const initial: Record<string, string> = {};
-                                ROOM_TYPES.forEach((rt) => { initial[rt] = ''; });
-                                setAvailabilityAddQuantityInputs(initial);
-                              };
-                              return (
-                                <tr
-                                  key={dateStr}
-                                  className={`border-b border-slate-100 last:border-0 transition-colors ${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'} hover:bg-emerald-50/40`}
-                                >
-                                  <td className="py-2 px-3 align-middle">
-                                    <div
-                                      className={`inline-flex flex-col items-center justify-center rounded-xl border-2 min-w-[76px] py-2 px-2 ${
-                                        noSeason
-                                          ? 'bg-slate-50 border-slate-200 text-slate-400'
-                                          : allFull
-                                            ? 'bg-red-50 border-red-200'
-                                            : hasAlmostFull
-                                              ? 'bg-amber-50 border-amber-200'
-                                              : 'bg-emerald-50 border-emerald-200'
-                                      }`}
-                                    >
-                                      <span className="text-[10px] uppercase tracking-wide text-slate-500">{d.toLocaleDateString('id-ID', { month: 'short' })}</span>
-                                      <span className="text-xl font-bold tabular-nums text-slate-800 leading-none mt-0.5">{d.getDate()}</span>
-                                      <span className="text-[10px] text-slate-500 mt-0.5">{d.toLocaleDateString('id-ID', { weekday: 'short' })}</span>
-                                    </div>
-                                  </td>
-                                  {ROOM_TYPES.map((rt) => {
-                                    const a = rec && rec[rt] != null ? (rec[rt]?.available ?? 0) : null;
-                                    if (noSeason || a === null) {
-                                      return <td key={rt} className="py-2 px-2 text-center align-middle text-slate-400">—</td>;
-                                    }
-                                    const isFull = a <= 0;
-                                    const isAlmostFull = a > 0 && a <= ALMOST_FULL_THRESHOLD;
-                                    const showAddBtn = canAddHotel && (isFull || isAlmostFull) && (availabilityMode === 'global' || !!seasonId);
-                                    const cellBg = isFull ? 'bg-red-100 text-red-800' : isAlmostFull ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800';
-                                    return (
-                                      <td key={rt} className="py-2 px-2 text-center align-middle">
-                                        <div className="inline-flex items-center justify-center gap-1">
-                                          <span
-                                            className={`inline-flex items-center justify-center min-w-[44px] py-1.5 px-2 rounded-lg font-semibold tabular-nums text-sm ${cellBg}`}
-                                          >
-                                            {a > 0 ? a : 'Full'}
-                                          </span>
-                                          {showAddBtn && (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => { e.stopPropagation(); openAddQty(); }}
-                                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors shrink-0"
-                                              title="Tambah kuota (full/hampir penuh)"
-                                            >
-                                              <Plus className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              </ModalBody>
-            </ModalBoxLg>
-          </Modal>
-        );
-      })()}
-
-      {availabilityAddQuantity && availabilityPopupHotelId && (
-        <HotelAddRoomQuantityModal
-          open
-          zIndex={60}
-          saving={availabilityAddQuantitySaving}
-          onClose={() => !availabilityAddQuantitySaving && setAvailabilityAddQuantity(null)}
-          dateStr={availabilityAddQuantity.dateStr}
-          seasonName={availabilityAddQuantity.seasonName}
-          helpText="Isi jumlah tambahan per tipe. Total baru = total saat ini + tambahan."
-          rows={ROOM_TYPES.map((rt) => {
-            const r = availabilityAddQuantity.roomTypes[rt];
-            return {
-              roomType: rt,
-              total: r?.total ?? 0,
-              booked: r?.booked ?? 0,
-              available: r?.available ?? 0
-            };
-          })}
-          addInputs={availabilityAddQuantityInputs}
-          onAddInputChange={(rt, v) => setAvailabilityAddQuantityInputs((prev) => ({ ...prev, [rt]: v }))}
-          onSave={handleSaveAvailabilityAddQuantity}
-        />
-      )}
 
       {showAddModal && (
         <Modal open onClose={() => !saving && !editFormLoading && (setShowAddModal(false), setEditingHotel(null))}>
