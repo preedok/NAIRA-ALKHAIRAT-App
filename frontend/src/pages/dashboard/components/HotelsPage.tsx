@@ -1151,10 +1151,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
             const mealType = hotel.meta?.meal_price_type === 'per_trip' ? 'Per trip' : hotel.meta?.meal_price_type === 'per_day' ? 'Per hari' : '-';
             const roomPriceType = hotel.meta?.room_price_type === 'per_lasten' ? 'Per lasten' : hotel.meta?.room_price_type === 'per_day' ? 'Per hari' : '-';
             const breakdown = hotel.room_breakdown || hotel.prices_by_room || {};
+            const ownerMealModeMeta = (hotel.meta?.owner_meal_mode || {}) as Partial<Record<OwnerPriceType, OwnerMealMode>>;
+            const isOwnerFullboard = (ownerType: OwnerPriceType) => ownerMealModeMeta[ownerType] === 'fullboard';
             const tripleMeal = fillFromSource(cur, mealPrice, currencyRates);
             const md = hotel.hotel_monthly_display;
-            const isFullboardPlan = false;
-            const isFullboardView = false;
+            const isFullboardPlan = isOwnerFullboard('mou') && isOwnerFullboard('non_mou');
+            const isFullboardView = isFullboardPlan;
             /** SAR per malam dari grid bulanan (sumber utama tabel) */
             const monthlyRoomSar =
               md?.sar_room_only;
@@ -1272,8 +1274,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             </p>
                             {renderHotelListMonthlyMatrixTable({
                               monthKeys: ownerMonthKeys,
-                              isFullboard: isFullboardView,
-                              mealMonthsList: isFullboardView ? [] : ownerMealMonths,
+                              isFullboard: isOwnerFullboard(ownerType),
+                              mealMonthsList: isOwnerFullboard(ownerType) ? [] : ownerMealMonths,
                               byRoomTypeDisplay: ownerByRoom,
                               gridRates,
                               roomYearDisplay: hotel.hotel_monthly_series_by_owner_type?.year,
