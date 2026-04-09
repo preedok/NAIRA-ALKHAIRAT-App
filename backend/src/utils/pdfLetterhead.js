@@ -37,14 +37,14 @@ function drawCorporateLetterhead(doc, { margin = 48 } = {}) {
   }
 
   const titleY = y + 2;
-  doc.font('Helvetica-Bold').fontSize(20).fillColor('#0b4f82').text(COMPANY_NAME, headerX, titleY, { width: headerW, align: 'left' });
-  const titleH = doc.heightOfString(COMPANY_NAME, { width: headerW, align: 'left' });
+  doc.font('Helvetica-Bold').fontSize(20).fillColor('#0b4f82').text(COMPANY_NAME, headerX, titleY, { width: headerW, align: 'center' });
+  const titleH = doc.heightOfString(COMPANY_NAME, { width: headerW, align: 'center' });
   const addressY = titleY + titleH + 4;
-  doc.font('Helvetica').fontSize(9.2).fillColor('#111827').text(COMPANY_ADDRESS, headerX, addressY, { width: headerW, align: 'left' });
-  const addressH = doc.heightOfString(COMPANY_ADDRESS, { width: headerW, align: 'left' });
+  doc.font('Helvetica').fontSize(9.2).fillColor('#111827').text(COMPANY_ADDRESS, headerX, addressY, { width: headerW, align: 'center' });
+  const addressH = doc.heightOfString(COMPANY_ADDRESS, { width: headerW, align: 'center' });
   const contactY = addressY + addressH + 3;
-  doc.font('Helvetica').fontSize(9.8).fillColor('#111827').text(COMPANY_CONTACT, headerX, contactY, { width: headerW, align: 'left' });
-  const contactH = doc.heightOfString(COMPANY_CONTACT, { width: headerW, align: 'left' });
+  doc.font('Helvetica').fontSize(9.8).fillColor('#111827').text(COMPANY_CONTACT, headerX, contactY, { width: headerW, align: 'center' });
+  const contactH = doc.heightOfString(COMPANY_CONTACT, { width: headerW, align: 'center' });
 
   const textBottom = contactY + contactH;
   const lineY = Math.max(textBottom + 8, margin + logoBoxH + 8);
