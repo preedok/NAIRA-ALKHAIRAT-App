@@ -1088,10 +1088,42 @@ const exportListPdf = asyncHandler(async (req, res) => {
         doc.fillColor('#0f172a').text(String(it.qty), xQty + 2, ry + 2, { width: subQtyW - 4, align: 'right' });
         doc.fillColor('#0f172a').text(String(it.status).slice(0, 22), xStatus + 2, ry + 2, { width: subStatusW - 4 });
       });
-      doc.font('Helvetica-Bold').fontSize(7).fillColor('#0f172a')
-        .text(`Rp ${tot.idr.toLocaleString('id-ID')}\nSAR ${tot.sar.toFixed(2)}\nUSD ${tot.usd.toFixed(2)}`, col.total + 2, y + 4, { width: 72, height: blockH - 8 })
-        .text(`Rp ${paid.idr.toLocaleString('id-ID')}\nSAR ${paid.sar.toFixed(2)}\nUSD ${paid.usd.toFixed(2)}`, col.paid + 2, y + 4, { width: 72, height: blockH - 8 })
-        .text(`Rp ${rem.idr.toLocaleString('id-ID')}\nSAR ${rem.sar.toFixed(2)}\nUSD ${rem.usd.toFixed(2)}`, col.remain + 2, y + 4, { width: 72, height: blockH - 8 });
+      // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
+      const amtX = col.total + 2;
+      const amtY = y + 4;
+      const amtW = (doc.page.width - 36) - amtX - 2;
+      const amtH = blockH - 8;
+      const amtHeaderH = 12;
+      doc.rect(amtX, amtY, amtW, amtHeaderH).fill('#E0E7FF');
+      doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(amtX, amtY, amtW, amtH).stroke();
+      const aw1 = col.paid - col.total;
+      const aw2 = col.remain - col.paid;
+      const aw3 = amtW - aw1 - aw2;
+      const ax2 = amtX + aw1;
+      const ax3 = amtX + aw1 + aw2;
+      doc.strokeColor('#cbd5e1').lineWidth(0.5)
+        .moveTo(ax2, amtY).lineTo(ax2, amtY + amtH).stroke()
+        .moveTo(ax3, amtY).lineTo(ax3, amtY + amtH).stroke();
+
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.6)
+        .text('Total', amtX + 2, amtY + 3, { width: aw1 - 4 })
+        .text('Dibayar', ax2 + 2, amtY + 3, { width: aw2 - 4 })
+        .text('Sisa', ax3 + 2, amtY + 3, { width: aw3 - 4 });
+
+      const amountRows = [
+        [`Rp ${tot.idr.toLocaleString('id-ID')}`, `Rp ${paid.idr.toLocaleString('id-ID')}`, `Rp ${rem.idr.toLocaleString('id-ID')}`],
+        [`SAR ${tot.sar.toFixed(2)}`, `SAR ${paid.sar.toFixed(2)}`, `SAR ${rem.sar.toFixed(2)}`],
+        [`USD ${tot.usd.toFixed(2)}`, `USD ${paid.usd.toFixed(2)}`, `USD ${rem.usd.toFixed(2)}`]
+      ];
+      const rowH = Math.max(10, (amtH - amtHeaderH) / amountRows.length);
+      amountRows.forEach((vals, i) => {
+        const ry = amtY + amtHeaderH + i * rowH;
+        doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(amtX, ry).lineTo(amtX + amtW, ry).stroke();
+        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.8)
+          .text(vals[0], amtX + 2, ry + 2, { width: aw1 - 4, height: rowH - 2 })
+          .text(vals[1], ax2 + 2, ry + 2, { width: aw2 - 4, height: rowH - 2 })
+          .text(vals[2], ax3 + 2, ry + 2, { width: aw3 - 4, height: rowH - 2 });
+      });
       y += blockH;
     });
   }
