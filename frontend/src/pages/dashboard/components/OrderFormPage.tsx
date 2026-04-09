@@ -632,11 +632,16 @@ const OrderFormPage: React.FC = () => {
   /** Ada input kurs khusus order → total & subtotal hotel (IDR dari master SAR) dihitung ulang pakai kurs ini, bukan nilai IDR tersimpan dari kurs admin. */
   const hasCustomOrderKurs = !!(orderRatesOverride && (orderRatesOverride.SAR_TO_IDR != null || orderRatesOverride.USD_TO_IDR != null));
   const rowCur=(row:OrderItemRow):DisplayCurrency=> row.price_currency ?? getDisplayCurrency(row.type, products.find(x=>x.id===row.product_id));
-  const hotelPriceMode = (row: OrderItemRow): HotelPriceMode => {
-    const mode = String((row.meta?.hotel_price_mode as string) || 'non_mou').toLowerCase();
-    if (mode === 'mou' || mode === 'non_mou') return mode;
-    return 'non_mou';
-  };
+  const isMouOwnerResolved = (() => {
+    // Owner login: role menentukan.
+    if (user?.role === 'owner_mou') return true;
+    if (user?.role === 'owner_non_mou') return false;
+    // Admin pilih owner: ambil dari profile owner yang terpilih (atau endpoint owner/me jika tersedia).
+    if (ownerProf?.is_mou_owner != null) return !!ownerProf.is_mou_owner;
+    if (ownerMeProfile?.is_mou_owner != null) return !!ownerMeProfile.is_mou_owner;
+    return false;
+  })();
+  const hotelPriceMode = (_row: OrderItemRow): HotelPriceMode => (isMouOwnerResolved ? 'mou' : 'non_mou');
   const hotelOwnerTypeScopeParam = (row: OrderItemRow): 'mou' | 'non_mou' | undefined => {
     return hotelPriceMode(row);
   };
@@ -1031,31 +1036,6 @@ const OrderFormPage: React.FC = () => {
       const tripType:TicketTripType=(upd.meta.trip_type as TicketTripType)||(next.meta?.trip_type as TicketTripType)||'round_trip';
       if(prodBus) next.unit_price=busRoutePrice(prodBus,route,tripType);
     }
-    if (upd.meta != null && next.type === 'hotel' && (upd.meta as { hotel_price_mode?: string }).hotel_price_mode != null) {
-      const prodH = byType('hotel').find((x) => x.id === next.product_id);
-      if (prodH && next.room_breakdown?.length) {
-        const rowCurHotel = next.price_currency ?? getDisplayCurrency(next.type, prodH);
-        const fullboard = isFullboardHotelForRow(prodH, next);
-        next.room_breakdown = next.room_breakdown.map((l) => {
-          if (!l.room_type) return l;
-          const withMeal = fullboard ? true : (l.with_meal ?? false);
-          const roomPSar = hotelRoomUnitSar(prodH, l.room_type as RoomTypeId, next.check_in, next);
-          const mealPSar = getMealPriceSar(prodH, next.check_in, next);
-          const roomP = toCurrencyFromSAR(roomPSar, rowCurHotel);
-          const mealP = toCurrencyFromSAR(mealPSar, rowCurHotel);
-          const combinedP = fullboard ? roomP : (roomP + (withMeal ? mealP : 0));
-          // Saat sumber harga (MOU/Non-MOU) berubah, harga harus ikut berubah (override nilai lama).
-          return {
-            ...l,
-            with_meal: withMeal,
-            unit_price: (fullboard ? combinedP : roomP),
-            meal_unit_price: withMeal && !fullboard ? mealP : 0,
-            unit_price_currency: rowCurHotel,
-            meal_unit_price_currency: rowCurHotel
-          };
-        });
-      }
-    }
     if(upd.type!=null&&upd.type!==r.type){
       next.product_id=''; next.product_name=''; next.unit_price=0; next.meta=undefined;
       if(upd.type!=='hotel'){ next.room_type=undefined; next.room_breakdown=undefined; } else next.room_breakdown=next.room_breakdown??[];
@@ -1320,7 +1300,7 @@ const OrderFormPage: React.FC = () => {
         for(const l of r.room_breakdown){
           if(l.quantity<=0||!l.room_type) continue;
           const meal=l.with_meal??false;
-          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location; if (r.meta?.hotel_price_mode) meta.hotel_price_mode = r.meta.hotel_price_mode;
+          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
           const key=`hotel:${r.product_id}:${l.room_type}:${r.check_in||''}:${r.check_out||''}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
@@ -1329,7 +1309,7 @@ const OrderFormPage: React.FC = () => {
           out.push(item);
         }
       } else if(r.type==='hotel'&&r.room_type){
-        const meta:Record<string,unknown>={room_type:r.room_type,room_unit_price:r.unit_price??0,meal_unit_price:0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location; if (r.meta?.hotel_price_mode) meta.hotel_price_mode = r.meta.hotel_price_mode;
+        const meta:Record<string,unknown>={room_type:r.room_type,room_unit_price:r.unit_price??0,meal_unit_price:0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
         const key=`hotel:${r.product_id}:${r.room_type}:${r.check_in||''}:${r.check_out||''}`;
         const isNew=!initialOrderItemKeysRef.current.has(key);
         const useLatestRates=hasDpPayment&&isNew;
@@ -1827,22 +1807,10 @@ const OrderFormPage: React.FC = () => {
                                     <p className="text-xs text-slate-400 mt-1">Jam 12:00</p>
                                   </div>
                                   <div className="min-w-0 sm:col-span-2">
-                                    <Autocomplete
-                                      label="Sumber harga hotel"
-                                      value={hotelPriceMode(row)}
-                                      onChange={(v) => {
-                                        const next = (v as HotelPriceMode) || 'non_mou';
-                                        updateRow(row.id, { meta: { ...(row.meta || {}), hotel_price_mode: next } });
-                                      }}
-                                      options={[
-                                        { value: 'mou', label: 'Harga MOU' },
-                                        { value: 'non_mou', label: 'Harga Non-MOU' }
-                                      ]}
-                                      emptyLabel="Pilih sumber harga"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">
-                                      Gunakan opsi ini bila ingin memilih harga yang dipakai di invoice (MOU/Non-MOU) per item hotel.
-                                    </p>
+                                    <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                                      Sumber harga hotel: <span className="font-semibold text-slate-900">{hotelPriceMode(row) === 'mou' ? 'MOU' : 'Non-MOU'}</span>
+                                      <span className="block text-xs text-slate-500 mt-1">Otomatis mengikuti owner yang dipilih / owner yang login.</span>
+                                    </div>
                                   </div>
                                   {row.check_in && row.check_out && (
                                     <div className="flex items-center gap-2 py-2.5 px-4 rounded-lg bg-slate-100 border border-slate-200/80 text-sm font-medium text-slate-700 col-span-full">
