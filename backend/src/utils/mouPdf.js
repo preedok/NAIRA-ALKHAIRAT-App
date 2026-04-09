@@ -42,15 +42,13 @@ async function generateMouPdf(opts) {
   doc.text(`Tanggal: ${formatDate(new Date())}`, margin, y);
   y += 24;
 
-  const paragraphs = [
-    'Dengan ini kedua belah pihak menyatakan sepakat untuk menjalin kerjasama dalam rangka penjualan paket umroh dan travel yang dikelola oleh Bintang Global Group.',
-    `Pihak Pertama (Partner Travel): ${user.name || '-'}${user.company_name ? `, ${user.company_name}` : ''}.`,
-    `Alamat: ${profile.address || '-'}. Kontak: ${profile.whatsapp || user.phone || user.email || '-'}.`,
-    `Pihak Kedua: Bintang Global Group. Cabang terdaftar: ${assignedBranchName || '-'}.`,
-    'Seluruh transaksi, pembayaran, dan ketentuan mengikuti kebijakan Bintang Global Group. Partner wajib mematuhi prosedur dan tata kelola yang berlaku.',
-    'Dokumen ini digenerate secara otomatis oleh sistem dan berlaku sebagai surat perjanjian kerjasama setelah akun partner diaktivasi oleh Admin Pusat.'
+  const introParagraphs = [
+    'Pada hari ini, kedua belah pihak sepakat untuk menjalin kerja sama dalam pelaksanaan layanan perjalanan umroh melalui Bintang Global Grup.',
+    `PIHAK KEDUA: ${user.name || '-'}${user.company_name ? ` (${user.company_name})` : ''}.`,
+    `Alamat PIHAK KEDUA: ${profile.address || '-'}. Kontak: ${profile.whatsapp || user.phone || user.email || '-'}.`,
+    `PIHAK PERTAMA: ${COMPANY_NAME}. Cabang terdaftar: ${assignedBranchName || '-'}.`
   ];
-  paragraphs.forEach(p => {
+  introParagraphs.forEach((p) => {
     if (y > doc.page.height - 120) {
       doc.addPage();
       y = margin;
@@ -58,6 +56,39 @@ async function generateMouPdf(opts) {
     doc.fontSize(10).fillColor('#334155').text(p, margin, y, { width: pageWidth, lineGap: 4 });
     y += doc.heightOfString(p, { width: pageWidth }) + 12;
   });
+
+  const ketentuanTitle = 'Dengan ini menyatakan bahwa:';
+  if (y > doc.page.height - 140) {
+    doc.addPage();
+    y = margin;
+  }
+  doc.fontSize(10.5).fillColor('#0f172a').font('Helvetica-Bold').text(ketentuanTitle, margin, y, { width: pageWidth });
+  y += 18;
+  doc.font('Helvetica').fontSize(10).fillColor('#334155');
+
+  const ketentuanItems = [
+    'PIHAK KEDUA berkomitmen untuk terus melakukan seluruh pemesanan Hotel, Visa, Bus, Makan, dan Tiket Pesawat melalui Bintang Global Grup.',
+    'Apabila terdapat pemesanan yang tidak dilakukan melalui Bintang Global Grup, maka PIHAK KEDUA bersedia memberikan masukan dan informasi kepada Bintang Global Grup.',
+    'PIHAK KEDUA berkomitmen untuk saling menjaga nama baik kedua belah pihak, yaitu antara Bintang Global Grup dan Perusahaan PIHAK KEDUA.',
+    'Apabila di kemudian hari terjadi permasalahan antara PIHAK KEDUA dengan Bintang Global Grup, maka penyelesaian akan dilakukan secara musyawarah dan kekeluargaan.'
+  ];
+  ketentuanItems.forEach((txt, idx) => {
+    const numbered = `${idx + 1}. ${txt}`;
+    if (y > doc.page.height - 120) {
+      doc.addPage();
+      y = margin;
+    }
+    doc.fontSize(10).fillColor('#334155').text(numbered, margin, y, { width: pageWidth, lineGap: 4 });
+    y += doc.heightOfString(numbered, { width: pageWidth }) + 10;
+  });
+
+  const closingParagraph = 'Demikian Memorandum of Agreement ini dibuat dengan sebenar-benarnya untuk dipatuhi dan dilaksanakan dengan penuh tanggung jawab oleh kedua belah pihak.';
+  if (y > doc.page.height - 120) {
+    doc.addPage();
+    y = margin;
+  }
+  doc.fontSize(10).fillColor('#334155').text(closingParagraph, margin, y, { width: pageWidth, lineGap: 4 });
+  y += doc.heightOfString(closingParagraph, { width: pageWidth }) + 18;
 
   y += 20;
   if (y > doc.page.height - 140) {
