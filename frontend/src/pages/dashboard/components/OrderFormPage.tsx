@@ -1044,7 +1044,15 @@ const OrderFormPage: React.FC = () => {
           const roomP = toCurrencyFromSAR(roomPSar, rowCurHotel);
           const mealP = toCurrencyFromSAR(mealPSar, rowCurHotel);
           const combinedP = fullboard ? roomP : (roomP + (withMeal ? mealP : 0));
-          return { ...l, with_meal: withMeal, unit_price: l.unit_price || (fullboard ? combinedP : roomP), meal_unit_price: withMeal && !fullboard ? (l.meal_unit_price ?? mealP) : 0 };
+          // Saat sumber harga (MOU/Non-MOU) berubah, harga harus ikut berubah (override nilai lama).
+          return {
+            ...l,
+            with_meal: withMeal,
+            unit_price: (fullboard ? combinedP : roomP),
+            meal_unit_price: withMeal && !fullboard ? mealP : 0,
+            unit_price_currency: rowCurHotel,
+            meal_unit_price_currency: rowCurHotel
+          };
         });
       }
     }
