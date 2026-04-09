@@ -1087,9 +1087,17 @@ const exportListPdf = asyncHandler(async (req, res) => {
   let y = drawCorporateLetterhead(doc, { margin: 36 });
   doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text('LAPORAN RESMI DAFTAR INVOICE', 36, y, { align: 'center', width: doc.page.width - 72 });
   y += 20;
-  doc.font('Helvetica').fontSize(9).fillColor('#334155')
-    .text(`Filter: ${buildInvoiceListExportFilterSummary(req, data)}`, 36, y, { width: doc.page.width - 72, align: 'center' });
-  y += 28;
+  const filterSummaryRaw = buildInvoiceListExportFilterSummary(req, data);
+  const filterSummaryClean = String(filterSummaryRaw || '')
+    .replace(/^Semua filter default \(sesuai hak akses\)\s*·\s*/i, '')
+    .trim();
+  if (filterSummaryClean) {
+    doc.font('Helvetica').fontSize(9).fillColor('#334155')
+      .text(filterSummaryClean, 36, y, { width: doc.page.width - 72, align: 'center' });
+    y += 28;
+  } else {
+    y += 8;
+  }
   doc.font('Helvetica').fontSize(9).fillColor('#475569').text(`Jumlah baris: ${data.length} · Tanggal cetak: ${formatDateTimeJakartaForExport(new Date())}`, 36, y, { align: 'center', width: doc.page.width - 72 });
   y += 22;
 
@@ -1108,7 +1116,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7.5)
       .text('No', col.no + 2, y + 6)
       .text('Invoice', col.inv + 2, y + 6)
-      .text('Owner / Perusahaan', col.owner + 2, y + 6)
+      .text('Owner', col.owner + 2, y + 6)
       .text('Status', col.status + 2, y + 6)
       .text('Item & Qty', col.item + 2, y + 6)
       .text('Total', col.total + 2, y + 6)
@@ -1127,7 +1135,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const rem = remainingTripleForList(inv);
       const ownerName = (inv.User && inv.User.name) || inv.owner_name_manual || '-';
       const company = (inv.User && inv.User.company_name) || '';
-      const ownerLine = company ? `${ownerName} · ${company}` : ownerName;
+      const ownerLines = [ownerName, company || '-'];
       const branch = inv.Branch || {};
       const cabang = (branch.name || branch.code || '-');
       const invoiceDate = inv.issued_at || inv.created_at || inv.createdAt || inv.date;
@@ -1145,7 +1153,12 @@ const exportListPdf = asyncHandler(async (req, res) => {
       doc.font('Helvetica').fontSize(7).fillColor('#0f172a')
         .text(String(idx + 1), col.no + 2, y + 4, { width: 14 })
         .text(String(inv.invoice_number || '-').slice(0, 16), col.inv + 2, y + 4, { width: 60 })
-        .text(`${ownerLine}\nCab: ${cabang}\nTgl Inv: ${formatDateOnlyForExport(invoiceDate)}`.slice(0, 160), col.owner + 2, y + 4, { width: (col.status - col.owner - 6), height: blockH - 8 })
+        .text(
+          `${ownerLines.join('\n')}\nCab: ${cabang}\nTgl Inv: ${formatDateOnlyForExport(invoiceDate)}\nKurs: SAR ${Number(tot.sarToIdr || 0).toLocaleString('id-ID')} | USD ${Number(tot.usdToIdr || 0).toLocaleString('id-ID')}`.slice(0, 220),
+          col.owner + 2,
+          y + 4,
+          { width: (col.status - col.owner - 6), height: blockH - 8 }
+        )
         .text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 26), col.status + 2, y + 4, { width: (col.item - col.status - 6) });
 
       // Mini-table: Item | Qty | CI-CO | Harga/item | Subtotal (maks 4 baris agar rapih).

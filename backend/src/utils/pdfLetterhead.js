@@ -17,28 +17,37 @@ function getLetterheadLogoPath() {
 function drawCorporateLetterhead(doc, { margin = 48 } = {}) {
   const pageWidth = doc.page.width - margin * 2;
   const x = margin;
-  let y = margin;
+  const y = margin;
   const logoBoxW = 86;
   const logoBoxH = 64;
+  const logoTextGap = 8;
+  const textBlockW = Math.min(430, Math.max(220, pageWidth - logoBoxW - logoTextGap));
+  const groupW = logoBoxW + logoTextGap + textBlockW;
+  const groupX = x + Math.max(0, (pageWidth - groupW) / 2);
+  const logoX = groupX;
+  const headerX = logoX + logoBoxW + logoTextGap;
+  const headerW = textBlockW;
   const logoPath = getLetterheadLogoPath();
   if (logoPath) {
-    doc.image(logoPath, x, y, { fit: [logoBoxW, logoBoxH], align: 'left', valign: 'top' });
+    doc.image(logoPath, logoX, y, { fit: [logoBoxW, logoBoxH], align: 'left', valign: 'top' });
   } else {
-    doc.roundedRect(x, y + 2, logoBoxW, logoBoxH, 6).lineWidth(1).strokeColor('#0b4f82').stroke();
-    doc.font('Helvetica-Bold').fontSize(24).fillColor('#0b4f82').text('BG', x + 21, y + 18, { width: 44, align: 'center' });
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a').text('PT. BINTANG GLOBAL GRUP', x + 3, y + 50, { width: logoBoxW - 6, align: 'center' });
+    doc.roundedRect(logoX, y + 2, logoBoxW, logoBoxH, 6).lineWidth(1).strokeColor('#0b4f82').stroke();
+    doc.font('Helvetica-Bold').fontSize(24).fillColor('#0b4f82').text('BG', logoX + 21, y + 18, { width: 44, align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#0f172a').text('PT. BINTANG GLOBAL GRUP', logoX + 3, y + 50, { width: logoBoxW - 6, align: 'center' });
   }
 
-  const headerX = x + logoBoxW + 12;
-  const headerW = pageWidth - logoBoxW - 12;
-  doc.font('Helvetica-Bold').fontSize(24).fillColor('#0b4f82').text(COMPANY_NAME, headerX, y, { width: headerW, align: 'center' });
-  y += 34;
-  doc.font('Helvetica').fontSize(9.5).fillColor('#111827').text(COMPANY_ADDRESS, headerX, y, { width: headerW, align: 'center' });
-  y += 28;
-  doc.font('Helvetica').fontSize(10).fillColor('#111827').text(COMPANY_CONTACT, headerX, y, { width: headerW, align: 'center' });
-  y += 18;
+  const titleY = y + 2;
+  doc.font('Helvetica-Bold').fontSize(20).fillColor('#0b4f82').text(COMPANY_NAME, headerX, titleY, { width: headerW, align: 'left' });
+  const titleH = doc.heightOfString(COMPANY_NAME, { width: headerW, align: 'left' });
+  const addressY = titleY + titleH + 4;
+  doc.font('Helvetica').fontSize(9.2).fillColor('#111827').text(COMPANY_ADDRESS, headerX, addressY, { width: headerW, align: 'left' });
+  const addressH = doc.heightOfString(COMPANY_ADDRESS, { width: headerW, align: 'left' });
+  const contactY = addressY + addressH + 3;
+  doc.font('Helvetica').fontSize(9.8).fillColor('#111827').text(COMPANY_CONTACT, headerX, contactY, { width: headerW, align: 'left' });
+  const contactH = doc.heightOfString(COMPANY_CONTACT, { width: headerW, align: 'left' });
 
-  const lineY = Math.max(y, margin + logoBoxH + 8);
+  const textBottom = contactY + contactH;
+  const lineY = Math.max(textBottom + 8, margin + logoBoxH + 8);
   doc.moveTo(x, lineY).lineTo(x + pageWidth, lineY).lineWidth(2).strokeColor('#2f89c8').stroke();
   return lineY + 18;
 }
