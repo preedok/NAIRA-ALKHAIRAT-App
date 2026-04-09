@@ -219,7 +219,7 @@ async function calculateStayCostByNights({
 
   const product = await Product.findByPk(productId, { attributes: ['id', 'meta'] });
   const meta = product && product.meta && typeof product.meta === 'object' ? product.meta : {};
-  const mealPlan = 'room_only';
+  let mealPlan = String(meta?.meal_plan || 'room_only').toLowerCase() === 'fullboard' ? 'fullboard' : 'room_only';
 
   const qty = Math.max(1, parseInt(quantity, 10) || 1);
   const cur = String(currency || 'IDR').toUpperCase();
@@ -229,6 +229,12 @@ async function calculateStayCostByNights({
   if (!resolvedOwnerTypeScope && ownerId) {
     const profile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
     resolvedOwnerTypeScope = profile && profile.is_mou_owner ? 'mou' : 'non_mou';
+  }
+  // Jika ada mode makan per owner scope, mode ini menimpa meal_plan global.
+  const ownerMealMode = meta && typeof meta.owner_meal_mode === 'object' ? meta.owner_meal_mode : null;
+  if (resolvedOwnerTypeScope && ownerMealMode && typeof ownerMealMode[resolvedOwnerTypeScope] === 'string') {
+    const scoped = String(ownerMealMode[resolvedOwnerTypeScope]).toLowerCase();
+    mealPlan = scoped === 'fullboard' ? 'fullboard' : 'room_only';
   }
 
   let roomSubtotalIdr = 0;
