@@ -84,6 +84,13 @@ const roomTypeLabel = (r) => ({ double: 'Double', triple: 'Triple', quad: 'Quad'
 /** Kapasitas orang per kamar per tipe (untuk hitung jumlah orang dari kamar) */
 const ROOM_CAPACITY = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
+function isHotelPackPricing(item, meta = {}) {
+  const m = meta && typeof meta === 'object' ? meta : {};
+  const modeFromMeta = String(m.room_pricing_mode || m.pricing_mode || '').toLowerCase();
+  const modeFromProduct = String(item?.Product?.meta?.room_pricing_mode || item?.Product?.meta?.pricing_mode || '').toLowerCase();
+  return modeFromMeta === 'per_person' || modeFromMeta === 'per_pack' || modeFromProduct === 'per_person' || modeFromProduct === 'per_pack';
+}
+
 function normalizeYmd(val) {
   if (!val) return '';
   return String(val).trim().slice(0, 10);
@@ -368,6 +375,7 @@ function buildInvoiceDisplayItems(data) {
       const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
       const rt = (m.room_type || 'quad').toString().toLowerCase();
       const q = it2.quantity != null ? Number(it2.quantity) : 1;
+      if (isHotelPackPricing(it2, m)) return `Pack × ${q}`;
       return `${roomTypeLabel(rt)} × ${q}`;
     });
     const totalSub = group.reduce((s, it2) => s + (parseFloat(String(it2.subtotal || 0)) || 0), 0);
@@ -713,6 +721,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         const mealStatus = item.HotelProgress?.meal_status;
         const hotelStatus = item.HotelProgress?.status;
         const roomType = meta.room_type;
+        const isPackPricing = isHotelPackPricing(item, meta);
         const nights = meta.nights != null ? Number(meta.nights) : 0;
         const qtyRooms = item.quantity != null ? Number(item.quantity) : 1;
         const capacity = ROOM_CAPACITY[String(roomType || '').toLowerCase()] ?? 1;
@@ -725,9 +734,9 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         if (Number.isFinite(mealUnitRaw)) hotelMealUnitIdr = toIdr(mealUnitRaw);
         const parts = [];
         if (hotelStatus) parts.push(`Status hotel: ${hotelProgressStatusLabel(hotelStatus)}`);
-        if (nights > 0) parts.push(`${qtyRooms} kamar × ${nights} malam`);
+        if (nights > 0) parts.push(isPackPricing ? `${qtyRooms} pack × ${nights} malam` : `${qtyRooms} kamar × ${nights} malam`);
         if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);
-        if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
+        if (roomType && !isPackPricing) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
         if (parts.length) mealLine = parts.join('  |  ');
         if (withMeal && nights > 0 && qtyRooms > 0) {
           const totalOrangMalam = totalOrang * nights;
