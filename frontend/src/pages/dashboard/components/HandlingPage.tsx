@@ -8,7 +8,7 @@ import PageHeader from '../../../components/common/PageHeader';
 import { AutoRefreshControl } from '../../../components/common';
 import Table from '../../../components/common/Table';
 import type { TableColumn } from '../../../types';
-import { Input, Autocomplete, PriceCurrencyField, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
+import { Input, PriceCurrencyField, Textarea, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ContentLoading } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
@@ -63,7 +63,6 @@ const HandlingPage: React.FC = () => {
 
   const [deleting, setDeleting] = useState(false);
 
-  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [filterSortBy, setFilterSortBy] = useState<string>('code');
   const [filterSortOrder, setFilterSortOrder] = useState<'asc' | 'desc'>('asc');
   const [searchName, setSearchName] = useState('');
@@ -77,7 +76,7 @@ const HandlingPage: React.FC = () => {
 
   const ownerId = getProductListOwnerId(user);
   const fetchList = useCallback(() => {
-    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    const filterKey = `${debouncedSearchName}`;
     let pageToUse = page;
     if (lastFilterKeyRef.current !== filterKey) {
       lastFilterKeyRef.current = filterKey;
@@ -98,7 +97,7 @@ const HandlingPage: React.FC = () => {
     productsApi.list({
         type: 'handling',
         with_prices: 'true',
-        include_inactive: filterIncludeInactive,
+        include_inactive: 'false',
         sort_by: filterSortBy,
         sort_order: filterSortOrder,
         ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}),
@@ -119,7 +118,7 @@ const HandlingPage: React.FC = () => {
       })
       .catch(() => setList([]))
       .finally(() => setLoading(false));
-  }, [page, limit, filterIncludeInactive, filterSortBy, filterSortOrder, debouncedSearchName, ownerId]);
+  }, [page, limit, filterSortBy, filterSortOrder, debouncedSearchName, ownerId]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
@@ -267,16 +266,6 @@ const HandlingPage: React.FC = () => {
       const err = e as { response?: { status?: number; data?: { message?: string } } };
       const msg = err.response?.data?.message || 'Gagal menghapus produk';
       showToast(msg, 'error');
-      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan produk "${row.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
-        try {
-          await productsApi.update(row.id, { is_active: false });
-          showToast('Produk dinonaktifkan', 'success');
-          fetchList();
-        } catch (e2: unknown) {
-          const e2err = e2 as { response?: { data?: { message?: string } } };
-          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan produk', 'error');
-        }
-      }
     } finally {
       setDeleting(false);
     }
@@ -288,7 +277,6 @@ const HandlingPage: React.FC = () => {
     { id: 'description', label: 'Deskripsi', align: 'left' },
     { id: 'currency', label: 'Mata Uang', align: 'center' },
     { id: 'price', label: 'Harga (IDR · SAR · USD)', align: 'right' },
-    { id: 'status', label: 'Status', align: 'center' },
     ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
   ].filter(Boolean) as TableColumn[];
 
@@ -311,17 +299,8 @@ const HandlingPage: React.FC = () => {
             </Button>
           ) : undefined}
         />
-        <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+        <div className="pb-4 grid grid-cols-1 gap-4 items-end">
           <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama produk handling..." fullWidth />
-          <Autocomplete
-            label="Tampilkan"
-            value={filterIncludeInactive}
-            onChange={(v: string) => setFilterIncludeInactive(v as 'false' | 'true')}
-            options={[
-              { value: 'false', label: 'Aktif saja' },
-              { value: 'true', label: 'Semua (termasuk nonaktif)' }
-            ]}
-          />
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[120px]">
           {loading ? (
@@ -351,11 +330,6 @@ const HandlingPage: React.FC = () => {
                       </>
                     );
                   })()}
-                </td>
-                <td className="py-3 px-4 text-center">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${row.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                    {row.is_active ? 'Aktif' : 'Nonaktif'}
-                  </span>
                 </td>
                 {canShowProductActions && (
                   <td className="py-3 px-4">

@@ -140,9 +140,6 @@ const OrderCancellationRequestsPanel: React.FC = () => {
           >
             Semua status
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => load()} disabled={loading}>
-            Muat ulang
-          </Button>
         </div>
         {loading && rows.length === 0 ? (
           <ContentLoading />

@@ -12,13 +12,12 @@ import {
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Table from '../../../components/common/Table';
-import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import ActionsMenu from '../../../components/common/ActionsMenu';
 import type { ActionsMenuItem } from '../../../components/common/ActionsMenu';
 import { AutoRefreshControl } from '../../../components/common';
 import PageHeader from '../../../components/common/PageHeader';
-import { StatCard, Autocomplete, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
+import { StatCard, Input, Modal, ModalHeader, ModalBody, ModalFooter, ModalBox, ModalBoxLg, ContentLoading, CONTENT_LOADING_MESSAGE } from '../../../components/common';
 import CardSectionHeader from '../../../components/common/CardSectionHeader';
 import { TableColumn } from '../../../types';
 import { useToast } from '../../../contexts/ToastContext';
@@ -570,7 +569,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   const [sortBy, setSortBy] = useState('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
-  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   /** Tahun grid SAR untuk kolom harga di tabel daftar (query `hotel_monthly_year`). */
   const [hotelListMonthlyYear] = useState(() => String(new Date().getFullYear()));
@@ -590,7 +588,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         align: 'left'
       },
       { id: 'availability', label: 'Ketersediaan (realtime)', align: 'left' },
-      { id: 'status', label: 'Status', align: 'center', sortable: true, sortKey: 'is_active' },
       ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
     ],
     [hotelListMonthlyYear, canShowProductActions]
@@ -602,7 +599,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
   }, [searchTerm]);
 
   const fetchProducts = useCallback(() => {
-    const filterKey = `${debouncedSearchTerm}|${filterIncludeInactive}`;
+    const filterKey = `${debouncedSearchTerm}`;
     let pageToUse = page;
     if (lastFilterKeyRef.current !== filterKey) {
       lastFilterKeyRef.current = filterKey;
@@ -616,7 +613,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       type: 'hotel' as const,
       with_prices: 'true' as const,
       hotel_monthly_year: hotelListMonthlyYear,
-      include_inactive: filterIncludeInactive,
+      include_inactive: 'false' as const,
       limit,
       page: pageToUse,
       sort_by: sortBy,
@@ -637,7 +634,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive, debouncedSearchTerm, hotelListMonthlyYear]);
+  }, [page, limit, sortBy, sortOrder, user?.role, debouncedSearchTerm, hotelListMonthlyYear]);
 
   useEffect(() => {
     fetchProducts();
@@ -735,8 +732,8 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       color: 'from-purple-500 to-pink-500'
     },
     {
-      label: 'Aktif',
-      value: hotels.filter((h: HotelProduct) => h.is_active).length,
+      label: 'Kamar Type',
+      value: ROOM_TYPES.length,
       icon: <Bed className="w-5 h-5" />,
       color: 'from-orange-500 to-red-500'
     }
@@ -894,16 +891,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
       const err = e as { response?: { status?: number; data?: { message?: string } } };
       const msg = err.response?.data?.message || 'Gagal menghapus hotel';
       showToast(msg, 'error');
-      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan hotel "${hotel.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
-        try {
-          await productsApi.update(hotel.id, { is_active: false });
-          showToast('Hotel dinonaktifkan', 'success');
-          fetchProducts();
-        } catch (e2: unknown) {
-          const e2err = e2 as { response?: { data?: { message?: string } } };
-          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan hotel', 'error');
-        }
-      }
     }
   };
 
@@ -1014,7 +1001,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
           ) : undefined}
         />
         <div className="pb-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+          <div className="grid grid-cols-1 gap-4 items-end">
             <Input
               label="Cari nama hotel"
               type="text"
@@ -1023,15 +1010,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
               placeholder="Cari nama hotel..."
               icon={<Search className="w-4 h-4" />}
               fullWidth
-            />
-            <Autocomplete
-              label="Tampilkan"
-              value={filterIncludeInactive}
-              onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
-              options={[
-                { value: 'false', label: 'Aktif saja' },
-                { value: 'true', label: 'Semua (termasuk nonaktif)' }
-              ]}
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1424,11 +1402,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       </div>
                     );
                   })()}
-                </td>
-                <td className="px-4 py-3.5 text-center align-middle">
-                  <Badge variant={hotel.is_active ? 'success' : 'error'}>
-                    {hotel.is_active ? 'Aktif' : 'Nonaktif'}
-                  </Badge>
                 </td>
                 {canShowProductActions && (
                 <td className="px-4 py-3.5 align-middle">

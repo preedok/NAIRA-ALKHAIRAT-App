@@ -240,7 +240,6 @@ const PackagesPage: React.FC = () => {
   const [sortBy, setSortBy] = useState('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
-  const [filterIncludeInactive, setFilterIncludeInactive] = useState<'false' | 'true'>('false');
   const [searchName, setSearchName] = useState('');
   const [debouncedSearchName, setDebouncedSearchName] = useState('');
   const lastFilterKeyRef = useRef<string>('');
@@ -251,7 +250,7 @@ const PackagesPage: React.FC = () => {
   }, [searchName]);
 
   const fetchPackages = useCallback(() => {
-    const filterKey = `${debouncedSearchName}|${filterIncludeInactive}`;
+    const filterKey = `${debouncedSearchName}`;
     let pageToUse = page;
     if (lastFilterKeyRef.current !== filterKey) {
       lastFilterKeyRef.current = filterKey;
@@ -261,7 +260,7 @@ const PackagesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     const ownerId = getProductListOwnerId(user);
-    const params = { is_package: 'true', with_prices: 'true', include_inactive: filterIncludeInactive, limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
+    const params = { is_package: 'true', with_prices: 'true', include_inactive: 'false', limit, page: pageToUse, sort_by: sortBy, sort_order: sortOrder, ...(debouncedSearchName.trim() ? { name: debouncedSearchName.trim() } : {}), ...(user?.role === 'role_hotel' ? { view_as_pusat: 'true' } : {}), ...(ownerId ? { owner_id: ownerId } : {}) };
     productsApi
       .list(params)
       .then((res) => {
@@ -274,7 +273,7 @@ const PackagesPage: React.FC = () => {
         setPagination(null);
       })
       .finally(() => setLoading(false));
-  }, [page, limit, sortBy, sortOrder, user?.role, filterIncludeInactive, debouncedSearchName]);
+  }, [page, limit, sortBy, sortOrder, user?.role, debouncedSearchName]);
 
   useEffect(() => {
     fetchPackages();
@@ -285,8 +284,8 @@ const PackagesPage: React.FC = () => {
 
   const stats = [
     { label: 'Total Paket', value: pagination?.total ?? packages.length, color: 'from-blue-500 to-cyan-500' },
-    { label: 'Aktif', value: packages.filter((p) => p.is_active).length, color: 'from-emerald-500 to-teal-500' },
-    { label: 'Dengan Harga', value: packages.filter((p) => (p.price_general ?? p.price_branch) != null).length, color: 'from-purple-500 to-pink-500' }
+    { label: 'Dengan Harga', value: packages.filter((p) => (p.price_general ?? p.price_branch) != null).length, color: 'from-emerald-500 to-teal-500' },
+    { label: 'Dengan Include', value: packages.filter((p) => ((p.meta?.includes as string[] | undefined)?.length || 0) > 0).length, color: 'from-purple-500 to-pink-500' }
   ];
 
   const tableColumns: TableColumn[] = [
@@ -301,7 +300,6 @@ const PackagesPage: React.FC = () => {
     { id: 'discount', label: 'Diskon %', align: 'center' },
     { id: 'price_after', label: 'Setelah Diskon (IDR · SAR · USD)', align: 'right' },
     { id: 'includes', label: 'Include', align: 'left' },
-    { id: 'status', label: 'Status', align: 'center' },
     ...(canShowProductActions ? [{ id: 'actions', label: 'Aksi', align: 'center' as const }] : [])
   ];
 
@@ -516,16 +514,6 @@ const PackagesPage: React.FC = () => {
       const err = e as { response?: { status?: number; data?: { message?: string } } };
       const msg = err.response?.data?.message || 'Gagal menghapus paket';
       showToast(msg, 'error');
-      if (err.response?.status === 400 && msg.includes('masih digunakan') && window.confirm(`${msg}\n\nNonaktifkan paket "${pkg.name}" saja? (Tidak akan ditampilkan di daftar.)`)) {
-        try {
-          await productsApi.update(pkg.id, { is_active: false });
-          showToast('Paket dinonaktifkan', 'success');
-          fetchPackages();
-        } catch (e2: unknown) {
-          const e2err = e2 as { response?: { data?: { message?: string } } };
-          showToast(e2err.response?.data?.message || 'Gagal menonaktifkan paket', 'error');
-        }
-      }
     }
   };
 
@@ -565,17 +553,8 @@ const PackagesPage: React.FC = () => {
             </Button>
           ) : undefined}
         />
-        <div className="pb-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)] gap-4 items-end">
+        <div className="pb-4 grid grid-cols-1 gap-4 items-end">
           <Input label="Cari nama" type="text" value={searchName} onChange={(e) => setSearchName(e.target.value)} placeholder="Nama paket..." fullWidth />
-          <Autocomplete
-            label="Tampilkan"
-            value={filterIncludeInactive}
-            onChange={(v) => setFilterIncludeInactive(v as 'false' | 'true')}
-            options={[
-              { value: 'false', label: 'Aktif saja' },
-              { value: 'true', label: 'Semua (termasuk nonaktif)' }
-            ]}
-          />
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 relative min-h-[200px]">
           {error ? (
@@ -679,9 +658,6 @@ const PackagesPage: React.FC = () => {
                       return <span key={inc} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700">{label}</span>;
                     }) : <span className="text-slate-400 text-sm col-span-full">-</span>}
                   </div>
-                </td>
-                <td className="px-4 py-3 text-center whitespace-nowrap">
-                  {pkg.is_active ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Aktif</span> : <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Nonaktif</span>}
                 </td>
                 {canShowProductActions && (
                 <td className="px-4 py-3">
