@@ -32,10 +32,25 @@ async function run() {
   await sequelize.authenticate();
   console.log('Applying kota compatibility hotfix...');
 
+  const hasKotas = await tableExists('kotas');
+  const hasBranches = await tableExists('branches');
+
   // Keep legacy branches table, expose kotas view for new code paths.
-  if (!(await tableExists('kotas')) && (await tableExists('branches'))) {
+  if (!hasKotas && hasBranches) {
     await sequelize.query('CREATE VIEW kotas AS SELECT * FROM branches');
     console.log('  + created view kotas -> branches');
+  }
+
+  // If kotas exists as table but empty while branches has data, backfill kotas.
+  if (hasKotas && hasBranches) {
+    const [kRows] = await sequelize.query('SELECT COUNT(*)::int AS c FROM kotas');
+    const [bRows] = await sequelize.query('SELECT COUNT(*)::int AS c FROM branches');
+    const kotasCount = kRows[0]?.c || 0;
+    const branchesCount = bRows[0]?.c || 0;
+    if (kotasCount === 0 && branchesCount > 0) {
+      await sequelize.query('INSERT INTO kotas SELECT * FROM branches');
+      console.log(`  + backfilled kotas from branches (${branchesCount} rows)`);
+    }
   }
 
   const branchTables = [
