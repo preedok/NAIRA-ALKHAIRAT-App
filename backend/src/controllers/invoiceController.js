@@ -791,7 +791,7 @@ function formatDateOnlyShortForExport(value) {
 }
 
 function formatMoneyForExport(amount, currency = 'IDR') {
-  const n = Number(amount || 0);
+  const n = parseNumberish(amount);
   if (!Number.isFinite(n)) return `${currency || 'IDR'} 0`;
   if (String(currency || 'IDR').toUpperCase() === 'IDR') {
     return `Rp ${Math.round(n).toLocaleString('id-ID')}`;
@@ -799,12 +799,24 @@ function formatMoneyForExport(amount, currency = 'IDR') {
   return `${String(currency || 'IDR').toUpperCase()} ${n.toFixed(2)}`;
 }
 
+function parseNumberish(value) {
+  if (value == null) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  const normalized = raw.replace(/,/g, '');
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function amountTripleForDisplay(amount, fromCurrency, sarToIdr = 4200, usdToIdr = 15500) {
   const cur = String(fromCurrency || 'IDR').toUpperCase();
-  const raw = Number(amount || 0);
-  const idr = cur === 'IDR' ? raw : cur === 'SAR' ? raw * sarToIdr : raw * usdToIdr;
-  const sar = sarToIdr > 0 ? idr / sarToIdr : 0;
-  const usd = usdToIdr > 0 ? idr / usdToIdr : 0;
+  const raw = parseNumberish(amount);
+  const sarRate = parseNumberish(sarToIdr) > 0 ? parseNumberish(sarToIdr) : 4200;
+  const usdRate = parseNumberish(usdToIdr) > 0 ? parseNumberish(usdToIdr) : 15500;
+  const idr = cur === 'IDR' ? raw : cur === 'SAR' ? raw * sarRate : raw * usdRate;
+  const sar = sarRate > 0 ? idr / sarRate : 0;
+  const usd = usdRate > 0 ? idr / usdRate : 0;
   return { idr, sar, usd };
 }
 
@@ -820,13 +832,20 @@ function buildPaymentHistoryLines(inv) {
       const currency = String(p?.payment_currency || 'IDR').toUpperCase();
       const amt = Number(p?.amount_original ?? p?.amount ?? p?.amount_idr ?? 0);
       const bankSender = p?.bank_name || p?.Bank?.name || '-';
+      const senderAccNo = p?.sender_account_number || p?.account_number || '';
       const bankRecipient = p?.RecipientAccount?.bank_name || (String(p?.payment_location || '').toLowerCase() === 'saudi' ? 'Pembayaran KES' : '-');
       const recipientAccNo = p?.RecipientAccount?.account_number || '';
       const sender = p?.sender_account_name || '-';
+      const senderLabel = senderAccNo
+        ? `${sender} | ${bankSender} ${senderAccNo}`
+        : `${sender} | ${bankSender}`;
+      const recipientLabel = recipientAccNo
+        ? `${bankRecipient} ${recipientAccNo}`
+        : bankRecipient;
       lines.push({
         info1: `${dt} | ${method} | ${status}`,
-        info2: `${formatMoneyForExport(amt, currency)} | Pengirim: ${sender} (${bankSender})`,
-        info3: `Penerima: ${recipientAccNo ? `${bankRecipient} ${recipientAccNo}` : bankRecipient}`
+        info2: `${formatMoneyForExport(amt, currency)}\nPengirim: ${senderLabel}`,
+        info3: `Penerima: ${recipientLabel}`
       });
     });
   const allocs = Array.isArray(inv?.BalanceAllocations) ? inv.BalanceAllocations : [];
@@ -874,8 +893,8 @@ function buildPdfOrderItemsDetailed(inv) {
     const unit = orderItemQtyUnitForExport(it);
     const qty = Math.max(0, parseInt(it?.quantity, 10) || 0);
     const currency = String(it?.unit_price_currency || it?.currency || 'IDR').toUpperCase();
-    const unitPriceRaw = Number(it?.unit_price || it?.meta?.room_unit_price || 0);
-    const mealUnitPriceRaw = Number(it?.meta?.meal_unit_price || 0);
+    const unitPriceRaw = parseNumberish(it?.unit_price || it?.meta?.room_unit_price || 0);
+    const mealUnitPriceRaw = parseNumberish(it?.meta?.meal_unit_price || 0);
     const unitPrice = unitPriceRaw + mealUnitPriceRaw;
     const checkIn = it?.check_in || it?.checkIn || it?.meta?.check_in || it?.meta?.checkIn || it?.meta?.check_in_date || it?.meta?.checkInDate || it?.HotelProgress?.check_in_date;
     const checkOut = it?.check_out || it?.checkOut || it?.meta?.check_out || it?.meta?.checkOut || it?.meta?.check_out_date || it?.meta?.checkOutDate || it?.HotelProgress?.check_out_date;
@@ -888,7 +907,7 @@ function buildPdfOrderItemsDetailed(inv) {
       .trim();
     const productName = type === ORDER_ITEM_TYPE.HOTEL ? (normalizedHotelName || productNameRaw) : productNameRaw;
     const nights = (type === ORDER_ITEM_TYPE.HOTEL && checkIn && checkOut) ? Math.max(1, getNights(checkIn, checkOut)) : 1;
-    const subtotalRaw = Number(it?.subtotal);
+    const subtotalRaw = parseNumberish(it?.subtotal);
     const subtotal = Number.isFinite(subtotalRaw) && subtotalRaw > 0 ? subtotalRaw : (qty * unitPrice * nights);
     const displayUnitPrice = unitPrice * nights;
     const typeText = type === ORDER_ITEM_TYPE.HOTEL ? 'HTL' : typeLabel;
@@ -1311,17 +1330,16 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const items = buildPdfOrderItemsDetailed(inv);
       const paymentHistory = buildPaymentHistoryLines(inv);
       // Tampilkan item invoice lebih lengkap (visa/bus/tiket/handling tidak terpotong terlalu cepat).
-      const itemRows = Math.max(1, Math.min(items.length, 6));
       const historyRows = Math.max(1, Math.min(paymentHistory.length, 4));
-      const showItems = items.length ? items.slice(0, itemRows) : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
-      const hasRoomTypeBreakdown = showItems.some((it) => String(it.roomTypeBreakdownLine || '').trim() !== '');
-      const rowCellH = hasRoomTypeBreakdown ? 38 : 28;
-      const lines = Math.max(itemRows, historyRows);
       const finRules = (inv.branch_id && rulesByBranchForPdf.get(inv.branch_id)) || rulesGlobalForPdf;
       const finLine = formatBusFinalityForListPdf(inv, finRules);
-      /** Baris ringkas bus/finality di atas mini-tabel Item (kolom Finality dihapus). */
-      const busStripH = 14;
-      const contentBlockH = 30 + busStripH + lines * rowCellH;
+      const itemSource = items.length ? items : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
+      const showItems = [{ __isFinalityRow: true, itemLabel: `Bus/finality: ${finLine}` }, ...itemSource].slice(0, 6);
+      const itemRows = Math.max(1, showItems.length);
+      const hasRoomTypeBreakdown = showItems.some((it) => !it.__isFinalityRow && String(it.roomTypeBreakdownLine || '').trim() !== '');
+      const rowCellH = hasRoomTypeBreakdown ? 38 : 28;
+      const lines = Math.max(itemRows, historyRows);
+      const contentBlockH = 30 + lines * rowCellH;
       const blockH = contentBlockH + 10;
       if (y + blockH > doc.page.height - 48) {
         doc.addPage();
@@ -1343,12 +1361,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const itemX = col.item + 2;
       const itemW = col.payment - col.item - 6;
       const headerH = 12;
-      doc.font('Helvetica').fontSize(5.7).fillColor('#475569').text(`Bus/finality: ${finLine}`.slice(0, 220), itemX, y + 4, {
-        width: itemW,
-        height: busStripH,
-        lineGap: 0.5
-      });
-      const rowTop = y + 4 + busStripH;
+      const rowTop = y + 4;
       doc.rect(itemX, rowTop, itemW, headerH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(itemX, rowTop, itemW, headerH).stroke();
       const subItemW = Math.max(68, Math.floor(itemW * 0.46));
@@ -1372,6 +1385,18 @@ const exportListPdf = asyncHandler(async (req, res) => {
         doc.strokeColor('#e2e8f0').lineWidth(0.5)
           .moveTo(xUnit, ry).lineTo(xUnit, ry + rowH).stroke()
           .moveTo(xSubtotal, ry).lineTo(xSubtotal, ry + rowH).stroke();
+        if (it.__isFinalityRow) {
+          doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.1).text(String(it.itemLabel || '-').slice(0, 140), itemX + 2, ry + 2, {
+            width: subItemW - 4, height: 20, lineBreak: false
+          });
+          doc.fillColor('#475569').font('Helvetica').fontSize(5.8).text('-', xUnit + 2, ry + 2, {
+            width: unitColW - 4, height: 10, lineBreak: false
+          });
+          doc.fillColor('#475569').font('Helvetica').fontSize(5.8).text('-', xSubtotal + 2, ry + 2, {
+            width: subtotalColW - 4, height: 10, lineBreak: false
+          });
+          return;
+        }
         const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
         const subtotalTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
         doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.2).text(String(it.itemLabel || '-').slice(0, 64), itemX + 2, ry + 2, {
@@ -1434,16 +1459,16 @@ const exportListPdf = asyncHandler(async (req, res) => {
         doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(5.8).text(String(entry?.info1 || '-').slice(0, 72), historyX + 2, ry + 2, {
           width: historyW - 4, height: 9, lineBreak: false
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info2 || '').slice(0, 90), historyX + 2, ry + 11, {
-          width: historyW - 4, height: 8, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.5).text(String(entry?.info2 || '').slice(0, 170), historyX + 2, ry + 10, {
+          width: historyW - 4, height: 16, lineGap: 0.4
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info3 || '').slice(0, 90), historyX + 2, ry + 19, {
-          width: historyW - 4, height: 8, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.5).text(String(entry?.info3 || '').slice(0, 120), historyX + 2, ry + 26, {
+          width: historyW - 4, height: 9, lineBreak: false
         });
       });
       // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
       const amtX = col.total + 2;
-      const amtY = y + 4 + busStripH;
+      const amtY = y + 4;
       const amtW = (doc.page.width - 36) - amtX - 2;
       const amtH = contentBlockH - 8;
       const amtHeaderH = 12;
