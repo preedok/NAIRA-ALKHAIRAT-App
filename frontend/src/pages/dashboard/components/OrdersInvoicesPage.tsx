@@ -219,6 +219,20 @@ function getEarliestServiceYmdFromInvoice(inv: any): string | null {
 
 /** Hari kalender: owner tidak boleh batalkan jika layanan terawal sudah lewat atau dalam 7 hari ke depan (termasuk besok). */
 const OWNER_CANCEL_SERVICE_EXCLUSION_DAYS = 7;
+
+function cancelablePaidAmount(inv: any): number {
+  const paid = parseFloat(inv?.paid_amount || 0) || 0;
+  if (paid > 0) return paid;
+  const st = String(inv?.status || '').toLowerCase();
+  if (st === 'cancelled_refund' || st === 'refund_canceled') {
+    const fromCanceled = parseFloat(inv?.cancelled_refund_amount || 0) || 0;
+    if (fromCanceled > 0) return fromCanceled;
+    const latestRejected = (inv?.Refunds || []).find((r: any) => String(r?.status || '').toLowerCase() === 'rejected');
+    const fromRejected = parseFloat(latestRejected?.amount || 0) || 0;
+    if (fromRejected > 0) return fromRejected;
+  }
+  return 0;
+}
 const INVOICE_LOCKED_EDIT_UPLOAD_STATUSES = new Set(['canceled', 'cancelled', 'cancelled_refund', 'refunded', 'refund_canceled']);
 
 function isInvoiceLockedForEditUpload(inv: any): boolean {
@@ -592,7 +606,7 @@ const OrdersInvoicesPage: React.FC = () => {
       }
       return;
     }
-    const paid = parseFloat(inv.paid_amount || 0);
+    const paid = cancelablePaidAmount(inv);
     const formatNum = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     setCancelTargetInv(inv);
     setCancelAction('to_balance');
@@ -739,7 +753,7 @@ const OrdersInvoicesPage: React.FC = () => {
       }
       return;
     }
-    const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
+    const paid = cancelablePaidAmount(cancelTargetInv);
     if (paid > 0 && cancelAction === 'refund') {
       if (!cancelBankName.trim() || !cancelAccountNumber.trim()) {
         showToast('Untuk refund wajib isi Nama Bank dan Nomor Rekening', 'error');
@@ -4536,7 +4550,7 @@ const OrdersInvoicesPage: React.FC = () => {
                   <InvoiceRefundDocument
                     inv={cancelTargetInv}
                     preview={(() => {
-                      const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
+                      const paid = cancelablePaidAmount(cancelTargetInv);
                       if (paid === 0) return { action: 'to_balance' as const, reason: cancelReason };
                       const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
                       const effRefund = Number.isFinite(refundAmt) ? refundAmt : paid;
@@ -4554,7 +4568,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     formatDate={(d) => (d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '–')}
                   />
                   {(() => {
-                    const paid = parseFloat(cancelTargetInv.paid_amount) || 0;
+                    const paid = cancelablePaidAmount(cancelTargetInv);
                     if (paid > 0) {
                       const refundAmt = cancelRefundAmount.trim() ? parseFloat(cancelRefundAmount.replace(/,/g, '')) : paid;
                       const isPartialRefund = Number.isFinite(refundAmt) && refundAmt > 0 && refundAmt < paid;

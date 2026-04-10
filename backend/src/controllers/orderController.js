@@ -248,6 +248,93 @@ async function validatePaidCancelBody(order, inv, body) {
   };
 }
 
+async function getRejectedRefundRetryContext(order, inv) {
+  const orderStatus = String(order?.status || '').toLowerCase();
+  const invoiceStatus = String(inv?.status || '').toLowerCase();
+  if (!['canceled', 'cancelled'].includes(orderStatus)) return { eligible: false };
+  if (![String(INVOICE_STATUS.CANCELLED_REFUND || '').toLowerCase(), String(INVOICE_STATUS.REFUND_CANCELED || '').toLowerCase()].includes(invoiceStatus)) {
+    return { eligible: false };
+  }
+  const refunds = await Refund.findAll({
+    where: { invoice_id: inv.id, source: REFUND_SOURCE.CANCEL },
+    attributes: ['id', 'status', 'amount', 'created_at'],
+    order: [['created_at', 'DESC']]
+  });
+  if (!refunds.length) return { eligible: false };
+  const latest = refunds[0];
+  const latestStatus = String(latest.status || '').toLowerCase();
+  if (latestStatus !== REFUND_STATUS.REJECTED) return { eligible: false };
+  const hasActive = refunds.some((r) => [REFUND_STATUS.REQUESTED, REFUND_STATUS.APPROVED].includes(String(r.status || '').toLowerCase()));
+  if (hasActive) return { eligible: false };
+  const baseAmount = parseFloat(latest.amount) || parseFloat(inv.cancelled_refund_amount) || 0;
+  if (baseAmount <= 0) return { eligible: false };
+  return { eligible: true, baseAmount, previousRefundId: latest.id };
+}
+
+function validateRejectedRefundRetryBody(body, baseAmount) {
+  const rawAction = body && body.action != null ? String(body.action).trim() : '';
+  const action = ['to_balance', 'refund'].includes(rawAction) ? rawAction : '';
+  if (action !== 'refund') {
+    return { ok: false, status: 400, message: 'Setelah refund ditolak, tindakan yang tersedia hanya refund ke rekening (action=refund).' };
+  }
+  const bankName = body && body.bank_name ? String(body.bank_name).trim() || null : null;
+  const accountNumber = body && body.account_number ? String(body.account_number).trim() || null : null;
+  const accountHolderName = body && body.account_holder_name ? String(body.account_holder_name).trim() || null : null;
+  if (!bankName || !accountNumber) {
+    return { ok: false, status: 400, message: 'Untuk refund wajib isi bank_name dan account_number (rekening tujuan pengembalian).' };
+  }
+  let refundAmount = body && body.refund_amount != null ? parseFloat(body.refund_amount) : null;
+  if (refundAmount == null || Number.isNaN(refundAmount) || refundAmount <= 0) refundAmount = baseAmount;
+  if (refundAmount > baseAmount) refundAmount = baseAmount;
+  const reason = body && body.reason ? String(body.reason).trim() || null : null;
+  return {
+    ok: true,
+    paidAmount: baseAmount,
+    action: 'refund',
+    reason,
+    bankName,
+    accountNumber,
+    accountHolderName,
+    refundAmount
+  };
+}
+
+async function executeRejectedRefundRetry(order, inv, parsed, ctx) {
+  const { reason, bankName, accountNumber, accountHolderName, refundAmount } = parsed;
+  const { auditUserId, refundRequestedById, previousRefundId } = ctx;
+  const refund = await Refund.create({
+    invoice_id: inv.id,
+    order_id: order.id,
+    owner_id: order.owner_id,
+    amount: refundAmount,
+    status: REFUND_STATUS.REQUESTED,
+    source: REFUND_SOURCE.CANCEL,
+    reason: reason || null,
+    bank_name: bankName,
+    account_number: accountNumber,
+    account_holder_name: accountHolderName,
+    requested_by: refundRequestedById
+  });
+  await logInvoiceStatusChange({
+    invoice_id: inv.id,
+    from_status: inv.status,
+    to_status: inv.status,
+    changed_by: auditUserId,
+    reason: 'refund_retry_requested',
+    meta: {
+      refund_id: refund.id,
+      previous_refund_id: previousRefundId || null,
+      amount: refundAmount,
+      bank_name: bankName,
+      account_number: accountNumber
+    }
+  });
+  return {
+    message: `Permintaan refund ulang Rp ${Number(refundAmount).toLocaleString('id-ID')} ke ${bankName} ${accountNumber} telah dicatat. Role accounting akan memproses.`,
+    data: { order, refund, retry: true }
+  };
+}
+
 async function executePaidOrderCancellation(order, inv, parsed, ctx) {
   const {
     paidAmount,
@@ -1795,11 +1882,15 @@ const destroy = asyncHandler(async (req, res) => {
   if (!canDelete) {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau tim invoice/admin yang dapat membatalkan order' });
   }
-  if (!['draft', 'tentative', 'confirmed', 'processing'].includes(order.status)) {
-    return res.status(400).json({ success: false, message: 'Invoice hanya bisa dibatalkan saat draft/tentative/confirmed/processing' });
-  }
-
   const inv = await Invoice.findOne({ where: { order_id: order.id } });
+  const normalCancelableStatuses = ['draft', 'tentative', 'confirmed', 'processing'];
+  let retryCtx = { eligible: false };
+  if (!normalCancelableStatuses.includes(order.status)) {
+    retryCtx = await getRejectedRefundRetryContext(order, inv);
+    if (!retryCtx.eligible) {
+      return res.status(400).json({ success: false, message: 'Invoice hanya bisa dibatalkan saat draft/tentative/confirmed/processing' });
+    }
+  }
   const paidAmountZero = inv ? parseFloat(inv.paid_amount) || 0 : 0;
 
   const isStaffCancelRoleEarly = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
@@ -1866,7 +1957,9 @@ const destroy = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Order tidak memiliki invoice.' });
   }
 
-  const v = await validatePaidCancelBody(order, inv, req.body);
+  const v = retryCtx.eligible
+    ? validateRejectedRefundRetryBody(req.body, retryCtx.baseAmount)
+    : await validatePaidCancelBody(order, inv, req.body);
   if (!v.ok) return res.status(v.status).json({ success: false, message: v.message });
 
   const isStaffCancel = ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(req.user.role);
@@ -1880,11 +1973,17 @@ const destroy = asyncHandler(async (req, res) => {
   }
 
   const { ok: _ok, ...cancelParsed } = v;
-  const cancelResult = await executePaidOrderCancellation(order, inv, cancelParsed, {
-    auditUserId: req.user.id,
-    refundRequestedById: order.owner_id,
-    performedById: req.user.id
-  });
+  const cancelResult = retryCtx.eligible
+    ? await executeRejectedRefundRetry(order, inv, cancelParsed, {
+      auditUserId: req.user.id,
+      refundRequestedById: order.owner_id,
+      previousRefundId: retryCtx.previousRefundId
+    })
+    : await executePaidOrderCancellation(order, inv, cancelParsed, {
+      auditUserId: req.user.id,
+      refundRequestedById: order.owner_id,
+      performedById: req.user.id
+    });
   res.json({ success: true, message: cancelResult.message, data: cancelResult.data });
 });
 

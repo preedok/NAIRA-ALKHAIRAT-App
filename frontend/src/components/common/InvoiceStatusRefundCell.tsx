@@ -95,7 +95,16 @@ export function getEffectiveInvoiceStatusBadgeVariant(inv: InvoiceForStatusRefun
  */
 export function shouldHideInvoiceCancelAction(inv: InvoiceForStatusRefund): boolean {
   const st = (inv?.status || '').toLowerCase();
-  if (['canceled', 'cancelled', 'cancelled_refund', 'refunded'].includes(st)) return true;
+  if (['canceled', 'cancelled', 'refunded'].includes(st)) return true;
+  if (st === 'cancelled_refund' || st === 'refund_canceled') {
+    const refunds = (inv?.Refunds || []) as Array<{ status?: string }>;
+    const latest = refunds[0];
+    const latestStatus = String(latest?.status || '').toLowerCase();
+    const hasActiveRefund = refunds.some((r) => ['requested', 'approved'].includes(String(r?.status || '').toLowerCase()));
+    if (hasActiveRefund) return true;
+    if (latestStatus === 'rejected') return false; // allow retry refund after rejection
+    return true;
+  }
 
   const effective = getEffectiveInvoiceStatusLabel(inv);
   if (effective === CANCELLATION_TO_BALANCE_LABEL) return true;
