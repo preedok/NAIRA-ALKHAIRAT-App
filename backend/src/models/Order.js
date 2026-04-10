@@ -40,8 +40,9 @@ const Order = sequelize.define('Order', {
   branch_id: {
     type: DataTypes.UUID,
     allowNull: false,
-    field: 'kota_id',
-    references: { model: 'kotas', key: 'id' },
+    // Kompatibilitas DB produksi: banyak environment masih menyimpan FK di kolom branch_id.
+    field: 'branch_id',
+    references: { model: 'branches', key: 'id' },
     onUpdate: 'CASCADE',
     onDelete: 'RESTRICT'
   },
