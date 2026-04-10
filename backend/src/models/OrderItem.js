@@ -34,17 +34,18 @@ const OrderItem = sequelize.define('OrderItem', {
   unit_price: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: false,
-    comment: 'Nilai dalam unit_price_currency (mata uang yang dipilih). Tidak dikonversi saat simpan.'
+    comment: 'Harga satuan (unit_price_currency). Export daftar invoice: kolom Harga per item.'
   },
   unit_price_currency: {
     type: DataTypes.STRING(3),
     allowNull: false,
     defaultValue: 'IDR',
-    comment: 'Mata uang dari unit_price. Konversi ke IDR hanya untuk total order.'
+    comment: 'Mata uang unit_price; dasar konversi IDR/SAR/USD di laporan export.'
   },
   subtotal: {
     type: DataTypes.DECIMAL(18, 2),
-    allowNull: false
+    allowNull: false,
+    comment: 'Total baris item; export daftar invoice: kolom Subtotal.'
   },
   manifest_file_url: {
     type: DataTypes.STRING(500),

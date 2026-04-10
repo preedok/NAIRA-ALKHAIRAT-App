@@ -2145,6 +2145,7 @@ const OrdersInvoicesPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 className="border-slate-200/90"
+                title="PDF: item dengan kolom Harga per item dan Subtotal terpisah; riwayat bayar tanpa nama file bukti."
                 disabled={exportingInvoiceListPdf || loading}
                 onClick={async () => {
                   setExportingInvoiceListPdf(true);

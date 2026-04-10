@@ -706,11 +706,36 @@ function getOrderItemStatusForExport(item) {
 }
 
 function summarizeOrderItemsForExport(inv) {
-  const items = inv?.Order?.OrderItems || [];
+  const items = buildPdfOrderItemsDetailed(inv);
   if (!items.length) return '-';
   return items
-    .map((it) => `${String(it.type || '-').toUpperCase()}:${it.product_name || it.Product?.name || '-'} x${parseInt(it.quantity, 10) || 0}`)
-    .join(' | ');
+    .map((it) => {
+      const bits = [String(it.itemLabel || '-').slice(0, 140), `${it.qty} ${it.unit}`];
+      if (it.stayLabel && it.stayLabel !== '-') bits.push(it.stayLabel);
+      if (it.roomTypeLabel) bits.push(it.roomTypeLabel);
+      return bits.join(' · ');
+    })
+    .join('\n');
+}
+
+/** Satu baris per item (sama pengelompokan dengan PDF): teks harga per item & subtotal untuk Excel. */
+function buildOrderItemExportPriceTexts(inv) {
+  const tot = invoiceListAmountTriple(inv);
+  const items = buildPdfOrderItemsDetailed(inv);
+  if (!items.length) return { unitBlock: '-', subtotalBlock: '-' };
+  const unitLines = [];
+  const subLines = [];
+  for (const it of items) {
+    const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
+    const subTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
+    unitLines.push(
+      `Rp ${Math.round(unitTriple.idr).toLocaleString('id-ID')} · SAR ${unitTriple.sar.toFixed(2)} · USD ${unitTriple.usd.toFixed(2)}`
+    );
+    subLines.push(
+      `Rp ${Math.round(subTriple.idr).toLocaleString('id-ID')} · SAR ${subTriple.sar.toFixed(2)} · USD ${subTriple.usd.toFixed(2)}`
+    );
+  }
+  return { unitBlock: unitLines.join('\n'), subtotalBlock: subLines.join('\n') };
 }
 
 function orderItemQtyUnitForExport(item) {
@@ -817,7 +842,7 @@ function buildPdfOrderItemsDetailed(inv) {
     const productNameRaw = (it?.product_name || it?.Product?.name || '-');
     const unit = orderItemQtyUnitForExport(it);
     const qty = Math.max(0, parseInt(it?.quantity, 10) || 0);
-    const currency = String(it?.currency || 'IDR').toUpperCase();
+    const currency = String(it?.unit_price_currency || it?.currency || 'IDR').toUpperCase();
     const unitPriceRaw = Number(it?.unit_price || it?.meta?.room_unit_price || 0);
     const mealUnitPriceRaw = Number(it?.meta?.meal_unit_price || 0);
     const unitPrice = unitPriceRaw + mealUnitPriceRaw;
@@ -964,22 +989,22 @@ const exportListExcel = asyncHandler(async (req, res) => {
     { width: 18 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 14 },
     { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 12 },
     { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
-    { width: 28 }, { width: 24 }, { width: 28 }, { width: 44 }, { width: 44 }
+    { width: 28 }, { width: 24 }, { width: 28 }, { width: 36 }, { width: 32 }, { width: 32 }, { width: 44 }
   ];
 
-  ws.mergeCells('A1:AE1');
+  ws.mergeCells('A1:AG1');
   ws.getCell('A1').value = 'PT. BINTANG GLOBAL GRUP';
   ws.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF0B4F82' } };
   ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.mergeCells('A2:AE2');
+  ws.mergeCells('A2:AG2');
   ws.getCell('A2').value = 'Laporan Resmi Daftar Invoice / Order';
   ws.getCell('A2').font = { bold: true, size: 12 };
   ws.getCell('A2').alignment = { horizontal: 'center' };
-  ws.mergeCells('A3:AE3');
+  ws.mergeCells('A3:AG3');
   ws.getCell('A3').value = `Dicetak: ${new Date().toLocaleString('id-ID')}`;
   ws.getCell('A3').alignment = { horizontal: 'center' };
   ws.getCell('A3').font = { color: { argb: 'FF475569' } };
-  ws.mergeCells('A4:AE4');
+  ws.mergeCells('A4:AG4');
   ws.getCell('A4').value = buildInvoiceListExportFilterSummary(req, data);
   ws.getCell('A4').alignment = { horizontal: 'center', wrapText: true };
   ws.getCell('A4').font = { italic: true, color: { argb: 'FF64748B' } };
@@ -989,7 +1014,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
     'Cabang', 'Wilayah', 'Provinsi', 'Kota', 'Status Invoice', 'Status Order', 'No. Order',
     'Total IDR', 'Total SAR', 'Total USD', 'Kurs SAR→IDR', 'Kurs USD→IDR',
     'Dibayar IDR', 'Dibayar SAR', 'Dibayar USD', 'Sisa IDR', 'Sisa SAR', 'Sisa USD',
-    'Alokasi saldo', 'Refund', 'Realokasi pembayaran', 'Catatan', 'Rincian Item (Nama x Qty)', 'Status Progress Item'
+    'Alokasi saldo', 'Refund', 'Realokasi pembayaran', 'Catatan', 'Rincian Item', 'Harga per item (IDR/SAR/USD)', 'Subtotal per item (IDR/SAR/USD)', 'Status Progress Item'
   ];
   const headerRow = ws.addRow(headers);
   headerRow.eachCell((cell) => {
@@ -1005,8 +1030,8 @@ const exportListExcel = asyncHandler(async (req, res) => {
   });
 
   if (!data.length) {
-    const row = ws.addRow(['', 'Tidak ada data', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    ws.mergeCells(`B${row.number}:AE${row.number}`);
+    const row = ws.addRow(['', 'Tidak ada data', ...Array(31).fill('')]);
+    ws.mergeCells(`B${row.number}:AG${row.number}`);
     row.getCell(2).alignment = { horizontal: 'center' };
     row.getCell(2).font = { italic: true, color: { argb: 'FF64748B' } };
   } else {
@@ -1025,6 +1050,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
       const orderSt = (inv.Order && inv.Order.status) ? String(inv.Order.status) : '-';
       const notes = [inv.notes, inv.cancellation_handling_note].filter(Boolean).join(' | ') || '-';
       const itemSummary = summarizeOrderItemsForExport(inv);
+      const { unitBlock, subtotalBlock } = buildOrderItemExportPriceTexts(inv);
       const itemStatusSummary = summarizeOrderItemsStatusForExport(inv);
       const row = ws.addRow([
         idx + 1,
@@ -1057,6 +1083,8 @@ const exportListExcel = asyncHandler(async (req, res) => {
         summarizeReallocForExport(inv),
         notes,
         itemSummary,
+        unitBlock,
+        subtotalBlock,
         itemStatusSummary
       ]);
       row.getCell(15).numFmt = '"Rp" #,##0';
@@ -1082,7 +1110,7 @@ const exportListExcel = asyncHandler(async (req, res) => {
     });
 
     // Ringkasan total seluruh data (semua baris hasil filter)
-    const spacer = ws.addRow(new Array(31).fill(''));
+    const spacer = ws.addRow(new Array(33).fill(''));
     spacer.height = 6;
     const totalRow = ws.addRow([
       '', '', '', '', '', '', '', '', '', '', '', '', '', 'TOTAL SELURUH DATA',
@@ -1099,6 +1127,8 @@ const exportListExcel = asyncHandler(async (req, res) => {
       totals.remaining_usd,
       totals.allocation_idr,
       totals.refund_idr,
+      '-',
+      '-',
       '-',
       '-',
       '-',
@@ -1252,14 +1282,18 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const rowTop = y + 4;
       doc.rect(itemX, rowTop, itemW, headerH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(itemX, rowTop, itemW, headerH).stroke();
-      const subPriceW = Math.max(86, Math.floor(itemW * 0.42));
-      const subItemW = Math.max(90, itemW - subPriceW);
-      const xPrice = itemX + subItemW;
-      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.6)
-        .text('Item & Detail', itemX + 2, rowTop + 3, { width: subItemW - 4 })
-        .text('Harga / Subtotal', xPrice + 2, rowTop + 3, { width: subPriceW - 4, align: 'left' });
+      const subItemW = Math.max(68, Math.floor(itemW * 0.46));
+      const unitColW = Math.max(52, Math.floor(itemW * 0.27));
+      const subtotalColW = Math.max(52, itemW - subItemW - unitColW);
+      const xUnit = itemX + subItemW;
+      const xSubtotal = xUnit + unitColW;
       doc.strokeColor('#cbd5e1').lineWidth(0.5)
-        .moveTo(xPrice, rowTop).lineTo(xPrice, rowTop + headerH).stroke();
+        .moveTo(xUnit, rowTop).lineTo(xUnit, rowTop + headerH).stroke()
+        .moveTo(xSubtotal, rowTop).lineTo(xSubtotal, rowTop + headerH).stroke();
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.4)
+        .text('Item & Detail', itemX + 2, rowTop + 3, { width: subItemW - 4 })
+        .text('Harga per item', xUnit + 2, rowTop + 3, { width: unitColW - 4, align: 'left' })
+        .text('Subtotal', xSubtotal + 2, rowTop + 3, { width: subtotalColW - 4, align: 'left' });
 
       doc.font('Helvetica').fontSize(6.8).fillColor('#0f172a');
       const showItems = items.length ? items.slice(0, itemRows) : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
@@ -1268,30 +1302,43 @@ const exportListPdf = asyncHandler(async (req, res) => {
         const ry = rowTop + headerH + i * rowH;
         doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(itemX, ry, itemW, rowH).stroke();
         doc.strokeColor('#e2e8f0').lineWidth(0.5)
-          .moveTo(xPrice, ry).lineTo(xPrice, ry + rowH).stroke();
+          .moveTo(xUnit, ry).lineTo(xUnit, ry + rowH).stroke()
+          .moveTo(xSubtotal, ry).lineTo(xSubtotal, ry + rowH).stroke();
         const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
         const subtotalTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
-        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.2).text(String(it.itemLabel || '-').slice(0, 72), itemX + 2, ry + 2, {
+        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.2).text(String(it.itemLabel || '-').slice(0, 64), itemX + 2, ry + 2, {
           width: subItemW - 4, height: 10, lineBreak: false
         });
         const nightLabel = Number(it.nights || 1) > 1 ? `${it.nights} malam` : '';
         const detailText = [ `${it.qty} ${it.unit}`, String(it.stayLabel || '-'), nightLabel, String(it.roomTypeLabel || '') ]
           .filter((v) => String(v || '').trim() !== '')
           .join(' | ');
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(6).text(detailText.slice(0, 68), itemX + 2, ry + 12, {
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(6).text(detailText.slice(0, 60), itemX + 2, ry + 12, {
           width: subItemW - 4, height: 10, lineBreak: false
         });
-        doc.fillColor('#0f172a').fontSize(5.8).text(
-          `H: Rp ${Math.round(unitTriple.idr).toLocaleString('id-ID')} | S ${unitTriple.sar.toFixed(1)} | U ${unitTriple.usd.toFixed(1)}`.slice(0, 52),
-          xPrice + 2,
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(
+          `Rp ${Math.round(unitTriple.idr).toLocaleString('id-ID')}`,
+          xUnit + 2,
           ry + 2,
-          { width: subPriceW - 4, height: 10, lineBreak: false }
+          { width: unitColW - 4, height: 10, lineBreak: false }
         );
-        doc.fillColor('#0f172a').fontSize(5.8).text(
-          `S: Rp ${Math.round(subtotalTriple.idr).toLocaleString('id-ID')} | S ${subtotalTriple.sar.toFixed(1)} | U ${subtotalTriple.usd.toFixed(1)}`.slice(0, 52),
-          xPrice + 2,
+        doc.fillColor('#0f172a').fontSize(5.4).text(
+          `S ${unitTriple.sar.toFixed(1)} · U ${unitTriple.usd.toFixed(1)}`,
+          xUnit + 2,
           ry + 12,
-          { width: subPriceW - 4, height: 10, lineBreak: false }
+          { width: unitColW - 4, height: 10, lineBreak: false }
+        );
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(
+          `Rp ${Math.round(subtotalTriple.idr).toLocaleString('id-ID')}`,
+          xSubtotal + 2,
+          ry + 2,
+          { width: subtotalColW - 4, height: 10, lineBreak: false }
+        );
+        doc.fillColor('#0f172a').fontSize(5.4).text(
+          `S ${subtotalTriple.sar.toFixed(1)} · U ${subtotalTriple.usd.toFixed(1)}`,
+          xSubtotal + 2,
+          ry + 12,
+          { width: subtotalColW - 4, height: 10, lineBreak: false }
         );
       });
       const historyX = col.payment + 2;
