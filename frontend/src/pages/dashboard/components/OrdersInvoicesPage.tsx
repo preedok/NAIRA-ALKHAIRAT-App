@@ -116,6 +116,13 @@ function isInvoiceFullyPaidOwnerCancelFlow(inv: any): boolean {
 
 const OWNER_CANCEL_MAX_CALENDAR_DAYS = 7;
 
+function exportPdfOwnerRowLabel(o: { id: string; name?: string; User?: { name?: string; company_name?: string } }) {
+  const n = o.User?.name || o.name;
+  const c = o.User?.company_name;
+  if (n && c && String(n).trim() !== String(c).trim()) return `${n} — ${c}`;
+  return String(n || c || o.id || '');
+}
+
 function calendarDaysBetweenUtcDateOnly(a: Date, b: Date): number {
   const start = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
   const end = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
@@ -294,6 +301,8 @@ const OrdersInvoicesPage: React.FC = () => {
   const [statModal, setStatModal] = useState<'total_invoice' | 'total_tagihan' | 'dibayar' | 'sisa' | null>(null);
   const [statusModal, setStatusModal] = useState<string | null>(null);
   const [exportingInvoiceListPdf, setExportingInvoiceListPdf] = useState(false);
+  const [exportListPdfOwnerModalOpen, setExportListPdfOwnerModalOpen] = useState(false);
+  const [exportListPdfSelectedOwnerId, setExportListPdfSelectedOwnerId] = useState('');
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'va' | 'qris' | 'saudi'>('bank');
@@ -1735,7 +1744,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const hasActiveFilters = !!(branchId || wilayahId || provinsiId || filterStatus || filterOwnerId || filterInvoiceNumber.trim() || filterDateFrom || filterDateTo || filterDueStatus || sortBy !== 'created_at' || sortOrder !== 'desc');
 
   /** Opsi filter Owner: gabung dari API + unique owner di data invoice agar semua owner yang punya invoice bisa dipilih dan filter tampil benar */
-  const ownerFilterOptions = (() => {
+  const ownerFilterOptions = useMemo(() => {
     const map = new Map<string, { id: string; name?: string; User?: { name?: string; company_name?: string } }>();
     owners.forEach((o) => {
       const userId = (o as { user_id?: string }).user_id ?? o.User?.id ?? '';
@@ -1753,7 +1762,13 @@ const OrdersInvoicesPage: React.FC = () => {
       map.set(sid, { id: sid, name, User: { name, company_name: inv.User?.company_name || inv.Order?.User?.company_name } });
     });
     return Array.from(map.values()).filter((o) => Boolean(o.id));
-  })();
+  }, [owners, invoices]);
+
+  const sortedExportListPdfOwners = useMemo(() => {
+    return [...ownerFilterOptions].sort((a, b) =>
+      exportPdfOwnerRowLabel(a).toLowerCase().localeCompare(exportPdfOwnerRowLabel(b).toLowerCase(), 'id')
+    );
+  }, [ownerFilterOptions]);
 
   const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
   const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
@@ -2145,29 +2160,23 @@ const OrdersInvoicesPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 className="border-slate-200/90"
-                title="PDF: item dengan kolom Harga per item dan Subtotal terpisah; riwayat bayar tanpa nama file bukti."
+                title="Pilih owner, lalu unduh PDF daftar invoice (filter lain tetap berlaku)."
                 disabled={exportingInvoiceListPdf || loading}
-                onClick={async () => {
-                  setExportingInvoiceListPdf(true);
-                  try {
-                    const res = await invoicesApi.exportListPdf(buildExportListParams() as Parameters<typeof invoicesApi.exportListPdf>[0]);
-                    const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.pdf`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    showToast('Export PDF berhasil diunduh.', 'success');
-                  } catch {
-                    showToast('Gagal mengunduh PDF.', 'error');
-                  } finally {
-                    setExportingInvoiceListPdf(false);
+                onClick={() => {
+                  if (!sortedExportListPdfOwners.length) {
+                    showToast('Tidak ada owner pada data saat ini. Sesuaikan filter atau muat ulang daftar.', 'warning');
+                    return;
                   }
+                  const pref =
+                    filterOwnerId && sortedExportListPdfOwners.some((o) => o.id === filterOwnerId)
+                      ? filterOwnerId
+                      : sortedExportListPdfOwners[0].id;
+                  setExportListPdfSelectedOwnerId(pref);
+                  setExportListPdfOwnerModalOpen(true);
                 }}
               >
                 <FileText className="w-4 h-4 mr-1.5" />
-                {exportingInvoiceListPdf ? 'Mengunduh...' : 'Export PDF'}
+                Export PDF
               </Button>
               {canOrderAction && (
                 <Button variant="primary" size="sm" onClick={() => navigate('/dashboard/orders/new')}>
@@ -2288,6 +2297,78 @@ const OrdersInvoicesPage: React.FC = () => {
           )}
         </div>
       </Card>
+
+      {exportListPdfOwnerModalOpen && (
+        <Modal open onClose={() => !exportingInvoiceListPdf && setExportListPdfOwnerModalOpen(false)} zIndex={55}>
+          <ModalBox className="max-w-md w-full">
+            <ModalHeader
+              title="Export PDF daftar invoice"
+              subtitle="Pilih owner — filter tanggal, status, cabang, dll. tetap diterapkan pada ekspor."
+              icon={<FileText className="w-5 h-5" />}
+              onClose={() => !exportingInvoiceListPdf && setExportListPdfOwnerModalOpen(false)}
+            />
+            <ModalBody className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">Owner</label>
+              <select
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                value={exportListPdfSelectedOwnerId}
+                onChange={(e) => setExportListPdfSelectedOwnerId(e.target.value)}
+                disabled={exportingInvoiceListPdf}
+              >
+                {sortedExportListPdfOwners.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {exportPdfOwnerRowLabel(o)}
+                  </option>
+                ))}
+              </select>
+            </ModalBody>
+            <ModalFooter className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={exportingInvoiceListPdf}
+                onClick={() => setExportListPdfOwnerModalOpen(false)}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={exportingInvoiceListPdf || !String(exportListPdfSelectedOwnerId || '').trim()}
+                onClick={async () => {
+                  const id = String(exportListPdfSelectedOwnerId || '').trim();
+                  if (!id) {
+                    showToast('Pilih owner terlebih dahulu.', 'error');
+                    return;
+                  }
+                  setExportingInvoiceListPdf(true);
+                  try {
+                    const res = await invoicesApi.exportListPdf({
+                      ...buildExportListParams(),
+                      owner_id: id
+                    } as Parameters<typeof invoicesApi.exportListPdf>[0]);
+                    const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('Export PDF berhasil diunduh.', 'success');
+                    setExportListPdfOwnerModalOpen(false);
+                  } catch {
+                    showToast('Gagal mengunduh PDF.', 'error');
+                  } finally {
+                    setExportingInvoiceListPdf(false);
+                  }
+                }}
+              >
+                {exportingInvoiceListPdf ? 'Mengunduh...' : 'Unduh PDF'}
+              </Button>
+            </ModalFooter>
+          </ModalBox>
+        </Modal>
+      )}
 
       {publishDraftModalInv && (
         <Modal open onClose={() => !publishingDraftOrderId && setPublishDraftModalInv(null)} zIndex={55}>
