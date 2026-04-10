@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op, QueryTypes } = require('sequelize');
-const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, HotelMonthlyPrice } = require('../models');
+const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile, HotelMonthlyPrice } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { calculateStayCostByNights, MEAL_ROOM_TYPE, COMPONENT_MEAL, COMPONENT_ROOM } = require('../services/hotelMonthlyPricingService');
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
@@ -241,6 +241,11 @@ const list = asyncHandler(async (req, res) => {
     const viewAsPusat = req.query.view_as_pusat === 'true' && req.user?.role === 'role_hotel';
     const bid = viewAsPusat ? null : (branch_id || req.user?.branch_id || null);
     const oid = owner_id || null;
+    let ownerIsMou = false;
+    if (oid) {
+      const profile = await OwnerProfile.findOne({ where: { user_id: oid }, attributes: ['is_mou_owner'], raw: true });
+      ownerIsMou = !!profile?.is_mou_owner;
+    }
     const applyMou = (n) => n;
     const result = (products || []).map(p => {
       const prices = p.ProductPrices || [];
