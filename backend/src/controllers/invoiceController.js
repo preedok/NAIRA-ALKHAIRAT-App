@@ -787,13 +787,10 @@ function buildPaymentHistoryLines(inv) {
       const bankRecipient = p?.RecipientAccount?.bank_name || '-';
       const recipientAccNo = p?.RecipientAccount?.account_number || '-';
       const sender = p?.sender_account_name || '-';
-      const proofUrl = String(p?.proof_file_url || '').trim();
-      const proofName = proofUrl ? (proofUrl.split('/').pop() || proofUrl) : '-';
       lines.push({
         info1: `${dt} | ${method} | ${status}`,
         info2: `${formatMoneyForExport(amt, currency)} | Pengirim: ${sender} (${bankSender})`,
-        info3: `Penerima: ${bankRecipient} ${recipientAccNo}`,
-        proof: proofName
+        info3: `Penerima: ${bankRecipient} ${recipientAccNo}`
       });
     });
   const allocs = Array.isArray(inv?.BalanceAllocations) ? inv.BalanceAllocations : [];
@@ -803,11 +800,10 @@ function buildPaymentHistoryLines(inv) {
     lines.push({
       info1: `${dt} | ALOKASI SALDO | VERIFIED`,
       info2: `${formatMoneyForExport(amt, 'IDR')}`,
-      info3: 'Penerima: -',
-      proof: '-'
+      info3: 'Penerima: -'
     });
   });
-  if (!lines.length) lines.push({ info1: '-', info2: '', info3: '', proof: '-' });
+  if (!lines.length) lines.push({ info1: '-', info2: '', info3: '' });
   return lines;
 }
 
@@ -1300,34 +1296,23 @@ const exportListPdf = asyncHandler(async (req, res) => {
       });
       const historyX = col.payment + 2;
       const historyW = col.total - col.payment - 8;
-      const historyProofW = Math.max(36, Math.floor(historyW * 0.26));
-      const historyInfoW = historyW - historyProofW;
-      const historyProofX = historyX + historyInfoW;
       doc.rect(historyX, rowTop, historyW, headerH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(historyX, rowTop, historyW, headerH).stroke();
-      doc.strokeColor('#cbd5e1').lineWidth(0.5)
-        .moveTo(historyProofX, rowTop).lineTo(historyProofX, rowTop + headerH).stroke();
       doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.4)
-        .text('Informasi Transaksi', historyX + 2, rowTop + 3, { width: historyInfoW - 4, lineBreak: false })
-        .text('Bukti', historyProofX + 2, rowTop + 3, { width: historyProofW - 4, lineBreak: false });
+        .text('Informasi Transaksi', historyX + 2, rowTop + 3, { width: historyW - 4, lineBreak: false });
       const showHistory = paymentHistory.slice(0, historyRows);
       showHistory.forEach((entry, i) => {
         const rowH = rowCellH;
         const ry = rowTop + headerH + i * rowH;
         doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(historyX, ry, historyW, rowH).stroke();
-        doc.strokeColor('#e2e8f0').lineWidth(0.5)
-          .moveTo(historyProofX, ry).lineTo(historyProofX, ry + rowH).stroke();
-        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(5.8).text(String(entry?.info1 || '-').slice(0, 50), historyX + 2, ry + 2, {
-          width: historyInfoW - 4, height: 9, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(5.8).text(String(entry?.info1 || '-').slice(0, 72), historyX + 2, ry + 2, {
+          width: historyW - 4, height: 9, lineBreak: false
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info2 || '').slice(0, 62), historyX + 2, ry + 11, {
-          width: historyInfoW - 4, height: 8, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info2 || '').slice(0, 90), historyX + 2, ry + 11, {
+          width: historyW - 4, height: 8, lineBreak: false
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info3 || '').slice(0, 62), historyX + 2, ry + 19, {
-          width: historyInfoW - 4, height: 8, lineBreak: false
-        });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.proof || '-').slice(0, 16), historyProofX + 2, ry + 10, {
-          width: historyProofW - 4, height: 9, align: 'center', lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.6).text(String(entry?.info3 || '').slice(0, 90), historyX + 2, ry + 19, {
+          width: historyW - 4, height: 8, lineBreak: false
         });
       });
       // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
