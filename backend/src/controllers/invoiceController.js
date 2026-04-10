@@ -837,6 +837,12 @@ function amountTripleForDisplay(amount, fromCurrency, sarToIdr = 4200, usdToIdr 
 
 function buildPaymentHistoryLines(inv) {
   const lines = [];
+  const triplet = (name, bank, account) => {
+    const n = String(name || '-').trim() || '-';
+    const b = String(bank || '-').trim() || '-';
+    const a = String(account || '-').trim() || '-';
+    return `${n} | ${b} | ${a}`;
+  };
   const proofs = Array.isArray(inv?.PaymentProofs) ? inv.PaymentProofs : [];
   proofs
     .sort((a, b) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime())
@@ -846,17 +852,14 @@ function buildPaymentHistoryLines(inv) {
       const status = String(p?.verified_status || 'pending').toUpperCase();
       const currency = String(p?.payment_currency || 'IDR').toUpperCase();
       const amt = Number(p?.amount_original ?? p?.amount ?? p?.amount_idr ?? 0);
-      const bankSender = p?.bank_name || p?.Bank?.name || '-';
-      const senderAccNo = p?.sender_account_number || p?.account_number || '';
-      const bankRecipient = p?.RecipientAccount?.bank_name || (String(p?.payment_location || '').toLowerCase() === 'saudi' ? 'Pembayaran KES' : '-');
-      const recipientAccNo = p?.RecipientAccount?.account_number || '';
-      const sender = p?.sender_account_name || '-';
-      const senderLabel = senderAccNo
-        ? `${sender} | ${bankSender} ${senderAccNo}`
-        : `${sender} | ${bankSender}`;
-      const recipientLabel = recipientAccNo
-        ? `${bankRecipient} ${recipientAccNo}`
-        : bankRecipient;
+      const senderName = p?.sender_account_name || '-';
+      const senderBank = p?.Bank?.name || p?.bank_name || '-';
+      const senderAccNo = p?.sender_account_number || p?.account_number || '-';
+      const recipientName = p?.RecipientAccount?.name || (String(p?.payment_location || '').toLowerCase() === 'saudi' ? 'Pembayaran KES' : '-');
+      const recipientBank = p?.RecipientAccount?.bank_name || '-';
+      const recipientAccNo = p?.RecipientAccount?.account_number || '-';
+      const senderLabel = triplet(senderName, senderBank, senderAccNo);
+      const recipientLabel = triplet(recipientName, recipientBank, recipientAccNo);
       lines.push({
         info1: `${dt} | ${method} | ${status}`,
         info2: `${formatMoneyForExport(amt, currency)}\nPengirim: ${senderLabel}`,
@@ -895,6 +898,22 @@ function formatBusFinalityForListPdf(inv, rules) {
   const deficit = busFinalityDeficitPacks(visaPacks, rules);
   if (deficit <= 0) return `Visa ${visaPacks} pk · min ${minPack} · Rp 0`;
   return `Kurang ${deficit} pk × Rp ${Math.round(perPack).toLocaleString('id-ID')} = Rp ${Math.round(penalty).toLocaleString('id-ID')}`;
+}
+
+function getBusFinalityNumbersForListPdf(inv, rules) {
+  const o = inv && inv.Order;
+  if (!o) return null;
+  const opt = String(o.bus_service_option || '');
+  if (o.waive_bus_penalty || opt === 'hiace' || opt === 'visa_only' || opt !== 'finality') return null;
+  const items = o.OrderItems || [];
+  const visaPacks = items
+    .filter((i) => String(i.type || '').toLowerCase() === String(ORDER_ITEM_TYPE.VISA).toLowerCase())
+    .reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+  const perPack = parseFloat(rules?.bus_penalty_idr) || 500000;
+  const penalty = parseFloat(o.penalty_amount) || 0;
+  const deficit = busFinalityDeficitPacks(visaPacks, rules);
+  if (deficit <= 0 || perPack <= 0 || penalty <= 0) return null;
+  return { deficit, perPack, penalty };
 }
 
 function buildPdfOrderItemsDetailed(inv) {
@@ -946,6 +965,8 @@ function buildPdfOrderItemsDetailed(inv) {
       }
     } else {
       grouped.set(key, {
+        type,
+        hotelLocation: String(location || '').toLowerCase(),
         itemLabel,
         qty,
         unit,
@@ -959,25 +980,48 @@ function buildPdfOrderItemsDetailed(inv) {
       });
     }
   }
-  return Array.from(grouped.values()).map((entry) => {
-    if (entry.roomTypeQty instanceof Map && entry.roomTypeQty.size > 0) {
-      // Harga per pack: tidak menampilkan rincian tipe kamar di PDF (bukan konsep kamar terpisah).
-      if (entry.unit === 'pack') {
-        entry.roomTypeBreakdownLine = '';
-      } else {
-        const unitWord = 'room';
-        const entries = Array.from(entry.roomTypeQty.entries());
-        const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
-        const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
-        entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
+  const sorted = Array.from(grouped.values())
+    .map((entry) => {
+      if (entry.roomTypeQty instanceof Map && entry.roomTypeQty.size > 0) {
+        // Harga per pack: tidak menampilkan rincian tipe kamar di PDF (bukan konsep kamar terpisah).
+        if (entry.unit === 'pack') {
+          entry.roomTypeBreakdownLine = '';
+        } else {
+          const unitWord = 'room';
+          const entries = Array.from(entry.roomTypeQty.entries());
+          const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
+          const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
+          entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
+        }
+        delete entry.roomTypeQty;
       }
+      if (entry.qty > 0 && entry.subtotal != null && Number.isFinite(Number(entry.subtotal))) {
+        entry.displayUnitPrice = Number(entry.subtotal) / entry.qty;
+        const n = Math.max(1, parseInt(entry.nights, 10) || 1);
+        entry.unitPrice = entry.displayUnitPrice / n;
+      }
+      return entry;
+    })
+    .sort((a, b) => {
+      const rank = (it) => {
+        const t = String(it?.type || '').toLowerCase();
+        if (t === ORDER_ITEM_TYPE.HOTEL) return String(it?.hotelLocation || '') === 'madinah' ? 0 : 1;
+        if (t === ORDER_ITEM_TYPE.VISA) return 2;
+        if (t === ORDER_ITEM_TYPE.BUS) return 3;
+        if (t === ORDER_ITEM_TYPE.TICKET) return 4;
+        if (t === ORDER_ITEM_TYPE.HANDLING) return 5;
+        if (t === ORDER_ITEM_TYPE.PACKAGE) return 6;
+        if (t === ORDER_ITEM_TYPE.SISKOPATUH) return 7;
+        return 8;
+      };
+      return rank(a) - rank(b);
+    });
+  return sorted.map((entry) => {
+    if (entry.roomTypeQty instanceof Map && entry.roomTypeQty.size > 0) {
       delete entry.roomTypeQty;
     }
-    if (entry.qty > 0 && entry.subtotal != null && Number.isFinite(Number(entry.subtotal))) {
-      entry.displayUnitPrice = Number(entry.subtotal) / entry.qty;
-      const n = Math.max(1, parseInt(entry.nights, 10) || 1);
-      entry.unitPrice = entry.displayUnitPrice / n;
-    }
+    delete entry.type;
+    delete entry.hotelLocation;
     return entry;
   });
 }
@@ -1350,6 +1394,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const historyRows = Math.max(1, Math.min(paymentHistory.length, 4));
       const finRules = (inv.branch_id && rulesByBranchForPdf.get(inv.branch_id)) || rulesGlobalForPdf;
       const finLine = formatBusFinalityForListPdf(inv, finRules);
+      const finNums = getBusFinalityNumbersForListPdf(inv, finRules);
       const itemSource = items.length ? items : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
       const showItems = [{ __isFinalityRow: true, itemLabel: `Bus/finality: ${finLine}` }, ...itemSource].slice(0, 6);
       const itemRows = Math.max(1, showItems.length);
@@ -1406,12 +1451,24 @@ const exportListPdf = asyncHandler(async (req, res) => {
           doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.1).text(String(it.itemLabel || '-').slice(0, 140), itemX + 2, ry + 2, {
             width: subItemW - 4, height: 20, lineBreak: false
           });
-          doc.fillColor('#475569').font('Helvetica').fontSize(5.8).text('-', xUnit + 2, ry + 2, {
-            width: unitColW - 4, height: 10, lineBreak: false
-          });
-          doc.fillColor('#475569').font('Helvetica').fontSize(5.8).text('-', xSubtotal + 2, ry + 2, {
-            width: subtotalColW - 4, height: 10, lineBreak: false
-          });
+          if (finNums) {
+            doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(`Rp ${Math.round(finNums.perPack).toLocaleString('id-ID')} / pk`, xUnit + 2, ry + 2, {
+              width: unitColW - 4, height: 10, lineBreak: false
+            });
+            doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(
+              `${finNums.deficit} pk × Rp ${Math.round(finNums.perPack).toLocaleString('id-ID')} = Rp ${Math.round(finNums.penalty).toLocaleString('id-ID')}`,
+              xSubtotal + 2,
+              ry + 2,
+              { width: subtotalColW - 4, height: 14, lineBreak: false }
+            );
+          } else {
+            doc.fillColor('#475569').font('Helvetica').fontSize(5.8).text('-', xUnit + 2, ry + 2, {
+              width: unitColW - 4, height: 10, lineBreak: false
+            });
+            doc.fillColor('#475569').font('Helvetica').fontSize(5.8).text('-', xSubtotal + 2, ry + 2, {
+              width: subtotalColW - 4, height: 10, lineBreak: false
+            });
+          }
           return;
         }
         const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
