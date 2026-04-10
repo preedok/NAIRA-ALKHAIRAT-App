@@ -501,12 +501,27 @@ async function loadInvoiceListRelations(data) {
  * @returns {{ where: object, orderInclude: object, orderBy: any[] }}
  */
 async function buildInvoiceListFilters(req) {
-  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, date_from, date_to, due_status, has_handling, sort_by, sort_order } = req.query;
+  const { status, branch_id, provinsi_id, wilayah_id, owner_id, owner_type, order_status, invoice_number, date_from, date_to, due_status, has_handling, sort_by, sort_order } = req.query;
   const where = {};
   if (status) where.status = status;
   const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
   if (Object.keys(branchFilter).length) Object.assign(where, branchFilter);
   if (owner_id) where.owner_id = owner_id;
+  if (owner_type === 'mou' || owner_type === 'non_mou') {
+    const isMou = owner_type === 'mou';
+    const ownerRows = await OwnerProfile.findAll({
+      where: { is_mou_owner: isMou },
+      attributes: ['user_id'],
+      raw: true
+    });
+    const ownerIds = [...new Set((ownerRows || []).map((r) => r.user_id).filter(Boolean))];
+    if (where.owner_id) {
+      const current = String(where.owner_id);
+      where.owner_id = ownerIds.includes(current) ? current : { [Op.in]: [] };
+    } else {
+      where.owner_id = ownerIds.length ? { [Op.in]: ownerIds } : { [Op.in]: [] };
+    }
+  }
   if (invoice_number) where.invoice_number = { [Op.iLike]: `%${String(invoice_number).trim()}%` };
   if (has_handling === true || has_handling === 'true' || has_handling === '1') {
     const handlingRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HANDLING }, attributes: ['order_id'], raw: true });
@@ -742,8 +757,8 @@ function buildOrderItemExportPriceTexts(inv) {
 function orderItemQtyUnitForExport(item) {
   const t = String(item?.type || '').toLowerCase();
   if (t === ORDER_ITEM_TYPE.HOTEL) {
-    const mode = String(item?.Product?.meta?.room_pricing_mode || '').toLowerCase();
-    return mode === 'per_person' ? 'pack' : 'room';
+    const mode = String(item?.meta?.room_pricing_mode || item?.meta?.pricing_mode || item?.Product?.meta?.room_pricing_mode || item?.Product?.meta?.pricing_mode || '').toLowerCase();
+    return mode === 'per_person' || mode === 'per_pack' ? 'pack' : 'room';
   }
   return 'qty';
 }
@@ -1024,6 +1039,8 @@ function buildInvoiceListExportFilterSummary(req, data = []) {
   if (q.provinsi_id) parts.push(`Provinsi: ${provinsiNames.join(', ') || q.provinsi_id}`);
   if (q.city || q.kota) parts.push(`Kota: ${String(q.city || q.kota)}`);
   if (q.owner_id) parts.push(`Owner: ${ownerNames.join(', ') || q.owner_id}`);
+  if (q.owner_type === 'mou') parts.push('Tipe owner: MOU');
+  if (q.owner_type === 'non_mou') parts.push('Tipe owner: Non-MOU');
   if (q.invoice_number) parts.push(`No. Invoice: ${q.invoice_number}`);
   if (q.date_from || q.date_to) parts.push(`Periode: ${q.date_from || '…'} s/d ${q.date_to || '…'}`);
   if (q.due_status) parts.push(`Jatuh tempo DP: ${q.due_status}`);
@@ -1805,12 +1822,27 @@ const listDraftOrders = asyncHandler(async (req, res) => {
  * Same query params as list (no page/limit). Returns aggregates for Order & Invoice stats.
  */
 const getSummary = asyncHandler(async (req, res) => {
-  const { status, branch_id, provinsi_id, wilayah_id, owner_id, order_status, invoice_number, date_from, date_to, due_status } = req.query;
+  const { status, branch_id, provinsi_id, wilayah_id, owner_id, owner_type, order_status, invoice_number, date_from, date_to, due_status } = req.query;
   const where = {};
   if (status) where.status = status;
   const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
   if (Object.keys(branchFilter).length) Object.assign(where, branchFilter);
   if (owner_id) where.owner_id = owner_id;
+  if (owner_type === 'mou' || owner_type === 'non_mou') {
+    const isMou = owner_type === 'mou';
+    const ownerRows = await OwnerProfile.findAll({
+      where: { is_mou_owner: isMou },
+      attributes: ['user_id'],
+      raw: true
+    });
+    const ownerIds = [...new Set((ownerRows || []).map((r) => r.user_id).filter(Boolean))];
+    if (where.owner_id) {
+      const current = String(where.owner_id);
+      where.owner_id = ownerIds.includes(current) ? current : { [Op.in]: [] };
+    } else {
+      where.owner_id = ownerIds.length ? { [Op.in]: ownerIds } : { [Op.in]: [] };
+    }
+  }
   if (invoice_number) where.invoice_number = { [Op.iLike]: `%${String(invoice_number).trim()}%` };
   if (date_from || date_to) {
     where.issued_at = {};

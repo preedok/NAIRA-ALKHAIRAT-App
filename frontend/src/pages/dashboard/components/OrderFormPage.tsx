@@ -75,7 +75,7 @@ interface ProductOption {
   is_package?:boolean; price_general?:number|null;
   price_general_idr?:number|null; price_general_sar?:number|null; price_general_usd?:number|null;
   price_branch?:number|null; price_owner?:number|null;
-  currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';room_pricing_mode?:'per_room'|'per_person';owner_meal_mode?:Partial<Record<HotelPriceMode,'with_meal'|'fullboard'>>;route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
+  currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';room_pricing_mode?:'per_room'|'per_person'|'per_pack';owner_meal_mode?:Partial<Record<HotelPriceMode,'with_meal'|'fullboard'>>;route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
   room_breakdown?:Record<string,{ price: number; quantity?: number }>; prices_by_room?:Record<string,{ price: number; quantity?: number }>;
   /** Backend: nilai suplemen makan dalam mata uang referensi produk (bukan selalu IDR meski namanya _idr). */
   meal_price_idr?: number | null;
@@ -418,7 +418,7 @@ const OrderFormPage: React.FC = () => {
       const draftUnit = ((d as any).unit_price != null ? Number((d as any).unit_price) : NaN);
       const fallbackUnit = Number.isFinite(draftUnit) ? draftUnit : d.unit_price_idr;
       const draftHotelProd = d.type === 'hotel' ? products.find((p) => p.id === d.product_id) : undefined;
-      const draftPerPack = !!(draftHotelProd && hotelRoomPricingMode(draftHotelProd) === 'per_person');
+      const draftPerPack = !!(draftHotelProd && hotelRoomPricingMode(draftHotelProd) === 'per_pack');
       const room_breakdown=d.room_breakdown?.map(l=>{ const line=(l as { meal_unit_price?: number }); const rtLine=(draftPerPack?('' as RoomTypeId):((l.room_type||'quad') as RoomTypeId)); return { id:l.id||`rl-${uid()}`, room_type:rtLine, quantity:l.quantity||1, unit_price:l.unit_price||fallbackUnit, with_meal:!!l.with_meal, ...(typeof line.meal_unit_price==='number'?{ meal_unit_price: line.meal_unit_price }:{}) }; });
       return {
         id:d.id,
@@ -469,7 +469,7 @@ const OrderFormPage: React.FC = () => {
           const checkOut=(firstMeta.check_out??getVal(grp[0],'check_out')) as string|undefined;
           const hotelCur=currencyFromBackend||itemCur(grp[0]);
           const hotelProd = products.find((p) => p.id === productRefId);
-          const perPackHotel = !!(hotelProd && hotelRoomPricingMode(hotelProd) === 'per_person');
+          const perPackHotel = !!(hotelProd && hotelRoomPricingMode(hotelProd) === 'per_pack');
           const hotelMeta: Record<string, unknown> = {};
           if (firstMeta.hotel_location) hotelMeta.hotel_location = firstMeta.hotel_location;
           if (firstMeta.hotel_stay_date_mode) hotelMeta.hotel_stay_date_mode = firstMeta.hotel_stay_date_mode;
@@ -798,21 +798,23 @@ const OrderFormPage: React.FC = () => {
     const raw=(p.meta?.meal_price as number)??0; const cur=(p.currency||'IDR').toUpperCase(); return cur==='SAR'?raw:cur==='USD'?raw*u2iR/s2i:raw/s2i;
   };
   const roomCap = (rt: RoomTypeId) => ROOM_TYPES.find((t) => t.id === rt)?.cap ?? 0;
-  const hotelRoomPricingMode = (p: ProductOption | undefined): 'per_room' | 'per_person' =>
-    p?.meta?.room_pricing_mode === 'per_person' ? 'per_person' : 'per_room';
+  const hotelRoomPricingMode = (p: ProductOption | undefined): 'per_room' | 'per_pack' => {
+    const mode = String(p?.meta?.room_pricing_mode || '').toLowerCase();
+    return mode === 'per_person' || mode === 'per_pack' ? 'per_pack' : 'per_room';
+  };
   const hotelRoomPricingLabel = (p: ProductOption | undefined): string =>
-    hotelRoomPricingMode(p) === 'per_person' ? 'Per pack' : 'Per room';
+    hotelRoomPricingMode(p) === 'per_pack' ? 'Per pack' : 'Per room';
   /** Per pack: tipe kamar tidak dipilih user; lookup harga pakai acuan grid produk jika baris kosong. */
   const effectiveHotelLineRoomType = (r: OrderItemRow, l: HotelRoomLine): RoomTypeId | '' => {
     if (l.room_type) return l.room_type as RoomTypeId;
     const prod = byType('hotel').find((p) => p.id === r.product_id);
-    if (prod && hotelRoomPricingMode(prod) === 'per_person') return defaultRoomTypeForHotelGrid(prod, r);
+    if (prod && hotelRoomPricingMode(prod) === 'per_pack') return defaultRoomTypeForHotelGrid(prod, r);
     return '';
   };
   const hotelLineQuantityValid = (r: OrderItemRow, l: HotelRoomLine): boolean => {
     if (l.quantity <= 0) return false;
     const prod = byType('hotel').find((p) => p.id === r.product_id);
-    if (prod && hotelRoomPricingMode(prod) === 'per_person') return true;
+    if (prod && hotelRoomPricingMode(prod) === 'per_pack') return true;
     return !!l.room_type;
   };
   // Catatan: grid bulanan backend untuk mode per_person sudah bernilai "per pack", jadi jangan dikali kapasitas kamar.
@@ -876,7 +878,7 @@ const OrderFormPage: React.FC = () => {
       if (r.id !== rowId || r.type !== 'hotel') return r;
       const prod = products.find((p) => p.type === 'hotel' && p.id === r.product_id);
       if (!prod) return r;
-      if (hotelRoomPricingMode(prod) === 'per_person') return r;
+      if (hotelRoomPricingMode(prod) === 'per_pack') return r;
 
       const rb = (prod.room_breakdown ?? prod.prices_by_room ?? {}) as Record<string, any>;
       const productRoomTypes = Object.keys(rb).filter(Boolean) as RoomTypeId[];
@@ -1045,7 +1047,7 @@ const OrderFormPage: React.FC = () => {
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod,next.type);
         }
         if (next.type === 'hotel' && prod && upd.product_id !== r.product_id) {
-          if (hotelRoomPricingMode(prod) === 'per_person') {
+          if (hotelRoomPricingMode(prod) === 'per_pack') {
             const fb = isFullboardHotelForRow(prod, next);
             next.meta = { ...(next.meta || {}), hotel_room_input_mode: undefined, hotel_pax: undefined };
             next.room_breakdown = [{ id: `rl-${uid()}`, room_type: '', quantity: 0, unit_price: 0, with_meal: fb, meal_unit_price: 0 }];
@@ -1055,7 +1057,7 @@ const OrderFormPage: React.FC = () => {
             next.room_breakdown = [{ id: `rl-${uid()}`, room_type: '', quantity: 0, unit_price: 0, with_meal: withMealDefault }];
           }
         } else if (next.type === 'hotel' && !(next.room_breakdown?.length)) {
-          if (hotelRoomPricingMode(prod) === 'per_person') {
+          if (hotelRoomPricingMode(prod) === 'per_pack') {
             const fb = isFullboardHotelForRow(prod, next);
             next.room_breakdown = [{ id: `rl-${uid()}`, room_type: '', quantity: 0, unit_price: 0, with_meal: fb, meal_unit_price: 0 }];
           } else {
@@ -1204,7 +1206,7 @@ const OrderFormPage: React.FC = () => {
   const rowPax=(r:OrderItemRow)=>{
     if(r.type==='hotel'&&r.room_breakdown?.length){
       const prod=byType('hotel').find(p=>p.id===r.product_id);
-      const perPack=prod&&hotelRoomPricingMode(prod)==='per_person';
+      const perPack=prod&&hotelRoomPricingMode(prod)==='per_pack';
       return r.room_breakdown.reduce((s,l)=>{
         const q=Math.max(0,l.quantity);
         if(perPack) return s+q;
@@ -1827,7 +1829,7 @@ const OrderFormPage: React.FC = () => {
                   {items.map((row, index)=>{
                     const tc=typeOf(row.type);
                     const hProd=row.type==='hotel'?byType('hotel').find(p=>p.id===row.product_id):undefined;
-                    const isPerPackHotel = !!(hProd && hotelRoomPricingMode(hProd) === 'per_person');
+                    const isPerPackHotel = !!(hProd && hotelRoomPricingMode(hProd) === 'per_pack');
                     const fullboardRow = !!(hProd && isFullboardHotelForRow(hProd, row));
                     return (
                       <div

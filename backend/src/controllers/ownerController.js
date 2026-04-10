@@ -594,9 +594,10 @@ const getById = asyncHandler(async (req, res) => {
 
 /** Build where clause for owner list/stats (shared by list and getStats) */
 async function buildOwnerWhere(req) {
-  const { status, branch_id, wilayah_id: queryWilayahId } = req.query;
+  const { status, branch_id, wilayah_id: queryWilayahId, is_mou_owner } = req.query;
   const where = {};
   if (status) where.status = status;
+  if (is_mou_owner === 'true' || is_mou_owner === 'false') where.is_mou_owner = is_mou_owner === 'true';
 
   const isKoordinator = isKoordinatorRole(req.user.role);
   const userWilayahId = req.user.wilayah_id;

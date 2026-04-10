@@ -20,6 +20,8 @@ export type PaymentProofItem = {
   account_number?: string;
   sender_account_name?: string;
   sender_account_number?: string;
+  transfer_date?: string | null;
+  notes?: string | null;
   created_at?: string | null;
   proof_file_url?: string;
   proof_file_name?: string;
@@ -52,6 +54,12 @@ const formatDate = (d: string | null | undefined) =>
 
 const formatTime = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+
+const transferTimeFromNotes = (notes: string | null | undefined): string => {
+  if (!notes) return '';
+  const m = String(notes).match(/jam\s+transfer(?:\s+pada\s+bukti)?\s*:\s*([0-2]\d:[0-5]\d(?::[0-5]\d)?)/i);
+  return m?.[1] || '';
+};
 
 /** Alokasi saldo akun ke invoice (bukan file bukti transfer). */
 export type BalanceAllocationItem = {
@@ -147,7 +155,7 @@ export function PaymentProofCell({
             <th className={`${cellBase} text-left font-semibold`}>Tipe</th>
             <th className={`${cellBase} text-left font-semibold`}>Nominal</th>
             <th className={`${cellBase} text-left font-semibold`}>Rekening / keterangan</th>
-            <th className={`${cellBase} text-left font-semibold`}>Diunggah</th>
+            <th className={`${cellBase} text-left font-semibold`}>Transfer</th>
             <th className={`${cellBase} text-left font-semibold`}>Status</th>
           </tr>
         </thead>
@@ -210,10 +218,10 @@ export function PaymentProofCell({
                 </td>
                 <td className={`${cellBase} text-slate-700 [overflow-wrap:anywhere]`}>{rekLines}</td>
                 <td className={`${cellBase} text-slate-600 text-[10px] leading-snug whitespace-normal`}>
-                  {p.created_at ? (
+                  {p.transfer_date ? (
                     <div className="space-y-0.5">
-                      <div>{formatDate(p.created_at)}</div>
-                      <div className="text-slate-500">{formatTime(p.created_at)}</div>
+                      <div>{formatDate(p.transfer_date)}</div>
+                      <div className="text-slate-500">{transferTimeFromNotes(p.notes) || formatTime(p.transfer_date) || '-'}</div>
                     </div>
                   ) : (
                     '–'

@@ -61,6 +61,19 @@ const PER_STATUS_ALWAYS_SHOW = ['tentative', 'partial_paid', 'paid', 'processing
 /** Label trip type bus: pergi saja / pulang saja / pulang pergi */
 const BUS_TRIP_LABELS: Record<string, string> = { one_way: 'Pergi saja', return_only: 'Pulang saja', round_trip: 'Pulang pergi' };
 
+function isPackPricingHotelItem(item: any): boolean {
+  const meta = item?.meta && typeof item.meta === 'object' ? item.meta : {};
+  const modeMeta = String(meta.room_pricing_mode || meta.pricing_mode || '').toLowerCase();
+  const modeProduct = String(item?.Product?.meta?.room_pricing_mode || item?.Product?.meta?.pricing_mode || '').toLowerCase();
+  return modeMeta === 'per_person' || modeMeta === 'per_pack' || modeProduct === 'per_person' || modeProduct === 'per_pack';
+}
+
+function transferTimeFromProofNotes(notes: string | null | undefined): string {
+  if (!notes) return '';
+  const m = String(notes).match(/jam\s+transfer(?:\s+pada\s+bukti)?\s*:\s*([0-2]\d:[0-5]\d(?::[0-5]\d)?)/i);
+  return m?.[1] || '';
+}
+
 /** Base URL untuk file uploads (supaya foto bukti bayar tampil; pakai origin saat proxy) */
 const UPLOAD_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -273,6 +286,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [owners, setOwners] = useState<{ id: string; user_id?: string; User?: { id: string; name: string; company_name?: string } }[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterOwnerId, setFilterOwnerId] = useState<string>('');
+  const [filterOwnerType, setFilterOwnerType] = useState<string>('');
   const [filterInvoiceNumber, setFilterInvoiceNumber] = useState<string>(() => searchParams.get('invoice_number') || '');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
@@ -415,9 +429,11 @@ const OrdersInvoicesPage: React.FC = () => {
     const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
     if (!canListOwners) return; // GET /owners untuk admin, accounting, invoice Saudi, koordinator wilayah
     try {
-      const params: { branch_id?: string; wilayah_id?: string; limit?: number } = { limit: 500 };
+      const params: { branch_id?: string; wilayah_id?: string; limit?: number; is_mou_owner?: 'true' | 'false' } = { limit: 500 };
       if (branchId) params.branch_id = branchId;
       if (user?.role === 'invoice_koordinator' && user?.wilayah_id) params.wilayah_id = user.wilayah_id;
+      if (filterOwnerType === 'mou') params.is_mou_owner = 'true';
+      if (filterOwnerType === 'non_mou') params.is_mou_owner = 'false';
       const res = await ownersApi.list(params);
       if (res.data.success) setOwners(res.data.data || []);
     } catch {
@@ -432,6 +448,7 @@ const OrdersInvoicesPage: React.FC = () => {
     if (provinsiId) params.provinsi_id = provinsiId;
     if (filterStatus) params.status = filterStatus;
     if (filterOwnerId) params.owner_id = filterOwnerId;
+    if (filterOwnerType) params.owner_type = filterOwnerType;
     if (filterInvoiceNumber.trim()) params.invoice_number = filterInvoiceNumber.trim();
     if (filterDateFrom) params.date_from = filterDateFrom;
     if (filterDateTo) params.date_to = filterDateTo;
@@ -454,6 +471,7 @@ const OrdersInvoicesPage: React.FC = () => {
       if (provinsiId) params.provinsi_id = provinsiId;
       if (filterStatus) params.status = filterStatus;
       if (filterOwnerId) params.owner_id = filterOwnerId;
+      if (filterOwnerType) params.owner_type = filterOwnerType;
       if (filterInvoiceNumber.trim()) params.invoice_number = filterInvoiceNumber.trim();
       if (filterDateFrom) params.date_from = filterDateFrom;
       if (filterDateTo) params.date_to = filterDateTo;  
@@ -805,15 +823,15 @@ const OrdersInvoicesPage: React.FC = () => {
   useEffect(() => {
     const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
     if (canListOwners) fetchOwners();
-  }, [isAdminPusat, isAccounting, isInvoiceSaudi, user?.role, user?.wilayah_id, branchId]);
+  }, [isAdminPusat, isAccounting, isInvoiceSaudi, user?.role, user?.wilayah_id, branchId, filterOwnerType]);
 
   useEffect(() => {
     setPage(1);
-  }, [branchId, wilayahId, provinsiId, limit, filterStatus, filterOwnerId, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus, sortBy, sortOrder]);
+  }, [branchId, wilayahId, provinsiId, limit, filterStatus, filterOwnerId, filterOwnerType, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchInvoices();
-  }, [branchId, wilayahId, provinsiId, isAdminPusat, isAccounting, page, limit, filterStatus, filterOwnerId, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus, sortBy, sortOrder]);
+  }, [branchId, wilayahId, provinsiId, isAdminPusat, isAccounting, page, limit, filterStatus, filterOwnerId, filterOwnerType, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus, sortBy, sortOrder]);
 
   useEffect(() => {
     const state = location.state as { refreshList?: boolean } | undefined;
@@ -848,7 +866,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
   useEffect(() => {
     fetchSummary();
-  }, [branchId, wilayahId, provinsiId, filterStatus, filterOwnerId, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus]);
+  }, [branchId, wilayahId, provinsiId, filterStatus, filterOwnerId, filterOwnerType, filterInvoiceNumber, filterDateFrom, filterDateTo, filterDueStatus]);
 
   useEffect(() => {
     if (user?.role === 'owner_mou' || user?.role === 'owner_non_mou') fetchOwnerBalance();
@@ -1732,6 +1750,7 @@ const OrdersInvoicesPage: React.FC = () => {
     setProvinsiId('');
     setFilterStatus('');
     setFilterOwnerId('');
+    setFilterOwnerType('');
     setFilterInvoiceNumber('');
     setFilterDateFrom('');
     setFilterDateTo('');
@@ -1741,7 +1760,7 @@ const OrdersInvoicesPage: React.FC = () => {
     setPage(1);
   };
 
-  const hasActiveFilters = !!(branchId || wilayahId || provinsiId || filterStatus || filterOwnerId || filterInvoiceNumber.trim() || filterDateFrom || filterDateTo || filterDueStatus || sortBy !== 'created_at' || sortOrder !== 'desc');
+  const hasActiveFilters = !!(branchId || wilayahId || provinsiId || filterStatus || filterOwnerId || filterOwnerType || filterInvoiceNumber.trim() || filterDateFrom || filterDateTo || filterDueStatus || sortBy !== 'created_at' || sortOrder !== 'desc');
 
   /** Opsi filter Owner: gabung dari API + unique owner di data invoice agar semua owner yang punya invoice bisa dipilih dan filter tampil benar */
   const ownerFilterOptions = useMemo(() => {
@@ -1797,8 +1816,6 @@ const OrdersInvoicesPage: React.FC = () => {
   const invoiceTableColumns: TableColumn[] = [
     { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
     { id: 'owner', label: 'Owner', align: 'left' },
-    { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
-    { id: 'company_wilayah', label: 'Perusahaan', align: 'left' },
     { id: 'pic_name', label: 'PIC', align: 'left' },
     { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' },
     { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
@@ -1857,6 +1874,7 @@ const OrdersInvoicesPage: React.FC = () => {
             showStatus
             statusType="invoice"
             showOwner
+            showOwnerType
             showSearch2
             search2Placeholder="No. Invoice..."
             search2={filterInvoiceNumber}
@@ -1870,6 +1888,7 @@ const OrdersInvoicesPage: React.FC = () => {
             branchId={branchId}
             status={filterStatus}
             ownerId={filterOwnerId}
+            ownerType={filterOwnerType}
             dateFrom={filterDateFrom}
             dateTo={filterDateTo}
             dueStatus={filterDueStatus}
@@ -1888,6 +1907,7 @@ const OrdersInvoicesPage: React.FC = () => {
             onBranchChange={setBranchId}
             onStatusChange={setFilterStatus}
             onOwnerChange={setFilterOwnerId}
+            onOwnerTypeChange={setFilterOwnerType}
             onDateFromChange={setFilterDateFrom}
             onDateToChange={setFilterDateTo}
             onDueStatusChange={setFilterDueStatus}
@@ -1966,8 +1986,6 @@ const OrdersInvoicesPage: React.FC = () => {
             const statModalColumns: TableColumn[] = [
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
-              { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
-              { id: 'company', label: 'Perusahaan', align: 'left' },
               { id: 'pic', label: 'PIC', align: 'left' },
               { id: 'total', label: 'Total', align: 'right' },
               { id: 'paid', label: 'Dibayar', align: 'right' },
@@ -2004,9 +2022,13 @@ const OrdersInvoicesPage: React.FC = () => {
                           return (
                             <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
                               <td className="py-2 px-4 font-mono text-sm"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan compact /></td>
-                              <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</td>
-                              <td className="py-2 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></td>
-                              <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
+                              <td className="py-2 px-4 text-slate-700 text-sm align-top">
+                                <div className="space-y-1">
+                                  <div className="font-medium">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</div>
+                                  <div><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></div>
+                                  <div className="text-slate-600">{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div>
+                                </div>
+                              </td>
                               <td className="py-2 px-4 text-slate-700 text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
                               <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
@@ -2042,8 +2064,6 @@ const OrdersInvoicesPage: React.FC = () => {
             const statusListModalColumns: TableColumn[] = [
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
-              { id: 'owner_type', label: 'Tipe Owner', align: 'left' },
-              { id: 'company', label: 'Perusahaan', align: 'left' },
               { id: 'pic', label: 'PIC', align: 'left' },
               { id: 'total', label: 'Total', align: 'right' },
               { id: 'paid', label: 'Dibayar', align: 'right' },
@@ -2074,9 +2094,13 @@ const OrdersInvoicesPage: React.FC = () => {
                           return (
                             <tr key={inv.id} className="border-b border-slate-100 hover:bg-slate-50/80">
                               <td className="py-2 px-4 font-mono text-sm"><InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan compact /></td>
-                              <td className="py-2 px-4 text-slate-700 text-sm">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</td>
-                              <td className="py-2 px-4"><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></td>
-                              <td className="py-2 px-4 text-slate-600 text-sm max-w-[180px] truncate"><div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div><div className="text-xs text-slate-400">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div></td>
+                              <td className="py-2 px-4 text-slate-700 text-sm align-top">
+                                <div className="space-y-1">
+                                  <div className="font-medium">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</div>
+                                  <div><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>{inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}</span></div>
+                                  <div className="text-slate-600">{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div>
+                                </div>
+                              </td>
                               <td className="py-2 px-4 text-slate-700 text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
                               <td className="py-2 px-4 text-right text-sm"><NominalDisplay amount={totalTriple.idr} currency="IDR" /></td>
                               <td className="py-2 px-4 text-right text-emerald-600 text-sm"><NominalDisplay amount={paid} currency="IDR" /></td>
@@ -2213,15 +2237,16 @@ const OrdersInvoicesPage: React.FC = () => {
                     <td className="py-3 px-4 font-mono font-semibold text-slate-900 align-top">
                       <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} showBaruAndPerubahan showCancellationNote />
                     </td>
-                    <td className="py-3 px-4 text-slate-700 align-top">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</td>
-                    <td className="py-3 px-4 align-top">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-                        {inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}
-                      </span>
-                    </td>
                     <td className="py-3 px-4 text-slate-700 align-top text-sm">
-                      <div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div>
-                      <div className="text-xs text-slate-600 mt-0.5">{[inv.Branch?.Provinsi?.Wilayah?.name, inv.Branch?.Provinsi?.name, inv.Branch?.city].filter(Boolean).join(' · ') || '–'}</div>
+                      <div className="space-y-1">
+                        <div className="font-medium">{inv.User?.name || inv.User?.company_name || inv.owner_name_manual || inv.Order?.owner_name_manual || '-'}</div>
+                        <div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${inv.owner_is_mou ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                            {inv.owner_is_mou ? 'Owner MOU' : 'Non-MOU'}
+                          </span>
+                        </div>
+                        <div>{inv.User?.company_name || inv.User?.name || inv.owner_name_manual || inv.Order?.owner_name_manual || inv.Branch?.name || '–'}</div>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-slate-700 align-top text-sm">{inv.pic_name || inv.Order?.pic_name || '–'}</td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900 align-top">
@@ -3415,6 +3440,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                 const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
                                 const rt = (m.room_type || 'quad').toString().toLowerCase();
                                 const q = it2.quantity != null ? Number(it2.quantity) : 1;
+                                if (isPackPricingHotelItem(it2)) return `Pack × ${q}`;
                                 return `${ROOM_LABELS[rt] || rt} × ${q}`;
                               });
                               const descLine = `Check-in: ${ci}, Check-out: ${co}.${nights ? ` ${nights} malam.` : ''} ${roomParts.join(', ')}.`;
@@ -3484,7 +3510,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               const nights = meta.nights != null ? Number(meta.nights) : 0;
                               const qty = item.quantity != null ? Number(item.quantity) : 1;
                               const meal = meta.meal || meta.with_meal ? 'Ya' : 'Tidak';
-                              const packByPax = String(meta.hotel_pack_input_mode || '') === 'pax';
+                              const packByPax = String(meta.hotel_pack_input_mode || '') === 'pax' || isPackPricingHotelItem(item);
                               const roomType = meta.room_type ? String(meta.room_type) : '';
                               const cap = ROOM_CAP[roomType.toLowerCase()] ?? 1;
                               const totalOrang = qty * cap;
@@ -4052,9 +4078,9 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <span className="text-xs text-slate-600">oleh: <strong className="text-slate-800">{(p as any).VerifiedBy.name}</strong></span>
                                   )}
                                 </span>
-                                {p.created_at && (
+                                {(p.transfer_date || p.created_at) && (
                                   <span className="text-xs text-slate-500">
-                                    Tanggal upload bukti: {formatDate(p.created_at)} · Jam: {new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                    Tanggal transfer: {formatDate((p as any).transfer_date || p.created_at)} · Jam: {transferTimeFromProofNotes((p as any).notes) || new Date((p as any).transfer_date || p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 )}
                                 {(p as any).proof_file_name && (
@@ -4283,7 +4309,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                   {isHotel && (
                                     <p className="text-xs text-slate-500">
                                       {(() => {
-                                        const packByPaxOnly = group.items.length > 0 && group.items.every((it: any) => String(it?.meta?.hotel_pack_input_mode || '') === 'pax');
+                                        const packByPaxOnly = group.items.length > 0 && group.items.every((it: any) => String(it?.meta?.hotel_pack_input_mode || '') === 'pax' || isPackPricingHotelItem(it));
                                         if (packByPaxOnly) {
                                           const totalPack = group.items.reduce((s: number, it: any) => s + (Number(it?.quantity) || 0), 0);
                                           return `${totalPack} pack`;
@@ -4382,10 +4408,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                             <div><dt className="text-slate-500">Pemesan (Owner)</dt><dd className="font-medium text-slate-900">{ownerName}</dd></div>
                                             {isHotel && (
                                               <>
-                                                {String(item?.meta?.hotel_pack_input_mode || '') !== 'pax' && (
+                                                {String(item?.meta?.hotel_pack_input_mode || '') !== 'pax' && !isPackPricingHotelItem(item) && (
                                                   <div><dt className="text-slate-500">Tipe Kamar</dt><dd className="font-medium text-slate-900">{ROOM_TYPE_LABELS[(item.meta?.room_type || '').toString()] || item.meta?.room_type || '–'}</dd></div>
                                                 )}
-                                                <div><dt className="text-slate-500">{String(item?.meta?.hotel_pack_input_mode || '') === 'pax' ? 'Jumlah Pack' : 'Jumlah Kamar'}</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
+                                                <div><dt className="text-slate-500">{String(item?.meta?.hotel_pack_input_mode || '') === 'pax' || isPackPricingHotelItem(item) ? 'Jumlah Pack' : 'Jumlah Kamar'}</dt><dd className="font-medium text-slate-900">{item.quantity ?? '–'}</dd></div>
                                                 <div><dt className="text-slate-500">Nomor Kamar</dt><dd className="font-medium text-slate-900">{(prog?.room_number || '').trim() || '–'}</dd></div>
                                                 {mealLabel != null && <div><dt className="text-slate-500">Status Makan</dt><dd className="font-medium text-slate-900">{mealLabel}</dd></div>}
                                                 <div><dt className="text-slate-500">Check-in</dt><dd className="font-medium text-slate-900">{prog?.check_in_date ? formatDate(prog.check_in_date) + ' 16:00' : '–'}</dd></div>

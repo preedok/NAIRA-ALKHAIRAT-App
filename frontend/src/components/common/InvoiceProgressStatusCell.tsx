@@ -56,6 +56,13 @@ export const ROOM_TYPE_LABELS: Record<string, string> = {
 /** Kapasitas orang per tipe kamar (untuk tampilan jumlah orang); legacy `single` ≈ double */
 const ROOM_CAPACITY: Record<string, number> = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
+const isPackPricingItem = (item: any): boolean => {
+  const meta = item?.meta && typeof item.meta === 'object' ? item.meta : {};
+  const modeMeta = String(meta.room_pricing_mode || meta.pricing_mode || '').toLowerCase();
+  const modeProduct = String(item?.Product?.meta?.room_pricing_mode || item?.Product?.meta?.pricing_mode || '').toLowerCase();
+  return modeMeta === 'per_person' || modeMeta === 'per_pack' || modeProduct === 'per_person' || modeProduct === 'per_pack';
+};
+
 const BUS_TRIP_LABELS: Record<string, string> = {
   one_way: 'Pergi saja',
   return_only: 'Pulang saja',
@@ -171,6 +178,10 @@ export function buildInvoiceProgressSectionModels(
       const checkIn = formatDateWithTime(first?.HotelProgress?.check_in_date ?? first?.meta?.check_in, first?.HotelProgress?.check_in_time ?? first?.meta?.check_in_time ?? '16:00');
       const checkOut = formatDateWithTime(first?.HotelProgress?.check_out_date ?? first?.meta?.check_out, first?.HotelProgress?.check_out_time ?? first?.meta?.check_out_time ?? '12:00');
       const roomLines = group.items.map((item: any) => {
+        if (isPackPricingItem(item) || String(item?.meta?.hotel_pack_input_mode || '').toLowerCase() === 'pax') {
+          const qtyPack = Math.max(0, parseInt(String(item.quantity ?? 0), 10) || 0);
+          return `${qtyPack} pack`;
+        }
         const rt = item.room_type || item.meta?.room_type || '';
         const qty = Math.max(0, parseInt(String(item.quantity ?? 0), 10) || 0);
         const cap = rt ? (ROOM_CAPACITY[rt] ?? 0) : 0;

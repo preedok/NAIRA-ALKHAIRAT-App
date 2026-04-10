@@ -20,6 +20,7 @@ export interface DashboardFilterBarProps {
   showReset?: boolean;
   showOrderStatus?: boolean;
   showOwner?: boolean;
+  showOwnerType?: boolean;
   showDueStatus?: boolean;
   showSort?: boolean;
   wilayahId?: string;
@@ -28,6 +29,7 @@ export interface DashboardFilterBarProps {
   status?: string;
   orderStatus?: string;
   ownerId?: string;
+  ownerType?: string;
   dueStatus?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -44,6 +46,7 @@ export interface DashboardFilterBarProps {
   onStatusChange?: (v: string) => void;
   onOrderStatusChange?: (v: string) => void;
   onOwnerChange?: (v: string) => void;
+  onOwnerTypeChange?: (v: string) => void;
   onDueStatusChange?: (v: string) => void;
   onDateFromChange?: (v: string) => void;
   onDateToChange?: (v: string) => void;
@@ -60,6 +63,7 @@ export interface DashboardFilterBarProps {
   invoiceStatusOptions?: { value: string; label: string }[];
   owners?: { id: string; name?: string; User?: { name?: string; company_name?: string } }[];
   dueStatusOptions?: { value: string; label: string }[];
+  ownerTypeOptions?: { value: string; label: string }[];
   /** Label untuk filter kota (default: Kota). */
   branchLabel?: string;
   /** Empty label untuk filter kota (default: Semua kota). */
@@ -92,6 +96,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   showReset = true,
   showOrderStatus = false,
   showOwner = false,
+  showOwnerType = false,
   showDueStatus = false,
   showSort = false,
   wilayahId = '',
@@ -100,6 +105,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   status = '',
   orderStatus = '',
   ownerId = '',
+  ownerType = '',
   dueStatus = '',
   dateFrom = '',
   dateTo = '',
@@ -121,6 +127,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   onStatusChange,
   onOrderStatusChange,
   onOwnerChange,
+  onOwnerTypeChange,
   onDueStatusChange,
   onDateFromChange,
   onDateToChange,
@@ -142,6 +149,11 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
     { value: 'current', label: 'Current' },
     { value: 'due', label: 'Jatuh tempo hari ini' },
     { value: 'overdue', label: 'Terlambat' },
+  ],
+  ownerTypeOptions = [
+    { value: '', label: AUTOCOMPLETE_FILTER.SEMUA },
+    { value: 'mou', label: 'Owner MOU' },
+    { value: 'non_mou', label: 'Owner Non-MOU' }
   ],
 }) => {
   const isModal = variant === 'modal';
@@ -206,6 +218,14 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
           onChange={(v) => onOwnerChange?.(v)}
           options={owners.map((o) => ({ value: o.id, label: o.name ?? o.User?.name ?? o.User?.company_name ?? o.id }))}
           emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_OWNER}
+        />
+      )}
+      {showOwnerType && (
+        <Autocomplete
+          label="Tipe Owner"
+          value={ownerType}
+          onChange={(v) => onOwnerTypeChange?.(v)}
+          options={ownerTypeOptions}
         />
       )}
       {showDueStatus && (

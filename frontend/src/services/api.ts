@@ -549,14 +549,14 @@ export interface InvoicesSummaryData {
 }
 
 export const invoicesApi = {
-  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; order_ids?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  list: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; owner_type?: 'mou' | 'non_mou' | ''; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; order_ids?: string; limit?: number; page?: number; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/invoices', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
   /** Daftar invoice — PDF resmi dengan kop surat */
-  exportListPdf: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; order_ids?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
+  exportListPdf: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; owner_type?: 'mou' | 'non_mou' | ''; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string; has_handling?: boolean; order_ids?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) =>
     api.get('/invoices/export-pdf', { params, responseType: 'blob' }),
   getDraftOrders: (params?: { branch_id?: string; provinsi_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: any[] }>('/invoices/draft-orders', { params, headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
-  getSummary: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
+  getSummary: (params?: { status?: string; branch_id?: string; provinsi_id?: string; wilayah_id?: string; owner_id?: string; owner_type?: 'mou' | 'non_mou' | ''; order_status?: string; invoice_number?: string; date_from?: string; date_to?: string; due_status?: string }) =>
     api.get<{ success: boolean; data: InvoicesSummaryData }>('/invoices/summary', { params }),
   getById: (id: string) => api.get(`/invoices/${id}`),
   getStatusHistory: (id: string) => api.get(`/invoices/${id}/status-history`),
@@ -1240,7 +1240,7 @@ export const ownersApi = {
   getMe: () => api.get<{ success: boolean; data: OwnerProfile }>('/owners/me'),
   uploadRegistrationPayment: (formData: FormData) =>
     api.post<{ success: boolean; message?: string; data?: { owner_status: string } }>('/owners/upload-registration-payment', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  list: (params?: { status?: string; branch_id?: string; wilayah_id?: string; q?: string; page?: number; limit?: number }) =>
+  list: (params?: { status?: string; branch_id?: string; wilayah_id?: string; is_mou_owner?: 'true' | 'false'; q?: string; page?: number; limit?: number }) =>
     api.get<{ success: boolean; data: OwnerProfile[]; total?: number; page?: number; limit?: number }>('/owners', { params }),
   getStats: (params?: { status?: string; branch_id?: string; wilayah_id?: string }) =>
     api.get<{ success: boolean; data: OwnerStats }>('/owners/stats', { params }),
