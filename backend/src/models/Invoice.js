@@ -47,8 +47,9 @@ const Invoice = sequelize.define('Invoice', {
   branch_id: {
     type: DataTypes.UUID,
     allowNull: false,
-    field: 'kota_id',
-    references: { model: 'kotas', key: 'id' }
+    // Kompatibilitas DB produksi: invoices masih memakai kolom branch_id.
+    field: 'branch_id',
+    references: { model: 'branches', key: 'id' }
   },
   total_amount: {
     type: DataTypes.DECIMAL(18, 2),
