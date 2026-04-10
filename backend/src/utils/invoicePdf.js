@@ -84,6 +84,23 @@ const roomTypeLabel = (r) => ({ double: 'Double', triple: 'Triple', quad: 'Quad'
 /** Kapasitas orang per kamar per tipe (untuk hitung jumlah orang dari kamar) */
 const ROOM_CAPACITY = { double: 2, triple: 3, quad: 4, quint: 5, single: 2 };
 
+function normalizeYmd(val) {
+  if (!val) return '';
+  return String(val).trim().slice(0, 10);
+}
+
+function resolveHotelCheckDates(meta = {}, item = null) {
+  const m = meta && typeof meta === 'object' ? meta : {};
+  const p = item && item.HotelProgress ? item.HotelProgress : {};
+  const checkIn = normalizeYmd(
+    m.check_in || m.checkIn || m.check_in_date || m.checkInDate || p.check_in_date || p.checkInDate
+  );
+  const checkOut = normalizeYmd(
+    m.check_out || m.checkOut || m.check_out_date || m.checkOutDate || p.check_out_date || p.checkOutDate
+  );
+  return { checkIn, checkOut };
+}
+
 /** Lokasi hotel (urutan baris invoice & label deskripsi): madinah | makkah */
 function getHotelLocationFromItem(it) {
   const fromMeta = (it?.meta?.hotel_location || '').toLowerCase();
@@ -256,6 +273,11 @@ function idrToSarUsd(idr, currencyRates) {
   return { sar: n / SAR_TO_IDR, usd: n / USD_TO_IDR };
 }
 
+function formatTripleFromIdr(idr, rates) {
+  const conv = idrToSarUsd(idr, rates);
+  return `${formatIDR(idr)}  |  ${formatSAR(conv.sar)}  |  ${formatUSD(conv.usd)}`;
+}
+
 function checkNewPage(doc, y, margin, need) {
   const bottomMargin = 80;
   if (y + need > doc.page.height - bottomMargin) {
@@ -310,8 +332,7 @@ function buildInvoiceDisplayItems(data) {
   const hotelKey = (it) => {
     const meta = it.meta && typeof it.meta === 'object' ? it.meta : {};
     const pid = it.product_ref_id || it.product_id || '';
-    const ci = (meta.check_in || '').toString().slice(0, 10);
-    const co = (meta.check_out || '').toString().slice(0, 10);
+    const { checkIn: ci, checkOut: co } = resolveHotelCheckDates(meta, it);
     return `${pid}|${ci}|${co}`;
   };
   const groups = new Map();
@@ -339,8 +360,9 @@ function buildInvoiceDisplayItems(data) {
     }
     const first = group[0];
     const meta0 = first.meta && typeof first.meta === 'object' ? first.meta : {};
-    const ci = meta0.check_in ? formatDateShort(meta0.check_in) : '';
-    const co = meta0.check_out ? formatDateShort(meta0.check_out) : '';
+    const { checkIn, checkOut } = resolveHotelCheckDates(meta0, first);
+    const ci = checkIn ? formatDateShort(checkIn) : '';
+    const co = checkOut ? formatDateShort(checkOut) : '';
     const nights = meta0.nights != null ? Number(meta0.nights) : 0;
     const roomParts = group.map((it2) => {
       const m = it2.meta && typeof it2.meta === 'object' ? it2.meta : {};
@@ -677,13 +699,14 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         if (mergedRoomSub > 0 || mergedMealSub > 0) {
           hotelSubtotalFromFormula = mergedRoomSub + mergedMealSub;
           subtotalFormulaLine = mergedMealSub > 0
-            ? `Subtotal: (Kamar ${formatIDR(mergedRoomSub)}) + (Makan ${formatIDR(mergedMealSub)}) = ${formatIDR(hotelSubtotalFromFormula)}`
-            : `Subtotal: Kamar ${formatIDR(mergedRoomSub)} = ${formatIDR(hotelSubtotalFromFormula)}`;
+            ? `Subtotal: (Kamar ${formatTripleFromIdr(mergedRoomSub, rates)}) + (Makan ${formatTripleFromIdr(mergedMealSub, rates)}) = ${formatTripleFromIdr(hotelSubtotalFromFormula, rates)}`
+            : `Subtotal: Kamar ${formatTripleFromIdr(mergedRoomSub, rates)} = ${formatTripleFromIdr(hotelSubtotalFromFormula, rates)}`;
         }
       } else if (itemType === 'hotel') {
         const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
-        const ci = meta.check_in ? formatDateShort(meta.check_in) : null;
-        const co = meta.check_out ? formatDateShort(meta.check_out) : null;
+        const { checkIn, checkOut } = resolveHotelCheckDates(meta, item);
+        const ci = checkIn ? formatDateShort(checkIn) : null;
+        const co = checkOut ? formatDateShort(checkOut) : null;
         if (ci || co) dateLine = `Check-in: ${ci || '-'}, Check-out: ${co || '-'}`;
         const withMeal = meta.meal === true || meta.with_meal === true;
         hotelWithMeal = withMeal;
@@ -728,8 +751,8 @@ function renderInvoicePdf(doc, data, logoBuffer) {
           }
           hotelSubtotalFromFormula = roomPart + mealPart;
           subtotalFormulaLine = mealPart > 0
-            ? `Subtotal: (Kamar ${formatIDR(roomPart)}) + (Makan ${formatIDR(mealPart)}) = ${formatIDR(hotelSubtotalFromFormula)}`
-            : `Subtotal: Kamar ${formatIDR(roomPart)} = ${formatIDR(hotelSubtotalFromFormula)}`;
+            ? `Subtotal: (Kamar ${formatTripleFromIdr(roomPart, rates)}) + (Makan ${formatTripleFromIdr(mealPart, rates)}) = ${formatTripleFromIdr(hotelSubtotalFromFormula, rates)}`
+            : `Subtotal: Kamar ${formatTripleFromIdr(roomPart, rates)} = ${formatTripleFromIdr(hotelSubtotalFromFormula, rates)}`;
         }
       } else if (itemType === 'visa') {
         const meta = item.meta && typeof item.meta === 'object' ? item.meta : {};
