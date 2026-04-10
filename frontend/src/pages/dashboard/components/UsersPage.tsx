@@ -82,6 +82,9 @@ const UsersPage: React.FC = () => {
   const [mouTargetUser, setMouTargetUser] = useState<UserListItem | null>(null);
   const [mouCheckValue, setMouCheckValue] = useState(false);
   const [mouSaving, setMouSaving] = useState(false);
+  const [mouFileBlobUrl, setMouFileBlobUrl] = useState<string | null>(null);
+  const [mouFileLoading, setMouFileLoading] = useState(false);
+  const [mouFileType, setMouFileType] = useState<'generated' | 'signed'>('generated');
   const tableSectionRef = useRef<HTMLDivElement>(null);
 
   /** Modal Tambah User: owner (kabupaten→provinsi&wilayah), koordinator (pilih wilayah), pusat/bus/hotel/accounting (tanpa wilayah) */
@@ -458,6 +461,12 @@ const UsersPage: React.FC = () => {
       setMouCheckValue(false);
     }
   }, [mouTargetUser?.id, (mouTargetUser as UserListItem & { owner_profile_id?: string })?.owner_profile_id]);
+
+  useEffect(() => {
+    return () => {
+      if (mouFileBlobUrl) URL.revokeObjectURL(mouFileBlobUrl);
+    };
+  }, [mouFileBlobUrl]);
 
   useEffect(() => {
     setPage(1);
@@ -1008,13 +1017,33 @@ const UsersPage: React.FC = () => {
       <Modal open={!!mouTargetUser} onClose={() => setMouTargetUser(null)}>
         {mouTargetUser && (() => {
           const profileId = (mouTargetUser as UserListItem & { owner_profile_id?: string }).owner_profile_id;
+          const closeMouModal = () => {
+            if (mouFileBlobUrl) URL.revokeObjectURL(mouFileBlobUrl);
+            setMouFileBlobUrl(null);
+            setMouFileType('generated');
+            setMouTargetUser(null);
+          };
+          const handleOpenMouFile = async (type: 'generated' | 'signed') => {
+            try {
+              setMouFileLoading(true);
+              setMouFileType(type);
+              const res = await ownersApi.getMouFile(mouTargetUser.id, type);
+              const blob = res.data as unknown as Blob;
+              if (mouFileBlobUrl) URL.revokeObjectURL(mouFileBlobUrl);
+              setMouFileBlobUrl(URL.createObjectURL(blob));
+            } catch {
+              showToast(type === 'signed' ? 'File MOU signed belum tersedia' : 'File MOU belum tersedia', 'error');
+            } finally {
+              setMouFileLoading(false);
+            }
+          };
           const handleSaveMou = async () => {
             if (!profileId) return;
             setMouSaving(true);
             try {
               await ownersApi.updateProfile(profileId, { is_mou_owner: mouCheckValue });
               showToast(mouCheckValue ? 'Owner diset sebagai MOU' : 'Owner diset sebagai Non-MOU', 'success');
-              setMouTargetUser(null);
+              closeMouModal();
               fetchUsers();
             } catch (e: any) {
               showToast(e.response?.data?.message || 'Gagal', 'error');
@@ -1023,17 +1052,59 @@ const UsersPage: React.FC = () => {
             }
           };
           return (
-            <ModalBox>
-              <ModalHeader title="Set Tipe Owner" subtitle={`${mouTargetUser.name || mouTargetUser.email}`} onClose={() => setMouTargetUser(null)} />
+            <ModalBox className="max-w-4xl">
+              <ModalHeader title="Set Tipe Owner" subtitle={`${mouTargetUser.name || mouTargetUser.email}`} onClose={closeMouModal} />
               <ModalBody className="space-y-4">
                 <p className="text-sm text-slate-600">Owner MOU mendapat harga produk lebih murah (diskon % di Settings).</p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox checked={mouCheckValue} onChange={(e) => setMouCheckValue(e.target.checked)} />
                   <span className="text-sm font-medium text-slate-700">Owner MOU</span>
                 </label>
+                <div className="pt-2 border-t border-slate-200">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-sm font-medium text-slate-700">View File MOU</p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenMouFile('generated')}
+                        disabled={mouFileLoading}
+                      >
+                        {mouFileLoading && mouFileType === 'generated' ? 'Memuat...' : 'Lihat Generated'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenMouFile('signed')}
+                        disabled={mouFileLoading}
+                      >
+                        {mouFileLoading && mouFileType === 'signed' ? 'Memuat...' : 'Lihat Signed'}
+                      </Button>
+                      {mouFileBlobUrl && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(mouFileBlobUrl, '_blank', 'noopener')}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Buka Tab
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="h-[420px] rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                    {mouFileBlobUrl ? (
+                      <iframe title="Preview File MOU" src={mouFileBlobUrl} className="w-full h-full" />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-sm text-slate-500">
+                        Pilih <strong className="mx-1">Lihat Generated</strong> atau <strong className="mx-1">Lihat Signed</strong> untuk preview file.
+                      </div>
+                    )}
+                  </div>
+                </div>
               </ModalBody>
               <ModalFooter>
-                <Button variant="outline" onClick={() => setMouTargetUser(null)}>Batal</Button>
+                <Button variant="outline" onClick={closeMouModal}>Batal</Button>
                 <Button variant="primary" onClick={handleSaveMou} disabled={mouSaving}>{mouSaving ? 'Menyimpan...' : 'Simpan'}</Button>
               </ModalFooter>
             </ModalBox>
