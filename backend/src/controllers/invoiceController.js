@@ -6,6 +6,7 @@ const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, Bank, InvoiceStatusHistory, OrderRevision } = require('../models');
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, isOwnerRole, ROLES } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
+const { busFinalityDeficitPacks } = require('../utils/busFinalityPenalty');
 const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
 const { enrichBranchWithLocation } = require('../utils/locationMaster');
 const { resolveBankAccountsForInvoice } = require('../utils/invoiceBankAccounts');
@@ -712,7 +713,7 @@ function summarizeOrderItemsForExport(inv) {
     .map((it) => {
       const bits = [String(it.itemLabel || '-').slice(0, 140), `${it.qty} ${it.unit}`];
       if (it.stayLabel && it.stayLabel !== '-') bits.push(it.stayLabel);
-      if (it.roomTypeLabel) bits.push(it.roomTypeLabel);
+      if (String(it.roomTypeBreakdownLine || '').trim()) bits.push(String(it.roomTypeBreakdownLine).trim());
       return bits.join(' · ');
     })
     .join('\n');
@@ -832,6 +833,26 @@ function buildPaymentHistoryLines(inv) {
   return lines;
 }
 
+/** Satu blok teks untuk kolom PDF daftar invoice: ringkas finality bus (visa pack vs min, nominal). */
+function formatBusFinalityForListPdf(inv, rules) {
+  const o = inv && inv.Order;
+  if (!o) return '—';
+  const opt = String(o.bus_service_option || '');
+  const penalty = parseFloat(o.penalty_amount) || 0;
+  const items = o.OrderItems || [];
+  const visaPacks = items
+    .filter((i) => String(i.type || '').toLowerCase() === String(ORDER_ITEM_TYPE.VISA).toLowerCase())
+    .reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
+  if (o.waive_bus_penalty || opt === 'hiace') return 'Hiace (non-finality)';
+  if (opt === 'visa_only') return 'Tanpa bus';
+  if (opt !== 'finality') return penalty > 0 ? `Rp ${Math.round(penalty).toLocaleString('id-ID')}` : '—';
+  const minPack = parseInt(rules?.bus_min_pack, 10) || 35;
+  const perPack = parseFloat(rules?.bus_penalty_idr) || 500000;
+  const deficit = busFinalityDeficitPacks(visaPacks, rules);
+  if (deficit <= 0) return `Visa ${visaPacks} pk · min ${minPack} · Rp 0`;
+  return `Kurang ${deficit} pk × Rp ${Math.round(perPack).toLocaleString('id-ID')} = Rp ${Math.round(penalty).toLocaleString('id-ID')}`;
+}
+
 function buildPdfOrderItemsDetailed(inv) {
   const src = inv?.Order?.OrderItems || [];
   if (!src.length) return [];
@@ -866,14 +887,18 @@ function buildPdfOrderItemsDetailed(inv) {
     const stayLabel = (checkIn || checkOut)
       ? `CI ${formatDateOnlyForExport(checkIn)} | CO ${formatDateOnlyForExport(checkOut)}`
       : '-';
+    // Hotel: gabung baris jika hotel + lokasi + masa inap + mata uang sama (beda tipe kamar / harga → satu row, rincian tipe di bawah).
     const key = type === ORDER_ITEM_TYPE.HOTEL
-      ? `${type}|${productName}|${location}|${String(checkIn || '')}|${String(checkOut || '')}|${currency}|${unitPrice}`
+      ? `${type}|${productName}|${location}|${String(checkIn || '')}|${String(checkOut || '')}|${currency}`
       : `${type}|${productName}|${currency}|${unitPrice}|${stayLabel}`;
     const prev = grouped.get(key);
+    const roomTypeKey = roomTypeRaw || '—';
     if (prev) {
       prev.qty += qty;
       prev.subtotal += subtotal;
-      if (type === ORDER_ITEM_TYPE.HOTEL && roomTypeRaw) prev.roomTypes.add(roomTypeRaw);
+      if (type === ORDER_ITEM_TYPE.HOTEL && prev.roomTypeQty instanceof Map) {
+        prev.roomTypeQty.set(roomTypeKey, (prev.roomTypeQty.get(roomTypeKey) || 0) + qty);
+      }
     } else {
       grouped.set(key, {
         itemLabel,
@@ -885,15 +910,23 @@ function buildPdfOrderItemsDetailed(inv) {
         displayUnitPrice,
         currency,
         subtotal,
-        roomTypes: type === ORDER_ITEM_TYPE.HOTEL ? new Set(roomTypeRaw ? [roomTypeRaw] : []) : null
+        roomTypeQty: type === ORDER_ITEM_TYPE.HOTEL ? new Map([[roomTypeKey, qty]]) : null
       });
     }
   }
   return Array.from(grouped.values()).map((entry) => {
-    if (entry.roomTypes instanceof Set) {
-      const types = Array.from(entry.roomTypes).filter(Boolean);
-      entry.roomTypeLabel = types.length ? `Tipe: ${types.join(', ')}` : '';
-      delete entry.roomTypes;
+    if (entry.roomTypeQty instanceof Map && entry.roomTypeQty.size > 0) {
+      const unitWord = entry.unit === 'pack' ? 'pack' : 'room';
+      const entries = Array.from(entry.roomTypeQty.entries());
+      const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
+      const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
+      entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
+      delete entry.roomTypeQty;
+    }
+    if (entry.qty > 0 && entry.subtotal != null && Number.isFinite(Number(entry.subtotal))) {
+      entry.displayUnitPrice = Number(entry.subtotal) / entry.qty;
+      const n = Math.max(1, parseInt(entry.nights, 10) || 1);
+      entry.unitPrice = entry.displayUnitPrice / n;
     }
     return entry;
   });
@@ -1185,6 +1218,13 @@ const exportListPdf = asyncHandler(async (req, res) => {
   await loadInvoiceListRelations(data);
   const totals = computeInvoiceExportTotals(data);
 
+  const rulesByBranchForPdf = new Map();
+  const branchIdsPdf = [...new Set(data.map((d) => d.branch_id).filter(Boolean))];
+  for (const bid of branchIdsPdf) {
+    rulesByBranchForPdf.set(bid, await getRulesForBranch(bid));
+  }
+  const rulesGlobalForPdf = await getRulesForBranch(null);
+
   const filename = `daftar-invoice-${new Date().toISOString().slice(0, 10)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -1215,7 +1255,8 @@ const exportListPdf = asyncHandler(async (req, res) => {
     inv: 52,
     owner: ownerFilterActive ? null : 112,
     status: ownerFilterActive ? 116 : 230,
-    item: ownerFilterActive ? 190 : 290,
+    busFin: ownerFilterActive ? 162 : 278,
+    item: ownerFilterActive ? 218 : 336,
     payment: ownerFilterActive ? 470 : 515,
     total: 620,
     paid: 685,
@@ -1228,6 +1269,8 @@ const exportListPdf = asyncHandler(async (req, res) => {
       .text('Invoice', col.inv + 2, y + 6);
     if (!ownerFilterActive && col.owner != null) h.text('Owner', col.owner + 2, y + 6);
     h.text('Status', col.status + 2, y + 6)
+      .fontSize(6.8).text('Finality\nbus', col.busFin + 1, y + 4, { width: col.item - col.busFin - 4, lineGap: 1 })
+      .fontSize(7.5)
       .text('Item & Qty', col.item + 2, y + 6)
       .text('Riwayat Pembayaran', col.payment + 2, y + 6)
       .text('Total', col.total + 2, y + 6)
@@ -1255,8 +1298,10 @@ const exportListPdf = asyncHandler(async (req, res) => {
       // Tampilkan item invoice lebih lengkap (visa/bus/tiket/handling tidak terpotong terlalu cepat).
       const itemRows = Math.max(1, Math.min(items.length, 6));
       const historyRows = Math.max(1, Math.min(paymentHistory.length, 4));
+      const showItems = items.length ? items.slice(0, itemRows) : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
+      const hasRoomTypeBreakdown = showItems.some((it) => String(it.roomTypeBreakdownLine || '').trim() !== '');
+      const rowCellH = hasRoomTypeBreakdown ? 38 : 28;
       const lines = Math.max(itemRows, historyRows);
-      const rowCellH = 28;
       const contentBlockH = 30 + lines * rowCellH;
       const blockH = contentBlockH + 10;
       if (y + blockH > doc.page.height - 48) {
@@ -1273,7 +1318,14 @@ const exportListPdf = asyncHandler(async (req, res) => {
       if (!ownerFilterActive && col.owner != null) {
         r.text(`${ownerLines.join('\n')}\nCab: ${cabang}\nTgl Inv: ${formatDateOnlyForExport(invoiceDate)}`.slice(0, 220), col.owner + 2, y + 4, { width: (col.status - col.owner - 6), height: blockH - 8 });
       }
-      r.text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 26), col.status + 2, y + 4, { width: (col.item - col.status - 6) });
+      r.text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 22), col.status + 2, y + 4, { width: (col.busFin - col.status - 6) });
+      const finRules = (inv.branch_id && rulesByBranchForPdf.get(inv.branch_id)) || rulesGlobalForPdf;
+      const finLine = formatBusFinalityForListPdf(inv, finRules);
+      doc.font('Helvetica').fontSize(5.8).fillColor('#334155').text(finLine.slice(0, 80), col.busFin + 2, y + 4, {
+        width: col.item - col.busFin - 6,
+        height: blockH - 10,
+        lineGap: 0.5
+      });
 
       // Mini-table item: tampil ringkas agar tidak overlap dengan kolom lain.
       const itemX = col.item + 2;
@@ -1296,7 +1348,6 @@ const exportListPdf = asyncHandler(async (req, res) => {
         .text('Subtotal', xSubtotal + 2, rowTop + 3, { width: subtotalColW - 4, align: 'left' });
 
       doc.font('Helvetica').fontSize(6.8).fillColor('#0f172a');
-      const showItems = items.length ? items.slice(0, itemRows) : [{ itemLabel: '-', qty: 0, unit: 'qty', stayLabel: '-', unitPrice: 0, currency: 'IDR', subtotal: 0 }];
       showItems.forEach((it, i) => {
         const rowH = rowCellH;
         const ry = rowTop + headerH + i * rowH;
@@ -1310,12 +1361,20 @@ const exportListPdf = asyncHandler(async (req, res) => {
           width: subItemW - 4, height: 10, lineBreak: false
         });
         const nightLabel = Number(it.nights || 1) > 1 ? `${it.nights} malam` : '';
-        const detailText = [ `${it.qty} ${it.unit}`, String(it.stayLabel || '-'), nightLabel, String(it.roomTypeLabel || '') ]
+        const detailText = [ `${it.qty} ${it.unit}`, String(it.stayLabel || '-'), nightLabel ]
           .filter((v) => String(v || '').trim() !== '')
           .join(' | ');
         doc.fillColor('#0f172a').font('Helvetica').fontSize(6).text(detailText.slice(0, 60), itemX + 2, ry + 12, {
           width: subItemW - 4, height: 10, lineBreak: false
         });
+        const rtLine = String(it.roomTypeBreakdownLine || '').trim();
+        if (rtLine) {
+          doc.fillColor('#475569').font('Helvetica').fontSize(5.3).text(rtLine.slice(0, 140), itemX + 2, ry + 20, {
+            width: subItemW - 4,
+            height: 16,
+            lineGap: 0.5
+          });
+        }
         doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(
           `Rp ${Math.round(unitTriple.idr).toLocaleString('id-ID')}`,
           xUnit + 2,
@@ -1323,7 +1382,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
           { width: unitColW - 4, height: 10, lineBreak: false }
         );
         doc.fillColor('#0f172a').fontSize(5.4).text(
-          `S ${unitTriple.sar.toFixed(1)} · U ${unitTriple.usd.toFixed(1)}`,
+          `SAR ${unitTriple.sar.toFixed(1)} · USD ${unitTriple.usd.toFixed(1)}`,
           xUnit + 2,
           ry + 12,
           { width: unitColW - 4, height: 10, lineBreak: false }
@@ -1335,7 +1394,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
           { width: subtotalColW - 4, height: 10, lineBreak: false }
         );
         doc.fillColor('#0f172a').fontSize(5.4).text(
-          `S ${subtotalTriple.sar.toFixed(1)} · U ${subtotalTriple.usd.toFixed(1)}`,
+          `SAR ${subtotalTriple.sar.toFixed(1)} · USD ${subtotalTriple.usd.toFixed(1)}`,
           xSubtotal + 2,
           ry + 12,
           { width: subtotalColW - 4, height: 10, lineBreak: false }

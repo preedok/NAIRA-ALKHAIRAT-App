@@ -1191,9 +1191,9 @@ const OrderFormPage: React.FC = () => {
     return Object.entries(byMonth).map(([yearMonth,nights])=>({ yearMonth, nights, est: perNight*nights }));
   };
   const totalVisaPacks=items.filter(r=>r.type==='visa').reduce((s,r)=>s+Math.max(0,r.quantity),0);
-  const busFinalityPerPackIDR = busServiceOption === 'finality' && totalVisaPacks > 0
-    ? totalVisaPacks * busPenaltyRule.bus_penalty_idr
-    : 0;
+  const busFinalityDeficitPacks = Math.max(0, busPenaltyRule.bus_min_pack - totalVisaPacks);
+  const busFinalityPerPackIDR =
+    busServiceOption === 'finality' && totalVisaPacks > 0 ? busFinalityDeficitPacks * busPenaltyRule.bus_penalty_idr : 0;
 
   const applyBusServiceOption = useCallback((opt: BusServiceOption) => {
     setBusServiceOption(opt);
@@ -2405,7 +2405,16 @@ const OrderFormPage: React.FC = () => {
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
                       <span className="font-medium text-amber-900">Total visa: {totalVisaPacks} pack.</span>
                       {busServiceOption === 'finality' && totalVisaPacks > 0 ? (
-                        <span className="text-amber-800"> Biaya Bus Finality otomatis: {totalVisaPacks} pack × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busFinalityPerPackIDR} currency="IDR" /> (langsung masuk Ringkasan Total).</span>
+                        <span className="text-amber-800">
+                          {' '}
+                          Biaya Bus Finality: visa {totalVisaPacks} pack (min. {busPenaltyRule.bus_min_pack} pack).
+                          {busFinalityDeficitPacks > 0 ? (
+                            <> Kekurangan {busFinalityDeficitPacks} pack × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busFinalityPerPackIDR} currency="IDR" />.</>
+                          ) : (
+                            <> Tidak ada penalti (sudah ≥ {busPenaltyRule.bus_min_pack} pack).</>
+                          )}{' '}
+                          (masuk Ringkasan Total.)
+                        </span>
                       ) : busServiceOption === 'finality' ? (
                         <span className="text-slate-600"> Belum ada pack visa — biaya Bus Finality belum dihitung.</span>
                       ) : busServiceOption === 'hiace' ? (
@@ -2498,7 +2507,15 @@ const OrderFormPage: React.FC = () => {
                   <p className="text-amber-800 font-medium">Total visa: {totalVisaPacks} pack</p>
                   <p className="text-slate-600 text-xs mt-0.5">
                     {busServiceOption === 'finality' && totalVisaPacks > 0 ? (
-                      <>Biaya Bus Finality: {totalVisaPacks} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busFinalityPerPackIDR} currency="IDR" /> (otomatis digabung ke Total SAR/IDR/USD).</>
+                      <>
+                        Biaya Bus Finality: visa {totalVisaPacks} pack, min {busPenaltyRule.bus_min_pack} pack.
+                        {busFinalityDeficitPacks > 0 ? (
+                          <> Kekurangan {busFinalityDeficitPacks} × <NominalDisplay amount={busPenaltyRule.bus_penalty_idr} currency="IDR" /> = <NominalDisplay amount={busFinalityPerPackIDR} currency="IDR" />.</>
+                        ) : (
+                          <> Tanpa penalti (≥ min pack).</>
+                        )}{' '}
+                        Otomatis digabung ke Total SAR/IDR/USD.
+                      </>
                     ) : busServiceOption === 'finality' ? (
                       <>Belum ada pack visa, jadi biaya Bus Finality belum terbentuk.</>
                     ) : busServiceOption === 'hiace' ? (
@@ -2520,7 +2537,7 @@ const OrderFormPage: React.FC = () => {
                     />
                     <span className="text-sm text-slate-700">
                       <span className="font-medium text-slate-900">Bus Finality</span>
-                      {' — '}Bus include visa; biaya otomatis per pack visa dan langsung masuk total ringkasan.
+                      {' — '}Penalti hanya jika visa di bawah minimum pack (pengaturan bisnis, default 35): dihitung dari pack kekurangan × tarif per pack. Di atas minimum: tanpa penalti.
                     </span>
                   </label>
                   <label className="flex items-start gap-2.5 cursor-pointer">

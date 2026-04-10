@@ -13,6 +13,7 @@ const { calculateStayCostByNights } = require('../services/hotelMonthlyPricingSe
 const { syncInvoiceFromOrder, createInvoiceForOrder } = require('./invoiceController');
 const { getBranchIdsForWilayah } = require('../utils/wilayahScope');
 const uploadConfig = require('../config/uploads');
+const { computeBusFinalityPenaltyIdr } = require('../utils/busFinalityPenalty');
 
 const generateOrderNumber = () => {
   const y = new Date().getFullYear();
@@ -904,12 +905,13 @@ async function createOrderAndInvoiceFromItemsForOwner({ ownerId, branchId, items
     ? String(bus_service_option)
     : ((waive_bus_penalty === true || waive_bus_penalty === 'true') ? 'hiace' : 'finality');
   const waiveBusPenaltyAi = busOptAi === 'hiace';
-  const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
-  const finalityPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = (busOptAi === 'finality' && !waiveBusPenaltyAi && hasVisaItems)
-    ? totalVisaPacks * finalityPerPackIdr
-    : 0;
+  const penaltyAmount = computeBusFinalityPenaltyIdr({
+    busServiceOption: busOptAi,
+    waiveBusPenalty: waiveBusPenaltyAi,
+    totalVisaPacks,
+    rules
+  });
 
   let ratesPayload = {};
   const crForPayload = typeof rules.currency_rates === 'object' && rules.currency_rates != null
@@ -1253,12 +1255,13 @@ const create = asyncHandler(async (req, res) => {
   // Opsi bus: finality (biaya per-pack visa), hiace (Hiace auto), visa_only (tanpa biaya bus finality).
   const busOptCreate = normalizeBusServiceOptionForCreate(req.body);
   const waiveBusPenaltyCreate = busOptCreate === 'hiace';
-  const hasVisaItems = orderItems.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
   const totalVisaPacks = orderItems.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
-  const finalityPerPackIdr = parseFloat(rules.bus_penalty_idr) || 500000;
-  const penaltyAmount = (busOptCreate === 'finality' && !waiveBusPenaltyCreate && hasVisaItems)
-    ? totalVisaPacks * finalityPerPackIdr
-    : 0;
+  const penaltyAmount = computeBusFinalityPenaltyIdr({
+    busServiceOption: busOptCreate,
+    waiveBusPenalty: waiveBusPenaltyCreate,
+    totalVisaPacks,
+    rules
+  });
 
   // Final safety check sebelum create
   if (!finalBranchId || typeof finalBranchId !== 'string' || finalBranchId.length < 10) {
@@ -1678,11 +1681,14 @@ const update = asyncHandler(async (req, res) => {
     } else if (busOptUpdate === 'visa_only') {
       penaltyAmountUpdate = 0;
     } else {
-      const hasVisaItemsUpdate = items.some((i) => i.type === ORDER_ITEM_TYPE.VISA);
       const totalVisaPacksUpdate = items.filter((i) => i.type === ORDER_ITEM_TYPE.VISA).reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
       const rulesUpdate = await getRulesForBranch(order.branch_id);
-      const finalityPerPackIdrUpdate = parseFloat(rulesUpdate.bus_penalty_idr) || 500000;
-      penaltyAmountUpdate = hasVisaItemsUpdate ? totalVisaPacksUpdate * finalityPerPackIdrUpdate : 0;
+      penaltyAmountUpdate = computeBusFinalityPenaltyIdr({
+        busServiceOption: busOptUpdate,
+        waiveBusPenalty: waiveBusPenaltyUpdate,
+        totalVisaPacks: totalVisaPacksUpdate,
+        rules: rulesUpdate
+      });
     }
     await order.update({
       subtotal,
