@@ -10,7 +10,7 @@
 export const AUTOCOMPLETE_FILTER = {
   SEMUA_WILAYAH: 'Semua wilayah',
   SEMUA_PROVINSI: 'Semua provinsi',
-  SEMUA_CABANG: 'Semua cabang',
+  SEMUA_CABANG: 'Semua kota',
   SEMUA_KOTA: 'Semua kota',
   SEMUA_STATUS: 'Semua status',
   SEMUA_PROGRESS: 'Semua progress',
@@ -23,7 +23,7 @@ export const AUTOCOMPLETE_PILIH = {
   PILIH_ROLE: 'Pilih role...',
   PILIH_WILAYAH: 'Pilih wilayah...',
   PILIH_PROVINSI: 'Pilih provinsi...',
-  PILIH_CABANG: 'Pilih cabang...',
+  PILIH_CABANG: 'Pilih kota...',
   PILIH_OWNER: 'Pilih owner...',
   PILIH_KABUPATEN: 'Pilih kabupaten/kota...',
   PILIH_ALASAN: 'Pilih alasan (jika tolak)...',

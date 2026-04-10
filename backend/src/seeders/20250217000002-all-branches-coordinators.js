@@ -72,7 +72,7 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     const q = queryInterface.sequelize;
     const [branches] = await q.query(
-      `SELECT id, code, name, city, region FROM branches`
+      `SELECT id, code, name, city, region FROM kotas`
     );
     if (!branches || branches.length === 0) {
       console.log('[seed all-branches-coordinators] Tidak ada cabang.');
@@ -86,7 +86,7 @@ module.exports = {
       const coord = getCoordinatorForRegion(b.region);
       const koordWilayah = `Koord. ${(b.name || b.city || '').replace(/'/g, "''")}`;
       await q.query(`
-        UPDATE branches SET
+        UPDATE kotas SET
           koordinator_provinsi = '${String(coord.name || '').replace(/'/g, "''")}',
           koordinator_provinsi_phone = '${String(coord.phone || '').replace(/'/g, "''")}',
           koordinator_provinsi_email = '${String(coord.email || '').replace(/'/g, "''")}',
@@ -103,7 +103,7 @@ module.exports = {
 
   async down(queryInterface, Sequelize) {
     await queryInterface.sequelize.query(`
-      UPDATE branches SET
+      UPDATE kotas SET
         koordinator_provinsi = NULL,
         koordinator_provinsi_phone = NULL,
         koordinator_provinsi_email = NULL,

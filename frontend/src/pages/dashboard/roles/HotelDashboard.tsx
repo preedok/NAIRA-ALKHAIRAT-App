@@ -46,7 +46,7 @@ const HotelDashboard: React.FC = () => {
     <div className="space-y-8">
       <PageHeader
         title="Dashboard Hotel"
-        subtitle="Rekapitulasi pekerjaan hotel cabang Anda."
+        subtitle="Rekapitulasi pekerjaan hotel kota Anda."
         right={<AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />}
       />
 
@@ -117,7 +117,7 @@ const HotelDashboard: React.FC = () => {
 
       {!data && !loading && (
         <Card className="p-8 rounded-2xl border border-slate-200/80 text-center">
-          <p className="text-slate-600">Belum ada order dengan item hotel di cabang Anda.</p>
+          <p className="text-slate-600">Belum ada order dengan item hotel di kota Anda.</p>
         </Card>
       )}
     </div>

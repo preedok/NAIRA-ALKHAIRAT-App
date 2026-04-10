@@ -280,7 +280,7 @@ const KoordinatorOwnersPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title="Owners Wilayah"
-        subtitle={isAdminPusatOrSuperAdmin ? 'Daftar owner per wilayah. Filter menurut wilayah, cabang, status, dan cari nama/email.' : 'Owner yang dilayani koordinator wilayah Anda. Verifikasi bukti bayar/deposit lalu aktivasi.'}
+        subtitle={isAdminPusatOrSuperAdmin ? 'Daftar owner per wilayah. Filter menurut wilayah, kota, status, dan cari nama/email.' : 'Owner yang dilayani koordinator wilayah Anda. Verifikasi bukti bayar/deposit lalu aktivasi.'}
         right={
           <div className="flex items-center gap-2">
             <AutoRefreshControl onRefresh={() => { fetchStats(); fetchOwners(); }} disabled={loading} />
@@ -328,13 +328,13 @@ const KoordinatorOwnersPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Cabang</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Kota</label>
                 <select
                   value={filterBranchId}
                   onChange={(e) => { setFilterBranchId(e.target.value); setPage(1); }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="">Semua cabang</option>
+                  <option value="">Semua kota</option>
                   {branchesForFilter.map((b) => (
                     <option key={b.id} value={b.id}>{b.code} – {b.name}</option>
                   ))}
@@ -382,7 +382,7 @@ const KoordinatorOwnersPage: React.FC = () => {
                 <th className="text-left py-3 px-4">Nama / Perusahaan</th>
                 <th className="text-left py-3 px-4">Email</th>
                 <th className="text-left py-3 px-4">Status</th>
-                <th className="text-left py-3 px-4">Cabang</th>
+                <th className="text-left py-3 px-4">Kota</th>
                 <th className="text-left py-3 px-4 w-32">Aksi</th>
               </tr>
             </thead>
@@ -502,7 +502,7 @@ const KoordinatorOwnersPage: React.FC = () => {
               <div><span className="text-slate-500">Email</span><p>{detailOwner.User?.email || '-'}</p></div>
               <div><span className="text-slate-500">Telepon</span><p>{detailOwner.User?.phone || detailOwner.phone || '-'}</p></div>
               <div><span className="text-slate-500">Status</span><p><Badge variant={detailOwner.status === 'active' ? 'success' : detailOwner.status === 'rejected' ? 'error' : 'warning'}>{OWNER_STATUS_LABELS[detailOwner.status] || detailOwner.status}</Badge></p></div>
-              <div><span className="text-slate-500">Cabang</span><p>{detailOwner.AssignedBranch ? `${detailOwner.AssignedBranch.code} – ${detailOwner.AssignedBranch.name}` : '-'}</p></div>
+              <div><span className="text-slate-500">Kota</span><p>{detailOwner.AssignedBranch ? `${detailOwner.AssignedBranch.code} – ${detailOwner.AssignedBranch.name}` : '-'}</p></div>
               {detailOwner.User?.address && <div><span className="text-slate-500">Alamat</span><p>{detailOwner.User.address}</p></div>}
               {detailOwner.User?.whatsapp && <div><span className="text-slate-500">WhatsApp</span><p>{detailOwner.User.whatsapp}</p></div>}
             </ModalBody>

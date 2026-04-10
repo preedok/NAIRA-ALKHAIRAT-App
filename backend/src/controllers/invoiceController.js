@@ -844,7 +844,7 @@ function formatBusFinalityForListPdf(inv, rules) {
     .filter((i) => String(i.type || '').toLowerCase() === String(ORDER_ITEM_TYPE.VISA).toLowerCase())
     .reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0);
   if (o.waive_bus_penalty || opt === 'hiace') return 'Hiace (non-finality)';
-  if (opt === 'visa_only') return 'Tanpa bus';
+  if (opt === 'visa_only') return '-';
   if (opt !== 'finality') return penalty > 0 ? `Rp ${Math.round(penalty).toLocaleString('id-ID')}` : '—';
   const minPack = parseInt(rules?.bus_min_pack, 10) || 35;
   const perPack = parseFloat(rules?.bus_penalty_idr) || 500000;
@@ -916,11 +916,16 @@ function buildPdfOrderItemsDetailed(inv) {
   }
   return Array.from(grouped.values()).map((entry) => {
     if (entry.roomTypeQty instanceof Map && entry.roomTypeQty.size > 0) {
-      const unitWord = entry.unit === 'pack' ? 'pack' : 'room';
-      const entries = Array.from(entry.roomTypeQty.entries());
-      const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
-      const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
-      entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
+      // Harga per pack: tidak menampilkan rincian tipe kamar di PDF (bukan konsep kamar terpisah).
+      if (entry.unit === 'pack') {
+        entry.roomTypeBreakdownLine = '';
+      } else {
+        const unitWord = 'room';
+        const entries = Array.from(entry.roomTypeQty.entries());
+        const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
+        const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
+        entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
+      }
       delete entry.roomTypeQty;
     }
     if (entry.qty > 0 && entry.subtotal != null && Number.isFinite(Number(entry.subtotal))) {
@@ -1250,17 +1255,17 @@ const exportListPdf = asyncHandler(async (req, res) => {
   y += 22;
 
   const ownerFilterActive = !!(req.query?.owner_id || req.query?.owner || req.query?.owner_name);
+  /** Kolom Finality bus digabung ke area Item & Qty (bukan kolom terpisah). */
   const col = {
     no: 36,
     inv: 52,
     owner: ownerFilterActive ? null : 112,
     status: ownerFilterActive ? 116 : 230,
-    busFin: ownerFilterActive ? 162 : 278,
-    item: ownerFilterActive ? 218 : 336,
-    payment: ownerFilterActive ? 470 : 515,
-    total: 620,
-    paid: 685,
-    remain: 750
+    item: ownerFilterActive ? 162 : 278,
+    payment: ownerFilterActive ? 414 : 457,
+    total: 562,
+    paid: 627,
+    remain: 692
   };
   const drawTableHeader = () => {
     doc.rect(36, y, doc.page.width - 72, 20).fill('#0D1A63');
@@ -1269,7 +1274,6 @@ const exportListPdf = asyncHandler(async (req, res) => {
       .text('Invoice', col.inv + 2, y + 6);
     if (!ownerFilterActive && col.owner != null) h.text('Owner', col.owner + 2, y + 6);
     h.text('Status', col.status + 2, y + 6)
-      .fontSize(6.8).text('Finality\nbus', col.busFin + 1, y + 4, { width: col.item - col.busFin - 4, lineGap: 1 })
       .fontSize(7.5)
       .text('Item & Qty', col.item + 2, y + 6)
       .text('Riwayat Pembayaran', col.payment + 2, y + 6)
@@ -1302,7 +1306,11 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const hasRoomTypeBreakdown = showItems.some((it) => String(it.roomTypeBreakdownLine || '').trim() !== '');
       const rowCellH = hasRoomTypeBreakdown ? 38 : 28;
       const lines = Math.max(itemRows, historyRows);
-      const contentBlockH = 30 + lines * rowCellH;
+      const finRules = (inv.branch_id && rulesByBranchForPdf.get(inv.branch_id)) || rulesGlobalForPdf;
+      const finLine = formatBusFinalityForListPdf(inv, finRules);
+      /** Baris ringkas bus/finality di atas mini-tabel Item (kolom Finality dihapus). */
+      const busStripH = 14;
+      const contentBlockH = 30 + busStripH + lines * rowCellH;
       const blockH = contentBlockH + 10;
       if (y + blockH > doc.page.height - 48) {
         doc.addPage();
@@ -1318,20 +1326,18 @@ const exportListPdf = asyncHandler(async (req, res) => {
       if (!ownerFilterActive && col.owner != null) {
         r.text(`${ownerLines.join('\n')}\nCab: ${cabang}\nTgl Inv: ${formatDateOnlyForExport(invoiceDate)}`.slice(0, 220), col.owner + 2, y + 4, { width: (col.status - col.owner - 6), height: blockH - 8 });
       }
-      r.text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 22), col.status + 2, y + 4, { width: (col.busFin - col.status - 6) });
-      const finRules = (inv.branch_id && rulesByBranchForPdf.get(inv.branch_id)) || rulesGlobalForPdf;
-      const finLine = formatBusFinalityForListPdf(inv, finRules);
-      doc.font('Helvetica').fontSize(5.8).fillColor('#334155').text(finLine.slice(0, 80), col.busFin + 2, y + 4, {
-        width: col.item - col.busFin - 6,
-        height: blockH - 10,
-        lineGap: 0.5
-      });
+      r.text(String(getInvoiceStatusLabelForExport(inv)).slice(0, 22), col.status + 2, y + 4, { width: (col.item - col.status - 6) });
 
       // Mini-table item: tampil ringkas agar tidak overlap dengan kolom lain.
       const itemX = col.item + 2;
       const itemW = col.payment - col.item - 6;
       const headerH = 12;
-      const rowTop = y + 4;
+      doc.font('Helvetica').fontSize(5.7).fillColor('#475569').text(`Bus/finality: ${finLine}`.slice(0, 220), itemX, y + 4, {
+        width: itemW,
+        height: busStripH,
+        lineGap: 0.5
+      });
+      const rowTop = y + 4 + busStripH;
       doc.rect(itemX, rowTop, itemW, headerH).fill('#E0E7FF');
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(itemX, rowTop, itemW, headerH).stroke();
       const subItemW = Math.max(68, Math.floor(itemW * 0.46));
@@ -1423,7 +1429,7 @@ const exportListPdf = asyncHandler(async (req, res) => {
       });
       // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
       const amtX = col.total + 2;
-      const amtY = y + 4;
+      const amtY = y + 4 + busStripH;
       const amtW = (doc.page.width - 36) - amtX - 2;
       const amtH = contentBlockH - 8;
       const amtHeaderH = 12;

@@ -3,7 +3,7 @@ const router = express.Router();
 const branchController = require('../../controllers/branchController');
 const { auth } = require('../../middleware/auth');
 
-// Read-only: list, listPublic, provinces, wilayah, kabupaten (untuk filter & Tambah User). Kelola Cabang dihapus.
+// Read-only: list, listPublic, provinces, wilayah, kabupaten (untuk filter & Tambah User). Master kota (tabel kotas).
 router.get('/public', branchController.listPublic);
 router.get('/provinces', auth, branchController.listProvinces);
 router.get('/wilayah', auth, branchController.listWilayah);

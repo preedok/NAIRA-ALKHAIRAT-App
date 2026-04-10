@@ -485,7 +485,7 @@ const AccountingAgingPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_WILAYAH} />
             <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={filteredProvinsi.map((p) => ({ value: p.id, label: p.name }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_PROVINSI} />
-            <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG} />
+            <Autocomplete label="Kota" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG} />
             <Autocomplete label="Owner / Partner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name || 'Owner' }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_OWNER} />
             <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={INVOICE_STATUS_OPTIONS.map((s) => ({ value: s, label: INVOICE_STATUS_LABELS[s] || s }))} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
             <Input label="Tanggal Buat (dari)" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} fullWidth />
@@ -670,7 +670,7 @@ const AccountingAgingPage: React.FC = () => {
                       <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Data Order</h4>
                       <dl className="space-y-1.5 text-sm">
                         <div className="flex justify-between"><dt className="text-slate-600">Owner</dt><dd className="font-semibold">{viewInvoice.User?.name || viewInvoice.User?.company_name}</dd></div>
-                        <div className="flex justify-between"><dt className="text-slate-600">Cabang</dt><dd className="font-semibold">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
+                        <div className="flex justify-between"><dt className="text-slate-600">Kota</dt><dd className="font-semibold">{viewInvoice.Branch?.name || viewInvoice.Branch?.code}</dd></div>
                         <div className="flex justify-between"><dt className="text-slate-600">Mata Uang</dt><dd className="font-semibold">{viewInvoice.Order?.currency || 'IDR'}</dd></div>
                       </dl>
                     </div>

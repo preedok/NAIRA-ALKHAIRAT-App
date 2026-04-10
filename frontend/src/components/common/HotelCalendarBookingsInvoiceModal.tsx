@@ -498,7 +498,7 @@ const HotelCalendarBookingsInvoiceModal: React.FC<HotelCalendarBookingsInvoiceMo
                   : provinces
               }
               branches={branches}
-              branchLabel="Cabang"
+              branchLabel="Kota"
               branchEmptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG}
               invoiceStatusOptions={[
                 { value: '', label: 'Semua status' },

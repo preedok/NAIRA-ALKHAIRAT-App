@@ -2,8 +2,7 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
 /**
- * Price layers: general (pusat, branch_id null), branch override (branch_id set), special owner (owner_id set).
- * Role invoice can set special for owner; admin cabang can set branch override.
+ * Price layers: general (pusat, kota null), override per kota (kota_id), khusus owner (owner_id).
  */
 const ProductPrice = sequelize.define('ProductPrice', {
   id: {
@@ -19,7 +18,8 @@ const ProductPrice = sequelize.define('ProductPrice', {
   },
   branch_id: {
     type: DataTypes.UUID,
-    references: { model: 'branches', key: 'id' },
+    field: 'kota_id',
+    references: { model: 'kotas', key: 'id' },
     comment: 'null = pusat general'
   },
   owner_id: {

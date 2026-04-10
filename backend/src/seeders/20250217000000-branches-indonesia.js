@@ -108,14 +108,14 @@ module.exports = {
       const existingCodes = new Set();
       for (const chunk of chunks) {
         const [rows] = await queryInterface.sequelize.query(
-          `SELECT code FROM branches WHERE code IN (${chunk.map(c => `'${String(c).replace(/'/g, "''")}'`).join(',')})`
+          `SELECT code FROM kotas WHERE code IN (${chunk.map(c => `'${String(c).replace(/'/g, "''")}'`).join(',')})`
         ).catch(() => [[]]);
         (rows || []).forEach(r => existingCodes.add(r.code));
       }
       const toInsert = branches.filter(b => !existingCodes.has(b.code));
 
       if (toInsert.length > 0) {
-        await queryInterface.bulkInsert('branches', toInsert);
+        await queryInterface.bulkInsert('kotas', toInsert);
         console.log(`[seed branches-indonesia] Berhasil menambah ${toInsert.length} cabang (kabupaten/kota).`);
       } else {
         console.log('[seed branches-indonesia] Semua data sudah ada, tidak ada yang ditambah.');
@@ -129,7 +129,7 @@ module.exports = {
   async down(queryInterface, Sequelize) {
     // Hapus hanya cabang dengan code numerik (kode BPS), jangan hapus JKT, SBY, BDG
     await queryInterface.sequelize.query(
-      `DELETE FROM branches WHERE code ~ '^[0-9]+$'`
+      `DELETE FROM kotas WHERE code ~ '^[0-9]+$'`
     );
     console.log('[seed branches-indonesia] Cabang kabupaten/kota telah dihapus.');
   }

@@ -40,7 +40,7 @@ module.exports = {
       password_hash: hash,
       name: 'Super Admin',
       role: ROLES.SUPER_ADMIN,
-      branch_id: null,
+      kota_id: null,
       wilayah_id: null,
       is_active: true,
       created_at: now,
@@ -54,7 +54,7 @@ module.exports = {
       password_hash: hash,
       name: 'Admin Pusat',
       role: ROLES.ADMIN_PUSAT,
-      branch_id: null,
+      kota_id: null,
       wilayah_id: null,
       is_active: true,
       created_at: now,
@@ -68,7 +68,7 @@ module.exports = {
       password_hash: hash,
       name: 'Accounting Pusat',
       role: ROLES.ROLE_ACCOUNTING,
-      branch_id: null,
+      kota_id: null,
       wilayah_id: null,
       is_active: true,
       created_at: now,
@@ -77,9 +77,9 @@ module.exports = {
 
     // 5) Saudi: Hotel, Bus, Invoice Saudi
     usersToInsert.push(
-      { id: uuid(), email: 'hotel.saudi@bintangglobal.com', password_hash: hash, name: 'Hotel Saudi Arabia', role: ROLES.ROLE_HOTEL, branch_id: null, wilayah_id: null, is_active: true, created_at: now, updated_at: now },
-      { id: uuid(), email: 'bus.saudi@bintangglobal.com', password_hash: hash, name: 'Bus Saudi Arabia', role: ROLES.ROLE_BUS, branch_id: null, wilayah_id: null, is_active: true, created_at: now, updated_at: now },
-      { id: uuid(), email: 'invoice.saudi@bintangglobal.com', password_hash: hash, name: 'Invoice Saudi Arabia', role: ROLES.ROLE_INVOICE_SAUDI, branch_id: null, wilayah_id: null, is_active: true, created_at: now, updated_at: now }
+      { id: uuid(), email: 'hotel.saudi@bintangglobal.com', password_hash: hash, name: 'Hotel Saudi Arabia', role: ROLES.ROLE_HOTEL, kota_id: null, wilayah_id: null, is_active: true, created_at: now, updated_at: now },
+      { id: uuid(), email: 'bus.saudi@bintangglobal.com', password_hash: hash, name: 'Bus Saudi Arabia', role: ROLES.ROLE_BUS, kota_id: null, wilayah_id: null, is_active: true, created_at: now, updated_at: now },
+      { id: uuid(), email: 'invoice.saudi@bintangglobal.com', password_hash: hash, name: 'Invoice Saudi Arabia', role: ROLES.ROLE_INVOICE_SAUDI, kota_id: null, wilayah_id: null, is_active: true, created_at: now, updated_at: now }
     );
 
     // 6) Koordinator: 3 wilayah (Bali-Nusa Tenggara, Jawa, Kalimantan), masing-masing 4 akun
@@ -96,17 +96,17 @@ module.exports = {
       const wName = w.name || '';
       const pre = slug(wName).slice(0, 20) || 'wilayah';
       usersToInsert.push(
-        { id: uuid(), email: `invoice-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Invoice Koordinator ${wName}`, role: ROLES.INVOICE_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
-        { id: uuid(), email: `tiket-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Tiket Koordinator ${wName}`, role: ROLES.TIKET_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
-        { id: uuid(), email: `visa-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Visa Koordinator ${wName}`, role: ROLES.VISA_KOORDINATOR, branch_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now }
+        { id: uuid(), email: `invoice-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Invoice Koordinator ${wName}`, role: ROLES.INVOICE_KOORDINATOR, kota_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
+        { id: uuid(), email: `tiket-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Tiket Koordinator ${wName}`, role: ROLES.TIKET_KOORDINATOR, kota_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now },
+        { id: uuid(), email: `visa-koord.${pre}@bintangglobal.com`, password_hash: hash, name: `Visa Koordinator ${wName}`, role: ROLES.VISA_KOORDINATOR, kota_id: null, wilayah_id: wid, is_active: true, created_at: now, updated_at: now }
       );
     }
 
-    // 7) Satu cabang per wilayah (untuk assign owner)
+    // 7) Satu kota per wilayah (untuk assign owner)
     const ownerBranches = [];
     for (const w of wilayahList) {
       const [rows] = await q.query(`
-        SELECT b.id FROM branches b
+        SELECT b.id FROM kotas b
         INNER JOIN provinsi p ON b.provinsi_id = p.id
         WHERE p.wilayah_id = '${w.id}'
         LIMIT 1
@@ -114,7 +114,7 @@ module.exports = {
       if (rows && rows[0]) ownerBranches.push(rows[0].id);
     }
     if (ownerBranches.length === 0) {
-      const [anyBranches] = await q.query(`SELECT id FROM branches ORDER BY created_at LIMIT 3`);
+      const [anyBranches] = await q.query(`SELECT id FROM kotas ORDER BY created_at LIMIT 3`);
       (anyBranches || []).forEach(r => ownerBranches.push(r.id));
     }
 
@@ -146,7 +146,7 @@ module.exports = {
         password_hash: hash,
         name: o.name,
         role: ROLES.OWNER_MOU,
-        branch_id: null,
+        kota_id: null,
         wilayah_id: null,
         company_name: o.company_name,
         is_active: true,
@@ -157,7 +157,7 @@ module.exports = {
 
     await queryInterface.bulkInsert('users', usersToInsert).catch(e => console.warn('[seed workflow-koordinator-users] users', e.message));
 
-    // 9) Owner profiles: assign ke cabang sesuai wilayah (orderan diurus koordinator wilayah masing-masing)
+    // 9) Owner profiles: assign ke kota sesuai wilayah (orderan diurus koordinator wilayah masing-masing)
     const ownerEmails = flatOwners.map(o => o.email);
     const [ownerRows] = await q.query(
       `SELECT id, email FROM users WHERE email IN (${ownerEmails.map(e => `'${e.replace(/'/g, "''")}'`).join(',')})`
@@ -173,7 +173,7 @@ module.exports = {
         id: uuid(),
         user_id: userId,
         status: OWNER_STATUS.ACTIVE,
-        assigned_branch_id: branchId,
+        assigned_kota_id: branchId,
         activated_at: now,
         created_at: now,
         updated_at: now

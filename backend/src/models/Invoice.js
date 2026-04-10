@@ -47,7 +47,8 @@ const Invoice = sequelize.define('Invoice', {
   branch_id: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: { model: 'branches', key: 'id' }
+    field: 'kota_id',
+    references: { model: 'kotas', key: 'id' }
   },
   total_amount: {
     type: DataTypes.DECIMAL(18, 2),

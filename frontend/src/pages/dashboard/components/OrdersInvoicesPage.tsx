@@ -1895,7 +1895,7 @@ const OrdersInvoicesPage: React.FC = () => {
             wilayahList={wilayahList}
             provinces={wilayahId ? provinces.filter((p) => (p as { wilayah_id?: string }).wilayah_id === wilayahId) : provinces}
             branches={branches}
-            branchLabel="Cabang"
+            branchLabel="Kota"
             branchEmptyLabel={AUTOCOMPLETE_FILTER.SEMUA_CABANG}
             invoiceStatusOptions={[{ value: '', label: 'Semua status' }, ...Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))]}
             owners={ownerFilterOptions}
@@ -2303,7 +2303,7 @@ const OrdersInvoicesPage: React.FC = () => {
           <ModalBox className="max-w-md w-full">
             <ModalHeader
               title="Export PDF daftar invoice"
-              subtitle="Pilih owner — filter tanggal, status, cabang, dll. tetap diterapkan pada ekspor."
+              subtitle="Pilih owner — filter tanggal, status, kota, dll. tetap diterapkan pada ekspor."
               icon={<FileText className="w-5 h-5" />}
               onClose={() => !exportingInvoiceListPdf && setExportListPdfOwnerModalOpen(false)}
             />

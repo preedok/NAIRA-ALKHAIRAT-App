@@ -253,7 +253,7 @@ const AccountingDashboard: React.FC = () => {
   const getModalTitle = () => {
     if (modalType === 'all') return 'Semua Invoice';
     if (modalType === 'status') return 'Invoice per Status';
-    if (modalType === 'branch') return 'Invoice per Cabang';
+    if (modalType === 'branch') return 'Invoice per Kota';
     if (modalType === 'wilayah') return 'Invoice per Wilayah';
     if (modalType === 'provinsi') return 'Invoice per Provinsi';
     if (modalType === 'recent') return 'Invoice Terbaru';
@@ -321,7 +321,7 @@ const AccountingDashboard: React.FC = () => {
       )}
 
       <Card className="travel-card min-h-[200px]">
-        <CardSectionHeader icon={<Activity className="w-6 h-6" />} title="Ringkasan Accounting" subtitle="Total invoice, terbayar, dan piutang per status, cabang, wilayah." className="mb-4" />
+        <CardSectionHeader icon={<Activity className="w-6 h-6" />} title="Ringkasan Accounting" subtitle="Total invoice, terbayar, dan piutang per status, kota, wilayah." className="mb-4" />
         {loading && !data ? (
           <ContentLoading />
         ) : data ? (
@@ -378,7 +378,7 @@ const AccountingDashboard: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-blue-500" />
-                  Per Cabang
+                  Per Kota
                 </h3>
                 <Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('branch')}>
                   View All <ChevronRight className="w-4 h-4" />
@@ -456,7 +456,7 @@ const AccountingDashboard: React.FC = () => {
                 columns={[
                   { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
                   { id: 'owner', label: 'Owner', align: 'left' },
-                  { id: 'branch', label: 'Cabang', align: 'left' },
+                  { id: 'branch', label: 'Kota', align: 'left' },
                   { id: 'total', label: 'Total', align: 'left' },
                   { id: 'paid', label: 'Terbayar', align: 'left' },
                   { id: 'remaining', label: 'Sisa', align: 'left' },

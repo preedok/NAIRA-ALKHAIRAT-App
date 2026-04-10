@@ -9,7 +9,7 @@ const AccountingBankAccount = sequelize.define('AccountingBankAccount', {
   account_number: { type: DataTypes.STRING(50) },
   currency: { type: DataTypes.STRING(5), defaultValue: 'IDR' },
   gl_account_id: { type: DataTypes.UUID },
-  branch_id: { type: DataTypes.UUID },
+  branch_id: { type: DataTypes.UUID, field: 'kota_id' },
   is_active: { type: DataTypes.BOOLEAN, defaultValue: true }
 }, { tableName: 'accounting_bank_accounts', underscored: true, timestamps: true });
 

@@ -14,7 +14,7 @@ import { InvoiceNumberCell } from '../../../components/common/InvoiceNumberCell'
 import { getEffectiveInvoiceStatusLabel, getEffectiveInvoiceStatusBadgeVariant, type InvoiceForStatusRefund } from '../../../components/common/InvoiceStatusRefundCell';
 import Badge from '../../../components/common/Badge';
 
-type ReportTab = 'ringkasan' | 'wilayah' | 'provinsi' | 'cabang' | 'owner' | 'produk' | 'periode' | 'detail';
+type ReportTab = 'ringkasan' | 'wilayah' | 'provinsi' | 'kota' | 'owner' | 'produk' | 'periode' | 'detail';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
   hotel: 'Hotel',
@@ -94,7 +94,7 @@ const REPORT_TABLE_COLUMNS: Record<string, TableColumn[]> = {
     { id: 'count', label: 'Invoice', align: 'right' },
     { id: 'aksi', label: '', align: 'center' }
   ],
-  cabang: [
+  kota: [
     { id: 'no', label: 'No', align: 'left' },
     { id: 'name', label: 'Kota', align: 'left' },
     { id: 'revenue', label: 'Pendapatan (IDR · SAR · USD)', align: 'right' },
@@ -154,7 +154,7 @@ function FinancialReportInvoiceModalTable({
             <th className="text-left py-3 px-3 font-semibold text-slate-700">No</th>
             <th className="text-left py-3 px-3 font-semibold text-slate-700">Invoice</th>
             <th className="text-left py-3 px-3 font-semibold text-slate-700">Owner</th>
-            <th className="text-left py-3 px-3 font-semibold text-slate-700">Kota / Cabang</th>
+            <th className="text-left py-3 px-3 font-semibold text-slate-700">Kota</th>
             <th className="text-left py-3 px-3 font-semibold text-slate-700">Provinsi / Kota</th>
             <th className="text-left py-3 px-3 font-semibold text-slate-700">Tanggal</th>
             <th className="text-right py-3 px-3 font-semibold text-slate-700">Dibayar</th>
@@ -723,7 +723,7 @@ const AccountingFinancialReportPage: React.FC = () => {
     { id: 'ringkasan', label: 'Ringkasan', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'wilayah', label: 'Per Wilayah', icon: <MapPin className="w-4 h-4" /> },
     { id: 'provinsi', label: 'Per Provinsi', icon: <Map className="w-4 h-4" /> },
-    { id: 'cabang', label: 'Per Kota', icon: <Building2 className="w-4 h-4" /> },
+    { id: 'kota', label: 'Per Kota', icon: <Building2 className="w-4 h-4" /> },
     { id: 'owner', label: 'Per Owner', icon: <Users className="w-4 h-4" /> },
     { id: 'produk', label: 'Per Produk', icon: <Package className="w-4 h-4" /> },
     { id: 'periode', label: 'Per Bulan', icon: <Calendar className="w-4 h-4" /> },
@@ -797,7 +797,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
                 <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
                 <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
-                <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+                <Autocomplete label="Kota" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua kota" />
                 <Autocomplete label="Owner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name }))} emptyLabel="Semua owner" />
                 <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua status" />
                 <Autocomplete label="Jenis Produk" value={productType} onChange={setProductType} options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua produk" />
@@ -809,7 +809,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 <StatCard icon={<Calendar className="w-5 h-5" />} label="Periode" value={`${formatDate(data.period.start)} – ${formatDate(data.period.end)}`} />
                 <StatCard icon={<MapPin className="w-5 h-5" />} label="Wilayah" value={(data.by_wilayah || []).length} subtitle="Wilayah dengan transaksi" />
                 <StatCard icon={<Map className="w-5 h-5" />} label="Provinsi" value={(data.by_provinsi || []).length} subtitle="Provinsi dengan transaksi" />
-                <StatCard icon={<Building2 className="w-5 h-5" />} label="Kota" value={data.by_branch.length} subtitle="Unit cabang / kota dengan transaksi" />
+                <StatCard icon={<Building2 className="w-5 h-5" />} label="Kota" value={data.by_branch.length} subtitle="Unit kota dengan transaksi" />
                 <StatCard icon={<Users className="w-5 h-5" />} label="Owner" value={(data.by_owner || []).length} subtitle="Owner dengan transaksi" />
                 {prevPeriod && (
                   <StatCard
@@ -995,10 +995,10 @@ const AccountingFinancialReportPage: React.FC = () => {
             </>
           )}
 
-          {activeTab === 'cabang' && (
+          {activeTab === 'kota' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-                <StatCard icon={<Building2 className="w-5 h-5" />} label="Jumlah Kota" value={data.by_branch.length} subtitle="Unit cabang / kota dengan transaksi" />
+                <StatCard icon={<Building2 className="w-5 h-5" />} label="Jumlah Kota" value={data.by_branch.length} subtitle="Unit kota dengan transaksi" />
                 <StatCard icon={<DollarSign className="w-5 h-5" />} label="Total Pendapatan" value={<NominalDisplay amount={data.total_revenue} currency="IDR" />} subtitle={data.by_branch.length ? <>≈ <NominalDisplay amount={data.total_revenue / sarToIdr} currency="SAR" showCurrency={false} /> · <NominalDisplay amount={data.total_revenue / usdToIdr} currency="USD" showCurrency={false} /></> : undefined} />
                 <StatCard icon={<Receipt className="w-5 h-5" />} label="Total Invoice" value={data.by_branch.reduce((s, b) => s + (b.invoice_count ?? 0), 0)} subtitle="Seluruh kota" />
                 {data.by_branch.length > 0 && (() => {
@@ -1023,7 +1023,7 @@ const AccountingFinancialReportPage: React.FC = () => {
               />
               <div className="min-w-0 overflow-x-auto">
               <Table
-                columns={REPORT_TABLE_COLUMNS.cabang}
+                columns={REPORT_TABLE_COLUMNS.kota}
                 data={sortAndPaginate(data.by_branch || [], tableSortKey, tableSortOrder, tablePage, tableLimit, { nameKey: 'branch_name', revenueKey: 'revenue' }).rows}
                 emptyMessage="Belum ada data"
                 pagination={(data.by_branch || []).length > 0 ? {
@@ -1093,14 +1093,14 @@ const AccountingFinancialReportPage: React.FC = () => {
                 })()}
               </div>
               <Card className="min-w-0">
-              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Owner" subtitle="Periode, lokasi cabang, dan owner" right={null} className="mb-2" />
+              <CardSectionHeader icon={<Filter className="w-6 h-6" />} title="Filter Per Owner" subtitle="Periode, lokasi kota, dan owner" right={null} className="mb-2" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-3 mb-3 pb-3 border-b border-slate-200 items-end">
                 <Autocomplete label="Periode cepat" value={datePresetId} onChange={(v) => { const p = DATE_PRESETS.find((x) => x.id === v); if (p) applyPreset(p); else setDatePresetId(v || ''); }} options={DATE_PRESETS.map((p) => ({ value: p.id, label: p.label }))} emptyLabel="Pilih periode" />
                 <Autocomplete label="Jenis Periode" value={period} onChange={(v) => setPeriod(v as typeof period)} options={[{ value: 'month', label: 'Bulanan' }, { value: 'quarter', label: 'Triwulanan' }, { value: 'year', label: 'Tahunan' }, { value: 'custom', label: 'Rentang Tanggal' }]} />
                 {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
                 <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); setOwnerId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
                 <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); setOwnerId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
-                <Autocomplete label="Cabang" value={branchId} onChange={(v) => { setBranchId(v); setOwnerId(''); }} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+                <Autocomplete label="Kota" value={branchId} onChange={(v) => { setBranchId(v); setOwnerId(''); }} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua kota" />
                 <Autocomplete label="Owner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name }))} emptyLabel="Semua owner" className="md:col-span-2" />
               </div>
               <CardSectionHeader
@@ -1345,7 +1345,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                 {period !== 'custom' ? (<><Input label="Tahun" type="number" value={String(year)} onChange={(e) => setYear(parseInt(e.target.value, 10) || year)} min={2020} max={2030} />{period === 'month' && <Autocomplete label="Bulan" value={String(month)} onChange={(v) => setMonth(parseInt(v, 10))} options={[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({ value: String(m), label: new Date(2000, m - 1).toLocaleString('id-ID', { month: 'long' }) }))} />}{period === 'quarter' && <Autocomplete label="Triwulan" value={String(Math.ceil(month / 3))} onChange={(v) => setMonth((parseInt(v, 10) - 1) * 3 + 1)} options={[{ value: '1', label: 'Q1 (Jan–Mar)' }, { value: '2', label: 'Q2 (Apr–Jun)' }, { value: '3', label: 'Q3 (Jul–Sep)' }, { value: '4', label: 'Q4 (Okt–Des)' }]} />}</>) : (<><Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /><Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></>)}
                 <Autocomplete label="Wilayah" value={wilayahId} onChange={(v) => { setWilayahId(v); setProvinsiId(''); setBranchId(''); }} options={wilayahList.map((w) => ({ value: w.id, label: w.name }))} emptyLabel="Semua wilayah" />
                 <Autocomplete label="Provinsi" value={provinsiId} onChange={(v) => { setProvinsiId(v); setBranchId(''); }} options={provinsiList.filter((p) => !wilayahId || p.wilayah_id === wilayahId).map((p) => ({ value: p.id, label: p.name }))} emptyLabel="Semua provinsi" />
-                <Autocomplete label="Cabang" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua cabang" />
+                <Autocomplete label="Kota" value={branchId} onChange={setBranchId} options={branches.map((b) => ({ value: b.id, label: `${b.code} - ${b.name}` }))} emptyLabel="Semua kota" />
                 <Autocomplete label="Owner" value={ownerId} onChange={setOwnerId} options={owners.map((o) => ({ value: o.id, label: o.name }))} emptyLabel="Semua owner" />
                 <Autocomplete label="Status Invoice" value={status} onChange={setStatus} options={Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua status" />
                 <Autocomplete label="Jenis Produk" value={productType} onChange={setProductType} options={Object.entries(PRODUCT_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))} emptyLabel="Semua produk" />
@@ -1483,7 +1483,7 @@ const AccountingFinancialReportPage: React.FC = () => {
                       <th className="text-left py-3 px-3 font-semibold text-slate-700">No</th>
                       <th className="text-left py-3 px-3 font-semibold text-slate-700">No. Invoice</th>
                       <th className="text-left py-3 px-3 font-semibold text-slate-700">Owner</th>
-                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Cabang</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-700">Kota</th>
                       <th className="text-left py-3 px-3 font-semibold text-slate-700">Tanggal</th>
                       <th className="text-right py-3 px-3 font-semibold text-slate-700">Alokasi produk</th>
                       <th className="text-right py-3 px-3 font-semibold text-slate-700">Dibayar (inv.)</th>
@@ -1703,7 +1703,7 @@ const AccountingFinancialReportPage: React.FC = () => {
           <ModalBoxLg className="!max-w-6xl">
             <ModalHeader
               title={`Invoice — ${kotaInvModal.kota_label}`}
-              subtitle="Invoice unit cabang/kota ini; filter owner dan tanggal"
+              subtitle="Invoice unit kota ini; filter owner dan tanggal"
               icon={<Building2 className="w-5 h-5" />}
               onClose={() => {
                 setKotaInvModal(null);
@@ -1755,7 +1755,7 @@ const AccountingFinancialReportPage: React.FC = () => {
           <ModalBoxLg className="!max-w-6xl">
             <ModalHeader
               title={`Invoice — ${ownerInvModal.owner_name}`}
-              subtitle="Invoice milik owner ini; sempitkan lokasi (wilayah, provinsi, kabupaten, cabang) dan tanggal"
+              subtitle="Invoice milik owner ini; sempitkan lokasi (wilayah, provinsi, kabupaten, kota) dan tanggal"
               icon={<Users className="w-5 h-5" />}
               onClose={() => {
                 setOwnerInvModal(null);
@@ -1804,11 +1804,11 @@ const AccountingFinancialReportPage: React.FC = () => {
                   className="lg:col-span-2"
                 />
                 <Autocomplete
-                  label="Cabang (kota)"
+                  label="Kota"
                   value={owModalBranch}
                   onChange={setOwModalBranch}
                   options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
-                  emptyLabel="Semua cabang"
+                  emptyLabel="Semua kota"
                   className="lg:col-span-2"
                 />
                 <Input label="Dari tanggal" type="date" value={owModalFrom} onChange={(e) => setOwModalFrom(e.target.value)} />
@@ -1882,11 +1882,11 @@ const AccountingFinancialReportPage: React.FC = () => {
                   className="lg:col-span-2"
                 />
                 <Autocomplete
-                  label="Kota (cabang)"
+                  label="Kota"
                   value={pmModalBranch}
                   onChange={setPmModalBranch}
                   options={branches.map((b) => ({ value: b.id, label: `${b.code} — ${b.name}` }))}
-                  emptyLabel="Semua cabang"
+                  emptyLabel="Semua kota"
                   className="lg:col-span-2"
                 />
                 <Autocomplete

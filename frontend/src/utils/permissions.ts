@@ -2,7 +2,7 @@
  * Permission logic sesuai Master Business Process & RBAC
  * - Role Invoice: tidak bisa download dokumen visa/tiket/hotel
  * - Owner: hanya data miliknya
- * - Role operasional: hanya cabangnya (enforced di backend)
+ * - Role operasional: hanya kotanya (enforced di backend)
  */
 
 import type { UserRole } from '../types';
@@ -12,7 +12,7 @@ export function canDownloadVisaTicketHotel(role: UserRole): boolean {
   return role !== 'invoice_koordinator' && role !== 'invoice_saudi';
 }
 
-/** Bisa buat order: Owner, Invoice, Admin Cabang, Admin Pusat, Super Admin */
+/** Bisa buat order: Owner, Invoice, Admin per kota, Admin Pusat, Super Admin */
 export function canCreateOrder(role: UserRole): boolean {
   return ['owner_mou', 'owner_non_mou', 'invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin'].includes(role);
 }
@@ -32,7 +32,7 @@ export function canManageGeneralPricing(role: UserRole): boolean {
   return ['super_admin', 'admin_pusat'].includes(role);
 }
 
-/** Bisa set harga khusus owner / kurs cabang: Admin Cabang, (Hotel/Bus jika diizinkan) */
+/** Bisa set harga khusus owner / kurs per kota: Admin pusat/koordinator, (Hotel/Bus jika diizinkan) */
 export function canManageSpecialPricing(role: UserRole): boolean {
   return ['admin_pusat', 'super_admin', 'role_hotel', 'role_bus'].includes(role);
 }

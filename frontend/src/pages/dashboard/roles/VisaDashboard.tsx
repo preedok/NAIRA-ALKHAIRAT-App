@@ -70,7 +70,7 @@ const VisaDashboard: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Visa</h1>
-            <p className="text-slate-600 text-sm mt-1">Rekap statistik pekerjaan visa (penerbitan & dokumen Nusuk) cabang Anda.</p>
+            <p className="text-slate-600 text-sm mt-1">Rekap statistik pekerjaan visa (penerbitan & dokumen Nusuk) kota Anda.</p>
           </div>
         </div>
         <AutoRefreshControl onRefresh={fetchDashboard} disabled={loading} size="sm" />
@@ -79,7 +79,7 @@ const VisaDashboard: React.FC = () => {
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <StatCard icon={<ClipboardList className="w-5 h-5" />} label="Total Invoice" value={totalInvoices} subtitle="Invoice dengan item visa" iconClassName="bg-slate-100 text-slate-600" onClick={() => navigate('/dashboard/progress-visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
-          <StatCard icon={<FileText className="w-5 h-5" />} label="Item Visa" value={totalItems} subtitle="Item visa di cabang" iconClassName="bg-sky-100 text-sky-600" onClick={() => navigate('/dashboard/progress-visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
+          <StatCard icon={<FileText className="w-5 h-5" />} label="Item Visa" value={totalItems} subtitle="Item visa di kota" iconClassName="bg-sky-100 text-sky-600" onClick={() => navigate('/dashboard/progress-visa')} action={<div onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="gap-1 w-full justify-center" onClick={() => navigate('/dashboard/progress-visa')}><Eye className="w-4 h-4" /> Lihat</Button></div>} />
         </div>
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Per Status</p>

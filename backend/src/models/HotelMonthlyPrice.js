@@ -16,7 +16,8 @@ const HotelMonthlyPrice = sequelize.define('HotelMonthlyPrice', {
   branch_id: {
     type: DataTypes.UUID,
     allowNull: true,
-    references: { model: 'branches', key: 'id' },
+    field: 'kota_id',
+    references: { model: 'kotas', key: 'id' },
     onDelete: 'SET NULL'
   },
   owner_id: {

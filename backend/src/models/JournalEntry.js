@@ -9,7 +9,7 @@ const JournalEntry = sequelize.define('JournalEntry', {
   journal_type: { type: DataTypes.STRING(30), allowNull: false },
   source_type: { type: DataTypes.STRING(50) },
   source_id: { type: DataTypes.UUID },
-  branch_id: { type: DataTypes.UUID },
+  branch_id: { type: DataTypes.UUID, field: 'kota_id' },
   wilayah_id: { type: DataTypes.UUID },
   description: { type: DataTypes.TEXT },
   status: { type: DataTypes.STRING(30), defaultValue: 'draft' },

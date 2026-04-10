@@ -64,13 +64,15 @@ const OwnerProfile = sequelize.define('OwnerProfile', {
   },
   preferred_branch_id: {
     type: DataTypes.UUID,
-    references: { model: 'branches', key: 'id' },
+    field: 'preferred_kota_id',
+    references: { model: 'kotas', key: 'id' },
     onUpdate: 'CASCADE',
     onDelete: 'SET NULL'
   },
   assigned_branch_id: {
     type: DataTypes.UUID,
-    references: { model: 'branches', key: 'id' }
+    field: 'assigned_kota_id',
+    references: { model: 'kotas', key: 'id' }
   },
   assigned_at: {
     type: DataTypes.DATE

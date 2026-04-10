@@ -506,7 +506,7 @@ const UsersPage: React.FC = () => {
     { id: 'email', label: 'Email', align: 'left', sortable: true },
     { id: 'role', label: 'Role', align: 'left', sortable: true },
     { id: 'company', label: 'Perusahaan', align: 'left' },
-    { id: 'branch', label: 'Cabang', align: 'left' },
+    { id: 'branch', label: 'Kota', align: 'left' },
     { id: 'wilayah', label: 'Wilayah', align: 'left' },
     { id: 'provinsi', label: 'Provinsi', align: 'left' },
     { id: 'status', label: 'Status', align: 'center' },

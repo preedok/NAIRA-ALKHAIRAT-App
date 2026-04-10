@@ -26,14 +26,14 @@ module.exports = {
     ]).catch(() => {});
 
     await queryInterface.bulkInsert('product_prices', [
-      { id: 'f0000000-0000-0000-0000-000000000001', product_id: productIds.handling, branch_id: null, owner_id: null, currency: 'SAR', amount: 100, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000002', product_id: productIds.handling, branch_id: null, owner_id: null, currency: 'IDR', amount: 420000, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000003', product_id: productIds.hotel1, branch_id: null, owner_id: null, currency: 'IDR', amount: 2500000, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000004', product_id: productIds.visa1, branch_id: null, owner_id: null, currency: 'IDR', amount: 1500000, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000006', product_id: productIds.visa2, branch_id: null, owner_id: null, currency: 'IDR', amount: 2000000, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000007', product_id: productIds.visa3, branch_id: null, owner_id: null, currency: 'IDR', amount: 2500000, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000005', product_id: productIds.bus1, branch_id: null, owner_id: null, currency: 'IDR', amount: 500000, meta: '{}', created_at: now, updated_at: now },
-      { id: 'f0000000-0000-0000-0000-000000000008', product_id: productIds.siskopatuh1, branch_id: null, owner_id: null, currency: 'IDR', amount: 500000, meta: '{}', created_at: now, updated_at: now }
+      { id: 'f0000000-0000-0000-0000-000000000001', product_id: productIds.handling, kota_id: null, owner_id: null, currency: 'SAR', amount: 100, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000002', product_id: productIds.handling, kota_id: null, owner_id: null, currency: 'IDR', amount: 420000, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000003', product_id: productIds.hotel1, kota_id: null, owner_id: null, currency: 'IDR', amount: 2500000, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000004', product_id: productIds.visa1, kota_id: null, owner_id: null, currency: 'IDR', amount: 1500000, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000006', product_id: productIds.visa2, kota_id: null, owner_id: null, currency: 'IDR', amount: 2000000, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000007', product_id: productIds.visa3, kota_id: null, owner_id: null, currency: 'IDR', amount: 2500000, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000005', product_id: productIds.bus1, kota_id: null, owner_id: null, currency: 'IDR', amount: 500000, meta: '{}', created_at: now, updated_at: now },
+      { id: 'f0000000-0000-0000-0000-000000000008', product_id: productIds.siskopatuh1, kota_id: null, owner_id: null, currency: 'IDR', amount: 500000, meta: '{}', created_at: now, updated_at: now }
     ]).catch(() => {});
   },
 

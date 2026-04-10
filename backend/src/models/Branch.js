@@ -66,7 +66,7 @@ const Branch = sequelize.define('Branch', {
     defaultValue: true
   }
 }, {
-  tableName: 'branches',
+  tableName: 'kotas',
   underscored: true,
   timestamps: true
 });

@@ -113,7 +113,7 @@ const OrderListModal: React.FC<{
   return (
     <Modal open onClose={onClose}>
       <ModalBoxXl>
-        <ModalHeader title={title} subtitle="Daftar order dengan filter cabang, wilayah, status, dan tanggal" icon={<FileText className="w-5 h-5" />} onClose={onClose} />
+        <ModalHeader title={title} subtitle="Daftar order dengan filter kota, wilayah, status, dan tanggal" icon={<FileText className="w-5 h-5" />} onClose={onClose} />
         <ModalBody className="flex-1 overflow-y-auto">
           <div className="mb-6">
             <DashboardFilterBar
@@ -152,7 +152,7 @@ const OrderListModal: React.FC<{
             columns={[
               { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
               { id: 'owner', label: 'Owner', align: 'left' },
-              { id: 'branch', label: 'Cabang', align: 'left' },
+              { id: 'branch', label: 'Kota', align: 'left' },
               { id: 'status', label: 'Status', align: 'left' },
               { id: 'total', label: 'Total', align: 'left' },
               { id: 'date', label: 'Tanggal', align: 'left' },
@@ -392,7 +392,7 @@ const AdminPusatDashboard: React.FC = () => {
 
   const getModalTitle = () => {
     if (modalType === 'status') return 'Daftar Invoice per Status';
-    if (modalType === 'branch') return 'Daftar Invoice per Cabang';
+    if (modalType === 'branch') return 'Daftar Invoice per Kota';
     if (modalType === 'wilayah') return 'Daftar Invoice per Wilayah';
     if (modalType === 'provinsi') return 'Daftar Invoice per Provinsi';
     if (modalType === 'orders') return 'Semua Invoice';
@@ -404,7 +404,7 @@ const AdminPusatDashboard: React.FC = () => {
     <div className="space-y-8">
       <PageHeader
         title={user?.name ? `Selamat datang, ${user.name}` : 'Admin Pusat'}
-        subtitle="Rekapitulasi transaksi dan pekerjaan cabang"
+        subtitle="Rekapitulasi transaksi dan pekerjaan kota"
         right={
           <div className="flex items-center gap-2">
             <Button
@@ -419,9 +419,9 @@ const AdminPusatDashboard: React.FC = () => {
                     const d = res.data.data;
                     const msg = [
                       d.provinsi_updated != null && d.provinsi_updated > 0 ? `${d.provinsi_updated} provinsi` : null,
-                      d.branch_by_code != null && d.branch_by_code > 0 ? `${d.branch_by_code} cabang (dari kode)` : null,
-                      d.branch_by_city != null && d.branch_by_city > 0 ? `${d.branch_by_city} cabang (dari kota)` : null,
-                      d.branch_by_region != null && d.branch_by_region > 0 ? `${d.branch_by_region} cabang (dari region)` : null,
+                      d.branch_by_code != null && d.branch_by_code > 0 ? `${d.branch_by_code} kota (dari kode)` : null,
+                      d.branch_by_city != null && d.branch_by_city > 0 ? `${d.branch_by_city} kota (dari nama kota)` : null,
+                      d.branch_by_region != null && d.branch_by_region > 0 ? `${d.branch_by_region} kota (dari region)` : null,
                       d.user_wilayah_updated != null && d.user_wilayah_updated > 0 ? `${d.user_wilayah_updated} user` : null
                     ].filter(Boolean).join(', ') || 'Tidak ada data yang diubah.';
                     alert(`Sinkronisasi lokasi selesai.\n${msg}`);
@@ -435,7 +435,7 @@ const AdminPusatDashboard: React.FC = () => {
                   setSyncingLocation(false);
                 }
               }}
-              title="Isi otomatis provinsi/wilayah yang masih null dari kode cabang, kota, atau region"
+              title="Isi otomatis provinsi/wilayah yang masih null dari kode kota, nama kota, atau region"
             >
               <RefreshCw className={`w-4 h-4 mr-1 ${syncingLocation ? 'animate-spin' : ''}`} />
               Sync Lokasi
@@ -538,7 +538,7 @@ const AdminPusatDashboard: React.FC = () => {
             />
           </div>
 
-          {/* Order per Status, Cabang, Wilayah, Provinsi - 2x2 grid */}
+          {/* Order per Status, Kota, Wilayah, Provinsi - 2x2 grid */}
           <div className="grid lg:grid-cols-2 gap-8">
             <Card className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
@@ -566,7 +566,7 @@ const AdminPusatDashboard: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-emerald-500" />
-                  Invoice per Cabang
+                  Invoice per Kota
                 </h3>
                 <Button variant="ghost" size="sm" className="gap-1" onClick={() => openModal('branch')}>
                   View All <ChevronRight className="w-4 h-4" />
@@ -649,7 +649,7 @@ const AdminPusatDashboard: React.FC = () => {
                   { id: 'invoice_number', label: 'No. Invoice', align: 'left' },
                   { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' },
                   { id: 'owner', label: 'Owner', align: 'left' },
-                  { id: 'branch', label: 'Cabang', align: 'left' },
+                  { id: 'branch', label: 'Kota', align: 'left' },
                   { id: 'total', label: 'Total', align: 'left' },
                   { id: 'date', label: 'Tanggal', align: 'left' },
                   { id: 'actions', label: 'Aksi', align: 'left' }

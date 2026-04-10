@@ -306,7 +306,7 @@ const ReportsPage: React.FC = () => {
     <div className="flex flex-col min-h-0 w-full max-w-full space-y-6">
       <PageHeader
         title="Reports & Analytics"
-        subtitle="Laporan lengkap dengan filter periode, cabang, wilayah, dan provinsi"
+        subtitle="Laporan lengkap dengan filter periode, kota, wilayah, dan provinsi"
         right={
           <div className="flex items-center gap-2 flex-wrap">
             <AutoRefreshControl onRefresh={fetchAnalytics} disabled={loading} />
@@ -335,7 +335,7 @@ const ReportsPage: React.FC = () => {
           <CardSectionHeader
             icon={<Filter className="w-6 h-6" />}
             title="Pengaturan Filter"
-            subtitle="Pilih tipe, periode, cabang & wilayah. Filter berlaku otomatis."
+            subtitle="Pilih tipe, periode, kota & wilayah. Filter berlaku otomatis."
             className="mb-4 pb-3 border-b border-slate-200/80"
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -354,7 +354,7 @@ const ReportsPage: React.FC = () => {
             <Input label="Dari Tanggal" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
             <Input label="Sampai Tanggal" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             <Autocomplete
-              label="Cabang"
+              label="Kota"
               value={branchId}
               onChange={setBranchId}
               options={filterOptions.branches
@@ -481,11 +481,11 @@ const ReportsPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 shrink-0 mt-2">
             {breakdown.by_branch && breakdown.by_branch.length > 0 && (
               <Card className="travel-card min-w-0">
-                <CardSectionHeader title="Per Cabang" className="mb-4" />
+                <CardSectionHeader title="Per Kota" className="mb-4" />
                 <div className="overflow-auto max-h-96 min-w-0 rounded-xl border border-slate-200">
                   <Table
                     columns={[
-                      { id: 'branch', label: 'Cabang', align: 'left' },
+                      { id: 'branch', label: 'Kota', align: 'left' },
                       { id: 'count', label: 'Jumlah', align: 'right' },
                       { id: 'revenue', label: 'Revenue', align: 'right' }
                     ] as TableColumn[]}

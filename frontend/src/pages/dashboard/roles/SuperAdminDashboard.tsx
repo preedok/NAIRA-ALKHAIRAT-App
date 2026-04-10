@@ -152,9 +152,9 @@ const SuperAdminDashboard: React.FC = () => {
                 value={filterBranch}
                 onChange={(e) => setFilterBranch(e.target.value)}
                 className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white min-w-[160px] focus:ring-2 focus:ring-[#0D1A63]/20 focus:border-[#0D1A63] transition-shadow"
-                title="Per cabang"
+                title="Per kota"
               >
-                <option value="">Semua cabang</option>
+                <option value="">Semua kota</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -257,7 +257,7 @@ const SuperAdminDashboard: React.FC = () => {
                 <div className="flex justify-between"><span className="text-slate-600">Database</span><span className={perf.database === 'ok' ? 'text-primary-600 font-medium' : 'text-red-600 font-medium'}>{perf.database === 'ok' ? 'OK' : 'Error'}</span></div>
                 <div className="flex justify-between"><span className="text-slate-600">Memory</span><span className="font-medium">{perf.memory_mb ?? '-'} MB</span></div>
                 <div className="flex justify-between"><span className="text-slate-600">Uptime</span><span className="font-medium">{perf.uptime_human || '-'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600">Cabang aktif</span><span className="font-medium">{o.active_branches ?? 0}</span></div>
+                <div className="flex justify-between"><span className="text-slate-600">Kota aktif</span><span className="font-medium">{o.active_branches ?? 0}</span></div>
               </div>
             </Card>
           </div>

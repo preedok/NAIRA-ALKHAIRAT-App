@@ -203,7 +203,7 @@ const OrderFormPage: React.FC = () => {
   const [ownerInputMode, setOwnerInputMode] = useState<OwnerInputMode>('registered');
   const [manualOwnerName, setManualOwnerName] = useState('');
   const [manualOwnerPhone, setManualOwnerPhone] = useState('');
-  /** Owner manual: pilih kabupaten saja → provinsi & wilayah master terisi otomatis → cabang dari kode kabupaten */
+  /** Owner manual: pilih kabupaten saja → provinsi & wilayah master terisi otomatis → kota dari kode kabupaten */
   const [kabupatenMaster, setKabupatenMaster] = useState<KabupatenForOwnerItem[]>([]);
   const [kabupatenLoading, setKabupatenLoading] = useState(false);
   const [kabupatenFetchError, setKabupatenFetchError] = useState(false);
@@ -410,12 +410,16 @@ const OrderFormPage: React.FC = () => {
   const appliedDraftRef = useRef(false);
   useEffect(()=>{
     if(orderId||loadingOrd||orderDraft.items.length===0||appliedDraftRef.current) return;
+    const draftNeedsHotelProducts = orderDraft.items.some((d) => d.type === 'hotel' && !!d.product_id);
+    if (draftNeedsHotelProducts && loadingProd) return;
     appliedDraftRef.current=true;
     const rows:OrderItemRow[]=orderDraft.items.map(d=>{
       const draftCur = ((d as any).price_currency as DisplayCurrency | undefined) || undefined;
       const draftUnit = ((d as any).unit_price != null ? Number((d as any).unit_price) : NaN);
       const fallbackUnit = Number.isFinite(draftUnit) ? draftUnit : d.unit_price_idr;
-      const room_breakdown=d.room_breakdown?.map(l=>{ const line=(l as { meal_unit_price?: number }); return { id:l.id||`rl-${uid()}`, room_type:(l.room_type||'quad') as RoomTypeId, quantity:l.quantity||1, unit_price:l.unit_price||fallbackUnit, with_meal:!!l.with_meal, ...(typeof line.meal_unit_price==='number'?{ meal_unit_price: line.meal_unit_price }:{}) }; });
+      const draftHotelProd = d.type === 'hotel' ? products.find((p) => p.id === d.product_id) : undefined;
+      const draftPerPack = !!(draftHotelProd && hotelRoomPricingMode(draftHotelProd) === 'per_person');
+      const room_breakdown=d.room_breakdown?.map(l=>{ const line=(l as { meal_unit_price?: number }); const rtLine=(draftPerPack?('' as RoomTypeId):((l.room_type||'quad') as RoomTypeId)); return { id:l.id||`rl-${uid()}`, room_type:rtLine, quantity:l.quantity||1, unit_price:l.unit_price||fallbackUnit, with_meal:!!l.with_meal, ...(typeof line.meal_unit_price==='number'?{ meal_unit_price: line.meal_unit_price }:{}) }; });
       return {
         id:d.id,
         type:d.type as ItemType,
@@ -432,7 +436,7 @@ const OrderFormPage: React.FC = () => {
     });
     setItems(rows.length?rows:[newRow()]);
     orderDraft.clear();
-  },[orderId,loadingOrd,orderDraft.items.length,orderDraft.clear,rates.SAR_TO_IDR]);
+  },[orderId,loadingOrd,loadingProd,orderDraft.items.length,orderDraft.clear,rates.SAR_TO_IDR,products]);
 
   useEffect(()=>{
     if(!orderId||!order||!products.length) return;
@@ -464,6 +468,8 @@ const OrderFormPage: React.FC = () => {
           const checkIn=(firstMeta.check_in??getVal(grp[0],'check_in')) as string|undefined;
           const checkOut=(firstMeta.check_out??getVal(grp[0],'check_out')) as string|undefined;
           const hotelCur=currencyFromBackend||itemCur(grp[0]);
+          const hotelProd = products.find((p) => p.id === productRefId);
+          const perPackHotel = !!(hotelProd && hotelRoomPricingMode(hotelProd) === 'per_person');
           const hotelMeta: Record<string, unknown> = {};
           if (firstMeta.hotel_location) hotelMeta.hotel_location = firstMeta.hotel_location;
           if (firstMeta.hotel_stay_date_mode) hotelMeta.hotel_stay_date_mode = firstMeta.hotel_stay_date_mode;
@@ -481,7 +487,7 @@ const OrderFormPage: React.FC = () => {
             check_in:checkIn||undefined,
             check_out:checkOut||undefined,
             meta: Object.keys(hotelMeta).length ? hotelMeta : undefined,
-            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rt=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; const lineCur=itemCur(o); const withMeal=!!(m.with_meal??m.meal); const roomUp=parseFloat(m.room_unit_price??getVal(o,'unit_price'))||0; const mealUp=m.meal_unit_price!=null?Number(m.meal_unit_price):undefined; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(roomUp,productRefId,'hotel',lineCur), meal_unit_price:mealUp!=null?disp(mealUp,productRefId,'hotel',lineCur):undefined, with_meal:withMeal }; })
+            room_breakdown:grp.map((o:any)=>{ const m=typeof o.meta==='object'?o.meta:{}; const rtStored=((m.room_type??getVal(o,'room_type'))||'quad') as RoomTypeId; const rt=(perPackHotel?('' as RoomTypeId):rtStored); const lineCur=itemCur(o); const withMeal=!!(m.with_meal??m.meal); const roomUp=parseFloat(m.room_unit_price??getVal(o,'unit_price'))||0; const mealUp=m.meal_unit_price!=null?Number(m.meal_unit_price):undefined; return{ id:o.id||`rl-${uid()}`, room_type:rt, quantity:qty(o), unit_price:disp(roomUp,productRefId,'hotel',lineCur), meal_unit_price:mealUp!=null?disp(mealUp,productRefId,'hotel',lineCur):undefined, with_meal:withMeal }; })
           });
         }
       } else {
@@ -796,6 +802,19 @@ const OrderFormPage: React.FC = () => {
     p?.meta?.room_pricing_mode === 'per_person' ? 'per_person' : 'per_room';
   const hotelRoomPricingLabel = (p: ProductOption | undefined): string =>
     hotelRoomPricingMode(p) === 'per_person' ? 'Per pack' : 'Per room';
+  /** Per pack: tipe kamar tidak dipilih user; lookup harga pakai acuan grid produk jika baris kosong. */
+  const effectiveHotelLineRoomType = (r: OrderItemRow, l: HotelRoomLine): RoomTypeId | '' => {
+    if (l.room_type) return l.room_type as RoomTypeId;
+    const prod = byType('hotel').find((p) => p.id === r.product_id);
+    if (prod && hotelRoomPricingMode(prod) === 'per_person') return defaultRoomTypeForHotelGrid(prod, r);
+    return '';
+  };
+  const hotelLineQuantityValid = (r: OrderItemRow, l: HotelRoomLine): boolean => {
+    if (l.quantity <= 0) return false;
+    const prod = byType('hotel').find((p) => p.id === r.product_id);
+    if (prod && hotelRoomPricingMode(prod) === 'per_person') return true;
+    return !!l.room_type;
+  };
   // Catatan: grid bulanan backend untuk mode per_person sudah bernilai "per pack", jadi jangan dikali kapasitas kamar.
   const hotelRoomUnitMultiplier = (_p: ProductOption | undefined, _rt: RoomTypeId | ''): number => 1;
   const hotelRoomUnitSar = (p: ProductOption | undefined, rt: RoomTypeId | '', checkIn?: string, row?: OrderItemRow): number => {
@@ -901,8 +920,11 @@ const OrderFormPage: React.FC = () => {
         const prod = products.find((p) => p.id === r.product_id);
         const cur = (r.price_currency ?? getDisplayCurrency('hotel', prod)) as string;
         const lines = (r.room_breakdown || [])
-          .filter((l) => l.room_type)
-          .map((l) => `${l.id}:${l.room_type}:${l.quantity}:${l.with_meal ? 1 : 0}`)
+          .map((l) => {
+            const effRt = effectiveHotelLineRoomType(r, l);
+            return effRt ? `${l.id}:${effRt}:${l.quantity}:${l.with_meal ? 1 : 0}` : '';
+          })
+          .filter(Boolean)
           .join('|');
         return `${r.id}|${r.product_id}|${r.check_in}|${r.check_out}|${cur}|${lines}|${hotelPriceMode(r)}|${branchId ?? ''}|${ownerId ?? ''}|${s2iEff}|${u2iEff}`;
       })
@@ -918,13 +940,14 @@ const OrderFormPage: React.FC = () => {
         const prod = products.find((p) => p.id === row.product_id);
         const cur = (row.price_currency ?? getDisplayCurrency('hotel', prod)) as 'SAR' | 'IDR' | 'USD';
         (row.room_breakdown || []).forEach((line) => {
-          if (!line.room_type) return;
+          const quoteRt = effectiveHotelLineRoomType(row, line);
+          if (!quoteRt) return;
           const q = Math.max(1, line.quantity || 1);
           productsApi
             .getHotelStayQuote(row.product_id, {
               check_in: row.check_in!,
               check_out: row.check_out!,
-              room_type: line.room_type,
+              room_type: quoteRt,
               with_meal: !!line.with_meal,
               quantity: q,
               currency: cur,
@@ -1023,10 +1046,9 @@ const OrderFormPage: React.FC = () => {
         }
         if (next.type === 'hotel' && prod && upd.product_id !== r.product_id) {
           if (hotelRoomPricingMode(prod) === 'per_person') {
-            const rt = defaultRoomTypeForHotelGrid(prod, next);
             const fb = isFullboardHotelForRow(prod, next);
             next.meta = { ...(next.meta || {}), hotel_room_input_mode: undefined, hotel_pax: undefined };
-            next.room_breakdown = [{ id: `rl-${uid()}`, room_type: rt, quantity: 0, unit_price: 0, with_meal: fb, meal_unit_price: 0 }];
+            next.room_breakdown = [{ id: `rl-${uid()}`, room_type: '', quantity: 0, unit_price: 0, with_meal: fb, meal_unit_price: 0 }];
           } else {
             const withMealDefault = isFullboardHotelForRow(prod, next);
             next.meta = { ...(next.meta || {}), hotel_room_input_mode: 'manual', hotel_pax: undefined };
@@ -1034,9 +1056,8 @@ const OrderFormPage: React.FC = () => {
           }
         } else if (next.type === 'hotel' && !(next.room_breakdown?.length)) {
           if (hotelRoomPricingMode(prod) === 'per_person') {
-            const rt = defaultRoomTypeForHotelGrid(prod, next);
             const fb = isFullboardHotelForRow(prod, next);
-            next.room_breakdown = [{ id: `rl-${uid()}`, room_type: rt, quantity: 0, unit_price: 0, with_meal: fb, meal_unit_price: 0 }];
+            next.room_breakdown = [{ id: `rl-${uid()}`, room_type: '', quantity: 0, unit_price: 0, with_meal: fb, meal_unit_price: 0 }];
           } else {
             const withMealDefault = isFullboardHotelForRow(prod, next);
             next.room_breakdown = [{ id: `rl-${uid()}`, room_type: '', quantity: 0, unit_price: 0, with_meal: withMealDefault }];
@@ -1046,9 +1067,10 @@ const OrderFormPage: React.FC = () => {
           const rowCurHotel = next.price_currency ?? getDisplayCurrency(next.type, prod);
           const fullboard = isFullboardHotelForRow(prod, next);
           next.room_breakdown = next.room_breakdown.map((l) => {
-            if (!l.room_type) return l;
+            const effRt = effectiveHotelLineRoomType(next, l);
+            if (!effRt) return l;
             const withMeal = fullboard ? true : (l.with_meal ?? false);
-            const roomPSar = hotelRoomUnitSar(prod, l.room_type as RoomTypeId, next.check_in, next);
+            const roomPSar = hotelRoomUnitSar(prod, effRt, next.check_in, next);
             const mealPSar = getMealPriceSar(prod, next.check_in, next);
             const roomP = toCurrencyFromSAR(roomPSar, rowCurHotel);
             const mealP = toCurrencyFromSAR(mealPSar, rowCurHotel);
@@ -1078,25 +1100,29 @@ const OrderFormPage: React.FC = () => {
 
   /* totals — hotel: harga per malam × jumlah malam × qty; non-hotel: unit_price × qty. Semua dalam mata uang baris (product); konversi pakai kurs sistem. */
   const getEffectiveLinePrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
-    if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
+    if(r.type!=='hotel') return l.unit_price||0;
+    const effRt = effectiveHotelLineRoomType(r, l);
+    if(!effRt) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
     const effectiveCheckIn = hotelPricingCheckInForRow(r);
     if (prod?.type === 'hotel') {
       const hasSplitMeal = typeof l.meal_unit_price === 'number';
       if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
-      const roomPart = l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
+      const roomPart = l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, effRt, effectiveCheckIn, r), cur);
       const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, effectiveCheckIn, r), cur)) : 0;
       return roomPart + mealPart;
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
-    const roomPart=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    if(l.with_meal&&!hasSplitMeal) return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,effRt,effectiveCheckIn,r),cur);
+    const roomPart=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,effRt,effectiveCheckIn,r),cur);
     const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur)):0;
     return roomPart+mealPart;
   };
   const getEffectiveRoomPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
-    if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
+    if(r.type!=='hotel') return l.unit_price||0;
+    const effRt = effectiveHotelLineRoomType(r, l);
+    if(!effRt) return l.unit_price||0;
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
     const effectiveCheckIn = hotelPricingCheckInForRow(r);
@@ -1106,30 +1132,33 @@ const OrderFormPage: React.FC = () => {
         const meal = toCurrencyFromSAR(getMealPriceSar(prod, effectiveCheckIn, r), cur);
         return Math.max(0, combined - meal);
       }
-      return l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
+      return l.unit_price || toCurrencyFromSAR(hotelRoomUnitSar(prod, effRt, effectiveCheckIn, r), cur);
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur); return Math.max(0,combined-meal); }
-    return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    if(l.with_meal&&!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,effRt,effectiveCheckIn,r),cur); const meal=toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur); return Math.max(0,combined-meal); }
+    return l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,effRt,effectiveCheckIn,r),cur);
   };
   const getEffectiveMealPrice=(r:OrderItemRow,l:HotelRoomLine):number=>{
     if(r.type!=='hotel'||!l.with_meal) return 0;
+    const effRt = effectiveHotelLineRoomType(r, l);
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
     const effectiveCheckIn = hotelPricingCheckInForRow(r);
     if (prod?.type === 'hotel') {
       if (typeof l.meal_unit_price === 'number') return l.meal_unit_price;
       const combined = l.unit_price || 0;
-      const room = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
+      const room = effRt ? toCurrencyFromSAR(hotelRoomUnitSar(prod, effRt, effectiveCheckIn, r), cur) : 0;
       return Math.max(0, combined - room);
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
-    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
+    if(!hasSplitMeal){ const combined=l.unit_price||toCurrencyFromSAR(hotelRoomUnitSar(prod,(effRt||'quad') as RoomTypeId,effectiveCheckIn,r),cur); const room=getEffectiveRoomPrice(r,l); return Math.max(0,combined-room); }
     return l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur);
   };
   /** Untuk ringkasan total & header: jika kurs order diisi, harga kamar dihitung lagi dari master SAR × kurs order (bukan IDR tersimpan dari kurs settings). */
   const getEffectiveLinePriceForTotals=(r:OrderItemRow,l:HotelRoomLine):number=>{
-    if(r.type!=='hotel'||!l.room_type) return l.unit_price||0;
+    if(r.type!=='hotel') return l.unit_price||0;
+    const effRt = effectiveHotelLineRoomType(r, l);
+    if(!effRt) return l.unit_price||0;
     if (!hasCustomOrderKurs) return getEffectiveLinePrice(r,l);
     const prod=byType('hotel').find(p=>p.id===r.product_id);
     const cur=rowCur(r);
@@ -1137,14 +1166,14 @@ const OrderFormPage: React.FC = () => {
       const hasSplitMeal = typeof l.meal_unit_price === 'number';
       if (l.with_meal && !hasSplitMeal) return l.unit_price || 0;
       const effectiveCheckIn = hotelPricingCheckInForRow(r);
-      const roomPart = toCurrencyFromSAR(hotelRoomUnitSar(prod, l.room_type as RoomTypeId, effectiveCheckIn, r), cur);
+      const roomPart = toCurrencyFromSAR(hotelRoomUnitSar(prod, effRt, effectiveCheckIn, r), cur);
       const mealPart = l.with_meal ? (hasSplitMeal ? (l.meal_unit_price as number) : toCurrencyFromSAR(getMealPriceSar(prod, effectiveCheckIn, r), cur)) : 0;
       return roomPart + mealPart;
     }
     const hasSplitMeal=typeof l.meal_unit_price==='number';
     const effectiveCheckIn = hotelPricingCheckInForRow(r);
-    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
-    const roomPart=toCurrencyFromSAR(hotelRoomUnitSar(prod,l.room_type as RoomTypeId,effectiveCheckIn,r),cur);
+    if(l.with_meal&&!hasSplitMeal) return toCurrencyFromSAR(hotelRoomUnitSar(prod,effRt,effectiveCheckIn,r),cur);
+    const roomPart=toCurrencyFromSAR(hotelRoomUnitSar(prod,effRt,effectiveCheckIn,r),cur);
     const mealPart=l.with_meal?(l.meal_unit_price??toCurrencyFromSAR(getMealPriceSar(prod,effectiveCheckIn,r),cur)):0;
     return roomPart+mealPart;
   };
@@ -1172,7 +1201,19 @@ const OrderFormPage: React.FC = () => {
     }
     return Math.max(0,r.quantity)*(r.unit_price||0);
   };
-  const rowPax=(r:OrderItemRow)=>{ if(r.type==='hotel'&&r.room_breakdown?.length) return r.room_breakdown.reduce((s,l)=>s+Math.max(0,l.quantity)*rCap(l.room_type||undefined),0); if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type); return 0; };
+  const rowPax=(r:OrderItemRow)=>{
+    if(r.type==='hotel'&&r.room_breakdown?.length){
+      const prod=byType('hotel').find(p=>p.id===r.product_id);
+      const perPack=prod&&hotelRoomPricingMode(prod)==='per_person';
+      return r.room_breakdown.reduce((s,l)=>{
+        const q=Math.max(0,l.quantity);
+        if(perPack) return s+q;
+        return s+q*rCap(l.room_type||undefined);
+      },0);
+    }
+    if(r.type==='hotel'&&r.room_type) return Math.max(0,r.quantity)*rCap(r.room_type);
+    return 0;
+  };
   const hotelMonthBreakdown=(r:OrderItemRow)=>{
     if(r.type!=='hotel'||!r.check_in||!r.check_out) return [] as Array<{ yearMonth:string; nights:number; est:number }>;
     const a=new Date(`${r.check_in}T00:00:00`);
@@ -1288,8 +1329,10 @@ const OrderFormPage: React.FC = () => {
     for(const r of valid){
       if(r.type==='hotel'&&r.room_breakdown?.length){
         for(const l of r.room_breakdown){
-          if(l.quantity<=0||!l.room_type) continue;
-          const key=`hotel:${r.product_id}:${l.room_type}:${hotelStayKeyPart(r)}`;
+          if(!hotelLineQuantityValid(r,l)) continue;
+          const effRt = effectiveHotelLineRoomType(r,l);
+          if(!effRt) continue;
+          const key=`hotel:${r.product_id}:${effRt}:${hotelStayKeyPart(r)}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
           const lineRowCur=getEffectiveLinePriceForTotals(r,l);
@@ -1320,7 +1363,7 @@ const OrderFormPage: React.FC = () => {
     }
     return sum;
   };
-  const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+  const validForTotal=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some((l)=>hotelLineQuantityValid(r,l))||(r.room_type&&r.quantity>0); return r.quantity>0; });
   const subtotalIDR=payloadSubtotalIDR(validForTotal);
   const totalIDR=subtotalIDR+busFinalityPerPackIDR;
   const totalSAR=totalIDR/(effectiveRates.SAR_TO_IDR||4200);
@@ -1336,13 +1379,15 @@ const OrderFormPage: React.FC = () => {
       const cur=rowCur(r);
       if(r.type==='hotel'&&r.room_breakdown?.length){
         for(const l of r.room_breakdown){
-          if(l.quantity<=0||!l.room_type) continue;
+          if(!hotelLineQuantityValid(r,l)) continue;
+          const effRt = effectiveHotelLineRoomType(r,l);
+          if(!effRt) continue;
           const meal=l.with_meal??false;
-          const meta:Record<string,unknown>={room_type:l.room_type,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
+          const meta:Record<string,unknown>={room_type:effRt,with_meal:meal,room_unit_price:l.unit_price??0,meal_unit_price:meal?(l.meal_unit_price??0):0}; if(r.check_in) meta.check_in=r.check_in; if(r.check_out) meta.check_out=r.check_out; if(r.meta?.hotel_location) meta.hotel_location=r.meta.hotel_location;
           if ((r.meta as { hotel_pack_input_mode?: string } | undefined)?.hotel_pack_input_mode) meta.hotel_pack_input_mode = (r.meta as { hotel_pack_input_mode?: string }).hotel_pack_input_mode;
           if ((r.meta as { hotel_pack_pax?: number } | undefined)?.hotel_pack_pax != null) meta.hotel_pack_pax = (r.meta as { hotel_pack_pax?: number }).hotel_pack_pax;
           if ((r.meta as { hotel_pack_total?: number } | undefined)?.hotel_pack_total != null) meta.hotel_pack_total = (r.meta as { hotel_pack_total?: number }).hotel_pack_total;
-          const key=`hotel:${r.product_id}:${l.room_type}:${hotelStayKeyPart(r)}`;
+          const key=`hotel:${r.product_id}:${effRt}:${hotelStayKeyPart(r)}`;
           const isNew=!initialOrderItemKeysRef.current.has(key);
           const useLatestRates=hasDpPayment&&isNew;
           if ((r.meta as { hotel_stay_date_mode?: string } | undefined)?.hotel_stay_date_mode) meta.hotel_stay_date_mode = (r.meta as { hotel_stay_date_mode?: string }).hotel_stay_date_mode;
@@ -1353,7 +1398,7 @@ const OrderFormPage: React.FC = () => {
           if ((r.meta as { hotel_stay_nights?: number } | undefined)?.hotel_stay_nights != null) meta.hotel_stay_nights = (r.meta as { hotel_stay_nights?: number }).hotel_stay_nights;
           if ((r.meta as { hotel_stay_month?: number } | undefined)?.hotel_stay_month != null) meta.hotel_stay_month = (r.meta as { hotel_stay_month?: number }).hotel_stay_month;
           if ((r.meta as { hotel_stay_year?: number } | undefined)?.hotel_stay_year != null) meta.hotel_stay_year = (r.meta as { hotel_stay_year?: number }).hotel_stay_year;
-          const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:l.unit_price??0,currency:cur,room_type:l.room_type,meal,check_in:r.check_in,check_out:r.check_out,meta};
+          const item:Record<string,any>={product_id:r.product_id,type:'hotel',product_ref_type:'product',quantity:l.quantity,unit_price:l.unit_price??0,currency:cur,room_type:effRt,meal,check_in:r.check_in,check_out:r.check_out,meta};
           if(useLatestRates) item.currency_rates_override=latestRates;
           out.push(item);
         }
@@ -1395,16 +1440,16 @@ const OrderFormPage: React.FC = () => {
     const hasCustomRates=canEditPrice&&orderRatesOverride&&(orderRatesOverride.SAR_TO_IDR!=null||orderRatesOverride.USD_TO_IDR!=null);
     return hasCustomRates ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride!.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride!.USD_TO_IDR } } : {};
   };
-  const validForRates=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+  const validForRates=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some((l)=>hotelLineQuantityValid(r,l))||(r.room_type&&r.quantity>0); return r.quantity>0; });
   const hasNewItemsAfterDp=hasDpPayment&&validForRates.some(r=>{
-    if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(l.quantity<=0||!l.room_type) continue; const key=`hotel:${r.product_id}:${l.room_type}:${hotelStayKeyPart(r)}`; if(!initialOrderItemKeysRef.current.has(key)) return true; } return false; }
+    if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(!hotelLineQuantityValid(r,l)) continue; const effRt=effectiveHotelLineRoomType(r,l); if(!effRt) continue; const key=`hotel:${r.product_id}:${effRt}:${hotelStayKeyPart(r)}`; if(!initialOrderItemKeysRef.current.has(key)) return true; } return false; }
     if(r.type==='hotel'&&r.room_type){ const key=`hotel:${r.product_id}:${r.room_type}:${hotelStayKeyPart(r)}`; return !initialOrderItemKeysRef.current.has(key); }
     const key=`${r.type}:${r.product_id}:${JSON.stringify(r.meta||{})}`;
     return !initialOrderItemKeysRef.current.has(key);
   });
   const handleSubmit=(e:React.FormEvent)=>{
     e.preventDefault();
-    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some((l)=>hotelLineQuantityValid(r,l))||(r.room_type&&r.quantity>0); return r.quantity>0; });
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
     if (!orderPicName.trim()) { showToast('Nama PIC invoice wajib diisi', 'warning'); return; }
     const visaWithoutTravel = valid.filter((r) => r.type === 'visa' && !(r.meta?.travel_date && String(r.meta.travel_date).trim()));
@@ -1425,13 +1470,13 @@ const OrderFormPage: React.FC = () => {
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan (pulang pergi: keberangkatan & kepulangan; pergi saja: tanggal keberangkatan; pulang saja: tanggal kepulangan)','warning'); return; }
     const siskopatuhWithoutDate=valid.filter(r=>r.type==='siskopatuh'&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
     if(siskopatuhWithoutDate.length){ showToast('Item siskopatuh wajib isi tanggal layanan','warning'); return; }
-    if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
+    if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih kota terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
-    if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki kota','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualOwnerName.trim()){ showToast('Isi nama owner tanpa akun','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualKabupatenId){ showToast('Pilih kota/kabupaten','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&manualKabupatenId&&!selectedManualKab?.wilayah_id){ showToast('Kabupaten ini belum dipetakan ke wilayah di master. Hubungi admin pusat.','warning'); return; }
-    if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada cabang sistem untuk kota terpilih (pastikan master cabang punya kode sama dengan kode kabupaten).','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada kota sistem untuk kabupaten terpilih (pastikan master kota punya kode sama dengan kode kabupaten).','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
     setSaving(true);
@@ -1461,7 +1506,7 @@ const OrderFormPage: React.FC = () => {
 
   const handleSaveDraft=(e?: React.MouseEvent)=>{
     e?.preventDefault();
-    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some(l=>l.room_type&&l.quantity>0)||(r.room_type&&r.quantity>0); return r.quantity>0; });
+    const valid=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some((l)=>hotelLineQuantityValid(r,l))||(r.room_type&&r.quantity>0); return r.quantity>0; });
     if(!valid.length){ showToast('Minimal satu item dengan produk dan qty > 0','warning'); return; }
     if (!orderPicName.trim()) { showToast('Nama PIC invoice wajib diisi', 'warning'); return; }
     const visaWithoutTravelDraft = valid.filter((r) => r.type === 'visa' && !(r.meta?.travel_date && String(r.meta.travel_date).trim()));
@@ -1482,13 +1527,13 @@ const OrderFormPage: React.FC = () => {
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan','warning'); return; }
     const siskopatuhWithoutDateDraft=valid.filter(r=>r.type==='siskopatuh'&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
     if(siskopatuhWithoutDateDraft.length){ showToast('Item siskopatuh wajib isi tanggal layanan','warning'); return; }
-    if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih cabang terlebih dahulu','warning'); return; }
+    if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih kota terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
-    if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki cabang','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki kota','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualOwnerName.trim()){ showToast('Isi nama owner tanpa akun','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&!manualKabupatenId){ showToast('Pilih kota/kabupaten','warning'); return; }
     if(canPickOwner&&ownerInputMode==='manual'&&manualKabupatenId&&!selectedManualKab?.wilayah_id){ showToast('Kabupaten ini belum dipetakan ke wilayah di master. Hubungi admin pusat.','warning'); return; }
-    if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada cabang sistem untuk kota terpilih (pastikan master cabang punya kode sama dengan kode kabupaten).','warning'); return; }
+    if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada kota sistem untuk kabupaten terpilih (pastikan master kota punya kode sama dengan kode kabupaten).','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
     setSaving(true);
@@ -1589,7 +1634,7 @@ const OrderFormPage: React.FC = () => {
         />
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Cabang */}
+        {/* Kota */}
         {!isEdit&&!isOwner&&!canPickOwner&&branches.length>0&&(
           <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
             <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
@@ -1597,12 +1642,12 @@ const OrderFormPage: React.FC = () => {
                 <Building2 className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="font-semibold text-slate-900 text-sm">Cabang</h2>
-                <p className="text-xs text-slate-500">Pilih cabang untuk order ini</p>
+                <h2 className="font-semibold text-slate-900 text-sm">Kota</h2>
+                <p className="text-xs text-slate-500">Pilih kota untuk order ini</p>
               </div>
             </div>
             <div className="p-4">
-              <Autocomplete label="Cabang" value={branchSel} onChange={v=>{setBranchSel(v);setOwnerSel('');}} options={branches.map(b=>({ value: b.id, label: `${b.name} (${b.code})` }))} placeholder={AUTOCOMPLETE_PILIH.PILIH_CABANG} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_CABANG} />
+              <Autocomplete label="Kota" value={branchSel} onChange={v=>{setBranchSel(v);setOwnerSel('');}} options={branches.map(b=>({ value: b.id, label: `${b.name} (${b.code})` }))} placeholder={AUTOCOMPLETE_PILIH.PILIH_CABANG} emptyLabel={AUTOCOMPLETE_PILIH.PILIH_CABANG} />
             </div>
           </section>
         )}
@@ -1634,7 +1679,7 @@ const OrderFormPage: React.FC = () => {
               </div>
               <div>
                 <h2 className="font-semibold text-slate-900 text-sm">Owner</h2>
-                <p className="text-xs text-slate-500">Order & cabang mengikuti owner yang dipilih</p>
+                <p className="text-xs text-slate-500">Order & kota mengikuti owner yang dipilih</p>
               </div>
             </div>
             <div className="p-4 space-y-3">
@@ -1715,16 +1760,16 @@ const OrderFormPage: React.FC = () => {
                     placeholder="—"
                   />
                   <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2">
-                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Cabang owner (otomatis)</p>
+                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Kota owner (otomatis)</p>
                     {branchSel && branches.find((b) => b.id === branchSel) ? (
                       <p className="text-sm text-slate-800">
                         {(branches.find((b) => b.id === branchSel)?.name ?? '')}{' '}
                         <span className="text-slate-500">({branches.find((b) => b.id === branchSel)?.code})</span>
                       </p>
                     ) : manualKabupatenId ? (
-                      <p className="text-sm text-amber-700">Belum ada cabang dengan kode sama kode kabupaten ini. Hubungi admin pusat untuk master cabang.</p>
+                      <p className="text-sm text-amber-700">Belum ada kota dengan kode sama kode kabupaten ini. Hubungi admin pusat untuk master kota.</p>
                     ) : (
-                      <p className="text-sm text-slate-500">Pilih kota/kabupaten — cabang mengikuti kode kabupaten di master.</p>
+                      <p className="text-sm text-slate-500">Pilih kota/kabupaten — kota operasional mengikuti kode kabupaten di master.</p>
                     )}
                   </div>
                 </div>
@@ -2275,13 +2320,14 @@ const OrderFormPage: React.FC = () => {
                                   <p className="font-semibold text-slate-800 text-xs">
                                     {isPerPackHotel ? 'Hitungan (harga/malam × malam × pack)' : 'Hitungan (harga/malam × malam × kamar)'}
                                   </p>
-                                  {(row.room_breakdown||[]).filter(l=>l.quantity>0&&l.room_type).map(line=>{
+                                  {(row.room_breakdown||[]).filter((l) => hotelLineQuantityValid(row, l)).map(line=>{
                                     const nights = nightsFor(row);
                                     const roomPerNight = getEffectiveRoomPrice(row, line);
                                     const mealPerNight = getEffectiveMealPrice(row, line);
                                     const lineTotalRoom = roomPerNight * line.quantity * nights;
                                     const lineTotalMeal = mealPerNight * line.quantity * nights;
-                                    const roomLabel = ROOM_TYPES.find(t=>t.id===line.room_type)?.label ?? line.room_type;
+                                    const effLineRt = effectiveHotelLineRoomType(row, line);
+                                    const roomLabel = ROOM_TYPES.find(t=>t.id===effLineRt)?.label ?? effLineRt;
                                     return (
                                       <div key={line.id} className="pl-2 border-l-2 border-slate-300">
                                         <p className="tabular-nums">

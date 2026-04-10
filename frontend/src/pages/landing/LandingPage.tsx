@@ -121,7 +121,7 @@ const FAQS = [
 ];
 
 const STATS = [
-  { value: 50,   suffix: '+', label: 'Cabang Aktif',       icon: MapPin    },
+  { value: 50,   suffix: '+', label: 'Kota Aktif',       icon: MapPin    },
   { value: 10,   suffix: 'rb+', label: 'Jamaah / Tahun',   icon: Users     },
   { value: 15,   suffix: '+', label: 'Tahun Pengalaman',   icon: Award     },
   { value: 98,   suffix: '%', label: 'Tingkat Kepuasan',   icon: Star      },
@@ -1565,7 +1565,7 @@ const LandingPage: React.FC = () => {
               { icon: Phone, label: 'Telepon', value: '021-XXXX-XXXX', desc: 'Senin–Sabtu, 08:00–17:00 WIB' },
               { icon: Mail, label: 'Email', value: 'partner@bintangglobal.id', desc: 'Balasan dalam 1×24 jam' },
               { icon: MessageCircle, label: 'WhatsApp', value: '08xx-xxxx-xxxx', desc: 'Support cepat via chat' },
-              { icon: Building2, label: 'Cabang', value: '50+ cabang', desc: 'Seluruh Indonesia' },
+              { icon: Building2, label: 'Kota', value: '50+ kota', desc: 'Seluruh Indonesia' },
             ].map(({ icon: Icon, label, value, desc }) => (
               <div key={label} style={{
                 padding:24, borderRadius:16, border:'1px solid rgba(56,189,248,0.12)', background:'rgba(56,189,248,0.04)',
@@ -1647,7 +1647,7 @@ const LandingPage: React.FC = () => {
           <div data-reveal style={{ opacity:0, padding:'24px 20px', borderRadius:20, border:'1px solid rgba(56,189,248,0.1)', background:'rgba(56,189,248,0.03)', display:'flex', flexWrap:'wrap', justifyContent:'center', gap:24, alignItems:'center' }}>
             <div style={{ fontSize:12, fontWeight:700, letterSpacing:'0.15em', color:T.dim, textTransform:'uppercase' }}>Dipercaya oleh</div>
             {[
-              { num: '50+', text: 'Cabang' },
+              { num: '50+', text: 'Kota' },
               { num: '10rb+', text: 'Jamaah/Tahun' },
               { num: '500+', text: 'Partner' },
               { num: '98%', text: 'Kepuasan' },

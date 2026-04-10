@@ -682,8 +682,8 @@ const OwnerActivationPage: React.FC = () => {
                     </div>
                     <div className="oap-card-desc">
                       {isMouOwner
-                        ? 'Bukti bayar Anda sedang ditinjau. Setelah disetujui, admin akan menetapkan cabang dan mengaktivasi akun.'
-                        : 'Pendaftaran Anda sedang ditinjau oleh Admin Pusat. Setelah disetujui, cabang akan ditetapkan dan akun Anda diaktivasi.'}
+                        ? 'Bukti bayar Anda sedang ditinjau. Setelah disetujui, admin akan menetapkan kota dan mengaktivasi akun.'
+                        : 'Pendaftaran Anda sedang ditinjau oleh Admin Pusat. Setelah disetujui, kota akan ditetapkan dan akun Anda diaktivasi.'}
                     </div>
                   </div>
                 </div>

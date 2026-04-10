@@ -16,7 +16,7 @@ const { ROLES } = require('../constants');
 
 /**
  * GET /api/v1/super-admin/monitoring
- * Query: branch_id, role (optional). Filter monitoring per cabang atau per role.
+ * Query: branch_id, role (optional). Filter monitoring per kota atau per role.
  */
 const getMonitoring = asyncHandler(async (req, res) => {
   const now = new Date();
@@ -429,7 +429,7 @@ const I18N = {
     orders: 'Order',
     invoices: 'Faktur',
     users: 'Pengguna',
-    branches: 'Cabang',
+    branches: 'Kota',
     settings: 'Pengaturan',
     reports: 'Laporan',
     hotels: 'Hotel',
@@ -570,7 +570,7 @@ const exportMonitoringExcel = asyncHandler(async (req, res) => {
     ['Total Revenue', parseFloat(totalRevenue || 0)],
     ['Pengguna Aktif (24j)', activeUsersCount || 0],
     ['Total Pengguna', totalUsers || 0],
-    ['Cabang Aktif', branchesCount || 0],
+    ['Kota Aktif', branchesCount || 0],
     ['Database', dbPing],
     ['Memory (MB)', Math.round(memoryUsage.heapUsed / 1024 / 1024)],
     ['Uptime', uptimeHuman]
@@ -651,7 +651,7 @@ const exportMonitoringPdf = asyncHandler(async (req, res) => {
   doc.font('Helvetica').fontSize(10);
   doc.text(`Total Order: ${totalOrders || 0}  |  Total Faktur: ${totalInvoices || 0}`);
   doc.text(`Total Revenue: ${parseFloat(totalRevenue || 0).toLocaleString('id-ID')}`);
-  doc.text(`Pengguna Aktif (24j): ${activeUsersCount || 0}  |  Total Pengguna: ${totalUsers || 0}  |  Cabang Aktif: ${branchesCount || 0}`);
+  doc.text(`Pengguna Aktif (24j): ${activeUsersCount || 0}  |  Total Pengguna: ${totalUsers || 0}  |  Kota Aktif: ${branchesCount || 0}`);
   doc.text(`Database: ${dbPing}  |  Memory (MB): ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}  |  Uptime: ${formatUptime(uptimeSeconds)}`);
   doc.moveDown(1);
 

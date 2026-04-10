@@ -169,7 +169,7 @@ const ProfilePage: React.FC = () => {
                       { label: 'Peran Akun', value: roleLabel },
                       { label: 'Nama Perusahaan', value: user?.company_name },
                       ...(isOwner && ownerProfile?.AssignedBranch
-                        ? [{ label: 'Cabang', value: `${ownerProfile.AssignedBranch.code} – ${ownerProfile.AssignedBranch.name}` }]
+                        ? [{ label: 'Kota', value: `${ownerProfile.AssignedBranch.code} – ${ownerProfile.AssignedBranch.name}` }]
                         : []),
                       ...(isOwner && ownerProfile?.activated_at
                         ? [{ label: 'Tanggal Aktivasi', value: formatDate(ownerProfile.activated_at) }]

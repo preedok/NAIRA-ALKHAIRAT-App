@@ -13,6 +13,7 @@ router.get('/', (req, res) => {
       auth: '/api/v1/auth (POST /login, GET /me)',
       owners: '/api/v1/owners (register, upload-mou, list, verify-mou, verify-deposit, assign-branch, activate)',
       branches: '/api/v1/branches',
+      kotas: '/api/v1/kotas',
       orders: '/api/v1/orders',
       invoices: '/api/v1/invoices'
     }
@@ -29,6 +30,7 @@ router.use('/notifications', require('./notifications'));
 router.use('/owners', require('./owners'));
 router.use('/ai-chat', require('./aiChat'));
 router.use('/branches', require('./branches'));
+router.use('/kotas', require('./branches'));
 router.use('/orders', require('./orders'));
 router.use('/order-cancellation-requests', require('./orderCancellationRequests'));
 router.use('/invoices', require('./invoices'));

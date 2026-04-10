@@ -31,7 +31,8 @@ const User = sequelize.define('User', {
   },
   branch_id: {
     type: DataTypes.UUID,
-    references: { model: 'branches', key: 'id' },
+    field: 'kota_id',
+    references: { model: 'kotas', key: 'id' },
     onUpdate: 'CASCADE',
     onDelete: 'SET NULL'
   },

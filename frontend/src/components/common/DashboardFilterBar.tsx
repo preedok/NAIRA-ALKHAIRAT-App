@@ -60,9 +60,9 @@ export interface DashboardFilterBarProps {
   invoiceStatusOptions?: { value: string; label: string }[];
   owners?: { id: string; name?: string; User?: { name?: string; company_name?: string } }[];
   dueStatusOptions?: { value: string; label: string }[];
-  /** Label untuk filter cabang (default: Cabang). Misal di halaman Invoice pakai "Kota". */
+  /** Label untuk filter kota (default: Kota). */
   branchLabel?: string;
-  /** Empty label untuk filter cabang (default: Semua cabang). Misal "Semua kota". */
+  /** Empty label untuk filter kota (default: Semua kota). */
   branchEmptyLabel?: string;
 }
 
@@ -135,7 +135,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   orderStatusOptions = {},
   invoiceStatusOptions = DEFAULT_INVOICE_STATUS_OPTIONS,
   owners = [],
-  branchLabel = 'Cabang',
+  branchLabel = 'Kota',
   branchEmptyLabel = AUTOCOMPLETE_FILTER.SEMUA_CABANG,
   dueStatusOptions = [
     { value: '', label: 'Semua' },

@@ -169,7 +169,7 @@ const InvoiceDashboard: React.FC = () => {
     navigate(`/dashboard/orders-invoices?tab=invoices&invoice_id=${inv.id}`);
   };
 
-  const scopeLabel = user?.role === 'invoice_saudi' ? 'Semua wilayah' : 'Cabang Anda';
+  const scopeLabel = user?.role === 'invoice_saudi' ? 'Semua wilayah' : 'Kota Anda';
 
   const invoiceSubtitle = user?.role === 'invoice_saudi'
     ? 'Semua invoice seluruh wilayah. Input pembayaran SAR/USD/IDR + upload bukti bayar; sistem update sisa tagihan otomatis.'
@@ -300,13 +300,13 @@ const InvoiceDashboard: React.FC = () => {
           <CardSectionHeader
             icon={<FileText className="w-6 h-6" />}
             title="Invoice Terbaru (wilayah)"
-            subtitle="Invoice di wilayah Anda. Cari no. invoice, order, owner, atau cabang."
+            subtitle="Invoice di wilayah Anda. Cari no. invoice, order, owner, atau kota."
             right={
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
                   type="text"
-                  placeholder="Cari no. invoice, order, owner, cabang..."
+                  placeholder="Cari no. invoice, order, owner, kota..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -578,7 +578,7 @@ const InvoiceDashboard: React.FC = () => {
                       <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact />
                     </div>
                     <p className="text-sm text-slate-600 mt-0.5">
-                      {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · Total <NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />
+                      {inv.User?.name ?? inv.Order?.User?.name} · Kota: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · Total <NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />
                     </p>
                     {proof && (
                       <p className="text-xs text-slate-500 mt-1">
@@ -612,7 +612,7 @@ const InvoiceDashboard: React.FC = () => {
                     <InvoiceNumberCell inv={inv} statusLabels={INVOICE_STATUS_LABELS} compact />
                   </div>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    {inv.User?.name ?? inv.Order?.User?.name} · Cabang: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · <NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />
+                    {inv.User?.name ?? inv.Order?.User?.name} · Kota: {inv.Branch?.name ?? inv.Branch?.code ?? '–'} · <NominalDisplay amount={parseFloat(inv.total_amount) || 0} currency="IDR" />
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => handleUnblock(inv.id)}>

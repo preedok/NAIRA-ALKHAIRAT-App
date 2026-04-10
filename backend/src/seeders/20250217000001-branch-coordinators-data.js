@@ -20,7 +20,7 @@ module.exports = {
     const q = queryInterface.sequelize;
     for (const u of UPDATES) {
       await q.query(
-        `UPDATE branches SET
+        `UPDATE kotas SET
           name = '${String(u.name).replace(/'/g, "''")}',
           manager_name = '${String(u.manager_name || '').replace(/'/g, "''")}',
           koordinator_provinsi = '${String(u.koordinator_provinsi || '').replace(/'/g, "''")}',
@@ -38,7 +38,7 @@ module.exports = {
 
   async down(queryInterface, Sequelize) {
     await queryInterface.sequelize.query(
-      `UPDATE branches SET
+      `UPDATE kotas SET
         koordinator_provinsi = NULL,
         koordinator_provinsi_phone = NULL,
         koordinator_provinsi_email = NULL,

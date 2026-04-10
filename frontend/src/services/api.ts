@@ -652,15 +652,17 @@ export interface KabupatenForOwnerItem {
   wilayah_nama: string | null;
 }
 
-/** Master lokasi: wilayah, provinsi, kabupaten/kota dari API (database master). Jangan pakai data dummy. */
+/** Master lokasi (kota): wilayah, provinsi, kabupaten/kota dari API (tabel kotas). Jangan pakai data dummy. */
 export const branchesApi = {
-  list: (params?: { limit?: number; page?: number; include_inactive?: string; search?: string; region?: string; provinsi_id?: string; wilayah_id?: string; city?: string; is_active?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get<{ success: boolean; data: Branch[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/branches', { params }),
-  listPublic: (params?: { search?: string; region?: string; limit?: number }) => api.get<{ success: boolean; data: Branch[] }>('/branches/public', { params }),
-  listProvinces: (params?: { wilayah_id?: string }) => api.get<{ success: boolean; data: ProvinceItem[] }>('/branches/provinces', { params }),
-  listWilayah: () => api.get<{ success: boolean; data: Array<{ id: string; name: string }> }>('/branches/wilayah'),
-  listKabupaten: (provinceId: string | number) => api.get<{ success: boolean; data: KabupatenItem[] }>(`/branches/kabupaten/${provinceId}`),
-  listKabupatenForOwner: () => api.get<{ success: boolean; data: KabupatenForOwnerItem[] }>('/branches/kabupaten-for-owner')
+  list: (params?: { limit?: number; page?: number; include_inactive?: string; search?: string; region?: string; provinsi_id?: string; wilayah_id?: string; city?: string; is_active?: string; sort_by?: string; sort_order?: 'asc' | 'desc' }) => api.get<{ success: boolean; data: Branch[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/kotas', { params }),
+  listPublic: (params?: { search?: string; region?: string; limit?: number }) => api.get<{ success: boolean; data: Branch[] }>('/kotas/public', { params }),
+  listProvinces: (params?: { wilayah_id?: string }) => api.get<{ success: boolean; data: ProvinceItem[] }>('/kotas/provinces', { params }),
+  listWilayah: () => api.get<{ success: boolean; data: Array<{ id: string; name: string }> }>('/kotas/wilayah'),
+  listKabupaten: (provinceId: string | number) => api.get<{ success: boolean; data: KabupatenItem[] }>(`/kotas/kabupaten/${provinceId}`),
+  listKabupatenForOwner: () => api.get<{ success: boolean; data: KabupatenForOwnerItem[] }>('/kotas/kabupaten-for-owner')
 };
+/** Alias nama domain: sama dengan branchesApi (master kota). */
+export const kotasApi = branchesApi;
 export interface Branch {
   id: string;
   code: string;

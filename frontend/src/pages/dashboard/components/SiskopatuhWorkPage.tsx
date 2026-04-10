@@ -446,11 +446,11 @@ const SiskopatuhWorkPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
             <div className="flex-1 min-w-0 sm:min-w-[220px]">
               <Input
-                label="Cari (Invoice / Order / Owner / Cabang)"
+                label="Cari (Invoice / Order / Owner / Kota)"
                 type="text"
                 value={filterSearch}
                 onChange={(e) => setFilterSearch(e.target.value)}
-                placeholder="No. invoice, owner, cabang..."
+                placeholder="No. invoice, owner, kota..."
                 icon={<Search className="w-4 h-4" />}
                 fullWidth
               />

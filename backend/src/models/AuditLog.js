@@ -13,7 +13,8 @@ const AuditLog = sequelize.define('AuditLog', {
   },
   branch_id: {
     type: DataTypes.UUID,
-    references: { model: 'branches', key: 'id' }
+    field: 'kota_id',
+    references: { model: 'kotas', key: 'id' }
   },
   action: {
     type: DataTypes.STRING(100),

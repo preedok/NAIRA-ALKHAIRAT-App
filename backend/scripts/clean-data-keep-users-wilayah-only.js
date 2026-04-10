@@ -82,15 +82,15 @@ const TABLES_DELETE_ORDER = [
   'accounting_bank_accounts',
   'banks',
 
-  // Master owner & cabang/provinsi (users.branch_id harus di-null dulu sebelum hapus branches)
+  // Master owner & kota/provinsi (users.kota_id harus di-null dulu sebelum hapus kotas)
   'owner_profiles',
-  'branches',
+  'kotas',
   'provinsi'
 ];
 
-// Sebelum hapus branches: null-kan users.branch_id agar tidak FK violation
+// Sebelum hapus kotas: null-kan users.kota_id agar tidak FK violation
 const NULL_USER_FK_BEFORE_DELETE = [
-  { table: 'users', column: 'branch_id' }
+  { table: 'users', column: 'kota_id' }
 ];
 
 // chart_of_accounts punya self-reference (parent_id): hapus anak dulu
@@ -114,7 +114,7 @@ async function run() {
 
   console.log('Menghapus SEMUA data non-master (tetap: tabel users & wilayah)...\n');
 
-  // Null-kan FK di users yang mengacu ke tabel yang akan dihapus (branch_id)
+  // Null-kan FK di users yang mengacu ke tabel yang akan dihapus (kota_id)
   for (const { table, column } of NULL_USER_FK_BEFORE_DELETE) {
     try {
       await sequelize.query(`UPDATE "${table}" SET ${column} = NULL WHERE ${column} IS NOT NULL`);

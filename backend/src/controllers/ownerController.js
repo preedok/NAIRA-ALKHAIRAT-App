@@ -670,7 +670,7 @@ const getStats = asyncHandler(async (req, res) => {
 /**
  * GET /api/v1/owners (Admin Pusat / Super Admin / Koordinator / Accounting)
  * Query: status, branch_id, wilayah_id, search (q), page, limit.
- * Koordinator: hanya owner yang assigned ke cabang di wilayah mereka, atau DEPOSIT_VERIFIED.
+ * Koordinator: hanya owner yang assigned ke kota di wilayah mereka, atau DEPOSIT_VERIFIED.
  */
 const list = asyncHandler(async (req, res) => {
   const { q: search, page = 1, limit = 50 } = req.query;
@@ -777,13 +777,13 @@ const verifyRegistrationPayment = asyncHandler(async (req, res) => {
   });
   res.json({
     success: true,
-    message: 'Bukti bayar pendaftaran disetujui. Tetapkan cabang lalu aktivasi owner.',
+    message: 'Bukti bayar pendaftaran disetujui. Tetapkan kota lalu aktivasi owner.',
     data: { owner_status: OWNER_STATUS.DEPOSIT_VERIFIED }
   });
 });
 
 /**
- * PATCH /api/v1/owners/:id/verify-deposit (Admin Pusat / Admin Cabang)
+ * PATCH /api/v1/owners/:id/verify-deposit (Admin Pusat / Admin per kota)
  */
 const verifyDeposit = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -802,7 +802,7 @@ const verifyDeposit = asyncHandler(async (req, res) => {
 });
 
 /**
- * PATCH /api/v1/owners/:id/assign-branch (Admin Pusat / Admin Koordinator hanya ke cabang di wilayah)
+ * PATCH /api/v1/owners/:id/assign-branch (Admin Pusat / Admin Koordinator hanya ke kota di wilayah)
  */
 const assignBranch = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -819,10 +819,10 @@ const assignBranch = asyncHandler(async (req, res) => {
   }
 
   const branch = await Branch.findByPk(branch_id);
-  if (!branch) return res.status(404).json({ success: false, message: 'Cabang tidak ditemukan' });
+  if (!branch) return res.status(404).json({ success: false, message: 'Kota tidak ditemukan' });
   if (isKoordinatorRole(req.user.role)) {
     const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
-    if (!branchIds.includes(branch_id)) return res.status(403).json({ success: false, message: 'Hanya dapat menetapkan ke cabang di wilayah Anda' });
+    if (!branchIds.includes(branch_id)) return res.status(403).json({ success: false, message: 'Hanya dapat menetapkan ke kota di wilayah Anda' });
   }
 
   await User.update({ branch_id }, { where: { id: profile.user_id } });
@@ -831,7 +831,7 @@ const assignBranch = asyncHandler(async (req, res) => {
     assigned_at: new Date(),
     status: OWNER_STATUS.ASSIGNED_TO_BRANCH
   });
-  res.json({ success: true, message: 'Cabang berhasil ditetapkan', data: { owner_status: OWNER_STATUS.ASSIGNED_TO_BRANCH } });
+  res.json({ success: true, message: 'Kota berhasil ditetapkan', data: { owner_status: OWNER_STATUS.ASSIGNED_TO_BRANCH } });
 });
 
 /**
@@ -881,7 +881,7 @@ const activate = asyncHandler(async (req, res) => {
         return res.status(403).json({ success: false, message: 'Owner ini bukan di wilayah Anda.' });
       }
     } else if (profile.assigned_branch_id !== req.user.branch_id) {
-      return res.status(403).json({ success: false, message: 'Bukan cabang Anda' });
+      return res.status(403).json({ success: false, message: 'Bukan kota Anda' });
     }
   }
 
@@ -898,7 +898,7 @@ const activate = asyncHandler(async (req, res) => {
   let emailSent = false;
 
   if (!isNonMou) {
-    const assignedBranchName = (profile.AssignedBranch && profile.AssignedBranch.name) || (profile.PreferredBranch && profile.PreferredBranch.name) || (profile.preferred_branch_id ? (await Branch.findByPk(profile.preferred_branch_id, { attributes: ['name'] }))?.name : null) || 'Cabang Bintang Global';
+    const assignedBranchName = (profile.AssignedBranch && profile.AssignedBranch.name) || (profile.PreferredBranch && profile.PreferredBranch.name) || (profile.preferred_branch_id ? (await Branch.findByPk(profile.preferred_branch_id, { attributes: ['name'] }))?.name : null) || 'Kota Bintang Global';
     mou_generated_url = await generateMouPdf({
       user: user.get ? user.get({ plain: true }) : user,
       ownerProfile: profile.get ? profile.get({ plain: true }) : profile,

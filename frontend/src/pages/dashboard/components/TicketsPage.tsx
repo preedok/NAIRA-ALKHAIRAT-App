@@ -908,7 +908,7 @@ const TicketsPage: React.FC<TicketsPageProps> = ({
         <Plane className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
         <div>
           <h3 className="font-medium text-slate-900 text-sm">Penerbitan tiket</h3>
-          <p className="text-sm text-slate-600 mt-0.5">Order dan penerbitan tiket jamaah dikelola dengan akun role Tiket cabang.</p>
+          <p className="text-sm text-slate-600 mt-0.5">Order dan penerbitan tiket jamaah dikelola dengan akun role Tiket per kota.</p>
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ import { isKoordinatorRole } from '../../types';
 
 /**
  * Menampilkan dashboard sesuai role user.
- * Super Admin & Admin Pusat: monitoring semua cabang.
+ * Super Admin & Admin Pusat: monitoring semua kota.
  * Koordinator: dashboard wilayah.
  * Owner / Invoice / Hotel / Visa / Ticket / Bus: rekapitulasi pekerjaan masing-masing.
  */

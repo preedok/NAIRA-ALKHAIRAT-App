@@ -56,7 +56,7 @@ export const OWNER_STATUS_LABELS: Record<OwnerStatus, string> = {
   pending_registration_payment: 'Upload Bukti Bayar Pendaftaran',
   pending_registration_verification: 'Menunggu Verifikasi Admin',
   deposit_verified: 'Bukti Disetujui',
-  assigned_to_branch: 'Ditugaskan ke Cabang',
+  assigned_to_branch: 'Ditugaskan ke Kota',
   active: 'Aktif',
   rejected: 'Ditolak',
   registered_pending_mou: 'Registrasi – Pending MoU',
@@ -161,7 +161,7 @@ export interface HotelPrice {
   meal_price_per_person_sar?: number;
   is_general_price: boolean; // true = set by Super Admin/Admin Pusat
   owner_id?: string; // if special price for specific owner
-  approved_by?: string; // Admin Cabang/Pusat who approved
+  approved_by?: string; // Admin kota/Pusat who approved
   effective_date: string;
   notes?: string;
 }

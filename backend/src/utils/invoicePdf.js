@@ -508,7 +508,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   doc.text(formatDate(data.due_date_full) || '-', infoX(2), y, { width: infoColW - 20 });
   y += 26;
 
-  // ---- Dua kolom: Bill To | Cabang (garis pemisah, nilai dibatasi lebar) ----
+  // ---- Dua kolom: Bill To | Lokasi kota (garis pemisah, nilai dibatasi lebar) ----
   const col2StartX = margin + Math.floor(pageWidth * 0.5);
   const valW1 = col2StartX - margin - 90;
   const valW2 = pageWidth - (col2StartX - margin) - 20;
@@ -540,7 +540,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
   y += 14;
   doc.text('Email', margin + 12, y);
   doc.text(String(data.User?.email || '-'), margin + 92, y, { width: valW1 });
-  doc.text('Kode Cabang', col2StartX + 12, y);
+  doc.text('Kode Kota', col2StartX + 12, y);
   doc.text(String(data.Branch?.code || '-'), col2StartX + 92, y, { width: valW2 - 82 });
   y += 14;
   const picForPdf = (() => {

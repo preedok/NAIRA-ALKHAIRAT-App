@@ -415,7 +415,7 @@ const VisaWorkPage: React.FC = () => {
           </div>
           <div className="flex flex-col sm:flex-row gap-4 sm:items-end flex-wrap">
             <div className="flex-1 min-w-0 sm:min-w-[220px]">
-              <Input label="Cari (invoice / order / owner / cabang)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
+              <Input label="Cari (invoice / order / owner / kota)" type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Ketik untuk filter..." icon={<Search className="w-4 h-4" />} fullWidth />
             </div>
             <div className="w-full sm:w-52 min-w-0">
               <Autocomplete label="Status Invoice" value={filterInvoiceStatus} onChange={setFilterInvoiceStatus} options={[{ value: '', label: AUTOCOMPLETE_FILTER.SEMUA_STATUS }, ...Object.entries(INVOICE_STATUS_LABELS).map(([val, lbl]) => ({ value: val, label: lbl }))]} emptyLabel={AUTOCOMPLETE_FILTER.SEMUA_STATUS} />
