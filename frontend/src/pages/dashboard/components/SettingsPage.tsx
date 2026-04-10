@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Settings as SettingsIcon, DollarSign, Bell, Save, Percent } from 'lucide-react';
+import { Settings as SettingsIcon, DollarSign, Bell, Save } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
@@ -27,7 +27,6 @@ const SettingsPage: React.FC = () => {
     registration_deposit_idr: string | number;
     SAR_TO_IDR: string | number;
     USD_TO_IDR: string | number;
-    mou_discount_percent: string | number;
     notification_order: boolean;
     notification_payment: boolean;
     notification_invoice: boolean;
@@ -37,7 +36,6 @@ const SettingsPage: React.FC = () => {
     registration_deposit_idr: 25000000,
     SAR_TO_IDR: 4200,
     USD_TO_IDR: 15500,
-    mou_discount_percent: 10,
     notification_order: true,
     notification_payment: true,
     notification_invoice: true
@@ -64,7 +62,6 @@ const SettingsPage: React.FC = () => {
             registration_deposit_idr: data.registration_deposit_idr ?? f.registration_deposit_idr,
             SAR_TO_IDR: currency.SAR_TO_IDR ?? f.SAR_TO_IDR,
             USD_TO_IDR: currency.USD_TO_IDR ?? f.USD_TO_IDR,
-            mou_discount_percent: data.mou_discount_percent ?? f.mou_discount_percent,
             notification_order: data.notification_order === 'true' || data.notification_order === true,
             notification_payment: data.notification_payment === 'true' || data.notification_payment === true,
             notification_invoice: data.notification_invoice === 'true' || data.notification_invoice === true
@@ -84,7 +81,6 @@ const SettingsPage: React.FC = () => {
   const tabs = [
     { id: 'general', label: 'General', icon: <SettingsIcon className="w-5 h-5" /> },
     { id: 'currency', label: 'Currency & Kurs', icon: <DollarSign className="w-5 h-5" /> },
-    { id: 'mou_discount', label: 'Diskon MOU', icon: <Percent className="w-5 h-5" /> },
     { id: 'notifications', label: 'Notifikasi', icon: <Bell className="w-5 h-5" /> }
   ];
 
@@ -131,23 +127,6 @@ const SettingsPage: React.FC = () => {
       } else {
         showToast('Kurs disimpan', 'success');
       }
-    } catch (e: any) {
-      showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveMouDiscount = async () => {
-    if (!canEdit) return;
-    setSaving(true);
-    try {
-      const pct = Math.min(100, Math.max(0, Number(form.mou_discount_percent) || 0));
-      await businessRulesApi.set({
-        rules: { mou_discount_percent: pct }
-      });
-      setForm((f) => ({ ...f, mou_discount_percent: pct }));
-      showToast('Diskon MOU disimpan. Harga produk untuk owner MOU akan ' + (pct > 0 ? pct + '% lebih murah.' : 'sama dengan non-MOU.'), 'success');
     } catch (e: any) {
       showToast(e.response?.data?.message || 'Gagal menyimpan', 'error');
     } finally {
@@ -283,32 +262,6 @@ const SettingsPage: React.FC = () => {
               </div>
             </Card>
           )}
-
-              {activeTab === 'mou_discount' && (
-                <Card className="travel-card">
-                  <CardSectionHeader title="Diskon MOU" subtitle="Persentase diskon harga produk untuk owner MOU (lebih murah dari harga non-MOU)." className="mb-6" />
-                  <div className="space-y-6">
-                    <p className="text-sm text-slate-600">Owner dengan status MOU akan melihat harga produk lebih murah. Nilai 10 = harga 10% lebih murah dari harga normal. Diatur oleh Admin Pusat.</p>
-                    <div className="p-4 bg-slate-50 rounded-lg w-full">
-                      <Input
-                        label="Diskon MOU (%)"
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={form.mou_discount_percent === '' ? '' : String(form.mou_discount_percent)}
-                        onChange={(e) => setForm((f) => ({ ...f, mou_discount_percent: e.target.value === '' ? '' : Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
-                        disabled={!canEdit}
-                      />
-                    </div>
-                    {canEdit && (
-                      <Button variant="primary" onClick={handleSaveMouDiscount} disabled={saving} fullWidth>
-                        <Save className="w-5 h-5 mr-2" />
-                        {saving ? 'Menyimpan...' : 'Simpan Diskon MOU'}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              )}
 
               {activeTab === 'notifications' && (
                 <Card className="travel-card">

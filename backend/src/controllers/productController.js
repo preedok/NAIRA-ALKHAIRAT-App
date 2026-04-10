@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { Op, QueryTypes } = require('sequelize');
-const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, OwnerProfile, HotelMonthlyPrice } = require('../models');
+const { Product, ProductPrice, ProductAvailability, Branch, User, BusinessRuleConfig, OrderItem, HotelMonthlyPrice } = require('../models');
 const { getAvailabilityByDateRange, getHotelCalendar } = require('../services/hotelAvailabilityService');
 const { calculateStayCostByNights, MEAL_ROOM_TYPE, COMPONENT_MEAL, COMPONENT_ROOM } = require('../services/hotelMonthlyPricingService');
 const { getVisaCalendar } = require('../services/visaAvailabilityService');
@@ -8,7 +8,6 @@ const { getTicketCalendar } = require('../services/ticketAvailabilityService');
 const { getBusCalendar } = require('../services/busAvailabilityService');
 const { ROLES, VISA_KIND, BANDARA_TIKET, BANDARA_TIKET_CODES, TICKET_PERIOD_TYPES, TICKET_TRIP_TYPES, BUS_ROUTE_TYPES, BUS_TRIP_TYPES, isOwnerRole } = require('../constants');
 const { BUSINESS_RULE_KEYS } = require('../constants');
-const { getRulesForBranch } = require('./businessRuleController');
 const sequelize = require('../config/sequelize');
 const { hasMouFullboardAutoCalcColumn, productCreateFieldsOption } = require('../utils/productSchemaSupport');
 
@@ -105,15 +104,9 @@ function fillTriple(sourceCurrency, value, rates) {
   return { idr: v * USD_TO_IDR, sar: (v * USD_TO_IDR) / SAR_TO_IDR, usd: v };
 }
 
-/** Terapkan diskon MOU ke amount jika owner_id adalah owner MOU. Dipakai di getEffectivePrice (bus, tiket, umum). */
+/** Diskon MOU dinonaktifkan: harga mengikuti data master produk. */
 async function applyMouDiscountIfOwner(amount, ownerId, branchId) {
-  if (amount == null || typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0 || !ownerId) return amount;
-  const profile = await OwnerProfile.findOne({ where: { user_id: ownerId }, attributes: ['is_mou_owner'], raw: true });
-  if (!profile || !profile.is_mou_owner) return amount;
-  const rules = await getRulesForBranch(branchId);
-  const discountPct = Math.min(100, Math.max(0, parseInt(rules.mou_discount_percent, 10) || 0));
-  if (discountPct <= 0) return amount;
-  return Math.round(amount * (1 - discountPct / 100) * 100) / 100;
+  return amount;
 }
 
 /**
@@ -248,21 +241,7 @@ const list = asyncHandler(async (req, res) => {
     const viewAsPusat = req.query.view_as_pusat === 'true' && req.user?.role === 'role_hotel';
     const bid = viewAsPusat ? null : (branch_id || req.user?.branch_id || null);
     const oid = owner_id || null;
-    let mouMultiplier = 1;
-    let ownerIsMou = false;
-    let mouDiscountPercent = 0;
-    if (oid) {
-      const profile = await OwnerProfile.findOne({ where: { user_id: oid }, attributes: ['is_mou_owner'], raw: true });
-      if (profile && profile.is_mou_owner) {
-        const rules = await getRulesForBranch(bid);
-        mouDiscountPercent = Math.min(100, Math.max(0, parseInt(rules.mou_discount_percent, 10) || 0));
-        if (mouDiscountPercent > 0) {
-          ownerIsMou = true;
-          mouMultiplier = 1 - mouDiscountPercent / 100;
-        }
-      }
-    }
-    const applyMou = (n) => (n != null && typeof n === 'number' && !Number.isNaN(n) ? Math.round(n * mouMultiplier * 100) / 100 : n);
+    const applyMou = (n) => n;
     const result = (products || []).map(p => {
       const prices = p.ProductPrices || [];
       const generalPrices = prices.filter(pr => !pr.branch_id && !pr.owner_id);
@@ -293,10 +272,6 @@ const list = asyncHandler(async (req, res) => {
         price_general_sar: applyMou(price_general_sar ?? null),
         price_general_usd: applyMou(price_general_usd ?? null)
       };
-      if (oid) {
-        base.owner_is_mou = ownerIsMou;
-        base.mou_discount_percent = mouDiscountPercent;
-      }
       const productType = p.type || (p.toJSON && p.toJSON().type);
       if (productType === 'hotel') {
         const av = p.ProductAvailability;
