@@ -713,7 +713,7 @@ const OrdersInvoicesPage: React.FC = () => {
       }
       return;
     }
-    const paidAmount = parseFloat(inv.paid_amount) || 0;
+    const paidAmount = cancelablePaidAmount(inv);
     if (paidAmount > 0) {
       openCancelModal(inv);
       return;

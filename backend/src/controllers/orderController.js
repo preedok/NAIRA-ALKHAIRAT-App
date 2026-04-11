@@ -92,8 +92,9 @@ function getNights(checkIn, checkOut) {
 /** Invoice lunas (sisa 0 atau status paid/completed) — owner tidak boleh batalkan langsung tanpa persetujuan admin pusat. */
 function isInvoiceFullyPaidForOwnerCancel(inv, paidAmount) {
   if (!inv || paidAmount <= 0) return false;
-  const rem = parseFloat(inv.remaining_amount) || 0;
   const st = (inv.status || '').toLowerCase();
+  if (['canceled', 'cancelled', 'cancelled_refund', 'refund_canceled', 'refunded'].includes(st)) return false;
+  const rem = parseFloat(inv.remaining_amount) || 0;
   return rem <= 0.01 || st === 'paid' || st === 'completed';
 }
 
@@ -284,8 +285,21 @@ async function getRejectedRefundRetryContext(order, inv) {
 function validateRejectedRefundRetryBody(body, baseAmount) {
   const rawAction = body && body.action != null ? String(body.action).trim() : '';
   const action = ['to_balance', 'refund'].includes(rawAction) ? rawAction : '';
-  if (action !== 'refund') {
-    return { ok: false, status: 400, message: 'Setelah refund ditolak, tindakan yang tersedia hanya refund ke rekening (action=refund).' };
+  if (!action) {
+    return { ok: false, status: 400, message: 'Setelah refund ditolak, pilih action=to_balance (saldo akun) atau action=refund (rekening).' };
+  }
+  const reason = body && body.reason ? String(body.reason).trim() || null : null;
+  if (action === 'to_balance') {
+    return {
+      ok: true,
+      paidAmount: baseAmount,
+      action: 'to_balance',
+      reason,
+      bankName: null,
+      accountNumber: null,
+      accountHolderName: null,
+      refundAmount: baseAmount
+    };
   }
   const bankName = body && body.bank_name ? String(body.bank_name).trim() || null : null;
   const accountNumber = body && body.account_number ? String(body.account_number).trim() || null : null;
@@ -296,7 +310,6 @@ function validateRejectedRefundRetryBody(body, baseAmount) {
   let refundAmount = body && body.refund_amount != null ? parseFloat(body.refund_amount) : null;
   if (refundAmount == null || Number.isNaN(refundAmount) || refundAmount <= 0) refundAmount = baseAmount;
   if (refundAmount > baseAmount) refundAmount = baseAmount;
-  const reason = body && body.reason ? String(body.reason).trim() || null : null;
   return {
     ok: true,
     paidAmount: baseAmount,
@@ -310,8 +323,65 @@ function validateRejectedRefundRetryBody(body, baseAmount) {
 }
 
 async function executeRejectedRefundRetry(order, inv, parsed, ctx) {
-  const { reason, bankName, accountNumber, accountHolderName, refundAmount } = parsed;
+  const { reason, bankName, accountNumber, accountHolderName, refundAmount, action, paidAmount } = parsed;
   const { auditUserId, refundRequestedById, previousRefundId } = ctx;
+  const amount = parseFloat(paidAmount) || parseFloat(refundAmount) || 0;
+
+  if (action === 'to_balance') {
+    let balanceAdded = null;
+    const profile = await OwnerProfile.findOne({ where: { user_id: order.owner_id } });
+    if (profile && amount > 0) {
+      const currentBalance = parseFloat(profile.balance) || 0;
+      const newBalance = currentBalance + amount;
+      await profile.update({ balance: newBalance });
+      await OwnerBalanceTransaction.create({
+        owner_id: order.owner_id,
+        amount,
+        type: 'cancel_credit',
+        reference_type: 'order',
+        reference_id: order.id,
+        notes: `Refund ditolak: dana ke saldo akun (order ${order.order_number}; invoice ${inv.invoice_number}). +${Number(amount).toLocaleString('id-ID')}`
+      });
+      balanceAdded = { previous: currentBalance, new: newBalance };
+    }
+    const fmt = (n) => Number(n).toLocaleString('id-ID');
+    const cancellationHandlingNote = `Dipindahkan ke saldo akun. Jumlah: Rp ${fmt(amount)}`;
+    const fromStatus = inv.status;
+    const newInvoiceStatus = INVOICE_STATUS.CANCELLED_REFUND;
+    await inv.update({
+      status: newInvoiceStatus,
+      cancelled_refund_amount: amount,
+      paid_amount: 0,
+      remaining_amount: 0,
+      cancellation_handling_note: cancellationHandlingNote
+    });
+    await logInvoiceStatusChange({
+      invoice_id: inv.id,
+      from_status: fromStatus,
+      to_status: newInvoiceStatus,
+      changed_by: auditUserId,
+      reason: 'refund_retry_to_balance',
+      meta: {
+        previous_refund_id: previousRefundId || null,
+        amount,
+        order_id: order.id
+      }
+    });
+    await logInvoiceStatusChange({
+      invoice_id: inv.id,
+      from_status: newInvoiceStatus,
+      to_status: newInvoiceStatus,
+      changed_by: auditUserId,
+      reason: 'to_balance',
+      meta: { amount, previous_refund_id: previousRefundId || null }
+    });
+    const msg = `Dana Rp ${Number(amount).toLocaleString('id-ID')} dipindahkan ke saldo akun owner. Dapat digunakan untuk order baru atau alokasi ke tagihan.`;
+    return {
+      message: msg,
+      data: { order, refund: null, balance_added: balanceAdded, retry: true, to_balance: true }
+    };
+  }
+
   const refund = await Refund.create({
     invoice_id: inv.id,
     order_id: order.id,
