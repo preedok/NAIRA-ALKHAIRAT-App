@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const asyncHandler = require('express-async-handler');
 const sequelize = require('../config/sequelize');
 const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Notification, Provinsi, Wilayah, Product, VisaProgress, TicketProgress, HotelProgress, BusProgress, Refund, OwnerProfile, OwnerBalanceTransaction, PaymentReallocation, AccountingBankAccount, Bank, InvoiceStatusHistory, OrderRevision } = require('../models');
-const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, isOwnerRole, ROLES } = require('../constants');
+const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, REFUND_STATUS, isOwnerRole, ROLES } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { busFinalityDeficitPacks } = require('../utils/busFinalityPenalty');
 const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
@@ -409,7 +409,7 @@ async function loadInvoiceListRelations(data) {
   if (invoiceIds.length > 0) {
     const refundsList = await Refund.findAll({
       where: { invoice_id: { [Op.in]: invoiceIds } },
-      attributes: ['invoice_id', 'status', 'amount'],
+      attributes: ['invoice_id', 'status', 'amount', 'source', 'bank_name', 'account_number', 'account_holder_name', 'created_at'],
       order: [['created_at', 'DESC']],
       raw: true
     });
@@ -435,6 +435,29 @@ async function loadInvoiceListRelations(data) {
     }, {});
     for (const d of data) {
       d.BalanceAllocations = balByInvId[d.id] || [];
+    }
+  }
+
+  const orderIdsForCancelCredit = [...new Set(data.map((d) => d.order_id).filter(Boolean))];
+  if (orderIdsForCancelCredit.length > 0) {
+    const cancelCredList = await OwnerBalanceTransaction.findAll({
+      where: { reference_type: 'order', reference_id: { [Op.in]: orderIdsForCancelCredit }, type: 'cancel_credit' },
+      attributes: ['reference_id', 'amount', 'notes', 'created_at'],
+      order: [['created_at', 'ASC']],
+      raw: true
+    });
+    const cancelByOrderId = cancelCredList.reduce((acc, r) => {
+      const oid = r.reference_id;
+      if (!acc[oid]) acc[oid] = [];
+      acc[oid].push(r);
+      return acc;
+    }, {});
+    for (const d of data) {
+      d.CancelBalanceCredits = d.order_id ? (cancelByOrderId[d.order_id] || []) : [];
+    }
+  } else {
+    for (const d of data) {
+      d.CancelBalanceCredits = [];
     }
   }
 
@@ -837,6 +860,14 @@ function amountTripleForDisplay(amount, fromCurrency, sarToIdr = 4200, usdToIdr 
 
 function buildPaymentHistoryLines(inv) {
   const lines = [];
+  const refundStatusLabel = (s) => {
+    const k = String(s || '').toLowerCase();
+    if (k === REFUND_STATUS.REQUESTED) return 'Menunggu';
+    if (k === REFUND_STATUS.APPROVED) return 'Disetujui';
+    if (k === REFUND_STATUS.REJECTED) return 'Ditolak';
+    if (k === REFUND_STATUS.REFUNDED) return 'Sudah direfund';
+    return k || '-';
+  };
   const triplet = (name, bank, account) => {
     const n = String(name || '-').trim() || '-';
     const b = String(bank || '-').trim() || '-';
@@ -874,6 +905,39 @@ function buildPaymentHistoryLines(inv) {
       info1: `${dt} | ALOKASI SALDO | VERIFIED`,
       info2: `${formatMoneyForExport(amt, 'IDR')}`,
       info3: 'Penerima: -'
+    });
+  });
+  const refunds = Array.isArray(inv?.Refunds) ? [...inv.Refunds] : [];
+  refunds.sort((a, b) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime());
+  refunds.forEach((rf) => {
+    const dt = formatDateTimeJakartaForExport(rf?.created_at);
+    const stLabel = refundStatusLabel(rf?.status);
+    const src = String(rf?.source || '').trim().toLowerCase() || REFUND_SOURCE.CANCEL;
+    const flow =
+      src === REFUND_SOURCE.BALANCE
+        ? 'REFUND PENARIKAN SALDO → REKENING'
+        : 'REFUND PEMBATALAN → REKENING';
+    const amt = Number(rf?.amount || 0);
+    const bank = String(rf?.bank_name || '').trim() || '-';
+    const acc = String(rf?.account_number || '').trim() || '-';
+    const holder = String(rf?.account_holder_name || '').trim();
+    const rekLine = holder ? `Bank: ${bank} · Rek: ${acc} · a.n. ${holder}` : `Bank: ${bank} · Rek: ${acc}`;
+    lines.push({
+      info1: `${dt} | ${flow} | ${stLabel}`,
+      info2: `${formatMoneyForExport(amt, 'IDR')}`,
+      info3: rekLine
+    });
+  });
+  const cancelCredits = Array.isArray(inv?.CancelBalanceCredits) ? [...inv.CancelBalanceCredits] : [];
+  cancelCredits.sort((a, b) => new Date(a?.created_at || 0).getTime() - new Date(b?.created_at || 0).getTime());
+  cancelCredits.forEach((c) => {
+    const dt = formatDateTimeJakartaForExport(c?.created_at);
+    const amt = Number(c?.amount || 0);
+    const note = String(c?.notes || '').trim();
+    lines.push({
+      info1: `${dt} | KREDIT SALDO AKUN (PEMBATALAN) | OK`,
+      info2: `${formatMoneyForExport(amt, 'IDR')}`,
+      info3: note ? note.slice(0, 220) : 'Dana masuk saldo akun owner (pembatalan / sisa refund ke saldo).'
     });
   });
   if (!lines.length) lines.push({ info1: '-', info2: '', info3: '' });
@@ -1390,8 +1454,6 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const invoiceDate = inv.issued_at || inv.created_at || inv.createdAt || inv.date;
       const items = buildPdfOrderItemsDetailed(inv);
       const paymentHistory = buildPaymentHistoryLines(inv);
-      // Tampilkan item invoice lebih lengkap (visa/bus/tiket/handling tidak terpotong terlalu cepat).
-      const historyRows = Math.max(1, Math.min(paymentHistory.length, 4));
       const finRules = (inv.branch_id && rulesByBranchForPdf.get(inv.branch_id)) || rulesGlobalForPdf;
       const finLine = formatBusFinalityForListPdf(inv, finRules);
       const finNums = getBusFinalityNumbersForListPdf(inv, finRules);
@@ -1399,8 +1461,10 @@ const exportListPdf = asyncHandler(async (req, res) => {
       const showItems = [{ __isFinalityRow: true, itemLabel: `Bus/finality: ${finLine}` }, ...itemSource].slice(0, 6);
       const itemRows = Math.max(1, showItems.length);
       const hasRoomTypeBreakdown = showItems.some((it) => !it.__isFinalityRow && String(it.roomTypeBreakdownLine || '').trim() !== '');
-      const rowCellH = hasRoomTypeBreakdown ? 38 : 28;
-      const lines = Math.max(itemRows, historyRows);
+      const rowCellH = hasRoomTypeBreakdown ? 40 : 32;
+      // Tinggi blok = baris item; jika banyak bukti bayar butuh ruang vertikal lebih dari jumlah baris item.
+      const payRowsForHeight = paymentHistory.length <= 1 ? 1 : Math.min(10, Math.max(2, paymentHistory.length * 2));
+      const lines = Math.max(itemRows, payRowsForHeight);
       const contentBlockH = 30 + lines * rowCellH;
       const blockH = contentBlockH + 10;
       if (y + blockH > doc.page.height - 48) {
@@ -1473,25 +1537,38 @@ const exportListPdf = asyncHandler(async (req, res) => {
         }
         const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
         const subtotalTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
-        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.2).text(String(it.itemLabel || '-').slice(0, 64), itemX + 2, ry + 2, {
-          width: subItemW - 4, height: 10, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6).text(String(it.itemLabel || '-'), itemX + 2, ry + 2, {
+          width: subItemW - 4,
+          height: 11,
+          lineBreak: true,
+          lineGap: 0.35,
+          ellipsis: true
         });
         const nightLabel = Number(it.nights || 1) > 1 ? `${it.nights} malam` : '';
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(6).text(`${it.qty} ${it.unit}`.slice(0, 30), itemX + 2, ry + 12, {
-          width: subItemW - 4, height: 8, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.8).text(`${it.qty} ${it.unit}`.slice(0, 36), itemX + 2, ry + 13, {
+          width: subItemW - 4,
+          height: 7,
+          lineBreak: false,
+          ellipsis: true
         });
-        const detailText = [ String(it.stayLabel || '-'), nightLabel ]
+        const detailText = [String(it.stayLabel || '-'), nightLabel]
           .filter((v) => String(v || '').trim() !== '')
           .join(' | ');
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.8).text(detailText.slice(0, 80), itemX + 2, ry + 19, {
-          width: subItemW - 4, height: 8, lineBreak: false
+        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(detailText.slice(0, 120), itemX + 2, ry + 20, {
+          width: subItemW - 4,
+          height: 7,
+          lineBreak: true,
+          lineGap: 0.35,
+          ellipsis: true
         });
         const rtLine = String(it.roomTypeBreakdownLine || '').trim();
         if (rtLine) {
-          doc.fillColor('#475569').font('Helvetica').fontSize(5.3).text(rtLine.slice(0, 140), itemX + 2, ry + 20, {
+          doc.fillColor('#475569').font('Helvetica').fontSize(5.2).text(rtLine, itemX + 2, ry + 28, {
             width: subItemW - 4,
-            height: 16,
-            lineGap: 0.5
+            height: Math.max(6, rowCellH - 30),
+            lineBreak: true,
+            lineGap: 0.4,
+            ellipsis: true
           });
         }
         doc.fillColor('#0f172a').font('Helvetica').fontSize(5.7).text(
@@ -1525,21 +1602,45 @@ const exportListPdf = asyncHandler(async (req, res) => {
       doc.strokeColor('#cbd5e1').lineWidth(0.5).rect(historyX, rowTop, historyW, headerH).stroke();
       doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6.4)
         .text('Informasi Transaksi', historyX + 2, rowTop + 3, { width: historyW - 4, lineBreak: false });
-      const showHistory = paymentHistory.slice(0, historyRows);
-      showHistory.forEach((entry, i) => {
-        const rowH = rowCellH;
-        const ry = rowTop + headerH + i * rowH;
-        doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(historyX, ry, historyW, rowH).stroke();
-        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(5.8).text(String(entry?.info1 || '-').slice(0, 72), historyX + 2, ry + 2, {
-          width: historyW - 4, height: 9, lineBreak: false
+      const historyBodyTop = rowTop + headerH;
+      const historyBodyH = lines * rowCellH;
+      doc.strokeColor('#e2e8f0').lineWidth(0.5).rect(historyX, historyBodyTop, historyW, historyBodyH).stroke();
+      for (let hi = 1; hi < lines; hi += 1) {
+        const hy = historyBodyTop + hi * rowCellH;
+        doc.moveTo(historyX, hy).lineTo(historyX + historyW, hy).stroke();
+      }
+      const payPad = 3;
+      const payInnerW = historyW - payPad * 2;
+      doc.save();
+      doc.rect(historyX + 0.5, historyBodyTop + 0.5, historyW - 1, historyBodyH - 1).clip();
+      let payY = historyBodyTop + payPad;
+      const payBottom = historyBodyTop + historyBodyH - payPad;
+      paymentHistory.forEach((entry) => {
+        if (payY >= payBottom - 8) return;
+        doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(5.7).text(String(entry?.info1 || '-'), historyX + payPad, payY, {
+          width: payInnerW,
+          lineBreak: true,
+          lineGap: 0.35
         });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.5).text(String(entry?.info2 || '').slice(0, 170), historyX + 2, ry + 10, {
-          width: historyW - 4, height: 16, lineGap: 0.4
-        });
-        doc.fillColor('#0f172a').font('Helvetica').fontSize(5.5).text(String(entry?.info3 || '').slice(0, 120), historyX + 2, ry + 26, {
-          width: historyW - 4, height: 9, lineBreak: false
-        });
+        payY = doc.y + 2;
+        if (String(entry?.info2 || '').trim()) {
+          doc.font('Helvetica').fontSize(5.3).fillColor('#0f172a').text(String(entry.info2), historyX + payPad, payY, {
+            width: payInnerW,
+            lineBreak: true,
+            lineGap: 0.35
+          });
+          payY = doc.y + 2;
+        }
+        if (String(entry?.info3 || '').trim()) {
+          doc.font('Helvetica').fontSize(5.3).text(String(entry.info3), historyX + payPad, payY, {
+            width: payInnerW,
+            lineBreak: true,
+            lineGap: 0.35
+          });
+          payY = doc.y + 4;
+        }
       });
+      doc.restore();
       // Mini-table: Total / Dibayar / Sisa agar data nominal lebih terstruktur.
       const amtX = col.total + 2;
       const amtY = y + 4;
