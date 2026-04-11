@@ -250,13 +250,23 @@ async function validatePaidCancelBody(order, inv, body) {
 
 async function getRejectedRefundRetryContext(order, inv) {
   const orderStatus = String(order?.status || '').toLowerCase();
-  const invoiceStatus = String(inv?.status || '').toLowerCase();
   if (!['canceled', 'cancelled'].includes(orderStatus)) return { eligible: false };
-  if (![String(INVOICE_STATUS.CANCELLED_REFUND || '').toLowerCase(), String(INVOICE_STATUS.REFUND_CANCELED || '').toLowerCase()].includes(invoiceStatus)) {
-    return { eligible: false };
-  }
+  if (!inv || !inv.id) return { eligible: false };
+  const invoiceStatus = String(inv.status || '').toLowerCase();
+  const retryableInvoiceStatuses = new Set(
+    [
+      String(INVOICE_STATUS.CANCELLED_REFUND || '').toLowerCase(),
+      String(INVOICE_STATUS.REFUND_CANCELED || '').toLowerCase(),
+      String(INVOICE_STATUS.PARTIAL_PAID || '').toLowerCase(),
+      String(INVOICE_STATUS.PAID || '').toLowerCase()
+    ].filter(Boolean)
+  );
+  if (!retryableInvoiceStatuses.has(invoiceStatus)) return { eligible: false };
   const refunds = await Refund.findAll({
-    where: { invoice_id: inv.id, source: REFUND_SOURCE.CANCEL },
+    where: {
+      invoice_id: inv.id,
+      [Op.or]: [{ source: REFUND_SOURCE.CANCEL }, { source: { [Op.is]: null } }]
+    },
     attributes: ['id', 'status', 'amount', 'created_at'],
     order: [['created_at', 'DESC']]
   });
@@ -1883,7 +1893,7 @@ const destroy = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Hanya owner (invoice sendiri) atau tim invoice/admin yang dapat membatalkan order' });
   }
   const inv = await Invoice.findOne({ where: { order_id: order.id } });
-  const normalCancelableStatuses = ['draft', 'tentative', 'confirmed', 'processing'];
+  const normalCancelableStatuses = ['draft', 'tentative', 'confirmed', 'processing', 'blocked'];
   let retryCtx = { eligible: false };
   if (!normalCancelableStatuses.includes(order.status)) {
     retryCtx = await getRejectedRefundRetryContext(order, inv);

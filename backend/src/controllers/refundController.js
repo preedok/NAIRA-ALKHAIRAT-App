@@ -471,10 +471,19 @@ const updateStatus = asyncHandler(async (req, res) => {
               transaction: tx
             });
           } else if (status === REFUND_STATUS.REJECTED) {
+            const fromStatus = inv.status;
+            let toStatus = fromStatus;
+            if (
+              !isBalanceWithdrawalRefund(r) &&
+              String(fromStatus || '').toLowerCase() === String(INVOICE_STATUS.CANCELLED_REFUND || '').toLowerCase()
+            ) {
+              toStatus = INVOICE_STATUS.REFUND_CANCELED;
+              await inv.update({ status: INVOICE_STATUS.REFUND_CANCELED }, { transaction: tx });
+            }
             await logInvoiceStatusChange({
               invoice_id: inv.id,
-              from_status: inv.status,
-              to_status: inv.status,
+              from_status: fromStatus,
+              to_status: toStatus,
               changed_by: req.user.id,
               reason: 'refund_rejected',
               meta: { refund_id: r.id, rejection_reason: updates.rejection_reason ?? null },
