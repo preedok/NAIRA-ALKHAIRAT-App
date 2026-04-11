@@ -765,8 +765,9 @@ function buildOrderItemExportPriceTexts(inv) {
   const unitLines = [];
   const subLines = [];
   for (const it of items) {
-    const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
-    const subTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
+    const { amount: unitAmt, currency: unitCur } = listPdfUnitAmountAndCurrency(it);
+    const unitTriple = amountTripleForDisplay(unitAmt, unitCur, tot.sarToIdr, tot.usdToIdr);
+    const subTriple = amountTripleForDisplay(Number(it.subtotal || 0), 'IDR', tot.sarToIdr, tot.usdToIdr);
     unitLines.push(
       `Rp ${Math.round(unitTriple.idr).toLocaleString('id-ID')} · SAR ${unitTriple.sar.toFixed(2)} · USD ${unitTriple.usd.toFixed(2)}`
     );
@@ -856,6 +857,22 @@ function amountTripleForDisplay(amount, fromCurrency, sarToIdr = 4200, usdToIdr 
   const sar = sarRate > 0 ? idr / sarRate : 0;
   const usd = usdRate > 0 ? idr / usdRate : 0;
   return { idr, sar, usd };
+}
+
+/**
+ * OrderItem.subtotal di DB selalu IDR (lihat orderController: st = monthlyPricing.subtotal_idr / qty*unitPriceIdr).
+ * Harga satuan asli tetap di unit_price + unit_price_currency. Untuk export daftar: nominal dari subtotal & (subtotal/qty) wajib dikonversi sebagai IDR.
+ */
+function listPdfItemSubtotalIsIdr(it) {
+  return it && it.subtotal != null && Number.isFinite(Number(it.subtotal)) && Number(it.qty) > 0;
+}
+
+function listPdfUnitAmountAndCurrency(it) {
+  if (listPdfItemSubtotalIsIdr(it)) {
+    return { amount: Number(it.subtotal) / Number(it.qty), currency: 'IDR' };
+  }
+  const u = it.displayUnitPrice != null ? it.displayUnitPrice : it.unitPrice;
+  return { amount: parseNumberish(u), currency: String(it.currency || 'IDR').toUpperCase() };
 }
 
 function buildPaymentHistoryLines(inv) {
@@ -1535,8 +1552,9 @@ const exportListPdf = asyncHandler(async (req, res) => {
           }
           return;
         }
-        const unitTriple = amountTripleForDisplay(it.displayUnitPrice || it.unitPrice, it.currency, tot.sarToIdr, tot.usdToIdr);
-        const subtotalTriple = amountTripleForDisplay(it.subtotal, it.currency, tot.sarToIdr, tot.usdToIdr);
+        const { amount: unitAmt, currency: unitCur } = listPdfUnitAmountAndCurrency(it);
+        const unitTriple = amountTripleForDisplay(unitAmt, unitCur, tot.sarToIdr, tot.usdToIdr);
+        const subtotalTriple = amountTripleForDisplay(Number(it.subtotal || 0), 'IDR', tot.sarToIdr, tot.usdToIdr);
         doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(6).text(String(it.itemLabel || '-'), itemX + 2, ry + 2, {
           width: subItemW - 4,
           height: 11,
