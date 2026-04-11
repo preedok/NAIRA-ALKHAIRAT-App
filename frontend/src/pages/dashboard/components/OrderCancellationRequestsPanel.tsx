@@ -29,7 +29,6 @@ type Row = {
   owner_note?: string | null;
   payload?: { action?: string };
   created_at?: string;
-  Order?: { order_number?: string };
   Invoice?: { invoice_number?: string };
   Owner?: { name?: string; company_name?: string };
 };
@@ -171,7 +170,6 @@ const OrderCancellationRequestsPanel: React.FC = () => {
               <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 align-top text-sm">
                   <div className="font-medium text-slate-900">{row.Invoice?.invoice_number || '–'}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{row.Order?.order_number || '–'}</div>
                 </td>
                 <td className="px-4 py-3 align-top text-sm">{row.Owner?.company_name || row.Owner?.name || '–'}</td>
                 <td className="px-4 py-3 align-top text-sm">{actionLabel(row.payload?.action)}</td>

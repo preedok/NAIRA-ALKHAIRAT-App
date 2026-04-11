@@ -699,7 +699,7 @@ const exportExcel = asyncHandler(async (req, res) => {
       const prog = item.BusProgress;
       sheet.addRow({
         no: no++,
-        order_number: o.order_number,
+        invoice_number: invoiceNumberByOrderId[o.id] || '',
         owner_name: o.User?.name || '',
         quantity: item.quantity,
         bus_ticket_status: prog?.bus_ticket_status || BUS_TICKET_STATUS.PENDING,

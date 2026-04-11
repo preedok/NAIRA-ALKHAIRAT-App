@@ -33,7 +33,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../contexts/ToastContext';
 import { formatIDR, formatSAR, formatUSD, formatInvoiceDisplay } from '../../../utils';
 import { formatInvoiceNumberDisplay } from '../../../utils/formatters';
-import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF, AUTOCOMPLETE_FILTER, getOrderItemSortIndex, getHotelLocationFromItem } from '../../../utils/constants';
+import { INVOICE_STATUS_LABELS, API_BASE_URL, INVOICE_TABLE_COLUMN_PROOF, AUTOCOMPLETE_FILTER, AUTOCOMPLETE_PILIH, getOrderItemSortIndex, getHotelLocationFromItem } from '../../../utils/constants';
 import { getDisplayRemaining } from '../../../utils/invoiceTableHelpers';
 import { invoicesApi, branchesApi, businessRulesApi, ownersApi, ordersApi, hotelApi, accountingApi, refundsApi, type InvoicesSummaryData, type BankAccountItem, type BankItem } from '../../../services/api';
 
@@ -272,7 +272,7 @@ function canOwnerCancelInvoiceInUi(inv: any): boolean {
  */
 type ApiOrder = {
   id: string;
-  order_number: string;
+  order_number?: string;
   owner_id?: string;
   status: string;
   total_amount: number;
@@ -2347,19 +2347,17 @@ const OrdersInvoicesPage: React.FC = () => {
               onClose={() => !exportingInvoiceListPdf && setExportListPdfOwnerModalOpen(false)}
             />
             <ModalBody className="space-y-3">
-              <label className="block text-sm font-medium text-slate-700">Owner</label>
-              <select
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              <Autocomplete
+                label="Owner"
                 value={exportListPdfSelectedOwnerId}
-                onChange={(e) => setExportListPdfSelectedOwnerId(e.target.value)}
+                onChange={(v) => setExportListPdfSelectedOwnerId(v)}
+                options={sortedExportListPdfOwners.map((o) => ({
+                  value: o.id,
+                  label: exportPdfOwnerRowLabel(o)
+                }))}
+                placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER}
                 disabled={exportingInvoiceListPdf}
-              >
-                {sortedExportListPdfOwners.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {exportPdfOwnerRowLabel(o)}
-                  </option>
-                ))}
-              </select>
+              />
             </ModalBody>
             <ModalFooter className="flex justify-end gap-2">
               <Button

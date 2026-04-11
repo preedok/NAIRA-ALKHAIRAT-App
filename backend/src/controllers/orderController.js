@@ -340,7 +340,7 @@ async function executeRejectedRefundRetry(order, inv, parsed, ctx) {
         type: 'cancel_credit',
         reference_type: 'order',
         reference_id: order.id,
-        notes: `Refund ditolak: dana ke saldo akun (order ${order.order_number}; invoice ${inv.invoice_number}). +${Number(amount).toLocaleString('id-ID')}`
+        notes: `Refund ditolak: dana ke saldo akun (invoice ${inv.invoice_number}). +${Number(amount).toLocaleString('id-ID')}`
       });
       balanceAdded = { previous: currentBalance, new: newBalance };
     }
@@ -444,7 +444,7 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
         type: 'cancel_credit',
         reference_type: 'order',
         reference_id: order.id,
-        notes: `Pembatalan order ${order.order_number}; invoice ${inv.invoice_number}. Saldo +${Number(paidAmount).toLocaleString('id-ID')}`
+        notes: `Pembatalan invoice ${inv.invoice_number}. Saldo +${Number(paidAmount).toLocaleString('id-ID')}`
       });
       balanceAdded = { previous: currentBalance, new: newBalance };
     }
@@ -462,7 +462,7 @@ async function executePaidOrderCancellation(order, inv, parsed, ctx) {
           type: 'cancel_credit',
           reference_type: 'order',
           reference_id: order.id,
-          notes: `Pembatalan order ${order.order_number}; sisa setelah refund. Saldo +${Number(remainder).toLocaleString('id-ID')}`
+          notes: `Pembatalan invoice ${inv.invoice_number}; sisa setelah refund. Saldo +${Number(remainder).toLocaleString('id-ID')}`
         });
         balanceAdded = { previous: currentBalance, new: newBalance, amount: remainder };
       }
@@ -2075,7 +2075,10 @@ const sendOrderResult = asyncHandler(async (req, res) => {
   const { id: orderId } = req.params;
   const { channel } = req.body || {};
   const order = await Order.findByPk(orderId, {
-    include: [{ model: User, as: 'User', attributes: ['id', 'name', 'email'] }]
+    include: [
+      { model: User, as: 'User', attributes: ['id', 'name', 'email'] },
+      { model: Invoice, as: 'Invoice', attributes: ['invoice_number'], required: false }
+    ]
   });
   if (!order) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
 
@@ -2089,12 +2092,13 @@ const sendOrderResult = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Invoice tidak dalam scope Anda' });
   }
 
+  const invNum = order.Invoice?.invoice_number || 'INV';
   const notif = await Notification.create({
     user_id: order.owner_id,
     trigger: NOTIFICATION_TRIGGER.ORDER_COMPLETED,
     title: 'Trip selesai',
-    message: `Invoice ${order.order_number} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`,
-    data: { order_id: order.id, order_number: order.order_number },
+    message: `Invoice ${invNum} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`,
+    data: { order_id: order.id, invoice_number: invNum },
     channel_in_app: true,
     channel_email: channel === 'email' || channel === 'both',
     channel_whatsapp: channel === 'whatsapp' || channel === 'both'
@@ -2102,8 +2106,8 @@ const sendOrderResult = asyncHandler(async (req, res) => {
   const sendEmail = channel === 'email' || channel === 'both';
   if (sendEmail && order.User?.email) {
     const { sendOrderResultEmail } = require('../utils/emailService');
-    const msg = `Order ${order.order_number} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`;
-    sendOrderResultEmail(order.User.email, order.User.name, order.order_number, msg)
+    const msg = `Invoice ${invNum} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`;
+    sendOrderResultEmail(order.User.email, order.User.name, invNum, msg)
       .then((sent) => {
         if (sent && notif.id) return Notification.update({ email_sent_at: new Date() }, { where: { id: notif.id } });
       })
@@ -2139,7 +2143,7 @@ const uploadJamaahData = [
     const order = await Order.findByPk(orderId, {
       include: [
         { model: OrderItem, as: 'OrderItems' },
-        { model: Invoice, as: 'Invoice', attributes: ['id', 'status', 'cancellation_handling_note'], required: false }
+        { model: Invoice, as: 'Invoice', attributes: ['id', 'status', 'cancellation_handling_note', 'invoice_number'], required: false }
       ]
     });
     if (!order) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
@@ -2169,7 +2173,8 @@ const uploadJamaahData = [
     let jamaahDataType = null;
     let jamaahDataValue = null;
     if (hasFile) {
-      const finalName = uploadConfig.jamaahDataFilename(order.order_number, item.id, req.file.originalname);
+      const refJamaah = order.Invoice?.invoice_number || String(order.id || '').slice(-8);
+      const finalName = uploadConfig.jamaahDataFilename(refJamaah, item.id, req.file.originalname);
       const newPath = path.join(jamaahDataDir, finalName);
       try { fs.renameSync(req.file.path, newPath); } catch (e) { /* keep temp name */ }
       jamaahDataType = 'file';
@@ -2470,7 +2475,7 @@ const reviewOrderCancellationRequest = asyncHandler(async (req, res) => {
     user_id: reqRow.owner_id,
     trigger: NOTIFICATION_TRIGGER.CANCEL,
     title: 'Pembatalan invoice disetujui',
-    message: `Admin menyetujui pembatalan untuk order ${order.order_number}. ${cancelResult.message}`,
+    message: `Admin menyetujui pembatalan untuk invoice ${inv.invoice_number || '—'}. ${cancelResult.message}`,
     data: { order_cancellation_request_id: reqRow.id, order_id: order.id },
     channel_in_app: true
   });

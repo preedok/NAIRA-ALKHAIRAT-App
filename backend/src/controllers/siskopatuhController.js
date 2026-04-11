@@ -396,7 +396,7 @@ const uploadSiskopatuhDocument = [
   asyncHandler(async (req, res) => {
     const { orderItemId } = req.params;
     const item = await OrderItem.findByPk(orderItemId, {
-      include: [{ model: Order, as: 'Order', attributes: ['id', 'branch_id', 'order_number'] }]
+      include: [{ model: Order, as: 'Order', attributes: ['id', 'branch_id'] }]
     });
     if (!item || item.type !== ORDER_ITEM_TYPE.SISKOPATUH) {
       return res.status(404).json({ success: false, message: 'Order item siskopatuh tidak ditemukan' });
@@ -416,8 +416,9 @@ const uploadSiskopatuhDocument = [
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'File wajib diupload' });
     }
-    const orderNumber = item.Order?.order_number || 'ORD';
-    const finalName = uploadConfig.siskopatuhDocFilename(orderNumber, item.id, req.file.originalname);
+    const invoiceForFile = await Invoice.findOne({ where: { order_id: item.order_id }, attributes: ['invoice_number'] });
+    const refLabel = (invoiceForFile && invoiceForFile.invoice_number) ? String(invoiceForFile.invoice_number).replace(/[^\w\-]/g, '_') : 'INV';
+    const finalName = uploadConfig.siskopatuhDocFilename(refLabel, item.id, req.file.originalname);
     const newPath = path.join(siskopatuhDocsDir, finalName);
     let savedName = req.file.filename;
     try {

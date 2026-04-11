@@ -16,12 +16,22 @@ function isKoordinatorRole(role) {
   return KOORDINATOR_ROLES.includes(role);
 }
 
+/** Catatan lama/BE: hilangkan rujukan nomor order (ORD-…); tampilan hanya memakai nomor invoice. */
+function sanitizeNoteRemoveOrderReferences(text) {
+  if (text == null || text === '') return text;
+  let s = String(text);
+  s = s.replace(/\(\s*order\s+ORD-[A-Za-z0-9-]+\s*;\s*/gi, '(');
+  s = s.replace(/\bPembatalan\s+order\s+ORD-[A-Za-z0-9-]+\s*;\s*invoice\b/gi, 'Pembatalan invoice');
+  s = s.replace(/\bPembatalan\s+order\s+ORD-[A-Za-z0-9-]+\s*;\s*/gi, 'Pembatalan invoice; ');
+  return s.trim();
+}
+
 /** Satu baris alokasi saldo → payload API (amount selalu positif IDR). */
 function mapBalanceAllocRow(r) {
   return {
     id: r.id,
     amount: Math.abs(Math.min(0, parseFloat(r.amount) || 0)),
-    notes: r.notes || null,
+    notes: r.notes ? sanitizeNoteRemoveOrderReferences(r.notes) : null,
     created_at: r.created_at
   };
 }
@@ -453,7 +463,11 @@ async function loadInvoiceListRelations(data) {
       return acc;
     }, {});
     for (const d of data) {
-      d.CancelBalanceCredits = d.order_id ? (cancelByOrderId[d.order_id] || []) : [];
+      const rawCc = d.order_id ? (cancelByOrderId[d.order_id] || []) : [];
+      d.CancelBalanceCredits = rawCc.map((row) => ({
+        ...row,
+        notes: row.notes ? sanitizeNoteRemoveOrderReferences(row.notes) : row.notes
+      }));
     }
   } else {
     for (const d of data) {
@@ -622,7 +636,7 @@ async function buildInvoiceListFilters(req) {
     model: Order,
     as: 'Order',
     attributes: [
-      'id', 'order_number', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar', 'penalty_amount', 'waive_bus_penalty', 'bus_service_option',
+      'id', 'total_amount', 'currency', 'status', 'created_at', 'currency_rates_override', 'dp_payment_status', 'dp_percentage_paid', 'order_updated_at', 'total_amount_idr', 'total_amount_sar', 'penalty_amount', 'waive_bus_penalty', 'bus_service_option',
       'bus_include_arrival_status', 'bus_include_arrival_bus_number', 'bus_include_arrival_date', 'bus_include_arrival_time',
       'bus_include_return_status', 'bus_include_return_bus_number', 'bus_include_return_date', 'bus_include_return_time'
     ],
@@ -954,7 +968,7 @@ function buildPaymentHistoryLines(inv) {
     lines.push({
       info1: `${dt} | KREDIT SALDO AKUN (PEMBATALAN) | OK`,
       info2: `${formatMoneyForExport(amt, 'IDR')}`,
-      info3: note ? note.slice(0, 220) : 'Dana masuk saldo akun owner (pembatalan / sisa refund ke saldo).'
+      info3: note ? sanitizeNoteRemoveOrderReferences(note).slice(0, 220) : 'Dana masuk saldo akun owner (pembatalan / sisa refund ke saldo).'
     });
   });
   if (!lines.length) lines.push({ info1: '-', info2: '', info3: '' });
@@ -1196,32 +1210,32 @@ const exportListExcel = asyncHandler(async (req, res) => {
   const ws = workbook.addWorksheet('Daftar Invoice');
   ws.columns = [
     { width: 5 }, { width: 18 }, { width: 18 }, { width: 22 }, { width: 12 }, { width: 28 }, { width: 14 },
-    { width: 18 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 14 },
+    { width: 18 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 14 },
     { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 12 },
     { width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
     { width: 28 }, { width: 24 }, { width: 28 }, { width: 36 }, { width: 32 }, { width: 32 }, { width: 44 }
   ];
 
-  ws.mergeCells('A1:AG1');
+  ws.mergeCells('A1:AF1');
   ws.getCell('A1').value = 'PT. BINTANG GLOBAL GRUP';
   ws.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF0B4F82' } };
   ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.mergeCells('A2:AG2');
-  ws.getCell('A2').value = 'Laporan Resmi Daftar Invoice / Order';
+  ws.mergeCells('A2:AF2');
+  ws.getCell('A2').value = 'Laporan Resmi Daftar Invoice';
   ws.getCell('A2').font = { bold: true, size: 12 };
   ws.getCell('A2').alignment = { horizontal: 'center' };
-  ws.mergeCells('A3:AG3');
+  ws.mergeCells('A3:AF3');
   ws.getCell('A3').value = `Dicetak: ${new Date().toLocaleString('id-ID')}`;
   ws.getCell('A3').alignment = { horizontal: 'center' };
   ws.getCell('A3').font = { color: { argb: 'FF475569' } };
-  ws.mergeCells('A4:AG4');
+  ws.mergeCells('A4:AF4');
   ws.getCell('A4').value = buildInvoiceListExportFilterSummary(req, data);
   ws.getCell('A4').alignment = { horizontal: 'center', wrapText: true };
   ws.getCell('A4').font = { italic: true, color: { argb: 'FF64748B' } };
 
   const headers = [
     'No', 'No. Invoice', 'Tgl terbit', 'Owner', 'Tipe Owner', 'Perusahaan', 'PIC',
-    'Cabang', 'Wilayah', 'Provinsi', 'Kota', 'Status Invoice', 'Status Order', 'No. Order',
+    'Cabang', 'Wilayah', 'Provinsi', 'Kota', 'Status Invoice', 'Status Order',
     'Total IDR', 'Total SAR', 'Total USD', 'Kurs SAR→IDR', 'Kurs USD→IDR',
     'Dibayar IDR', 'Dibayar SAR', 'Dibayar USD', 'Sisa IDR', 'Sisa SAR', 'Sisa USD',
     'Alokasi saldo', 'Refund', 'Realokasi pembayaran', 'Catatan', 'Rincian Item', 'Harga per item (IDR/SAR/USD)', 'Subtotal per item (IDR/SAR/USD)', 'Status Progress Item'
@@ -1240,8 +1254,8 @@ const exportListExcel = asyncHandler(async (req, res) => {
   });
 
   if (!data.length) {
-    const row = ws.addRow(['', 'Tidak ada data', ...Array(31).fill('')]);
-    ws.mergeCells(`B${row.number}:AG${row.number}`);
+    const row = ws.addRow(['', 'Tidak ada data', ...Array(30).fill('')]);
+    ws.mergeCells(`B${row.number}:AF${row.number}`);
     row.getCell(2).alignment = { horizontal: 'center' };
     row.getCell(2).font = { italic: true, color: { argb: 'FF64748B' } };
   } else {
@@ -1256,9 +1270,9 @@ const exportListExcel = asyncHandler(async (req, res) => {
       const prov = branch.Provinsi?.name || branch.provinsi_name || '-';
       const kota = branch.city || '-';
       const cabang = branch.name || branch.code || '-';
-      const orderNo = (inv.Order && inv.Order.order_number) ? String(inv.Order.order_number) : '-';
       const orderSt = (inv.Order && inv.Order.status) ? String(inv.Order.status) : '-';
-      const notes = [inv.notes, inv.cancellation_handling_note].filter(Boolean).join(' | ') || '-';
+      const notes =
+        sanitizeNoteRemoveOrderReferences([inv.notes, inv.cancellation_handling_note].filter(Boolean).join(' | ') || '-') || '-';
       const itemSummary = summarizeOrderItemsForExport(inv);
       const { unitBlock, subtotalBlock } = buildOrderItemExportPriceTexts(inv);
       const itemStatusSummary = summarizeOrderItemsStatusForExport(inv);
@@ -1276,7 +1290,6 @@ const exportListExcel = asyncHandler(async (req, res) => {
         kota,
         getInvoiceStatusLabelForExport(inv),
         orderSt,
-        orderNo,
         tot.idr,
         tot.sar,
         tot.usd,
@@ -1297,17 +1310,17 @@ const exportListExcel = asyncHandler(async (req, res) => {
         subtotalBlock,
         itemStatusSummary
       ]);
-      row.getCell(15).numFmt = '"Rp" #,##0';
+      row.getCell(14).numFmt = '"Rp" #,##0';
+      row.getCell(15).numFmt = '#,##0.00';
       row.getCell(16).numFmt = '#,##0.00';
       row.getCell(17).numFmt = '#,##0.00';
       row.getCell(18).numFmt = '#,##0.00';
-      row.getCell(19).numFmt = '#,##0.00';
-      row.getCell(20).numFmt = '"Rp" #,##0';
+      row.getCell(19).numFmt = '"Rp" #,##0';
+      row.getCell(20).numFmt = '#,##0.00';
       row.getCell(21).numFmt = '#,##0.00';
-      row.getCell(22).numFmt = '#,##0.00';
-      row.getCell(23).numFmt = '"Rp" #,##0';
+      row.getCell(22).numFmt = '"Rp" #,##0';
+      row.getCell(23).numFmt = '#,##0.00';
       row.getCell(24).numFmt = '#,##0.00';
-      row.getCell(25).numFmt = '#,##0.00';
       row.eachCell((cell) => {
         cell.alignment = { vertical: 'top', wrapText: true };
         cell.border = {
@@ -1320,10 +1333,10 @@ const exportListExcel = asyncHandler(async (req, res) => {
     });
 
     // Ringkasan total seluruh data (semua baris hasil filter)
-    const spacer = ws.addRow(new Array(33).fill(''));
+    const spacer = ws.addRow(new Array(32).fill(''));
     spacer.height = 6;
     const totalRow = ws.addRow([
-      '', '', '', '', '', '', '', '', '', '', '', '', '', 'TOTAL SELURUH DATA',
+      '', '', '', '', '', '', '', '', '', '', '', 'TOTAL SELURUH DATA',
       totals.total_idr,
       totals.total_sar,
       totals.total_usd,
@@ -1344,25 +1357,25 @@ const exportListExcel = asyncHandler(async (req, res) => {
       '-',
       '-'
     ]);
-    ws.mergeCells(`A${totalRow.number}:N${totalRow.number}`);
+    ws.mergeCells(`A${totalRow.number}:M${totalRow.number}`);
     totalRow.getCell(1).value = 'TOTAL SELURUH DATA';
     totalRow.getCell(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
     totalRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
     totalRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1A63' } };
-    totalRow.getCell(15).numFmt = '"Rp" #,##0';
+    totalRow.getCell(14).numFmt = '"Rp" #,##0';
+    totalRow.getCell(15).numFmt = '#,##0.00';
     totalRow.getCell(16).numFmt = '#,##0.00';
-    totalRow.getCell(17).numFmt = '#,##0.00';
-    totalRow.getCell(20).numFmt = '"Rp" #,##0';
+    totalRow.getCell(19).numFmt = '"Rp" #,##0';
+    totalRow.getCell(20).numFmt = '#,##0.00';
     totalRow.getCell(21).numFmt = '#,##0.00';
-    totalRow.getCell(22).numFmt = '#,##0.00';
-    totalRow.getCell(23).numFmt = '"Rp" #,##0';
+    totalRow.getCell(22).numFmt = '"Rp" #,##0';
+    totalRow.getCell(23).numFmt = '#,##0.00';
     totalRow.getCell(24).numFmt = '#,##0.00';
-    totalRow.getCell(25).numFmt = '#,##0.00';
+    totalRow.getCell(25).numFmt = '"Rp" #,##0';
     totalRow.getCell(26).numFmt = '"Rp" #,##0';
-    totalRow.getCell(27).numFmt = '"Rp" #,##0';
     totalRow.eachCell((cell, colNumber) => {
-      cell.font = { ...(cell.font || {}), bold: true, color: { argb: colNumber <= 14 ? 'FFFFFFFF' : 'FF0D1A63' } };
-      if (colNumber >= 15) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+      cell.font = { ...(cell.font || {}), bold: true, color: { argb: colNumber <= 13 ? 'FFFFFFFF' : 'FF0D1A63' } };
+      if (colNumber >= 14) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
       cell.border = {
         top: { style: 'thin', color: { argb: 'FF94A3B8' } },
         left: { style: 'thin', color: { argb: 'FF94A3B8' } },
@@ -1752,6 +1765,32 @@ const exportListPdf = asyncHandler(async (req, res) => {
     doc.font('Helvetica').text(`${Number(r.usd || 0).toFixed(2)} USD`, c3 + 6, ry + 3, { width: c4 - c3 - 8 });
     doc.font('Helvetica');
   });
+
+  const yBelowTotals = y + boxH;
+  const ownerIdPdf = String(req.query?.owner_id || '').trim();
+  if (ownerIdPdf) {
+    const prof = await OwnerProfile.findOne({ where: { user_id: ownerIdPdf }, attributes: ['balance'] });
+    const ownerUser = await User.findByPk(ownerIdPdf, { attributes: ['name', 'company_name'] });
+    const bal = prof ? parseFloat(prof.balance) || 0 : 0;
+    const ownerLabel = ownerUser ? [ownerUser.name, ownerUser.company_name].filter(Boolean).join(' — ') : ownerIdPdf;
+    let saldoY = yBelowTotals + 16;
+    if (saldoY + 80 > doc.page.height - 36) {
+      doc.addPage();
+      saldoY = drawCorporateLetterhead(doc, { margin: 36 }) + 8;
+    }
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#0D1A63').text('Informasi saldo akun owner', 36, saldoY);
+    saldoY += 14;
+    doc.font('Helvetica').fontSize(8).fillColor('#334155').text(
+      'Saldo akun adalah dana milik owner yang dapat digunakan untuk pembayaran invoice lain atau dialokasikan ke tagihan (misalnya dari pembatalan yang dijadikan saldo). Nilai berikut adalah saldo terkini untuk pemilik akun sesuai filter owner pada ekspor ini, terpisah dari ringkasan nominal tagihan pada tabel di atas.',
+      36,
+      saldoY,
+      { width: doc.page.width - 72, align: 'left' }
+    );
+    saldoY = doc.y + 6;
+    doc.font('Helvetica').fontSize(8).fillColor('#475569').text(`Owner: ${ownerLabel}`, 36, saldoY, { width: doc.page.width - 72 });
+    saldoY = doc.y + 8;
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(`Saldo saat ini: Rp ${bal.toLocaleString('id-ID')}`, 36, saldoY);
+  }
 
   doc.end();
 });
@@ -2922,8 +2961,8 @@ const getArchive = asyncHandler(async (req, res) => {
         const itemWithOrder = { ...(item.get ? item.get({ plain: true }) : item), Order: order || item.Order };
         const buf = await buildHotelInfoPdfBuffer(itemWithOrder, slipOpts);
         hotelIdx += 1;
-        const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
-        const name = `08_Hotel_${String(hotelIdx).padStart(2, '0')}_Slip_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+        const invNumZip = (invoice.invoice_number || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
+        const name = `08_Hotel_${String(hotelIdx).padStart(2, '0')}_Slip_${invNumZip}_${(item.id || '').toString().slice(-6)}.pdf`;
         archive.append(buf, { name });
       } catch (e) {
         logger.warn('Archive hotel slip generate failed:', e && e.message);
@@ -2938,8 +2977,8 @@ const getArchive = asyncHandler(async (req, res) => {
     try {
       const buf = await buildVisaSlipPdfBuffer(item, slipOpts);
       visaSlipIdx += 1;
-      const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
-      const name = `09_Slip_Visa_${String(visaSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+      const invNumZip = (invoice.invoice_number || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
+      const name = `09_Slip_Visa_${String(visaSlipIdx).padStart(2, '0')}_${invNumZip}_${(item.id || '').toString().slice(-6)}.pdf`;
       archive.append(buf, { name });
     } catch (e) {
       logger.warn('Archive visa slip generate failed:', e && e.message);
@@ -2953,8 +2992,8 @@ const getArchive = asyncHandler(async (req, res) => {
     try {
       const buf = await buildTicketSlipPdfBuffer(item, slipOpts);
       tiketSlipIdx += 1;
-      const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
-      const name = `10_Slip_Tiket_${String(tiketSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+      const invNumZip = (invoice.invoice_number || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
+      const name = `10_Slip_Tiket_${String(tiketSlipIdx).padStart(2, '0')}_${invNumZip}_${(item.id || '').toString().slice(-6)}.pdf`;
       archive.append(buf, { name });
     } catch (e) {
       logger.warn('Archive ticket slip generate failed:', e && e.message);
@@ -2968,8 +3007,8 @@ const getArchive = asyncHandler(async (req, res) => {
     try {
       const buf = await buildBusSlipPdfBuffer(item, slipOpts);
       busSlipIdx += 1;
-      const ordNum = (invoice.Order && invoice.Order.order_number) || 'ORD';
-      const name = `11_Slip_Bus_${String(busSlipIdx).padStart(2, '0')}_${(ordNum || '').replace(/[^a-zA-Z0-9-]/g, '_')}_${(item.id || '').toString().slice(-6)}.pdf`;
+      const invNumZip = (invoice.invoice_number || 'INV').replace(/[^a-zA-Z0-9-]/g, '_');
+      const name = `11_Slip_Bus_${String(busSlipIdx).padStart(2, '0')}_${invNumZip}_${(item.id || '').toString().slice(-6)}.pdf`;
       archive.append(buf, { name });
     } catch (e) {
       logger.warn('Archive bus slip generate failed:', e && e.message);

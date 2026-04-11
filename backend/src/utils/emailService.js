@@ -278,12 +278,12 @@ async function sendPaymentReceivedEmail(toEmail, ownerName, invoiceNumber, amoun
 /**
  * Kirim email notifikasi: trip selesai / hasil order.
  */
-async function sendOrderResultEmail(toEmail, ownerName, orderNumber, message) {
+async function sendOrderResultEmail(toEmail, ownerName, invoiceNumber, message) {
   if (!toEmail || !toEmail.trim()) return false;
   if (!emailConfig.from && !emailConfig.user) return false;
   const trans = getTransporter();
   if (!trans) return false;
-  const subject = `Trip Selesai – Order ${orderNumber || ''} | Bintang Global Group`;
+  const subject = `Trip Selesai – Invoice ${invoiceNumber || ''} | Bintang Global Group`;
   const html = `
 <!DOCTYPE html>
 <html>
@@ -291,11 +291,11 @@ async function sendOrderResultEmail(toEmail, ownerName, orderNumber, message) {
 <body>
   <h1>Trip Selesai</h1>
   <p>Halo <strong>${escapeHtml(ownerName || 'Pemesan')}</strong>,</p>
-  <p>${escapeHtml(message || `Order ${orderNumber || ''} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`)}</p>
+  <p>${escapeHtml(message || `Invoice ${invoiceNumber || ''} telah selesai. Hasil dapat diunduh/dilihat di aplikasi.`)}</p>
   <p class="footer">Email ini dikirim otomatis oleh sistem Bintang Global Group.</p>
 </body>
 </html>`;
-  const text = `Trip Selesai\n\nHalo ${ownerName || 'Pemesan'},\n\n${message || `Order ${orderNumber || ''} telah selesai.`}\n\n— Bintang Global Group`;
+  const text = `Trip Selesai\n\nHalo ${ownerName || 'Pemesan'},\n\n${message || `Invoice ${invoiceNumber || ''} telah selesai.`}\n\n— Bintang Global Group`;
   return sendMail(toEmail, subject, text, html, []);
 }
 

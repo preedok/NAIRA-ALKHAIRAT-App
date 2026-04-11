@@ -403,8 +403,9 @@ const uploadVisa = [
     if (branchIds.length === 0 || !branchIds.includes(item.Order.branch_id)) return res.status(403).json({ success: false, message: 'Bukan order cabang/wilayah Anda' });
 
     if (!req.file) return res.status(400).json({ success: false, message: 'File visa wajib diupload' });
-    const orderNumber = item.Order?.order_number || 'ORD';
-    const finalName = uploadConfig.visaDocFilename(orderNumber, item.id, req.file.originalname);
+    const invoiceForFile = await Invoice.findOne({ where: { order_id: item.order_id }, attributes: ['invoice_number'] });
+    const refLabel = (invoiceForFile && invoiceForFile.invoice_number) ? String(invoiceForFile.invoice_number).replace(/[^\w\-]/g, '_') : 'INV';
+    const finalName = uploadConfig.visaDocFilename(refLabel, item.id, req.file.originalname);
     const oldPath = req.file.path;
     const newPath = path.join(visaDir, finalName);
     let savedName = req.file.filename;
