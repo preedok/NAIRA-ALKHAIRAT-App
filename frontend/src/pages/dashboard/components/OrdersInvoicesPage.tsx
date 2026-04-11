@@ -3023,9 +3023,19 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <p className="text-xs text-slate-600 mt-1">Untuk order baru atau alokasi ke tagihan.</p>
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && (ownerBalance ?? 0) > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-emerald-200 space-y-2">
-                                        <div className="flex gap-2 items-end">
-                                          <Input label="Alokasikan ke invoice ini" type="number" min={1} max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount || 0))} value={allocateAmount} onChange={(e) => setAllocateAmount(e.target.value)} placeholder="Jumlah (IDR)" className="flex-1 min-w-0" />
-                                          <Button size="sm" variant="primary" className="h-10 px-4 self-stretch" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
+                                        <p className="text-sm font-semibold text-emerald-900">Alokasikan ke invoice ini</p>
+                                        <div className="flex gap-2 items-center">
+                                          <Input
+                                            ariaLabel="Jumlah alokasi ke invoice (IDR)"
+                                            type="number"
+                                            min={1}
+                                            max={Math.min(ownerBalance ?? 0, parseFloat(viewInvoice.remaining_amount || 0))}
+                                            value={allocateAmount}
+                                            onChange={(e) => setAllocateAmount(e.target.value)}
+                                            placeholder="Jumlah (IDR)"
+                                            className="flex-1 min-w-0"
+                                          />
+                                          <Button size="sm" variant="primary" className="h-10 px-4 shrink-0" disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0} onClick={async () => {
                                             if (shouldHideInvoiceCancelAction(viewInvoice)) {
                                               showToast('Invoice sudah dibatalkan/refund. Pembayaran memakai saldo akun tidak dapat dilakukan.', 'error');
                                               return;
@@ -3166,9 +3176,10 @@ const OrdersInvoicesPage: React.FC = () => {
                                     )}
                                     {parseFloat(viewInvoice.remaining_amount || 0) > 0 && invoiceOwnerBalance > 0 && !shouldHideInvoiceCancelAction(viewInvoice) && (
                                       <div className="mt-4 pt-4 border-t border-indigo-200 space-y-2">
-                                        <div className="flex gap-2 items-end">
+                                        <p className="text-sm font-semibold text-[#0D1A63]">Alokasikan saldo owner ke invoice</p>
+                                        <div className="flex gap-2 items-center">
                                           <Input
-                                            label="Alokasikan saldo owner ke invoice"
+                                            ariaLabel="Jumlah alokasi saldo owner ke invoice (IDR)"
                                             type="number"
                                             min={1}
                                             max={Math.min(invoiceOwnerBalance, parseFloat(viewInvoice.remaining_amount || 0))}
@@ -3180,7 +3191,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                           <Button
                                             size="sm"
                                             variant="primary"
-                                            className="h-10 px-4 self-stretch"
+                                            className="h-10 px-4 shrink-0"
                                             disabled={allocating || !allocateAmount || parseFloat(allocateAmount) <= 0}
                                             onClick={async () => {
                                               if (shouldHideInvoiceCancelAction(viewInvoice)) {
