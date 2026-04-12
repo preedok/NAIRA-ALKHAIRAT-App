@@ -4,6 +4,9 @@
  * Create master tables: wilayah, provinsi
  * Wilayah = region utama (Sumatra, Jawa, dll)
  * Provinsi = provinsi dengan FK ke wilayah
+ *
+ * Idempotent: aman jika data provinsi/wilayah sudah ada (deploy ulang / DB diselaraskan manual)
+ * tanpa baris SequelizeMeta untuk migrasi ini.
  */
 const crypto = require('crypto');
 const uuidv4 = () => crypto.randomUUID();
@@ -60,55 +63,87 @@ const PROVINSI_DATA = [
   { kode: '96', nama: 'PAPUA BARAT DAYA', wilayah: 'Papua' }
 ];
 
+async function tableExists(queryInterface, tableName) {
+  const [rows] = await queryInterface.sequelize.query(
+    `SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = :tableName LIMIT 1`,
+    { replacements: { tableName } }
+  );
+  return rows.length > 0;
+}
+
+async function columnExists(queryInterface, tableName, columnName) {
+  const [rows] = await queryInterface.sequelize.query(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = :tableName AND column_name = :columnName LIMIT 1`,
+    { replacements: { tableName, columnName } }
+  );
+  return rows.length > 0;
+}
+
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('wilayah', {
-      id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
-      name: { type: Sequelize.STRING(100), allowNull: false },
-      created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-      updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') }
-    });
+    if (!(await tableExists(queryInterface, 'wilayah'))) {
+      await queryInterface.createTable('wilayah', {
+        id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
+        name: { type: Sequelize.STRING(100), allowNull: false },
+        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
+        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') }
+      });
+    }
 
-    await queryInterface.createTable('provinsi', {
-      id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
-      kode: { type: Sequelize.STRING(20), allowNull: false, unique: true },
-      name: { type: Sequelize.STRING(100), allowNull: false },
-      wilayah_id: { type: Sequelize.UUID, references: { model: 'wilayah', key: 'id' }, onUpdate: 'CASCADE', onDelete: 'RESTRICT' },
-      created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-      updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') }
-    });
+    if (!(await tableExists(queryInterface, 'provinsi'))) {
+      await queryInterface.createTable('provinsi', {
+        id: { type: Sequelize.UUID, primaryKey: true, defaultValue: Sequelize.UUIDV4 },
+        kode: { type: Sequelize.STRING(20), allowNull: false, unique: true },
+        name: { type: Sequelize.STRING(100), allowNull: false },
+        wilayah_id: { type: Sequelize.UUID, references: { model: 'wilayah', key: 'id' }, onUpdate: 'CASCADE', onDelete: 'RESTRICT' },
+        created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
+        updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') }
+      });
+    }
 
-    const wilayahMap = {};
     for (const w of WILAYAH_DATA) {
-      const id = uuidv4();
-      wilayahMap[w] = id;
-      await queryInterface.bulkInsert('wilayah', [{
-        id,
-        name: w,
-        created_at: new Date(),
-        updated_at: new Date()
-      }]);
+      const [existing] = await queryInterface.sequelize.query(
+        `SELECT id FROM wilayah WHERE name = :name LIMIT 1`,
+        { replacements: { name: w } }
+      );
+      if (!existing.length) {
+        const id = uuidv4();
+        await queryInterface.bulkInsert('wilayah', [{
+          id,
+          name: w,
+          created_at: new Date(),
+          updated_at: new Date()
+        }]);
+      }
+    }
+
+    const [wilayahRows] = await queryInterface.sequelize.query(`SELECT id, name FROM wilayah`);
+    const wilayahMap = {};
+    for (const row of wilayahRows) {
+      wilayahMap[row.name] = row.id;
     }
 
     for (const p of PROVINSI_DATA) {
-      const wilayahId = wilayahMap[p.wilayah] || wilayahMap['Lainnya'];
-      await queryInterface.bulkInsert('provinsi', [{
-        id: uuidv4(),
-        kode: p.kode,
-        name: p.nama,
-        wilayah_id: wilayahId,
-        created_at: new Date(),
-        updated_at: new Date()
-      }]);
+      const wilayahId = wilayahMap[p.wilayah] || wilayahMap.Lainnya;
+      await queryInterface.sequelize.query(
+        `INSERT INTO provinsi (id, kode, name, wilayah_id, created_at, updated_at)
+         VALUES (:id, :kode, :name, :wilayah_id, NOW(), NOW())
+         ON CONFLICT (kode) DO NOTHING`,
+        { replacements: { id: uuidv4(), kode: p.kode, name: p.nama, wilayah_id: wilayahId } }
+      );
     }
 
-    await queryInterface.addColumn('branches', 'provinsi_id', {
-      type: Sequelize.UUID,
-      allowNull: true,
-      references: { model: 'provinsi', key: 'id' },
-      onUpdate: 'CASCADE',
-      onDelete: 'SET NULL'
-    });
+    if (!(await columnExists(queryInterface, 'branches', 'provinsi_id'))) {
+      await queryInterface.addColumn('branches', 'provinsi_id', {
+        type: Sequelize.UUID,
+        allowNull: true,
+        references: { model: 'provinsi', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+      });
+    }
   },
 
   async down(queryInterface) {
