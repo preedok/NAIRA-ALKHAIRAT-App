@@ -14,29 +14,35 @@ import { publicApi } from '../../services/api';
 import logo from '../../assets/logo.png';
 
 /* ═══════════════════════════════════════════════════════════════════
-   DESIGN TOKENS — Warm White / Islamic Green / Gold
+   DESIGN TOKENS — Light / Biru dongker (#0D1A63) / hijau sekunder
 ═══════════════════════════════════════════════════════════════════ */
+const NAVY = '#0D1A63';
+const NAVY_MED = '#152a7a';
+const NAVY_LT = '#E8EAF6';
+const NAVY_PALE = '#F0F4FF';
+
 const T = {
-  bg:       '#FAFAF7',
-  bgSoft:   '#F4EFE5',
-  bgCream:  '#F9F5ED',
+  bg:       '#F4F6FA',
+  bgSoft:   '#EEF1F6',
+  bgCream:  '#F8F9FC',
   white:    '#FFFFFF',
   green:    '#1B4D3E',
   greenMd:  '#2D6A58',
   greenLt:  '#EAF4F0',
   greenPale:'#F0F7F5',
-  gold:     '#B8832A',
-  goldWarm: '#C9922A',
-  goldLt:   '#FEF5E7',
-  goldPale: '#FDF8F0',
+  /** Aksen utama: biru dongker (menggantikan emas/oranye di landing) */
+  gold:     NAVY,
+  goldWarm: NAVY_MED,
+  goldLt:   NAVY_LT,
+  goldPale: NAVY_PALE,
   text:     '#1A1A1A',
   textMd:   '#374151',
   muted:    '#6B7280',
   dim:      '#9CA3AF',
   border:   '#E5E7EB',
   borderMd: '#D1D5DB',
-  shadow:   'rgba(27,77,62,0.08)',
-  shadowMd: 'rgba(27,77,62,0.14)',
+  shadow:   'rgba(13,26,99,0.08)',
+  shadowMd: 'rgba(13,26,99,0.14)',
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -58,42 +64,58 @@ const TICKER_ITEMS = [
 ];
 
 const SERVICES = [
-  { id: 'hotel',  label: 'Hotel',   desc: 'Ribuan pilihan akomodasi bintang 3–5',      icon: Hotel,     accent: T.gold,    bg: T.goldPale  },
+  { id: 'hotel',  label: 'Hotel',   desc: 'Ribuan pilihan akomodasi bintang 3–5',      icon: Hotel,     accent: NAVY,       bg: NAVY_PALE },
   { id: 'visa',   label: 'Visa',    desc: 'Proses visa cepat & resmi',                  icon: FileCheck, accent: '#2D6A58',  bg: T.greenPale },
-  { id: 'tiket',  label: 'Tiket',   desc: 'Penerbangan langsung & transit',             icon: Ticket,    accent: '#1B4D3E',  bg: T.greenLt   },
-  { id: 'bus',    label: 'Bus',     desc: 'Armada AC nyaman untuk jamaah',              icon: Bus,       accent: '#7C5A1E',  bg: '#FDF4E7'   },
-  { id: 'paket',  label: 'Paket',   desc: 'All-in-one umrah & wisata halal',            icon: Package,   accent: '#C4882F',  bg: T.goldLt    },
+  { id: 'tiket',  label: 'Tiket',   desc: 'Penerbangan langsung & transit',             icon: Ticket,    accent: NAVY_MED,   bg: NAVY_LT },
+  { id: 'bus',    label: 'Bus',     desc: 'Armada AC nyaman untuk jamaah',              icon: Bus,       accent: NAVY,       bg: NAVY_PALE },
+  { id: 'paket',  label: 'Paket',   desc: 'All-in-one umrah & wisata halal',            icon: Package,   accent: NAVY_MED,   bg: NAVY_LT },
   { id: 'report', label: 'Laporan', desc: 'Dashboard real-time & analitik bisnis',      icon: BarChart3, accent: '#2D6A58',  bg: T.greenPale },
 ];
 
 const PACKAGES = [
   {
-    badge: '⭐ Terlaris', badgeColor: T.gold,
+    category: 'umrah' as const,
+    badge: '⭐ Terlaris', badgeColor: NAVY,
     title: 'Paket Umrah Reguler', sub: '9 Hari · Makkah & Madinah',
-    price: 'Rp 32.500.000', per: '/orang',
+    price: 'Rp 32.500.000', oldPrice: 'Rp 34.000.000', per: '/orang',
     features: ['Hotel Bintang 4 dekat Masjidil Haram', 'Penerbangan PP Garuda Indonesia', 'Visa Umrah & Asuransi', 'Muthawif Berpengalaman', 'City Tour Madinah'],
-    accentColor: T.green,
-    stripBg: '#1B4D3E',
+    accentColor: NAVY,
+    stripBg: NAVY,
     hot: true,
   },
   {
-    badge: '🔥 Populer', badgeColor: T.goldWarm,
+    category: 'umrah' as const,
+    badge: '🔥 Populer', badgeColor: NAVY_MED,
     title: 'Paket Umrah Plus Turki', sub: '14 Hari · Umrah + Wisata Halal',
-    price: 'Rp 28.900.000', per: '/orang',
+    price: 'Rp 28.900.000', oldPrice: 'Rp 31.200.000', per: '/orang',
     features: ['Hotel Bintang 5 Makkah & Istanbul', 'Penerbangan Internasional', 'Visa Schengen & Saudi', 'Tour Istanbul 3 Hari', 'Free City Tour Madinah'],
-    accentColor: T.goldWarm,
-    stripBg: '#7C5A1E',
+    accentColor: NAVY_MED,
+    stripBg: NAVY_MED,
     hot: false,
   },
   {
-    badge: '✨ Baru', badgeColor: '#2D6A58',
+    category: 'wisata' as const,
+    badge: '✨ Baru', badgeColor: NAVY,
     title: 'Wisata Halal Eropa', sub: '12 Hari · 5 Negara',
-    price: 'Rp 45.000.000', per: '/orang',
+    price: 'Rp 45.000.000', oldPrice: 'Rp 48.500.000', per: '/orang',
     features: ['Hotel Bintang 4 di 5 Kota', 'Penerbangan Business Class', 'Visa Schengen Multi-Country', 'Muslim-Friendly Guide', 'Halal Food Guaranteed'],
-    accentColor: '#2D6A58',
-    stripBg: '#2D6A58',
+    accentColor: NAVY,
+    stripBg: NAVY,
     hot: false,
   },
+];
+
+const PACKAGE_TABS = [
+  { id: 'all' as const, label: 'Semua' },
+  { id: 'umrah' as const, label: 'Umrah' },
+  { id: 'wisata' as const, label: 'Wisata halal' },
+];
+
+const HERO_VISUAL_TILES: { Icon: typeof Hotel; label: string; bg: string }[] = [
+  { Icon: Hotel, label: 'Hotel', bg: 'linear-gradient(145deg, #1e3a5f, #0D1A63)' },
+  { Icon: Plane, label: 'Tiket', bg: 'linear-gradient(145deg, #152a7a, #0c1838)' },
+  { Icon: FileCheck, label: 'Visa', bg: 'linear-gradient(145deg, #0D1A63, #243a63)' },
+  { Icon: Package, label: 'Paket', bg: 'linear-gradient(145deg, #1a2f52, #0D1A63)' },
 ];
 
 const STEPS = [
@@ -149,7 +171,7 @@ const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
   :root {
-    --green:#1B4D3E; --gold:#B8832A; --bg:#FAFAF7; --cream:#F4EFE5;
+    --green:#1B4D3E; --gold:#0D1A63; --bg:#F4F6FA; --cream:#EEF1F6;
     --text:#1A1A1A; --muted:#6B7280; --border:#E5E7EB;
   }
 
@@ -170,7 +192,7 @@ const STYLES = `
     0%,100% { transform:translateY(0); }
     50%      { transform:translateY(-8px); }
   }
-  @keyframes shimmerGold {
+  @keyframes shimmerNavy {
     0%,100% { background-position:0% center; }
     50%      { background-position:100% center; }
   }
@@ -206,12 +228,13 @@ const STYLES = `
   .ticker-track { animation:ticker 32s linear infinite; display:flex; gap:0; white-space:nowrap; }
   .ticker-track:hover { animation-play-state:paused; }
 
-  /* ─ Gold shimmer text ─────────────────────────────── */
+  /* ─ Navy accent text ─────────────────────────────── */
   .l-gold-text {
-    background:linear-gradient(90deg,#B8832A 0%,#DCA84A 40%,#B8832A 80%);
+    background:linear-gradient(90deg,#0D1A63 0%,#2d4a8c 45%,#0D1A63 85%);
     background-size:200% auto;
     -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    animation:shimmerGold 4s ease infinite;
+    background-clip:text;
+    animation:shimmerNavy 4s ease infinite;
   }
   .l-green-text {
     background:linear-gradient(135deg,#1B4D3E,#2D6A58);
@@ -223,7 +246,7 @@ const STYLES = `
     background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231B4D3E' fill-opacity='0.04'%3E%3Cpath d='M30 0 L37.5 10.5 L49.5 7.5 L46.5 19.5 L57 27 L46.5 34.5 L49.5 46.5 L37.5 43.5 L30 54 L22.5 43.5 L10.5 46.5 L13.5 34.5 L3 27 L13.5 19.5 L10.5 7.5 L22.5 10.5 Z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   }
   .l-pattern-gold {
-    background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23B8832A' fill-opacity='0.06'%3E%3Crect x='0' y='0' width='1' height='40'/%3E%3Crect x='0' y='0' width='40' height='1'/%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%230D1A63' fill-opacity='0.05'%3E%3Crect x='0' y='0' width='1' height='40'/%3E%3Crect x='0' y='0' width='40' height='1'/%3E%3C/g%3E%3C/svg%3E");
   }
 
   /* ─ Buttons ──────────────────────────────────────── */
@@ -231,13 +254,13 @@ const STYLES = `
     position:relative; overflow:hidden;
     display:inline-flex; align-items:center; gap:8px;
     padding:13px 26px; border-radius:10px; border:none; cursor:pointer;
-    background:linear-gradient(135deg,#1B4D3E 0%,#2D6A58 100%);
-    box-shadow:0 4px 20px rgba(27,77,62,0.3);
+    background:linear-gradient(135deg,#0D1A63 0%,#152a7a 100%);
+    box-shadow:0 4px 20px rgba(13,26,99,0.32);
     color:white; font-weight:700; font-size:14px; letter-spacing:.01em;
     text-decoration:none; font-family:'Plus Jakarta Sans',system-ui,sans-serif;
     transition:transform .15s, box-shadow .2s;
   }
-  .l-btn-primary:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(27,77,62,0.4); }
+  .l-btn-primary:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(13,26,99,0.42); }
   .l-btn-primary:active { transform:translateY(0); }
   .l-btn-primary .shine {
     position:absolute; inset:0;
@@ -250,13 +273,13 @@ const STYLES = `
     position:relative; overflow:hidden;
     display:inline-flex; align-items:center; gap:8px;
     padding:13px 26px; border-radius:10px; border:none; cursor:pointer;
-    background:linear-gradient(135deg,#B8832A 0%,#DCA84A 100%);
-    box-shadow:0 4px 20px rgba(184,131,42,0.3);
+    background:linear-gradient(135deg,#0D1A63 0%,#1e3a7a 100%);
+    box-shadow:0 4px 20px rgba(13,26,99,0.3);
     color:white; font-weight:700; font-size:14px; letter-spacing:.01em;
     text-decoration:none; font-family:'Plus Jakarta Sans',system-ui,sans-serif;
     transition:transform .15s, box-shadow .2s;
   }
-  .l-btn-gold:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(184,131,42,0.4); }
+  .l-btn-gold:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(13,26,99,0.4); }
   .l-btn-gold .shine { position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transform:translateX(-120%);transition:transform .55s; }
   .l-btn-gold:hover .shine { transform:translateX(120%); }
 
@@ -265,22 +288,22 @@ const STYLES = `
     padding:12px 24px; border-radius:10px; text-decoration:none; cursor:pointer;
     font-weight:600; font-size:14px; letter-spacing:.01em;
     font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    color:#1B4D3E; background:white;
-    border:1.5px solid #D1D5DB;
+    color:#0D1A63; background:white;
+    border:1.5px solid #0D1A63;
     transition:all .2s; white-space:nowrap;
   }
-  .l-btn-outline:hover { border-color:#1B4D3E; background:#F0F7F5; color:#1B4D3E; }
+  .l-btn-outline:hover { border-color:#152a7a; background:#F0F4FF; color:#152a7a; }
 
   .l-btn-outline-gold {
     display:inline-flex; align-items:center; gap:8px;
     padding:12px 24px; border-radius:10px; text-decoration:none; cursor:pointer;
     font-weight:600; font-size:14px;
     font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    color:#B8832A; background:white;
-    border:1.5px solid #E8C87A;
+    color:#0D1A63; background:white;
+    border:1.5px solid #0D1A63;
     transition:all .2s;
   }
-  .l-btn-outline-gold:hover { background:#FEF5E7; border-color:#B8832A; }
+  .l-btn-outline-gold:hover { background:#F0F4FF; border-color:#152a7a; }
 
   /* ─ Cards ────────────────────────────────────────── */
   .l-card {
@@ -307,8 +330,8 @@ const STYLES = `
     display:inline-flex; align-items:center; gap:5px;
     padding:5px 14px; border-radius:100px; font-size:10px;
     font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-    background:#FEF5E7; border:1px solid #E8C87A;
-    color:#B8832A;
+    background:#F0F4FF; border:1px solid rgba(13,26,99,0.2);
+    color:#0D1A63;
   }
 
   /* ─ Divider ──────────────────────────────────────── */
@@ -324,9 +347,9 @@ const STYLES = `
   }
   .l-nav-link::after {
     content:''; position:absolute; bottom:-3px; left:0; width:0; height:2px;
-    background:#B8832A; border-radius:1px; transition:width .25s ease;
+    background:#0D1A63; border-radius:1px; transition:width .25s ease;
   }
-  .l-nav-link:hover { color:#1B4D3E; }
+  .l-nav-link:hover { color:#0D1A63; }
   .l-nav-link:hover::after { width:100%; }
 
   /* ─ FAQ ──────────────────────────────────────────── */
@@ -376,8 +399,8 @@ const STYLES = `
     border-bottom:2px solid transparent; margin-bottom:-1px;
     transition:all .2s;
   }
-  .l-search-tab:hover { color:#1B4D3E; background:rgba(27,77,62,0.04); }
-  .l-search-tab.active { color:#1B4D3E; border-bottom-color:#B8832A; background:white; }
+  .l-search-tab:hover { color:#0D1A63; background:rgba(13,26,99,0.06); }
+  .l-search-tab.active { color:#0D1A63; border-bottom-color:#0D1A63; background:white; }
   .l-search-form { padding:22px 22px 26px; }
   .l-search-row { display:grid; gap:14px; align-items:end; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
   .l-search-field { display:flex; flex-direction:column; gap:5px; }
@@ -390,7 +413,7 @@ const STYLES = `
     transition:border-color .2s, box-shadow .2s, background .2s;
   }
   .l-search-input::placeholder { color:#B0B7BF; }
-  .l-search-input:focus { border-color:#1B4D3E; box-shadow:0 0 0 3px rgba(27,77,62,0.1); background:white; }
+  .l-search-input:focus { border-color:#0D1A63; box-shadow:0 0 0 3px rgba(13,26,99,0.12); background:white; }
   .l-search-input.no-icon { padding-left:12px; }
   select.l-search-input { cursor:pointer; }
   .l-search-field-wrap { position:relative; }
@@ -404,7 +427,7 @@ const STYLES = `
     transition:all .2s;
   }
   .l-search-chip:hover { border-color:#C8D8D4; color:#1B4D3E; }
-  .l-search-chip.active { background:#EAF4F0; border-color:#1B4D3E; color:#1B4D3E; }
+  .l-search-chip.active { background:#F0F4FF; border-color:#0D1A63; color:#0D1A63; }
   .l-search-submit { margin-top:18px; }
   .l-search-submit .l-btn-primary { width:100%; justify-content:center; padding:13px 24px; font-size:15px; }
 
@@ -413,8 +436,8 @@ const STYLES = `
   .l-stat-card:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(27,77,62,0.1); }
 
   /* ─ Package card hot ─────────────────────────────── */
-  .l-pkg-featured { border-color:#1B4D3E !important; box-shadow:0 0 0 2px rgba(27,77,62,0.15); }
-  .l-pkg-featured:hover { border-color:#1B4D3E !important; box-shadow:0 16px 48px rgba(27,77,62,0.18) !important; }
+  .l-pkg-featured { border-color:#0D1A63 !important; box-shadow:0 0 0 2px rgba(13,26,99,0.18); }
+  .l-pkg-featured:hover { border-color:#0D1A63 !important; box-shadow:0 16px 48px rgba(13,26,99,0.2) !important; }
 
   /* ─ Dot ──────────────────────────────────────────── */
   .l-dot { width:8px; height:8px; border-radius:50%; cursor:pointer; border:none; transition:all .2s; }
@@ -436,15 +459,41 @@ const STYLES = `
 
   /* ─ CTA section ─────────────────────────────────── */
   .l-cta-section {
-    background:linear-gradient(135deg,#1B4D3E 0%,#163C2E 50%,#0F2A20 100%);
+    background:linear-gradient(135deg,#0D1A63 0%,#152a7a 48%,#0a0f24 100%);
     position:relative; overflow:hidden;
   }
   .l-cta-section::before {
     content:''; position:absolute; inset:0;
-    background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23B8832A' fill-opacity='0.07'%3E%3Cpath d='M40 0 L50 28 L80 28 L56 45 L65 73 L40 57 L15 73 L24 45 L0 28 L30 28 Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M40 0 L50 28 L80 28 L56 45 L65 73 L40 57 L15 73 L24 45 L0 28 L30 28 Z'/%3E%3C/g%3E%3C/svg%3E");
     animation:patternDrift 20s linear infinite;
     pointer-events:none;
   }
+
+  .l-nav-search-wrap .l-search-box { border-radius:16px; box-shadow:0 12px 40px rgba(13,26,99,0.1); }
+  .l-nav-search-wrap .l-search-tabs { padding:10px 12px 0; }
+  .l-nav-search-wrap .l-search-tab { padding:8px 12px; font-size:12px; }
+  .l-nav-search-wrap .l-search-form { padding:14px 14px 18px; }
+  .l-nav-search-wrap .l-search-submit { margin-top:12px; }
+  .l-nav-search-wrap .l-search-submit .l-btn-primary { padding:10px 16px; font-size:13px; }
+
+  .l-hero-visual {
+    display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px;
+    border-radius:24px; border:3px solid #0D1A63;
+    background:#fff; box-shadow:0 20px 50px rgba(13,26,99,0.12);
+    max-width:440px; margin:0 auto;
+  }
+  .l-hero-visual-cell {
+    aspect-ratio:1; border-radius:16px; overflow:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .l-pkg-tab {
+    padding:10px 22px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer;
+    border:1.5px solid #E5E7EB; background:white; color:#6B7280;
+    font-family:'Plus Jakarta Sans',system-ui,sans-serif; transition:all .2s;
+  }
+  .l-pkg-tab:hover { border-color:#0D1A63; color:#0D1A63; }
+  .l-pkg-tab.active { background:#0D1A63; border-color:#0D1A63; color:white; }
 
   /* ─ Responsive ───────────────────────────────────── */
   .l-hide-mob { }
@@ -498,7 +547,7 @@ const STYLES = `
   ::-webkit-scrollbar { width:5px; }
   ::-webkit-scrollbar-track { background:#F4EFE5; }
   ::-webkit-scrollbar-thumb { background:#C8D8D4; border-radius:3px; }
-  ::-webkit-scrollbar-thumb:hover { background:#1B4D3E; }
+  ::-webkit-scrollbar-thumb:hover { background:#0D1A63; }
 `;
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -709,6 +758,8 @@ const LandingPage: React.FC = () => {
   const [scrolled, setScrolled]       = useState(false);
   const [mobileOpen, setMobileOpen]   = useState(false);
   const [testiIdx, setTestiIdx]       = useState(0);
+  const [pkgTab, setPkgTab]           = useState<(typeof PACKAGE_TABS)[number]['id']>('all');
+  const [navHasSearch, setNavHasSearch] = useState(false);
   const [contactForm, setContactForm] = useState({ nama: '', email: '', telepon: '', pesan: '' });
   const [contactSent, setContactSent] = useState(false);
   const [searchData, setSearchData]   = useState<SearchWidgetProps['searchData']>(null);
@@ -736,6 +787,14 @@ const LandingPage: React.FC = () => {
     const h = () => setScrolled(window.scrollY > 32);
     window.addEventListener('scroll', h, { passive: true });
     return () => window.removeEventListener('scroll', h);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1240px)');
+    const set = () => setNavHasSearch(mq.matches);
+    set();
+    mq.addEventListener('change', set);
+    return () => mq.removeEventListener('change', set);
   }, []);
 
   useEffect(() => {
@@ -780,37 +839,62 @@ const LandingPage: React.FC = () => {
       ══════════════════════════════════════ */}
       <nav className="l-nav" style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200,
-        background: scrolled ? 'rgba(250,250,247,0.97)' : 'rgba(250,250,247,0.85)',
+        background: scrolled ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.88)',
         backdropFilter: 'blur(20px)',
         borderBottom: scrolled ? `1px solid ${T.border}` : '1px solid transparent',
-        boxShadow: scrolled ? '0 2px 20px rgba(27,77,62,0.06)' : 'none',
+        boxShadow: scrolled ? '0 2px 20px rgba(13,26,99,0.06)' : 'none',
         transition: 'all .3s ease',
       }}>
-        <div className="l-container" style={{ ...S, display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 68 }}>
+        <div
+          className="l-container"
+          style={{
+            ...S,
+            display: 'grid',
+            gridTemplateColumns: navHasSearch ? 'minmax(0,auto) minmax(0,1fr) minmax(260px,400px)' : 'minmax(0,auto) minmax(0,1fr) auto',
+            alignItems: 'center',
+            gap: navHasSearch ? 20 : 16,
+            minHeight: navHasSearch ? 72 : 68,
+            paddingTop: 10,
+            paddingBottom: 10,
+          }}
+        >
           {/* Brand */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <img src={logo} alt="Bintang Global" style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'contain', display: 'block', flexShrink: 0 }} />
             <div>
-              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.1, color: T.green, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Bintang Global</div>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', color: T.gold, textTransform: 'uppercase', lineHeight: 1.5 }}>Umroh & Travel</div>
+              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.1, color: NAVY, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Bintang Global</div>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', color: T.muted, textTransform: 'uppercase', lineHeight: 1.5 }}>Umroh & Travel</div>
+              {!navHasSearch && (
+                <div className="l-hide-mob" style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                  <Link to="/login" style={{ fontSize: 11, fontWeight: 600, color: T.muted }}>Masuk</Link>
+                  <Link to="/register-owner-type" style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>Daftar</Link>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Desktop links */}
-          <div className="l-hide-mob" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+          {/* Desktop links — centered */}
+          <div className="l-hide-mob" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
             {NAV_LINKS.map(l => <button key={l.id} className="l-nav-link" onClick={() => scrollTo(l.id)}>{l.label}</button>)}
           </div>
 
-          {/* Auth */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Link to="/login" className="l-btn-outline l-hide-mob" style={{ padding: '8px 18px', fontSize: 13 }}>Masuk</Link>
-            <Link to="/register" className="l-btn-primary" style={{ padding: '9px 18px', fontSize: 13 }}>
-              <span className="shine" />
-              <span className="l-hide-mob">Daftar Partner</span>
-              <span className="l-show-mob">Daftar</span>
-              <ArrowRight size={13} />
-            </Link>
-            <button type="button" onClick={() => setMobileOpen(v => !v)} className="l-show-mob" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.text, padding: 4, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Kanan: card pencarian produk (layar lebar) atau auth + menu mobile */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, minWidth: 0 }}>
+            {navHasSearch ? (
+              <div className="l-nav-search-wrap l-hide-mob" style={{ width: '100%', maxWidth: 400 }}>
+                <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
+              </div>
+            ) : (
+              <>
+                <Link to="/login" className="l-btn-outline l-hide-mob" style={{ padding: '8px 18px', fontSize: 13 }}>Masuk</Link>
+                <Link to="/register-owner-type" className="l-btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
+                  <span className="shine" />
+                  Daftar Partner
+                  <ArrowRight size={13} />
+                </Link>
+              </>
+            )}
+            <button type="button" onClick={() => setMobileOpen(v => !v)} className="l-show-mob" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.text, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {mobileOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
@@ -825,7 +909,7 @@ const LandingPage: React.FC = () => {
               ))}
               <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
                 <Link to="/login" className="l-btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobileOpen(false)}>Masuk</Link>
-                <Link to="/register" className="l-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobileOpen(false)}>
+                <Link to="/register-owner-type" className="l-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobileOpen(false)}>
                   <span className="shine" />Daftar Partner
                 </Link>
               </div>
@@ -837,78 +921,77 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           HERO
       ══════════════════════════════════════ */}
-      <section className="l-hero-section l-section" style={{ paddingTop: 110, paddingBottom: 70, minHeight: '92vh', display: 'flex', alignItems: 'center' }}>
+      <section className="l-hero-section l-section" style={{ paddingTop: navHasSearch ? 100 : 110, paddingBottom: 70, minHeight: '88vh', display: 'flex', alignItems: 'center' }}>
         <div className="l-container l-hero-grid" style={{ ...S, width: '100%' }}>
 
-          {/* LEFT: Text */}
+          {/* KIRI: headline + CTA */}
           <div className="l-hero-left" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
 
-            {/* Announcement pill */}
             <div className="l-fu l-fu-0" style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '5px 12px 5px 6px', borderRadius: 100, marginBottom: 24,
-              background: T.goldPale, border: `1px solid #E8C87A`,
+              padding: '5px 12px 5px 6px', borderRadius: 100, marginBottom: 22,
+              background: NAVY_PALE, border: `1px solid rgba(13,26,99,0.15)`,
             }}>
-              <span style={{ background: T.gold, borderRadius: 100, padding: '2px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', color: 'white' }}>BARU</span>
-              <span style={{ fontSize: 11, color: T.gold, fontWeight: 600 }}>Dashboard v3.0 — Analitik Real-time & Invoice Otomatis</span>
-              <ArrowRight size={11} color={T.gold} style={{ flexShrink: 0 }} />
+              <span style={{ background: NAVY, borderRadius: 100, padding: '2px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', color: 'white' }}>BARU</span>
+              <span style={{ fontSize: 11, color: NAVY_MED, fontWeight: 600 }}>Dashboard mitra — invoice & analitik real-time</span>
+              <ArrowRight size={11} color={NAVY} style={{ flexShrink: 0 }} />
             </div>
 
-            {/* Headline */}
             <h1 className="l-fu l-fu-1" style={{
-              fontFamily: "'Cormorant Garamond',Georgia,serif",
-              fontSize: 'clamp(36px,4.5vw,68px)', fontWeight: 700,
-              lineHeight: 1.05, letterSpacing: '-0.015em',
-              margin: '0 0 20px', color: T.text,
+              fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif",
+              fontSize: 'clamp(32px,4.2vw,56px)', fontWeight: 800,
+              lineHeight: 1.08, letterSpacing: '-0.03em',
+              margin: '0 0 18px', color: T.text,
             }}>
-              Satu Platform untuk{' '}
-              <span className="l-gold-text">Semua Perjalanan</span>
+              Nikmati layanan{' '}
+              <span className="l-gold-text">perjalanan umroh</span>
               <br />
-              <span style={{ color: T.green }}>Umroh & Haji</span>
+              <span style={{ color: NAVY_MED, fontWeight: 700 }}>bersama mitra terpercaya</span>
             </h1>
 
-            {/* Sub */}
-            <p className="l-fu l-fu-2" style={{ fontSize: 'clamp(14px,1.1vw,16px)', color: T.muted, lineHeight: 1.8, margin: '0 0 20px', maxWidth: 480 }}>
-              Hotel · Visa · Tiket · Bus · Paket Umrah dan Haji. Satu ekosistem terintegrasi untuk partner travel dan agen umrah terpercaya di seluruh Indonesia.
+            <p className="l-fu l-fu-2" style={{ fontSize: 'clamp(14px,1.1vw,16px)', color: T.muted, lineHeight: 1.75, margin: '0 0 22px', maxWidth: 500 }}>
+              Hotel, visa, tiket, bus, dan paket dalam satu platform. Untuk agen travel dan penyelenggara umroh di seluruh Indonesia.
             </p>
 
-            {/* Feature pills */}
-            <div className="l-fu l-fu-2 l-hero-pills" style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 26 }}>
+            <div className="l-fu l-fu-2 l-hero-pills" style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 24 }}>
               {[
-                { icon: Hotel,     label: 'Hotel',  bg: T.goldPale,   color: T.gold },
-                { icon: FileCheck, label: 'Visa',   bg: T.greenPale,  color: T.green },
-                { icon: Ticket,    label: 'Tiket',  bg: T.greenLt,    color: '#2D6A58' },
-                { icon: Bus,       label: 'Bus',    bg: '#FDF4E7',    color: '#7C5A1E' },
-                { icon: Package,   label: 'Paket',  bg: T.goldPale,   color: T.goldWarm },
+                { icon: Hotel, label: 'Hotel', bg: NAVY_PALE, color: NAVY },
+                { icon: FileCheck, label: 'Visa', bg: T.greenPale, color: T.green },
+                { icon: Ticket, label: 'Tiket', bg: NAVY_LT, color: NAVY_MED },
+                { icon: Bus, label: 'Bus', bg: NAVY_PALE, color: NAVY },
+                { icon: Package, label: 'Paket', bg: NAVY_LT, color: NAVY },
               ].map(({ icon: Icon, label, bg, color }) => (
-                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600, background: bg, border: `1px solid ${color}30`, color }}>
+                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600, background: bg, border: `1px solid ${String(color)}25`, color }}>
                   <Icon size={11} /> {label}
                 </span>
               ))}
             </div>
 
-            {/* CTA */}
-            <div className="l-fu l-fu-3 l-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
-              <Link to="/register" className="l-btn-primary" style={{ fontSize: 14 }}>
+            <div className="l-fu l-fu-3 l-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+              <Link to="/register-owner-type" className="l-btn-primary" style={{ fontSize: 14 }}>
                 <span className="shine" />
-                <Sparkles size={15} /> Daftar Gratis Sekarang
+                <Sparkles size={15} /> Mulai daftar mitra
               </Link>
               <Link to="/login" className="l-btn-outline" style={{ fontSize: 14 }}>
-                Masuk ke Dashboard
+                Masuk ke dashboard
               </Link>
             </div>
 
-            {/* Social proof */}
+            <div className="l-fu l-fu-3" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.muted, marginBottom: 28 }}>
+              <Clock size={16} color={NAVY} />
+              <span><strong style={{ color: T.textMd }}>Jam operasional:</strong> Senin–Sabtu 08.00–17.00 WIB</span>
+            </div>
+
             <div className="l-fu l-fu-4 l-hero-social" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ display: 'flex' }}>
                   {['AF', 'SR', 'HG', 'MR', 'DK'].map((a, i) => (
-                    <div key={a} style={{ width: 28, height: 28, borderRadius: '50%', background: `hsl(${150 + i * 20},45%,42%)`, border: '2px solid white', marginLeft: i ? -7 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: 'white', flexShrink: 0 }}>{a}</div>
+                    <div key={a} style={{ width: 28, height: 28, borderRadius: '50%', background: `linear-gradient(135deg, ${NAVY}, #2d4a7c)`, border: '2px solid white', marginLeft: i ? -7 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: 'white', flexShrink: 0 }}>{a}</div>
                   ))}
                 </div>
                 <div>
                   <div style={{ display: 'flex', gap: 1 }}>
-                    {[...Array(5)].map((_, i) => <Star key={i} size={10} fill={T.gold} color={T.gold} />)}
+                    {[...Array(5)].map((_, i) => <Star key={i} size={10} fill={NAVY} color={NAVY} />)}
                   </div>
                   <div style={{ fontSize: 10, color: T.dim, marginTop: 1 }}>500+ partner aktif</div>
                 </div>
@@ -922,11 +1005,30 @@ const LandingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* RIGHT: Search widget */}
+          {/* KANAN: card pencarian (tablet/desktop sempit) atau grid visual (header sudah punya search) */}
           <div className="l-fu l-fu-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: '100%', maxWidth: 500 }}>
-              <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
-            </div>
+            {navHasSearch ? (
+              <div className="l-hero-visual l-fu" style={{ width: '100%' }}>
+                <p style={{
+                  position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%) rotate(-8deg)',
+                  fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 'clamp(48px,8vw,120px)', fontWeight: 600,
+                  color: 'rgba(13,26,99,0.06)', whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none', zIndex: 0,
+                }}
+                >
+                  Umroh
+                </p>
+                {HERO_VISUAL_TILES.map(({ Icon, label, bg }) => (
+                  <div key={label} className="l-hero-visual-cell" style={{ background: bg, zIndex: 1 }}>
+                    <Icon size={36} color="rgba(255,255,255,0.95)" strokeWidth={1.5} />
+                    <span style={{ position: 'absolute', bottom: 10, left: 10, right: 10, fontSize: 12, fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ width: '100%', maxWidth: 500 }}>
+                <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -962,7 +1064,7 @@ const LandingPage: React.FC = () => {
             {SERVICES.map((svc, i) => {
               const Icon = svc.icon;
               return (
-                <div key={svc.id} data-reveal className="l-card" style={{ padding: 26, opacity: 0, animationDelay: `${i * 0.08}s`, cursor: 'pointer' }} onClick={() => navigate('/register')}>
+                <div key={svc.id} data-reveal className="l-card" style={{ padding: 26, opacity: 0, animationDelay: `${i * 0.08}s`, cursor: 'pointer' }} onClick={() => navigate('/register-owner-type')}>
                   <div style={{ width: 50, height: 50, borderRadius: 14, marginBottom: 18, background: svc.bg, border: `1px solid ${svc.accent}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon size={22} color={svc.accent} />
                   </div>
@@ -985,23 +1087,30 @@ const LandingPage: React.FC = () => {
       ══════════════════════════════════════ */}
       <section id="paket" className="l-section" style={{ background: T.bg }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20, marginBottom: 48 }}>
-            <div style={{ textAlign: 'left' }}>
-              <div className="l-tag-gold" style={{ marginBottom: 14, display: 'inline-flex' }}>
-                <Star size={11} /> Paket Unggulan
-              </div>
-              <h2 style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, letterSpacing: '-0.01em', margin: 0, color: T.text }}>
-                Pilihan Paket <span className="l-gold-text">Terbaik</span>
-              </h2>
+          <div data-reveal style={{ opacity: 0, textAlign: 'center', marginBottom: 36 }}>
+            <div className="l-tag-gold" style={{ marginBottom: 14, display: 'inline-flex' }}>
+              <Star size={11} /> Paket Unggulan
             </div>
-            <button className="l-btn-outline" style={{ padding: '10px 20px', fontSize: 13 }}>
-              Lihat Semua Paket <ArrowRight size={13} />
-            </button>
+            <h2 style={{ fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", fontSize: 'clamp(26px,3.5vw,42px)', fontWeight: 800, letterSpacing: '-0.02em', margin: '0 0 22px', color: T.text }}>
+              Temukan <span className="l-gold-text">paket kami</span>
+            </h2>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+              {PACKAGE_TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`l-pkg-tab${pkgTab === tab.id ? ' active' : ''}`}
+                  onClick={() => setPkgTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="l-packages-grid">
-            {PACKAGES.map((pkg, i) => (
-              <div key={i} data-reveal className={`l-card ${pkg.hot ? 'l-pkg-featured' : ''}`} style={{ opacity: 0, animationDelay: `${i * 0.1}s`, overflow: 'hidden' }}>
+            {PACKAGES.filter(p => pkgTab === 'all' || p.category === pkgTab).map((pkg, i) => (
+              <div key={pkg.title} data-reveal className={`l-card ${pkg.hot ? 'l-pkg-featured' : ''}`} style={{ opacity: 0, animationDelay: `${i * 0.1}s`, overflow: 'hidden' }}>
                 {/* Color strip header */}
                 <div style={{ height: 8, background: pkg.stripBg, width: '100%' }} />
                 <div style={{ padding: '22px 24px 26px' }}>
@@ -1027,13 +1136,18 @@ const LandingPage: React.FC = () => {
                   </ul>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
                     <div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: pkg.hot ? T.gold : T.green, letterSpacing: '-0.02em' }}>{pkg.price}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: pkg.hot ? NAVY : T.green, letterSpacing: '-0.02em' }}>{pkg.price}</div>
+                        {pkg.oldPrice ? (
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.dim, textDecoration: 'line-through' }}>{pkg.oldPrice}</div>
+                        ) : null}
+                      </div>
                       <div style={{ fontSize: 11, color: T.dim }}>{pkg.per}</div>
                     </div>
                     <button
                       className={pkg.hot ? 'l-btn-gold' : 'l-btn-primary'}
                       style={{ padding: '9px 18px', fontSize: 13 }}
-                      onClick={() => navigate('/register')}
+                      onClick={() => navigate('/register-owner-type')}
                     >
                       <span className="shine" />
                       Pesan <ArrowRight size={13} />
@@ -1077,7 +1191,7 @@ const LandingPage: React.FC = () => {
                     <div style={{
                       position: 'absolute', top: -10, right: -10,
                       width: 26, height: 26, borderRadius: 8,
-                      background: T.gold, boxShadow: `0 2px 8px rgba(184,131,42,0.4)`,
+                      background: NAVY, boxShadow: `0 2px 12px rgba(13,26,99,0.45)`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 10, fontWeight: 800, color: 'white',
                     }}>
@@ -1091,7 +1205,7 @@ const LandingPage: React.FC = () => {
             })}
           </div>
           <div data-reveal style={{ opacity: 0, textAlign: 'center', marginTop: 52 }}>
-            <Link to="/register" className="l-btn-primary" style={{ fontSize: 15, padding: '14px 34px' }}>
+            <Link to="/register-owner-type" className="l-btn-primary" style={{ fontSize: 15, padding: '14px 34px' }}>
               <span className="shine" />
               <Zap size={16} /> Mulai Daftar Sekarang — Gratis!
             </Link>
@@ -1102,7 +1216,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           STATS
       ══════════════════════════════════════ */}
-      <section className="l-section-sm" style={{ background: T.green }}>
+      <section className="l-section-sm" style={{ background: `linear-gradient(155deg, ${NAVY} 0%, #0a1438 55%, #050a18 100%)` }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <div className="l-stats-grid">
             {STATS.map((stat, i) => {
@@ -1114,7 +1228,7 @@ const LandingPage: React.FC = () => {
                   border: '1px solid rgba(255,255,255,0.12)',
                   borderRadius: 16,
                 }}>
-                  <Icon size={18} color={T.goldWarm} style={{ marginBottom: 10 }} />
+                  <Icon size={18} color="#B8C8FF" style={{ marginBottom: 10 }} />
                   <div style={{
                     fontFamily: "'Cormorant Garamond',Georgia,serif",
                     fontSize: 36, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
@@ -1380,7 +1494,7 @@ const LandingPage: React.FC = () => {
       <section className="l-cta-section l-section">
         <div style={{ maxWidth: 900, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
           <div data-reveal style={{ opacity: 0 }}>
-            <div className="l-tag-gold" style={{ marginBottom: 20, display: 'inline-flex', background: 'rgba(184,131,42,0.18)', borderColor: 'rgba(184,131,42,0.4)', color: '#DCA84A' }}>
+            <div className="l-tag-gold" style={{ marginBottom: 20, display: 'inline-flex', background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.28)', color: '#E8ECFF' }}>
               <Sparkles size={11} /> Bergabung Sekarang
             </div>
             <h2 style={{
@@ -1390,13 +1504,13 @@ const LandingPage: React.FC = () => {
               color: 'white', margin: '0 0 16px',
             }}>
               Siap Tingkatkan Bisnis<br />
-              <span style={{ color: '#DCA84A' }}>Travel Anda?</span>
+              <span style={{ color: '#C7D2FE' }}>Travel Anda?</span>
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 16, margin: '0 auto 40px', lineHeight: 1.7, maxWidth: 480 }}>
               Daftar gratis dalam 2 menit. Verifikasi instan. Akses penuh ke semua fitur platform.
             </p>
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Link to="/register" className="l-btn-gold" style={{ fontSize: 15, padding: '15px 34px' }}>
+              <Link to="/register-owner-type" className="l-btn-gold" style={{ fontSize: 15, padding: '15px 34px' }}>
                 <span className="shine" />
                 <Zap size={16} /> Daftar Partner — GRATIS
               </Link>
@@ -1416,7 +1530,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           FOOTER
       ══════════════════════════════════════ */}
-      <footer style={{ background: '#0F2A20', borderTop: `3px solid ${T.gold}`, padding: '56px 24px 32px', position: 'relative', zIndex: 1 }}>
+      <footer style={{ background: 'linear-gradient(180deg, #0a0f24 0%, #050814 100%)', borderTop: `3px solid ${NAVY_MED}`, padding: '56px 24px 32px', position: 'relative', zIndex: 1 }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <div className="l-footer-grid" style={{ marginBottom: 48 }}>
             {/* Brand */}
@@ -1425,7 +1539,7 @@ const LandingPage: React.FC = () => {
                 <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'contain', display: 'block', flexShrink: 0 }} />
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'white', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Bintang Global</div>
-                  <div style={{ fontSize: 9, color: T.gold, letterSpacing: '0.22em', textTransform: 'uppercase' }}>Umroh & Travel</div>
+                  <div style={{ fontSize: 9, color: '#9CAEF5', letterSpacing: '0.22em', textTransform: 'uppercase' }}>Umroh & Travel</div>
                 </div>
               </div>
               <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.75, margin: '0 0 20px', maxWidth: 240 }}>
@@ -1434,9 +1548,9 @@ const LandingPage: React.FC = () => {
               <div style={{ display: 'flex', gap: 10 }}>
                 {[Instagram, Twitter, Youtube].map((Icon, i) => (
                   <button key={i} style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = T.gold; (e.currentTarget as HTMLElement).style.background = 'rgba(184,131,42,0.15)'; }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = NAVY_MED; (e.currentTarget as HTMLElement).style.background = 'rgba(21,42,122,0.35)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}>
-                    <Icon size={14} color={T.gold} />
+                    <Icon size={14} color="#C7D2FE" />
                   </button>
                 ))}
               </div>
@@ -1445,11 +1559,11 @@ const LandingPage: React.FC = () => {
             {/* Links */}
             {[
               { title: 'Platform', links: [['Layanan', '#layanan'], ['Paket Umrah', '#paket'], ['Cara Kerja', '#proses'], ['Tentang Kami', '#tentang']] },
-              { title: 'Partner',  links: [['Daftar Partner', '/register'], ['Masuk Dashboard', '/login'], ['Kebijakan Privasi', '#'], ['Syarat & Ketentuan', '#']] },
+              { title: 'Partner',  links: [['Daftar Partner', '/register-owner-type'], ['Masuk Dashboard', '/login'], ['Kebijakan Privasi', '#'], ['Syarat & Ketentuan', '#']] },
               { title: 'Kontak',   links: [['021-XXXX-XXXX', '#'], ['partner@bintangglobal.id', '#'], ['Senin–Sabtu 08–17', '#'], ['Support 24/7', '#']] },
             ].map(({ title, links }) => (
               <div key={title}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: T.gold, textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: '#9CAEF5', textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {links.map(([label, href]) => (
                     <a key={label} href={href} style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', transition: 'color .2s' }}

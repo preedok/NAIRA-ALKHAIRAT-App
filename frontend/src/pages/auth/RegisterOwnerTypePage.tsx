@@ -33,11 +33,7 @@ const RegisterOwnerTypePage: React.FC = () => {
     'hover:border-[#0D1A63]/30 hover:shadow-md hover:bg-slate-50/80 transition-all cursor-pointer group';
 
   return (
-    <AuthSplitLayout
-      panelTitle="Dua jalur mitra, satu layanan profesional."
-      panelSubtitle="MOU atau non-MOU — keduanya terintegrasi dengan tim koordinator dan tarif produk yang transparan."
-      panelFooterLink={{ to: '/login', label: 'Kembali ke login →' }}
-    >
+    <AuthSplitLayout singleColumn singleColumnClassName="max-w-lg w-full">
       <AuthBrandLogoRow />
 
       <Link

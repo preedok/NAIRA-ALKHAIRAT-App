@@ -8,18 +8,46 @@ const BRAND_NAVY_SOFT = '#152a7a';
 type AuthSplitLayoutProps = {
   /** Konten kolom kiri (form) */
   children: React.ReactNode;
-  /** Judul panel kanan */
-  panelTitle: string;
+  /** Judul panel kanan (diabaikan jika singleColumn) */
+  panelTitle?: string;
   /** Deskripsi panel kanan */
-  panelSubtitle: string;
+  panelSubtitle?: string;
   /** Teks link kaki panel kanan (opsional) */
   panelFooterLink?: { to: string; label: string };
+  /** Hanya kartu form putih, tanpa panel biru (mis. halaman daftar) */
+  singleColumn?: boolean;
+  /** Kelas lebar kartu saat singleColumn, contoh: max-w-3xl w-full */
+  singleColumnClassName?: string;
 };
 
 /**
- * Layout dua kolom: form putih + panel biru (selaras referensi login modern).
+ * Layout dua kolom: form putih + panel biru — atau satu kolom jika `singleColumn`.
  */
-export function AuthSplitLayout({ children, panelTitle, panelSubtitle, panelFooterLink }: AuthSplitLayoutProps) {
+export function AuthSplitLayout({
+  children,
+  panelTitle = '',
+  panelSubtitle = '',
+  panelFooterLink,
+  singleColumn = false,
+  singleColumnClassName = 'max-w-xl w-full',
+}: AuthSplitLayoutProps) {
+  if (singleColumn) {
+    return (
+      <div
+        className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8"
+        style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+      >
+        <div
+          className={`${singleColumnClassName} bg-white rounded-2xl shadow-xl shadow-slate-200/60 overflow-hidden flex flex-col`}
+        >
+          <div className="flex-1 flex flex-col min-w-0 px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12 bg-white">
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8"
@@ -95,7 +123,7 @@ export function AuthBrandLogoRow() {
       <div
         className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md shrink-0"
         style={{
-          background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 45%, #0D1A63 100%)',
+          background: 'linear-gradient(135deg, #0D1A63 0%, #152a7a 55%, #1e3a8a 100%)',
         }}
       >
         <Star className="w-6 h-6 text-white" fill="white" strokeWidth={1.5} />
