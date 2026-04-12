@@ -136,6 +136,34 @@ function exportPdfOwnerRowLabel(o: { id: string; name?: string; User?: { name?: 
   return String(n || c || o.id || '');
 }
 
+/** Cakupan ekspor PDF daftar invoice (Accounting / Admin Pusat). */
+type ExportInvoicePdfScope = 'all' | 'wilayah' | 'provinsi' | 'kota' | 'owner';
+
+function buildExportInvoiceListPdfParams(
+  base: Record<string, string | number | undefined>,
+  scope: ExportInvoicePdfScope,
+  picks: { wilayahId: string; provinsiId: string; branchId: string; ownerId: string }
+): Record<string, string | number | undefined> {
+  const { branch_id, wilayah_id, provinsi_id, owner_id, ...rest } = base;
+  void branch_id;
+  void wilayah_id;
+  void provinsi_id;
+  void owner_id;
+  switch (scope) {
+    case 'all':
+      return { ...rest };
+    case 'wilayah':
+      return { ...rest, wilayah_id: picks.wilayahId };
+    case 'provinsi':
+      return { ...rest, provinsi_id: picks.provinsiId };
+    case 'kota':
+      return { ...rest, branch_id: picks.branchId };
+    case 'owner':
+    default:
+      return { ...rest, owner_id: picks.ownerId };
+  }
+}
+
 function calendarDaysBetweenUtcDateOnly(a: Date, b: Date): number {
   const start = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
   const end = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
@@ -331,6 +359,11 @@ const OrdersInvoicesPage: React.FC = () => {
   const [exportingInvoiceListPdf, setExportingInvoiceListPdf] = useState(false);
   const [exportListPdfOwnerModalOpen, setExportListPdfOwnerModalOpen] = useState(false);
   const [exportListPdfSelectedOwnerId, setExportListPdfSelectedOwnerId] = useState('');
+  const [exportListPdfScope, setExportListPdfScope] = useState<ExportInvoicePdfScope>('all');
+  const [exportListPdfModalWilayahId, setExportListPdfModalWilayahId] = useState('');
+  const [exportListPdfModalProvinsiId, setExportListPdfModalProvinsiId] = useState('');
+  const [exportListPdfModalBranchId, setExportListPdfModalBranchId] = useState('');
+  const [exportListPdfModalBranches, setExportListPdfModalBranches] = useState<{ id: string; code: string; name: string }[]>([]);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bank' | 'va' | 'qris' | 'saudi'>('bank');
@@ -402,6 +435,7 @@ const OrdersInvoicesPage: React.FC = () => {
 
   const isAdminPusat = user?.role === 'admin_pusat';
   const isAccounting = user?.role === 'role_accounting';
+  const useAccountingAdminPusatExportPdfModal = isAdminPusat || isAccounting;
   const isInvoiceSaudi = user?.role === 'invoice_saudi';
   const isDraftRow = (inv: any) => inv?.status === 'draft' || inv?.is_draft_order;
   const canPayInvoice = (inv: any) => {
@@ -438,6 +472,22 @@ const OrdersInvoicesPage: React.FC = () => {
   useEffect(() => {
     fetchBranches();
   }, [fetchBranches]);
+
+  useEffect(() => {
+    if (!exportListPdfOwnerModalOpen || !useAccountingAdminPusatExportPdfModal) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await branchesApi.list({ limit: 500, page: 1 });
+        if (!cancelled && res.data.success) setExportListPdfModalBranches((res.data.data || []) as { id: string; code: string; name: string }[]);
+      } catch {
+        if (!cancelled) setExportListPdfModalBranches([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [exportListPdfOwnerModalOpen, useAccountingAdminPusatExportPdfModal]);
 
   const fetchOwners = async () => {
     const canListOwners = isAdminPusat || isAccounting || isInvoiceSaudi || user?.role === 'invoice_koordinator';
@@ -1803,6 +1853,12 @@ const OrdersInvoicesPage: React.FC = () => {
     );
   }, [ownerFilterOptions]);
 
+  const sortedExportListPdfModalBranches = useMemo(() => {
+    return [...exportListPdfModalBranches].sort((a, b) =>
+      `${a.code || ''} ${a.name || ''}`.localeCompare(`${b.code || ''} ${b.name || ''}`, 'id')
+    );
+  }, [exportListPdfModalBranches]);
+
   const sarToIdrList = currencyRates.SAR_TO_IDR || 4200;
   const usdToIdrList = currencyRates.USD_TO_IDR || 15500;
   const amountTriple = (idr: number) => ({ idr, sar: idr / sarToIdrList, usd: idr / usdToIdrList });
@@ -2198,9 +2254,31 @@ const OrdersInvoicesPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 className="border-slate-200/90"
-                title="Pilih owner, lalu unduh PDF daftar invoice (filter lain tetap berlaku)."
+                title={
+                  useAccountingAdminPusatExportPdfModal
+                    ? 'Unduh PDF daftar invoice: pilih cakupan (semua / wilayah / provinsi / kota / owner). Filter tanggal, status, dll. tetap berlaku.'
+                    : 'Pilih owner, lalu unduh PDF daftar invoice (filter lain tetap berlaku).'
+                }
                 disabled={exportingInvoiceListPdf || loading}
                 onClick={() => {
+                  if (useAccountingAdminPusatExportPdfModal) {
+                    let scope: ExportInvoicePdfScope = 'all';
+                    if (filterOwnerId) scope = 'owner';
+                    else if (branchId) scope = 'kota';
+                    else if (provinsiId) scope = 'provinsi';
+                    else if (wilayahId) scope = 'wilayah';
+                    setExportListPdfScope(scope);
+                    setExportListPdfModalWilayahId(wilayahId || '');
+                    setExportListPdfModalProvinsiId(provinsiId || '');
+                    setExportListPdfModalBranchId(branchId || '');
+                    const prefOwner =
+                      filterOwnerId && sortedExportListPdfOwners.some((o) => o.id === filterOwnerId)
+                        ? filterOwnerId
+                        : (sortedExportListPdfOwners[0]?.id || '');
+                    setExportListPdfSelectedOwnerId(prefOwner);
+                    setExportListPdfOwnerModalOpen(true);
+                    return;
+                  }
                   if (!sortedExportListPdfOwners.length) {
                     showToast('Tidak ada owner pada data saat ini. Sesuaikan filter atau muat ulang daftar.', 'warning');
                     return;
@@ -2339,25 +2417,120 @@ const OrdersInvoicesPage: React.FC = () => {
 
       {exportListPdfOwnerModalOpen && (
         <Modal open onClose={() => !exportingInvoiceListPdf && setExportListPdfOwnerModalOpen(false)} zIndex={55}>
-          <ModalBox className="max-w-md w-full">
+          <ModalBox className={useAccountingAdminPusatExportPdfModal ? 'max-w-lg w-full' : 'max-w-md w-full'}>
             <ModalHeader
               title="Export PDF daftar invoice"
-              subtitle="Pilih owner — filter tanggal, status, kota, dll. tetap diterapkan pada ekspor."
+              subtitle={
+                useAccountingAdminPusatExportPdfModal
+                  ? 'Pilih cakupan ekspor. Filter tanggal, status invoice, tipe owner, nomor invoice, jatuh tempo, dan urutan dari bilah filter tetap diterapkan (lokasi di bilah tidak memaksa cakupan — atur di bawah).'
+                  : 'Pilih owner — filter tanggal, status, kota, dll. tetap diterapkan pada ekspor.'
+              }
               icon={<FileText className="w-5 h-5" />}
               onClose={() => !exportingInvoiceListPdf && setExportListPdfOwnerModalOpen(false)}
             />
-            <ModalBody className="space-y-3">
-              <Autocomplete
-                label="Owner"
-                value={exportListPdfSelectedOwnerId}
-                onChange={(v) => setExportListPdfSelectedOwnerId(v)}
-                options={sortedExportListPdfOwners.map((o) => ({
-                  value: o.id,
-                  label: exportPdfOwnerRowLabel(o)
-                }))}
-                placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER}
-                disabled={exportingInvoiceListPdf}
-              />
+            <ModalBody className="space-y-4">
+              {useAccountingAdminPusatExportPdfModal ? (
+                <>
+                  <fieldset className="space-y-2.5">
+                    <legend className="text-sm font-medium text-slate-800 mb-1">Cakupan ekspor</legend>
+                    {(
+                      [
+                        ['all', 'Semua invoice'] as const,
+                        ['wilayah', 'Per wilayah'] as const,
+                        ['provinsi', 'Per provinsi'] as const,
+                        ['kota', 'Per kota (cabang)'] as const,
+                        ['owner', 'Per owner'] as const
+                      ] as const
+                    ).map(([scopeVal, scopeLabel]) => (
+                      <label
+                        key={scopeVal}
+                        className="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer rounded-lg border border-transparent px-1 py-0.5 hover:bg-slate-50"
+                      >
+                        <input
+                          type="radio"
+                          name="exportInvoicePdfScope"
+                          className="mt-0.5"
+                          checked={exportListPdfScope === scopeVal}
+                          onChange={() => setExportListPdfScope(scopeVal)}
+                          disabled={exportingInvoiceListPdf}
+                        />
+                        <span>{scopeLabel}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  {exportListPdfScope === 'wilayah' && (
+                    <Autocomplete
+                      label="Wilayah"
+                      value={exportListPdfModalWilayahId}
+                      onChange={(v) => setExportListPdfModalWilayahId(v)}
+                      options={wilayahList.map((w) => ({ value: w.id, label: w.name }))}
+                      placeholder="Pilih wilayah"
+                      disabled={exportingInvoiceListPdf}
+                    />
+                  )}
+                  {exportListPdfScope === 'provinsi' && (
+                    <Autocomplete
+                      label="Provinsi"
+                      value={exportListPdfModalProvinsiId}
+                      onChange={(v) => setExportListPdfModalProvinsiId(v)}
+                      options={provinces.map((p) => ({
+                        value: String(p.id),
+                        label: String(p.name || p.nama || p.id)
+                      }))}
+                      placeholder="Pilih provinsi"
+                      disabled={exportingInvoiceListPdf}
+                    />
+                  )}
+                  {exportListPdfScope === 'kota' && (
+                    <Autocomplete
+                      label="Kota (cabang)"
+                      value={exportListPdfModalBranchId}
+                      onChange={(v) => setExportListPdfModalBranchId(v)}
+                      options={sortedExportListPdfModalBranches.map((b) => ({
+                        value: b.id,
+                        label: `${b.code ? `${b.code} · ` : ''}${b.name || b.id}`
+                      }))}
+                      placeholder="Pilih cabang / kota"
+                      disabled={exportingInvoiceListPdf}
+                    />
+                  )}
+                  {exportListPdfScope === 'owner' && (
+                    <>
+                      <Autocomplete
+                        label="Owner"
+                        value={exportListPdfSelectedOwnerId}
+                        onChange={(v) => setExportListPdfSelectedOwnerId(v)}
+                        options={sortedExportListPdfOwners.map((o) => ({
+                          value: o.id,
+                          label: exportPdfOwnerRowLabel(o)
+                        }))}
+                        placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER}
+                        disabled={exportingInvoiceListPdf}
+                      />
+                      {!sortedExportListPdfOwners.length && (
+                        <p className="text-xs text-amber-700">Belum ada daftar owner. Muat ulang halaman atau longgarkan filter daftar invoice.</p>
+                      )}
+                    </>
+                  )}
+                  {exportListPdfScope === 'all' && (
+                    <p className="text-xs text-slate-500">
+                      Ekspor mencakup seluruh invoice sesuai hak akses Anda, tanpa pembatasan wilayah/provinsi/cabang/owner pada parameter ekspor (filter lain dari bilah tetap dipakai).
+                    </p>
+                  )}
+                </>
+              ) : (
+                <Autocomplete
+                  label="Owner"
+                  value={exportListPdfSelectedOwnerId}
+                  onChange={(v) => setExportListPdfSelectedOwnerId(v)}
+                  options={sortedExportListPdfOwners.map((o) => ({
+                    value: o.id,
+                    label: exportPdfOwnerRowLabel(o)
+                  }))}
+                  placeholder={AUTOCOMPLETE_PILIH.PILIH_OWNER}
+                  disabled={exportingInvoiceListPdf}
+                />
+              )}
             </ModalBody>
             <ModalFooter className="flex justify-end gap-2">
               <Button
@@ -2371,19 +2544,55 @@ const OrdersInvoicesPage: React.FC = () => {
               <Button
                 type="button"
                 variant="primary"
-                disabled={exportingInvoiceListPdf || !String(exportListPdfSelectedOwnerId || '').trim()}
+                disabled={
+                  exportingInvoiceListPdf ||
+                  (useAccountingAdminPusatExportPdfModal
+                    ? (exportListPdfScope === 'wilayah' && !String(exportListPdfModalWilayahId || '').trim()) ||
+                      (exportListPdfScope === 'provinsi' && !String(exportListPdfModalProvinsiId || '').trim()) ||
+                      (exportListPdfScope === 'kota' && !String(exportListPdfModalBranchId || '').trim()) ||
+                      (exportListPdfScope === 'owner' && !String(exportListPdfSelectedOwnerId || '').trim())
+                    : !String(exportListPdfSelectedOwnerId || '').trim())
+                }
                 onClick={async () => {
-                  const id = String(exportListPdfSelectedOwnerId || '').trim();
-                  if (!id) {
-                    showToast('Pilih owner terlebih dahulu.', 'error');
-                    return;
+                  const base = buildExportListParams() as Record<string, string | number | undefined>;
+                  let params: Parameters<typeof invoicesApi.exportListPdf>[0];
+                  if (useAccountingAdminPusatExportPdfModal) {
+                    const picks = {
+                      wilayahId: String(exportListPdfModalWilayahId || '').trim(),
+                      provinsiId: String(exportListPdfModalProvinsiId || '').trim(),
+                      branchId: String(exportListPdfModalBranchId || '').trim(),
+                      ownerId: String(exportListPdfSelectedOwnerId || '').trim()
+                    };
+                    if (exportListPdfScope === 'wilayah' && !picks.wilayahId) {
+                      showToast('Pilih wilayah terlebih dahulu.', 'error');
+                      return;
+                    }
+                    if (exportListPdfScope === 'provinsi' && !picks.provinsiId) {
+                      showToast('Pilih provinsi terlebih dahulu.', 'error');
+                      return;
+                    }
+                    if (exportListPdfScope === 'kota' && !picks.branchId) {
+                      showToast('Pilih kota (cabang) terlebih dahulu.', 'error');
+                      return;
+                    }
+                    if (exportListPdfScope === 'owner' && !picks.ownerId) {
+                      showToast('Pilih owner terlebih dahulu.', 'error');
+                      return;
+                    }
+                    params = buildExportInvoiceListPdfParams(base, exportListPdfScope, picks) as Parameters<
+                      typeof invoicesApi.exportListPdf
+                    >[0];
+                  } else {
+                    const id = String(exportListPdfSelectedOwnerId || '').trim();
+                    if (!id) {
+                      showToast('Pilih owner terlebih dahulu.', 'error');
+                      return;
+                    }
+                    params = { ...base, owner_id: id } as Parameters<typeof invoicesApi.exportListPdf>[0];
                   }
                   setExportingInvoiceListPdf(true);
                   try {
-                    const res = await invoicesApi.exportListPdf({
-                      ...buildExportListParams(),
-                      owner_id: id
-                    } as Parameters<typeof invoicesApi.exportListPdf>[0]);
+                    const res = await invoicesApi.exportListPdf(params);
                     const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
