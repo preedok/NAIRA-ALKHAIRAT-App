@@ -25,7 +25,8 @@ import {
   Calendar,
   DollarSign,
   Wallet,
-  Sparkles
+  Sparkles,
+  Landmark
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { OrderDraftProvider } from '../contexts/OrderDraftContext';
@@ -49,17 +50,19 @@ const productMenuRoles: UserRole[] = [
   'role_bus',
   'invoice_saudi',
   'handling',
-  'role_siskopatuh'
+  'role_siskopatuh',
+  'role_haji_dakhili'
 ];
 // Siskopatuh: subset invoice + divisi siskopatuh.
 const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'role_siskopatuh'];
+const hajiDakhiliMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'role_haji_dakhili'];
 
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling', 'role_siskopatuh']
+    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling', 'role_siskopatuh', 'role_haji_dakhili']
   },
   {
     title: 'Asisten AI',
@@ -77,13 +80,14 @@ const menuItems: MenuItem[] = [
     title: 'Products',
     icon: <Package className="w-5 h-5" />,
     path: '/dashboard/products',
-    roles: Array.from(new Set<UserRole>([...productMenuRoles, ...siskopatuhMenuRoles])),
+    roles: Array.from(new Set<UserRole>([...productMenuRoles, ...siskopatuhMenuRoles, ...hajiDakhiliMenuRoles])),
     children: [
       { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: productMenuRoles },
       { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: productMenuRoles },
       { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: productMenuRoles },
       { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: productMenuRoles },
       { title: 'Siskopatuh', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/siskopatuh', roles: siskopatuhMenuRoles },
+      { title: 'Haji Dakhili', icon: <Landmark className="w-4 h-4" />, path: '/dashboard/products/haji-dakhili', roles: hajiDakhiliMenuRoles },
       { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: productMenuRoles },
       { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: productMenuRoles },
     ]
@@ -125,10 +129,16 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'role_siskopatuh']
   },
   {
+    title: 'Progress Haji Dakhili',
+    icon: <Landmark className="w-5 h-5" />,
+    path: '/dashboard/progress-haji-dakhili',
+    roles: ['super_admin', 'role_haji_dakhili']
+  },
+  {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner_mou', 'owner_non_mou', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_siskopatuh']
+    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner_mou', 'owner_non_mou', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_siskopatuh', 'role_haji_dakhili']
   },
   {
     title: 'Refund',

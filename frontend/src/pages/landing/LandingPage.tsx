@@ -1,751 +1,469 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Plane, Hotel, FileCheck, Ticket, Bus, Package,
-  Shield, Headphones, Zap, Globe, ChevronRight, ChevronDown,
+  Hotel, FileCheck, Ticket, Bus, Package, BarChart3,
+  Shield, Headphones, Zap, ChevronRight, ChevronDown,
   Menu, X, ArrowRight, Star, MapPin, Building2, Users,
   CheckCircle, Award, TrendingUp, MessageCircle,
   Phone, Mail, Instagram, Twitter, Youtube, Sparkles,
-  BarChart3, Lock, Layers, Navigation, Search, Calendar,
-  UtensilsCrossed, PlaneTakeoff, Eye, Target, HeartHandshake,
+  Lock, Layers, Navigation, Search, Calendar,
+  PlaneTakeoff, Target,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { publicApi } from '../../services/api';
 import logo from '../../assets/logo.png';
 
-/* ═══════════════════════════════════════════════════════════════════
-   DESIGN TOKENS — Light / Biru dongker (#0D1A63) / hijau sekunder
-═══════════════════════════════════════════════════════════════════ */
-const NAVY = '#0D1A63';
-const NAVY_MED = '#152a7a';
-const NAVY_LT = '#E8EAF6';
-const NAVY_PALE = '#F0F4FF';
-
-const T = {
-  bg:       '#F4F6FA',
-  bgSoft:   '#EEF1F6',
-  bgCream:  '#F8F9FC',
-  white:    '#FFFFFF',
-  green:    '#1B4D3E',
-  greenMd:  '#2D6A58',
-  greenLt:  '#EAF4F0',
-  greenPale:'#F0F7F5',
-  /** Aksen utama: biru dongker (menggantikan emas/oranye di landing) */
-  gold:     NAVY,
-  goldWarm: NAVY_MED,
-  goldLt:   NAVY_LT,
-  goldPale: NAVY_PALE,
-  text:     '#1A1A1A',
-  textMd:   '#374151',
-  muted:    '#6B7280',
-  dim:      '#9CA3AF',
-  border:   '#E5E7EB',
-  borderMd: '#D1D5DB',
-  shadow:   'rgba(13,26,99,0.08)',
-  shadowMd: 'rgba(13,26,99,0.14)',
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
+const C = {
+  navy:       '#0B1D51',
+  navyMed:    '#1a3280',
+  navyLt:     '#2d4fa6',
+  navyGhost:  '#EEF1FA',
+  navyFaint:  '#F5F7FE',
+  white:      '#FFFFFF',
+  offWhite:   '#F8F9FC',
+  border:     '#E2E6F0',
+  borderMd:   '#C8D0E8',
+  text:       '#0B1120',
+  textMd:     '#2D3748',
+  muted:      '#64748B',
+  dim:        '#94A3B8',
+  accent:     '#1645C8',
+  accentLt:   '#EBF0FF',
+  gold:       '#C9A84C',
+  goldLt:     '#FDF6E3',
+  shadow:     'rgba(11,29,81,0.10)',
+  shadowMd:   'rgba(11,29,81,0.18)',
 };
 
-/* ═══════════════════════════════════════════════════════════════════
-   STATIC DATA
-═══════════════════════════════════════════════════════════════════ */
+/* ─── DATA ───────────────────────────────────────────────────────── */
 const NAV_LINKS = [
-  { id: 'layanan',     label: 'Layanan' },
-  { id: 'daftar-mitra', label: 'Daftar mitra' },
-  { id: 'paket',       label: 'Paket' },
-  { id: 'proses',      label: 'Proses' },
-  { id: 'tentang',     label: 'Tentang' },
-  { id: 'faq',         label: 'FAQ' },
-  { id: 'kontak',      label: 'Kontak' },
-];
-
-const TICKER_ITEMS = [
-  '✈ Mekkah',  '🕌 Madinah', '🇹🇷 Istanbul', '🇦🇪 Dubai',
-  '🇪🇬 Cairo',  '🇯🇴 Amman', '🇲🇾 Kuala Lumpur', '🇫🇷 Paris',
-  '🇬🇧 London', '🇮🇹 Roma', '🇩🇪 Frankfurt', '🇲🇦 Marrakech',
+  { id: 'layanan',  label: 'Layanan' },
+  { id: 'paket',    label: 'Paket' },
+  { id: 'proses',   label: 'Proses' },
+  { id: 'tentang',  label: 'Tentang' },
+  { id: 'faq',      label: 'FAQ' },
+  { id: 'kontak',   label: 'Kontak' },
 ];
 
 const SERVICES = [
-  { id: 'hotel',  label: 'Hotel',   desc: 'Ribuan pilihan akomodasi bintang 3–5',      icon: Hotel,     accent: NAVY,       bg: NAVY_PALE },
-  { id: 'visa',   label: 'Visa',    desc: 'Proses visa cepat & resmi',                  icon: FileCheck, accent: '#2D6A58',  bg: T.greenPale },
-  { id: 'tiket',  label: 'Tiket',   desc: 'Penerbangan langsung & transit',             icon: Ticket,    accent: NAVY_MED,   bg: NAVY_LT },
-  { id: 'bus',    label: 'Bus',     desc: 'Armada AC nyaman untuk jamaah',              icon: Bus,       accent: NAVY,       bg: NAVY_PALE },
-  { id: 'paket',  label: 'Paket',   desc: 'All-in-one umrah & wisata halal',            icon: Package,   accent: NAVY_MED,   bg: NAVY_LT },
-  { id: 'report', label: 'Laporan', desc: 'Dashboard real-time & analitik bisnis',      icon: BarChart3, accent: '#2D6A58',  bg: T.greenPale },
+  { id: 'hotel',   label: 'Akomodasi Hotel',   desc: 'Ribuan hotel bintang 3–5 di Makkah, Madinah, dan seluruh destinasi haji & umroh.',  icon: Hotel,     num: '01' },
+  { id: 'visa',    label: 'Pengurusan Visa',    desc: 'Proses visa Saudi resmi dan cepat. Tim kami menangani dokumen dari awal hingga selesai.', icon: FileCheck, num: '02' },
+  { id: 'tiket',   label: 'Tiket Penerbangan', desc: 'Penerbangan langsung dan transit ke Arab Saudi dari seluruh bandara di Indonesia.',   icon: PlaneTakeoff, num: '03' },
+  { id: 'bus',     label: 'Transportasi Bus',  desc: 'Armada ber-AC khusus jamaah, melayani rute bandara, hotel, dan ziarah.',            icon: Bus,       num: '04' },
+  { id: 'paket',   label: 'Paket All-In-One',  desc: 'Paket lengkap umroh dan wisata halal — satu harga, tanpa kejutan biaya tambahan.',   icon: Package,   num: '05' },
+  { id: 'report',  label: 'Dashboard Mitra',   desc: 'Kelola order, invoice otomatis, dan laporan real-time dari satu dashboard terintegrasi.', icon: BarChart3, num: '06' },
 ];
 
 const PACKAGES = [
   {
     category: 'umrah' as const,
-    badge: '⭐ Terlaris', badgeColor: NAVY,
-    title: 'Paket Umrah Reguler', sub: '9 Hari · Makkah & Madinah',
-    price: 'Rp 32.500.000', oldPrice: 'Rp 34.000.000', per: '/orang',
-    features: ['Hotel Bintang 4 dekat Masjidil Haram', 'Penerbangan PP Garuda Indonesia', 'Visa Umrah & Asuransi', 'Muthawif Berpengalaman', 'City Tour Madinah'],
-    accentColor: NAVY,
-    stripBg: NAVY,
-    hot: true,
+    badge: 'Terlaris',
+    title: 'Umroh Reguler',
+    sub: '9 Hari · Makkah & Madinah',
+    price: 'Rp 32.500.000',
+    oldPrice: 'Rp 34.000.000',
+    features: ['Hotel Bintang 4 dekat Masjidil Haram', 'Penerbangan PP Garuda Indonesia', 'Visa Umroh & Asuransi Perjalanan', 'Muthawif Berpengalaman', 'City Tour Madinah'],
+    featured: true,
   },
   {
     category: 'umrah' as const,
-    badge: '🔥 Populer', badgeColor: NAVY_MED,
-    title: 'Paket Umrah Plus Turki', sub: '14 Hari · Umrah + Wisata Halal',
-    price: 'Rp 28.900.000', oldPrice: 'Rp 31.200.000', per: '/orang',
+    badge: 'Populer',
+    title: 'Umroh Plus Turki',
+    sub: '14 Hari · Umroh + Istanbul',
+    price: 'Rp 28.900.000',
+    oldPrice: 'Rp 31.200.000',
     features: ['Hotel Bintang 5 Makkah & Istanbul', 'Penerbangan Internasional', 'Visa Schengen & Saudi', 'Tour Istanbul 3 Hari', 'Free City Tour Madinah'],
-    accentColor: NAVY_MED,
-    stripBg: NAVY_MED,
-    hot: false,
+    featured: false,
   },
   {
     category: 'wisata' as const,
-    badge: '✨ Baru', badgeColor: NAVY,
-    title: 'Wisata Halal Eropa', sub: '12 Hari · 5 Negara',
-    price: 'Rp 45.000.000', oldPrice: 'Rp 48.500.000', per: '/orang',
+    badge: 'Baru',
+    title: 'Wisata Halal Eropa',
+    sub: '12 Hari · 5 Negara',
+    price: 'Rp 45.000.000',
+    oldPrice: 'Rp 48.500.000',
     features: ['Hotel Bintang 4 di 5 Kota', 'Penerbangan Business Class', 'Visa Schengen Multi-Country', 'Muslim-Friendly Guide', 'Halal Food Guaranteed'],
-    accentColor: NAVY,
-    stripBg: NAVY,
-    hot: false,
+    featured: false,
   },
 ];
 
 const PACKAGE_TABS = [
-  { id: 'all' as const, label: 'Semua' },
-  { id: 'umrah' as const, label: 'Umrah' },
-  { id: 'wisata' as const, label: 'Wisata halal' },
+  { id: 'all' as const,    label: 'Semua Paket' },
+  { id: 'umrah' as const,  label: 'Umroh' },
+  { id: 'wisata' as const, label: 'Wisata Halal' },
 ];
 
 const STEPS = [
-  { num: '01', icon: Users,        title: 'Daftar Partner',      desc: 'Buat akun mitra dalam 2 menit. Isi profil bisnis dan dokumen legalitas perusahaan Anda.' },
-  { num: '02', icon: CheckCircle,  title: 'Verifikasi Akun',     desc: 'Tim kami memverifikasi dokumen Anda dalam 1×24 jam kerja. Notifikasi via email & WhatsApp.' },
-  { num: '03', icon: Layers,       title: 'Akses Dashboard',     desc: 'Dashboard penuh fitur: kelola order, invoice otomatis, manajemen produk & laporan real-time.' },
-  { num: '04', icon: TrendingUp,   title: 'Kembangkan Bisnis',   desc: 'Nikmati komisi kompetitif, akses harga khusus mitra, dan support 24/7 dari tim kami.' },
+  { num: '01', icon: Users,       title: 'Daftar Akun Mitra',   desc: 'Isi formulir sederhana dengan data perusahaan dan dokumen legalitas. Proses hanya 2 menit.' },
+  { num: '02', icon: CheckCircle, title: 'Verifikasi Dokumen',  desc: 'Tim kami memverifikasi dokumen dalam 1×24 jam kerja dan mengirim notifikasi via email & WhatsApp.' },
+  { num: '03', icon: Layers,      title: 'Akses Dashboard',     desc: 'Dapatkan akses penuh ke dashboard: kelola order, invoice otomatis, manajemen produk & laporan.' },
+  { num: '04', icon: TrendingUp,  title: 'Kembangkan Bisnis',   desc: 'Nikmati komisi hingga 8%, harga khusus mitra, dan dukungan 24/7 dari tim kami.' },
 ];
 
 const TESTIMONIALS = [
-  {
-    name: 'H. Ahmad Fauzi', role: 'Owner · PT Cahaya Umrah', city: 'Jakarta',
-    rating: 5,
-    text: 'Bintang Global mengubah cara saya mengelola bisnis travel. Dashboard-nya intuitif, proses visa 2x lebih cepat, dan tim supportnya luar biasa responsif.',
-    avatar: 'AF',
-  },
-  {
-    name: 'Hj. Siti Rahmawati', role: 'Direktur · Madina Tour', city: 'Surabaya',
-    rating: 5,
-    text: 'Sudah 3 tahun jadi partner dan tidak pernah kecewa. Harga kompetitif, akomodasi selalu sesuai janji. Jamaah kami selalu puas.',
-    avatar: 'SR',
-  },
-  {
-    name: 'Bapak Hendra Gunawan', role: 'CEO · Firdaus Travel', city: 'Bandung',
-    rating: 5,
-    text: 'Fitur laporan otomatis menghemat waktu admin saya 80%. Sekarang saya bisa fokus ke pelayanan jamaah. Platform terbaik yang pernah saya gunakan.',
-    avatar: 'HG',
-  },
+  { name: 'H. Ahmad Fauzi',     role: 'Owner · PT Cahaya Umroh', city: 'Jakarta',  rating: 5, text: 'Platform terbaik yang pernah saya gunakan. Proses visa 2× lebih cepat, dashboard intuitif, dan tim support sangat responsif. Bisnis saya berkembang pesat sejak bergabung.', avatar: 'AF' },
+  { name: 'Hj. Siti Rahmawati', role: 'Direktur · Madina Tour',  city: 'Surabaya', rating: 5, text: 'Sudah 3 tahun menjadi partner dan tidak pernah kecewa. Harga kompetitif, akomodasi selalu sesuai janji. Jamaah kami selalu puas dan merekomendasikan kepada rekan mereka.', avatar: 'SR' },
+  { name: 'Bapak Hendra G.',    role: 'CEO · Firdaus Travel',    city: 'Bandung',  rating: 5, text: 'Fitur laporan otomatis menghemat waktu admin kami 80%. Sekarang tim saya bisa fokus penuh pada pelayanan jamaah. Sangat direkomendasikan untuk agen travel manapun.', avatar: 'HG' },
 ];
 
 const FAQS = [
   { q: 'Bagaimana cara mendaftar sebagai partner?', a: 'Klik tombol "Daftar Partner", isi formulir dengan data perusahaan dan dokumen legalitas (SIUP, NPWP, SK Kemenkumham). Tim kami akan memverifikasi dalam 1×24 jam kerja.' },
   { q: 'Berapa biaya untuk menjadi partner?', a: 'Pendaftaran sepenuhnya GRATIS. Tidak ada biaya bulanan atau tahunan. Anda hanya membayar saat melakukan transaksi dengan harga khusus mitra.' },
-  { q: 'Apa saja keuntungan menjadi partner Bintang Global?', a: 'Akses harga grosir untuk semua produk, komisi kompetitif hingga 8%, dashboard manajemen gratis, invoice otomatis, dukungan 24/7, dan materi marketing siap pakai.' },
+  { q: 'Apa keuntungan menjadi partner Bintang Global?', a: 'Akses harga grosir untuk semua produk, komisi kompetitif hingga 8%, dashboard gratis, invoice otomatis, dukungan 24/7, dan materi marketing siap pakai.' },
   { q: 'Berapa lama proses verifikasi akun partner?', a: 'Proses verifikasi berlangsung 1×24 jam di hari kerja. Anda akan mendapat notifikasi via email dan WhatsApp begitu akun diaktifkan.' },
-  { q: 'Apakah ada minimum transaksi setiap bulan?', a: 'Tidak ada minimum transaksi. Akun tetap aktif selama tidak ada pelanggaran ketentuan. Partner aktif mendapat keuntungan tambahan berupa bonus komisi kuartalan.' },
-  { q: 'Apakah bisa diakses dari perangkat mobile?', a: 'Ya! Dashboard kami fully-responsive dan optimal di semua perangkat. Tersedia juga PWA (Progressive Web App) yang bisa diinstall di smartphone Anda.' },
+  { q: 'Apakah ada minimum transaksi setiap bulan?', a: 'Tidak ada minimum transaksi. Akun tetap aktif selama tidak ada pelanggaran ketentuan. Partner aktif mendapat bonus komisi kuartalan.' },
+  { q: 'Apakah bisa diakses dari perangkat mobile?', a: 'Ya! Dashboard kami fully-responsive dan optimal di semua perangkat. Tersedia juga PWA yang bisa diinstall di smartphone Anda.' },
 ];
 
 const STATS = [
-  { value: 50,   suffix: '+',   label: 'Kota Aktif',         icon: MapPin     },
+  { value: 500,  suffix: '+',   label: 'Partner Aktif',      icon: Building2  },
   { value: 10,   suffix: 'rb+', label: 'Jamaah / Tahun',     icon: Users      },
   { value: 15,   suffix: '+',   label: 'Tahun Pengalaman',   icon: Award      },
   { value: 98,   suffix: '%',   label: 'Tingkat Kepuasan',   icon: Star       },
-  { value: 500,  suffix: '+',   label: 'Partner Aktif',      icon: Building2  },
-  { value: 24,   suffix: '/7',  label: 'Tim Dukungan',       icon: Headphones },
 ];
 
-/* ═══════════════════════════════════════════════════════════════════
-   GLOBAL STYLES
-═══════════════════════════════════════════════════════════════════ */
-const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+const BANDARA_FALLBACK = [
+  { code: 'CGK', name: 'Jakarta (CGK)' }, { code: 'SBY', name: 'Surabaya (SBY)' },
+  { code: 'BTH', name: 'Batam (BTH)' },  { code: 'UPG', name: 'Makassar (UPG)' },
+];
 
-  :root {
-    --green:#1B4D3E; --gold:#0D1A63; --bg:#F4F6FA; --cream:#EEF1F6;
-    --text:#1A1A1A; --muted:#6B7280; --border:#E5E7EB;
-  }
+/* ─── GLOBAL STYLES ──────────────────────────────────────────────── */
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   html { scroll-behavior:smooth; }
-  body, * { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body { -webkit-font-smoothing:antialiased; }
 
-  /* ─ Animations ─────────────────────────────────── */
   @keyframes fadeUp {
-    from { opacity:0; transform:translateY(20px); }
+    from { opacity:0; transform:translateY(24px); }
     to   { opacity:1; transform:translateY(0); }
   }
   @keyframes ticker {
     from { transform:translateX(0); }
     to   { transform:translateX(-50%); }
   }
-  @keyframes floatUp {
-    0%,100% { transform:translateY(0); }
-    50%      { transform:translateY(-8px); }
+  @keyframes pulse-ring {
+    0%   { box-shadow:0 0 0 0 rgba(37,211,102,0.4); }
+    70%  { box-shadow:0 0 0 14px rgba(37,211,102,0); }
+    100% { box-shadow:0 0 0 0 rgba(37,211,102,0); }
   }
-  @keyframes shimmerNavy {
-    0%,100% { background-position:0% center; }
-    50%      { background-position:100% center; }
-  }
-  @keyframes navSlide {
-    from { opacity:0; transform:translateY(-16px); }
+  @keyframes navIn {
+    from { opacity:0; transform:translateY(-12px); }
     to   { opacity:1; transform:translateY(0); }
   }
-  @keyframes patternDrift {
-    from { background-position:0 0; }
-    to   { background-position:60px 60px; }
-  }
-  @keyframes glowPulse {
-    0%,100% { box-shadow:0 4px 20px rgba(37,211,102,0.35); }
-    50%      { box-shadow:0 4px 40px rgba(37,211,102,0.55); }
-  }
-  @keyframes dotPop {
-    0%   { transform:scale(0); opacity:0; }
-    60%  { transform:scale(1.3); }
-    100% { transform:scale(1); opacity:1; }
-  }
 
-  /* ─ Reveal / Animate ────────────────────────────── */
-  .l-fu   { animation:fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
-  .l-fu-0 { animation-delay:.05s; }
-  .l-fu-1 { animation-delay:.15s; }
-  .l-fu-2 { animation-delay:.25s; }
-  .l-fu-3 { animation-delay:.35s; }
-  .l-fu-4 { animation-delay:.45s; }
-  .l-visible { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both; }
-  .l-float  { animation:floatUp 5s ease-in-out infinite; }
+  .l-fu   { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both; }
+  .l-d0   { animation-delay:.05s; }
+  .l-d1   { animation-delay:.15s; }
+  .l-d2   { animation-delay:.25s; }
+  .l-d3   { animation-delay:.38s; }
+  .l-d4   { animation-delay:.52s; }
 
-  /* ─ Ticker ───────────────────────────────────────── */
-  .ticker-track { animation:ticker 32s linear infinite; display:flex; gap:0; white-space:nowrap; }
+  .l-reveal { opacity:0; }
+  .l-revealed { animation:fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
+
+  .l-nav-anim { animation:navIn .45s cubic-bezier(.22,1,.36,1) both; }
+
+  .ticker-wrap { overflow:hidden; white-space:nowrap; }
+  .ticker-track { display:inline-flex; animation:ticker 36s linear infinite; }
   .ticker-track:hover { animation-play-state:paused; }
 
-  /* ─ Navy accent text ─────────────────────────────── */
-  .l-gold-text {
-    background:linear-gradient(90deg,#0D1A63 0%,#2d4a8c 45%,#0D1A63 85%);
-    background-size:200% auto;
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    background-clip:text;
-    animation:shimmerNavy 4s ease infinite;
+  /* NAV */
+  .l-nav-link {
+    font-family:'DM Sans',system-ui,sans-serif;
+    font-size:14px; font-weight:500; color:#2D3748;
+    background:none; border:none; cursor:pointer;
+    text-decoration:none; padding:4px 0; position:relative;
+    transition:color .2s;
   }
-  .l-green-text {
-    background:linear-gradient(135deg,#1B4D3E,#2D6A58);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  .l-nav-link::after {
+    content:''; position:absolute; bottom:-2px; left:0;
+    width:0; height:1.5px; background:#0B1D51;
+    transition:width .25s ease;
   }
+  .l-nav-link:hover { color:#0B1D51; }
+  .l-nav-link:hover::after { width:100%; }
 
-  /* ─ Islamic geometric bg pattern ────────────────── */
-  .l-pattern-bg {
-    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231B4D3E' fill-opacity='0.04'%3E%3Cpath d='M30 0 L37.5 10.5 L49.5 7.5 L46.5 19.5 L57 27 L46.5 34.5 L49.5 46.5 L37.5 43.5 L30 54 L22.5 43.5 L10.5 46.5 L13.5 34.5 L3 27 L13.5 19.5 L10.5 7.5 L22.5 10.5 Z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  }
-  .l-pattern-gold {
-    background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%230D1A63' fill-opacity='0.05'%3E%3Crect x='0' y='0' width='1' height='40'/%3E%3Crect x='0' y='0' width='40' height='1'/%3E%3C/g%3E%3C/svg%3E");
-  }
-
-  /* ─ Buttons ──────────────────────────────────────── */
-  .l-btn-primary {
-    position:relative; overflow:hidden;
+  /* BUTTONS */
+  .btn-primary {
     display:inline-flex; align-items:center; gap:8px;
-    padding:13px 26px; border-radius:10px; border:none; cursor:pointer;
-    background:linear-gradient(135deg,#0D1A63 0%,#152a7a 100%);
-    box-shadow:0 4px 20px rgba(13,26,99,0.32);
-    color:white; font-weight:700; font-size:14px; letter-spacing:.01em;
-    text-decoration:none; font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    transition:transform .15s, box-shadow .2s;
+    padding:13px 26px; border-radius:8px; border:none; cursor:pointer;
+    background:#0B1D51; color:white;
+    font-family:'DM Sans',system-ui,sans-serif;
+    font-size:14px; font-weight:600; letter-spacing:.01em;
+    text-decoration:none;
+    box-shadow:0 4px 16px rgba(11,29,81,0.28);
+    transition:all .2s; position:relative; overflow:hidden;
   }
-  .l-btn-primary:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(13,26,99,0.42); }
-  .l-btn-primary:active { transform:translateY(0); }
-  .l-btn-primary .shine {
-    position:absolute; inset:0;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
-    transform:translateX(-120%); transition:transform .55s ease;
+  .btn-primary::after {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent);
+    transform:translateX(-100%); transition:transform .5s;
   }
-  .l-btn-primary:hover .shine { transform:translateX(120%); }
+  .btn-primary:hover { background:#1a3280; transform:translateY(-1px); box-shadow:0 8px 28px rgba(11,29,81,0.36); }
+  .btn-primary:hover::after { transform:translateX(100%); }
 
-  .l-btn-gold {
-    position:relative; overflow:hidden;
+  .btn-outline {
     display:inline-flex; align-items:center; gap:8px;
-    padding:13px 26px; border-radius:10px; border:none; cursor:pointer;
-    background:linear-gradient(135deg,#0D1A63 0%,#1e3a7a 100%);
-    box-shadow:0 4px 20px rgba(13,26,99,0.3);
-    color:white; font-weight:700; font-size:14px; letter-spacing:.01em;
-    text-decoration:none; font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    transition:transform .15s, box-shadow .2s;
-  }
-  .l-btn-gold:hover { transform:translateY(-1px); box-shadow:0 8px 28px rgba(13,26,99,0.4); }
-  .l-btn-gold .shine { position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);transform:translateX(-120%);transition:transform .55s; }
-  .l-btn-gold:hover .shine { transform:translateX(120%); }
-
-  .l-btn-outline {
-    display:inline-flex; align-items:center; gap:8px;
-    padding:12px 24px; border-radius:10px; text-decoration:none; cursor:pointer;
-    font-weight:600; font-size:14px; letter-spacing:.01em;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    color:#0D1A63; background:white;
-    border:1.5px solid #0D1A63;
-    transition:all .2s; white-space:nowrap;
-  }
-  .l-btn-outline:hover { border-color:#152a7a; background:#F0F4FF; color:#152a7a; }
-
-  .l-btn-outline-gold {
-    display:inline-flex; align-items:center; gap:8px;
-    padding:12px 24px; border-radius:10px; text-decoration:none; cursor:pointer;
-    font-weight:600; font-size:14px;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    color:#0D1A63; background:white;
-    border:1.5px solid #0D1A63;
+    padding:12px 24px; border-radius:8px; cursor:pointer;
+    background:transparent; color:#0B1D51;
+    border:1.5px solid #0B1D51;
+    font-family:'DM Sans',system-ui,sans-serif;
+    font-size:14px; font-weight:600; text-decoration:none;
     transition:all .2s;
   }
-  .l-btn-outline-gold:hover { background:#F0F4FF; border-color:#152a7a; }
+  .btn-outline:hover { background:#EEF1FA; }
 
-  /* ─ Cards ────────────────────────────────────────── */
+  .btn-ghost {
+    display:inline-flex; align-items:center; gap:7px;
+    padding:11px 22px; border-radius:8px; cursor:pointer;
+    background:rgba(255,255,255,0.12); color:white;
+    border:1px solid rgba(255,255,255,0.25);
+    font-family:'DM Sans',system-ui,sans-serif;
+    font-size:14px; font-weight:500; text-decoration:none;
+    transition:all .2s;
+  }
+  .btn-ghost:hover { background:rgba(255,255,255,0.2); }
+
+  /* CARDS */
   .l-card {
-    background:white;
-    border:1px solid #E5E7EB;
-    border-radius:16px;
+    background:white; border:1px solid #E2E6F0; border-radius:14px;
     transition:border-color .25s, transform .25s, box-shadow .25s;
   }
   .l-card:hover {
-    border-color:#C8D8D4;
-    transform:translateY(-4px);
-    box-shadow:0 16px 48px rgba(27,77,62,0.1);
+    border-color:#C8D0E8; transform:translateY(-4px);
+    box-shadow:0 20px 50px rgba(11,29,81,0.10);
   }
 
-  /* ─ Tag/Badge ────────────────────────────────────── */
-  .l-tag {
-    display:inline-flex; align-items:center; gap:5px;
-    padding:5px 14px; border-radius:100px; font-size:10px;
-    font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-    background:#EAF4F0; border:1px solid #C8D8D4;
-    color:#1B4D3E;
-  }
-  .l-tag-gold {
-    display:inline-flex; align-items:center; gap:5px;
-    padding:5px 14px; border-radius:100px; font-size:10px;
-    font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-    background:#F0F4FF; border:1px solid rgba(13,26,99,0.2);
-    color:#0D1A63;
-  }
-
-  /* ─ Divider ──────────────────────────────────────── */
-  .l-hr { height:1px; background:linear-gradient(90deg,transparent,#E5E7EB,transparent); }
-
-  /* ─ Nav ──────────────────────────────────────────── */
-  .l-nav { animation:navSlide .5s cubic-bezier(.22,1,.36,1) both; }
-  .l-nav-link {
-    font-size:14px; font-weight:600; color:#374151; text-decoration:none;
-    background:none; border:none; cursor:pointer;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    transition:color .2s; padding:4px 0; position:relative;
-  }
-  .l-nav-link::after {
-    content:''; position:absolute; bottom:-3px; left:0; width:0; height:2px;
-    background:#0D1A63; border-radius:1px; transition:width .25s ease;
-  }
-  .l-nav-link:hover { color:#0D1A63; }
-  .l-nav-link:hover::after { width:100%; }
-
-  /* ─ FAQ ──────────────────────────────────────────── */
-  .l-faq-item { border-bottom:1px solid #F3F4F6; }
+  /* FAQ */
+  .l-faq-item { border-bottom:1px solid #EEF1FA; }
   .l-faq-q {
     display:flex; align-items:center; justify-content:space-between;
-    padding:20px 0; cursor:pointer;
-    font-size:15px; font-weight:600; color:#1A1A1A; gap:16px;
-    background:none; border:none; width:100%; text-align:left;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+    padding:20px 0; cursor:pointer; width:100%;
+    background:none; border:none; text-align:left; gap:16px;
+    font-family:'DM Sans',system-ui,sans-serif;
+    font-size:15px; font-weight:600; color:#0B1120;
     transition:color .2s; line-height:1.5;
   }
-  .l-faq-q:hover { color:#1B4D3E; }
+  .l-faq-q:hover { color:#0B1D51; }
   .l-faq-a {
     overflow:hidden; transition:max-height .35s ease, opacity .3s;
-    font-size:14px; color:#6B7280; line-height:1.8;
+    font-size:14px; color:#64748B; line-height:1.8;
+    font-family:'DM Sans',system-ui,sans-serif;
   }
 
-  /* ─ Testimonial ──────────────────────────────────── */
-  .l-testi-track { display:flex; gap:20px; transition:transform .5s cubic-bezier(.22,1,.36,1); }
+  /* SEARCH */
+  .search-box { background:white; border:1px solid #E2E6F0; border-radius:16px; overflow:hidden; box-shadow:0 24px 64px rgba(11,29,81,0.12); }
+  .search-tab { display:flex; align-items:center; gap:6px; padding:10px 16px; border:none; background:transparent; cursor:pointer; font-family:'DM Sans',system-ui,sans-serif; font-size:13px; font-weight:500; color:#64748B; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .2s; border-radius:0; }
+  .search-tab:hover { color:#0B1D51; }
+  .search-tab.active { color:#0B1D51; border-bottom-color:#0B1D51; font-weight:600; }
+  .search-input { width:100%; height:42px; padding:0 12px; border-radius:8px; border:1.5px solid #E2E6F0; background:#F8F9FC; color:#0B1120; font-size:14px; font-family:'DM Sans',system-ui,sans-serif; outline:none; transition:border-color .2s, box-shadow .2s; }
+  .search-input::placeholder { color:#94A3B8; }
+  .search-input:focus { border-color:#0B1D51; box-shadow:0 0 0 3px rgba(11,29,81,0.08); background:white; }
+  select.search-input { cursor:pointer; }
 
-  /* ─ WhatsApp FAB ─────────────────────────────────── */
-  .l-fab {
-    position:fixed; bottom:28px; right:28px; z-index:999;
-    width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
-    background:linear-gradient(135deg,#25d366,#128c7e);
-    display:flex; align-items:center; justify-content:center;
-    animation:glowPulse 3s ease-in-out infinite;
-    transition:transform .2s;
-  }
-  .l-fab:hover { transform:scale(1.1); }
+  /* PKG TAB */
+  .pkg-tab { padding:9px 20px; border-radius:999px; font-size:13px; font-weight:500; cursor:pointer; border:1.5px solid #E2E6F0; background:white; color:#64748B; font-family:'DM Sans',system-ui,sans-serif; transition:all .2s; }
+  .pkg-tab:hover { border-color:#0B1D51; color:#0B1D51; }
+  .pkg-tab.active { background:#0B1D51; border-color:#0B1D51; color:white; }
 
-  /* ─ Search widget ────────────────────────────────── */
-  .l-search-box {
-    background:white;
-    border:1px solid #E5E7EB;
-    border-radius:20px;
-    overflow:hidden;
-    box-shadow:0 20px 60px rgba(27,77,62,0.12), 0 1px 0 rgba(255,255,255,0.9) inset;
-  }
-  .l-search-tabs { display:flex; gap:4px; padding:16px 20px 0; flex-wrap:wrap; background:#FAFAF7; border-bottom:1px solid #F3F4F6; }
-  .l-search-tab {
-    display:flex; align-items:center; gap:7px;
-    padding:10px 16px; border-radius:10px 10px 0 0; border:none; cursor:pointer;
-    font-size:13px; font-weight:600; font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    background:transparent; color:#6B7280;
-    border-bottom:2px solid transparent; margin-bottom:-1px;
-    transition:all .2s;
-  }
-  .l-search-tab:hover { color:#0D1A63; background:rgba(13,26,99,0.06); }
-  .l-search-tab.active { color:#0D1A63; border-bottom-color:#0D1A63; background:white; }
-  .l-search-form { padding:22px 22px 26px; }
-  .l-search-row { display:grid; gap:14px; align-items:end; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
-  .l-search-field { display:flex; flex-direction:column; gap:5px; }
-  .l-search-label { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; }
-  .l-search-input {
-    width:100%; height:42px; padding:0 12px 0 38px; border-radius:10px;
-    border:1.5px solid #E5E7EB; background:#FAFAF7;
-    color:#1A1A1A; font-size:14px; outline:none;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    transition:border-color .2s, box-shadow .2s, background .2s;
-  }
-  .l-search-input::placeholder { color:#B0B7BF; }
-  .l-search-input:focus { border-color:#0D1A63; box-shadow:0 0 0 3px rgba(13,26,99,0.12); background:white; }
-  .l-search-input.no-icon { padding-left:12px; }
-  select.l-search-input { cursor:pointer; }
-  .l-search-field-wrap { position:relative; }
-  .l-search-field-wrap .l-search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#9CA3AF; pointer-events:none; }
-  .l-search-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  .l-search-chip {
-    display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border-radius:8px;
-    font-size:12px; font-weight:500; cursor:pointer;
-    border:1.5px solid #E5E7EB; background:white; color:#6B7280;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
-    transition:all .2s;
-  }
-  .l-search-chip:hover { border-color:#C8D8D4; color:#1B4D3E; }
-  .l-search-chip.active { background:#F0F4FF; border-color:#0D1A63; color:#0D1A63; }
-  .l-search-submit { margin-top:18px; }
-  .l-search-submit .l-btn-primary { width:100%; justify-content:center; padding:13px 24px; font-size:15px; }
+  /* MISC */
+  .l-section { padding:96px 24px; }
+  .l-section-sm { padding:72px 24px; }
+  .l-hr { height:1px; background:linear-gradient(90deg,transparent,#E2E6F0,transparent); }
 
-  /* ─ Stats card hover ─────────────────────────────── */
-  .l-stat-card { transition:transform .2s, box-shadow .2s; }
-  .l-stat-card:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(27,77,62,0.1); }
+  .display-font { font-family:'Playfair Display',Georgia,serif; }
+  .body-font    { font-family:'DM Sans',system-ui,sans-serif; }
 
-  /* ─ Package card hot ─────────────────────────────── */
-  .l-pkg-featured { border-color:#0D1A63 !important; box-shadow:0 0 0 2px rgba(13,26,99,0.18); }
-  .l-pkg-featured:hover { border-color:#0D1A63 !important; box-shadow:0 16px 48px rgba(13,26,99,0.2) !important; }
+  .l-grid-2  { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; }
+  .l-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:40px; }
 
-  /* ─ Dot ──────────────────────────────────────────── */
-  .l-dot { width:8px; height:8px; border-radius:50%; cursor:pointer; border:none; transition:all .2s; }
+  .l-dot { width:8px; height:8px; border-radius:50%; cursor:pointer; border:none; transition:all .25s; }
 
-  /* ─ Form ──────────────────────────────────────────── */
-  .l-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:520px) { .l-form-grid { grid-template-columns:1fr; } }
-
-  /* ─ Hero section bg (polos, tanpa pola bintang) ─── */
-  .l-hero-section {
-    background:#F8F9FC;
-    position:relative;
-  }
-
-  /* ─ CTA section ─────────────────────────────────── */
-  .l-cta-section {
-    background:linear-gradient(135deg,#0D1A63 0%,#152a7a 48%,#0a0f24 100%);
-    position:relative; overflow:hidden;
-  }
-  .l-cta-section::before {
-    content:''; position:absolute; inset:0;
-    background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M40 0 L50 28 L80 28 L56 45 L65 73 L40 57 L15 73 L24 45 L0 28 L30 28 Z'/%3E%3C/g%3E%3C/svg%3E");
-    animation:patternDrift 20s linear infinite;
-    pointer-events:none;
-  }
-
-  .l-embed-search-wrap .l-search-box { border-radius:16px; box-shadow:0 12px 40px rgba(13,26,99,0.1); }
-  .l-embed-search-wrap .l-search-tabs { padding:10px 12px 0; }
-  .l-embed-search-wrap .l-search-tab { padding:8px 12px; font-size:12px; }
-  .l-embed-search-wrap .l-search-form { padding:14px 14px 18px; }
-  .l-embed-search-wrap .l-search-submit { margin-top:12px; }
-  .l-embed-search-wrap .l-search-submit .l-btn-primary { padding:10px 16px; font-size:13px; }
-
-  .l-pkg-tab {
-    padding:10px 22px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer;
-    border:1.5px solid #E5E7EB; background:white; color:#6B7280;
-    font-family:'Plus Jakarta Sans',system-ui,sans-serif; transition:all .2s;
-  }
-  .l-pkg-tab:hover { border-color:#0D1A63; color:#0D1A63; }
-  .l-pkg-tab.active { background:#0D1A63; border-color:#0D1A63; color:white; }
-
-  /* ─ Responsive ───────────────────────────────────── */
   .l-hide-mob { }
   .l-show-mob { display:none !important; }
-  @media (max-width:768px) {
-    .l-hide-mob { display:none !important; }
-    .l-show-mob { display:flex !important; }
-    .l-step-line { display:none; }
-    .l-search-tabs { padding:12px 14px 0; }
-    .l-search-form { padding:18px 14px 22px; }
-    .l-search-row { grid-template-columns:1fr; }
-  }
 
-  .l-hero-grid { display:grid; grid-template-columns:1fr 1.1fr; gap:40px; align-items:center; }
-  .l-tentang-grid { display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; }
-  .l-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:40px; }
-  .l-packages-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:22px; }
-  .l-stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:16px; }
-
-  @media (max-width:992px) {
-    .l-hero-grid { grid-template-columns:1fr; }
-    .l-hero-left { align-items:center !important; text-align:center !important; }
-    .l-hero-left .l-hero-pills { justify-content:center; }
-    .l-hero-left .l-hero-cta { justify-content:center; }
-    .l-hero-left .l-hero-social { justify-content:center; }
-    .l-tentang-grid { grid-template-columns:1fr; gap:36px; }
+  @media (max-width:1024px) {
+    .l-grid-2 { grid-template-columns:1fr; gap:40px; }
   }
-  @media (max-width:768px) {
-    .l-footer-grid { grid-template-columns:1fr; gap:28px; }
-    .l-packages-grid { grid-template-columns:1fr; }
-    .l-stats-grid { grid-template-columns:repeat(2,1fr); gap:12px; }
-  }
-  @media (max-width:480px) {
-    .l-stats-grid { grid-template-columns:1fr 1fr; }
-  }
-
-  .l-section { padding:90px 24px; }
-  .l-section-sm { padding:70px 24px; }
   @media (max-width:768px) {
     .l-section { padding:60px 16px; }
     .l-section-sm { padding:48px 16px; }
-  }
-  @media (max-width:480px) {
-    .l-section { padding:48px 12px; }
+    .l-footer-grid { grid-template-columns:1fr; gap:28px; }
+    .l-hide-mob { display:none !important; }
+    .l-show-mob { display:flex !important; }
+    .search-tab { padding:8px 10px; font-size:12px; }
   }
 
-  .l-container { padding-left:16px; padding-right:16px; }
-  @media (max-width:480px) { .l-container { padding-left:12px; padding-right:12px; } }
-
-  /* Scrollbar */
   ::-webkit-scrollbar { width:5px; }
-  ::-webkit-scrollbar-track { background:#F4EFE5; }
-  ::-webkit-scrollbar-thumb { background:#C8D8D4; border-radius:3px; }
-  ::-webkit-scrollbar-thumb:hover { background:#0D1A63; }
+  ::-webkit-scrollbar-track { background:#F8F9FC; }
+  ::-webkit-scrollbar-thumb { background:#C8D0E8; border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:#0B1D51; }
 `;
 
-/* ═══════════════════════════════════════════════════════════════════
-   SUB-COMPONENTS
-═══════════════════════════════════════════════════════════════════ */
-
-const Counter: React.FC<{ value: number; suffix: string; duration?: number }> = ({ value, suffix, duration = 2000 }) => {
+/* ─── SUB-COMPONENTS ─────────────────────────────────────────────── */
+const Counter: React.FC<{ value: number; suffix: string }> = ({ value, suffix }) => {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const started = useRef(false);
   useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !started.current) {
+    const observer = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !started.current) {
         started.current = true;
-        const step = value / (duration / 16);
+        const step = value / (1800 / 16);
         let cur = 0;
-        const timer = setInterval(() => {
+        const t = setInterval(() => {
           cur = Math.min(cur + step, value);
           setCount(Math.floor(cur));
-          if (cur >= value) clearInterval(timer);
+          if (cur >= value) clearInterval(t);
         }, 16);
       }
     }, { threshold: 0.5 });
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, [value, duration]);
+  }, [value]);
   return <span ref={ref}>{count}{suffix}</span>;
 };
 
-const FaqItem: React.FC<{ q: string; a: string; defaultOpen?: boolean }> = ({ q, a, defaultOpen }) => {
+const FaqItem: React.FC<{ q: string; a: string; open?: boolean }> = ({ q, a, open: defaultOpen }) => {
   const [open, setOpen] = useState(defaultOpen ?? false);
   return (
     <div className="l-faq-item">
       <button className="l-faq-q" onClick={() => setOpen(v => !v)}>
         <span>{q}</span>
-        <span style={{
-          width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-          background: open ? '#EAF4F0' : '#F9FAFB',
-          border: `1.5px solid ${open ? '#1B4D3E' : '#E5E7EB'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'all .25s', transform: open ? 'rotate(180deg)' : 'none',
-        }}>
-          <ChevronDown size={14} color={open ? T.green : T.muted} />
+        <span style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, background: open ? '#EEF1FA' : '#F8F9FC', border: `1.5px solid ${open ? C.navy : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .25s', transform: open ? 'rotate(180deg)' : 'none' }}>
+          <ChevronDown size={13} color={open ? C.navy : C.muted} />
         </span>
       </button>
-      <div className="l-faq-a" style={{ maxHeight: open ? 200 : 0, opacity: open ? 1 : 0, paddingBottom: open ? 20 : 0 }}>
-        {a}
-      </div>
+      <div className="l-faq-a" style={{ maxHeight: open ? 200 : 0, opacity: open ? 1 : 0, paddingBottom: open ? 20 : 0 }}>{a}</div>
     </div>
   );
 };
 
-const SectionHeader: React.FC<{ tag: string; tagIcon?: React.ReactNode; tagGold?: boolean; title: React.ReactNode; sub?: string; center?: boolean }> = ({ tag, tagIcon, tagGold, title, sub, center = true }) => (
-  <div style={{ textAlign: center ? 'center' : 'left', marginBottom: 52 }}>
-    <div className={tagGold ? 'l-tag-gold' : 'l-tag'} style={{ marginBottom: 16, display: 'inline-flex' }}>
-      {tagIcon}{tag}
-    </div>
-    <h2 style={{
-      fontFamily: "'Cormorant Garamond',Georgia,serif",
-      fontSize: 'clamp(30px,4vw,50px)', fontWeight: 700,
-      letterSpacing: '-0.01em', lineHeight: 1.1,
-      margin: '0 0 16px', color: T.text,
-    }}>
-      {title}
-    </h2>
-    {sub && <p style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", color: T.muted, fontSize: 16, margin: '0 auto', maxWidth: 500, lineHeight: 1.8, fontWeight: 400 }}>{sub}</p>}
+const SectionLabel: React.FC<{ text: string }> = ({ text }) => (
+  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+    <span style={{ display: 'block', width: 24, height: 2, background: C.navy, borderRadius: 2 }} />
+    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: C.navyMed, fontFamily: "'DM Sans',system-ui,sans-serif" }}>{text}</span>
   </div>
 );
 
-/* ─── Search widget ───────────────────────────────── */
-const PRODUCT_TABS = [
-  { id: 'hotel',   label: 'Hotel',  icon: Hotel },
-  { id: 'ticket',  label: 'Tiket',  icon: PlaneTakeoff },
-  { id: 'visa',    label: 'Visa',   icon: FileCheck },
-  { id: 'bus',     label: 'Bus',    icon: Bus },
-  { id: 'package', label: 'Paket',  icon: Package },
+/* ─── SEARCH WIDGET ──────────────────────────────────────────────── */
+const TABS = [
+  { id: 'hotel',  label: 'Hotel',  icon: Hotel },
+  { id: 'tiket',  label: 'Tiket',  icon: PlaneTakeoff },
+  { id: 'visa',   label: 'Visa',   icon: FileCheck },
+  { id: 'bus',    label: 'Bus',    icon: Bus },
+  { id: 'paket',  label: 'Paket',  icon: Package },
 ] as const;
-type ProductTabId = typeof PRODUCT_TABS[number]['id'];
-const BANDARA_FALLBACK = [
-  { code: 'CGK', name: 'Jakarta' }, { code: 'SBY', name: 'Surabaya' },
-  { code: 'BTH', name: 'Batam' },  { code: 'UPG', name: 'Makassar' },
-];
-interface SearchWidgetProps {
-  searchData: { products: { id: string; name: string; type: string; meta?: Record<string, unknown> }[]; byType: Record<string, { id: string; name: string; type: string }[]>; bandara: { code: string; name: string }[]; } | null;
-  onSearch: (params: Record<string, string>) => void;
-}
-const LandingSearchWidget: React.FC<SearchWidgetProps> = ({ searchData, onSearch }) => {
-  const [activeTab, setActiveTab] = useState<ProductTabId>('hotel');
-  const [hotel, setHotel] = useState({ destination: '', checkIn: '', checkOut: '', guests: '2', rooms: '1', freeBreakfast: false, freeCancel: false, star4: false, score8: false });
+type TabId = typeof TABS[number]['id'];
+
+const SearchWidget: React.FC<{
+  searchData: { bandara: { code: string; name: string }[] } | null;
+  onSearch: (p: Record<string, string>) => void;
+}> = ({ searchData, onSearch }) => {
+  const [tab, setTab] = useState<TabId>('hotel');
+  const [hotel, setHotel] = useState({ dest: '', cin: '', cout: '', guests: '2' });
   const [ticket, setTicket] = useState({ from: '', to: '', date: '' });
-  const [visa, setVisa] = useState({ destination: 'Visa Saudi', date: '' });
+  const [visa, setVisa] = useState({ type: 'Visa Saudi', date: '' });
   const [bus, setBus] = useState({ route: '', date: '' });
-  const [pkg, setPkg] = useState({ destination: '', date: '' });
+  const [pkg, setPkg] = useState({ dest: '', date: '' });
   const bandara = searchData?.bandara?.length ? searchData.bandara : BANDARA_FALLBACK;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const params: Record<string, string> = { product: activeTab };
-    if (activeTab === 'hotel') { if (hotel.destination) params.destination = hotel.destination; if (hotel.checkIn) params.checkin = hotel.checkIn; if (hotel.checkOut) params.checkout = hotel.checkOut; if (hotel.guests) params.guests = hotel.guests; if (hotel.rooms) params.rooms = hotel.rooms; }
-    else if (activeTab === 'ticket') { if (ticket.from) params.from = ticket.from; if (ticket.to) params.to = ticket.to; if (ticket.date) params.date = ticket.date; }
-    else if (activeTab === 'visa') { if (visa.destination) params.destination = visa.destination; if (visa.date) params.date = visa.date; }
-    else if (activeTab === 'bus') { if (bus.route) params.route = bus.route; if (bus.date) params.date = bus.date; }
-    else if (activeTab === 'package') { if (pkg.destination) params.destination = pkg.destination; if (pkg.date) params.date = pkg.date; }
-    onSearch(params);
+    const p: Record<string, string> = { product: tab };
+    if (tab === 'hotel') { if (hotel.dest) p.destination = hotel.dest; if (hotel.cin) p.checkin = hotel.cin; if (hotel.cout) p.checkout = hotel.cout; p.guests = hotel.guests; }
+    else if (tab === 'tiket') { if (ticket.from) p.from = ticket.from; if (ticket.to) p.to = ticket.to; if (ticket.date) p.date = ticket.date; }
+    else if (tab === 'visa') { p.destination = visa.type; if (visa.date) p.date = visa.date; }
+    else if (tab === 'bus') { if (bus.route) p.route = bus.route; if (bus.date) p.date = bus.date; }
+    else if (tab === 'paket') { if (pkg.dest) p.destination = pkg.dest; if (pkg.date) p.date = pkg.date; }
+    onSearch(p);
   };
-  const Field = ({ label, children, fullWidth }: { label: string; children: React.ReactNode; fullWidth?: boolean }) => (
-    <div className="l-search-field" style={fullWidth ? { gridColumn: '1 / -1' } : undefined}>
-      <span className="l-search-label">{label}</span>
-      {children}
-    </div>
+
+  const Label = ({ text }: { text: string }) => (
+    <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: '.06em', textTransform: 'uppercase', display: 'block', marginBottom: 5, fontFamily: "'DM Sans',system-ui,sans-serif" }}>{text}</span>
   );
-  const InputIcon = ({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { icon?: React.ComponentType<Record<string, unknown>> }) => (
-    <div className="l-search-field-wrap">
-      {Icon && <Icon size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: T.dim, pointerEvents: 'none' }} />}
-      <input className={`l-search-input ${Icon ? '' : 'no-icon'}`} style={{ height: 42 }} {...props} />
-    </div>
-  );
+
   return (
-    <div className="l-search-box">
-      <div className="l-search-tabs">
-        {PRODUCT_TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" onClick={() => setActiveTab(id)} className={`l-search-tab ${activeTab === id ? 'active' : ''}`}>
-            <Icon size={15} /> {label}
+    <div className="search-box">
+      <div style={{ display: 'flex', gap: 0, padding: '14px 18px 0', background: '#F8F9FC', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" onClick={() => setTab(id)} className={`search-tab ${tab === id ? 'active' : ''}`}>
+            <Icon size={14} />{label}
           </button>
         ))}
       </div>
-      <form onSubmit={handleSubmit} className="l-search-form">
-        {activeTab === 'hotel' && (
-          <>
-            <div className="l-search-row" style={{ marginBottom: 14 }}>
-              <Field label="DESTINASI" fullWidth>
-                <InputIcon icon={Search} type="text" placeholder="Kota, Mekkah, Madinah, atau nama hotel..." value={hotel.destination} onChange={e => setHotel(h => ({ ...h, destination: e.target.value }))} />
-              </Field>
+      <form onSubmit={handleSubmit} style={{ padding: '20px 20px 24px' }}>
+        {tab === 'hotel' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <Label text="Destinasi" />
+              <div style={{ position: 'relative' }}>
+                <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.dim, pointerEvents: 'none' }} />
+                <input className="search-input" style={{ paddingLeft: 36 }} type="text" placeholder="Kota, Makkah, Madinah, atau nama hotel..." value={hotel.dest} onChange={e => setHotel(h => ({ ...h, dest: e.target.value }))} />
+              </div>
             </div>
-            <div className="l-search-row" style={{ marginBottom: 14 }}>
-              <Field label="CHECK-IN"><InputIcon icon={Calendar} type="date" value={hotel.checkIn} onChange={e => setHotel(h => ({ ...h, checkIn: e.target.value }))} /></Field>
-              <Field label="CHECK-OUT"><input className="l-search-input no-icon" type="date" value={hotel.checkOut} onChange={e => setHotel(h => ({ ...h, checkOut: e.target.value }))} style={{ height: 42 }} /></Field>
-              <Field label="TAMU & KAMAR">
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <input className="l-search-input no-icon" type="number" min={1} max={20} value={hotel.guests} onChange={e => setHotel(h => ({ ...h, guests: e.target.value }))} style={{ height: 42, flex: 1 }} />
-                    <span style={{ fontSize: 12, color: T.dim, flexShrink: 0 }}>tamu</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <input className="l-search-input no-icon" type="number" min={1} max={10} value={hotel.rooms} onChange={e => setHotel(h => ({ ...h, rooms: e.target.value }))} style={{ height: 42, flex: 1 }} />
-                    <span style={{ fontSize: 12, color: T.dim, flexShrink: 0 }}>kamar</span>
-                  </div>
-                </div>
-              </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div><Label text="Check-In" /><input className="search-input" type="date" value={hotel.cin} onChange={e => setHotel(h => ({ ...h, cin: e.target.value }))} /></div>
+              <div><Label text="Check-Out" /><input className="search-input" type="date" value={hotel.cout} onChange={e => setHotel(h => ({ ...h, cout: e.target.value }))} /></div>
+              <div><Label text="Tamu" /><input className="search-input" type="number" min={1} max={20} value={hotel.guests} onChange={e => setHotel(h => ({ ...h, guests: e.target.value }))} /></div>
             </div>
-            <div className="l-search-chips">
-              {[{ key: 'freeBreakfast', label: 'Sarapan gratis', icon: UtensilsCrossed }, { key: 'freeCancel', label: 'Bebas batal' }, { key: 'star4', label: 'Bintang 4+', icon: Star }, { key: 'score8', label: 'Skor 8+' }].map(({ key, label, icon: C }) => (
-                <button key={key} type="button" onClick={() => setHotel(h => ({ ...h, [key]: !(h as Record<string, unknown>)[key] }))} className={`l-search-chip ${(hotel as Record<string, unknown>)[key] ? 'active' : ''}`}>
-                  {C && <C size={13} />}{label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        {activeTab === 'ticket' && (
-          <div className="l-search-row">
-            <Field label="Bandara Asal">
-              <select className="l-search-input no-icon" value={ticket.from} onChange={e => setTicket(t => ({ ...t, from: e.target.value }))} style={{ height: 42 }}>
-                <option value="">Pilih bandara</option>
-                {bandara.map(b => <option key={b.code} value={b.code}>{b.name} ({b.code})</option>)}
-              </select>
-            </Field>
-            <Field label="Bandara Tujuan">
-              <select className="l-search-input no-icon" value={ticket.to} onChange={e => setTicket(t => ({ ...t, to: e.target.value }))} style={{ height: 42 }}>
-                <option value="">Pilih bandara</option>
-                {bandara.map(b => <option key={b.code} value={b.code}>{b.name} ({b.code})</option>)}
-              </select>
-            </Field>
-            <Field label="Tanggal"><input className="l-search-input no-icon" type="date" value={ticket.date} onChange={e => setTicket(t => ({ ...t, date: e.target.value }))} style={{ height: 42 }} /></Field>
           </div>
         )}
-        {activeTab === 'visa' && (
-          <div className="l-search-row">
-            <Field label="Tujuan / Jenis Visa"><input className="l-search-input no-icon" type="text" placeholder="Visa Saudi, Visa Schengen..." value={visa.destination} onChange={e => setVisa(v => ({ ...v, destination: e.target.value }))} style={{ height: 42 }} /></Field>
-            <Field label="Tanggal Perjalanan"><input className="l-search-input no-icon" type="date" value={visa.date} onChange={e => setVisa(v => ({ ...v, date: e.target.value }))} style={{ height: 42 }} /></Field>
+        {tab === 'tiket' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div><Label text="Dari" /><select className="search-input" value={ticket.from} onChange={e => setTicket(t => ({ ...t, from: e.target.value }))}><option value="">Bandara asal</option>{bandara.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}</select></div>
+            <div><Label text="Ke" /><select className="search-input" value={ticket.to} onChange={e => setTicket(t => ({ ...t, to: e.target.value }))}><option value="">Bandara tujuan</option>{bandara.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}</select></div>
+            <div><Label text="Tanggal" /><input className="search-input" type="date" value={ticket.date} onChange={e => setTicket(t => ({ ...t, date: e.target.value }))} /></div>
           </div>
         )}
-        {activeTab === 'bus' && (
-          <div className="l-search-row">
-            <Field label="Rute" fullWidth><input className="l-search-input no-icon" type="text" placeholder="Jeddah – Mekkah, Bandara – Hotel..." value={bus.route} onChange={e => setBus(b => ({ ...b, route: e.target.value }))} style={{ height: 42 }} /></Field>
-            <Field label="Tanggal"><input className="l-search-input no-icon" type="date" value={bus.date} onChange={e => setBus(b => ({ ...b, date: e.target.value }))} style={{ height: 42 }} /></Field>
+        {tab === 'visa' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div><Label text="Jenis Visa" /><input className="search-input" type="text" placeholder="Visa Saudi, Schengen..." value={visa.type} onChange={e => setVisa(v => ({ ...v, type: e.target.value }))} /></div>
+            <div><Label text="Tanggal Perjalanan" /><input className="search-input" type="date" value={visa.date} onChange={e => setVisa(v => ({ ...v, date: e.target.value }))} /></div>
           </div>
         )}
-        {activeTab === 'package' && (
-          <div className="l-search-row">
-            <Field label="Paket / Destinasi"><input className="l-search-input no-icon" type="text" placeholder="Paket Umrah Reguler, Wisata Halal..." value={pkg.destination} onChange={e => setPkg(p => ({ ...p, destination: e.target.value }))} style={{ height: 42 }} /></Field>
-            <Field label="Tanggal"><input className="l-search-input no-icon" type="date" value={pkg.date} onChange={e => setPkg(p => ({ ...p, date: e.target.value }))} style={{ height: 42 }} /></Field>
+        {tab === 'bus' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div><Label text="Rute" /><input className="search-input" type="text" placeholder="Jeddah – Makkah, Bandara – Hotel..." value={bus.route} onChange={e => setBus(b => ({ ...b, route: e.target.value }))} /></div>
+            <div><Label text="Tanggal" /><input className="search-input" type="date" value={bus.date} onChange={e => setBus(b => ({ ...b, date: e.target.value }))} /></div>
           </div>
         )}
-        <div className="l-search-submit">
-          <button type="submit" className="l-btn-primary"><span className="shine" /><Search size={16} /> Cari Sekarang</button>
+        {tab === 'paket' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div><Label text="Paket / Destinasi" /><input className="search-input" type="text" placeholder="Paket Umroh Reguler, Wisata Halal..." value={pkg.dest} onChange={e => setPkg(p => ({ ...p, dest: e.target.value }))} /></div>
+            <div><Label text="Tanggal" /><input className="search-input" type="date" value={pkg.date} onChange={e => setPkg(p => ({ ...p, date: e.target.value }))} /></div>
+          </div>
+        )}
+        <div style={{ marginTop: 18 }}>
+          <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 24px', fontSize: 14 }}>
+            <Search size={15} /> Cari Sekarang
+          </button>
         </div>
       </form>
     </div>
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════════
-   MAIN COMPONENT
-═══════════════════════════════════════════════════════════════════ */
+/* ─── MAIN PAGE ──────────────────────────────────────────────────── */
 const LandingPage: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
   const { isAuthenticated, isLoading } = useAuth();
-  const [scrolled, setScrolled]       = useState(false);
-  const [mobileOpen, setMobileOpen]   = useState(false);
-  const [testiIdx, setTestiIdx]       = useState(0);
-  const [pkgTab, setPkgTab]           = useState<(typeof PACKAGE_TABS)[number]['id']>('all');
-  const [contactForm, setContactForm] = useState({ nama: '', email: '', telepon: '', pesan: '' });
-  const [contactSent, setContactSent] = useState(false);
-  const [searchData, setSearchData]   = useState<SearchWidgetProps['searchData']>(null);
+  const [scrolled, setScrolled]   = useState(false);
+  const [mobile, setMobile]       = useState(false);
+  const [testiIdx, setTestiIdx]   = useState(0);
+  const [pkgTab, setPkgTab]       = useState<(typeof PACKAGE_TABS)[number]['id']>('all');
+  const [form, setForm]           = useState({ nama: '', email: '', telepon: '', pesan: '' });
+  const [sent, setSent]           = useState(false);
+  const [searchData, setSearchData] = useState<{ bandara: { code: string; name: string }[] } | null>(null);
   const injected = useRef(false);
 
   useEffect(() => {
     publicApi.getProductsForSearch()
-      .then(res => res.data?.data && setSearchData({ products: res.data.data.products, byType: res.data.data.byType || {}, bandara: res.data.data.bandara || [] }))
-      .catch(() => setSearchData({ products: [], byType: {}, bandara: BANDARA_FALLBACK }));
+      .then(r => r.data?.data && setSearchData({ bandara: r.data.data.bandara || [] }))
+      .catch(() => setSearchData({ bandara: BANDARA_FALLBACK }));
   }, []);
 
   useEffect(() => {
@@ -761,266 +479,220 @@ const LandingPage: React.FC = () => {
   }, [isLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 32);
+    const h = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', h, { passive: true });
     return () => window.removeEventListener('scroll', h);
   }, []);
 
   useEffect(() => {
-    const els = document.querySelectorAll('[data-reveal]');
+    const els = document.querySelectorAll('.l-reveal');
     const obs = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) { (e.target as HTMLElement).classList.add('l-visible'); obs.unobserve(e.target); } });
-    }, { threshold: 0.12 });
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          (e.target as HTMLElement).classList.add('l-revealed');
+          obs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
     els.forEach(el => obs.observe(el));
     return () => obs.disconnect();
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setTestiIdx(i => (i + 1) % TESTIMONIALS.length), 5000);
+    const t = setInterval(() => setTestiIdx(i => (i + 1) % TESTIMONIALS.length), 5500);
     return () => clearInterval(t);
   }, []);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setMobileOpen(false);
+    setMobile(false);
   };
 
-  const handleContactSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contactForm.nama.trim() || !contactForm.email.trim() || !contactForm.pesan.trim()) return;
-    setContactSent(true);
-    setContactForm({ nama: '', email: '', telepon: '', pesan: '' });
-  };
-
-  const handleSearchSubmit = (params: Record<string, string>) => {
-    navigate(`/register?${new URLSearchParams(params).toString()}`);
-  };
+  const W = { maxWidth: 1200, margin: '0 auto' };
 
   if (!isLoading && isAuthenticated) return null;
 
-  const S = { maxWidth: 1260, margin: '0 auto' };
-
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, overflowX: 'hidden', fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: C.offWhite, color: C.text, overflowX: 'hidden', fontFamily: "'DM Sans',system-ui,sans-serif" }}>
 
-      {/* ══════════════════════════════════════
-          NAVBAR
-      ══════════════════════════════════════ */}
-      <nav className="l-nav" style={{
+      {/* ══ NAV ══ */}
+      <nav className="l-nav-anim" style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200,
-        background: scrolled ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.88)',
+        background: scrolled ? 'rgba(255,255,255,0.97)' : 'rgba(255,255,255,0.92)',
         backdropFilter: 'blur(20px)',
-        borderBottom: scrolled ? `1px solid ${T.border}` : '1px solid transparent',
-        boxShadow: scrolled ? '0 2px 20px rgba(13,26,99,0.06)' : 'none',
-        transition: 'all .3s ease',
+        borderBottom: `1px solid ${scrolled ? C.border : 'transparent'}`,
+        boxShadow: scrolled ? `0 1px 24px ${C.shadow}` : 'none',
+        transition: 'all .3s',
       }}>
-        <div
-          className="l-container"
-          style={{
-            ...S,
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0,auto) minmax(0,1fr) auto',
-            alignItems: 'center',
-            gap: 16,
-            minHeight: 68,
-            paddingTop: 10,
-            paddingBottom: 10,
-          }}
-        >
+        <div style={{ ...W, display: 'flex', alignItems: 'center', gap: 20, minHeight: 68, padding: '10px 24px' }}>
           {/* Brand */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <img src={logo} alt="Bintang Global" style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'contain', display: 'block', flexShrink: 0 }} />
+            <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
             <div>
-              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.1, color: NAVY, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Bintang Global</div>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', color: T.muted, textTransform: 'uppercase', lineHeight: 1.5 }}>Umroh & Travel</div>
-              <div className="l-hide-mob" style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                <Link to="/login" style={{ fontSize: 11, fontWeight: 600, color: T.muted }}>Masuk</Link>
-                <Link to="/register-owner-type" style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>Daftar</Link>
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.navy, lineHeight: 1.1, fontFamily: "'DM Sans',sans-serif" }}>Bintang Global</div>
+              <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: '.18em', color: C.muted, textTransform: 'uppercase' }}>Haji & Umroh</div>
             </div>
           </div>
 
-          {/* Desktop links — centered */}
-          <div className="l-hide-mob" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
+          {/* Links */}
+          <div className="l-hide-mob" style={{ display: 'flex', alignItems: 'center', gap: 26, flex: 1, justifyContent: 'center' }}>
             {NAV_LINKS.map(l => <button key={l.id} className="l-nav-link" onClick={() => scrollTo(l.id)}>{l.label}</button>)}
           </div>
 
-          {/* Kanan: auth + menu mobile */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, minWidth: 0 }}>
-            <Link to="/login" className="l-btn-outline l-hide-mob" style={{ padding: '8px 18px', fontSize: 13 }}>Masuk</Link>
-            <Link to="/register-owner-type" className="l-btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
-              <span className="shine" />
-              Daftar Partner
-              <ArrowRight size={13} />
+          {/* Auth */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <Link to="/login" className="l-hide-mob l-nav-link" style={{ fontSize: 13, textDecoration: 'none' }}>Masuk</Link>
+            <Link to="/register-owner-type" className="btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
+              Daftar Partner <ArrowRight size={13} />
             </Link>
-            <button type="button" onClick={() => setMobileOpen(v => !v)} className="l-show-mob" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.text, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            <button type="button" className="l-show-mob" onClick={() => setMobile(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, alignItems: 'center' }}>
+              {mobile ? <X size={22} color={C.text} /> : <Menu size={22} color={C.text} />}
             </button>
           </div>
         </div>
 
         {/* Mobile menu */}
-        {mobileOpen && (
-          <div style={{ background: 'rgba(250,250,247,0.99)', backdropFilter: 'blur(20px)', borderTop: `1px solid ${T.border}`, padding: '12px 20px 20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {NAV_LINKS.map(l => (
-                <button key={l.id} className="l-nav-link" onClick={() => scrollTo(l.id)} style={{ padding: '11px 0', textAlign: 'left', borderBottom: `1px solid ${T.border}` }}>{l.label}</button>
-              ))}
-              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-                <Link to="/login" className="l-btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobileOpen(false)}>Masuk</Link>
-                <Link to="/register-owner-type" className="l-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobileOpen(false)}>
-                  <span className="shine" />Daftar Partner
-                </Link>
-              </div>
+        {mobile && (
+          <div style={{ background: 'white', borderTop: `1px solid ${C.border}`, padding: '12px 24px 20px' }}>
+            {NAV_LINKS.map(l => (
+              <button key={l.id} className="l-nav-link" onClick={() => scrollTo(l.id)} style={{ display: 'block', padding: '12px 0', borderBottom: `1px solid ${C.border}`, width: '100%', textAlign: 'left' }}>{l.label}</button>
+            ))}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <Link to="/login" className="btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobile(false)}>Masuk</Link>
+              <Link to="/register-owner-type" className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobile(false)}>Daftar</Link>
             </div>
           </div>
         )}
       </nav>
 
-      {/* ══════════════════════════════════════
-          HERO
-      ══════════════════════════════════════ */}
-      <section className="l-hero-section l-section" style={{ paddingTop: 110, paddingBottom: 70, minHeight: '88vh', display: 'flex', alignItems: 'center' }}>
-        <div className="l-container l-hero-grid" style={{ ...S, width: '100%' }}>
+      {/* ══ HERO ══ */}
+      <section style={{ background: 'white', paddingTop: 68, minHeight: '92vh', display: 'flex', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+        {/* Geometric accent */}
+        <div style={{ position: 'absolute', top: 0, right: 0, width: '44%', height: '100%', background: `linear-gradient(135deg, ${C.navyFaint} 0%, #e8eeff 100%)`, clipPath: 'polygon(14% 0, 100% 0, 100% 100%, 0 100%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -80, right: '10%', width: 360, height: 360, borderRadius: '50%', background: `radial-gradient(circle, rgba(11,29,81,0.06) 0%, transparent 70%)`, pointerEvents: 'none' }} />
 
-          {/* KIRI: headline + CTA */}
-          <div className="l-hero-left" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+        <div style={{ ...W, width: '100%', padding: '80px 24px', position: 'relative', zIndex: 1 }}>
+          <div className="l-grid-2">
+            {/* Left */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {/* New badge */}
+              <div className="l-fu l-d0" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 8px', borderRadius: 100, background: C.navyFaint, border: `1px solid ${C.borderMd}`, width: 'fit-content', marginBottom: 24 }}>
+                <span style={{ background: C.navy, borderRadius: 100, padding: '2px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', color: 'white', textTransform: 'uppercase' }}>BARU</span>
+                <span style={{ fontSize: 12, color: C.navyMed, fontWeight: 500 }}>Dashboard mitra · Invoice & analitik real-time</span>
+              </div>
 
-            <div className="l-fu l-fu-0" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '5px 12px 5px 6px', borderRadius: 100, marginBottom: 22,
-              background: NAVY_PALE, border: `1px solid rgba(13,26,99,0.15)`,
-            }}>
-              <span style={{ background: NAVY, borderRadius: 100, padding: '2px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', color: 'white' }}>BARU</span>
-              <span style={{ fontSize: 11, color: NAVY_MED, fontWeight: 600 }}>Dashboard mitra — invoice & analitik real-time</span>
-              <ArrowRight size={11} color={NAVY} style={{ flexShrink: 0 }} />
+              <h1 className="l-fu l-d1 display-font" style={{ fontSize: 'clamp(34px,4.5vw,60px)', fontWeight: 700, lineHeight: 1.08, letterSpacing: '-.01em', margin: '0 0 20px', color: C.text }}>
+                Platform Terpercaya<br />
+                <em style={{ fontStyle: 'italic', color: C.navyMed }}>Haji & Umroh</em><br />
+                <span style={{ fontStyle: 'normal', fontSize: '0.82em', fontWeight: 600, color: C.muted }}>untuk Seluruh Indonesia</span>
+              </h1>
+
+              <p className="l-fu l-d2" style={{ fontSize: 16, color: C.muted, lineHeight: 1.75, margin: '0 0 28px', maxWidth: 460 }}>
+                Hotel, visa, tiket, bus, dan paket dalam satu platform terintegrasi — dirancang khusus untuk agen travel dan penyelenggara umroh profesional.
+              </p>
+
+              {/* Feature pills */}
+              <div className="l-fu l-d2" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 32 }}>
+                {[
+                  { icon: Hotel,        label: 'Hotel' },
+                  { icon: FileCheck,    label: 'Visa' },
+                  { icon: PlaneTakeoff, label: 'Tiket' },
+                  { icon: Bus,          label: 'Bus' },
+                  { icon: Package,      label: 'Paket' },
+                ].map(({ icon: Icon, label }) => (
+                  <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 13px', borderRadius: 100, fontSize: 12, fontWeight: 500, background: C.navyFaint, border: `1px solid ${C.borderMd}`, color: C.navyMed }}>
+                    <Icon size={12} /> {label}
+                  </span>
+                ))}
+              </div>
+
+              <div className="l-fu l-d3" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button type="button" className="btn-primary" onClick={() => scrollTo('layanan')} style={{ fontSize: 14, padding: '14px 28px' }}>
+                  Mulai Daftar Mitra <Sparkles size={14} />
+                </button>
+                <Link to="/login" className="btn-outline" style={{ fontSize: 14, padding: '13px 24px' }}>Sudah Punya Akun</Link>
+              </div>
+
+              {/* Trust badges */}
+              <div className="l-fu l-d4" style={{ display: 'flex', gap: 24, marginTop: 32, flexWrap: 'wrap' }}>
+                {[
+                  { icon: Shield,   label: 'Berlisensi Resmi' },
+                  { icon: Award,    label: '15+ Tahun Pengalaman' },
+                  { icon: Users,    label: '500+ Mitra Aktif' },
+                ].map(({ icon: Icon, label }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, fontWeight: 500 }}>
+                    <Icon size={14} color={C.navyLt} /> {label}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <h1 className="l-fu l-fu-1" style={{
-              fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif",
-              fontSize: 'clamp(32px,4.2vw,56px)', fontWeight: 800,
-              lineHeight: 1.08, letterSpacing: '-0.03em',
-              margin: '0 0 18px', color: T.text,
-            }}>
-              Nikmati layanan{' '}
-              <span className="l-gold-text">perjalanan umroh</span>
-              <br />
-              <span style={{ color: NAVY_MED, fontWeight: 700 }}>bersama mitra terpercaya</span>
-            </h1>
-
-            <p className="l-fu l-fu-2" style={{ fontSize: 'clamp(14px,1.1vw,16px)', color: T.muted, lineHeight: 1.75, margin: '0 0 22px', maxWidth: 500 }}>
-              Hotel, visa, tiket, bus, dan paket dalam satu platform. Untuk agen travel dan penyelenggara umroh di seluruh Indonesia.
-            </p>
-
-            <div className="l-fu l-fu-2 l-hero-pills" style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 24 }}>
-              {[
-                { icon: Hotel, label: 'Hotel', bg: NAVY_PALE, color: NAVY },
-                { icon: FileCheck, label: 'Visa', bg: T.greenPale, color: T.green },
-                { icon: Ticket, label: 'Tiket', bg: NAVY_LT, color: NAVY_MED },
-                { icon: Bus, label: 'Bus', bg: NAVY_PALE, color: NAVY },
-                { icon: Package, label: 'Paket', bg: NAVY_LT, color: NAVY },
-              ].map(({ icon: Icon, label, bg, color }) => (
-                <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600, background: bg, border: `1px solid ${String(color)}25`, color }}>
-                  <Icon size={11} /> {label}
-                </span>
-              ))}
-            </div>
-
-            <div className="l-fu l-fu-3 l-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-              <button
-                type="button"
-                className="l-btn-primary"
-                style={{ fontSize: 14, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-                onClick={() => scrollTo('daftar-mitra')}
-              >
-                <span className="shine" />
-                <Sparkles size={15} /> Mulai daftar mitra
-              </button>
-              <Link to="/register-owner-type" className="l-btn-outline" style={{ fontSize: 14 }}>
-                Form pendaftaran mitra
-              </Link>
-            </div>
-            <p className="l-fu l-fu-4" style={{ fontSize: 13, color: T.dim, margin: 0, maxWidth: 420 }}>
-              Cari hotel, tiket, visa, bus, atau paket di samping, lalu lanjutkan ke pendaftaran mitra.
-            </p>
-          </div>
-
-          {/* KANAN: card pencarian (Hotel · Tiket · Visa · Bus · Paket) */}
-          <div className="l-fu l-fu-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="l-embed-search-wrap l-fu" style={{ width: '100%', maxWidth: 520 }}>
-              <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
+            {/* Right: Search widget */}
+            <div className="l-fu l-d2">
+              <SearchWidget searchData={searchData} onSearch={p => navigate(`/register?${new URLSearchParams(p)}`)} />
+              <p style={{ fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 12 }}>Cari produk lalu lanjutkan ke pendaftaran mitra</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
-          MULAI DAFTAR MITRA (card pencarian)
-      ══════════════════════════════════════ */}
-      <section id="daftar-mitra" className="l-section" style={{ background: T.bgCream, paddingTop: 72, paddingBottom: 88 }}>
-        <div className="l-container" style={{ ...S, width: '100%', maxWidth: 640 }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <div className="l-tag-gold" style={{ marginBottom: 14, display: 'inline-flex' }}>
-              <Sparkles size={11} /> Mitra
-            </div>
-            <h2 style={{
-              fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif",
-              fontSize: 'clamp(26px,3.2vw,40px)', fontWeight: 800, letterSpacing: '-0.02em',
-              margin: '0 0 14px', color: T.text, lineHeight: 1.15,
-            }}
-            >
-              Mulai daftar mitra
-            </h2>
-            <p style={{ fontSize: 15, color: T.muted, lineHeight: 1.75, margin: '0 0 22px', maxWidth: 520 }}>
-              Gunakan pencarian produk di bagian atas halaman (hotel, tiket, visa, bus, paket), lalu lanjutkan ke formulir pendaftaran mitra resmi.
-            </p>
-            <Link to="/register-owner-type" className="l-btn-outline" style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              Form pendaftaran lengkap
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════
-          TICKER
-      ══════════════════════════════════════ */}
-      <div style={{ background: T.green, padding: '13px 0', overflow: 'hidden', borderTop: `3px solid ${T.gold}` }}>
-        <div style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>
+      {/* ══ TICKER ══ */}
+      <div style={{ background: C.navy, padding: '12px 0', overflow: 'hidden' }}>
+        <div className="ticker-wrap">
           <div className="ticker-track">
-            {[...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-              <span key={i} style={{ padding: '0 24px', fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)', borderRight: '1px solid rgba(255,255,255,0.18)', display: 'inline-flex', alignItems: 'center' }}>
-                {item}
-              </span>
+            {['✈ Makkah', '🕌 Madinah', '🇹🇷 Istanbul', '🇦🇪 Dubai', '🇪🇬 Cairo', '🇯🇴 Amman', '🇲🇾 Kuala Lumpur', '🇫🇷 Paris', '🇬🇧 London', '🇮🇹 Roma', '🇩🇪 Frankfurt', '🇲🇦 Marrakech',
+              '✈ Makkah', '🕌 Madinah', '🇹🇷 Istanbul', '🇦🇪 Dubai', '🇪🇬 Cairo', '🇯🇴 Amman', '🇲🇾 Kuala Lumpur', '🇫🇷 Paris', '🇬🇧 London', '🇮🇹 Roma', '🇩🇪 Frankfurt', '🇲🇦 Marrakech'].map((item, i) => (
+              <span key={i} style={{ padding: '0 22px', fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.7)', borderRight: '1px solid rgba(255,255,255,0.15)', display: 'inline-flex', alignItems: 'center' }}>{item}</span>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════
-          SERVICES
-      ══════════════════════════════════════ */}
+      {/* ══ STATS ══ */}
+      <div style={{ background: C.navyFaint, padding: '52px 24px', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ ...W, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
+          {STATS.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <div key={i} className="l-reveal" style={{ textAlign: 'center', padding: '20px 12px', animationDelay: `${i * 0.1}s` }}>
+                <Icon size={20} color={C.navyMed} style={{ marginBottom: 10 }} />
+                <div className="display-font" style={{ fontSize: 40, fontWeight: 700, color: C.navy, lineHeight: 1, marginBottom: 6, letterSpacing: '-.02em' }}>
+                  <Counter value={s.value} suffix={s.suffix} />
+                </div>
+                <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>{s.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ══ SERVICES ══ */}
       <section id="layanan" className="l-section" style={{ background: 'white' }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <SectionHeader
-              tag="Layanan Lengkap" tagIcon={<Layers size={11} />}
-              title={<>Semua yang Anda Butuhkan,<br /><span className="l-green-text">Dalam Satu Tempat</span></>}
-              sub="Ekosistem travel terintegrasi untuk memenuhi seluruh kebutuhan perjalanan umrah dan wisata halal."
-            />
+        <div style={W}>
+          <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 56 }}>
+            <SectionLabel text="Layanan Lengkap" />
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, lineHeight: 1.1, margin: '0 0 14px', color: C.text }}>
+              Semua yang Anda Butuhkan,<br />
+              <em style={{ color: C.navyMed }}>Dalam Satu Platform</em>
+            </h2>
+            <p style={{ fontSize: 15, color: C.muted, maxWidth: 480, margin: '0 auto', lineHeight: 1.8 }}>Ekosistem travel terintegrasi untuk memenuhi seluruh kebutuhan perjalanan haji, umroh, dan wisata halal.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 20 }}>
             {SERVICES.map((svc, i) => {
               const Icon = svc.icon;
               return (
-                <div key={svc.id} data-reveal className="l-card" style={{ padding: 26, opacity: 0, animationDelay: `${i * 0.08}s`, cursor: 'pointer' }} onClick={() => navigate('/register-owner-type')}>
-                  <div style={{ width: 50, height: 50, borderRadius: 14, marginBottom: 18, background: svc.bg, border: `1px solid ${svc.accent}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={22} color={svc.accent} />
+                <div key={svc.id} className="l-card l-reveal" style={{ padding: '28px 28px 24px', cursor: 'pointer', animationDelay: `${i * 0.07}s` }} onClick={() => navigate('/register-owner-type')}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 12, background: C.navyFaint, border: `1px solid ${C.borderMd}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon size={22} color={C.navy} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.dim, letterSpacing: '.08em' }}>{svc.num}</span>
                   </div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 7px', color: T.text }}>{svc.label}</h3>
-                  <p style={{ fontSize: 13, color: T.muted, margin: '0 0 16px', lineHeight: 1.65 }}>{svc.desc}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: svc.accent, fontWeight: 600 }}>
-                    Lihat detail <ChevronRight size={13} />
+                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px', color: C.text }}>{svc.label}</h3>
+                  <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, margin: '0 0 18px' }}>{svc.desc}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.navyMed, fontWeight: 600 }}>
+                    Selengkapnya <ChevronRight size={13} />
                   </div>
                 </div>
               );
@@ -1031,74 +703,50 @@ const LandingPage: React.FC = () => {
 
       <div className="l-hr" style={{ margin: '0 24px' }} />
 
-      {/* ══════════════════════════════════════
-          PACKAGES
-      ══════════════════════════════════════ */}
-      <section id="paket" className="l-section" style={{ background: T.bg }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0, textAlign: 'center', marginBottom: 36 }}>
-            <div className="l-tag-gold" style={{ marginBottom: 14, display: 'inline-flex' }}>
-              <Star size={11} /> Paket Unggulan
-            </div>
-            <h2 style={{ fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", fontSize: 'clamp(26px,3.5vw,42px)', fontWeight: 800, letterSpacing: '-0.02em', margin: '0 0 22px', color: T.text }}>
-              Temukan <span className="l-gold-text">paket kami</span>
+      {/* ══ PACKAGES ══ */}
+      <section id="paket" className="l-section" style={{ background: C.offWhite }}>
+        <div style={W}>
+          <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 40 }}>
+            <SectionLabel text="Paket Unggulan" />
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, lineHeight: 1.1, margin: '0 0 24px', color: C.text }}>
+              Temukan <em style={{ color: C.navyMed }}>Paket Kami</em>
             </h2>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-              {PACKAGE_TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`l-pkg-tab${pkgTab === tab.id ? ' active' : ''}`}
-                  onClick={() => setPkgTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {PACKAGE_TABS.map(t => (
+                <button key={t.id} className={`pkg-tab ${pkgTab === t.id ? 'active' : ''}`} onClick={() => setPkgTab(t.id)}>{t.label}</button>
               ))}
             </div>
           </div>
 
-          <div className="l-packages-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 22 }}>
             {PACKAGES.filter(p => pkgTab === 'all' || p.category === pkgTab).map((pkg, i) => (
-              <div key={pkg.title} data-reveal className={`l-card ${pkg.hot ? 'l-pkg-featured' : ''}`} style={{ opacity: 0, animationDelay: `${i * 0.1}s`, overflow: 'hidden' }}>
-                {/* Color strip header */}
-                <div style={{ height: 8, background: pkg.stripBg, width: '100%' }} />
+              <div key={pkg.title} className="l-card l-reveal" style={{
+                overflow: 'hidden', animationDelay: `${i * 0.1}s`,
+                ...(pkg.featured ? { border: `2px solid ${C.navy}`, boxShadow: `0 8px 32px rgba(11,29,81,0.14)` } : {}),
+              }}>
+                <div style={{ height: 5, background: pkg.featured ? C.navy : C.navyLt }} />
                 <div style={{ padding: '22px 24px 26px' }}>
-                  {/* Badge row */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <span style={{ padding: '4px 12px', borderRadius: 100, fontSize: 10, fontWeight: 700, background: `${pkg.accentColor}12`, color: pkg.accentColor, border: `1px solid ${pkg.accentColor}30`, letterSpacing: '.06em' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <span style={{ padding: '4px 12px', borderRadius: 100, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', background: pkg.featured ? C.navy : C.navyFaint, color: pkg.featured ? 'white' : C.navyMed, border: `1px solid ${pkg.featured ? C.navy : C.borderMd}` }}>
                       {pkg.badge}
                     </span>
-                    {pkg.hot && (
-                      <span style={{ padding: '3px 10px', borderRadius: 100, fontSize: 9, fontWeight: 700, background: T.goldPale, color: T.gold, border: `1px solid ${T.gold}40`, letterSpacing: '.1em' }}>
-                        BEST VALUE
-                      </span>
-                    )}
+                    {pkg.featured && <span style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: '.1em', textTransform: 'uppercase' }}>Best Value</span>}
                   </div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px', color: T.text, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{pkg.title}</h3>
-                  <p style={{ fontSize: 12, color: T.dim, margin: '0 0 18px' }}>{pkg.sub}</p>
+                  <h3 style={{ fontSize: 19, fontWeight: 700, margin: '0 0 4px', color: C.text }}>{pkg.title}</h3>
+                  <p style={{ fontSize: 12, color: C.dim, margin: '0 0 18px' }}>{pkg.sub}</p>
                   <ul style={{ listStyle: 'none', margin: '0 0 22px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {pkg.features.map((f, j) => (
-                      <li key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.textMd }}>
-                        <CheckCircle size={13} color="#2D6A58" style={{ flexShrink: 0 }} /> {f}
+                      <li key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: C.textMd }}>
+                        <CheckCircle size={14} color={C.navyLt} style={{ flexShrink: 0, marginTop: 1 }} /> {f}
                       </li>
                     ))}
                   </ul>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: pkg.hot ? NAVY : T.green, letterSpacing: '-0.02em' }}>{pkg.price}</div>
-                        {pkg.oldPrice ? (
-                          <div style={{ fontSize: 14, fontWeight: 600, color: T.dim, textDecoration: 'line-through' }}>{pkg.oldPrice}</div>
-                        ) : null}
-                      </div>
-                      <div style={{ fontSize: 11, color: T.dim }}>{pkg.per}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, letterSpacing: '-.02em' }}>{pkg.price}</div>
+                      <div style={{ fontSize: 12, color: C.dim, textDecoration: 'line-through' }}>{pkg.oldPrice} /orang</div>
                     </div>
-                    <button
-                      className={pkg.hot ? 'l-btn-gold' : 'l-btn-primary'}
-                      style={{ padding: '9px 18px', fontSize: 13 }}
-                      onClick={() => navigate('/register-owner-type')}
-                    >
-                      <span className="shine" />
+                    <button className={pkg.featured ? 'btn-primary' : 'btn-outline'} style={{ padding: '9px 18px', fontSize: 13 }} onClick={() => navigate('/register-owner-type')}>
                       Pesan <ArrowRight size={13} />
                     </button>
                   </div>
@@ -1111,167 +759,131 @@ const LandingPage: React.FC = () => {
 
       <div className="l-hr" style={{ margin: '0 24px' }} />
 
-      {/* ══════════════════════════════════════
-          HOW IT WORKS
-      ══════════════════════════════════════ */}
-      <section id="proses" className="l-section" style={{ background: T.bgCream }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <SectionHeader
-              tag="Cara Kerja" tagIcon={<Navigation size={11} />}
-              title={<>Mulai dalam <span className="l-green-text">4 Langkah</span> Mudah</>}
-              sub="Proses bergabung yang sederhana, cepat, dan tanpa biaya apapun."
-            />
+      {/* ══ HOW IT WORKS ══ */}
+      <section id="proses" className="l-section" style={{ background: 'white' }}>
+        <div style={W}>
+          <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 56 }}>
+            <SectionLabel text="Cara Bergabung" />
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, lineHeight: 1.1, margin: '0 0 14px', color: C.text }}>
+              Mulai dalam <em style={{ color: C.navyMed }}>4 Langkah</em> Mudah
+            </h2>
+            <p style={{ fontSize: 15, color: C.muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.8 }}>Proses bergabung yang sederhana, cepat, dan sepenuhnya gratis.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 24, position: 'relative' }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 28, position: 'relative' }}>
+            <div className="l-hide-mob" style={{ position: 'absolute', top: 33, left: '12.5%', right: '12.5%', height: 1, background: `linear-gradient(90deg, ${C.border}, ${C.borderMd}, ${C.border})`, zIndex: 0 }} />
             {STEPS.map((step, i) => {
               const Icon = step.icon;
               return (
-                <div key={i} data-reveal style={{ opacity: 0, animationDelay: `${i * 0.12}s` }}>
-                  <div style={{ position: 'relative', display: 'inline-block', marginBottom: 20 }}>
-                    <div style={{
-                      width: 68, height: 68, borderRadius: 18,
-                      background: 'white', border: `1px solid ${T.border}`,
-                      boxShadow: `0 4px 16px ${T.shadow}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Icon size={26} color={T.green} />
-                    </div>
-                    <div style={{
-                      position: 'absolute', top: -10, right: -10,
-                      width: 26, height: 26, borderRadius: 8,
-                      background: NAVY, boxShadow: `0 2px 12px rgba(13,26,99,0.45)`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, fontWeight: 800, color: 'white',
-                    }}>
+                <div key={i} className="l-reveal" style={{ textAlign: 'center', animationDelay: `${i * 0.12}s`, position: 'relative', zIndex: 1 }}>
+                  <div style={{ width: 66, height: 66, borderRadius: 18, background: 'white', border: `2px solid ${C.border}`, boxShadow: `0 4px 20px ${C.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', position: 'relative' }}>
+                    <Icon size={26} color={C.navy} />
+                    <div style={{ position: 'absolute', top: -10, right: -10, width: 26, height: 26, borderRadius: 8, background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: 'white' }}>
                       {step.num}
                     </div>
                   </div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px', color: T.text }}>{step.title}</h3>
-                  <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, margin: 0 }}>{step.desc}</p>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: C.text }}>{step.title}</h3>
+                  <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.7 }}>{step.desc}</p>
                 </div>
               );
             })}
           </div>
-          <div data-reveal style={{ opacity: 0, textAlign: 'center', marginTop: 52 }}>
-            <Link to="/register-owner-type" className="l-btn-primary" style={{ fontSize: 15, padding: '14px 34px' }}>
-              <span className="shine" />
-              <Zap size={16} /> Mulai Daftar Sekarang — Gratis!
+
+          <div className="l-reveal" style={{ textAlign: 'center', marginTop: 52 }}>
+            <Link to="/register-owner-type" className="btn-primary" style={{ fontSize: 15, padding: '14px 36px' }}>
+              <Zap size={16} /> Daftar Sekarang — Gratis
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
-          STATS
-      ══════════════════════════════════════ */}
-      <section className="l-section-sm" style={{ background: `linear-gradient(155deg, ${NAVY} 0%, #0a1438 55%, #050a18 100%)` }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div className="l-stats-grid">
-            {STATS.map((stat, i) => {
-              const Icon = stat.icon;
-              return (
-                <div key={i} className="l-stat-card" style={{
-                  textAlign: 'center', padding: '28px 16px',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 16,
-                }}>
-                  <Icon size={18} color="#B8C8FF" style={{ marginBottom: 10 }} />
-                  <div style={{
-                    fontFamily: "'Cormorant Garamond',Georgia,serif",
-                    fontSize: 36, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
-                    color: 'white', marginBottom: 8,
-                  }}>
-                    <Counter value={stat.value} suffix={stat.suffix} />
-                  </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 600, letterSpacing: '.04em' }}>{stat.label}</div>
-                </div>
-              );
-            })}
-          </div>
+      {/* ══ FEATURE STRIP ══ */}
+      <div style={{ background: C.navy, padding: '48px 24px' }}>
+        <div style={{ ...W, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 32 }}>
+          {[
+            { icon: Shield,     title: 'Berlisensi Resmi',        desc: 'Kemenag, IATA & POJK' },
+            { icon: Headphones, title: 'Support 24/7',            desc: 'Tim siap membantu kapan saja' },
+            { icon: Lock,       title: 'Data Aman & Enkripsi',    desc: 'Keamanan tingkat enterprise' },
+            { icon: Zap,        title: 'Proses Instan',           desc: 'Verifikasi & aktivasi cepat' },
+          ].map(({ icon: Icon, title, desc }, i) => (
+            <div key={i} className="l-reveal" style={{ display: 'flex', gap: 14, alignItems: 'flex-start', animationDelay: `${i * 0.1}s` }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={20} color="rgba(255,255,255,0.85)" />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 3 }}>{title}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
-      </section>
+      </div>
 
-      {/* ══════════════════════════════════════
-          TENTANG / WHY US
-      ══════════════════════════════════════ */}
-      <section id="tentang" className="l-section" style={{ background: 'white' }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div className="l-tentang-grid">
-            {/* Left */}
-            <div data-reveal style={{ opacity: 0 }}>
-              <div className="l-tag" style={{ marginBottom: 18, display: 'inline-flex' }}><Shield size={11} /> Kenapa Kami</div>
-              <h2 style={{
-                fontFamily: "'Cormorant Garamond',Georgia,serif",
-                fontSize: 'clamp(28px,3.5vw,46px)', fontWeight: 700,
-                letterSpacing: '-0.01em', lineHeight: 1.1, margin: '0 0 16px', color: T.text,
-              }}>
-                15 Tahun Membangun<br /><span className="l-green-text">Kepercayaan</span>
+      {/* ══ TENTANG ══ */}
+      <section id="tentang" className="l-section" style={{ background: C.offWhite }}>
+        <div style={W}>
+          <div className="l-grid-2">
+            <div className="l-reveal">
+              <SectionLabel text="Mengapa Kami" />
+              <h2 className="display-font" style={{ fontSize: 'clamp(28px,3.5vw,44px)', fontWeight: 700, lineHeight: 1.12, margin: '0 0 16px', color: C.text }}>
+                15 Tahun Membangun<br /><em style={{ color: C.navyMed }}>Kepercayaan</em>
               </h2>
-              <p style={{ color: T.muted, fontSize: 15, lineHeight: 1.8, margin: '0 0 30px' }}>
-                Bintang Global bukan sekadar platform teknologi — kami adalah mitra bisnis jangka panjang yang memahami kebutuhan agen travel dan umrah di seluruh Indonesia.
+              <p style={{ color: C.muted, fontSize: 15, lineHeight: 1.8, margin: '0 0 32px', maxWidth: 440 }}>
+                Bintang Global adalah mitra bisnis jangka panjang yang benar-benar memahami kebutuhan agen travel dan umroh profesional di seluruh Indonesia.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {[
-                  { icon: Shield,     color: T.green,    title: 'Terpercaya & Legal',       desc: 'Lisensi resmi Kemenag, IATA, dan POJK' },
-                  { icon: Headphones, color: T.goldWarm, title: 'Support 24 Jam / 7 Hari',  desc: 'Tim dedicated siap membantu kapan saja' },
-                  { icon: Zap,        color: T.green,    title: 'Teknologi Terdepan',        desc: 'Dashboard AI-powered dengan analitik cerdas' },
-                  { icon: Globe,      color: T.gold,     title: 'Jaringan Global',           desc: 'Partner di 50+ kota & destinasi internasional' },
-                ].map(({ icon: Icon, color, title, desc }, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, background: color === T.green ? T.greenLt : T.goldPale, border: `1px solid ${color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon size={17} color={color} />
+                  { icon: Target,        title: 'Fokus pada Hasil',        desc: 'Setiap fitur dirancang untuk meningkatkan penjualan dan efisiensi mitra.' },
+                  { icon: MessageCircle, title: 'Komunikasi Transparan',   desc: 'Notifikasi real-time dan laporan lengkap untuk setiap transaksi.' },
+                  { icon: Award,         title: 'Penghargaan Industri',    desc: 'Diakui sebagai platform travel umroh terbaik selama 5 tahun berturut-turut.' },
+                ].map(({ icon: Icon, title, desc }) => (
+                  <div key={title} style={{ display: 'flex', gap: 14 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 11, background: C.navyFaint, border: `1px solid ${C.borderMd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Icon size={18} color={C.navy} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2, color: T.text }}>{title}</div>
-                      <div style={{ fontSize: 13, color: T.muted }}>{desc}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3, color: C.text }}>{title}</div>
+                      <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.65 }}>{desc}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Right — activity feed */}
-            <div data-reveal style={{ opacity: 0 }}>
-              <div style={{
-                background: T.bg, border: `1px solid ${T.border}`,
-                borderRadius: 22, padding: 26,
-                boxShadow: `0 20px 60px ${T.shadow}`,
-              }}>
+            {/* Activity feed */}
+            <div className="l-reveal">
+              <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 20, padding: 26, boxShadow: `0 20px 60px ${C.shadow}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.textMd }}>Aktivitas Partner — Minggu Ini</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: T.green, background: T.greenLt, padding: '3px 10px', borderRadius: 100, border: `1px solid ${T.green}25` }}>● Live</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.textMd }}>Aktivitas Partner — Minggu Ini</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '3px 10px', borderRadius: 100, border: '1px solid #bbf7d0' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} /> LIVE
+                  </span>
                 </div>
                 {[
-                  { name: 'PT Cahaya Umrah',    status: 'Order Baru',      amount: '+Rp 12.5jt', color: T.green,    time: '5m lalu' },
-                  { name: 'Madina Tour',         status: 'Visa Approved',   amount: '3 Jamaah',   color: '#2D6A58',  time: '18m lalu' },
-                  { name: 'Firdaus Travel',      status: 'Pembayaran',      amount: '+Rp 8.2jt',  color: T.gold,     time: '1j lalu' },
-                  { name: 'Al-Madinah Tour',     status: 'Order Baru',      amount: '+Rp 22.1jt', color: T.green,    time: '2j lalu' },
-                  { name: 'Berkah Umrah',        status: 'Invoice Sent',    amount: '✓ Lunas',    color: T.goldWarm, time: '3j lalu' },
+                  { name: 'PT Cahaya Umroh',  status: 'Order Baru',    amount: '+Rp 12.5jt', time: '5m lalu' },
+                  { name: 'Madina Tour',       status: 'Visa Disetujui', amount: '3 Jamaah',  time: '18m lalu' },
+                  { name: 'Firdaus Travel',    status: 'Pembayaran',    amount: '+Rp 8.2jt',  time: '1j lalu' },
+                  { name: 'Al-Madinah Tour',   status: 'Order Baru',    amount: '+Rp 22.1jt', time: '2j lalu' },
+                  { name: 'Berkah Umroh',      status: 'Invoice Lunas', amount: '✓ Selesai',  time: '3j lalu' },
                 ].map((item, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '11px 0',
-                    borderBottom: i < 4 ? `1px solid ${T.border}` : 'none',
-                  }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: item.color === T.green ? T.greenLt : T.goldPale, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: item.color }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < 4 ? `1px solid ${C.border}` : 'none' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: C.navyFaint, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.navyMed, flexShrink: 0 }}>
                       {item.name.slice(0, 2)}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.text }}>{item.name}</div>
-                      <div style={{ fontSize: 11, color: T.dim }}>{item.status}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                      <div style={{ fontSize: 11, color: C.dim }}>{item.status}</div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: item.color }}>{item.amount}</div>
-                      <div style={{ fontSize: 10, color: T.dim }}>{item.time}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>{item.amount}</div>
+                      <div style={{ fontSize: 10, color: C.dim }}>{item.time}</div>
                     </div>
                   </div>
                 ))}
-                <div style={{ marginTop: 14, padding: '11px 14px', background: T.greenLt, borderRadius: 11, border: `1px solid ${T.green}20`, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <TrendingUp size={15} color={T.green} />
-                  <span style={{ fontSize: 12, color: T.textMd }}>Total revenue minggu ini: </span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: T.green, marginLeft: 'auto' }}>+Rp 42.8jt</span>
+                <div style={{ marginTop: 14, padding: '12px 14px', background: C.navyFaint, borderRadius: 10, border: `1px solid ${C.borderMd}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <TrendingUp size={15} color={C.navyMed} />
+                  <span style={{ fontSize: 12, color: C.textMd }}>Total revenue minggu ini</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: C.navy, marginLeft: 'auto' }}>+Rp 42.8jt</span>
                 </div>
               </div>
             </div>
@@ -1281,49 +893,38 @@ const LandingPage: React.FC = () => {
 
       <div className="l-hr" style={{ margin: '0 24px' }} />
 
-      {/* ══════════════════════════════════════
-          TESTIMONIALS
-      ══════════════════════════════════════ */}
-      <section className="l-section" style={{ background: T.bgCream, overflow: 'hidden' }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <SectionHeader
-              tag="Testimoni" tagIcon={<Star size={11} />} tagGold
-              title={<>Apa Kata <span className="l-gold-text">Partner Kami</span></>}
-              sub="Bergabung bersama ratusan agen travel dan umrah yang telah merasakan manfaatnya."
-            />
+      {/* ══ TESTIMONIALS ══ */}
+      <section className="l-section" style={{ background: 'white' }}>
+        <div style={W}>
+          <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 48 }}>
+            <SectionLabel text="Testimoni Mitra" />
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, lineHeight: 1.1, margin: 0, color: C.text }}>
+              Apa Kata <em style={{ color: C.navyMed }}>Partner Kami</em>
+            </h2>
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div className="l-testi-track" style={{ transform: `translateX(calc(-${testiIdx * (100 / 3)}%))` }}>
-              {TESTIMONIALS.map((t, i) => (
-                <div key={i} style={{
-                  minWidth: 'calc(33.33% - 14px)', flexShrink: 0,
-                  background: 'white', border: `1px solid ${T.border}`,
-                  borderRadius: 16, padding: '26px 28px',
-                  boxShadow: `0 4px 20px ${T.shadow}`,
-                }}>
-                  {/* Quote icon */}
-                  <div style={{ fontSize: 36, color: T.gold, lineHeight: 1, marginBottom: 12, fontFamily: 'Georgia,serif', opacity: 0.6 }}>"</div>
-                  <div style={{ display: 'flex', gap: 2, marginBottom: 14 }}>
-                    {[...Array(t.rating)].map((_, j) => <Star key={j} size={13} fill={T.gold} color={T.gold} />)}
-                  </div>
-                  <p style={{ fontSize: 14, color: T.textMd, lineHeight: 1.8, margin: '0 0 20px' }}>{t.text}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 11, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
-                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: T.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: 'white', flexShrink: 0 }}>{t.avatar}</div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{t.name}</div>
-                      <div style={{ fontSize: 11, color: T.dim }}>{t.role}</div>
-                      <div style={{ fontSize: 11, color: T.green, marginTop: 1 }}>📍 {t.city}</div>
-                    </div>
+
+          <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
+            {TESTIMONIALS.map((t, i) => (
+              <div key={i} style={{ display: i === testiIdx ? 'block' : 'none' }}>
+                <div style={{ fontSize: 64, color: C.navy, lineHeight: 0.7, marginBottom: 24, fontFamily: 'Georgia,serif', opacity: 0.12 }}>"</div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginBottom: 20 }}>
+                  {[...Array(t.rating)].map((_, j) => <Star key={j} size={16} fill={C.gold} color={C.gold} />)}
+                </div>
+                <p style={{ fontSize: 18, color: C.textMd, lineHeight: 1.8, margin: '0 0 32px', fontStyle: 'italic' }}>"{t.text}"</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: 'white' }}>{t.avatar}</div>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{t.name}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{t.role} · 📍 {t.city}</div>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 28 }}>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 36 }}>
             {TESTIMONIALS.map((_, i) => (
-              <button key={i} className="l-dot" onClick={() => setTestiIdx(i)}
-                style={{ background: i === testiIdx ? T.green : T.border, width: i === testiIdx ? 24 : 8 }} />
+              <button key={i} className="l-dot" onClick={() => setTestiIdx(i)} style={{ background: i === testiIdx ? C.navy : C.border, width: i === testiIdx ? 28 : 8 }} />
             ))}
           </div>
         </div>
@@ -1331,104 +932,86 @@ const LandingPage: React.FC = () => {
 
       <div className="l-hr" style={{ margin: '0 24px' }} />
 
-      {/* ══════════════════════════════════════
-          FAQ
-      ══════════════════════════════════════ */}
-      <section id="faq" className="l-section" style={{ background: 'white' }}>
-        <div style={{ maxWidth: 740, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <SectionHeader
-              tag="FAQ" tagIcon={<MessageCircle size={11} />}
-              title={<>Pertanyaan yang <span className="l-green-text">Sering Ditanya</span></>}
-              sub="Temukan jawaban atas pertanyaan umum seputar bergabung sebagai partner Bintang Global."
-            />
+      {/* ══ FAQ ══ */}
+      <section id="faq" className="l-section" style={{ background: C.offWhite }}>
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 48 }}>
+            <SectionLabel text="FAQ" />
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,44px)', fontWeight: 700, lineHeight: 1.1, margin: '0 0 14px', color: C.text }}>
+              Pertanyaan yang Sering <em style={{ color: C.navyMed }}>Ditanyakan</em>
+            </h2>
           </div>
-          <div data-reveal style={{ opacity: 0 }}>
-            {FAQS.map((f, i) => <FaqItem key={i} q={f.q} a={f.a} defaultOpen={i === 0} />)}
+          <div className="l-reveal">
+            {FAQS.map((f, i) => <FaqItem key={i} q={f.q} a={f.a} open={i === 0} />)}
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
-          KONTAK
-      ══════════════════════════════════════ */}
-      <section id="kontak" className="l-section" style={{ background: T.bg }}>
-        <div style={{ maxWidth: 960, margin: '0 auto' }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <SectionHeader
-              tag="Kontak" tagIcon={<Phone size={11} />}
-              title={<>Hubungi <span className="l-green-text">Tim Kami</span></>}
-              sub="Butuh bantuan atau ingin diskusi kerja sama? Isi form atau hubungi melalui channel berikut."
-            />
+      {/* ══ CONTACT ══ */}
+      <section id="kontak" className="l-section" style={{ background: 'white' }}>
+        <div style={W}>
+          <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 48 }}>
+            <SectionLabel text="Hubungi Kami" />
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,44px)', fontWeight: 700, lineHeight: 1.1, margin: '0 0 14px', color: C.text }}>
+              Tim Kami Siap <em style={{ color: C.navyMed }}>Membantu</em>
+            </h2>
+            <p style={{ fontSize: 15, color: C.muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.8 }}>Butuh bantuan atau ingin diskusi kerja sama? Kami siap merespons dalam 1×24 jam.</p>
           </div>
-          <div data-reveal style={{ opacity: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 16, marginBottom: 44 }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginBottom: 48 }}>
             {[
-              { icon: Phone,       label: 'Telepon',   value: '021-XXXX-XXXX',          desc: 'Senin–Sabtu, 08:00–17:00 WIB' },
-              { icon: Mail,        label: 'Email',     value: 'partner@bintangglobal.id', desc: 'Balasan dalam 1×24 jam' },
-              { icon: MessageCircle, label: 'WhatsApp', value: '08xx-xxxx-xxxx',         desc: 'Support cepat via chat' },
-              { icon: Building2,   label: 'Kota',      value: '50+ kota',               desc: 'Seluruh Indonesia' },
+              { icon: Phone,         label: 'Telepon',  value: '021-XXXX-XXXX',           desc: 'Senin–Sabtu, 08:00–17:00 WIB' },
+              { icon: Mail,          label: 'Email',    value: 'partner@bintangglobal.id', desc: 'Balasan dalam 1×24 jam' },
+              { icon: MessageCircle, label: 'WhatsApp', value: '08xx-xxxx-xxxx',           desc: 'Support cepat via chat' },
+              { icon: Building2,     label: 'Kantor',   value: '50+ Kota',                 desc: 'Jaringan seluruh Indonesia' },
             ].map(({ icon: Icon, label, value, desc }) => (
-              <div key={label} style={{
-                padding: 22, borderRadius: 14, border: `1px solid ${T.border}`, background: 'white',
-                transition: 'border-color .2s, box-shadow .2s', cursor: 'default',
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#C8D8D4'; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 24px ${T.shadow}`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = T.border; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: T.greenLt, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                  <Icon size={17} color={T.green} />
+              <div key={label} style={{ padding: 22, borderRadius: 14, border: `1px solid ${C.border}`, background: C.offWhite, transition: 'all .2s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = C.navyMed; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 24px ${C.shadow}`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = C.border; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: C.navyFaint, border: `1px solid ${C.borderMd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Icon size={18} color={C.navy} />
                 </div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: T.green, textTransform: 'uppercase', marginBottom: 5 }}>{label}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 3 }}>{value}</div>
-                <div style={{ fontSize: 12, color: T.dim }}>{desc}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: C.navyMed, textTransform: 'uppercase', marginBottom: 5 }}>{label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>{value}</div>
+                <div style={{ fontSize: 12, color: C.dim }}>{desc}</div>
               </div>
             ))}
           </div>
 
-          {/* Contact Form */}
-          <div data-reveal style={{ opacity: 0, maxWidth: 540, margin: '0 auto' }}>
-            <div style={{ padding: 32, borderRadius: 20, border: `1px solid ${T.border}`, background: 'white', boxShadow: `0 16px 48px ${T.shadow}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.green, marginBottom: 22, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Form Hubungi Kami</div>
-              {contactSent ? (
-                <div style={{ padding: 24, textAlign: 'center', color: T.green, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexDirection: 'column' }}>
-                  <CheckCircle size={40} />
-                  <span>Pesan Anda telah terkirim. Tim kami akan menghubungi dalam 1×24 jam.</span>
-                  <button type="button" className="l-btn-outline" style={{ marginTop: 12 }} onClick={() => setContactSent(false)}>Kirim pesan lagi</button>
+          {/* Form */}
+          <div className="l-reveal" style={{ maxWidth: 520, margin: '0 auto' }}>
+            <div style={{ background: C.offWhite, borderRadius: 18, border: `1px solid ${C.border}`, padding: 32, boxShadow: `0 16px 48px ${C.shadow}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.navyMed, marginBottom: 22, letterSpacing: '.12em', textTransform: 'uppercase' }}>Form Hubungi Kami</div>
+              {sent ? (
+                <div style={{ padding: 24, textAlign: 'center', color: C.navy, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                  <CheckCircle size={44} />
+                  <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7 }}>Pesan Anda telah terkirim. Tim kami akan menghubungi dalam 1×24 jam.</p>
+                  <button type="button" className="btn-outline" style={{ marginTop: 8 }} onClick={() => setSent(false)}>Kirim Pesan Lagi</button>
                 </div>
               ) : (
-                <form onSubmit={handleContactSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 5 }}>Nama *</label>
-                    <input type="text" required value={contactForm.nama} onChange={e => setContactForm(f => ({ ...f, nama: e.target.value }))} placeholder="Nama lengkap atau perusahaan"
-                      style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', transition: 'border-color .2s' }}
-                      onFocus={e => (e.currentTarget.style.borderColor = T.green)} onBlur={e => (e.currentTarget.style.borderColor = T.border)}
-                    />
-                  </div>
-                  <div className="l-form-grid">
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 5 }}>Email *</label>
-                      <input type="email" required value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} placeholder="email@contoh.com"
-                        style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
-                        onFocus={e => (e.currentTarget.style.borderColor = T.green)} onBlur={e => (e.currentTarget.style.borderColor = T.border)}
+                <form onSubmit={e => { e.preventDefault(); if (form.nama && form.email && form.pesan) { setSent(true); setForm({ nama: '', email: '', telepon: '', pesan: '' }); } }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {[
+                    { key: 'nama',     label: 'Nama *',    type: 'text',  placeholder: 'Nama atau perusahaan Anda',  required: true  },
+                    { key: 'email',    label: 'Email *',   type: 'email', placeholder: 'email@contoh.com',           required: true  },
+                    { key: 'telepon',  label: 'Telepon',   type: 'tel',   placeholder: '08xx-xxxx-xxxx',             required: false },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 5 }}>{f.label}</label>
+                      <input type={f.type} required={f.required} placeholder={f.placeholder} value={(form as Record<string,string>)[f.key]} onChange={e => setForm(v => ({ ...v, [f.key]: e.target.value }))}
+                        style={{ width: '100%', padding: '11px 14px', borderRadius: 9, border: `1.5px solid ${C.border}`, background: 'white', fontSize: 14, outline: 'none', fontFamily: "'DM Sans',system-ui,sans-serif", color: C.text, transition: 'border-color .2s' }}
+                        onFocus={e => (e.currentTarget.style.borderColor = C.navy)} onBlur={e => (e.currentTarget.style.borderColor = C.border)}
                       />
                     </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 5 }}>Telepon</label>
-                      <input type="tel" value={contactForm.telepon} onChange={e => setContactForm(f => ({ ...f, telepon: e.target.value }))} placeholder="08xx-xxxx-xxxx"
-                        style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
-                        onFocus={e => (e.currentTarget.style.borderColor = T.green)} onBlur={e => (e.currentTarget.style.borderColor = T.border)}
-                      />
-                    </div>
-                  </div>
+                  ))}
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 5 }}>Pesan *</label>
-                    <textarea required rows={4} value={contactForm.pesan} onChange={e => setContactForm(f => ({ ...f, pesan: e.target.value }))} placeholder="Tulis pesan atau pertanyaan Anda..."
-                      style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 14, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
-                      onFocus={e => (e.currentTarget.style.borderColor = T.green)} onBlur={e => (e.currentTarget.style.borderColor = T.border)}
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 5 }}>Pesan *</label>
+                    <textarea required rows={4} placeholder="Tulis pesan atau pertanyaan Anda..." value={form.pesan} onChange={e => setForm(v => ({ ...v, pesan: e.target.value }))}
+                      style={{ width: '100%', padding: '11px 14px', borderRadius: 9, border: `1.5px solid ${C.border}`, background: 'white', fontSize: 14, outline: 'none', fontFamily: "'DM Sans',system-ui,sans-serif", resize: 'vertical', color: C.text, transition: 'border-color .2s' }}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.navy)} onBlur={e => (e.currentTarget.style.borderColor = C.border)}
                     />
                   </div>
-                  <button type="submit" className="l-btn-primary" style={{ alignSelf: 'flex-start' }}>
-                    <span className="shine" /> Kirim Pesan
+                  <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start', padding: '12px 28px' }}>
+                    Kirim Pesan <ArrowRight size={14} />
                   </button>
                 </form>
               )}
@@ -1437,87 +1020,74 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
-          CTA SECTION
-      ══════════════════════════════════════ */}
-      <section className="l-cta-section l-section">
-        <div style={{ maxWidth: 900, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
-          <div data-reveal style={{ opacity: 0 }}>
-            <div className="l-tag-gold" style={{ marginBottom: 20, display: 'inline-flex', background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.28)', color: '#E8ECFF' }}>
-              <Sparkles size={11} /> Bergabung Sekarang
+      {/* ══ CTA ══ */}
+      <section style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMed} 50%, #0a1438 100%)`, padding: '96px 24px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: `radial-gradient(circle at 20% 50%, rgba(255,255,255,0.04) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.04) 0%, transparent 40%)`, pointerEvents: 'none' }} />
+        <div style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+          <div className="l-reveal">
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 100, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', marginBottom: 24 }}>
+              <Sparkles size={12} color="rgba(255,255,255,0.8)" />
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase' }}>Bergabung Sekarang</span>
             </div>
-            <h2 style={{
-              fontFamily: "'Cormorant Garamond',Georgia,serif",
-              fontSize: 'clamp(30px,5vw,56px)', fontWeight: 700,
-              letterSpacing: '-0.015em', lineHeight: 1.1,
-              color: 'white', margin: '0 0 16px',
-            }}>
+            <h2 className="display-font" style={{ fontSize: 'clamp(28px,5vw,54px)', fontWeight: 700, lineHeight: 1.1, color: 'white', margin: '0 0 18px' }}>
               Siap Tingkatkan Bisnis<br />
-              <span style={{ color: '#C7D2FE' }}>Travel Anda?</span>
+              <em style={{ color: '#A5B4FC' }}>Travel Anda?</em>
             </h2>
-            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 16, margin: '0 auto 40px', lineHeight: 1.7, maxWidth: 480 }}>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 16, margin: '0 auto 40px', lineHeight: 1.75, maxWidth: 440 }}>
               Daftar gratis dalam 2 menit. Verifikasi instan. Akses penuh ke semua fitur platform.
             </p>
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Link to="/register-owner-type" className="l-btn-gold" style={{ fontSize: 15, padding: '15px 34px' }}>
-                <span className="shine" />
+              <Link to="/register-owner-type" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 34px', borderRadius: 9, background: 'white', color: C.navy, fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', transition: 'all .2s', fontFamily: "'DM Sans',system-ui,sans-serif" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'none'; }}>
                 <Zap size={16} /> Daftar Partner — GRATIS
               </Link>
-              <Link to="/login" className="l-btn-outline-gold" style={{ fontSize: 15, padding: '15px 30px', background: 'transparent', color: 'rgba(255,255,255,0.75)', borderColor: 'rgba(255,255,255,0.25)' }}>
-                Sudah punya akun?
-              </Link>
+              <Link to="/login" className="btn-ghost" style={{ fontSize: 15, padding: '13px 28px' }}>Sudah Punya Akun</Link>
             </div>
-            <div style={{ marginTop: 28, display: 'flex', justifyContent: 'center', gap: 24, flexWrap: 'wrap' }}>
-              {['✓ Tanpa biaya pendaftaran', '✓ Verifikasi 24 jam', '✓ Komisi hingga 8%'].map(b => (
-                <span key={b} style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>{b}</span>
+            <div style={{ marginTop: 32, display: 'flex', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
+              {['Tanpa biaya pendaftaran', 'Verifikasi 24 jam', 'Komisi hingga 8%'].map(b => (
+                <span key={b} style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>✓ {b}</span>
               ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════
-          FOOTER
-      ══════════════════════════════════════ */}
-      <footer style={{ background: 'linear-gradient(180deg, #0a0f24 0%, #050814 100%)', borderTop: `3px solid ${NAVY_MED}`, padding: '56px 24px 32px', position: 'relative', zIndex: 1 }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div className="l-footer-grid" style={{ marginBottom: 48 }}>
-            {/* Brand */}
+      {/* ══ FOOTER ══ */}
+      <footer style={{ background: '#05091a', padding: '56px 24px 32px', borderTop: `3px solid ${C.navyMed}` }}>
+        <div style={W}>
+          <div className="l-footer-grid" style={{ marginBottom: 44 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'contain', display: 'block', flexShrink: 0 }} />
+                <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'white', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Bintang Global</div>
-                  <div style={{ fontSize: 9, color: '#9CAEF5', letterSpacing: '0.22em', textTransform: 'uppercase' }}>Umroh & Travel</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Bintang Global</div>
+                  <div style={{ fontSize: 9, color: '#6B7FCC', letterSpacing: '.18em', textTransform: 'uppercase' }}>Haji & Umroh</div>
                 </div>
               </div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.75, margin: '0 0 20px', maxWidth: 240 }}>
-                Platform travel dan umrah terintegrasi untuk partner dan jamaah di seluruh Indonesia.
-              </p>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.75, margin: '0 0 20px', maxWidth: 220 }}>Platform travel dan umroh terintegrasi untuk partner dan jamaah di seluruh Indonesia.</p>
+              <div style={{ display: 'flex', gap: 8 }}>
                 {[Instagram, Twitter, Youtube].map((Icon, i) => (
-                  <button key={i} style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = NAVY_MED; (e.currentTarget as HTMLElement).style.background = 'rgba(21,42,122,0.35)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}>
-                    <Icon size={14} color="#C7D2FE" />
+                  <button key={i} style={{ width: 34, height: 34, borderRadius: 9, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.10)'; }}>
+                    <Icon size={14} color="rgba(255,255,255,0.5)" />
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Links */}
             {[
-              { title: 'Platform', links: [['Layanan', '#layanan'], ['Paket Umrah', '#paket'], ['Cara Kerja', '#proses'], ['Tentang Kami', '#tentang']] },
+              { title: 'Platform', links: [['Layanan', '#layanan'], ['Paket Umroh', '#paket'], ['Cara Kerja', '#proses'], ['Tentang Kami', '#tentang']] },
               { title: 'Partner',  links: [['Daftar Partner', '/register-owner-type'], ['Masuk Dashboard', '/login'], ['Kebijakan Privasi', '#'], ['Syarat & Ketentuan', '#']] },
               { title: 'Kontak',   links: [['021-XXXX-XXXX', '#'], ['partner@bintangglobal.id', '#'], ['Senin–Sabtu 08–17', '#'], ['Support 24/7', '#']] },
             ].map(({ title, links }) => (
               <div key={title}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: '#9CAEF5', textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.16em', color: '#6B7FCC', textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {links.map(([label, href]) => (
-                    <a key={label} href={href} style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', transition: 'color .2s' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.85)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}>
+                    <a key={label} href={href} style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', textDecoration: 'none', transition: 'color .2s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.35)')}>
                       {label}
                     </a>
                   ))}
@@ -1525,16 +1095,12 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
-
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', marginBottom: 24 }} />
-
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 22 }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
-              © {new Date().getFullYear()} Bintang Global. All rights reserved.
-            </span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>© {new Date().getFullYear()} Bintang Global. All rights reserved.</span>
             <div style={{ display: 'flex', gap: 20 }}>
-              {['Kebijakan Privasi', 'Syarat & Ketentuan', 'Cookie'].map(l => (
-                <a key={l} href="#" style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', textDecoration: 'none' }}>{l}</a>
+              {['Privasi', 'Syarat & Ketentuan', 'Cookie'].map(l => (
+                <a key={l} href="#" style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', textDecoration: 'none' }}>{l}</a>
               ))}
             </div>
           </div>
@@ -1542,12 +1108,13 @@ const LandingPage: React.FC = () => {
       </footer>
 
       {/* WhatsApp FAB */}
-      <button className="l-fab" title="Chat WhatsApp" onClick={() => window.open('https://wa.me/62', '_blank')}>
+      <button title="Chat WhatsApp" onClick={() => window.open('https://wa.me/62', '_blank')} style={{ position: 'fixed', bottom: 26, right: 26, zIndex: 999, width: 54, height: 54, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg,#25d366,#128c7e)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse-ring 3s ease-in-out infinite', transition: 'transform .2s' }}
+        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.1)')}
+        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
         <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
         </svg>
       </button>
-
     </div>
   );
 };

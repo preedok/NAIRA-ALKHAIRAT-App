@@ -24,7 +24,9 @@ const ROLES = {
   ADMIN_WILAYAH: 'admin_wilayah',
   ROLE_HANDLING: 'handling',
   /** Divisi Siskopatuh: proses item order tipe siskopatuh (meta.siskopatuh_status), pola sama handling */
-  ROLE_SISKOPATUH: 'role_siskopatuh'
+  ROLE_SISKOPATUH: 'role_siskopatuh',
+  /** Divisi Haji Dakhili: produk haji dalam negeri (meta.haji_dakhili_status), pola sama handling/siskopatuh */
+  ROLE_HAJI_DAKHILI: 'role_haji_dakhili'
 };
 
 // PROSES A - Registrasi & Aktivasi Owner (Partner)
@@ -131,6 +133,9 @@ const HANDLING_PROGRESS_STATUS = {
 /** Sama alur dengan handling: pending → in_progress → completed di OrderItem.meta.siskopatuh_status */
 const SISKOPATUH_PROGRESS_STATUS = HANDLING_PROGRESS_STATUS;
 
+/** Sama alur: pending → in_progress → completed di OrderItem.meta.haji_dakhili_status */
+const HAJI_DAKHILI_PROGRESS_STATUS = HANDLING_PROGRESS_STATUS;
+
 // Bus Saudi: workflow perjalanan (sama konsep tiket)
 const BUS_TRIP_TYPES = ['one_way', 'return_only', 'round_trip'];
 
@@ -160,6 +165,8 @@ const ORDER_ITEM_TYPE = {
   TICKET: 'ticket',
   BUS: 'bus',
   SISKOPATUH: 'siskopatuh',
+  /** Produk haji dalam negeri (Haji Dakhili) */
+  HAJI_DAKHILI: 'haji_dakhili',
   HANDLING: 'handling',
   PACKAGE: 'package'
 };
@@ -326,6 +333,7 @@ module.exports = {
   INVOICE_STATUS,
   HANDLING_PROGRESS_STATUS,
   SISKOPATUH_PROGRESS_STATUS,
+  HAJI_DAKHILI_PROGRESS_STATUS,
   REFUND_STATUS,
   REFUND_SOURCE,
   ACCOUNTING_DOC_STATUS,

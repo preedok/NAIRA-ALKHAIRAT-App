@@ -7,7 +7,7 @@ const { Invoice, InvoiceFile, Order, OrderItem, User, Branch, PaymentProof, Noti
 const { INVOICE_STATUS, NOTIFICATION_TRIGGER, ORDER_ITEM_TYPE, DP_PAYMENT_STATUS, REFUND_SOURCE, REFUND_STATUS, isOwnerRole, ROLES } = require('../constants');
 const { getRulesForBranch } = require('./businessRuleController');
 const { busFinalityDeficitPacks } = require('../utils/busFinalityPenalty');
-const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah } = require('../utils/wilayahScope');
+const { getBranchIdsForWilayah, invoiceInKoordinatorWilayah, resolveProvinsiIdsSameName } = require('../utils/wilayahScope');
 const { enrichBranchWithLocation } = require('../utils/locationMaster');
 const { resolveBankAccountsForInvoice } = require('../utils/invoiceBankAccounts');
 
@@ -336,8 +336,8 @@ const ALLOWED_SORT = ['invoice_number', 'created_at', 'total_amount', 'status'];
 
 async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user) {
   if (!user) return branch_id ? { branch_id } : {};
-  // Role hotel, bus, handling, siskopatuh: lihat semua wilayah (tidak batasi by branch/wilayah)
-  if (user.role === 'role_hotel' || user.role === 'role_bus' || user.role === 'handling' || user.role === 'role_siskopatuh') return {};
+  // Role hotel, bus, handling, siskopatuh, haji dakhili: lihat semua wilayah (tidak batasi by branch/wilayah)
+  if (user.role === 'role_hotel' || user.role === 'role_bus' || user.role === 'handling' || user.role === 'role_siskopatuh' || user.role === 'role_haji_dakhili') return {};
   // Role invoice Saudi: lihat semua invoice seluruh wilayah (filter branch hanya jika dikirim eksplisit)
   if (user.role === 'invoice_saudi') return branch_id ? { branch_id } : {};
   // Koordinator / invoice koordinator: scope ke semua cabang di wilayah mereka
@@ -369,8 +369,12 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
   if (user.branch_id && !['super_admin', 'admin_pusat', 'role_accounting'].includes(user.role)) return { branch_id: user.branch_id };
   if (branch_id) return { branch_id };
   if (provinsi_id) {
-    const branches = await Branch.findAll({ where: { provinsi_id }, attributes: ['id'] });
-    const ids = branches.map(b => b.id);
+    const provinsiIds = await resolveProvinsiIdsSameName(provinsi_id);
+    const branches = await Branch.findAll({
+      where: { provinsi_id: { [Op.in]: provinsiIds } },
+      attributes: ['id']
+    });
+    const ids = branches.map((b) => b.id);
     return ids.length ? { branch_id: { [Op.in]: ids } } : { branch_id: { [Op.in]: [] } };
   }
   if (wilayah_id) {
@@ -395,7 +399,7 @@ async function loadInvoiceListRelations(data) {
   let orderItemsByOrderId = {};
   if (orderIdsFromRows.length > 0) {
     const items = await OrderItem.findAll({
-      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.SISKOPATUH, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
+      where: { order_id: orderIdsFromRows, type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.SISKOPATUH, ORDER_ITEM_TYPE.HAJI_DAKHILI, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
       include: [
         { model: Product, as: 'Product', attributes: ['id', 'name', 'code', 'type', 'meta'], required: false },
         { model: VisaProgress, as: 'VisaProgress', required: false, attributes: ['id', 'status', 'visa_file_url', 'issued_at'] },
@@ -603,7 +607,7 @@ async function buildInvoiceListFilters(req) {
     }
   }
   if (isOwnerRole(req.user.role)) where.owner_id = req.user.id;
-  const divisiProgressRoles = ['role_hotel', 'role_bus', 'handling', 'role_siskopatuh', 'visa_koordinator', 'tiket_koordinator'];
+  const divisiProgressRoles = ['role_hotel', 'role_bus', 'handling', 'role_siskopatuh', 'role_haji_dakhili', 'visa_koordinator', 'tiket_koordinator'];
   if (divisiProgressRoles.includes(req.user.role)) {
     let orderIdsByType = [];
     if (req.user.role === 'role_hotel') {
@@ -634,6 +638,9 @@ async function buildInvoiceListFilters(req) {
     } else if (req.user.role === 'role_siskopatuh') {
       const siskRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.SISKOPATUH }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((siskRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'role_haji_dakhili') {
+      const hajiRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HAJI_DAKHILI }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((hajiRows || []).map((r) => r.order_id))];
     } else if (req.user.role === 'visa_koordinator') {
       const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((visaRows || []).map((r) => r.order_id))];
@@ -643,7 +650,7 @@ async function buildInvoiceListFilters(req) {
     }
     where.order_id = orderIdsByType.length ? { [Op.in]: orderIdsByType } : { [Op.in]: [] };
   }
-  if (req.user.branch_id && !isOwnerRole(req.user.role) && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && req.user.role !== 'handling' && req.user.role !== 'role_siskopatuh' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  if (req.user.branch_id && !isOwnerRole(req.user.role) && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && req.user.role !== 'handling' && req.user.role !== 'role_siskopatuh' && req.user.role !== 'role_haji_dakhili' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
 
@@ -659,7 +666,7 @@ async function buildInvoiceListFilters(req) {
       {
         model: OrderItem,
         as: 'OrderItems',
-        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.SISKOPATUH, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
+        where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.SISKOPATUH, ORDER_ITEM_TYPE.HAJI_DAKHILI, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
         required: false,
         attributes: ['id', 'type', 'quantity'],
         include: [
@@ -767,7 +774,7 @@ function getOrderItemStatusForExport(item) {
     const parts = [p.bus_ticket_status, p.arrival_status, p.departure_status, p.return_status].filter(Boolean);
     return parts.length ? parts.join('/') : 'belum diproses';
   }
-  if (t === ORDER_ITEM_TYPE.SISKOPATUH || t === ORDER_ITEM_TYPE.HANDLING || t === ORDER_ITEM_TYPE.PACKAGE) {
+  if (t === ORDER_ITEM_TYPE.SISKOPATUH || t === ORDER_ITEM_TYPE.HAJI_DAKHILI || t === ORDER_ITEM_TYPE.HANDLING || t === ORDER_ITEM_TYPE.PACKAGE) {
     return (item?.meta && item.meta.status) ? String(item.meta.status) : 'sesuai progress invoice';
   }
   return 'belum diproses';
@@ -1117,7 +1124,8 @@ function buildPdfOrderItemsDetailed(inv) {
         if (t === ORDER_ITEM_TYPE.HANDLING) return 5;
         if (t === ORDER_ITEM_TYPE.PACKAGE) return 6;
         if (t === ORDER_ITEM_TYPE.SISKOPATUH) return 7;
-        return 8;
+        if (t === ORDER_ITEM_TYPE.HAJI_DAKHILI) return 8;
+        return 9;
       };
       return rank(a) - rank(b);
     });
@@ -1198,6 +1206,26 @@ function buildInvoiceListExportFilterSummary(req, data = []) {
     return `Semua filter default (sesuai hak akses) · ${wilayahInfo}`;
   }
   return parts.join(' · ');
+}
+
+/** Jika ekspor kosong, isi label Wilayah/Provinsi dari master (bukan UUID mentah di PDF). */
+async function enrichInvoiceListExportFilterSummaryNoRows(req, data, rawSummary) {
+  let s = String(rawSummary || '');
+  if (Array.isArray(data) && data.length > 0) return s;
+  const q = req.query || {};
+  try {
+    const wid = firstQueryString(q.wilayah_id);
+    if (wid) {
+      const w = await Wilayah.findByPk(wid, { attributes: ['name'] });
+      if (w?.name) s = s.split(`Wilayah: ${wid}`).join(`Wilayah: ${w.name}`);
+    }
+    const pid = firstQueryString(q.provinsi_id);
+    if (pid) {
+      const p = await Provinsi.findByPk(pid, { attributes: ['name'] });
+      if (p?.name) s = s.split(`Provinsi: ${pid}`).join(`Provinsi: ${p.name}`);
+    }
+  } catch (_) { /* non-fatal */ }
+  return s;
 }
 
 const exportListExcel = asyncHandler(async (req, res) => {
@@ -1435,7 +1463,8 @@ const exportListPdf = asyncHandler(async (req, res) => {
   let y = drawCorporateLetterhead(doc, { margin: 36 });
   doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text('LAPORAN RESMI DAFTAR INVOICE', 36, y, { align: 'center', width: doc.page.width - 72 });
   y += 20;
-  const filterSummaryRaw = buildInvoiceListExportFilterSummary(req, data);
+  let filterSummaryRaw = buildInvoiceListExportFilterSummary(req, data);
+  filterSummaryRaw = await enrichInvoiceListExportFilterSummaryNoRows(req, data, filterSummaryRaw);
   const filterSummaryClean = String(filterSummaryRaw || '')
     .replace(/^Semua filter default \(sesuai hak akses\)\s*·\s*/i, '')
     .trim();
@@ -1954,6 +1983,11 @@ const listDraftOrders = asyncHandler(async (req, res) => {
     const siskOrderIds = [...new Set((siskRows || []).map((r) => r.order_id))].filter((id) => !withInvIds.includes(id));
     orderWhereDraft.id = siskOrderIds.length ? { [Op.in]: siskOrderIds } : { [Op.in]: [] };
   }
+  if (req.user.role === 'role_haji_dakhili') {
+    const hajiRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HAJI_DAKHILI }, attributes: ['order_id'], raw: true });
+    const hajiOrderIds = [...new Set((hajiRows || []).map((r) => r.order_id))].filter((id) => !withInvIds.includes(id));
+    orderWhereDraft.id = hajiOrderIds.length ? { [Op.in]: hajiOrderIds } : { [Op.in]: [] };
+  }
   if (req.user.role === 'visa_koordinator' && req.user.wilayah_id) {
     const branchIds = await getBranchIdsForWilayah(req.user.wilayah_id);
     const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
@@ -1996,7 +2030,7 @@ const listDraftOrders = asyncHandler(async (req, res) => {
     {
       model: OrderItem,
       as: 'OrderItems',
-      where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.SISKOPATUH, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
+      where: { type: { [Op.in]: [ORDER_ITEM_TYPE.VISA, ORDER_ITEM_TYPE.TICKET, ORDER_ITEM_TYPE.HOTEL, ORDER_ITEM_TYPE.BUS, ORDER_ITEM_TYPE.SISKOPATUH, ORDER_ITEM_TYPE.HAJI_DAKHILI, ORDER_ITEM_TYPE.HANDLING, ORDER_ITEM_TYPE.PACKAGE] } },
       required: false,
       attributes: ['id', 'order_id', 'type', 'quantity', 'product_ref_id', 'meta'],
       include: [
@@ -2090,7 +2124,7 @@ const getSummary = asyncHandler(async (req, res) => {
     }
   }
   if (isOwnerRole(req.user.role)) where.owner_id = req.user.id;
-  if (req.user.branch_id && !isOwnerRole(req.user.role) && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && req.user.role !== 'handling' && req.user.role !== 'role_siskopatuh' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
+  if (req.user.branch_id && !isOwnerRole(req.user.role) && req.user.role !== 'role_hotel' && req.user.role !== 'role_bus' && req.user.role !== 'handling' && req.user.role !== 'role_siskopatuh' && req.user.role !== 'role_haji_dakhili' && !['super_admin', 'admin_pusat', 'role_accounting', 'invoice_saudi'].includes(req.user.role) && !isKoordinatorRole(req.user.role)) {
     where.branch_id = req.user.branch_id;
   }
   if (req.user.wilayah_id && isKoordinatorRole(req.user.role)) {
@@ -2099,7 +2133,7 @@ const getSummary = asyncHandler(async (req, res) => {
     // bila wilayah tidak punya cabang ter-link: jangan set filter agar summary tampil
   }
   // Sama seperti list: divisi melihat summary untuk semua order bertipe terkait (termasuk belum bayar DP).
-  const divisiProgressRolesSummary = ['role_hotel', 'role_bus', 'handling', 'role_siskopatuh', 'visa_koordinator', 'tiket_koordinator'];
+  const divisiProgressRolesSummary = ['role_hotel', 'role_bus', 'handling', 'role_siskopatuh', 'role_haji_dakhili', 'visa_koordinator', 'tiket_koordinator'];
   if (divisiProgressRolesSummary.includes(req.user.role)) {
     let orderIdsByType = [];
     if (req.user.role === 'role_hotel') {
@@ -2130,6 +2164,9 @@ const getSummary = asyncHandler(async (req, res) => {
     } else if (req.user.role === 'role_siskopatuh') {
       const siskRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.SISKOPATUH }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((siskRows || []).map((r) => r.order_id))];
+    } else if (req.user.role === 'role_haji_dakhili') {
+      const hajiRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.HAJI_DAKHILI }, attributes: ['order_id'], raw: true });
+      orderIdsByType = [...new Set((hajiRows || []).map((r) => r.order_id))];
     } else if (req.user.role === 'visa_koordinator') {
       const visaRows = await OrderItem.findAll({ where: { type: ORDER_ITEM_TYPE.VISA }, attributes: ['order_id'], raw: true });
       orderIdsByType = [...new Set((visaRows || []).map((r) => r.order_id))];
@@ -2474,6 +2511,11 @@ const getById = asyncHandler(async (req, res) => {
     const order = invoice.Order || await Order.findByPk(invoice.order_id, { include: [{ model: OrderItem, as: 'OrderItems', attributes: ['type'] }] });
     const hasSisk = (order?.OrderItems || []).some((it) => it.type === 'siskopatuh');
     if (!hasSisk) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item siskopatuh' });
+  }
+  if (req.user.role === 'role_haji_dakhili') {
+    const order = invoice.Order || await Order.findByPk(invoice.order_id, { include: [{ model: OrderItem, as: 'OrderItems', attributes: ['type'] }] });
+    const hasHaji = (order?.OrderItems || []).some((it) => it.type === 'haji_dakhili');
+    if (!hasHaji) return res.status(403).json({ success: false, message: 'Invoice ini tidak berisi item Haji Dakhili' });
   }
   await ensureBlockedStatus(invoice);
   // Sinkronkan paid_amount: bukti terverifikasi + alokasi saldo (allocate-balance tidak punya PaymentProof)
@@ -3371,6 +3413,47 @@ const getSiskopatuhFile = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/invoices/:id/order-items/:orderItemId/haji-dakhili-file
+ * Unduh dokumen Haji Dakhili — path di OrderItem.meta.haji_dakhili_file_url
+ */
+const getHajiDakhiliFile = asyncHandler(async (req, res) => {
+  let access = await canAccessInvoiceForReallocation(req.params.id, req.user);
+  if (!access.ok && req.user.role === ROLES.ROLE_HAJI_DAKHILI) {
+    const inv = await Invoice.findByPk(req.params.id, { attributes: ['id', 'owner_id', 'branch_id', 'order_id'] });
+    if (inv?.branch_id) {
+      const rows = await Branch.findAll({ where: { is_active: true }, attributes: ['id'], raw: true });
+      const ids = rows.map((r) => r.id);
+      if (ids.includes(inv.branch_id)) {
+        access = { ok: true, invoice: inv };
+      }
+    }
+  }
+  if (!access.ok) return res.status(403).json({ success: false, message: access.message });
+  const invoice = access.invoice;
+  const orderItem = await OrderItem.findOne({
+    where: { id: req.params.orderItemId, order_id: invoice.order_id, type: ORDER_ITEM_TYPE.HAJI_DAKHILI },
+    attributes: ['id', 'meta']
+  });
+  if (!orderItem) {
+    return res.status(404).json({ success: false, message: 'Item Haji Dakhili tidak ditemukan' });
+  }
+  const meta = orderItem.meta && typeof orderItem.meta === 'object' ? orderItem.meta : {};
+  const fileUrl = (meta.haji_dakhili_file_url || '').trim();
+  if (!fileUrl) {
+    return res.status(404).json({ success: false, message: 'Dokumen Haji Dakhili belum diupload' });
+  }
+  const filePath = resolveUploadFilePath(fileUrl);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File tidak tersedia di server' });
+  }
+  const filename = path.basename(filePath);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '%22')}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+/**
  * GET /api/v1/invoices/reallocations
  * Query: invoice_id (optional, filter sebagai sumber atau target), limit, page
  */
@@ -3478,5 +3561,6 @@ module.exports = {
   getTicketFile,
   getVisaFile,
   getSiskopatuhFile,
+  getHajiDakhiliFile,
   getManifestFile
 };

@@ -44,6 +44,7 @@ router.use('/bus', require('./bus'));
 router.use('/maskapai', require('./maskapai'));
 router.use('/handling', require('./handling'));
 router.use('/siskopatuh', require('./siskopatuh'));
+router.use('/haji-dakhili', require('./hajiDakhili'));
 router.use('/koordinator', require('./koordinator'));
 router.delete('/admin-pusat/users/:id', auth, requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), adminPusatController.deleteUser);
 router.use('/admin-pusat', require('./adminPusat'));

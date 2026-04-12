@@ -51,6 +51,23 @@ async function resolveWilayahIdsSameName(wilayahId) {
 }
 
 /**
+ * Semua UUID provinsi yang punya nama sama dengan provinsi referensi (master bisa punya duplikat baris).
+ * Dipakai filter daftar/ekspor invoice agar cabang yang mereferensi UUID lain dengan nama sama tetap ikut.
+ */
+async function resolveProvinsiIdsSameName(provinsiId) {
+  if (!provinsiId) return [];
+  const pid = String(provinsiId).trim();
+  const row = await Provinsi.findByPk(pid, { attributes: ['id', 'name'] });
+  if (row && row.name) {
+    const allProv = await Provinsi.findAll({ attributes: ['id', 'name'], raw: true });
+    const nameKey = (row.name || '').trim().toLowerCase();
+    const ids = (allProv || []).filter((p) => (p.name || '').trim().toLowerCase() === nameKey).map((p) => p.id);
+    if (ids.length > 0) return ids;
+  }
+  return [pid];
+}
+
+/**
  * Resolve branch_id untuk filter wilayah (dinamis: nama wilayah + fallback via kabupaten/kota).
  * Dipakai agar filter Wilayah menampilkan data sesuai kota/provinsi yang ada di order.
  * - Resolve semua id wilayah dengan nama sama (duplikat nama).
@@ -125,5 +142,6 @@ module.exports = {
   getBranchIdsForWilayahDynamic,
   branchBelongsToWilayah,
   invoiceInKoordinatorWilayah,
-  resolveWilayahIdsSameName
+  resolveWilayahIdsSameName,
+  resolveProvinsiIdsSameName
 };

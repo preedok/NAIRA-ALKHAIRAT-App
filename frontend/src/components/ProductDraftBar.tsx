@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingCart, X, ChevronDown, ChevronUp, Hotel, FileText, Plane, Bus, Package, HandHelping } from 'lucide-react';
+import { ShoppingCart, X, ChevronDown, ChevronUp, Hotel, FileText, Plane, Bus, Package, HandHelping, Landmark } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrderDraft, type OrderDraftItem, type OrderDraftItemType } from '../contexts/OrderDraftContext';
 import Button from './common/Button';
@@ -11,6 +11,7 @@ const TYPE_LABELS: Record<OrderDraftItemType, string> = {
   ticket: 'Tiket',
   bus: 'Bus',
   siskopatuh: 'Siskopatuh',
+  haji_dakhili: 'Haji Dakhili',
   handling: 'Handling',
   package: 'Paket'
 };
@@ -21,6 +22,7 @@ const TYPE_ICONS: Record<OrderDraftItemType, React.ReactNode> = {
   ticket: <Plane className="w-4 h-4" />,
   bus: <Bus className="w-4 h-4" />,
   siskopatuh: <FileText className="w-4 h-4" />,
+  haji_dakhili: <Landmark className="w-4 h-4" />,
   handling: <HandHelping className="w-4 h-4" />,
   package: <Package className="w-4 h-4" />
 };

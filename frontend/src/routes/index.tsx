@@ -23,11 +23,13 @@ import HotelsPage from '../pages/dashboard/components/HotelsPage';
 import BusPage from '../pages/dashboard/components/BusPage';
 import ProductBusPage from '../pages/dashboard/components/ProductBusPage';
 import SiskopatuhPage from '../pages/dashboard/components/SiskopatuhPage';
+import HajiDakhiliPage from '../pages/dashboard/components/HajiDakhiliPage';
 import BusWorkPage from '../pages/dashboard/components/BusWorkPage';
 import PackagesPage from '../pages/dashboard/components/PackagesPage';
 import HandlingPage from '../pages/dashboard/components/HandlingPage';
 import HandlingWorkPage from '../pages/dashboard/components/HandlingWorkPage';
 import SiskopatuhWorkPage from '../pages/dashboard/components/SiskopatuhWorkPage';
+import HajiDakhiliWorkPage from '../pages/dashboard/components/HajiDakhiliWorkPage';
 import OrderFormPage from '../pages/dashboard/components/OrderFormPage';
 import UsersPage from '../pages/dashboard/components/UsersPage';
 import ReportsPage from '../pages/dashboard/components/ReportsPage';
@@ -131,6 +133,10 @@ const router = createBrowserRouter([
             element: <SiskopatuhWorkPage />
           },
           {
+            path: 'progress-haji-dakhili',
+            element: <HajiDakhiliWorkPage />
+          },
+          {
             path: 'products/visa',
             element: <ProductVisaPage />
           },
@@ -153,6 +159,10 @@ const router = createBrowserRouter([
           {
             path: 'products/siskopatuh',
             element: <SiskopatuhPage />
+          },
+          {
+            path: 'products/haji-dakhili',
+            element: <HajiDakhiliPage />
           },
           {
             path: 'products/packages',

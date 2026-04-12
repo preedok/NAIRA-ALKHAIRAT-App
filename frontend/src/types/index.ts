@@ -16,6 +16,7 @@ export type UserRole =
   | 'invoice_saudi'
   | 'handling'
   | 'role_siskopatuh'
+  | 'role_haji_dakhili'
   | 'owner_mou'
   | 'owner_non_mou'
   | 'role_hotel'
@@ -74,6 +75,7 @@ export const ROLE_NAMES: Record<UserRole, string> = {
   invoice_saudi: 'Invoice Saudi',
   handling: 'Handling',
   role_siskopatuh: 'Siskopatuh',
+  role_haji_dakhili: 'Haji Dakhili',
   owner_mou: 'Owner MOU',
   owner_non_mou: 'Owner Non-MOU',
   role_hotel: 'Hotel',
@@ -325,7 +327,7 @@ export interface Package {
 
 // ==================== ORDER ====================
 
-export type OrderItemType = 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'package';
+export type OrderItemType = 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'haji_dakhili' | 'package';
 export type OrderStatus = 'draft' | 'tentative' | 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
 
 /** Simplified order for list/table display (dashboard, reports) */

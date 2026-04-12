@@ -1,6 +1,6 @@
 /**
  * Status progress per divisi (Visa, Tiket, Hotel, Bus) — satu sumber kebenaran.
- * Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Siskopatuh → Paket.
+ * Urutan tampilan: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Siskopatuh → Haji Dakhili → Paket.
  * Label tampilan diseragamkan (Menunggu / Dokumen diterima / Dalam proses / Selesai) di progressStatusUnified.
  */
 import React from 'react';
@@ -91,7 +91,7 @@ export const PROGRESS_STATUS_OPTIONS_HANDLING_SISKOPATUH = Object.entries(PROGRE
   label
 }));
 
-export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'siskopatuh' | 'package';
+export type ProgressSectionKey = 'visa' | 'ticket' | 'hotel' | 'bus' | 'handling' | 'siskopatuh' | 'haji_dakhili' | 'package';
 
 export type InvoiceProgressLayout = 'stack' | 'table';
 
@@ -109,6 +109,7 @@ export function getProgressAllowedSectionsForRole(role: string | null | undefine
     role_bus: ['visa', 'bus'],
     handling: ['handling'],
     role_siskopatuh: ['siskopatuh'],
+    role_haji_dakhili: ['haji_dakhili'],
   };
   return byRole[role];
 }
@@ -165,6 +166,7 @@ export function buildInvoiceProgressSectionModels(
   const busItems = items.filter((i: any) => (i.type || i.product_type) === 'bus');
   const handlingItems = items.filter((i: any) => (i.type || i.product_type) === 'handling');
   const siskopatuhItems = items.filter((i: any) => (i.type || i.product_type) === 'siskopatuh');
+  const hajiDakhiliItems = items.filter((i: any) => (i.type || i.product_type) === 'haji_dakhili');
   const packageItems = items.filter((i: any) => (i.type || i.product_type) === 'package');
 
   const sections: InvoiceProgressSectionModel[] = [];
@@ -388,6 +390,30 @@ export function buildInvoiceProgressSectionModels(
     sections.push({ sortIndex: 6, title: 'Siskopatuh', rows });
   }
 
+  if (hajiDakhiliItems.length > 0 && allow('haji_dakhili')) {
+    const rows = hajiDakhiliItems.map((item: any, idx: number) => {
+      const name = item.Product?.name || item.product_name || 'Haji Dakhili';
+      const qty = Math.max(0, parseInt(String(item.quantity ?? 1), 10) || 1);
+      const st = (item.meta && item.meta.haji_dakhili_status) || 'pending';
+      const stLabel = PROGRESS_LABELS_HANDLING_SISKOPATUH[st] || st;
+      const hasDoc = !!(item.meta && item.meta.haji_dakhili_file_url && String(item.meta.haji_dakhili_file_url).trim());
+      const svcRaw = item.meta && item.meta.service_date ? String(item.meta.service_date).slice(0, 10) : '';
+      const svcLine = svcRaw && /^\d{4}-\d{2}-\d{2}$/.test(svcRaw) ? `Tgl layanan ${formatDate(svcRaw)}` : '';
+      const detailLines: string[] = [];
+      if (svcLine) detailLines.push(svcLine);
+      if (hasDoc) detailLines.push('Dokumen hasil: tersedia (unduh di detail Invoice)');
+      return {
+        key: String(item.id || `haji-${idx}`),
+        serviceLabel: name,
+        statusLabel: stLabel,
+        detailLines,
+        statusEmphasis: isUnifiedSelesai(stLabel),
+        statusInlineSuffix: `· Qty ${qty}`,
+      };
+    });
+    sections.push({ sortIndex: 7, title: 'Haji Dakhili', rows });
+  }
+
   if (packageItems.length > 0 && allow('package')) {
     const rows = packageItems.map((item: any, idx: number) => {
       const name = item.Product?.name || item.product_name || 'Paket';
@@ -401,7 +427,7 @@ export function buildInvoiceProgressSectionModels(
         statusMuted: true,
       };
     });
-    sections.push({ sortIndex: 7, title: 'Paket', rows });
+    sections.push({ sortIndex: 8, title: 'Paket', rows });
   }
 
   sections.sort((a, b) => a.sortIndex - b.sortIndex);

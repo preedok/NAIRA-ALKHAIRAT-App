@@ -583,6 +583,7 @@ function orderItemDiffKey(it) {
     return `${type}:${pid}:${route}:${busType}:${trip}`;
   }
   if (type === ORDER_ITEM_TYPE.SISKOPATUH) return `${type}:${pid}`;
+  if (type === ORDER_ITEM_TYPE.HAJI_DAKHILI) return `${type}:${pid}`;
   return `${type}:${pid}`;
 }
 
@@ -2155,7 +2156,7 @@ const uploadJamaahFile = multer({ storage: jamaahStorage, limits: { fileSize: 50
 /**
  * POST /api/v1/orders/:orderId/items/:itemId/jamaah-data
  * Owner atau Invoice: upload data jamaah (ZIP / Excel hotel) atau link Google Drive.
- * Untuk item: visa, tiket, hotel, siskopatuh.
+ * Untuk item: visa, tiket, hotel, siskopatuh, haji_dakhili.
  */
 const uploadJamaahData = [
   uploadJamaahFile.single('jamaah_file'),
@@ -2172,8 +2173,8 @@ const uploadJamaahData = [
       return res.status(400).json({ success: false, message: 'Invoice sudah dibatalkan/refund. Upload dokumen tidak diperbolehkan.' });
     }
     const canUpload = (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
-      ['invoice_koordinator', 'invoice_saudi', 'role_siskopatuh', 'admin_pusat', 'super_admin'].includes(req.user.role);
-    if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice/siskopatuh yang dapat mengupload data jamaah' });
+      ['invoice_koordinator', 'invoice_saudi', 'role_siskopatuh', 'role_haji_dakhili', 'admin_pusat', 'super_admin'].includes(req.user.role);
+    if (!canUpload) return res.status(403).json({ success: false, message: 'Hanya owner atau tim invoice/siskopatuh/haji dakhili yang dapat mengupload data jamaah' });
 
     const item = order.OrderItems.find(i => i.id === itemId);
     if (!item) return res.status(404).json({ success: false, message: 'Order item tidak ditemukan' });
@@ -2181,9 +2182,10 @@ const uploadJamaahData = [
       item.type === ORDER_ITEM_TYPE.VISA ||
       item.type === ORDER_ITEM_TYPE.TICKET ||
       item.type === ORDER_ITEM_TYPE.HOTEL ||
-      item.type === ORDER_ITEM_TYPE.SISKOPATUH;
+      item.type === ORDER_ITEM_TYPE.SISKOPATUH ||
+      item.type === ORDER_ITEM_TYPE.HAJI_DAKHILI;
     if (!jamaahAllowed) {
-      return res.status(400).json({ success: false, message: 'Data jamaah hanya untuk item visa, tiket, hotel, atau siskopatuh' });
+      return res.status(400).json({ success: false, message: 'Data jamaah hanya untuk item visa, tiket, hotel, siskopatuh, atau haji dakhili' });
     }
 
     const link = (req.body.jamaah_data_link != null ? String(req.body.jamaah_data_link).trim() : '') || null;
@@ -2288,7 +2290,7 @@ const getJamaahFile = asyncHandler(async (req, res) => {
   }
   let canAccess =
     (isOwnerRole(req.user.role) && order.owner_id === req.user.id) ||
-    ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'visa_koordinator', 'tiket_koordinator', 'role_siskopatuh'].includes(req.user.role);
+    ['invoice_koordinator', 'invoice_saudi', 'admin_pusat', 'super_admin', 'visa_koordinator', 'tiket_koordinator', 'role_siskopatuh', 'role_haji_dakhili'].includes(req.user.role);
   if (!canAccess && req.user.role === ROLES.ROLE_HOTEL) {
     const branchIds = await getHotelBranchIds(req.user);
     canAccess = !!(order.branch_id && branchIds.includes(order.branch_id));

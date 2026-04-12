@@ -819,7 +819,8 @@ const UsersPage: React.FC = () => {
                   { value: 'invoice_koordinator', label: 'Invoice Koordinator' },
                   { value: 'invoice_saudi', label: 'Invoice Saudi' },
                   { value: 'handling', label: 'Handling' },
-                  { value: 'role_siskopatuh', label: 'Siskopatuh' }
+                  { value: 'role_siskopatuh', label: 'Siskopatuh' },
+                  { value: 'role_haji_dakhili', label: 'Haji Dakhili' }
                 ]}
                 placeholder={AUTOCOMPLETE_PILIH.PILIH_ROLE}
               />
@@ -1223,7 +1224,8 @@ const UsersPage: React.FC = () => {
                   { value: 'invoice_koordinator', label: 'Invoice Koordinator' },
                   { value: 'invoice_saudi', label: 'Invoice Saudi' },
                   { value: 'handling', label: 'Handling' },
-                  { value: 'role_siskopatuh', label: 'Siskopatuh' }
+                  { value: 'role_siskopatuh', label: 'Siskopatuh' },
+                  { value: 'role_haji_dakhili', label: 'Haji Dakhili' }
                 ]}
                 placeholder={AUTOCOMPLETE_PILIH.PILIH_ROLE}
               />

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
-export type OrderDraftItemType = 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'handling' | 'package';
+export type OrderDraftItemType = 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'haji_dakhili' | 'handling' | 'package';
 
 export interface OrderDraftItem {
   id: string;

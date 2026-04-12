@@ -743,6 +743,20 @@ async function generateSiskopatuhCode() {
   return `${prefix}${String(nextSeq).padStart(2, '0')}`;
 }
 
+/** Generate kode unik untuk product Haji Dakhili (HDK-01, HDK-02, ...) */
+async function generateHajiDakhiliCode() {
+  const prefix = 'HDK-';
+  const existing = await Product.findAll({
+    where: { type: 'haji_dakhili', code: { [Op.like]: `${prefix}%` } },
+    attributes: ['code']
+  });
+  const nums = existing
+    .map(p => parseInt(String(p.code || '').replace(prefix, '') || '0', 10))
+    .filter(n => !Number.isNaN(n));
+  const nextSeq = nums.length === 0 ? 1 : Math.max(...nums) + 1;
+  return `${prefix}${String(nextSeq).padStart(2, '0')}`;
+}
+
 const BUS_KIND_VALUES = ['bus', 'hiace'];
 
 /**
@@ -949,6 +963,9 @@ const create = asyncHandler(async (req, res) => {
   }
   if (type === 'siskopatuh' && (!finalCode || finalCode.trim() === '')) {
     finalCode = await generateSiskopatuhCode();
+  }
+  if (type === 'haji_dakhili' && (!finalCode || finalCode.trim() === '')) {
+    finalCode = await generateHajiDakhiliCode();
   }
   if (type === 'package') {
     const vf = finalMeta.valid_from ? String(finalMeta.valid_from).slice(0, 10) : null;

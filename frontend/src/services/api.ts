@@ -437,6 +437,38 @@ export const siskopatuhApi = {
     })
 };
 
+export interface HajiDakhiliDashboardData {
+  total_orders: number;
+  total_haji_dakhili_items: number;
+  by_status: { pending?: number; in_progress?: number; completed?: number };
+  pending_list: Array<{
+    order_id: string;
+    order_number?: string;
+    invoice_id?: string;
+    invoice_number?: string;
+    order_item_id: string;
+    owner_name?: string;
+    pic_name?: string | null;
+    product_name?: string;
+    quantity: number;
+    status: string;
+  }>;
+}
+
+export const hajiDakhiliApi = {
+  getDashboard: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<{ success: boolean; data: HajiDakhiliDashboardData }>('/haji-dakhili/dashboard', { params }),
+  listInvoices: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: unknown[]; pagination?: { total: number; page: number; limit: number; totalPages: number } }>('/haji-dakhili/invoices', { params }),
+  getInvoice: (id: string) => api.get<{ success: boolean; data: unknown }>(`/haji-dakhili/invoices/${id}`),
+  updateOrderItemProgress: (orderItemId: string, body: { haji_dakhili_status: 'pending' | 'in_progress' | 'completed' }) =>
+    api.patch(`/haji-dakhili/order-items/${orderItemId}/progress`, body),
+  uploadHajiDakhiliDocument: (orderItemId: string, formData: FormData) =>
+    api.post(`/haji-dakhili/order-items/${orderItemId}/haji-dakhili-document`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+};
+
 // Minimal types for ticket dashboard (invoice-based)
 export interface TicketDashboardData {
   total_invoices: number;
@@ -580,6 +612,9 @@ export const invoicesApi = {
   /** Unduh dokumen siskopatuh (setelah divisi upload, status selesai) */
   getSiskopatuhFile: (invoiceId: string, orderItemId: string) =>
     api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/siskopatuh-file`, { responseType: 'blob' }),
+  /** Unduh dokumen Haji Dakhili (setelah divisi upload, status selesai) */
+  getHajiDakhiliFile: (invoiceId: string, orderItemId: string) =>
+    api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/haji-dakhili-file`, { responseType: 'blob' }),
   /** Unduh file manifest jamaah via API (sama seperti invoice/visa/tiket) */
   getManifestFile: (invoiceId: string, orderItemId: string) => api.get(`/invoices/${invoiceId}/order-items/${orderItemId}/manifest-file`, { responseType: 'blob' }),
   allocateBalance: (id: string, body: { amount: number }) => api.post(`/invoices/${id}/allocate-balance`, body),
@@ -1283,7 +1318,7 @@ export const ownersApi = {
 
 /** Item draft order dari AI chat (untuk "Isi ke Form Order"). */
 export interface AiChatOrderDraftItem {
-  type: 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'handling' | 'package';
+  type: 'hotel' | 'visa' | 'ticket' | 'bus' | 'siskopatuh' | 'haji_dakhili' | 'handling' | 'package';
   product_id: string;
   product_name: string;
   quantity: number;

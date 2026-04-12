@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Receipt, Download, Check, X, Unlock, Eye, FileText, ChevronLeft, ChevronRight,
-  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon, ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive, Bus
+  CreditCard, DollarSign, Package, Wallet, Plus, Edit, Trash2, FileSpreadsheet, LayoutGrid, ExternalLink, Upload, Link as LinkIcon,   ClipboardList, Send, Pencil, Plane, Clock, CheckCircle, Building2, QrCode, ArrowRight, Archive, Bus, Landmark
 } from 'lucide-react';
 import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
@@ -106,12 +106,15 @@ function splitBankAccountsForDualPayment(list: BankAccountItem[]) {
   return { nabiela, others, isDual: nabiela.length > 0 && others.length > 0 };
 }
 
-/** Bagi sisa pembayaran: bagian siskopatuh mengacu subtotal item siskopatuh (maks. sisa tagihan). */
+/** Bagi sisa pembayaran: bagian Nabiela mengacu subtotal item Siskopatuh + Haji Dakhili (maks. sisa tagihan). */
 function suggestedDualPaymentAmounts(viewInv: any): { other: number; nabiela: number } {
   const rem = Math.round(parseFloat(viewInv?.remaining_amount || 0));
   const items = viewInv?.Order?.OrderItems || [];
   const siskSubtotal = items
-    .filter((i: any) => (i.type || i.product_type || '').toLowerCase() === 'siskopatuh')
+    .filter((i: any) => {
+      const t = (i.type || i.product_type || '').toLowerCase();
+      return t === 'siskopatuh' || t === 'haji_dakhili';
+    })
     .reduce((s: number, i: any) => s + (parseFloat(i.subtotal) || 0), 0);
   const nabiela = Math.min(Math.round(siskSubtotal), rem);
   const other = Math.max(0, rem - nabiela);
@@ -443,7 +446,7 @@ const OrdersInvoicesPage: React.FC = () => {
   const [publishDraftModalInv, setPublishDraftModalInv] = useState<any | null>(null);
   const [publishDraftPicName, setPublishDraftPicName] = useState('');
   const [uploadDocInvoice, setUploadDocInvoice] = useState<any | null>(null);
-  const [uploadDocTab, setUploadDocTab] = useState<'hotel' | 'visa' | 'ticket' | 'siskopatuh'>('hotel');
+  const [uploadDocTab, setUploadDocTab] = useState<'hotel' | 'visa' | 'ticket' | 'siskopatuh' | 'haji_dakhili'>('hotel');
   const [uploadDocLoading, setUploadDocLoading] = useState(false);
 
   const isAdminPusat = user?.role === 'admin_pusat';
@@ -491,7 +494,7 @@ const OrdersInvoicesPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await branchesApi.list({ limit: 500, page: 1 });
+        const res = await branchesApi.list({ limit: 500, page: 1, include_inactive: 'true' });
         if (!cancelled && res.data.success) setExportListPdfModalBranches((res.data.data || []) as { id: string; code: string; name: string }[]);
       } catch {
         if (!cancelled) setExportListPdfModalBranches([]);
@@ -632,10 +635,12 @@ const OrdersInvoicesPage: React.FC = () => {
         const hasVisa = items.some((i: any) => (i.type || i.product_type) === 'visa');
         const hasTicket = items.some((i: any) => (i.type || i.product_type) === 'ticket');
         const hasSiskopatuh = items.some((i: any) => (i.type || i.product_type) === 'siskopatuh');
+        const hasHajiDakhili = items.some((i: any) => (i.type || i.product_type) === 'haji_dakhili');
         if (hasHotel) setUploadDocTab('hotel');
         else if (hasVisa) setUploadDocTab('visa');
         else if (hasTicket) setUploadDocTab('ticket');
         else if (hasSiskopatuh) setUploadDocTab('siskopatuh');
+        else if (hasHajiDakhili) setUploadDocTab('haji_dakhili');
       }
     } catch {
       showToast('Gagal memuat data order', 'error');
@@ -1305,14 +1310,16 @@ const OrdersInvoicesPage: React.FC = () => {
   };
 
   /** Unduh dokumen terbit (tiket/visa) via API — file di-stream dari server, mengatasi "file not available" */
-  const downloadIssuedDoc = async (invoiceId: string, orderItemId: string, type: 'ticket' | 'visa' | 'siskopatuh') => {
+  const downloadIssuedDoc = async (invoiceId: string, orderItemId: string, type: 'ticket' | 'visa' | 'siskopatuh' | 'haji_dakhili') => {
     try {
       const res =
         type === 'ticket'
           ? await invoicesApi.getTicketFile(invoiceId, orderItemId)
           : type === 'visa'
             ? await invoicesApi.getVisaFile(invoiceId, orderItemId)
-            : await invoicesApi.getSiskopatuhFile(invoiceId, orderItemId);
+            : type === 'haji_dakhili'
+              ? await invoicesApi.getHajiDakhiliFile(invoiceId, orderItemId)
+              : await invoicesApi.getSiskopatuhFile(invoiceId, orderItemId);
       const blob = res.data as Blob;
       const disp = (res.headers && (res.headers['content-disposition'] || res.headers['Content-Disposition'])) || '';
       const m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"'\s;]+)|filename=["']?([^"'\s;]+)/i);
@@ -2685,13 +2692,14 @@ const OrdersInvoicesPage: React.FC = () => {
               const visaItems = items.filter((i: any) => (i.type || i.product_type) === 'visa');
               const ticketItems = items.filter((i: any) => (i.type || i.product_type) === 'ticket');
               const siskopatuhItems = items.filter((i: any) => (i.type || i.product_type) === 'siskopatuh');
+              const hajiDakhiliItems = items.filter((i: any) => (i.type || i.product_type) === 'haji_dakhili');
               const hasAny =
-                hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0 || siskopatuhItems.length > 0;
+                hotelItems.length > 0 || visaItems.length > 0 || ticketItems.length > 0 || siskopatuhItems.length > 0 || hajiDakhiliItems.length > 0;
               if (!hasAny) {
                 return (
                   <div className="p-6">
                     <p className="text-slate-600 text-sm">
-                      Order ini tidak memiliki item hotel, visa, tiket, atau siskopatuh. Tidak ada dokumen yang perlu diupload.
+                      Order ini tidak memiliki item hotel, visa, tiket, siskopatuh, atau Haji Dakhili. Tidak ada dokumen yang perlu diupload.
                     </p>
                   </div>
                 );
@@ -2708,12 +2716,15 @@ const OrdersInvoicesPage: React.FC = () => {
                 },
                 [] as HotelUploadGroup[]
               );
-              const tabs: { id: 'hotel' | 'visa' | 'ticket' | 'siskopatuh'; label: string; icon: React.ReactNode; count: number }[] = [
+              const tabs: { id: 'hotel' | 'visa' | 'ticket' | 'siskopatuh' | 'haji_dakhili'; label: string; icon: React.ReactNode; count: number }[] = [
                 ...(hotelByProduct.length > 0 ? [{ id: 'hotel' as const, label: 'Hotel', icon: <Package className="w-4 h-4" />, count: hotelByProduct.length }] : []),
                 ...(visaItems.length > 0 ? [{ id: 'visa' as const, label: 'Visa', icon: <FileText className="w-4 h-4" />, count: visaItems.length }] : []),
                 ...(ticketItems.length > 0 ? [{ id: 'ticket' as const, label: 'Tiket', icon: <Plane className="w-4 h-4" />, count: ticketItems.length }] : []),
                 ...(siskopatuhItems.length > 0
                   ? [{ id: 'siskopatuh' as const, label: 'Siskopatuh', icon: <FileText className="w-4 h-4 text-violet-600" />, count: siskopatuhItems.length }]
+                  : []),
+                ...(hajiDakhiliItems.length > 0
+                  ? [{ id: 'haji_dakhili' as const, label: 'Haji Dakhili', icon: <Landmark className="w-4 h-4 text-teal-600" />, count: hajiDakhiliItems.length }]
                   : []),
               ];
               const activeTab = tabs.some((t) => t.id === uploadDocTab) ? uploadDocTab : (tabs[0]?.id ?? 'hotel');
@@ -3055,7 +3066,85 @@ const OrdersInvoicesPage: React.FC = () => {
                                       setUploadingJamaahItemId(item.id);
                                       try {
                                         await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
-                                        showToast('Dokumen siskopatuh berhasil diupload', 'success');
+                                        showToast('Dokumen Siskopatuh berhasil diupload', 'success');
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal upload', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }
+                                    e.target.value = '';
+                                  }} disabled={!!uploadingJamaahItemId} />
+                                </label>
+                                <div className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">atau Link Google Drive</span>
+                                  <div className="flex gap-2 flex-wrap">
+                                    <Input type="url" placeholder="https://drive.google.com/..." value={jamaahLinkInput[item.id] || ''} onChange={(e) => setJamaahLinkInput((p) => ({ ...p, [item.id]: e.target.value }))} className="flex-1 min-w-[200px]" disabled={!!uploadingJamaahItemId} />
+                                    <Button size="sm" variant="outline" onClick={async () => {
+                                      if (!uploadDocInvoice?.order_id || !(jamaahLinkInput[item.id] || '').trim()) return;
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, null, jamaahLinkInput[item.id] || '');
+                                        showToast('Link berhasil disimpan', 'success');
+                                        setJamaahLinkInput((p) => ({ ...p, [item.id]: '' }));
+                                        const res = await invoicesApi.getById(uploadDocInvoice.id);
+                                        if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
+                                      } catch (err: any) {
+                                        showToast(err.response?.data?.message || 'Gagal simpan link', 'error');
+                                      } finally {
+                                        setUploadingJamaahItemId(null);
+                                      }
+                                    }} disabled={!!uploadingJamaahItemId || !(jamaahLinkInput[item.id] || '').trim()}>
+                                      {uploadingJamaahItemId === item.id ? 'Mengunggah…' : 'Simpan link'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'haji_dakhili' && (
+                      <div className="space-y-4">
+                        <p className="text-sm text-slate-600">
+                          Upload dokumen Haji Dakhili (ZIP) atau masukkan link Google Drive — sama seperti visa/tiket.
+                        </p>
+                        {hajiDakhiliItems.map((item: any) => {
+                          const hasUploaded = item.jamaah_data_type && item.jamaah_data_value;
+                          return (
+                            <div key={item.id} className="rounded-xl border border-slate-200 bg-teal-50/40 p-4 space-y-3">
+                              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                <Landmark className="w-4 h-4 text-teal-600" /> {item.Product?.name || item.product_name || 'Haji Dakhili'}
+                              </h3>
+                              {hasUploaded && (
+                                <div className="rounded-lg bg-white/80 border border-teal-200/60 p-3">
+                                  <p className="text-xs font-medium text-slate-600 mb-1.5">Dokumen terunggah</p>
+                                  {item.jamaah_data_type === 'link' ? (
+                                    <a href={item.jamaah_data_value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline inline-flex items-center gap-1.5">
+                                      <LinkIcon className="w-4 h-4" /> Buka link
+                                    </a>
+                                  ) : uploadDocInvoice?.order_id ? (
+                                    <Button type="button" size="sm" variant="secondary" disabled={downloadingJamaahItemId === item.id} onClick={() => downloadJamaahFile(uploadDocInvoice.order_id, item.id, item.jamaah_data_value)} className="inline-flex items-center gap-1.5">
+                                      {downloadingJamaahItemId === item.id ? 'Mengunduh…' : <><Download className="w-4 h-4" /> Unduh file</>}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">File tersimpan</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-3">
+                                <label className="flex flex-col gap-1.5">
+                                  <span className="text-xs font-medium text-slate-600">{hasUploaded ? 'Upload ulang' : 'File ZIP'}</span>
+                                  <input type="file" accept=".zip" className="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-teal-50 file:text-teal-800" onChange={async (e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f && uploadDocInvoice?.order_id) {
+                                      setUploadingJamaahItemId(item.id);
+                                      try {
+                                        await handleUploadJamaahData(uploadDocInvoice.order_id, item.id, f, '');
+                                        showToast('Dokumen Haji Dakhili berhasil diupload', 'success');
                                         const res = await invoicesApi.getById(uploadDocInvoice.id);
                                         if (res.data?.success && res.data?.data) setUploadDocInvoice(res.data.data);
                                       } catch (err: any) {
@@ -3799,7 +3888,7 @@ const OrdersInvoicesPage: React.FC = () => {
                               const route = meta.route_type ? String(meta.route_type) : '';
                               return [trip, tgl && `Tgl ${tgl}`, route && `Rute ${route}`].filter(Boolean).join(' · ');
                             }
-                            if (t === 'siskopatuh') {
+                            if (t === 'siskopatuh' || t === 'haji_dakhili') {
                               return meta.service_date ? `Tanggal layanan: ${formatDate(meta.service_date)}` : '';
                             }
                             return '';
@@ -3838,7 +3927,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {orderItems.map((item: any, idx: number) => {
                                       const name = item.Product?.name || item.product_name || `${item.type || 'Item'} ${idx + 1}`;
                                       const typeKey = (item.type || item.product_type) as string;
-                                      const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', siskopatuh: 'Siskopatuh', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
+                                      const typeLabel = { hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', siskopatuh: 'Siskopatuh', haji_dakhili: 'Haji Dakhili', handling: 'Handling', package: 'Paket' }[typeKey] || typeKey || '-';
                                       const desc = item._mergedDesc != null ? item._mergedDesc : getItemDesc(item);
                                       const isMerged = !!item._merged;
                                       const qty = isMerged ? (item._mergedQty ?? item.quantity ?? 1) : (item.quantity != null ? item.quantity : 1);
@@ -4426,12 +4515,12 @@ const OrdersInvoicesPage: React.FC = () => {
 
               {detailTab === 'progress' && (
                 <div className="space-y-6">
-                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus, siskopatuh). Diupdate oleh divisi terkait.</p>
+                  <p className="text-sm text-slate-600">Status pekerjaan per produk (visa, tiket, hotel, bus, siskopatuh, Haji Dakhili). Diupdate oleh divisi terkait.</p>
                   {(() => {
                     const order = viewInvoice?.Order;
                     const items = (order?.OrderItems || []).filter((i: any) => {
                       const t = (i.type || i.product_type);
-                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus' || t === 'siskopatuh';
+                      return t === 'visa' || t === 'ticket' || t === 'hotel' || t === 'bus' || t === 'siskopatuh' || t === 'haji_dakhili';
                     });
                     const hasVisaItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'visa');
                     const hasBusItems = (order?.OrderItems || []).some((i: any) => (i.type || i.product_type) === 'bus');
@@ -4444,7 +4533,7 @@ const OrdersInvoicesPage: React.FC = () => {
                           <div className="p-4 rounded-2xl bg-slate-100 w-fit mx-auto mb-4">
                             <ClipboardList className="w-12 h-12 text-slate-400" />
                           </div>
-                          <p className="text-slate-700 font-semibold">Tidak ada item visa / tiket / hotel / bus / siskopatuh</p>
+                          <p className="text-slate-700 font-semibold">Tidak ada item visa / tiket / hotel / bus / siskopatuh / Haji Dakhili</p>
                           <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Invoice ini tidak memiliki item dengan status pekerjaan.</p>
                         </div>
                       );
@@ -4460,7 +4549,7 @@ const OrdersInvoicesPage: React.FC = () => {
                         const productLabel =
                           item.Product?.name ||
                           (item as any).product_name ||
-                          (t === 'visa' ? 'Visa' : t === 'ticket' ? 'Tiket' : t === 'hotel' ? 'Hotel' : t === 'siskopatuh' ? 'Siskopatuh' : 'Bus');
+                          (t === 'visa' ? 'Visa' : t === 'ticket' ? 'Tiket' : t === 'hotel' ? 'Hotel' : t === 'siskopatuh' ? 'Siskopatuh' : t === 'haji_dakhili' ? 'Haji Dakhili' : 'Bus');
                         groupsMap.set(key, { key, productLabel, type: t, items: [] });
                       }
                       groupsMap.get(key)!.items.push(item);
@@ -4471,7 +4560,7 @@ const OrdersInvoicesPage: React.FC = () => {
                     const groups = Array.from(groupsMap.values());
                     groups.sort((a, b) => {
                       const sortIdx = (g: typeof a) => {
-                        if (g.type === 'bus_include') return 7;
+                        if (g.type === 'bus_include') return 9;
                         if (g.type === 'hotel' && g.items.length > 0) return getHotelLocationFromItem(g.items[0]) === 'madinah' ? 0 : 1;
                         return getOrderItemSortIndex(g.type, undefined);
                       };
@@ -4516,13 +4605,17 @@ const OrdersInvoicesPage: React.FC = () => {
                           const isHotel = group.type === 'hotel';
                           const isBus = group.type === 'bus';
                           const isSiskopatuh = group.type === 'siskopatuh';
+                          const isHajiDakhili = group.type === 'haji_dakhili';
+                          const isSiskoOrHaji = isSiskopatuh || isHajiDakhili;
                           const skRaw =
-                            isSiskopatuh && first.meta && typeof first.meta === 'object'
-                              ? String((first.meta as { siskopatuh_status?: string }).siskopatuh_status || 'pending')
+                            isSiskoOrHaji && first.meta && typeof first.meta === 'object'
+                              ? isHajiDakhili
+                                ? String((first.meta as { haji_dakhili_status?: string }).haji_dakhili_status || 'pending')
+                                : String((first.meta as { siskopatuh_status?: string }).siskopatuh_status || 'pending')
                               : '';
                           const progress = isVisa ? first.VisaProgress : isTicket ? first.TicketProgress : isHotel ? first.HotelProgress : isBus ? first.BusProgress : null;
                           const statusLabels = isVisa ? VISA_STATUS_LABELS : isTicket ? TICKET_STATUS_LABELS : isHotel ? HOTEL_STATUS_LABELS : BUS_TICKET_LABELS;
-                          const status = isSiskopatuh
+                          const status = isSiskoOrHaji
                             ? labelHandlingSiskopatuhProgress(skRaw)
                             : isBus
                               ? labelBusItemProgress(first || {})
@@ -4535,6 +4628,8 @@ const OrdersInvoicesPage: React.FC = () => {
                           const badgeVariant = isUnifiedSelesai(status) ? 'success' : 'info';
                           const typeIcon = isSiskopatuh ? (
                             <FileText className="w-4 h-4" />
+                          ) : isHajiDakhili ? (
+                            <Landmark className="w-4 h-4" />
                           ) : isVisa ? (
                             <FileText className="w-4 h-4" />
                           ) : isTicket ? (
@@ -4546,6 +4641,8 @@ const OrdersInvoicesPage: React.FC = () => {
                           );
                           const typeBg = isSiskopatuh
                             ? 'bg-violet-100 text-violet-600'
+                            : isHajiDakhili
+                              ? 'bg-teal-100 text-teal-700'
                             : isVisa
                               ? 'bg-sky-100 text-sky-600'
                               : isTicket
@@ -4556,6 +4653,10 @@ const OrdersInvoicesPage: React.FC = () => {
                           const siskopatuhFileUrl =
                             isSiskopatuh && first.meta && typeof first.meta === 'object'
                               ? String((first.meta as { siskopatuh_file_url?: string }).siskopatuh_file_url || '').trim()
+                              : '';
+                          const hajiDakhiliFileUrl =
+                            isHajiDakhili && first.meta && typeof first.meta === 'object'
+                              ? String((first.meta as { haji_dakhili_file_url?: string }).haji_dakhili_file_url || '').trim()
                               : '';
                           return (
                             <div key={group.key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -4603,7 +4704,7 @@ const OrdersInvoicesPage: React.FC = () => {
                                         <Download className="w-3.5 h-3.5" /> Manifest
                                       </button>
                                     )}
-                                    {!isHotel && !isBus && !isSiskopatuh && (progress?.visa_file_url || progress?.ticket_file_url) && viewInvoice?.id && first?.id && (
+                                    {!isHotel && !isBus && !isSiskoOrHaji && (progress?.visa_file_url || progress?.ticket_file_url) && viewInvoice?.id && first?.id && (
                                       <button type="button" onClick={() => downloadIssuedDoc(viewInvoice.id, first.id, isVisa ? 'visa' : 'ticket')} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0">
                                         <Download className="w-3.5 h-3.5" /> Dokumen terbit
                                       </button>
@@ -4611,6 +4712,11 @@ const OrdersInvoicesPage: React.FC = () => {
                                     {isSiskopatuh && siskopatuhFileUrl && viewInvoice?.id && first?.id && (
                                       <button type="button" onClick={() => downloadIssuedDoc(viewInvoice.id, first.id, 'siskopatuh')} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0">
                                         <Download className="w-3.5 h-3.5" /> Dokumen Siskopatuh
+                                      </button>
+                                    )}
+                                    {isHajiDakhili && hajiDakhiliFileUrl && viewInvoice?.id && first?.id && (
+                                      <button type="button" onClick={() => downloadIssuedDoc(viewInvoice.id, first.id, 'haji_dakhili')} className="text-[#0D1A63] hover:underline inline-flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0">
+                                        <Download className="w-3.5 h-3.5" /> Dokumen Haji Dakhili
                                       </button>
                                     )}
                                   </div>
@@ -4621,6 +4727,12 @@ const OrdersInvoicesPage: React.FC = () => {
                                     <p className="text-xs text-slate-500">
                                       Dokumen diunggah:{' '}
                                       {new Date((first.meta as { siskopatuh_file_uploaded_at: string }).siskopatuh_file_uploaded_at).toLocaleString('id-ID')}
+                                    </p>
+                                  )}
+                                  {isHajiDakhili && first.meta && typeof first.meta === 'object' && (first.meta as { haji_dakhili_file_uploaded_at?: string }).haji_dakhili_file_uploaded_at && (
+                                    <p className="text-xs text-slate-500">
+                                      Dokumen diunggah:{' '}
+                                      {new Date((first.meta as { haji_dakhili_file_uploaded_at: string }).haji_dakhili_file_uploaded_at).toLocaleString('id-ID')}
                                     </p>
                                   )}
                                 </div>

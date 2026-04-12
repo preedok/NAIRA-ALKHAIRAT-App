@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Hotel, FileText, Plane, Bus, Package, ShoppingCart } from 'lucide-react';
+import { Hotel, FileText, Plane, Bus, Package, ShoppingCart, Landmark } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useOrderDraft } from '../../../contexts/OrderDraftContext';
 import Button from '../../../components/common/Button';
@@ -9,6 +9,7 @@ import VisaPage from './VisaPage';
 import TicketsPage from './TicketsPage';
 import BusPage from './BusPage';
 import SiskopatuhPage from './SiskopatuhPage';
+import HajiDakhiliPage from './HajiDakhiliPage';
 import PackagesPage from './PackagesPage';
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'tickets', label: 'Tiket', icon: Plane },
   { id: 'bus', label: 'Bus', icon: Bus },
   { id: 'siskopatuh', label: 'Siskopatuh', icon: FileText },
+  { id: 'haji-dakhili', label: 'Haji Dakhili', icon: Landmark },
   { id: 'packages', label: 'Paket', icon: Package }
 ] as const;
 
@@ -92,6 +94,7 @@ const ProductsPage: React.FC = () => {
         {tab === 'tickets' && <TicketsPage embedInProducts />}
         {tab === 'bus' && <BusPage embedInProducts />}
         {tab === 'siskopatuh' && <SiskopatuhPage />}
+        {tab === 'haji-dakhili' && <HajiDakhiliPage />}
         {tab === 'packages' && <PackagesPage />}
       </div>
     </div>

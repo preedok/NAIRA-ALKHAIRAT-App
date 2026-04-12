@@ -19,6 +19,7 @@
  *   - visa-doc:      VISA_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
  *   - ticket-doc:    TIKET_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
  *   - siskopatuh-doc: SISKOPATUH_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
+ *   - haji-dakhili-doc: HAJI_DAKHILI_ORD-XXXX-XXXXX_{orderItemId6}_YYYYMMDD_HHmmss.{ext}
  *   - manifest:      MANIFEST_VISA_ORD-XXXX-XXXXX_YYYYMMDD.{ext} atau MANIFEST_TIKET_...
  */
 
@@ -44,7 +45,8 @@ const SUBDIRS = {
   REFUND_PROOFS: 'refund-proofs',
   PURCHASE_PROOFS: 'purchase-proofs',
   BUS_TICKET_DOCS: 'bus-ticket-docs',
-  SISKOPATUH_DOCS: 'siskopatuh-docs'
+  SISKOPATUH_DOCS: 'siskopatuh-docs',
+  HAJI_DAKHILI_DOCS: 'haji-dakhili-docs'
 };
 
 function getDir(subdir) {
@@ -145,6 +147,15 @@ function siskopatuhDocFilename(orderNumber, orderItemId, originalName) {
   return `SISKOPATUH_${ord}_${id6}_${date}_${time}${ext}`;
 }
 
+/** Dokumen Haji Dakhili selesai (divisi upload) */
+function hajiDakhiliDocFilename(orderNumber, orderItemId, originalName) {
+  const { date, time } = dateTimeForFilename();
+  const ord = (orderNumber || 'ORD').replace(/[^a-zA-Z0-9-]/g, '_');
+  const id6 = (orderItemId || '').toString().slice(-6);
+  const ext = safeExt(originalName);
+  return `HAJI_DAKHILI_${ord}_${id6}_${date}_${time}${ext}`;
+}
+
 /**
  * Nama file dokumen info hotel (auto-generate): HOTEL_{invoiceNumber}_{orderItemId6}_YYYYMMDD_HHmmss.pdf
  */
@@ -210,6 +221,7 @@ module.exports = {
   visaDocFilename,
   ticketDocFilename,
   siskopatuhDocFilename,
+  hajiDakhiliDocFilename,
   hotelDocFilename,
   jamaahDataFilename,
   invoiceFilename,

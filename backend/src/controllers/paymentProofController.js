@@ -230,7 +230,7 @@ const getFile = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findByPk(proof.invoice_id, { attributes: ['owner_id'] });
   const allowedRoles = [
     'super_admin', 'admin_pusat', 'invoice_koordinator', 'invoice_saudi', 'role_accounting',
-    'role_hotel', 'role_bus', 'handling', 'role_siskopatuh', 'tiket_koordinator', 'visa_koordinator'
+    'role_hotel', 'role_bus', 'handling', 'role_siskopatuh', 'role_haji_dakhili', 'tiket_koordinator', 'visa_koordinator'
   ];
   const canAccess = invoice && (
     invoice.owner_id === req.user.id ||

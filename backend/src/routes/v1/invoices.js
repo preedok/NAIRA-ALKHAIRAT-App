@@ -22,6 +22,7 @@ router.get('/:id/payment-proofs/:proofId/file', paymentProofController.getFile);
 router.get('/:id/order-items/:orderItemId/ticket-file', invoiceController.getTicketFile);
 router.get('/:id/order-items/:orderItemId/visa-file', invoiceController.getVisaFile);
 router.get('/:id/order-items/:orderItemId/siskopatuh-file', invoiceController.getSiskopatuhFile);
+router.get('/:id/order-items/:orderItemId/haji-dakhili-file', invoiceController.getHajiDakhiliFile);
 router.get('/:id/order-items/:orderItemId/manifest-file', invoiceController.getManifestFile);
 router.get('/:id', invoiceController.getById);
 router.patch('/:id/unblock', requireRole(ROLES.INVOICE_KOORDINATOR, ROLES.ADMIN_PUSAT, ROLES.SUPER_ADMIN), invoiceController.unblock);

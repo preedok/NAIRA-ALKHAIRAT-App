@@ -55,7 +55,7 @@ const formatDateShort = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day
 const formatDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 const paymentTypeLabel = (t) => (t === 'dp' ? 'DP' : t === 'partial' ? 'Cicilan' : t === 'full' ? 'Lunas' : t || '-');
 const verifiedStatusLabel = (s) => (s === 'verified' ? 'Diverifikasi' : s === 'rejected' ? 'Ditolak' : 'Menunggu');
-const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket', siskopatuh: 'Siskopatuh' }[String(t).toLowerCase()] || t);
+const typeLabel = (t) => ({ hotel: 'Hotel', visa: 'Visa', ticket: 'Tiket', bus: 'Bus', handling: 'Handling', package: 'Paket', siskopatuh: 'Siskopatuh', haji_dakhili: 'Haji Dakhili' }[String(t).toLowerCase()] || t);
 /** Kode singkat kolom Tipe di PDF (3 huruf) */
 const typeCode = (t) => {
   const k = String(t || '').toLowerCase();
@@ -66,7 +66,8 @@ const typeCode = (t) => {
     bus: 'BUS',
     handling: 'HND',
     package: 'PKG',
-    siskopatuh: 'SKP'
+    siskopatuh: 'SKP',
+    haji_dakhili: 'HDK'
   };
   if (map[k]) return map[k];
   if (!k) return '—';

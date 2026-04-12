@@ -10,7 +10,7 @@ const { INVOICE_STATUS } = require('../constants');
 /** Atribut PaymentProof tanpa kolom opsional (proof_file_name, proof_file_content_type, proof_file_data) agar kompatibel dengan DB lama */
 const PAYMENT_PROOF_ATTRS_SAFE = ['id', 'invoice_id', 'payment_type', 'amount', 'payment_currency', 'amount_original', 'amount_idr', 'amount_sar', 'bank_id', 'bank_name', 'account_number', 'sender_account_name', 'sender_account_number', 'recipient_bank_account_id', 'transfer_date', 'proof_file_url', 'uploaded_by', 'verified_by', 'verified_at', 'verified_status', 'notes', 'issued_by', 'payment_location', 'reconciled_at', 'reconciled_by', 'created_at', 'updated_at'];
 
-const FIN_REPORT_PRODUCT_KEYS = ['hotel', 'visa', 'ticket', 'bus', 'siskopatuh', 'handling'];
+const FIN_REPORT_PRODUCT_KEYS = ['hotel', 'visa', 'ticket', 'bus', 'siskopatuh', 'haji_dakhili', 'handling'];
 
 function finReportBucketType(t) {
   const x = String(t || 'handling').toLowerCase();
@@ -1406,7 +1406,7 @@ function emptyFinancialReportPayload(startDate, endDate) {
     by_wilayah: [],
     by_provinsi: [],
     by_owner: [],
-    by_product_type: [{ type: 'hotel', revenue: 0 }, { type: 'visa', revenue: 0 }, { type: 'ticket', revenue: 0 }, { type: 'bus', revenue: 0 }, { type: 'siskopatuh', revenue: 0 }, { type: 'handling', revenue: 0 }],
+    by_product_type: [{ type: 'hotel', revenue: 0 }, { type: 'visa', revenue: 0 }, { type: 'ticket', revenue: 0 }, { type: 'bus', revenue: 0 }, { type: 'siskopatuh', revenue: 0 }, { type: 'haji_dakhili', revenue: 0 }, { type: 'handling', revenue: 0 }],
     by_period: [],
     invoice_count: 0,
     invoices: [],
@@ -1525,7 +1525,7 @@ const getFinancialReport = asyncHandler(async (req, res) => {
   const byWilayah = {};
   const byProvinsi = {};
   const byOwner = {};
-  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
+  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, haji_dakhili: 0, handling: 0 };
   const byPeriod = {};
   const invoicesDetail = [];
   const invoiceRowsByProduct = Object.fromEntries(FIN_REPORT_PRODUCT_KEYS.map((k) => [k, new Map()]));
@@ -1845,7 +1845,7 @@ const exportFinancialExcel = asyncHandler(async (req, res) => {
   const byWilayah = {};
   const byProvinsi = {};
   const byOwner = {};
-  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
+  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, haji_dakhili: 0, handling: 0 };
   invoices.forEach(inv => {
     const paid = parseFloat(inv.paid_amount || 0);
     totalRevenue += paid;
@@ -2030,7 +2030,7 @@ const exportFinancialPdf = asyncHandler(async (req, res) => {
   const byWilayah = {};
   const byProvinsi = {};
   const byOwner = {};
-  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
+  const byProductType = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, haji_dakhili: 0, handling: 0 };
   invoices.forEach(inv => {
     const paid = parseFloat(inv.paid_amount || 0);
     totalRevenue += paid;
@@ -2592,7 +2592,7 @@ const getDashboardKpi = asyncHandler(async (req, res) => {
   let totalRevenue = 0;
   let totalReceivable = 0;
   const byWilayah = {};
-  const byProduct = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, handling: 0 };
+  const byProduct = { hotel: 0, visa: 0, ticket: 0, bus: 0, siskopatuh: 0, haji_dakhili: 0, handling: 0 };
 
   invoices.forEach(inv => {
     const j = inv.toJSON();

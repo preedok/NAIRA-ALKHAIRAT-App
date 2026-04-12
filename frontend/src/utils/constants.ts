@@ -245,7 +245,7 @@ export const HOTEL_LOCATION_LABELS = {
 };
 
 /** Urutan tampilan item order / progress: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket. */
-export const ORDER_ITEM_DISPLAY_ORDER = ['hotel_madinah', 'hotel_makkah', 'visa', 'ticket', 'bus', 'handling', 'package', 'bus_include'] as const;
+export const ORDER_ITEM_DISPLAY_ORDER = ['hotel_madinah', 'hotel_makkah', 'visa', 'ticket', 'bus', 'handling', 'siskopatuh', 'haji_dakhili', 'package', 'bus_include'] as const;
 
 /** Index untuk sort: semakin kecil semakin dulu. Hotel Madinah=0, Hotel Mekkah=1, Visa=2, Tiket=3, Bus=4, ... */
 export function getOrderItemSortIndex(type: string, hotelLocation?: string | null): number {

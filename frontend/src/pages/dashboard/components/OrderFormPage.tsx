@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, Trash2, ArrowLeft, Hotel, Plane, FileText,
   Bus, Package, Users, Utensils, X, ChevronRight,
-  Star, CreditCard, Building2, Loader2, GripVertical
+  Star, CreditCard, Building2, Loader2, GripVertical, Landmark
 } from 'lucide-react';
 import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -26,6 +26,7 @@ const ITEM_TYPES = [
   { id:'ticket',   label:'Tiket',    Icon:Plane,    color:'#57534e' },
   { id:'bus',      label:'Bus',      Icon:Bus,      color:'#6b7280' },
   { id:'siskopatuh', label:'Siskopatuh', Icon:FileText, color:'#57534e' },
+  { id:'haji_dakhili', label:'Haji Dakhili', Icon:Landmark, color:'#0f766e' },
   { id:'handling', label:'Handling', Icon:Star,     color:'#78716c' },
   { id:'package',  label:'Paket',    Icon:Package,  color:'#64748b' },
 ] as const;
@@ -132,7 +133,7 @@ function getDisplayCurrency(type: ItemType, product?: ProductOption | null): Dis
   if (c === 'SAR' || c === 'USD' || c === 'IDR') return c as DisplayCurrency;
   if (type === 'hotel' || type === 'handling') return 'SAR';
   if (type === 'bus' || type === 'ticket') return 'IDR';
-  if (type === 'siskopatuh') return 'IDR';
+  if (type === 'siskopatuh' || type === 'haji_dakhili') return 'IDR';
   if (type === 'visa') return 'USD';
   return 'IDR';
 }
@@ -1514,8 +1515,8 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan (pulang pergi: keberangkatan & kepulangan; pergi saja: tanggal keberangkatan; pulang saja: tanggal kepulangan)','warning'); return; }
-    const siskopatuhWithoutDate=valid.filter(r=>r.type==='siskopatuh'&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
-    if(siskopatuhWithoutDate.length){ showToast('Item siskopatuh wajib isi tanggal layanan','warning'); return; }
+    const siskopatuhWithoutDate=valid.filter(r=>(r.type==='siskopatuh'||r.type==='haji_dakhili')&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
+    if(siskopatuhWithoutDate.length){ showToast('Item Siskopatuh / Haji Dakhili wajib isi tanggal layanan','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih kota terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk order ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki kota','warning'); return; }
@@ -1572,8 +1573,8 @@ const OrderFormPage: React.FC = () => {
       return !r.meta?.return_date;
     });
     if(ticketWithoutDates.length){ showToast('Item tiket wajib isi tanggal sesuai jenis perjalanan','warning'); return; }
-    const siskopatuhWithoutDateDraft=valid.filter(r=>r.type==='siskopatuh'&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
-    if(siskopatuhWithoutDateDraft.length){ showToast('Item siskopatuh wajib isi tanggal layanan','warning'); return; }
+    const siskopatuhWithoutDateDraft=valid.filter(r=>(r.type==='siskopatuh'||r.type==='haji_dakhili')&&!(r.meta?.service_date&&String(r.meta.service_date).trim()));
+    if(siskopatuhWithoutDateDraft.length){ showToast('Item Siskopatuh / Haji Dakhili wajib isi tanggal layanan','warning'); return; }
     if(!isEdit&&!isOwner&&!canPickOwner&&!branchId){ showToast('Pilih kota terlebih dahulu','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&!ownerSel){ showToast('Pilih owner untuk invoice ini','warning'); return; }
     if(canPickOwner&&ownerInputMode==='registered'&&ownerSel&&!bFromOwner){ showToast('Owner belum memiliki kota','warning'); return; }
@@ -2541,7 +2542,7 @@ const OrderFormPage: React.FC = () => {
                                   )}
                                 </div>
                               )}
-                              {row.type === 'siskopatuh' && (
+                              {(row.type === 'siskopatuh' || row.type === 'haji_dakhili') && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3">
                                   <div className="min-w-0 xl:col-span-4">
                                     <Input
@@ -2553,7 +2554,7 @@ const OrderFormPage: React.FC = () => {
                                           meta: { ...(row.meta || {}), service_date: e.target.value || undefined }
                                         })
                                       }
-                                      title="Untuk filter progress & referensi jadwal siskopatuh"
+                                      title="Untuk filter progress & referensi jadwal Siskopatuh / Haji Dakhili"
                                     />
                                   </div>
                                   <div className="min-w-0 xl:col-span-2">
