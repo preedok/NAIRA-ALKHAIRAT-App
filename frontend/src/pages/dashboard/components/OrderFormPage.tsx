@@ -1061,8 +1061,12 @@ const OrderFormPage: React.FC = () => {
         } else if(next.type==='package'){
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=toRowCurrency(packageUnitPriceIdr(prod),next);
           if (upd.product_id !== r.product_id) {
-            const pm = prod.meta as { includes?: string[]; hotel_makkah_id?: string; hotel_madinah_id?: string } | undefined;
-            const includes = Array.isArray(pm?.includes) ? pm.includes : [];
+            const pkgMeta = (prod.meta ?? {}) as {
+              includes?: string[];
+              hotel_makkah_id?: string;
+              hotel_madinah_id?: string;
+            };
+            const includes = Array.isArray(pkgMeta.includes) ? pkgMeta.includes : [];
             const package_include_flags: Record<string, boolean> = {};
             includes.forEach((k) => {
               package_include_flags[k] = true;
@@ -1070,8 +1074,8 @@ const OrderFormPage: React.FC = () => {
             next.meta = {
               ...(next.meta || {}),
               package_include_flags,
-              package_hotel_makkah_id: pm?.hotel_makkah_id || undefined,
-              package_hotel_madinah_id: pm?.hotel_madinah_id || undefined
+              package_hotel_makkah_id: pkgMeta.hotel_makkah_id || undefined,
+              package_hotel_madinah_id: pkgMeta.hotel_madinah_id || undefined
             };
           }
         } else {
@@ -2743,14 +2747,12 @@ const OrderFormPage: React.FC = () => {
                                 row.product_id &&
                                 (() => {
                                   const pkg = byType('package').find((p) => p.id === row.product_id);
-                                  const pm = pkg?.meta as
-                                    | {
-                                        includes?: string[];
-                                        hotel_makkah_id?: string;
-                                        hotel_madinah_id?: string;
-                                      }
-                                    | undefined;
-                                  const includes = Array.isArray(pm?.includes) ? pm.includes : [];
+                                  const pkgMeta = (pkg?.meta ?? {}) as {
+                                    includes?: string[];
+                                    hotel_makkah_id?: string;
+                                    hotel_madinah_id?: string;
+                                  };
+                                  const includes = Array.isArray(pkgMeta.includes) ? pkgMeta.includes : [];
                                   if (includes.length === 0) return null;
                                   const flags = (row.meta?.package_include_flags as Record<string, boolean> | undefined) ?? {};
                                   const setInclude = (key: string, on: boolean) => {
@@ -2764,9 +2766,9 @@ const OrderFormPage: React.FC = () => {
                                   const hotelLabel = (id?: string) =>
                                     products.find((p) => p.id === id)?.name ?? (id ? `Produk ${id.slice(0, 8)}…` : '—');
                                   const makId =
-                                    (row.meta?.package_hotel_makkah_id as string) || pm?.hotel_makkah_id || '';
+                                    (row.meta?.package_hotel_makkah_id as string) || pkgMeta.hotel_makkah_id || '';
                                   const madId =
-                                    (row.meta?.package_hotel_madinah_id as string) || pm?.hotel_madinah_id || '';
+                                    (row.meta?.package_hotel_madinah_id as string) || pkgMeta.hotel_madinah_id || '';
                                   return (
                                     <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
                                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Include paket</p>
@@ -2799,7 +2801,7 @@ const OrderFormPage: React.FC = () => {
                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             <div className="min-w-0">
                                               <p className="text-xs text-slate-500 mb-1">
-                                                Default Makkah: <span className="font-medium text-slate-800">{hotelLabel(pm?.hotel_makkah_id)}</span>
+                                                Default Makkah: <span className="font-medium text-slate-800">{hotelLabel(pkgMeta.hotel_makkah_id)}</span>
                                               </p>
                                               <Autocomplete
                                                 label="Hotel Makkah untuk order ini"
@@ -2816,7 +2818,7 @@ const OrderFormPage: React.FC = () => {
                                             <div className="min-w-0">
                                               <p className="text-xs text-slate-500 mb-1">
                                                 Default Madinah:{' '}
-                                                <span className="font-medium text-slate-800">{hotelLabel(pm?.hotel_madinah_id)}</span>
+                                                <span className="font-medium text-slate-800">{hotelLabel(pkgMeta.hotel_madinah_id)}</span>
                                               </p>
                                               <Autocomplete
                                                 label="Hotel Madinah untuk order ini"
