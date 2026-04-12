@@ -25,7 +25,7 @@ export const AUTOCOMPLETE_PILIH = {
   PILIH_PROVINSI: 'Pilih provinsi...',
   PILIH_CABANG: 'Pilih kota...',
   PILIH_OWNER: 'Pilih owner...',
-  PILIH_KABUPATEN: 'Pilih kabupaten/kota...',
+  PILIH_KABUPATEN: 'Pilih Kota...',
   PILIH_ALASAN: 'Pilih alasan (jika tolak)...',
   CARI: 'Cari...',
   TIDAK_ADA_HASIL: 'Tidak ada hasil'
