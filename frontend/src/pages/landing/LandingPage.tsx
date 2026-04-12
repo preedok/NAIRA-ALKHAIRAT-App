@@ -245,7 +245,7 @@ const STYLES = `
   .body-font    { font-family:'DM Sans',system-ui,sans-serif; }
 
   .l-grid-2  { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; }
-  .l-hero-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(340px,1.22fr); gap:clamp(32px,4vw,64px); align-items:stretch; }
+  .l-hero-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(340px,1.22fr); gap:clamp(32px,4vw,64px); align-items:start; }
   .l-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:40px; }
 
   .l-dot { width:8px; height:8px; border-radius:50%; cursor:pointer; border:none; transition:all .25s; }
@@ -513,18 +513,31 @@ const LandingPage: React.FC = () => {
         <div style={{ ...W, width: '100%', padding: 'clamp(48px,6vw,88px) 24px 28px', position: 'relative', zIndex: 1 }}>
           <div className="l-hero-grid">
             {/* Left */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="l-fu l-d0" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 8px', borderRadius: 100, background: C.navyFaint, border: `1px solid ${C.borderMd}`, width: 'fit-content', marginBottom: 24 }}>
                 <span style={{ background: C.navy, borderRadius: 100, padding: '2px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', color: 'white', textTransform: 'uppercase' }}>BARU</span>
                 <span style={{ fontSize: 12, color: C.navyMed, fontWeight: 500 }}>Dashboard mitra · Invoice & analitik real-time</span>
               </div>
 
-              <h1 className="l-fu l-d1 display-font" style={{ fontSize: 'clamp(32px,4.2vw,56px)', fontWeight: 700, lineHeight: 1.06, letterSpacing: '-.02em', margin: '0 0 18px', color: C.text }}>
-                Platform Terpercaya
-                <br />
-                <span style={{ color: C.navyMed }}>Haji &amp; Umroh</span>
-                <br />
-                <span style={{ fontSize: 'clamp(26px,3.2vw,44px)', fontWeight: 600, color: C.muted }}>untuk Seluruh Indonesia</span>
+              <h1
+                className="l-fu l-d1 display-font"
+                style={{
+                  fontSize: 'clamp(28px,3.6vw,48px)',
+                  fontWeight: 700,
+                  lineHeight: 1.15,
+                  letterSpacing: '-.02em',
+                  margin: '0 0 18px',
+                  color: C.text,
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'baseline',
+                  columnGap: '0.35em',
+                  rowGap: '0.12em',
+                }}
+              >
+                <span style={{ whiteSpace: 'nowrap' }}>Platform Terpercaya</span>
+                <span style={{ color: C.navyMed, whiteSpace: 'nowrap' }}>Haji &amp; Umroh</span>
+                <span style={{ fontSize: 'clamp(22px,2.8vw,38px)', fontWeight: 600, color: C.muted }}>untuk Seluruh Indonesia</span>
               </h1>
 
               <p className="l-fu l-d2" style={{ fontSize: 'clamp(15px,1.35vw,17px)', color: C.muted, lineHeight: 1.8, margin: '0 0 26px', maxWidth: 520 }}>
@@ -566,7 +579,7 @@ const LandingPage: React.FC = () => {
             </div>
 
             {/* Right: larger search card */}
-            <div className="l-fu l-d2 hero-search-wrap" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="l-fu l-d2 hero-search-wrap" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <SearchWidget searchData={searchData} onSearch={p => navigate(`/register?${new URLSearchParams(p)}`)} />
               <p style={{ fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 14 }}>Cari produk lalu lanjutkan ke pendaftaran mitra</p>
             </div>
