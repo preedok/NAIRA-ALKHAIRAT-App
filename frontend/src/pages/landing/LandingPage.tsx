@@ -4,7 +4,7 @@ import {
   Plane, Hotel, FileCheck, Ticket, Bus, Package,
   Shield, Headphones, Zap, Globe, ChevronRight, ChevronDown,
   Menu, X, ArrowRight, Star, MapPin, Building2, Users,
-  CheckCircle, Clock, Award, TrendingUp, MessageCircle,
+  CheckCircle, Award, TrendingUp, MessageCircle,
   Phone, Mail, Instagram, Twitter, Youtube, Sparkles,
   BarChart3, Lock, Layers, Navigation, Search, Calendar,
   UtensilsCrossed, PlaneTakeoff, Eye, Target, HeartHandshake,
@@ -110,13 +110,6 @@ const PACKAGE_TABS = [
   { id: 'all' as const, label: 'Semua' },
   { id: 'umrah' as const, label: 'Umrah' },
   { id: 'wisata' as const, label: 'Wisata halal' },
-];
-
-const HERO_VISUAL_TILES: { Icon: typeof Hotel; label: string; bg: string }[] = [
-  { Icon: Hotel, label: 'Hotel', bg: 'linear-gradient(145deg, #1e3a5f, #0D1A63)' },
-  { Icon: Plane, label: 'Tiket', bg: 'linear-gradient(145deg, #152a7a, #0c1838)' },
-  { Icon: FileCheck, label: 'Visa', bg: 'linear-gradient(145deg, #0D1A63, #243a63)' },
-  { Icon: Package, label: 'Paket', bg: 'linear-gradient(145deg, #1a2f52, #0D1A63)' },
 ];
 
 const STEPS = [
@@ -447,15 +440,10 @@ const STYLES = `
   .l-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   @media (max-width:520px) { .l-form-grid { grid-template-columns:1fr; } }
 
-  /* ─ Hero section bg ─────────────────────────────── */
+  /* ─ Hero section bg (polos, tanpa pola bintang) ─── */
   .l-hero-section {
-    background:#FAFAF7;
+    background:#F8F9FC;
     position:relative;
-  }
-  .l-hero-section::before {
-    content:''; position:absolute; inset:0;
-    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%231B4D3E' fill-opacity='0.028'%3E%3Cpath d='M30 5 L35 20 L50 20 L38 29 L42 44 L30 36 L18 44 L22 29 L10 20 L25 20 Z'/%3E%3C/g%3E%3C/svg%3E");
-    pointer-events:none;
   }
 
   /* ─ CTA section ─────────────────────────────────── */
@@ -477,17 +465,6 @@ const STYLES = `
   .l-embed-search-wrap .l-search-submit { margin-top:12px; }
   .l-embed-search-wrap .l-search-submit .l-btn-primary { padding:10px 16px; font-size:13px; }
 
-  .l-hero-visual {
-    display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px;
-    border-radius:24px; border:3px solid #0D1A63;
-    background:#fff; box-shadow:0 20px 50px rgba(13,26,99,0.12);
-    max-width:440px; margin:0 auto;
-  }
-  .l-hero-visual-cell {
-    aspect-ratio:1; border-radius:16px; overflow:hidden;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    position:relative;
-  }
   .l-pkg-tab {
     padding:10px 22px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer;
     border:1.5px solid #E5E7EB; background:white; color:#6B7280;
@@ -509,10 +486,6 @@ const STYLES = `
   }
 
   .l-hero-grid { display:grid; grid-template-columns:1fr 1.1fr; gap:40px; align-items:center; }
-  .l-daftar-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,480px); gap:48px; align-items:start; }
-  @media (max-width:992px) {
-    .l-daftar-grid { grid-template-columns:1fr; }
-  }
   .l-tentang-grid { display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; }
   .l-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:40px; }
   .l-packages-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:22px; }
@@ -670,7 +643,7 @@ const LandingSearchWidget: React.FC<SearchWidgetProps> = ({ searchData, onSearch
     </div>
   );
   return (
-    <div className="l-search-box l-float">
+    <div className="l-search-box">
       <div className="l-search-tabs">
         {PRODUCT_TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" onClick={() => setActiveTab(id)} className={`l-search-tab ${activeTab === id ? 'active' : ''}`}>
@@ -682,14 +655,14 @@ const LandingSearchWidget: React.FC<SearchWidgetProps> = ({ searchData, onSearch
         {activeTab === 'hotel' && (
           <>
             <div className="l-search-row" style={{ marginBottom: 14 }}>
-              <Field label="Destinasi" fullWidth>
+              <Field label="DESTINASI" fullWidth>
                 <InputIcon icon={Search} type="text" placeholder="Kota, Mekkah, Madinah, atau nama hotel..." value={hotel.destination} onChange={e => setHotel(h => ({ ...h, destination: e.target.value }))} />
               </Field>
             </div>
             <div className="l-search-row" style={{ marginBottom: 14 }}>
-              <Field label="Check-in"><InputIcon icon={Calendar} type="date" value={hotel.checkIn} onChange={e => setHotel(h => ({ ...h, checkIn: e.target.value }))} /></Field>
-              <Field label="Check-out"><input className="l-search-input no-icon" type="date" value={hotel.checkOut} onChange={e => setHotel(h => ({ ...h, checkOut: e.target.value }))} style={{ height: 42 }} /></Field>
-              <Field label="Tamu & Kamar">
+              <Field label="CHECK-IN"><InputIcon icon={Calendar} type="date" value={hotel.checkIn} onChange={e => setHotel(h => ({ ...h, checkIn: e.target.value }))} /></Field>
+              <Field label="CHECK-OUT"><input className="l-search-input no-icon" type="date" value={hotel.checkOut} onChange={e => setHotel(h => ({ ...h, checkOut: e.target.value }))} style={{ height: 42 }} /></Field>
+              <Field label="TAMU & KAMAR">
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                     <input className="l-search-input no-icon" type="number" min={1} max={20} value={hotel.guests} onChange={e => setHotel(h => ({ ...h, guests: e.target.value }))} style={{ height: 42, flex: 1 }} />
@@ -968,27 +941,14 @@ const LandingPage: React.FC = () => {
               </Link>
             </div>
             <p className="l-fu l-fu-4" style={{ fontSize: 13, color: T.dim, margin: 0, maxWidth: 420 }}>
-              Cari produk travel di bawah, lalu lanjutkan ke pendaftaran mitra.
+              Cari hotel, tiket, visa, bus, atau paket di samping, lalu lanjutkan ke pendaftaran mitra.
             </p>
           </div>
 
-          {/* KANAN: visual hero */}
+          {/* KANAN: card pencarian (Hotel · Tiket · Visa · Bus · Paket) */}
           <div className="l-fu l-fu-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="l-hero-visual l-fu" style={{ width: '100%' }}>
-              <p style={{
-                position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%) rotate(-8deg)',
-                fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 'clamp(48px,8vw,120px)', fontWeight: 600,
-                color: 'rgba(13,26,99,0.06)', whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none', zIndex: 0,
-              }}
-              >
-                Umroh
-              </p>
-              {HERO_VISUAL_TILES.map(({ Icon, label, bg }) => (
-                <div key={label} className="l-hero-visual-cell" style={{ background: bg, zIndex: 1 }}>
-                  <Icon size={36} color="rgba(255,255,255,0.95)" strokeWidth={1.5} />
-                  <span style={{ position: 'absolute', bottom: 10, left: 10, right: 10, fontSize: 12, fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>{label}</span>
-                </div>
-              ))}
+            <div className="l-embed-search-wrap l-fu" style={{ width: '100%', maxWidth: 520 }}>
+              <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
             </div>
           </div>
         </div>
@@ -998,7 +958,7 @@ const LandingPage: React.FC = () => {
           MULAI DAFTAR MITRA (card pencarian)
       ══════════════════════════════════════ */}
       <section id="daftar-mitra" className="l-section" style={{ background: T.bgCream, paddingTop: 72, paddingBottom: 88 }}>
-        <div className="l-container l-daftar-grid" style={{ ...S, width: '100%' }}>
+        <div className="l-container" style={{ ...S, width: '100%', maxWidth: 640 }}>
           <div data-reveal style={{ opacity: 0 }}>
             <div className="l-tag-gold" style={{ marginBottom: 14, display: 'inline-flex' }}>
               <Sparkles size={11} /> Mitra
@@ -1011,59 +971,13 @@ const LandingPage: React.FC = () => {
             >
               Mulai daftar mitra
             </h2>
-            <p style={{ fontSize: 15, color: T.muted, lineHeight: 1.75, margin: '0 0 20px', maxWidth: 440 }}>
-              Cari hotel, tiket, visa, bus, atau paket. Setelah memilih, Anda dapat melanjutkan ke formulir pendaftaran mitra.
+            <p style={{ fontSize: 15, color: T.muted, lineHeight: 1.75, margin: '0 0 22px', maxWidth: 520 }}>
+              Gunakan pencarian produk di bagian atas halaman (hotel, tiket, visa, bus, paket), lalu lanjutkan ke formulir pendaftaran mitra resmi.
             </p>
             <Link to="/register-owner-type" className="l-btn-outline" style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               Form pendaftaran lengkap
               <ArrowRight size={14} />
             </Link>
-          </div>
-          <div data-reveal className="l-embed-search-wrap" style={{ opacity: 0, width: '100%', maxWidth: 520, justifySelf: 'stretch' }}>
-            <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
-            <div style={{ marginTop: 24 }}>
-              <Link to="/login" className="l-btn-outline" style={{ fontSize: 13, padding: '9px 18px', display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-                Masuk ke dashboard
-                <ArrowRight size={14} />
-              </Link>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.muted, marginBottom: 20 }}>
-                <Clock size={16} color={NAVY} style={{ flexShrink: 0 }} />
-                <span><strong style={{ color: T.textMd }}>Jam operasional:</strong> Senin–Sabtu 08.00–17.00 WIB</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ display: 'flex' }}>
-                    {['AF', 'SR', 'HG', 'MR', 'DK'].map((a, i) => (
-                      <div
-                        key={a}
-                        style={{
-                          width: 28, height: 28, borderRadius: '50%',
-                          background: `linear-gradient(135deg, ${NAVY}, #2d4a7c)`,
-                          border: '2px solid white',
-                          marginLeft: i ? -7 : 0,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 8, fontWeight: 700, color: 'white', flexShrink: 0,
-                        }}
-                      >
-                        {a}
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', gap: 1 }}>
-                      {[...Array(5)].map((_, i) => <Star key={i} size={10} fill={NAVY} color={NAVY} />)}
-                    </div>
-                    <div style={{ fontSize: 10, color: T.dim, marginTop: 1 }}>500+ partner aktif</div>
-                  </div>
-                </div>
-                <div style={{ width: 1, height: 28, background: T.border, flexShrink: 0 }} />
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  {['🔒 SSL', '✓ POJK', '⚡ ISO 27001'].map(b => (
-                    <span key={b} style={{ fontSize: 10, color: T.dim, fontWeight: 600 }}>{b}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>

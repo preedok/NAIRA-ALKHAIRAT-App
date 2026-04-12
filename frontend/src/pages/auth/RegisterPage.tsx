@@ -12,6 +12,13 @@ import Input from '../../components/common/Input';
 import Autocomplete from '../../components/common/Autocomplete';
 import { AuthSplitLayout, AuthBrandLogoRow } from './AuthSplitLayout';
 
+const AUTH_PANEL = {
+  title: 'Gabung sebagai mitra travel.',
+  subtitle: 'Lengkapi data perusahaan dan kontak Anda. Setelah diverifikasi Admin Pusat, Anda dapat mengelola order dan invoice dari satu dasbor.',
+  footerTo: '/login' as const,
+  footerLabel: 'Sudah punya akun? Masuk →',
+};
+
 const PRIMARY = '#0D1A63';
 
 /* ─── Styles (form terang, selaras halaman login) ─────────────────── */
@@ -212,12 +219,15 @@ const RegisterPage: React.FC = () => {
   /* ── Success screen ── */
   if (success) {
     return (
-      <div
-        className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 sm:p-6"
-        style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+      <AuthSplitLayout
+        splitMaxWidthClass="max-w-[960px]"
+        panelTitle="Terhubung dengan layanan mitra Anda."
+        panelSubtitle="Satu dasbor untuk order, invoice, visa, tiket, hotel, dan paket umroh — mudah disesuaikan kebutuhan travel Anda."
+        panelFooterLink={{ to: '/login', label: 'Masuk ke akun →' }}
       >
-        <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200/80 p-8 sm:p-10 text-center">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-5">
+        <AuthBrandLogoRow />
+        <div className="text-center sm:text-left">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto sm:mx-0 mb-5">
             <CheckCircle className="w-8 h-8 text-emerald-600" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-3">Registrasi berhasil</h2>
@@ -234,13 +244,18 @@ const RegisterPage: React.FC = () => {
             <ArrowRight size={16} />
           </button>
         </div>
-      </div>
+      </AuthSplitLayout>
     );
   }
 
   /* ── Main ── */
   return (
-    <AuthSplitLayout singleColumn singleColumnClassName="max-w-3xl w-full">
+    <AuthSplitLayout
+      splitMaxWidthClass="max-w-[1080px]"
+      panelTitle={AUTH_PANEL.title}
+      panelSubtitle={AUTH_PANEL.subtitle}
+      panelFooterLink={{ to: AUTH_PANEL.footerTo, label: AUTH_PANEL.footerLabel }}
+    >
       <AuthBrandLogoRow />
 
       <h1 className="text-2xl font-bold text-slate-900 tracking-tight">

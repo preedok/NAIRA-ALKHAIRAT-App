@@ -33,7 +33,11 @@ const RegisterOwnerTypePage: React.FC = () => {
     'hover:border-[#0D1A63]/30 hover:shadow-md hover:bg-slate-50/80 transition-all cursor-pointer group';
 
   return (
-    <AuthSplitLayout singleColumn singleColumnClassName="max-w-lg w-full">
+    <AuthSplitLayout
+      panelTitle="Gabung sebagai mitra travel."
+      panelSubtitle="Lengkapi data perusahaan dan kontak Anda. Setelah diverifikasi Admin Pusat, Anda dapat mengelola order dan invoice dari satu dasbor."
+      panelFooterLink={{ to: '/login', label: 'Sudah punya akun? Masuk →' }}
+    >
       <AuthBrandLogoRow />
 
       <Link

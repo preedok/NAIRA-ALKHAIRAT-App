@@ -18,6 +18,8 @@ type AuthSplitLayoutProps = {
   singleColumn?: boolean;
   /** Kelas lebar kartu saat singleColumn, contoh: max-w-3xl w-full */
   singleColumnClassName?: string;
+  /** Lebar maks kartu mode dua kolom (tailwind), default max-w-[960px] */
+  splitMaxWidthClass?: string;
 };
 
 /**
@@ -30,6 +32,7 @@ export function AuthSplitLayout({
   panelFooterLink,
   singleColumn = false,
   singleColumnClassName = 'max-w-xl w-full',
+  splitMaxWidthClass = 'max-w-[960px]',
 }: AuthSplitLayoutProps) {
   if (singleColumn) {
     return (
@@ -53,9 +56,9 @@ export function AuthSplitLayout({
       className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8"
       style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
     >
-      <div className="w-full max-w-[960px] bg-white rounded-2xl shadow-xl shadow-slate-200/60 overflow-hidden flex flex-col md:flex-row md:min-h-[560px]">
+      <div className={`w-full ${splitMaxWidthClass} bg-white rounded-2xl shadow-xl shadow-slate-200/60 overflow-hidden flex flex-col md:flex-row md:min-h-[560px]`}>
         {/* Kolom kiri — form */}
-        <div className="flex-1 flex flex-col min-w-0 px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12 bg-white">{children}</div>
+        <div className="flex-1 flex flex-col min-w-0 px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12 bg-white overflow-y-auto max-h-[calc(100vh-2rem)] md:max-h-none">{children}</div>
 
         {/* Kolom kanan — panel merek (sembunyi di layar sempit) */}
         <div
