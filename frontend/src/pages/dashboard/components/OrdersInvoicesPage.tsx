@@ -3537,10 +3537,10 @@ const OrdersInvoicesPage: React.FC = () => {
                               const roomType = meta.room_type ? String(meta.room_type) : '';
                               const cap = ROOM_CAP[roomType.toLowerCase()] ?? 1;
                               const totalOrang = qty * cap;
-                              const line1 = [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, (!packByPax && roomType) ? `Tipe kamar: ${roomType}` : null].filter(Boolean).join(' · ');
+                              const line1 = [ci && co ? `CI ${ci} – CO ${co}` : null, nights ? `${nights} malam` : null, `Makan: ${meal}`, roomType ? `Tipe kamar: ${roomType}` : null].filter(Boolean).join(' · ');
                               const line2 = nights > 0
                                 ? (packByPax
-                                  ? `${qty} pack × ${nights} malam | Paket makan: ${meal}`
+                                  ? `${qty} pack × ${nights} malam | Paket makan: ${meal}${roomType ? ` | Tipe kamar: ${roomType}` : ''}`
                                   : `${qty} kamar × ${nights} malam | Paket makan: ${meal} | Tipe kamar: ${roomType || '–'}`)
                                 : '';
                               const line3 = (meta.meal || meta.with_meal) && nights > 0 && totalOrang > 0 ? `Perhitungan: ${totalOrang} orang × ${nights} malam = ${totalOrang * nights} (paket makan: Ya)` : '';

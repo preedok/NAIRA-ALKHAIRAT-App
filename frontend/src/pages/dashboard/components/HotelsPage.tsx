@@ -42,6 +42,12 @@ const OWNER_PRICE_LABELS: Record<OwnerPriceType, string> = {
 };
 const DEFAULT_ROOM = { quantity: 0, price: 0 };
 
+/** Tagihan per pack: meta bisa `per_pack` (DB) atau legacy `per_person`. */
+function isHotelMetaPerPackPricing(meta: { room_pricing_mode?: string } | null | undefined): boolean {
+  const m = String(meta?.room_pricing_mode || '').toLowerCase();
+  return m === 'per_person' || m === 'per_pack';
+}
+
 /** Label bulan untuk kolom matriks harga (id-ID, teks saja). */
 function formatMonthLabelId(ymKey: string): string {
   const [y, mo] = ymKey.split('-');
@@ -107,15 +113,12 @@ function renderHotelListMonthlyMatrixTable(props: {
   byRoomTypeDisplay: HotelMonthlyByRoomTypeMap;
   gridRates: GridRatesPair;
   roomYearDisplay: string | undefined;
-  roomPricingMode?: 'per_room' | 'per_person';
+  roomPricingMode?: 'per_room' | 'per_person' | 'per_pack';
 }): React.ReactNode {
   const { monthKeys, isFullboard, mealMonthsList, byRoomTypeDisplay, gridRates, roomYearDisplay, roomPricingMode } = props;
   const mealByYm = new Map((mealMonthsList || []).map((m) => [m.year_month, m.sar_meal_per_person_per_night]));
   const showMealRow = !isFullboard && Array.isArray(mealMonthsList) && mealMonthsList.length > 0;
-  const isPerPack = roomPricingMode === 'per_person';
-  const perPackSourceRoomType = ROOM_TYPES.find((rt) =>
-    (byRoomTypeDisplay?.[rt]?.months || []).some((m) => Number(m?.sar_room_per_night || 0) > 0)
-  ) || ROOM_TYPES[0];
+  const isPerPack = isHotelMetaPerPackPricing({ room_pricing_mode: roomPricingMode });
 
   return (
     <div className="min-w-0 overflow-x-auto max-w-[min(52rem,92vw)] rounded-lg border border-slate-100 bg-slate-50/60 touch-pan-x overscroll-x-contain">
@@ -123,7 +126,7 @@ function renderHotelListMonthlyMatrixTable(props: {
         <thead>
           <tr className="bg-slate-100/90 border-b border-slate-200">
             <th className="sticky left-0 z-[1] bg-slate-100/90 text-left px-2 py-1.5 font-semibold text-slate-700 border-r border-slate-200/80 w-[4.75rem]">
-              {isPerPack ? 'Harga' : 'Tipe'}
+              Tipe
             </th>
             {monthKeys.map((ym) => (
               <th key={ym} className="px-1 py-1.5 font-medium text-slate-600 text-center whitespace-nowrap min-w-[3.25rem]">
@@ -145,13 +148,14 @@ function renderHotelListMonthlyMatrixTable(props: {
               ))}
             </tr>
           ) : null}
-          {(isPerPack ? [perPackSourceRoomType] : ROOM_TYPES).map((rt) => {
+          {ROOM_TYPES.map((rt) => {
             const block = byRoomTypeDisplay[rt];
             const roomByYm = new Map((block?.months || []).map((m) => [m.year_month, m.sar_room_per_night]));
             return (
               <tr key={rt} className="border-b border-slate-100 last:border-0">
                 <td className="sticky left-0 z-0 bg-white px-2 py-1 font-medium text-slate-800 border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                  {isPerPack ? 'Per pack' : (ROOM_TYPE_LABELS[rt] || rt)}
+                  {ROOM_TYPE_LABELS[rt] || rt}
+                  {isPerPack ? <span className="block text-[8px] font-normal text-slate-500">/pack</span> : null}
                 </td>
                 {monthKeys.map((ym) => (
                   <td key={`${rt}-${ym}`} className="align-top">
@@ -165,11 +169,13 @@ function renderHotelListMonthlyMatrixTable(props: {
       </table>
       {isFullboard ? (
         <p className="text-[10px] text-slate-500 px-2 py-1 border-t border-slate-100 bg-white/80">
-          {isPerPack ? 'Harga per pack' : 'Makan termasuk (fullboard)'} · {roomYearDisplay ?? ''}
+          {isPerPack ? 'Harga per pack per tipe (fullboard)' : 'Makan termasuk (fullboard)'} · {roomYearDisplay ?? ''}
         </p>
       ) : (
         <p className="text-[10px] text-slate-400 px-2 py-1 border-t border-slate-100 bg-white/80">
-          {isPerPack ? 'Harga per pack per malam menginap (bukan total sebulan)' : 'Per malam menginap (bukan total sebulan)'} · {roomYearDisplay ?? ''}
+          {isPerPack
+            ? 'Per baris: SAR per pack per malam menginap untuk tipe tersebut (bukan total sebulan)'
+            : 'Per malam menginap (bukan total sebulan)'} · {roomYearDisplay ?? ''}
         </p>
       )}
     </div>
@@ -233,7 +239,7 @@ export interface HotelProduct {
     meal_price?: number;
     meal_price_type?: 'per_day' | 'per_trip';
     room_price_type?: 'per_day' | 'per_lasten';
-    room_pricing_mode?: 'per_room' | 'per_person';
+    room_pricing_mode?: 'per_room' | 'per_person' | 'per_pack';
     pricing_mode?: 'single' | 'per_type';
     mou_fullboard_auto_calc?: boolean;
     mou_manual_has_meal?: boolean;
@@ -764,7 +770,10 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         name: data.name || '',
         location: (meta.location as 'makkah' | 'madinah') || 'makkah',
         allotment_type: (meta.allotment_type as 'allotment' | 'non_allotment') || 'allotment',
-        room_pricing_mode: (meta.room_pricing_mode as 'per_room' | 'per_person') || 'per_room'
+        room_pricing_mode:
+          meta.room_pricing_mode === 'per_pack' || meta.room_pricing_mode === 'per_person'
+            ? 'per_person'
+            : ((meta.room_pricing_mode as 'per_room' | 'per_person') || 'per_room')
       });
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
@@ -905,7 +914,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         location: addForm.location,
         room_types: ROOM_TYPES,
         allotment_type: addForm.allotment_type,
-        room_pricing_mode: addForm.room_pricing_mode,
+        room_pricing_mode: addForm.room_pricing_mode === 'per_person' ? 'per_pack' : addForm.room_pricing_mode,
         pricing_mode: 'per_type'
       };
       await productsApi.createHotel({
@@ -937,7 +946,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
         location: addForm.location,
         room_types: existingMeta.room_types ?? ROOM_TYPES,
         allotment_type: addForm.allotment_type,
-        room_pricing_mode: addForm.room_pricing_mode
+        room_pricing_mode: addForm.room_pricing_mode === 'per_person' ? 'per_pack' : addForm.room_pricing_mode
       };
       await productsApi.update(editingHotel.id, { name: addForm.name.trim(), meta });
       showToast('Hotel berhasil diubah', 'success');
@@ -1382,21 +1391,27 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                   )}
                   {avail === null && <span className="text-slate-400 text-sm">—</span>}
                   {avail && typeof avail === 'object' && avail.byRoomType && (() => {
-                    /** Kuota operasional di backend per tipe; untuk daftar hotel ditampilkan agregat per pack (maks antar tipe). */
-                    const perPackAvailable = Object.values(avail.byRoomType).reduce((mx, n) => Math.max(mx, Number(n) || 0), 0);
+                    const by = avail.byRoomType;
+                    const packHotel = isHotelMetaPerPackPricing(hotel.meta);
+                    const entries = Object.entries(by).filter(([, n]) => Number(n) > 0);
                     return (
                       <div
                         className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-2"
-                        title="Ketersediaan realtime per pack (ringkas)"
+                        title={packHotel ? 'Ketersediaan realtime per tipe (pack)' : 'Ketersediaan realtime per tipe kamar'}
                       >
-                        <div
-                          className={`inline-flex flex-col rounded-lg border px-2 py-1.5 min-w-[84px] ${perPackAvailable === 0 ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}
-                        >
-                          <p className="text-[10px] font-medium text-slate-500 uppercase">Per pack</p>
-                          {perPackAvailable === 0 ? (
-                            <p className="text-xs font-bold text-red-600">Penuh</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {entries.length === 0 ? (
+                            <span className="text-xs text-slate-500">—</span>
                           ) : (
-                            <p className="text-xs font-bold text-emerald-600 tabular-nums">{perPackAvailable}</p>
+                            entries.map(([rt, n]) => (
+                              <span
+                                key={rt}
+                                className="inline-flex flex-col rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-2 py-1 min-w-[72px]"
+                              >
+                                <span className="text-[10px] font-medium text-slate-600 capitalize">{rt}{packHotel ? ' · pk' : ''}</span>
+                                <span className="text-xs font-bold tabular-nums text-emerald-800">{Number(n).toLocaleString('id-ID')}</span>
+                              </span>
+                            ))
                           )}
                         </div>
                       </div>
@@ -1621,9 +1636,9 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                 <p className="text-sm text-slate-500">{CONTENT_LOADING_MESSAGE}</p>
               ) : (
                 (() => {
-                  const isPerPackMode = seasonsModalHotel?.meta?.room_pricing_mode === 'per_person';
+                  const isPerPackMode = isHotelMetaPerPackPricing(seasonsModalHotel?.meta);
                   const totalRooms = ROOM_TYPES.reduce((s, rt) => s + Math.max(0, parseInt(quantityForm[rt] ?? '', 10) || 0), 0);
-                  const perPackQty = Math.max(0, parseInt(quantityForm.double ?? '', 10) || 0);
+                  const perPackTotalQty = isPerPackMode ? totalRooms : 0;
                   const stepBadge = (n: number) => (
                     <span
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0D1A63]/10 text-sm font-bold text-[#0D1A63]"
@@ -1637,7 +1652,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                       <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-5">
                         <p className="text-sm font-medium text-slate-800">Alur pengisian</p>
                         <ol className="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-600 list-decimal list-inside marker:font-medium">
-                          <li>{isPerPackMode ? 'Isi kapasitas per pack.' : 'Isi kapasitas per tipe kamar.'}</li>
+                          <li>{isPerPackMode ? 'Isi kapasitas pack per tipe kamar (satu angka = banyak pack untuk tipe itu).' : 'Isi kapasitas per tipe kamar.'}</li>
                           <li>
                             Isi <strong className="font-medium text-slate-800">tarif kamar SAR per malam</strong> untuk tiap kolom bulan kalender (mis. Januari = harga satu malam menginap jika tanggal inap jatuh di Januari).{' '}
                             <span className="text-slate-500">Bukan total sewa hotel untuk sebulan penuh.</span> Kolom kosong memakai fallback harga lama di sistem jika ada.
@@ -1659,10 +1674,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             <div className="min-w-0">
                               <h3 id="hotel-qty-capacity-heading" className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                 <Bed className="w-4 h-4 text-[#0D1A63] shrink-0" />
-                                {isPerPackMode ? 'Kapasitas pack' : 'Kapasitas kamar'}
+                                {isPerPackMode ? 'Kapasitas pack per tipe' : 'Kapasitas kamar'}
                               </h3>
                               <p className="text-xs text-slate-500 mt-1">
-                                {isPerPackMode ? 'Jumlah pack siap dijual.' : 'Jumlah kamar siap dijual untuk setiap tipe.'}
+                                {isPerPackMode
+                                  ? 'Jumlah pack siap dijual per tipe kamar (order memilih tipe + jumlah pack).'
+                                  : 'Jumlah kamar siap dijual untuk setiap tipe.'}
                               </p>
                             </div>
                           </div>
@@ -1670,56 +1687,34 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                             <span className="text-xs font-medium text-slate-600 sm:hidden">Total</span>
                             <span className="text-sm font-semibold tabular-nums text-[#0D1A63]">
                               <span className="hidden sm:inline">Total: </span>
-                              {isPerPackMode ? `${perPackQty} pack` : `${totalRooms} kamar`}
+                              {isPerPackMode ? `${perPackTotalQty} pack` : `${totalRooms} kamar`}
                             </span>
                           </div>
                         </div>
-                        {isPerPackMode ? (
-                          <div className="mt-3 w-full">
-                            <div className="w-full rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow">
-                              <label className="block text-xs font-medium text-slate-600 mb-2">Per pack</label>
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          {ROOM_TYPES.map((rt) => (
+                            <div
+                              key={rt}
+                              className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow"
+                            >
+                              <label className="block text-xs font-medium text-slate-600 mb-2">
+                                {ROOM_TYPE_LABELS[rt] ?? rt}
+                                {isPerPackMode ? <span className="block text-[10px] font-normal text-slate-500">pack</span> : null}
+                              </label>
                               <Input
                                 type="number"
                                 min={0}
-                                value={quantityForm.double ?? ''}
+                                value={quantityForm[rt] ?? ''}
                                 onChange={(e) => {
                                   const v = e.target.value;
-                                  if (!(v === '' || /^\d*$/.test(v))) return;
-                                  setQuantityForm((prev) => ({
-                                    ...prev,
-                                    ...Object.fromEntries(ROOM_TYPES.map((rt) => [rt, v]))
-                                  }));
+                                  if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
                                 }}
                                 placeholder="0"
                                 className="tabular-nums"
                               />
                             </div>
-                          </div>
-                        ) : (
-                          <div className="mt-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            {ROOM_TYPES.map((rt) => (
-                              <div
-                                key={rt}
-                                className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-3.5 focus-within:ring-2 focus-within:ring-[#0D1A63]/25 focus-within:border-[#0D1A63]/40 transition-shadow"
-                              >
-                                <label className="block text-xs font-medium text-slate-600 mb-2">
-                                  {ROOM_TYPE_LABELS[rt] ?? rt}
-                                </label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={quantityForm[rt] ?? ''}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    if (v === '' || /^\d*$/.test(v)) setQuantityForm((prev) => ({ ...prev, [rt]: v }));
-                                  }}
-                                  placeholder="0"
-                                  className="tabular-nums"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                          ))}
+                        </div>
                       </section>
 
                       <section
@@ -1734,7 +1729,11 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                 Tarif per malam (SAR) per bulan kalender
                               </h3>
                               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                                Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong> {seasonsModalHotel?.meta?.room_pricing_mode === 'per_person' ? 'per pack' : 'per kamar untuk tipe baris tersebut'}, berlaku untuk malam yang jatuh pada bulan kolom (bukan total sewa satu bulan penuh). Di bawah sel: perkiraan IDR/USD mengikuti kurs pengaturan. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
+                                Tagihan menginap dihitung <strong className="font-medium text-slate-700">per malam</strong>. Setiap sel = <strong className="font-medium text-slate-700">SAR untuk satu malam menginap</strong>{' '}
+                                {isHotelMetaPerPackPricing(seasonsModalHotel?.meta)
+                                  ? 'per pack untuk tipe baris tersebut (bisa berbeda per tipe)'
+                                  : 'per kamar untuk tipe baris tersebut'}
+                                , berlaku untuk malam yang jatuh pada bulan kolom (bukan total sewa satu bulan penuh). Di bawah sel: perkiraan IDR/USD mengikuti kurs pengaturan. Kosongkan bulan yang memakai fallback (data harga lama di sistem, jika ada).
                               </p>
                               <p className="text-xs text-slate-500 mt-2">
                                 Mata uang grid: <strong className="font-medium text-slate-700">SAR</strong>.
@@ -1802,7 +1801,7 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                   <thead className="sticky top-0 z-[3]">
                                     <tr className="bg-slate-100 border-b border-slate-200 shadow-sm">
                                       <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-100 z-[4] border-r border-slate-200/80">
-                                        {seasonsModalHotel?.meta?.room_pricing_mode === 'per_person' ? 'Harga' : 'Tipe'}
+                                        Tipe
                                       </th>
                                       {monthKeys.map((m) => (
                                         <th key={m} className="text-center px-2 py-2.5 min-w-[7rem] font-medium text-slate-700">
@@ -1813,16 +1812,12 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                   </thead>
                                   <tbody className="bg-white">
                                     {(() => {
-                                      const isPerPackMode = seasonsModalHotel?.meta?.room_pricing_mode === 'per_person';
-                                      const perPackSourceRoomType =
-                                        ROOM_TYPES.find((candidateRt) =>
-                                          monthKeys.some((m) => parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[candidateRt]?.[m] ?? '') > 0)
-                                        ) || ROOM_TYPES[0];
-                                      const tableRoomTypes = isPerPackMode ? [perPackSourceRoomType] : ROOM_TYPES;
-                                      return tableRoomTypes.map((rt) => (
+                                      const isPerPackMode = isHotelMetaPerPackPricing(seasonsModalHotel?.meta);
+                                      return ROOM_TYPES.map((rt) => (
                                       <tr key={`${ownerTypeScope}-${rt}`} className="border-b border-slate-100 last:border-0">
                                         <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap sticky left-0 bg-white relative z-[2] border-r border-slate-100 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                                          {isPerPackMode ? 'Per pack' : (ROOM_TYPE_LABELS[rt] || rt)}
+                                          {ROOM_TYPE_LABELS[rt] || rt}
+                                          {isPerPackMode ? <span className="block text-[10px] font-normal text-slate-500">/pack</span> : null}
                                         </td>
                                         {monthKeys.map((m) => {
                                           const derived = ownerTypeScope === 'mou' ? getMouDerivedSar(rt, m) : null;
@@ -1842,21 +1837,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                                 onChange={(e) => {
                                                   if (isDerivedCell) return;
                                                   const raw = e.target.value.replace(/[^\d.,]/g, '');
-                                                  if (isPerPackMode) {
-                                                    setMonthlyPriceRowsByOwnerType((prev) => ({
-                                                      ...prev,
-                                                      [ownerTypeScope]: {
-                                                        ...(prev?.[ownerTypeScope] || {}),
-                                                        ...Object.fromEntries(
-                                                          ROOM_TYPES.map((roomType) => [
-                                                            roomType,
-                                                            { ...(prev?.[ownerTypeScope]?.[roomType] || {}), [m]: raw }
-                                                          ])
-                                                        )
-                                                      }
-                                                    }));
-                                                    return;
-                                                  }
                                                   setMonthlyPriceRowsByOwnerType((prev) => ({
                                                     ...prev,
                                                     [ownerTypeScope]: {
@@ -1868,21 +1848,6 @@ const HotelsPage: React.FC<HotelsPageProps> = ({
                                                 onBlur={() => {
                                                   if (isDerivedCell) return;
                                                   const n = parseSarInputString(monthlyPriceRowsByOwnerType?.[ownerTypeScope]?.[rt]?.[m] ?? '');
-                                                  if (isPerPackMode) {
-                                                    setMonthlyPriceRowsByOwnerType((prev) => ({
-                                                      ...prev,
-                                                      [ownerTypeScope]: {
-                                                        ...(prev?.[ownerTypeScope] || {}),
-                                                        ...Object.fromEntries(
-                                                          ROOM_TYPES.map((roomType) => [
-                                                            roomType,
-                                                            { ...(prev?.[ownerTypeScope]?.[roomType] || {}), [m]: n > 0 ? formatSarId(n) : '' }
-                                                          ])
-                                                        )
-                                                      }
-                                                    }));
-                                                    return;
-                                                  }
                                                   setMonthlyPriceRowsByOwnerType((prev) => ({
                                                     ...prev,
                                                     [ownerTypeScope]: {

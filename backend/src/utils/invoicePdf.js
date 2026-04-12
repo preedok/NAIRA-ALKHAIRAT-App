@@ -736,7 +736,7 @@ function renderInvoicePdf(doc, data, logoBuffer) {
         if (hotelStatus) parts.push(`Status hotel: ${hotelProgressStatusLabel(hotelStatus)}`);
         if (nights > 0) parts.push(isPackPricing ? `${qtyRooms} pack × ${nights} malam` : `${qtyRooms} kamar × ${nights} malam`);
         if (mealStatus) parts.push(`Status makan: ${mealStatusLabel(mealStatus)}`);
-        if (roomType && !isPackPricing) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
+        if (roomType) parts.push(`Tipe kamar: ${roomTypeLabel(roomType)}`);
         if (parts.length) mealLine = parts.join('  |  ');
         if (withMeal && nights > 0 && qtyRooms > 0) {
           const totalOrangMalam = totalOrang * nights;

@@ -1078,16 +1078,11 @@ function buildPdfOrderItemsDetailed(inv) {
   const sorted = Array.from(grouped.values())
     .map((entry) => {
       if (entry.roomTypeQty instanceof Map && entry.roomTypeQty.size > 0) {
-        // Harga per pack: tidak menampilkan rincian tipe kamar di PDF (bukan konsep kamar terpisah).
-        if (entry.unit === 'pack') {
-          entry.roomTypeBreakdownLine = '';
-        } else {
-          const unitWord = 'room';
-          const entries = Array.from(entry.roomTypeQty.entries());
-          const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
-          const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
-          entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
-        }
+        const unitWord = entry.unit === 'pack' ? 'pack' : 'room';
+        const entries = Array.from(entry.roomTypeQty.entries());
+        const multiOrLabeled = entries.length > 1 || (entries.length === 1 && entries[0][0] !== '—');
+        const parts = entries.map(([rt, q]) => `${rt === '—' ? 'Tanpa label tipe' : rt} × ${q} ${unitWord}`);
+        entry.roomTypeBreakdownLine = multiOrLabeled && parts.length ? `Tipe kamar: ${parts.join(' · ')}` : '';
         delete entry.roomTypeQty;
       }
       if (entry.qty > 0 && entry.subtotal != null && Number.isFinite(Number(entry.subtotal))) {
