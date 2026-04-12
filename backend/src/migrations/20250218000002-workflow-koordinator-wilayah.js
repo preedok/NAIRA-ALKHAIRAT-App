@@ -9,11 +9,16 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     const q = queryInterface.sequelize;
     const newValues = ['admin_koordinator', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_invoice_saudi'];
-    for (const val of newValues) {
-      try {
-        await q.query(`ALTER TYPE user_role ADD VALUE IF NOT EXISTS '${val}'`);
-      } catch (e) {
-        try { await q.query(`ALTER TYPE user_role ADD VALUE '${val}'`); } catch (_) {}
+    const enumTypes = ['enum_users_role', 'user_role'];
+    for (const enumType of enumTypes) {
+      for (const val of newValues) {
+        try {
+          await q.query(`ALTER TYPE "${enumType}" ADD VALUE IF NOT EXISTS '${val}'`);
+        } catch (e) {
+          try {
+            await q.query(`ALTER TYPE "${enumType}" ADD VALUE '${val}'`);
+          } catch (_) { /* sudah ada atau tipe tidak dipakai di DB ini */ }
+        }
       }
     }
 

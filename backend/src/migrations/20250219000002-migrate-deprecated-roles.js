@@ -7,9 +7,24 @@
  * - role_ticket → tiket_koordinator
  * Setelah migrasi, aplikasi tidak lagi menggunakan role lama.
  */
+const ENUM_TYPE = 'enum_users_role';
+
 module.exports = {
   async up(queryInterface, Sequelize) {
-    const [results] = await queryInterface.sequelize.query(
+    const q = queryInterface.sequelize;
+    for (const val of ['admin_koordinator', 'visa_koordinator', 'tiket_koordinator']) {
+      try {
+        await q.query(`ALTER TYPE "${ENUM_TYPE}" ADD VALUE IF NOT EXISTS '${val}'`);
+      } catch (e) {
+        try {
+          await q.query(`ALTER TYPE "${ENUM_TYPE}" ADD VALUE '${val}'`);
+        } catch (err) {
+          if (!String(err.message || '').includes('already exists')) throw err;
+        }
+      }
+    }
+
+    const [results] = await q.query(
       `SELECT id, role FROM users WHERE role IN ('admin_cabang', 'role_visa', 'role_ticket')`
     );
     if (!results || results.length === 0) return;
@@ -20,7 +35,7 @@ module.exports = {
       if (row.role === 'role_visa') newRole = 'visa_koordinator';
       if (row.role === 'role_ticket') newRole = 'tiket_koordinator';
       if (newRole) {
-        await queryInterface.sequelize.query(
+        await q.query(
           `UPDATE users SET role = :newRole, updated_at = NOW() WHERE id = :id`,
           { replacements: { newRole, id: row.id } }
         );
