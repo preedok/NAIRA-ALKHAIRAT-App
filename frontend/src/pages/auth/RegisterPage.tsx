@@ -39,20 +39,20 @@ const STYLES = `
   .rg-scroll::-webkit-scrollbar-track { background:transparent; }
   .rg-scroll::-webkit-scrollbar-thumb { background:rgba(13,26,99,0.22); border-radius:99px; }
 
+  /* Blok section rata dengan halaman login (tanpa kartu kedua) */
   .rg-section {
-    background:#f8fafc;
-    border:1px solid #e2e8f0;
-    border-radius:16px;
-    padding:20px 20px 22px;
-    margin-bottom:20px;
+    padding:0;
+    margin:0 0 1.5rem 0;
+    background:transparent;
+    border:none;
   }
   .rg-section-title {
     font-size:11px; font-weight:700; letter-spacing:.12em;
-    text-transform:uppercase; color:#0D1A63; margin-bottom:16px;
+    text-transform:uppercase; color:#64748b; margin-bottom:14px;
     display:flex; align-items:center; gap:10px;
   }
   .rg-section-title::before {
-    content:''; width:4px; height:16px; border-radius:2px;
+    content:''; width:3px; height:14px; border-radius:2px;
     background:linear-gradient(180deg,#0D1A63,#152a7a);
   }
 
@@ -246,46 +246,29 @@ const RegisterPage: React.FC = () => {
       <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
         {ownerType === 'mou' ? 'Buat akun Owner MOU' : 'Buat akun Owner Non-MOU'}
       </h1>
-      <p className="text-sm text-slate-500 mt-1 mb-6 max-w-2xl leading-relaxed">
+      <p className="text-sm text-slate-500 mt-1.5 mb-3 max-w-2xl leading-relaxed">
         {ownerType === 'mou'
           ? 'Mitra dengan MOU — harga produk mengikuti ketentuan diskon mitra. Lengkapi form di bawah.'
           : 'Mitra tanpa MOU — harga standar. Lengkapi form di bawah; tidak ada pembayaran MoU di awal.'}
       </p>
+      <p className="text-xs font-semibold mb-6">
+        <Link to="/register-owner-type" className="text-slate-500 hover:text-[#0D1A63] hover:underline">
+          ← Ganti jenis pendaftaran
+        </Link>
+      </p>
 
-      <div
-        className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col"
-        style={{ maxHeight: 'min(72vh, calc(100vh - 14rem))' }}
-      >
-        <div className="fu flex-shrink-0 px-5 py-4 sm:px-6 border-b border-slate-200 bg-slate-50/90 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-slate-800">Form pendaftaran</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              to="/register-owner-type"
-              className="text-xs font-semibold text-slate-500 hover:text-[#0D1A63] px-2 py-1 rounded-lg transition-colors"
-            >
-              Ganti jenis
-            </Link>
-            <Link
-              to="/login"
-              className="text-xs font-semibold text-slate-600 hover:text-[#0D1A63] px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
-            >
-              ← Masuk
-            </Link>
-          </div>
+      {error && (
+        <div
+          className="err-msg flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4 text-sm text-red-700 bg-red-50 border border-red-100"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
         </div>
+      )}
 
-        <div className="rg-scroll fu fu-1 flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
-          {error && (
-            <div
-              className="err-msg flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4 text-sm text-red-700 bg-red-50 border border-red-100"
-              role="alert"
-            >
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-1">
+      <div className="rg-scroll fu fu-1 max-h-[min(72vh,calc(100vh-16rem))] overflow-y-auto -mr-1 pr-1">
+        <form onSubmit={handleSubmit} className="space-y-6 pb-1">
             <div className="rg-section">
               <div className="rg-section-title">Informasi Akun</div>
               <div className="rg-form-row-3">
@@ -381,8 +364,8 @@ const RegisterPage: React.FC = () => {
             )}
 
             {ownerType === 'non_mou' && (
-              <div className="rg-section bg-slate-50 border-slate-200">
-                <div className="rg-section-title text-slate-700">Pendaftaran Non-MOU (gratis)</div>
+              <div className="rg-section rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3.5">
+                <div className="rg-section-title !mb-2">Pendaftaran Non-MOU (gratis)</div>
                 <p className="text-sm text-slate-600 leading-relaxed m-0">
                   Tidak ada pembayaran MoU. Akun Anda tetap akan divalidasi oleh Admin Pusat. Setelah disetujui dan diaktifkan, Anda dapat login dan menggunakan aplikasi.
                 </p>
@@ -403,7 +386,7 @@ const RegisterPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="fu fu-2 pt-2">
+            <div className="fu fu-2 pt-1">
               <button
                 type="submit"
                 disabled={loading}
@@ -424,7 +407,6 @@ const RegisterPage: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
       </div>
 
       <p className="text-center text-sm text-slate-600 mt-8">

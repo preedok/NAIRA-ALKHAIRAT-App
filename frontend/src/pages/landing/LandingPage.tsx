@@ -49,12 +49,13 @@ const T = {
    STATIC DATA
 ═══════════════════════════════════════════════════════════════════ */
 const NAV_LINKS = [
-  { id: 'layanan', label: 'Layanan' },
-  { id: 'paket',   label: 'Paket'  },
-  { id: 'proses',  label: 'Proses' },
-  { id: 'tentang', label: 'Tentang'},
-  { id: 'faq',     label: 'FAQ'    },
-  { id: 'kontak',  label: 'Kontak' },
+  { id: 'layanan',     label: 'Layanan' },
+  { id: 'daftar-mitra', label: 'Daftar mitra' },
+  { id: 'paket',       label: 'Paket' },
+  { id: 'proses',      label: 'Proses' },
+  { id: 'tentang',     label: 'Tentang' },
+  { id: 'faq',         label: 'FAQ' },
+  { id: 'kontak',      label: 'Kontak' },
 ];
 
 const TICKER_ITEMS = [
@@ -469,12 +470,12 @@ const STYLES = `
     pointer-events:none;
   }
 
-  .l-nav-search-wrap .l-search-box { border-radius:16px; box-shadow:0 12px 40px rgba(13,26,99,0.1); }
-  .l-nav-search-wrap .l-search-tabs { padding:10px 12px 0; }
-  .l-nav-search-wrap .l-search-tab { padding:8px 12px; font-size:12px; }
-  .l-nav-search-wrap .l-search-form { padding:14px 14px 18px; }
-  .l-nav-search-wrap .l-search-submit { margin-top:12px; }
-  .l-nav-search-wrap .l-search-submit .l-btn-primary { padding:10px 16px; font-size:13px; }
+  .l-embed-search-wrap .l-search-box { border-radius:16px; box-shadow:0 12px 40px rgba(13,26,99,0.1); }
+  .l-embed-search-wrap .l-search-tabs { padding:10px 12px 0; }
+  .l-embed-search-wrap .l-search-tab { padding:8px 12px; font-size:12px; }
+  .l-embed-search-wrap .l-search-form { padding:14px 14px 18px; }
+  .l-embed-search-wrap .l-search-submit { margin-top:12px; }
+  .l-embed-search-wrap .l-search-submit .l-btn-primary { padding:10px 16px; font-size:13px; }
 
   .l-hero-visual {
     display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px;
@@ -508,6 +509,10 @@ const STYLES = `
   }
 
   .l-hero-grid { display:grid; grid-template-columns:1fr 1.1fr; gap:40px; align-items:center; }
+  .l-daftar-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,480px); gap:48px; align-items:start; }
+  @media (max-width:992px) {
+    .l-daftar-grid { grid-template-columns:1fr; }
+  }
   .l-tentang-grid { display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; }
   .l-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:40px; }
   .l-packages-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:22px; }
@@ -759,7 +764,6 @@ const LandingPage: React.FC = () => {
   const [mobileOpen, setMobileOpen]   = useState(false);
   const [testiIdx, setTestiIdx]       = useState(0);
   const [pkgTab, setPkgTab]           = useState<(typeof PACKAGE_TABS)[number]['id']>('all');
-  const [navHasSearch, setNavHasSearch] = useState(false);
   const [contactForm, setContactForm] = useState({ nama: '', email: '', telepon: '', pesan: '' });
   const [contactSent, setContactSent] = useState(false);
   const [searchData, setSearchData]   = useState<SearchWidgetProps['searchData']>(null);
@@ -787,14 +791,6 @@ const LandingPage: React.FC = () => {
     const h = () => setScrolled(window.scrollY > 32);
     window.addEventListener('scroll', h, { passive: true });
     return () => window.removeEventListener('scroll', h);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1240px)');
-    const set = () => setNavHasSearch(mq.matches);
-    set();
-    mq.addEventListener('change', set);
-    return () => mq.removeEventListener('change', set);
   }, []);
 
   useEffect(() => {
@@ -850,10 +846,10 @@ const LandingPage: React.FC = () => {
           style={{
             ...S,
             display: 'grid',
-            gridTemplateColumns: navHasSearch ? 'minmax(0,auto) minmax(0,1fr) minmax(260px,400px)' : 'minmax(0,auto) minmax(0,1fr) auto',
+            gridTemplateColumns: 'minmax(0,auto) minmax(0,1fr) auto',
             alignItems: 'center',
-            gap: navHasSearch ? 20 : 16,
-            minHeight: navHasSearch ? 72 : 68,
+            gap: 16,
+            minHeight: 68,
             paddingTop: 10,
             paddingBottom: 10,
           }}
@@ -864,12 +860,10 @@ const LandingPage: React.FC = () => {
             <div>
               <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.1, color: NAVY, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Bintang Global</div>
               <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', color: T.muted, textTransform: 'uppercase', lineHeight: 1.5 }}>Umroh & Travel</div>
-              {!navHasSearch && (
-                <div className="l-hide-mob" style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                  <Link to="/login" style={{ fontSize: 11, fontWeight: 600, color: T.muted }}>Masuk</Link>
-                  <Link to="/register-owner-type" style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>Daftar</Link>
-                </div>
-              )}
+              <div className="l-hide-mob" style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                <Link to="/login" style={{ fontSize: 11, fontWeight: 600, color: T.muted }}>Masuk</Link>
+                <Link to="/register-owner-type" style={{ fontSize: 11, fontWeight: 700, color: NAVY }}>Daftar</Link>
+              </div>
             </div>
           </div>
 
@@ -878,22 +872,14 @@ const LandingPage: React.FC = () => {
             {NAV_LINKS.map(l => <button key={l.id} className="l-nav-link" onClick={() => scrollTo(l.id)}>{l.label}</button>)}
           </div>
 
-          {/* Kanan: card pencarian produk (layar lebar) atau auth + menu mobile */}
+          {/* Kanan: auth + menu mobile */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, minWidth: 0 }}>
-            {navHasSearch ? (
-              <div className="l-nav-search-wrap l-hide-mob" style={{ width: '100%', maxWidth: 400 }}>
-                <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
-              </div>
-            ) : (
-              <>
-                <Link to="/login" className="l-btn-outline l-hide-mob" style={{ padding: '8px 18px', fontSize: 13 }}>Masuk</Link>
-                <Link to="/register-owner-type" className="l-btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
-                  <span className="shine" />
-                  Daftar Partner
-                  <ArrowRight size={13} />
-                </Link>
-              </>
-            )}
+            <Link to="/login" className="l-btn-outline l-hide-mob" style={{ padding: '8px 18px', fontSize: 13 }}>Masuk</Link>
+            <Link to="/register-owner-type" className="l-btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
+              <span className="shine" />
+              Daftar Partner
+              <ArrowRight size={13} />
+            </Link>
             <button type="button" onClick={() => setMobileOpen(v => !v)} className="l-show-mob" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.text, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {mobileOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
@@ -921,7 +907,7 @@ const LandingPage: React.FC = () => {
       {/* ══════════════════════════════════════
           HERO
       ══════════════════════════════════════ */}
-      <section className="l-hero-section l-section" style={{ paddingTop: navHasSearch ? 100 : 110, paddingBottom: 70, minHeight: '88vh', display: 'flex', alignItems: 'center' }}>
+      <section className="l-hero-section l-section" style={{ paddingTop: 110, paddingBottom: 70, minHeight: '88vh', display: 'flex', alignItems: 'center' }}>
         <div className="l-container l-hero-grid" style={{ ...S, width: '100%' }}>
 
           {/* KIRI: headline + CTA */}
@@ -967,68 +953,117 @@ const LandingPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="l-fu l-fu-3 l-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-              <Link to="/register-owner-type" className="l-btn-primary" style={{ fontSize: 14 }}>
+            <div className="l-fu l-fu-3 l-hero-cta" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+              <button
+                type="button"
+                className="l-btn-primary"
+                style={{ fontSize: 14, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                onClick={() => scrollTo('daftar-mitra')}
+              >
                 <span className="shine" />
                 <Sparkles size={15} /> Mulai daftar mitra
+              </button>
+              <Link to="/register-owner-type" className="l-btn-outline" style={{ fontSize: 14 }}>
+                Form pendaftaran mitra
               </Link>
-              <Link to="/login" className="l-btn-outline" style={{ fontSize: 14 }}>
-                Masuk ke dashboard
-              </Link>
             </div>
-
-            <div className="l-fu l-fu-3" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.muted, marginBottom: 28 }}>
-              <Clock size={16} color={NAVY} />
-              <span><strong style={{ color: T.textMd }}>Jam operasional:</strong> Senin–Sabtu 08.00–17.00 WIB</span>
-            </div>
-
-            <div className="l-fu l-fu-4 l-hero-social" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ display: 'flex' }}>
-                  {['AF', 'SR', 'HG', 'MR', 'DK'].map((a, i) => (
-                    <div key={a} style={{ width: 28, height: 28, borderRadius: '50%', background: `linear-gradient(135deg, ${NAVY}, #2d4a7c)`, border: '2px solid white', marginLeft: i ? -7 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: 'white', flexShrink: 0 }}>{a}</div>
-                  ))}
-                </div>
-                <div>
-                  <div style={{ display: 'flex', gap: 1 }}>
-                    {[...Array(5)].map((_, i) => <Star key={i} size={10} fill={NAVY} color={NAVY} />)}
-                  </div>
-                  <div style={{ fontSize: 10, color: T.dim, marginTop: 1 }}>500+ partner aktif</div>
-                </div>
-              </div>
-              <div style={{ width: 1, height: 28, background: T.border }} />
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {['🔒 SSL', '✓ POJK', '⚡ ISO 27001'].map(b => (
-                  <span key={b} style={{ fontSize: 10, color: T.dim, fontWeight: 600 }}>{b}</span>
-                ))}
-              </div>
-            </div>
+            <p className="l-fu l-fu-4" style={{ fontSize: 13, color: T.dim, margin: 0, maxWidth: 420 }}>
+              Cari produk travel di bawah, lalu lanjutkan ke pendaftaran mitra.
+            </p>
           </div>
 
-          {/* KANAN: card pencarian (tablet/desktop sempit) atau grid visual (header sudah punya search) */}
+          {/* KANAN: visual hero */}
           <div className="l-fu l-fu-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {navHasSearch ? (
-              <div className="l-hero-visual l-fu" style={{ width: '100%' }}>
-                <p style={{
-                  position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%) rotate(-8deg)',
-                  fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 'clamp(48px,8vw,120px)', fontWeight: 600,
-                  color: 'rgba(13,26,99,0.06)', whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none', zIndex: 0,
-                }}
-                >
-                  Umroh
-                </p>
-                {HERO_VISUAL_TILES.map(({ Icon, label, bg }) => (
-                  <div key={label} className="l-hero-visual-cell" style={{ background: bg, zIndex: 1 }}>
-                    <Icon size={36} color="rgba(255,255,255,0.95)" strokeWidth={1.5} />
-                    <span style={{ position: 'absolute', bottom: 10, left: 10, right: 10, fontSize: 12, fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>{label}</span>
+            <div className="l-hero-visual l-fu" style={{ width: '100%' }}>
+              <p style={{
+                position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%) rotate(-8deg)',
+                fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 'clamp(48px,8vw,120px)', fontWeight: 600,
+                color: 'rgba(13,26,99,0.06)', whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none', zIndex: 0,
+              }}
+              >
+                Umroh
+              </p>
+              {HERO_VISUAL_TILES.map(({ Icon, label, bg }) => (
+                <div key={label} className="l-hero-visual-cell" style={{ background: bg, zIndex: 1 }}>
+                  <Icon size={36} color="rgba(255,255,255,0.95)" strokeWidth={1.5} />
+                  <span style={{ position: 'absolute', bottom: 10, left: 10, right: 10, fontSize: 12, fontWeight: 700, color: 'white', textShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════
+          MULAI DAFTAR MITRA (card pencarian)
+      ══════════════════════════════════════ */}
+      <section id="daftar-mitra" className="l-section" style={{ background: T.bgCream, paddingTop: 72, paddingBottom: 88 }}>
+        <div className="l-container l-daftar-grid" style={{ ...S, width: '100%' }}>
+          <div data-reveal style={{ opacity: 0 }}>
+            <div className="l-tag-gold" style={{ marginBottom: 14, display: 'inline-flex' }}>
+              <Sparkles size={11} /> Mitra
+            </div>
+            <h2 style={{
+              fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif",
+              fontSize: 'clamp(26px,3.2vw,40px)', fontWeight: 800, letterSpacing: '-0.02em',
+              margin: '0 0 14px', color: T.text, lineHeight: 1.15,
+            }}
+            >
+              Mulai daftar mitra
+            </h2>
+            <p style={{ fontSize: 15, color: T.muted, lineHeight: 1.75, margin: '0 0 20px', maxWidth: 440 }}>
+              Cari hotel, tiket, visa, bus, atau paket. Setelah memilih, Anda dapat melanjutkan ke formulir pendaftaran mitra.
+            </p>
+            <Link to="/register-owner-type" className="l-btn-outline" style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              Form pendaftaran lengkap
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+          <div data-reveal className="l-embed-search-wrap" style={{ opacity: 0, width: '100%', maxWidth: 520, justifySelf: 'stretch' }}>
+            <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
+            <div style={{ marginTop: 24 }}>
+              <Link to="/login" className="l-btn-outline" style={{ fontSize: 13, padding: '9px 18px', display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                Masuk ke dashboard
+                <ArrowRight size={14} />
+              </Link>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.muted, marginBottom: 20 }}>
+                <Clock size={16} color={NAVY} style={{ flexShrink: 0 }} />
+                <span><strong style={{ color: T.textMd }}>Jam operasional:</strong> Senin–Sabtu 08.00–17.00 WIB</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex' }}>
+                    {['AF', 'SR', 'HG', 'MR', 'DK'].map((a, i) => (
+                      <div
+                        key={a}
+                        style={{
+                          width: 28, height: 28, borderRadius: '50%',
+                          background: `linear-gradient(135deg, ${NAVY}, #2d4a7c)`,
+                          border: '2px solid white',
+                          marginLeft: i ? -7 : 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 8, fontWeight: 700, color: 'white', flexShrink: 0,
+                        }}
+                      >
+                        {a}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                  <div>
+                    <div style={{ display: 'flex', gap: 1 }}>
+                      {[...Array(5)].map((_, i) => <Star key={i} size={10} fill={NAVY} color={NAVY} />)}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.dim, marginTop: 1 }}>500+ partner aktif</div>
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 28, background: T.border, flexShrink: 0 }} />
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {['🔒 SSL', '✓ POJK', '⚡ ISO 27001'].map(b => (
+                    <span key={b} style={{ fontSize: 10, color: T.dim, fontWeight: 600 }}>{b}</span>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div style={{ width: '100%', maxWidth: 500 }}>
-                <LandingSearchWidget searchData={searchData} onSearch={handleSearchSubmit} />
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </section>
