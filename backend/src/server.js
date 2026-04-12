@@ -176,6 +176,15 @@ async function ensureOrdersPicNameColumn(db) {
   }
 }
 
+/** Keterangan invoice di order (mirror migrasi 20260412140000 jika migrate tidak jalan di VPS). */
+async function ensureOrdersInvoiceKeteranganColumn(db) {
+  try {
+    await db.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_keterangan TEXT NULL');
+  } catch (e) {
+    logger.warn('ensureOrdersInvoiceKeteranganColumn:', e.message);
+  }
+}
+
 async function ensureOwnerProfilesIsMouOwnerColumn(db) {
   try {
     const [rows] = await db.query(`
@@ -234,6 +243,7 @@ sequelize.sync({ alter })
   .then(() => ensureOwnerProfilesIsMouOwnerColumn(sequelize))
   .then(() => ensureInvoicesPicNameColumn(sequelize))
   .then(() => ensureOrdersPicNameColumn(sequelize))
+  .then(() => ensureOrdersInvoiceKeteranganColumn(sequelize))
   .then(() => ensureOwnerRolesEnum(sequelize))
   .then(async () => {
     logger.info('Database synchronized');
