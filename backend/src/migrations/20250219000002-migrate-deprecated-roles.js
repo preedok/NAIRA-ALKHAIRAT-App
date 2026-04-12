@@ -25,7 +25,7 @@ module.exports = {
     }
 
     const [results] = await q.query(
-      `SELECT id, role FROM users WHERE role IN ('admin_cabang', 'role_visa', 'role_ticket')`
+      `SELECT id, role::text AS role FROM users WHERE role::text IN ('admin_cabang', 'role_visa', 'role_ticket')`
     );
     if (!results || results.length === 0) return;
 
