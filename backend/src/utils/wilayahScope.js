@@ -1,5 +1,37 @@
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
+const sequelize = require('../config/sequelize');
 const { Branch, Provinsi, Wilayah, Kabupaten } = require('../models');
+
+/**
+ * Fallback SQL jika query Sequelize tidak menemukan cabang (mis. provinsi_id null di kotas,
+ * is_active, atau edge case join) — supaya filter wilayah/provinsi tetap selaras invoice di DB.
+ */
+async function getBranchIdsForWilayahSqlFallback(wilayahIds) {
+  if (!wilayahIds || wilayahIds.length === 0) return [];
+  const safe = [...new Set(wilayahIds.map((id) => String(id).trim()).filter(Boolean))];
+  if (!safe.length) return [];
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const escaped = safe.filter((id) => uuidRe.test(id));
+  if (!escaped.length) return [];
+  const list = escaped.map((u) => `'${u.replace(/'/g, "''")}'::uuid`).join(', ');
+  const rows = await sequelize.query(
+    `SELECT DISTINCT b.id AS id FROM kotas b
+     LEFT JOIN provinsi p ON p.id = b.provinsi_id
+     WHERE (
+       p.wilayah_id IN (${list})
+       OR EXISTS (
+         SELECT 1 FROM kabupaten k
+         INNER JOIN provinsi p2 ON p2.id = k.provinsi_id
+         WHERE p2.wilayah_id IN (${list})
+           AND k.kode IS NOT NULL
+           AND b.code IS NOT NULL
+           AND trim(cast(k.kode AS text)) = trim(cast(b.code AS text))
+       )
+     )`,
+    { type: QueryTypes.SELECT }
+  );
+  return (rows || []).map((r) => r.id).filter(Boolean);
+}
 
 /**
  * Semua UUID wilayah yang punya nama sama dengan wilayah referensi (master bisa punya duplikat baris).
@@ -30,7 +62,6 @@ async function getBranchIdsForWilayahDynamic(wilayahId) {
   const wilayahIds = await resolveWilayahIdsSameName(wilayahId);
 
   let branches = await Branch.findAll({
-    where: { is_active: true },
     attributes: ['id'],
     include: [{ model: Provinsi, as: 'Provinsi', attributes: [], required: true, where: { wilayah_id: { [Op.in]: wilayahIds } } }]
   });
@@ -42,9 +73,12 @@ async function getBranchIdsForWilayahDynamic(wilayahId) {
     });
     const kodes = (kabupatenInWilayah || []).map((k) => k.kode).filter(Boolean);
     if (kodes.length > 0) {
-      const branchesByCode = await Branch.findAll({ where: { code: { [Op.in]: kodes }, is_active: true }, attributes: ['id'] });
+      const branchesByCode = await Branch.findAll({ where: { code: { [Op.in]: kodes } }, attributes: ['id'] });
       ids = branchesByCode.map((b) => b.id);
     }
+  }
+  if (ids.length === 0 && wilayahIds.length > 0) {
+    ids = await getBranchIdsForWilayahSqlFallback(wilayahIds);
   }
   return ids;
 }

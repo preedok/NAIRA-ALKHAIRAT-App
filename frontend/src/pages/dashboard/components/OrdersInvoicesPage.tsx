@@ -164,6 +164,19 @@ function buildExportInvoiceListPdfParams(
   }
 }
 
+/** Hindari kirim string kosong ke query (bisa membingungkan filter di backend). */
+function compactInvoiceExportQueryParams(
+  p: Record<string, string | number | undefined>
+): Record<string, string | number> {
+  const out: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(p)) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'string' && v.trim() === '') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 function calendarDaysBetweenUtcDateOnly(a: Date, b: Date): number {
   const start = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
   const end = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
@@ -2592,7 +2605,11 @@ const OrdersInvoicesPage: React.FC = () => {
                   }
                   setExportingInvoiceListPdf(true);
                   try {
-                    const res = await invoicesApi.exportListPdf(params);
+                    const res = await invoicesApi.exportListPdf(
+                      compactInvoiceExportQueryParams(params as Record<string, string | number | undefined>) as Parameters<
+                        typeof invoicesApi.exportListPdf
+                      >[0]
+                    );
                     const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');

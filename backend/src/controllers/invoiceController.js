@@ -16,6 +16,14 @@ function isKoordinatorRole(role) {
   return KOORDINATOR_ROLES.includes(role);
 }
 
+/** Express / client kadang mengirim query id duplikat sebagai array; normalisasi ke satu string. */
+function firstQueryString(val) {
+  if (val === undefined || val === null) return undefined;
+  const v = Array.isArray(val) ? val[0] : val;
+  const s = String(v).trim();
+  return s === '' ? undefined : s;
+}
+
 /** Catatan lama/BE: hilangkan rujukan nomor order (ORD-…); tampilan hanya memakai nomor invoice. */
 function sanitizeNoteRemoveOrderReferences(text) {
   if (text == null || text === '') return text;
@@ -361,7 +369,7 @@ async function resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, user)
   if (user.branch_id && !['super_admin', 'admin_pusat', 'role_accounting'].includes(user.role)) return { branch_id: user.branch_id };
   if (branch_id) return { branch_id };
   if (provinsi_id) {
-    const branches = await Branch.findAll({ where: { provinsi_id, is_active: true }, attributes: ['id'] });
+    const branches = await Branch.findAll({ where: { provinsi_id }, attributes: ['id'] });
     const ids = branches.map(b => b.id);
     return ids.length ? { branch_id: { [Op.in]: ids } } : { branch_id: { [Op.in]: [] } };
   }
@@ -538,7 +546,14 @@ async function loadInvoiceListRelations(data) {
  * @returns {{ where: object, orderInclude: object, orderBy: any[] }}
  */
 async function buildInvoiceListFilters(req) {
-  const { status, branch_id, provinsi_id, wilayah_id, owner_id, owner_type, order_status, invoice_number, date_from, date_to, due_status, has_handling, sort_by, sort_order } = req.query;
+  const q = req.query || {};
+  const status = q.status;
+  const branch_id = firstQueryString(q.branch_id);
+  const provinsi_id = firstQueryString(q.provinsi_id);
+  const wilayah_id = firstQueryString(q.wilayah_id);
+  const owner_id = firstQueryString(q.owner_id);
+  const owner_type = firstQueryString(Array.isArray(q.owner_type) ? q.owner_type[0] : q.owner_type);
+  const { order_status, invoice_number, date_from, date_to, due_status, has_handling, sort_by, sort_order } = q;
   const where = {};
   if (status) where.status = status;
   const branchFilter = await resolveBranchFilterList(branch_id, provinsi_id, wilayah_id, req.user);
