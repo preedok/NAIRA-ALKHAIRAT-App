@@ -2192,12 +2192,21 @@ const getSummary = asyncHandler(async (req, res) => {
   });
 });
 
+/** Catatan invoice dari order.invoice_keterangan atau opts (saat auto-create). */
+function resolveInvoiceKeteranganNotes(order, opts = {}) {
+  const fromOpts = opts.invoice_keterangan != null ? String(opts.invoice_keterangan).trim() : '';
+  if (fromOpts) return fromOpts;
+  const raw = order && typeof order.get === 'function' ? order.get('invoice_keterangan') : order?.invoice_keterangan;
+  const fromOrder = raw != null ? String(raw).trim() : '';
+  return fromOrder || null;
+}
+
 /**
  * POST /api/v1/invoices
  * Create invoice from order. Status tentative; jatuh tempo DP & auto_cancel = order.created_at + dp_grace_hours.
  */
 const create = asyncHandler(async (req, res) => {
-  const { order_id, is_super_promo, dp_percentage: bodyDpPct, dp_amount: bodyDpAmount, pic_name: bodyPicName } = req.body;
+  const { order_id, is_super_promo, dp_percentage: bodyDpPct, dp_amount: bodyDpAmount, pic_name: bodyPicName, invoice_keterangan: bodyInvoiceKet } = req.body;
   const order = await Order.findByPk(order_id, { include: ['OrderItems'] });
   if (!order) return res.status(404).json({ success: false, message: 'Trip tidak ditemukan' });
   if (order.owner_id !== req.user.id && !['invoice_koordinator', 'invoice_saudi', 'super_admin'].includes(req.user.role)) {
@@ -2215,6 +2224,18 @@ const create = asyncHandler(async (req, res) => {
   }
   if (picName !== picFromOrder) {
     await order.update({ pic_name: picName });
+  }
+
+  let notesForInvoice = resolveInvoiceKeteranganNotes(order, {});
+  if (Object.prototype.hasOwnProperty.call(req.body, 'invoice_keterangan')) {
+    const k =
+      bodyInvoiceKet === undefined || bodyInvoiceKet === null
+        ? ''
+        : typeof bodyInvoiceKet === 'string'
+          ? bodyInvoiceKet.trim()
+          : String(bodyInvoiceKet).trim();
+    notesForInvoice = k || null;
+    await order.update({ invoice_keterangan: notesForInvoice });
   }
 
   const rules = await getRulesForBranch(order.branch_id);
@@ -2259,7 +2280,8 @@ const create = asyncHandler(async (req, res) => {
       `Invoice batal otomatis bila dalam ${dpGraceHours} jam setelah order dibuat belum ada DP`,
       `Minimal DP ${dpPercentage}% dari total`,
       `Jatuh tempo DP ${dpGraceHours} jam setelah order dibuat`
-    ]
+    ],
+    notes: notesForInvoice
   });
   await updateOrderDpStatusFromInvoice(invoice);
   await logInvoiceStatusChange({
@@ -2362,7 +2384,8 @@ async function createInvoiceForOrder(order, opts = {}) {
       `Minimal DP ${dpPercentage}% dari total`,
       `Jatuh tempo DP ${dpGraceHours} jam setelah order dibuat`
     ],
-    currency_rates_snapshot: currencyRatesSnapshot
+    currency_rates_snapshot: currencyRatesSnapshot,
+    notes: resolveInvoiceKeteranganNotes(order, opts)
   });
   await logInvoiceStatusChange({
     invoice_id: invoice.id,

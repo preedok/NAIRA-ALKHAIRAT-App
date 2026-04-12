@@ -88,6 +88,11 @@ const Order = sequelize.define('Order', {
   notes: {
     type: DataTypes.TEXT
   },
+  invoice_keterangan: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Keterangan invoice (textarea form); disalin ke invoices.notes saat diterbitkan / update'
+  },
   currency_rates_override: {
     type: DataTypes.JSONB,
     allowNull: true,

@@ -3365,6 +3365,17 @@ const OrdersInvoicesPage: React.FC = () => {
                           </div>
                         )}
 
+                        {(() => {
+                          const ket = String(viewInvoice?.notes || viewInvoice?.Order?.invoice_keterangan || '').trim();
+                          if (!ket) return null;
+                          return (
+                            <div className="mb-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Keterangan</p>
+                              <p className="text-sm text-slate-800 whitespace-pre-wrap">{ket}</p>
+                            </div>
+                          );
+                        })()}
+
                         {/* Grid: Data Order | Data Invoice | Kurs */}
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                           {/* Data Order */}

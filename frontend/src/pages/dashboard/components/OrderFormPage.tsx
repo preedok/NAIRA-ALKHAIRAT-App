@@ -15,6 +15,7 @@ import Card from '../../../components/common/Card';
 import Button from '../../../components/common/Button';
 import PageHeader from '../../../components/common/PageHeader';
 import { Autocomplete, Input, ContentLoading, CONTENT_LOADING_MESSAGE, NominalDisplay } from '../../../components/common';
+import { inputBaseClass, inputBorderClass } from '../../../components/common/formStyles';
 
 /* ═══════════════════════════════════════════════
    TYPES & CONSTANTS
@@ -214,6 +215,8 @@ const OrderFormPage: React.FC = () => {
   const [busPenaltyRule, setBusPenaltyRule] = useState<{ bus_min_pack: number; bus_penalty_idr: number }>({ bus_min_pack: 35, bus_penalty_idr: 500000 });
   const [busServiceOption, setBusServiceOption] = useState<BusServiceOption>('finality');
   const [orderPicName, setOrderPicName] = useState('');
+  /** Keterangan invoice (textarea); hanya role yang boleh edit harga yang mengirim ke API. */
+  const [invoiceKeterangan, setInvoiceKeterangan] = useState('');
   const initialOrderItemKeysRef = useRef<Set<string>>(new Set());
   const lastHiaceBusRowRef = useRef<OrderItemRow | null>(null);
 
@@ -288,6 +291,13 @@ const OrderFormPage: React.FC = () => {
       USD_TO_IDR: typeof o.USD_TO_IDR === 'number' ? o.USD_TO_IDR : undefined
     });
   }, [order?.id, order?.currency_rates_override]);
+
+  useEffect(() => {
+    if (!order?.id) return;
+    const fromOrder = order.invoice_keterangan != null ? String(order.invoice_keterangan).trim() : '';
+    const fromInv = order.Invoice?.notes != null ? String(order.Invoice.notes).trim() : '';
+    setInvoiceKeterangan(fromOrder || fromInv || '');
+  }, [order?.id, order?.invoice_keterangan, order?.Invoice?.notes]);
 
   useEffect(()=>{
     if(!canPickOwner){ setOwners([]); return; }
@@ -1439,6 +1449,8 @@ const OrderFormPage: React.FC = () => {
     const hasCustomRates=canEditPrice&&orderRatesOverride&&(orderRatesOverride.SAR_TO_IDR!=null||orderRatesOverride.USD_TO_IDR!=null);
     return hasCustomRates ? { currency_rates_override: { SAR_TO_IDR: orderRatesOverride!.SAR_TO_IDR, USD_TO_IDR: orderRatesOverride!.USD_TO_IDR } } : {};
   };
+  const getInvoiceKeteranganPayload = () =>
+    canEditPrice ? { invoice_keterangan: invoiceKeterangan.trim() ? invoiceKeterangan.trim() : null } : {};
   const validForRates=items.filter(r=>{ if(!r.product_id) return false; if(r.type==='hotel') return r.room_breakdown?.some((l)=>hotelLineQuantityValid(r,l))||(r.room_type&&r.quantity>0); return r.quantity>0; });
   const hasNewItemsAfterDp=hasDpPayment&&validForRates.some(r=>{
     if(r.type==='hotel'&&r.room_breakdown?.length){ for(const l of r.room_breakdown){ if(!hotelLineQuantityValid(r,l)) continue; const effRt=effectiveHotelLineRoomType(r,l); if(!effRt) continue; const key=`hotel:${r.product_id}:${effRt}:${hotelStayKeyPart(r)}`; if(!initialOrderItemKeysRef.current.has(key)) return true; } return false; }
@@ -1478,14 +1490,15 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada kota sistem untuk kabupaten terpilih (pastikan master kota punya kode sama dengan kode kabupaten).','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
+    const ketPayload = getInvoiceKeteranganPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,pic_name:orderPicName.trim(),...ratesPayload,...busOrderApiFields})
+      ordersApi.update(orderId,{items:payload,pic_name:orderPicName.trim(),...ratesPayload,...ketPayload,...busOrderApiFields})
         .then(()=>{ showToast('Invoice diperbarui. Tagihan ikut diperbarui.','success'); navigate('/dashboard/orders-invoices', { state: { refreshList: true } }); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal memperbarui','error'))
         .finally(()=>setSaving(false));
     } else {
-      const body:Record<string,any>={items:payload,pic_name:orderPicName.trim(),...ratesPayload};
+      const body:Record<string,any>={items:payload,pic_name:orderPicName.trim(),...ratesPayload,...ketPayload};
       if((!isOwner&&!canPickOwner&&branchId) || (canPickOwner&&ownerInputMode==='manual'&&branchSel)) body.branch_id=(canPickOwner&&ownerInputMode==='manual')?branchSel:branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
       if(canPickOwner&&ownerInputMode==='manual'){
@@ -1535,14 +1548,15 @@ const OrderFormPage: React.FC = () => {
     if(canPickOwner&&ownerInputMode==='manual'&&!branchSel){ showToast('Tidak ada kota sistem untuk kabupaten terpilih (pastikan master kota punya kode sama dengan kode kabupaten).','warning'); return; }
     const payload=buildPayloadWithRates(valid);
     const ratesPayload=getRatesPayload();
+    const ketPayloadDraft = getInvoiceKeteranganPayload();
     setSaving(true);
     if(isEdit&&orderId){
-      ordersApi.update(orderId,{items:payload,pic_name:orderPicName.trim(),...ratesPayload,...busOrderApiFields})
+      ordersApi.update(orderId,{items:payload,pic_name:orderPicName.trim(),...ratesPayload,...ketPayloadDraft,...busOrderApiFields})
         .then(()=>{ showToast('Draft disimpan. Invoice belum diterbitkan.','success'); setSaving(false); })
         .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menyimpan draft','error'))
         .finally(()=>setSaving(false));
     } else {
-      const body:Record<string,any>={items:payload,save_as_draft:true,pic_name:orderPicName.trim(),...ratesPayload};
+      const body:Record<string,any>={items:payload,save_as_draft:true,pic_name:orderPicName.trim(),...ratesPayload,...ketPayloadDraft};
       if((!isOwner&&!canPickOwner&&branchId) || (canPickOwner&&ownerInputMode==='manual'&&branchSel)) body.branch_id=(canPickOwner&&ownerInputMode==='manual')?branchSel:branchId;
       if(ownerId&&user?.role!=='owner_mou'&&user?.role!=='owner_non_mou') body.owner_id=ownerId;
       if(canPickOwner&&ownerInputMode==='manual'){
@@ -1574,7 +1588,7 @@ const OrderFormPage: React.FC = () => {
       return;
     }
     setSaving(true);
-    invoicesApi.create({ order_id: orderId, pic_name: orderPicName.trim() })
+    invoicesApi.create({ order_id: orderId, pic_name: orderPicName.trim(), ...getInvoiceKeteranganPayload() })
       .then(()=>{ showToast('Invoice diterbitkan.','success'); navigate('/dashboard/orders-invoices',{state:{refreshList:true}}); })
       .catch((err:any)=>showToast(err.response?.data?.message||'Gagal menerbitkan invoice','error'))
       .finally(()=>setSaving(false));
@@ -2435,8 +2449,32 @@ const OrderFormPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Kurs untuk order ini */}
+        {/* Keterangan invoice + kurs (hanya role yang mengatur kurs) */}
         {canEditPrice && (
+          <>
+        <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-[#0D1A63]/10 text-[#0D1A63]">
+              <FileText className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 text-sm">Keterangan</h2>
+              <p className="text-xs text-slate-500">Teks tambahan untuk invoice (tampil sebagai catatan di PDF / detail invoice).</p>
+            </div>
+          </div>
+          <div className="p-4">
+            <label htmlFor="invoice_keterangan" className={labelClass}>Keterangan invoice</label>
+            <textarea
+              id="invoice_keterangan"
+              name="invoice_keterangan"
+              rows={4}
+              value={invoiceKeterangan}
+              onChange={(e) => setInvoiceKeterangan(e.target.value)}
+              placeholder="Contoh: kurs negosiasi, penjelasan tagihan, atau catatan untuk keuangan…"
+              className={`${inputBaseClass} ${inputBorderClass} w-full min-h-[96px] resize-y`}
+            />
+          </div>
+        </section>
           <section className="rounded-xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
             <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
@@ -2466,6 +2504,7 @@ const OrderFormPage: React.FC = () => {
               )}
             </div>
           </section>
+          </>
         )}
 
         {/* Ringkasan */}
