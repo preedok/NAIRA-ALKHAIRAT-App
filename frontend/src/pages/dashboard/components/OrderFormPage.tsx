@@ -71,12 +71,24 @@ type HotelPriceMode = 'mou' | 'non_mou';
 
 type DisplayCurrency = 'SAR' | 'IDR' | 'USD';
 
+/** Label include paket (selaras master paket di PackagesPage). */
+const PACKAGE_INCLUDE_LABELS: Record<string, string> = {
+  hotel: 'Hotel',
+  makan: 'Makan',
+  tasreh: 'Tasreh',
+  siskopatuh: 'Siskopatuh',
+  visa: 'Visa',
+  tiket: 'Tiket',
+  bis: 'Bis',
+  handling: 'Handling'
+};
+
 interface ProductOption {
   id:string; name:string; code:string; type:string;
   is_package?:boolean; price_general?:number|null;
   price_general_idr?:number|null; price_general_sar?:number|null; price_general_usd?:number|null;
   price_branch?:number|null; price_owner?:number|null;
-  currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';room_pricing_mode?:'per_room'|'per_person'|'per_pack';owner_meal_mode?:Partial<Record<HotelPriceMode,'with_meal'|'fullboard'>>;route_prices_by_trip?:Record<string,number>;[k:string]:unknown};
+  currency?:string; meta?:{meal_price?:number;meal_plan?:'fullboard'|'room_only';room_pricing_mode?:'per_room'|'per_person'|'per_pack';owner_meal_mode?:Partial<Record<HotelPriceMode,'with_meal'|'fullboard'>>;route_prices_by_trip?:Record<string,number>;includes?:string[];hotel_makkah_id?:string;hotel_madinah_id?:string;[k:string]:unknown};
   room_breakdown?:Record<string,{ price: number; quantity?: number }>; prices_by_room?:Record<string,{ price: number; quantity?: number }>;
   /** Backend: nilai suplemen makan dalam mata uang referensi produk (bukan selalu IDR meski namanya _idr). */
   meal_price_idr?: number | null;
@@ -1048,6 +1060,20 @@ const OrderFormPage: React.FC = () => {
           next.unit_price=next.unit_price===0||upd.product_id!==r.product_id?busRoutePrice(prod,route,tripType):next.unit_price;
         } else if(next.type==='package'){
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=toRowCurrency(packageUnitPriceIdr(prod),next);
+          if (upd.product_id !== r.product_id) {
+            const pm = prod.meta as { includes?: string[]; hotel_makkah_id?: string; hotel_madinah_id?: string } | undefined;
+            const includes = Array.isArray(pm?.includes) ? pm.includes : [];
+            const package_include_flags: Record<string, boolean> = {};
+            includes.forEach((k) => {
+              package_include_flags[k] = true;
+            });
+            next.meta = {
+              ...(next.meta || {}),
+              package_include_flags,
+              package_hotel_makkah_id: pm?.hotel_makkah_id || undefined,
+              package_hotel_madinah_id: pm?.hotel_madinah_id || undefined
+            };
+          }
         } else {
           if(next.unit_price===0||upd.product_id!==r.product_id) next.unit_price=effP(prod,next.type);
         }
@@ -2172,7 +2198,7 @@ const OrderFormPage: React.FC = () => {
                                             <>
                                   <>
                                   <div className="min-w-[100px] flex-1 sm:max-w-[140px]">
-                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=fullboardRow; const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hotelRoomUnitSar(hProd,rt,row.check_in,row); const unitP=rt?toCurrencyFromSAR(roomOnlySar,cur):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd,row.check_in,row),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}px` })); })()} emptyLabel="— Pilih —" />
+                                    <Autocomplete label="Tipe Kamar" value={line.room_type ?? ''} onChange={v=>{ if(locked) return; const rt=v as RoomTypeId|''; const cur=rowCur(row); const fullboard=fullboardRow; const withMeal=fullboard?true:(line.with_meal??false); const roomOnlySar=hotelRoomUnitSar(hProd,rt,row.check_in,row); const unitP=rt?toCurrencyFromSAR(roomOnlySar,cur):0; const mealP=withMeal&&!fullboard&&rt?toCurrencyFromSAR(getMealPriceSar(hProd,row.check_in,row),cur):0; updLine(row.id,line.id,{room_type:rt,unit_price:unitP,meal_unit_price:mealP,with_meal:withMeal}); }} options={(()=>{ const rb=hProd?.room_breakdown??hProd?.prices_by_room??{}; const ids=Object.keys(rb); return ids.map(id=>({ value: id, label: `${ROOM_TYPES.find(rt=>rt.id===id)?.label ?? id} · ${ROOM_TYPES.find(rt=>rt.id===id)?.cap ?? 0}` })); })()} emptyLabel="— Pilih —" />
                                   </div>
                                   <div className="w-24 min-w-[72px]">
                                     <Input label={isPerPackHotel ? 'Jumlah pack' : 'Jumlah'} type="number" min={0} value={line.quantity === undefined || line.quantity === null ? '' : String(line.quantity)} onChange={e=>{ if(locked) return; const v=e.target.value; if(v===''){updLine(row.id,line.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updLine(row.id,line.id,{quantity:n}); }} />
@@ -2193,9 +2219,9 @@ const OrderFormPage: React.FC = () => {
                                   {fullboardRow ? (
                                     <span
                                       className="inline-flex items-center justify-center shrink-0 h-12 box-border px-3 rounded-xl border-2 border-slate-200 bg-slate-100 text-xs font-medium text-slate-600 text-center leading-tight max-w-[11rem]"
-                                      title="Fullboard (termasuk makan)"
+                                      title="Fullboard"
                                     >
-                                      Fullboard (termasuk makan)
+                                      Fullboard 
                                     </span>
                                   ) : (
                                     <Button
@@ -2333,95 +2359,483 @@ const OrderFormPage: React.FC = () => {
                               )}
                             </>
                           ) : (
-                            <div className="rounded-lg bg-slate-50/60 border border-slate-100 p-3">
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 items-end">
-                              {row.type==='ticket' && (()=>{
-                                const ticketProduct = products.find((p:ProductOption)=>p.type==='ticket'&&p.id===row.product_id);
-                                const tripType:TicketTripType=(ticketProduct?.meta?.trip_type as TicketTripType)||(row.meta?.trip_type as TicketTripType)||'round_trip';
-                                return (
-                                <>
-                                  <div className="min-w-0">
-                                    <Autocomplete label="Bandara" value={(row.meta?.bandara as string)||''} onChange={v=>{ updateRow(row.id,{ meta: { ...(row.meta||{}), bandara:v } }); }} options={(ticketProduct?.bandara_options ?? []).map(b=>({value:b.bandara,label:`${b.name} (${b.bandara})`}))} emptyLabel="— Pilih bandara —" />
+                            <div className="rounded-lg bg-slate-50/60 border border-slate-100 p-3 space-y-4">
+                              {row.type === 'ticket' && (() => {
+                                const ticketProduct = products.find((p: ProductOption) => p.type === 'ticket' && p.id === row.product_id);
+                                const tripType: TicketTripType =
+                                  (ticketProduct?.meta?.trip_type as TicketTripType) || (row.meta?.trip_type as TicketTripType) || 'round_trip';
+                                const priceCol = canEditPrice ? (
+                                  <div className="min-w-0 xl:col-span-3">
+                                    <Input
+                                      label={`Harga Satuan (${rowCur(row)})`}
+                                      type="number"
+                                      min={0}
+                                      value={(() => {
+                                        const val = getInC(row.unit_price || 0, row, rowCur(row));
+                                        return String(Math.round(val * 100) / 100 || '');
+                                      })()}
+                                      placeholder="0"
+                                      onChange={(e) => setRP(row.id, rowCur(row), parseFloat(e.target.value) || 0)}
+                                    />
                                   </div>
-                                  {tripType==='round_trip' && (
-                                    <>
-                                      <div className="min-w-0"><Input label="Tanggal pergi" type="date" value={(row.meta?.departure_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), departure_date: e.target.value || undefined } })} /></div>
-                                      <div className="min-w-0"><Input label="Tanggal pulang" type="date" value={(row.meta?.return_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), return_date: e.target.value || undefined } })} /></div>
-                                    </>
-                                  )}
-                                  {tripType==='one_way' && (
-                                    <div className="min-w-0"><Input label="Tanggal pergi" type="date" value={(row.meta?.departure_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), departure_date: e.target.value || undefined, return_date: undefined } })} /></div>
-                                  )}
-                                  {tripType==='return_only' && (
-                                    <div className="min-w-0"><Input label="Tanggal pulang" type="date" value={(row.meta?.return_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), return_date: e.target.value || undefined, departure_date: undefined } })} /></div>
-                                  )}
-                                </>
+                                ) : (
+                                  <div className="min-w-0 xl:col-span-3">
+                                    <label className={labelClass}>{`Harga Satuan (${rowCur(row)})`}</label>
+                                    <p className="text-sm font-bold text-slate-900 tabular-nums">
+                                      <NominalDisplay {...nominalInRowCur(row, row.unit_price || 0)} />
+                                    </p>
+                                  </div>
                                 );
-                              })()}
-                              {row.type==='visa' && (
-                                <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender visa" /></div>
-                              )}
-                              {row.type==='siskopatuh' && (
-                                <div className="min-w-0">
-                                  <Input
-                                    label="Tanggal layanan"
-                                    type="date"
-                                    value={(row.meta?.service_date as string) ?? ''}
-                                    onChange={(e) =>
-                                      updateRow(row.id, {
-                                        meta: { ...(row.meta || {}), service_date: e.target.value || undefined }
-                                      })
-                                    }
-                                    title="Untuk filter progress & referensi jadwal siskopatuh"
-                                  />
-                                </div>
-                              )}
-                              {row.type==='bus' && (()=>{
-                                const busProduct = products.find((p:ProductOption)=>p.type==='bus'&&p.id===row.product_id);
-                                const productTripType = busProduct?.meta?.trip_type as TicketTripType | undefined;
-                                const tripType = (row.meta?.trip_type as TicketTripType)||productTripType||'round_trip';
+                                const qtyCol = (
+                                  <div className="min-w-0 xl:col-span-2">
+                                    <Input
+                                      label="Qty"
+                                      type="number"
+                                      min={0}
+                                      value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (v === '') {
+                                          updateRow(row.id, { quantity: 0 });
+                                          return;
+                                        }
+                                        const n = parseInt(v, 10);
+                                        if (!isNaN(n) && n >= 0) updateRow(row.id, { quantity: n });
+                                      }}
+                                    />
+                                  </div>
+                                );
                                 return (
-                                <>
-                                  <div className="min-w-0"><Input label="Tanggal keberangkatan" type="date" value={(row.meta?.travel_date as string)??''} onChange={e=> updateRow(row.id,{ meta: { ...(row.meta||{}), travel_date: e.target.value || undefined } })} title="Untuk kuota kalender bus" /></div>
-                                  <div className="min-w-0"><Autocomplete label="Jenis bus" value={(row.meta?.bus_type as BusType)||'besar'} onChange={v=>{ const bus_type=v as BusType; updateRow(row.id,{ meta: { ...(row.meta||{}), bus_type, route_type:(row.meta?.route_type as BusRouteType)||'full_route', trip_type: tripType } }); }} options={(()=>{ const kind=busProduct?.meta?.bus_kind as string|undefined; const t=kind?BUS_KIND_TO_TYPE[kind]:undefined; if(!t) return []; const lbl=BUS_TYPE_LABELS[t]; return [{ value: t, label: lbl ?? t }]; })()} /></div>
-                                  <div className="min-w-0"><Autocomplete label="Rute" value={(row.meta?.route_type as BusRouteType)||'full_route'} onChange={v=>{ const route_type=v as BusRouteType; updateRow(row.id,{ meta: { ...(row.meta||{}), route_type, trip_type: tripType, bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={(()=>{ const rp=busProduct?.meta?.route_prices as Record<string,number>|undefined; if(!rp) return []; return Object.entries(rp).filter(([,v])=>(v??0)>0).map(([k])=>({ value: k, label: BUS_ROUTE_LABELS[k] ?? k })); })()} /></div>
-                                  {productTripType ? (
-                                    <div className="min-w-0"><p className="text-sm font-medium text-slate-700 mb-0.5">Perjalanan</p><p className="text-sm text-slate-600">{TICKET_TRIP_LABELS[productTripType] ?? productTripType}</p></div>
-                                  ) : (
-                                    <div className="min-w-0"><Autocomplete label="Perjalanan" value={tripType} onChange={v=>{ const tt=v as TicketTripType; updateRow(row.id,{ meta: { ...(row.meta||{}), trip_type: tt, route_type:(row.meta?.route_type as BusRouteType)||'full_route', bus_type:(row.meta?.bus_type as BusType)||'besar' } }); }} options={(()=>{ const byTrip=busProduct?.meta?.route_prices_by_trip as Record<string,number>|undefined; const keys=byTrip?Object.keys(byTrip).filter(k=>['one_way','return_only','round_trip'].includes(k)):[]; return keys.map(k=>({ value: k, label: TICKET_TRIP_LABELS[k] ?? k })); })()} /></div>
-                                  )}
-                                </>
-                                );
-                              })()}
-                              <div className="min-w-0 w-20">
-                                <Input label="Qty" type="number" min={0} value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)} onChange={e=>{ const v=e.target.value; if(v===''){updateRow(row.id,{quantity:0});return;} const n=parseInt(v,10); if(!isNaN(n)&&n>=0) updateRow(row.id,{quantity:n}); }} />
-                              </div>
-                              {row.check_in && row.check_out && (
-                                <div className="min-w-0 col-span-full text-xs text-slate-600 -mt-1">
-                                  <span className="font-medium">Estimasi per bulan:</span>{' '}
-                                  {hotelMonthBreakdown(row).length
-                                    ? hotelMonthBreakdown(row).map((m)=>`${m.yearMonth} (${m.nights} malam): ${Math.round(m.est).toLocaleString('id-ID')}`).join(' | ')
-                                    : 'Belum bisa dihitung'}
-                                </div>
-                              )}
-                              {canEditPrice ? (
-                                <div className="min-w-0 col-span-2 sm:col-span-1 flex flex-col justify-end">
-                                  <div className="flex items-center gap-2">
-                                    <label className={`${labelClass} shrink-0 mb-0`}>Harga Satuan ({rowCur(row)})</label>
-                                    <div className="flex-1 min-w-0">
-                                      <Input fullWidth label="" type="number" min={0} value={(()=>{ const val=getInC(row.unit_price||0,row,rowCur(row)); return String(Math.round(val*100)/100||''); })()} placeholder="0" onChange={e=>setRP(row.id,rowCur(row),parseFloat(e.target.value)||0)} />
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3">
+                                    <div className="min-w-0 xl:col-span-2">
+                                      <Autocomplete
+                                        label="Bandara"
+                                        value={(row.meta?.bandara as string) || ''}
+                                        onChange={(v) => {
+                                          updateRow(row.id, { meta: { ...(row.meta || {}), bandara: v } });
+                                        }}
+                                        options={(ticketProduct?.bandara_options ?? []).map((b) => ({
+                                          value: b.bandara,
+                                          label: `${b.name} (${b.bandara})`
+                                        }))}
+                                        emptyLabel="— Pilih bandara —"
+                                      />
                                     </div>
+                                    {tripType === 'round_trip' && (
+                                      <>
+                                        <div className="min-w-0 xl:col-span-2">
+                                          <Input
+                                            label="Tanggal pergi"
+                                            type="date"
+                                            value={(row.meta?.departure_date as string) ?? ''}
+                                            onChange={(e) =>
+                                              updateRow(row.id, { meta: { ...(row.meta || {}), departure_date: e.target.value || undefined } })
+                                            }
+                                          />
+                                        </div>
+                                        <div className="min-w-0 xl:col-span-2">
+                                          <Input
+                                            label="Tanggal pulang"
+                                            type="date"
+                                            value={(row.meta?.return_date as string) ?? ''}
+                                            onChange={(e) =>
+                                              updateRow(row.id, { meta: { ...(row.meta || {}), return_date: e.target.value || undefined } })
+                                            }
+                                          />
+                                        </div>
+                                      </>
+                                    )}
+                                    {tripType === 'one_way' && (
+                                      <div className="min-w-0 xl:col-span-3">
+                                        <Input
+                                          label="Tanggal pergi"
+                                          type="date"
+                                          value={(row.meta?.departure_date as string) ?? ''}
+                                          onChange={(e) =>
+                                            updateRow(row.id, {
+                                              meta: { ...(row.meta || {}), departure_date: e.target.value || undefined, return_date: undefined }
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    )}
+                                    {tripType === 'return_only' && (
+                                      <div className="min-w-0 xl:col-span-3">
+                                        <Input
+                                          label="Tanggal pulang"
+                                          type="date"
+                                          value={(row.meta?.return_date as string) ?? ''}
+                                          onChange={(e) =>
+                                            updateRow(row.id, {
+                                              meta: { ...(row.meta || {}), return_date: e.target.value || undefined, departure_date: undefined }
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    )}
+                                    {qtyCol}
+                                    {priceCol}
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="min-w-0 flex flex-col justify-end">
-                                  <div className="flex items-center gap-2">
-                                    <label className={`${labelClass} mb-0 shrink-0`}>Harga Satuan ({rowCur(row)})</label>
-                                    <p className="text-sm font-bold text-slate-900 tabular-nums"><NominalDisplay {...nominalInRowCur(row,row.unit_price||0)} /></p>
+                                );
+                              })()}
+                              {row.type === 'visa' && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3">
+                                  <div className="min-w-0 xl:col-span-4">
+                                    <Input
+                                      label="Tanggal keberangkatan"
+                                      type="date"
+                                      value={(row.meta?.travel_date as string) ?? ''}
+                                      onChange={(e) =>
+                                        updateRow(row.id, { meta: { ...(row.meta || {}), travel_date: e.target.value || undefined } })
+                                      }
+                                      title="Untuk kuota kalender visa"
+                                    />
                                   </div>
+                                  <div className="min-w-0 xl:col-span-2">
+                                    <Input
+                                      label="Qty"
+                                      type="number"
+                                      min={0}
+                                      value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (v === '') {
+                                          updateRow(row.id, { quantity: 0 });
+                                          return;
+                                        }
+                                        const n = parseInt(v, 10);
+                                        if (!isNaN(n) && n >= 0) updateRow(row.id, { quantity: n });
+                                      }}
+                                    />
+                                  </div>
+                                  {canEditPrice ? (
+                                    <div className="min-w-0 xl:col-span-6">
+                                      <Input
+                                        label={`Harga Satuan (${rowCur(row)})`}
+                                        type="number"
+                                        min={0}
+                                        value={(() => {
+                                          const val = getInC(row.unit_price || 0, row, rowCur(row));
+                                          return String(Math.round(val * 100) / 100 || '');
+                                        })()}
+                                        placeholder="0"
+                                        onChange={(e) => setRP(row.id, rowCur(row), parseFloat(e.target.value) || 0)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="min-w-0 xl:col-span-6">
+                                      <label className={labelClass}>{`Harga Satuan (${rowCur(row)})`}</label>
+                                      <p className="text-sm font-bold text-slate-900 tabular-nums">
+                                        <NominalDisplay {...nominalInRowCur(row, row.unit_price || 0)} />
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               )}
-                              </div>
+                              {row.type === 'siskopatuh' && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3">
+                                  <div className="min-w-0 xl:col-span-4">
+                                    <Input
+                                      label="Tanggal layanan"
+                                      type="date"
+                                      value={(row.meta?.service_date as string) ?? ''}
+                                      onChange={(e) =>
+                                        updateRow(row.id, {
+                                          meta: { ...(row.meta || {}), service_date: e.target.value || undefined }
+                                        })
+                                      }
+                                      title="Untuk filter progress & referensi jadwal siskopatuh"
+                                    />
+                                  </div>
+                                  <div className="min-w-0 xl:col-span-2">
+                                    <Input
+                                      label="Qty"
+                                      type="number"
+                                      min={0}
+                                      value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (v === '') {
+                                          updateRow(row.id, { quantity: 0 });
+                                          return;
+                                        }
+                                        const n = parseInt(v, 10);
+                                        if (!isNaN(n) && n >= 0) updateRow(row.id, { quantity: n });
+                                      }}
+                                    />
+                                  </div>
+                                  {canEditPrice ? (
+                                    <div className="min-w-0 xl:col-span-6">
+                                      <Input
+                                        label={`Harga Satuan (${rowCur(row)})`}
+                                        type="number"
+                                        min={0}
+                                        value={(() => {
+                                          const val = getInC(row.unit_price || 0, row, rowCur(row));
+                                          return String(Math.round(val * 100) / 100 || '');
+                                        })()}
+                                        placeholder="0"
+                                        onChange={(e) => setRP(row.id, rowCur(row), parseFloat(e.target.value) || 0)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="min-w-0 xl:col-span-6">
+                                      <label className={labelClass}>{`Harga Satuan (${rowCur(row)})`}</label>
+                                      <p className="text-sm font-bold text-slate-900 tabular-nums">
+                                        <NominalDisplay {...nominalInRowCur(row, row.unit_price || 0)} />
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {row.type === 'bus' && (() => {
+                                const busProduct = products.find((p: ProductOption) => p.type === 'bus' && p.id === row.product_id);
+                                const productTripType = busProduct?.meta?.trip_type as TicketTripType | undefined;
+                                const tripType =
+                                  (row.meta?.trip_type as TicketTripType) || productTripType || 'round_trip';
+                                return (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3">
+                                    <div className="min-w-0 xl:col-span-3">
+                                      <Input
+                                        label="Tanggal keberangkatan"
+                                        type="date"
+                                        value={(row.meta?.travel_date as string) ?? ''}
+                                        onChange={(e) =>
+                                          updateRow(row.id, { meta: { ...(row.meta || {}), travel_date: e.target.value || undefined } })
+                                        }
+                                        title="Untuk kuota kalender bus"
+                                      />
+                                    </div>
+                                    <div className="min-w-0 xl:col-span-3">
+                                      <Autocomplete
+                                        label="Jenis bus"
+                                        value={(row.meta?.bus_type as BusType) || 'besar'}
+                                        onChange={(v) => {
+                                          const bus_type = v as BusType;
+                                          updateRow(row.id, {
+                                            meta: {
+                                              ...(row.meta || {}),
+                                              bus_type,
+                                              route_type: (row.meta?.route_type as BusRouteType) || 'full_route',
+                                              trip_type: tripType
+                                            }
+                                          });
+                                        }}
+                                        options={(() => {
+                                          const kind = busProduct?.meta?.bus_kind as string | undefined;
+                                          const t = kind ? BUS_KIND_TO_TYPE[kind] : undefined;
+                                          if (!t) return [];
+                                          const lbl = BUS_TYPE_LABELS[t];
+                                          return [{ value: t, label: lbl ?? t }];
+                                        })()}
+                                      />
+                                    </div>
+                                    <div className="min-w-0 xl:col-span-2">
+                                      <Autocomplete
+                                        label="Rute"
+                                        value={(row.meta?.route_type as BusRouteType) || 'full_route'}
+                                        onChange={(v) => {
+                                          const route_type = v as BusRouteType;
+                                          updateRow(row.id, {
+                                            meta: {
+                                              ...(row.meta || {}),
+                                              route_type,
+                                              trip_type: tripType,
+                                              bus_type: (row.meta?.bus_type as BusType) || 'besar'
+                                            }
+                                          });
+                                        }}
+                                        options={(() => {
+                                          const rp = busProduct?.meta?.route_prices as Record<string, number> | undefined;
+                                          if (!rp) return [];
+                                          return Object.entries(rp)
+                                            .filter(([, val]) => (val ?? 0) > 0)
+                                            .map(([k]) => ({ value: k, label: BUS_ROUTE_LABELS[k] ?? k }));
+                                        })()}
+                                      />
+                                    </div>
+                                    <div className="min-w-0 xl:col-span-2">
+                                      <Input
+                                        label="Qty"
+                                        type="number"
+                                        min={0}
+                                        value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          if (v === '') {
+                                            updateRow(row.id, { quantity: 0 });
+                                            return;
+                                          }
+                                          const n = parseInt(v, 10);
+                                          if (!isNaN(n) && n >= 0) updateRow(row.id, { quantity: n });
+                                        }}
+                                      />
+                                    </div>
+                                    {canEditPrice ? (
+                                      <div className="min-w-0 xl:col-span-2">
+                                        <Input
+                                          label={`Harga Satuan (${rowCur(row)})`}
+                                          type="number"
+                                          min={0}
+                                          value={(() => {
+                                            const val = getInC(row.unit_price || 0, row, rowCur(row));
+                                            return String(Math.round(val * 100) / 100 || '');
+                                          })()}
+                                          placeholder="0"
+                                          onChange={(e) => setRP(row.id, rowCur(row), parseFloat(e.target.value) || 0)}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="min-w-0 xl:col-span-2">
+                                        <label className={labelClass}>{`Harga Satuan (${rowCur(row)})`}</label>
+                                        <p className="text-sm font-bold text-slate-900 tabular-nums">
+                                          <NominalDisplay {...nominalInRowCur(row, row.unit_price || 0)} />
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              {(row.type === 'handling' || row.type === 'package') && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3">
+                                  <div className="min-w-0 xl:col-span-3">
+                                    <Input
+                                      label="Qty"
+                                      type="number"
+                                      min={0}
+                                      value={row.quantity === undefined || row.quantity === null ? '' : String(row.quantity)}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (v === '') {
+                                          updateRow(row.id, { quantity: 0 });
+                                          return;
+                                        }
+                                        const n = parseInt(v, 10);
+                                        if (!isNaN(n) && n >= 0) updateRow(row.id, { quantity: n });
+                                      }}
+                                    />
+                                  </div>
+                                  {canEditPrice ? (
+                                    <div className="min-w-0 xl:col-span-9">
+                                      <Input
+                                        label={`Harga Satuan (${rowCur(row)})`}
+                                        type="number"
+                                        min={0}
+                                        value={(() => {
+                                          const val = getInC(row.unit_price || 0, row, rowCur(row));
+                                          return String(Math.round(val * 100) / 100 || '');
+                                        })()}
+                                        placeholder="0"
+                                        onChange={(e) => setRP(row.id, rowCur(row), parseFloat(e.target.value) || 0)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="min-w-0 xl:col-span-9">
+                                      <label className={labelClass}>{`Harga Satuan (${rowCur(row)})`}</label>
+                                      <p className="text-sm font-bold text-slate-900 tabular-nums">
+                                        <NominalDisplay {...nominalInRowCur(row, row.unit_price || 0)} />
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {row.type === 'package' &&
+                                row.product_id &&
+                                (() => {
+                                  const pkg = byType('package').find((p) => p.id === row.product_id);
+                                  const pm = pkg?.meta as
+                                    | {
+                                        includes?: string[];
+                                        hotel_makkah_id?: string;
+                                        hotel_madinah_id?: string;
+                                      }
+                                    | undefined;
+                                  const includes = Array.isArray(pm?.includes) ? pm.includes : [];
+                                  if (includes.length === 0) return null;
+                                  const flags = (row.meta?.package_include_flags as Record<string, boolean> | undefined) ?? {};
+                                  const setInclude = (key: string, on: boolean) => {
+                                    updateRow(row.id, {
+                                      meta: { ...(row.meta || {}), package_include_flags: { ...flags, [key]: on } }
+                                    });
+                                  };
+                                  const hotelOpts = products
+                                    .filter((p) => p.type === 'hotel' && !p.is_package)
+                                    .map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }));
+                                  const hotelLabel = (id?: string) =>
+                                    products.find((p) => p.id === id)?.name ?? (id ? `Produk ${id.slice(0, 8)}…` : '—');
+                                  const makId =
+                                    (row.meta?.package_hotel_makkah_id as string) || pm?.hotel_makkah_id || '';
+                                  const madId =
+                                    (row.meta?.package_hotel_madinah_id as string) || pm?.hotel_madinah_id || '';
+                                  return (
+                                    <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Include paket</p>
+                                      <p className="text-xs text-slate-500">
+                                        Centang include yang dipakai untuk order ini. Penggantian hotel tersimpan di item order (meta).
+                                      </p>
+                                      <ul className="space-y-2">
+                                        {includes.map((inc) => (
+                                          <li
+                                            key={inc}
+                                            className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2"
+                                          >
+                                            <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
+                                              <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63] shrink-0"
+                                                checked={flags[inc] !== false}
+                                                onChange={(e) => setInclude(inc, e.target.checked)}
+                                              />
+                                              <span className="text-sm font-medium text-slate-800">
+                                                {PACKAGE_INCLUDE_LABELS[inc] ?? inc}
+                                              </span>
+                                            </label>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                      {includes.includes('hotel') && flags.hotel !== false && (
+                                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                                          <p className="text-xs font-semibold text-slate-600">Hotel paket (boleh diganti)</p>
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div className="min-w-0">
+                                              <p className="text-xs text-slate-500 mb-1">
+                                                Default Makkah: <span className="font-medium text-slate-800">{hotelLabel(pm?.hotel_makkah_id)}</span>
+                                              </p>
+                                              <Autocomplete
+                                                label="Hotel Makkah untuk order ini"
+                                                value={makId}
+                                                onChange={(v) =>
+                                                  updateRow(row.id, {
+                                                    meta: { ...(row.meta || {}), package_hotel_makkah_id: v || undefined }
+                                                  })
+                                                }
+                                                options={hotelOpts}
+                                                emptyLabel="— Pilih hotel —"
+                                              />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className="text-xs text-slate-500 mb-1">
+                                                Default Madinah:{' '}
+                                                <span className="font-medium text-slate-800">{hotelLabel(pm?.hotel_madinah_id)}</span>
+                                              </p>
+                                              <Autocomplete
+                                                label="Hotel Madinah untuk order ini"
+                                                value={madId}
+                                                onChange={(v) =>
+                                                  updateRow(row.id, {
+                                                    meta: { ...(row.meta || {}), package_hotel_madinah_id: v || undefined }
+                                                  })
+                                                }
+                                                options={hotelOpts}
+                                                emptyLabel="— Pilih hotel —"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                             </div>
                           )}
                         </div>
