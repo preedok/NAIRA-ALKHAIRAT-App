@@ -2191,17 +2191,28 @@ const OrderFormPage: React.FC = () => {
                                     )}
                                   </div>
                                   {fullboardRow ? (
-                                    <span className="text-xs font-medium text-slate-600 py-2 px-3 rounded-lg bg-slate-100">Fullboard (termasuk makan)</span>
+                                    <span
+                                      className="inline-flex items-center justify-center shrink-0 h-12 box-border px-3 rounded-xl border-2 border-slate-200 bg-slate-100 text-xs font-medium text-slate-600 text-center leading-tight max-w-[11rem]"
+                                      title="Fullboard (termasuk makan)"
+                                    >
+                                      Fullboard (termasuk makan)
+                                    </span>
                                   ) : (
-                                    <Button type="button" variant={line.with_meal?'primary':'outline'} size="sm" className="rounded-xl"
-                                      onClick={()=>{ 
+                                    <Button
+                                      type="button"
+                                      variant={line.with_meal ? 'primary' : 'outline'}
+                                      size="sm"
+                                      className="rounded-xl !py-0 h-12 shrink-0 box-border px-4 text-sm font-semibold leading-none"
+                                      onClick={() => {
                                         const nextWithMeal = !(line.with_meal ?? false);
                                         updLine(row.id, line.id, {
                                           with_meal: nextWithMeal,
                                           meal_unit_price: nextWithMeal ? toCurrencyFromSAR(getMealPriceSar(hProd, row.check_in, row), rowCur(row)) : 0
-                                        }); 
-                                      }}>
-                                      <Utensils size={14} className="mr-1.5"/> Makan
+                                        });
+                                      }}
+                                    >
+                                      <Utensils size={14} className="mr-1.5 shrink-0" />
+                                      Makan
                                     </Button>
                                   )}
                                   </>
