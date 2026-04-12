@@ -6,7 +6,7 @@ import {
   Menu, X, ArrowRight, Star, Building2, Users,
   CheckCircle, Award, TrendingUp, MessageCircle,
   Phone, Mail, Instagram, Twitter, Youtube, Sparkles,
-  Lock, Layers, Search,
+  Lock, Layers, Search, Landmark,
   PlaneTakeoff, Target,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -50,8 +50,9 @@ const SERVICES = [
   { id: 'visa',    label: 'Pengurusan Visa',    desc: 'Proses visa Saudi resmi dan cepat. Tim kami menangani dokumen dari awal hingga selesai.', icon: FileCheck, num: '02' },
   { id: 'tiket',   label: 'Tiket Penerbangan', desc: 'Penerbangan langsung dan transit ke Arab Saudi dari seluruh bandara di Indonesia.',   icon: PlaneTakeoff, num: '03' },
   { id: 'bus',     label: 'Transportasi Bus',  desc: 'Armada ber-AC khusus jamaah, melayani rute bandara, hotel, dan ziarah.',            icon: Bus,       num: '04' },
-  { id: 'paket',   label: 'Paket All-In-One',  desc: 'Paket lengkap umroh dan wisata halal — satu harga, tanpa kejutan biaya tambahan.',   icon: Package,   num: '05' },
-  { id: 'report',  label: 'Dashboard Mitra',   desc: 'Kelola order, invoice otomatis, dan laporan real-time dari satu dashboard terintegrasi.', icon: BarChart3, num: '06' },
+  { id: 'paket',   label: 'Paket Umroh & Halal', desc: 'Paket lengkap umroh dan wisata halal — satu harga transparan, tanpa kejutan biaya tambahan.', icon: Package, num: '05' },
+  { id: 'haji',    label: 'Produk Haji',       desc: 'Dukungan mitra untuk layanan jamaah haji: paket sesuai kuota PPIU, manajemen dokumen, dan koordinasi ground handling di Arab Saudi.', icon: Landmark, num: '06' },
+  { id: 'report',  label: 'Dashboard Mitra',   desc: 'Kelola order, invoice otomatis, dan laporan real-time dari satu dashboard terintegrasi.', icon: BarChart3, num: '07' },
 ];
 
 const STEPS = [
@@ -71,11 +72,12 @@ const TESTIMONIAL_HENDRA = {
 };
 
 const DESTINATIONS_TICKER = [
-  '✈ Makkah', '🕌 Madinah', '🇹🇷 Istanbul', '🇦🇪 Dubai', '🇪🇬 Cairo', '🇯🇴 Amman',
+  '🕋 Haji', '✈ Makkah', '🕌 Madinah', '🇹🇷 Istanbul', '🇦🇪 Dubai', '🇪🇬 Cairo', '🇯🇴 Amman',
   '🇲🇾 Kuala Lumpur', '🇫🇷 Paris', '🇬🇧 London', '🇮🇹 Roma', '🇩🇪 Frankfurt', '🇲🇦 Marrakech',
 ];
 
 const FAQS = [
+  { q: 'Apakah platform mendukung produk haji selain umroh?', a: 'Ya. Mitra dapat mengelola penawaran dan order terkait layanan haji (sesuai kebijakan PPIU dan kuota) bersama produk umroh, hotel, visa, dan tiket — dari satu dashboard.' },
   { q: 'Bagaimana cara mendaftar sebagai partner?', a: 'Klik tombol "Daftar Partner", isi formulir dengan data perusahaan dan dokumen legalitas (SIUP, NPWP, SK Kemenkumham). Tim kami akan memverifikasi dalam 1×24 jam kerja.' },
   { q: 'Berapa biaya untuk menjadi partner?', a: 'Pendaftaran sepenuhnya GRATIS. Tidak ada biaya bulanan atau tahunan. Anda hanya membayar saat melakukan transaksi dengan harga khusus mitra.' },
   { q: 'Apa keuntungan menjadi partner Bintang Global?', a: 'Akses harga grosir untuk semua produk, komisi kompetitif hingga 8%, dashboard gratis, invoice otomatis, dukungan 24/7, dan materi marketing siap pakai.' },
@@ -540,8 +542,8 @@ const LandingPage: React.FC = () => {
                 <span style={{ fontSize: 'clamp(22px,2.8vw,38px)', fontWeight: 600, color: C.muted }}>untuk Seluruh Indonesia</span>
               </h1>
 
-              <p className="l-fu l-d2" style={{ fontSize: 'clamp(15px,1.35vw,17px)', color: C.muted, lineHeight: 1.8, margin: '0 0 26px', maxWidth: 520 }}>
-                Hotel, visa, tiket, bus, dan paket dalam satu platform terintegrasi — dirancang khusus untuk agen travel dan penyelenggara umroh profesional.
+              <p className="l-fu l-d2" style={{ fontSize: 'clamp(15px,1.35vw,17px)', color: C.muted, lineHeight: 1.8, margin: '0 0 26px', maxWidth: 540 }}>
+                Hotel, visa, tiket, bus, paket <strong style={{ color: C.textMd, fontWeight: 600 }}>umroh dan haji</strong>, serta layanan pendukung lainnya dalam satu platform terintegrasi — untuk agen travel dan penyelenggara haji &amp; umroh profesional.
               </p>
 
               <div className="l-fu l-d2" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 28 }}>
@@ -550,7 +552,8 @@ const LandingPage: React.FC = () => {
                   { icon: FileCheck,    label: 'Visa' },
                   { icon: PlaneTakeoff, label: 'Tiket' },
                   { icon: Bus,          label: 'Bus' },
-                  { icon: Package,      label: 'Paket' },
+                  { icon: Package,      label: 'Umroh' },
+                  { icon: Landmark,     label: 'Haji' },
                 ].map(({ icon: Icon, label }) => (
                   <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 100, fontSize: 12, fontWeight: 500, background: C.navyFaint, border: `1px solid ${C.borderMd}`, color: C.navyMed }}>
                     <Icon size={12} /> {label}
