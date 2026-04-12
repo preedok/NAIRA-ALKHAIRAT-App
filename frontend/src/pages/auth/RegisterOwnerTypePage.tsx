@@ -1,40 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { FileText, User, ArrowRight, ArrowLeft } from 'lucide-react';
-
-const DARK = '#0a0f1e';
-const MUTED = '#475569';
-const SKY = '#38bdf8';
+import { AuthSplitLayout, AuthBrandLogoRow } from './AuthSplitLayout';
 
 const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-  .ty-card { animation: cardIn .5s cubic-bezier(.22,1,.36,1) both; }
-  .ty-opt  { animation: fadeUp .45s cubic-bezier(.22,1,.36,1) both; }
-  .ty-opt-1 { animation-delay:.1s; }
-  .ty-opt-2 { animation-delay:.2s; }
   @keyframes cardIn {
-    from { opacity:0; transform:translateY(24px) scale(.98); }
+    from { opacity:0; transform:translateY(20px) scale(.98); }
     to   { opacity:1; transform:translateY(0) scale(1); }
   }
-  @keyframes fadeUp {
-    from { opacity:0; transform:translateY(12px); }
-    to   { opacity:1; transform:translateY(0); }
-  }
-  .ty-opt-card {
-    transition: transform .2s, box-shadow .2s, border-color .2s;
-  }
-  .ty-opt-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(56,189,248,0.15);
-    border-color: rgba(56,189,248,0.35);
-  }
-  .blob { filter:blur(90px); position:absolute; border-radius:50%; pointer-events:none; }
-  .grid-bg {
-    background-image:
-      linear-gradient(rgba(56,189,248,0.04) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(56,189,248,0.04) 1px,transparent 1px);
-    background-size: 48px 48px;
-  }
+  .ty-card-in { animation: cardIn .45s cubic-bezier(.22,1,.36,1) both; }
 `;
 
 const RegisterOwnerTypePage: React.FC = () => {
@@ -54,160 +28,57 @@ const RegisterOwnerTypePage: React.FC = () => {
     navigate(`/register?type=${type}`);
   };
 
+  const optBtn =
+    'ty-card-in w-full text-left rounded-xl border-2 border-slate-200 bg-white p-5 flex gap-4 items-start ' +
+    'hover:border-[#0D1A63]/30 hover:shadow-md hover:bg-slate-50/80 transition-all cursor-pointer group';
+
   return (
-    <div
-      className="grid-bg"
-      style={{
-        minHeight: '100vh',
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: DARK,
-        padding: '24px 16px',
-        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
-        position: 'relative',
-        overflow: 'hidden'
-      }}
+    <AuthSplitLayout
+      panelTitle="Dua jalur mitra, satu layanan profesional."
+      panelSubtitle="MOU atau non-MOU — keduanya terintegrasi dengan tim koordinator dan tarif produk yang transparan."
+      panelFooterLink={{ to: '/login', label: 'Kembali ke login →' }}
     >
-      {/* Background blobs */}
-      <div className="blob" style={{ width: 400, height: 400, left: '-5%', top: '-10%', background: 'rgba(37,99,235,0.2)' }} />
-      <div className="blob" style={{ width: 320, height: 320, right: '-4%', bottom: '10%', background: 'rgba(56,189,248,0.15)' }} />
+      <AuthBrandLogoRow />
 
-      <div className="ty-card" style={{ position: 'relative', width: '100%', maxWidth: 560, zIndex: 10 }}>
-        <div
-          style={{
-            position: 'absolute',
-            inset: -1,
-            borderRadius: 20,
-            pointerEvents: 'none',
-            background: 'linear-gradient(135deg,rgba(56,189,248,0.25) 0%,rgba(37,99,235,0.1) 50%,rgba(79,70,229,0.2) 100%)'
-          }}
-        />
-        <div
-          style={{
-            position: 'relative',
-            borderRadius: 19,
-            padding: '32px 28px',
-            background: 'rgba(8,13,30,0.94)',
-            backdropFilter: 'blur(24px)',
-            border: '1px solid rgba(56,189,248,0.12)'
-          }}
-        >
-          <Link
-            to="/login"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              color: MUTED,
-              textDecoration: 'none',
-              marginBottom: 20
-            }}
-          >
-            <ArrowLeft size={16} /> Kembali ke Login
-          </Link>
+      <Link
+        to="/login"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-[#0D1A63] mb-6"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Kembali ke login
+      </Link>
 
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'white', margin: '0 0 8px' }}>
-            Daftar sebagai Partner Owner
-          </h1>
-          <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '0 0 28px' }}>
-            Pilih jenis pendaftaran sesuai kesepakatan Anda dengan Bintang Global Group. Setelah memilih, Anda akan diarahkan ke form registrasi.
-          </p>
+      <h1 className="text-2xl sm:text-[1.65rem] font-bold text-slate-900 tracking-tight">Daftar sebagai Partner Owner</h1>
+      <p className="text-sm text-slate-500 mt-2 mb-8 max-w-md leading-relaxed">
+        Pilih jenis pendaftaran sesuai kesepakatan Anda dengan Bintang Global Group. Setelah memilih, Anda akan diarahkan ke form registrasi.
+      </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Owner MOU */}
-            <button
-              type="button"
-              onClick={() => handleChoose('mou')}
-              className="ty-opt ty-opt-1 ty-opt-card"
-              style={{
-                textAlign: 'left',
-                padding: '20px 20px',
-                borderRadius: 14,
-                border: '1.5px solid rgba(56,189,248,0.2)',
-                background: 'rgba(56,189,248,0.06)',
-                cursor: 'pointer',
-                color: 'white',
-                fontFamily: 'inherit'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 12,
-                    background: 'rgba(34,197,94,0.15)',
-                    border: '1px solid rgba(34,197,94,0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <FileText size={24} color="#22c55e" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 4 }}>
-                    Owner MOU
-                  </div>
-                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5 }}>
-                    Mitra dengan perjanjian MOU. Mendapat harga produk lebih murah (diskon sesuai ketentuan).
-                  </div>
-                </div>
-                <ArrowRight size={20} color={SKY} style={{ flexShrink: 0, marginTop: 4 }} />
-              </div>
-            </button>
-
-            {/* Owner Non-MOU */}
-            <button
-              type="button"
-              onClick={() => handleChoose('non_mou')}
-              className="ty-opt ty-opt-2 ty-opt-card"
-              style={{
-                textAlign: 'left',
-                padding: '20px 20px',
-                borderRadius: 14,
-                border: '1.5px solid rgba(56,189,248,0.2)',
-                background: 'rgba(56,189,248,0.06)',
-                cursor: 'pointer',
-                color: 'white',
-                fontFamily: 'inherit'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 12,
-                    background: 'rgba(100,116,139,0.2)',
-                    border: '1px solid rgba(100,116,139,0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <User size={24} color="#94a3b8" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 4 }}>
-                    Owner Non-MOU
-                  </div>
-                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5 }}>
-                    Mitra tanpa MOU. Harga produk mengikuti tarif standar.
-                  </div>
-                </div>
-                <ArrowRight size={20} color={SKY} style={{ flexShrink: 0, marginTop: 4 }} />
-              </div>
-            </button>
+      <div className="flex flex-col gap-4">
+        <button type="button" onClick={() => handleChoose('mou')} className={optBtn}>
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+            <FileText className="w-6 h-6 text-emerald-600" />
           </div>
-        </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-slate-900 group-hover:text-[#0D1A63]">Owner MOU</div>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Mitra dengan perjanjian MOU. Mendapat harga produk lebih murah (diskon sesuai ketentuan).
+            </p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-[#0D1A63] shrink-0 mt-1" />
+        </button>
+
+        <button type="button" onClick={() => handleChoose('non_mou')} className={optBtn} style={{ animationDelay: '0.08s' }}>
+          <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+            <User className="w-6 h-6 text-slate-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-slate-900 group-hover:text-[#0D1A63]">Owner Non-MOU</div>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">Mitra tanpa MOU. Harga produk mengikuti tarif standar.</p>
+          </div>
+          <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-[#0D1A63] shrink-0 mt-1" />
+        </button>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 };
 

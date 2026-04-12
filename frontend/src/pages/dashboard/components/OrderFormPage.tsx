@@ -83,6 +83,10 @@ const PACKAGE_INCLUDE_LABELS: Record<string, string> = {
   handling: 'Handling'
 };
 
+/** Id include yang boleh dipilih di order (sama urutan PackagesPage INCLUDE_OPTIONS). */
+const ORDER_PACKAGE_INCLUDE_IDS = ['hotel', 'makan', 'tasreh', 'siskopatuh', 'visa', 'tiket', 'bis', 'handling'] as const;
+const ORDER_PACKAGE_INCLUDE_ID_SET = new Set<string>(ORDER_PACKAGE_INCLUDE_IDS);
+
 interface ProductOption {
   id:string; name:string; code:string; type:string;
   is_package?:boolean; price_general?:number|null;
@@ -1074,6 +1078,7 @@ const OrderFormPage: React.FC = () => {
             next.meta = {
               ...(next.meta || {}),
               package_include_flags,
+              package_include_extras: [],
               package_hotel_makkah_id: pkgMeta.hotel_makkah_id || undefined,
               package_hotel_madinah_id: pkgMeta.hotel_madinah_id || undefined
             };
@@ -2752,12 +2757,34 @@ const OrderFormPage: React.FC = () => {
                                     hotel_makkah_id?: string;
                                     hotel_madinah_id?: string;
                                   };
-                                  const includes = Array.isArray(pkgMeta.includes) ? pkgMeta.includes : [];
-                                  if (includes.length === 0) return null;
+                                  const baseIncludes = Array.isArray(pkgMeta.includes) ? pkgMeta.includes : [];
+                                  const extrasRaw = row.meta?.package_include_extras as string[] | undefined;
+                                  const extras = Array.isArray(extrasRaw)
+                                    ? Array.from(new Set(extrasRaw.filter((id) => ORDER_PACKAGE_INCLUDE_ID_SET.has(id))))
+                                    : [];
+                                  const includeOrderIdx = (id: string) => {
+                                    const i = (ORDER_PACKAGE_INCLUDE_IDS as readonly string[]).indexOf(id);
+                                    return i < 0 ? 999 : i;
+                                  };
+                                  const displayIncludes = Array.from(new Set([...baseIncludes, ...extras])).sort(
+                                    (a, b) => includeOrderIdx(a) - includeOrderIdx(b)
+                                  );
+                                  const addableIds = ORDER_PACKAGE_INCLUDE_IDS.filter((id) => !displayIncludes.includes(id));
                                   const flags = (row.meta?.package_include_flags as Record<string, boolean> | undefined) ?? {};
                                   const setInclude = (key: string, on: boolean) => {
+                                    const meta = { ...(row.meta || {}) };
+                                    const nextFlags = { ...(flags as Record<string, boolean>), [key]: on };
                                     updateRow(row.id, {
-                                      meta: { ...(row.meta || {}), package_include_flags: { ...flags, [key]: on } }
+                                      meta: { ...meta, package_include_flags: nextFlags }
+                                    });
+                                  };
+                                  const addExtraInclude = (id: string) => {
+                                    if (!id || displayIncludes.includes(id)) return;
+                                    const meta = { ...(row.meta || {}) };
+                                    const nextExtras = [...extras, id];
+                                    const nextFlags = { ...((meta.package_include_flags as Record<string, boolean>) ?? {}), [id]: true };
+                                    updateRow(row.id, {
+                                      meta: { ...meta, package_include_extras: nextExtras, package_include_flags: nextFlags }
                                     });
                                   };
                                   const hotelOpts = products
@@ -2772,30 +2799,58 @@ const OrderFormPage: React.FC = () => {
                                   return (
                                     <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
                                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Include paket</p>
+                                      <label className="block text-sm font-medium text-slate-700">
+                                        Include – pilih yang dipakai untuk order ini
+                                      </label>
                                       <p className="text-xs text-slate-500">
-                                        Centang include yang dipakai untuk order ini. Penggantian hotel tersimpan di item order (meta).
+                                        Bisa menambah include di luar definisi paket. Penggantian hotel tersimpan di item order (meta).
                                       </p>
-                                      <ul className="space-y-2">
-                                        {includes.map((inc) => (
-                                          <li
-                                            key={inc}
-                                            className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2"
-                                          >
-                                            <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
-                                              <input
-                                                type="checkbox"
-                                                className="rounded border-slate-300 text-[#0D1A63] focus:ring-[#0D1A63] shrink-0"
-                                                checked={flags[inc] !== false}
-                                                onChange={(e) => setInclude(inc, e.target.checked)}
-                                              />
-                                              <span className="text-sm font-medium text-slate-800">
+                                      {displayIncludes.length > 0 ? (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
+                                          {displayIncludes.map((inc) => {
+                                            const selected = flags[inc] !== false;
+                                            return (
+                                              <Button
+                                                key={inc}
+                                                type="button"
+                                                variant={selected ? 'primary' : 'outline'}
+                                                size="sm"
+                                                className="w-full"
+                                                onClick={() => setInclude(inc, !selected)}
+                                              >
                                                 {PACKAGE_INCLUDE_LABELS[inc] ?? inc}
-                                              </span>
-                                            </label>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                      {includes.includes('hotel') && flags.hotel !== false && (
+                                              </Button>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-slate-500 italic">
+                                          Paket belum punya include bawaan — tambahkan dari daftar di bawah.
+                                        </p>
+                                      )}
+                                      {addableIds.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                                          <span className="text-xs font-medium text-slate-600 shrink-0">Tambah include</span>
+                                          <select
+                                            key={displayIncludes.join(',')}
+                                            className={`${inputBaseClass} ${inputBorderClass} text-sm min-w-[11rem] max-w-full rounded-md py-1.5 px-2`}
+                                            defaultValue=""
+                                            onChange={(e) => {
+                                              const v = e.target.value;
+                                              e.target.value = '';
+                                              if (v) addExtraInclude(v);
+                                            }}
+                                          >
+                                            <option value="">— Pilih —</option>
+                                            {addableIds.map((id) => (
+                                              <option key={id} value={id}>
+                                                {PACKAGE_INCLUDE_LABELS[id] ?? id}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      )}
+                                      {displayIncludes.includes('hotel') && flags.hotel !== false && (
                                         <div className="space-y-3 pt-2 border-t border-slate-100">
                                           <p className="text-xs font-semibold text-slate-600">Hotel paket (boleh diganti)</p>
                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

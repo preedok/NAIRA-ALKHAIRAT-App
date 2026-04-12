@@ -1,358 +1,227 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import {
-  Mail, Lock, Eye, EyeOff,
-  AlertCircle, ArrowRight, CheckCircle, Star,
-} from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { validateEmail } from '../../utils';
 import Input from '../../components/common/Input';
+import { checkboxClass } from '../../components/common/formStyles';
+import { AuthSplitLayout, AuthBrandLogoRow } from './AuthSplitLayout';
 
-/* ─── Styles ─────────────────────────────────────────────────────── */
-const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+const PRIMARY = '#0D1A63';
 
-  @keyframes blobFloat {
-    0%,100% { transform: scale(1);    opacity:.35; }
-    50%      { transform: scale(1.14); opacity:.58; }
-  }
-  @keyframes ringPulse {
-    0%,100% { transform:translate(-50%,-50%) scale(1);    opacity:.22; }
-    50%      { transform:translate(-50%,-50%) scale(1.08); opacity:.5;  }
-  }
-  @keyframes cardIn {
-    from { opacity:0; transform:translateY(32px) scale(.97); }
-    to   { opacity:1; transform:translateY(0)    scale(1);   }
-  }
-  @keyframes fadeUp {
-    from { opacity:0; transform:translateY(14px); }
-    to   { opacity:1; transform:translateY(0);    }
-  }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  @keyframes errorIn {
-    from { opacity:0; transform:translateY(-6px); max-height:0; }
-    to   { opacity:1; transform:translateY(0);    max-height:60px; }
-  }
+function GoogleIcon() {
+  return (
+    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
 
-  .lg-card  { animation: cardIn .65s cubic-bezier(.22,1,.36,1) both; }
-  .fu       { animation: fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
-  .fu-1     { animation-delay:.1s; }
-  .fu-2     { animation-delay:.2s; }
-  .fu-3     { animation-delay:.28s; }
-  .fu-4     { animation-delay:.36s; }
+function FacebookIcon() {
+  return (
+    <svg className="w-5 h-5 shrink-0 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
 
-  .blob     { animation:blobFloat 9s ease-in-out infinite;  filter:blur(80px); }
-  .blob-b   { animation-duration:11s; animation-delay:2s; }
-  .blob-c   { animation-duration:8s;  animation-delay:4s; }
-  .ring     { animation:ringPulse 6s ease-in-out infinite; }
-  .ring-b   { animation-delay:1.5s; }
-  .ring-c   { animation-delay:3s; }
-
-  .err-banner { animation:errorIn .25s ease-out both; overflow:hidden; }
-
-  .lg-input {
-    background: rgba(255,255,255,0.03);
-    border: 1.5px solid rgba(255,255,255,0.08);
-    border-radius: 12px;
-    display: flex; align-items: center; gap: 10px;
-    padding: 11px 14px;
-    transition: border-color .2s, background .2s, box-shadow .2s;
-  }
-  .lg-input:focus-within {
-    background: rgba(56,189,248,0.06);
-    border-color: #38bdf8;
-    box-shadow: 0 0 0 3px rgba(56,189,248,0.14);
-  }
-  .lg-input.err {
-    border-color: rgba(239,68,68,0.65);
-    box-shadow: 0 0 0 3px rgba(239,68,68,0.09);
-  }
-
-  .grid-bg {
-    background-image:
-      linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px);
-    background-size: 48px 48px;
-  }
-
-  .btn-main {
-    position:relative; overflow:hidden; border:none; cursor:pointer;
-    background: linear-gradient(135deg,#38bdf8 0%,#2563eb 55%,#4f46e5 100%);
-    box-shadow: 0 4px 28px rgba(56,189,248,0.38), inset 0 1px 0 rgba(255,255,255,0.12);
-    border-radius: 12px;
-    color: white; font-weight:700; font-size:14px; letter-spacing:.04em;
-    width:100%; padding:13px;
-    display:flex; align-items:center; justify-content:center; gap:8px;
-    transition: transform .15s, box-shadow .2s, opacity .2s;
-  }
-  .btn-main:hover:not(:disabled) {
-    transform:scale(1.013);
-    box-shadow: 0 8px 40px rgba(56,189,248,0.55);
-  }
-  .btn-main:active:not(:disabled) { transform:scale(.978); }
-  .btn-main:disabled { opacity:.8; cursor:not-allowed; }
-  .btn-main.ok { background:linear-gradient(135deg,#22c55e,#16a34a); box-shadow:0 4px 20px rgba(34,197,94,0.4); }
-  .btn-main .shine {
-    position:absolute; inset:0;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);
-    transform:translateX(-110%); transition:transform .65s ease;
-  }
-  .btn-main:hover:not(:disabled) .shine { transform:translateX(110%); }
-
-  .btn-sec {
-    display:flex; align-items:center; justify-content:center; gap:8px;
-    padding:11px; width:100%; border-radius:12px; text-decoration:none;
-    font-weight:600; font-size:13px; color:#38bdf8;
-    background:rgba(56,189,248,0.07); border:1.5px solid rgba(56,189,248,0.22);
-    transition:background .2s, border-color .2s, transform .15s;
-  }
-  .btn-sec:hover { background:rgba(56,189,248,0.13); border-color:rgba(56,189,248,0.45); transform:scale(1.01); }
-
-  .spinner {
-    width:15px; height:15px; border-radius:50%;
-    border:2px solid rgba(255,255,255,0.3); border-top-color:white;
-    animation:spin .75s linear infinite;
-  }
-
-  /* Dark form inputs (sama dengan Register) */
-  .lg-form-dark label {
-    color:#64748b !important; font-size:11px !important; font-weight:700 !important;
-    letter-spacing:.08em !important; text-transform:uppercase !important;
-  }
-  .lg-form-dark input:not([type=file]):not([type=submit]):not([type=button]):not([type=checkbox]) {
-    background:rgba(255,255,255,0.04) !important; border:1.5px solid rgba(255,255,255,0.1) !important;
-    color:#fff !important; border-radius:12px !important; caret-color:#38bdf8 !important;
-  }
-  .lg-form-dark input::placeholder { color:#475569 !important; }
-  .lg-form-dark input:focus {
-    border-color:#38bdf8 !important; box-shadow:0 0 0 3px rgba(56,189,248,0.15) !important;
-    background:rgba(56,189,248,0.06) !important;
-  }
-  .lg-form-dark .relative input { padding-left:42px !important; padding-right:14px !important; }
-  .lg-form-dark .absolute.left-4 { color:#64748b !important; }
-`;
-
-const SKY  = '#38bdf8';
-const MUTED = '#475569';
-const DARK  = '#0a0f1e';
-
-/* ─── LoginPage ──────────────────────────────────────────────────── */
 const LoginPage: React.FC = () => {
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
   const { login } = useAuth();
-  const [formData, setFormData] = useState({ email:'', password:'' });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [success, setSuccess]   = useState(false);
-  const injected = useRef(false);
+  const [remember, setRemember] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (injected.current) return;
-    injected.current = true;
-    const s = document.createElement('style');
-    s.innerHTML = STYLES;
-    document.head.appendChild(s);
+    try {
+      const saved = localStorage.getItem('bgg_login_remember_email');
+      if (saved) {
+        setFormData((p) => ({ ...p, email: saved }));
+        setRemember(true);
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
+    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
     if (error) setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!formData.email || !formData.password) { setError('Email dan password harus diisi'); return; }
+    if (!formData.email || !formData.password) {
+      setError('Email dan password harus diisi');
+      return;
+    }
     const emailErr = validateEmail(formData.email);
-    if (emailErr) { setError(emailErr); return; }
+    if (emailErr) {
+      setError(emailErr);
+      return;
+    }
     setLoading(true);
     try {
       const result = await login(formData);
-      if (result.success) { setSuccess(true); setTimeout(() => navigate('/dashboard'), 900); }
-      else setError(result.message || 'Email atau password salah');
-    } catch { setError('Terjadi kesalahan. Silakan coba lagi.'); }
-    finally  { setLoading(false); }
+      if (result.success) {
+        try {
+          if (remember) localStorage.setItem('bgg_login_remember_email', formData.email.trim().toLowerCase());
+          else localStorage.removeItem('bgg_login_remember_email');
+        } catch {
+          /* ignore */
+        }
+        setSuccess(true);
+        setTimeout(() => navigate('/dashboard'), 900);
+      } else setError(result.message || 'Email atau password salah');
+    } catch {
+      setError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const socialBtnClass =
+    'flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl border-2 border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:bg-white';
+
   return (
-    <div className="grid-bg" style={{
-      minHeight:'100vh', width:'100%',
-      display:'flex', alignItems:'center', justifyContent:'center',
-      background: DARK, padding:'24px 16px',
-      fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",
-      position:'relative', overflow:'hidden',
-    }}>
+    <AuthSplitLayout
+      panelTitle="Terhubung dengan layanan mitra Anda."
+      panelSubtitle="Satu dasbor untuk order, invoice, visa, tiket, hotel, dan paket umroh — mudah disesuaikan kebutuhan travel Anda."
+      panelFooterLink={{ to: '/register-owner-type', label: 'Daftar sebagai partner →' }}
+    >
+      <AuthBrandLogoRow />
 
-      {/* Blobs */}
-      {[
-        { cls:'blob',   w:500, h:500, l:'-8%',  t:'-15%', c:'rgba(37,99,235,0.26)' },
-        { cls:'blob blob-b', w:380, h:380, r:'-4%', b:'4%',   c:'rgba(56,189,248,0.18)' },
-        { cls:'blob blob-c', w:280, h:280, l:'40%', t:'-8%',  c:'rgba(79,70,229,0.16)' },
-      ].map((b, i) => (
-        <div key={i} className={b.cls} style={{
-          position:'absolute', width:b.w, height:b.h, borderRadius:'50%',
-          background:b.c, pointerEvents:'none',
-          ...(b.l ? { left:b.l } : {}), ...(b.r ? { right:b.r } : {}),
-          ...(b.t ? { top:b.t }  : {}), ...(b.b ? { bottom:b.b } : {}),
-        }} />
-      ))}
+      <h1 className="text-2xl sm:text-[1.65rem] font-bold text-slate-900 tracking-tight">Masuk ke akun</h1>
+      <p className="text-sm text-slate-500 mt-1.5">Selamat datang kembali! Pilih metode masuk:</p>
 
-      {/* Rings */}
-      {[
-        { cls:'ring',       s:560, x:'80%', y:'90%' },
-        { cls:'ring ring-b', s:360, x:'-4%', y:'22%' },
-        { cls:'ring ring-c', s:200, x:'93%', y:'8%'  },
-      ].map((r, i) => (
-        <div key={i} className={r.cls} style={{
-          position:'absolute', width:r.s, height:r.s, left:r.x, top:r.y,
-          borderRadius:'50%', border:'1px solid rgba(56,189,248,0.11)',
-          transform:'translate(-50%,-50%)', pointerEvents:'none',
-        }} />
-      ))}
+      <div className="grid grid-cols-2 gap-3 mt-6">
+        <button type="button" className={socialBtnClass} disabled title="Segera hadir">
+          <GoogleIcon />
+          Google
+        </button>
+        <button type="button" className={socialBtnClass} disabled title="Segera hadir">
+          <FacebookIcon />
+          Facebook
+        </button>
+      </div>
+      <p className="text-[11px] text-slate-400 mt-2">Login mitra saat ini hanya melalui email & password.</p>
 
-      {/* ═══ CARD ═══ */}
-      <div className="lg-card" style={{ position:'relative', width:'100%', maxWidth:400, zIndex:10 }}>
-
-        {/* Glow border */}
-        <div style={{
-          position:'absolute', inset:-1, borderRadius:22, pointerEvents:'none',
-          background:'linear-gradient(135deg,rgba(56,189,248,0.3) 0%,rgba(37,99,235,0.12) 45%,rgba(79,70,229,0.26) 100%)',
-        }} />
-
-        {/* Body */}
-        <div style={{
-          position:'relative', borderRadius:21,
-          padding:'28px 30px 24px',
-          background:'rgba(8,13,30,0.93)',
-          backdropFilter:'blur(32px)',
-          border:'1px solid rgba(56,189,248,0.1)',
-        }}>
-
-          {/* ── Logo ── */}
-          <div className="fu" style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:20 }}>
-            <div style={{
-              marginBottom:10,
-              width: 72, height: 72,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 8px 32px rgba(56,189,248,0.35)',
-              transition:'transform .2s, box-shadow .2s', cursor:'default',
-            }}
-              onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform='scale(1.07)'; }}
-              onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform=''; }}
-            >
-              <Star size={36} color="white" fill="white" strokeWidth={1.5} />
-            </div>
-            <h1 style={{ fontSize:16, fontWeight:800, letterSpacing:'0.18em', color:'white', textTransform:'uppercase', margin:0 }}>
-              Bintang Global
-            </h1>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:5 }}>
-              <div style={{ height:1, width:28, background:`linear-gradient(to right,transparent,${SKY})` }} />
-              <span style={{ fontSize:9, fontWeight:700, letterSpacing:'0.3em', color:SKY, textTransform:'uppercase' }}>
-                Umroh & Travel
-              </span>
-              <div style={{ height:1, width:28, background:`linear-gradient(to left,transparent,${SKY})` }} />
-            </div>
-          </div>
-
-          {/* ── Heading ── */}
-          <div className="fu fu-1" style={{ marginBottom:20 }}>
-            <h2 style={{ fontSize:20, fontWeight:800, color:'white', margin:'0 0 3px' }}>Masuk ke Akun</h2>
-            <p  style={{ fontSize:12, color:MUTED, margin:0 }}>Gunakan kredensial mitra yang terdaftar</p>
-          </div>
-
-          {/* ── Error ── */}
-          {error && (
-            <div className="err-banner" style={{
-              display:'flex', alignItems:'center', gap:9,
-              padding:'10px 12px', borderRadius:10, marginBottom:16,
-              background:'rgba(239,68,68,0.09)', border:'1px solid rgba(239,68,68,0.3)',
-              color:'#fca5a5', fontSize:13,
-            }}>
-              <AlertCircle size={14} style={{ flexShrink:0 }} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* ── Form ── */}
-          <form onSubmit={handleSubmit} noValidate className="lg-form-dark">
-            <div className="fu fu-2" style={{ display:'flex', flexDirection:'column', gap:14, marginBottom:14 }}>
-              <Input
-                name="email"
-                type="email"
-                label="Alamat Email"
-                value={formData.email}
-                onChange={handleChange}
-                icon={<Mail size={16} style={{ color:'#64748b' }} />}
-                placeholder="nama@perusahaan.com"
-                autoComplete="email"
-                error={error || undefined}
-              />
-              <Input
-                name="password"
-                type={showPass ? 'text' : 'password'}
-                label="Kata Sandi"
-                value={formData.password}
-                onChange={handleChange}
-                icon={<Lock size={16} style={{ color:'#64748b' }} />}
-                placeholder="Minimal 8 karakter"
-                autoComplete="current-password"
-                error={error || undefined}
-                rightLabel={
-                  <Link to="/forgot-password" style={{ fontSize:12, fontWeight:600, color:SKY, textDecoration:'none' }}>
-                    Lupa kata sandi?
-                  </Link>
-                }
-                suffix={
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(p => !p)}
-                    aria-label={showPass ? 'Sembunyikan' : 'Tampilkan'}
-                    style={{ padding:0, border:'none', background:'transparent', cursor:'pointer', color:'#64748b', display:'flex', alignItems:'center' }}
-                  >
-                    {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                }
-              />
-            </div>
-
-            {/* Submit */}
-            <div className="fu fu-3">
-              <button type="submit" disabled={loading || success} className={`btn-main${success ? ' ok' : ''}`}>
-                <span className="shine" />
-                {loading  ? <><span className="spinner" />Memverifikasi...</>
-                : success ? <><CheckCircle size={15} />Berhasil! Mengalihkan...</>
-                :           <>Masuk ke Dashboard<ArrowRight size={14} /></>}
-              </button>
-            </div>
-          </form>
-
-          {/* Divider */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, margin:'18px 0' }}>
-            <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }} />
-            <span style={{ fontSize:10, color:'#1e3a5f' }}>belum punya akun?</span>
-            <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.06)' }} />
-          </div>
-
-          {/* Register */}
-          <div className="fu fu-4">
-            <Link to="/register-owner-type" className="btn-sec">
-              Daftar sebagai Partner Owner <ArrowRight size={13} />
-            </Link>
-          </div>
-
-          {/* Trust */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:18, marginTop:18 }}>
-            {['🔒 SSL Aman','✓ ISO 27001','⚡ POJK'].map(b => (
-              <span key={b} style={{ fontSize:9, color:'#1e3a5f' }}>{b}</span>
-            ))}
-          </div>
-
+      <div className="relative my-7">
+        <div className="absolute inset-0 flex items-center" aria-hidden>
+          <div className="w-full border-t border-slate-200" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-white px-3 text-slate-500 font-medium">atau lanjutkan dengan email</span>
         </div>
       </div>
-    </div>
+
+      {error && (
+        <div
+          className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4 text-sm text-red-700 bg-red-50 border border-red-100"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <Input
+          name="email"
+          type="email"
+          label="Email"
+          value={formData.email}
+          onChange={handleChange}
+          icon={<Mail className="w-4 h-4 text-slate-400" />}
+          placeholder="nama@perusahaan.com"
+          autoComplete="email"
+          error={undefined}
+        />
+        <Input
+          name="password"
+          type={showPass ? 'text' : 'password'}
+          label="Password"
+          value={formData.password}
+          onChange={handleChange}
+          icon={<Lock className="w-4 h-4 text-slate-400" />}
+          placeholder="••••••••"
+          autoComplete="current-password"
+          error={undefined}
+          rightLabel={
+            <Link to="/forgot-password" className="text-xs font-semibold hover:underline" style={{ color: PRIMARY }}>
+              Lupa password?
+            </Link>
+          }
+          suffix={
+            <button
+              type="button"
+              onClick={() => setShowPass((p) => !p)}
+              aria-label={showPass ? 'Sembunyikan password' : 'Tampilkan password'}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            >
+              {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          }
+        />
+
+        <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className={checkboxClass}
+          />
+          Ingat saya
+        </label>
+
+        <button
+          type="submit"
+          disabled={loading || success}
+          className="w-full py-3 rounded-xl font-bold text-sm text-white shadow-md transition-all disabled:opacity-70 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99]"
+          style={{ backgroundColor: PRIMARY, boxShadow: '0 8px 24px rgba(13,26,99,0.25)' }}
+        >
+          {loading ? (
+            'Memverifikasi…'
+          ) : success ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Berhasil! Mengalihkan…
+            </span>
+          ) : (
+            <span className="inline-flex items-center justify-center gap-2">
+              Masuk
+              <ArrowRight className="w-4 h-4" />
+            </span>
+          )}
+        </button>
+      </form>
+
+      <p className="text-center text-sm text-slate-600 mt-8">
+        Belum punya akun?{' '}
+        <Link to="/register-owner-type" className="font-semibold hover:underline" style={{ color: PRIMARY }}>
+          Buat akun
+        </Link>
+      </p>
+    </AuthSplitLayout>
   );
 };
 

@@ -10,6 +10,7 @@ import { validateEmail } from '../../utils';
 import { AUTOCOMPLETE_PILIH } from '../../utils/constants';
 import Input from '../../components/common/Input';
 import Autocomplete from '../../components/common/Autocomplete';
+import { AuthSplitLayout, AuthBrandLogoRow } from './AuthSplitLayout';
 
 /* ─── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
@@ -281,7 +282,6 @@ const STYLES = `
 
 const SKY   = '#38bdf8';
 const MUTED = '#475569';
-const DARK  = '#0a0f1e';
 
 interface DropdownOption { value: string; label: string; sub?: string; }
 
@@ -403,23 +403,6 @@ const RegisterPage: React.FC = () => {
     }
   };
 
-  const BG = (
-    <>
-      <div className="blob"        style={{ width:520, height:520, left:'-8%',  top:'-15%', background:'rgba(37,99,235,0.26)' }} />
-      <div className="blob blob-b" style={{ width:380, height:380, right:'-4%', bottom:'4%',  background:'rgba(56,189,248,0.18)' }} />
-      <div className="blob blob-c" style={{ width:280, height:280, left:'40%',  top:'-8%',  background:'rgba(79,70,229,0.16)' }} />
-      <div className="ring"        style={{ width:560, height:560, left:'80%', top:'90%', border:'1px solid rgba(56,189,248,0.11)' }} />
-      <div className="ring ring-b" style={{ width:360, height:360, left:'-4%', top:'22%', border:'1px solid rgba(56,189,248,0.11)' }} />
-    </>
-  );
-
-  const PAGE_STYLE: React.CSSProperties = {
-    minHeight:'100vh', width:'100%', display:'flex', alignItems:'center',
-    justifyContent:'center', background:DARK, padding:'24px 16px',
-    fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",
-    position:'relative', overflow:'hidden',
-  };
-
   /* ── Redirect: no type or invalid type ── */
   if (ownerType !== 'mou' && ownerType !== 'non_mou') {
     return null;
@@ -428,32 +411,27 @@ const RegisterPage: React.FC = () => {
   /* ── Success screen ── */
   if (success) {
     return (
-      <div className="grid-bg" style={PAGE_STYLE}>
-        {BG}
-        <div className="rg-success" style={{ position:'relative', width:'100%', maxWidth:380, zIndex:10 }}>
-          <div style={{ position:'absolute', inset:-1, borderRadius:22, pointerEvents:'none',
-            background:'linear-gradient(135deg,rgba(56,189,248,0.3) 0%,rgba(37,99,235,0.12) 45%,rgba(79,70,229,0.26) 100%)' }} />
-          <div style={{
-            position:'relative', borderRadius:21, padding:'36px 32px',
-            background:'rgba(8,13,30,0.93)', backdropFilter:'blur(32px)',
-            border:'1px solid rgba(56,189,248,0.1)', textAlign:'center',
-          }}>
-            <div style={{
-              width:60, height:60, borderRadius:'50%', margin:'0 auto 16px',
-              background:'rgba(34,197,94,0.12)', border:'1.5px solid rgba(34,197,94,0.3)',
-              display:'flex', alignItems:'center', justifyContent:'center',
-            }}>
-              <CheckCircle size={28} color="#22c55e" />
-            </div>
-            <h2 style={{ fontSize:20, fontWeight:800, color:'white', margin:'0 0 10px' }}>Registrasi Berhasil!</h2>
-            <p style={{ fontSize:13, color:MUTED, lineHeight:1.65, margin:'0 0 24px' }}>
-              Registrasi dan bukti bayar MoU Anda telah diterima. Admin Pusat akan memverifikasi bukti bayar dan mengaktifkan akun. Setelah akun diaktifkan, Anda dapat login dan mengakses seluruh fitur aplikasi serta akan mendapat surat MoU dan password baru dari sistem.
-            </p>
-            <button onClick={() => navigate('/login')} className="btn-submit" style={{ fontFamily:'inherit' }}>
-              <span className="shine" />
-              Ke Halaman Login <ArrowRight size={14} />
-            </button>
+      <div
+        className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 sm:p-6"
+        style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+      >
+        <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200/80 p-8 sm:p-10 text-center">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-5">
+            <CheckCircle className="w-8 h-8 text-emerald-600" />
           </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-3">Registrasi berhasil</h2>
+          <p className="text-sm text-slate-600 leading-relaxed mb-8">
+            Registrasi dan bukti bayar MoU Anda telah diterima. Admin Pusat akan memverifikasi bukti bayar dan mengaktifkan akun. Setelah akun diaktifkan, Anda dapat login dan mengakses seluruh fitur aplikasi serta akan mendapat surat MoU dan password baru dari sistem.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="w-full py-3 rounded-xl font-bold text-sm text-white inline-flex items-center justify-center gap-2 hover:brightness-110 transition-all"
+            style={{ backgroundColor: '#0D1A63', boxShadow: '0 8px 24px rgba(13,26,99,0.2)' }}
+          >
+            Ke halaman login
+            <ArrowRight size={16} />
+          </button>
         </div>
       </div>
     );
@@ -461,77 +439,48 @@ const RegisterPage: React.FC = () => {
 
   /* ── Main ── */
   return (
-    <div className="grid-bg" style={PAGE_STYLE}>
-      {BG}
+    <AuthSplitLayout
+      panelTitle="Gabung sebagai mitra travel."
+      panelSubtitle="Lengkapi data perusahaan dan kontak Anda. Setelah diverifikasi Admin Pusat, Anda dapat mengelola order dan invoice dari satu dasbor."
+      panelFooterLink={{ to: '/login', label: 'Sudah punya akun? Masuk →' }}
+    >
+      <AuthBrandLogoRow />
 
-      <div className="rg-card" style={{ position:'relative', width:'100%', maxWidth:960, zIndex:10 }}>
-        {/* Glow border */}
-        <div style={{
-          position:'absolute', inset:-1, borderRadius:22, pointerEvents:'none',
-          background:'linear-gradient(135deg,rgba(56,189,248,0.3) 0%,rgba(37,99,235,0.12) 45%,rgba(79,70,229,0.26) 100%)',
-        }} />
+      <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+        {ownerType === 'mou' ? 'Buat akun Owner MOU' : 'Buat akun Owner Non-MOU'}
+      </h1>
+      <p className="text-sm text-slate-500 mt-1 mb-6 max-w-lg">
+        {ownerType === 'mou'
+          ? 'Mitra dengan MOU — harga produk mengikuti ketentuan diskon mitra. Lengkapi form di bawah.'
+          : 'Mitra tanpa MOU — harga standar. Lengkapi form di bawah; tidak ada pembayaran MoU di awal.'}
+      </p>
 
-        {/* Card body */}
-        <div style={{
-          position:'relative', borderRadius:21,
-          background:'rgba(8,13,30,0.93)', backdropFilter:'blur(32px)',
-          border:'1px solid rgba(56,189,248,0.1)',
-          overflow:'hidden', display:'flex', flexDirection:'column',
-          maxHeight:'calc(100vh - 48px)',
-        }}>
-
-          {/* ── Header ── */}
-          <div className="fu" style={{
-            padding:'28px 28px 24px',
-            borderBottom:'1px solid rgba(255,255,255,0.06)',
-            display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, flexWrap:'wrap', gap:16,
-          }}>
-            <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-              <div style={{
-                width:48, height:48, borderRadius:14, flexShrink:0,
-                background:'linear-gradient(145deg,#38bdf8 0%,#2563eb 50%,#4f46e5 100%)',
-                boxShadow:'0 8px 24px rgba(56,189,248,0.35)',
-                display:'flex', alignItems:'center', justifyContent:'center',
-              }}>
-                <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-                  <path d="M22 16C22 21.523 17.523 26 12 26C9.387 26 7.02 24.98 5.27 23.3C5.78 23.43 6.315 23.5 6.87 23.5C11.843 23.5 15.87 19.473 15.87 14.5C15.87 11.03 13.973 7.997 11.15 6.387C11.756 6.297 12.374 6.25 13 6.25C18.108 6.25 22 10.692 22 16Z" fill="white"/>
-                  <circle cx="21" cy="8" r="1.8" fill="white" opacity=".75"/>
-                  <circle cx="25" cy="13" r="1.1" fill="white" opacity=".5"/>
-                </svg>
-              </div>
-              <div>
-                <h1 style={{ fontSize:20, fontWeight:800, color:'white', margin:0, letterSpacing:'-0.02em' }}>
-                  {ownerType === 'mou' ? 'Pendaftaran Owner MOU' : 'Pendaftaran Owner Non-MOU'}
-                </h1>
-                <p style={{ fontSize:12, color:MUTED, margin:'4px 0 0', lineHeight:1.4 }}>
-                  {ownerType === 'mou'
-                    ? 'Mitra dengan MOU — dapat harga produk lebih murah (diskon sesuai ketentuan).'
-                    : 'Mitra tanpa MOU — harga produk mengikuti tarif standar.'}
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/register-owner-type"
-              style={{ marginRight: 8, fontSize: 13, color: MUTED }}
-            >
+      <div
+        className="rounded-2xl border border-slate-200 overflow-hidden flex flex-col shadow-inner"
+        style={{
+          background: 'rgba(8,13,30,0.96)',
+          maxHeight: 'min(72vh, calc(100vh - 14rem))',
+        }}
+      >
+        <div
+          className="fu flex-shrink-0 px-5 py-4 sm:px-6 border-b flex flex-wrap items-center justify-between gap-3"
+          style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+        >
+          <p className="text-sm font-semibold text-white">Form pendaftaran</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link to="/register-owner-type" className="text-xs font-semibold text-slate-400 hover:text-sky-400 px-2 py-1 rounded-lg">
               Ganti jenis
             </Link>
             <Link
               to="/login"
-              style={{
-                fontSize:13, color:MUTED, textDecoration:'none', flexShrink:0, transition:'color .2s',
-                padding:'10px 18px', borderRadius:10, border:'1px solid rgba(255,255,255,0.1)',
-                fontWeight:600,
-              }}
-              onMouseEnter={e => { const t = e.currentTarget as HTMLElement; t.style.color = SKY; t.style.borderColor = 'rgba(56,189,248,0.3)'; t.style.background = 'rgba(56,189,248,0.08)'; }}
-              onMouseLeave={e => { const t = e.currentTarget as HTMLElement; t.style.color = MUTED; t.style.borderColor = 'rgba(255,255,255,0.1)'; t.style.background = 'transparent'; }}
+              className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-white/15 hover:bg-white/10"
             >
               ← Masuk
             </Link>
           </div>
+        </div>
 
-          {/* ── Scrollable form ── */}
-          <div className="rg-scroll fu fu-1" style={{ flex:1, overflowY:'auto', padding:'24px 28px 28px' }}>
+        <div className="rg-scroll fu fu-1 flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
 
             {/* Error */}
             {error && (
@@ -688,10 +637,9 @@ const RegisterPage: React.FC = () => {
                 </p>
               </div>
             </form>
-          </div>
         </div>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 };
 
