@@ -100,7 +100,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
   const inputBorder = inputBorderClass;
   const widthStyles = fullWidth ? 'w-full' : '';
   const triggerSizeClass = size === 'sm'
-    ? 'py-1.5 px-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#0D1A63] focus:border-[#0D1A63] disabled:bg-slate-100 disabled:cursor-not-allowed transition-all'
+    ? 'py-1.5 px-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#C9A04B] focus:border-[#C9A04B] disabled:bg-slate-100 disabled:cursor-not-allowed transition-all'
     : '';
 
   const dropdownContent = open && dropdownReady && (
@@ -127,7 +127,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
             <button
               type="button"
               onClick={() => handleSelect({ value: '', label: emptyLabel })}
-              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${value === '' ? 'bg-slate-100 font-medium text-[#0D1A63]' : 'text-slate-700'}`}
+              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${value === '' ? 'bg-slate-100 font-medium text-[#B78734]' : 'text-slate-700'}`}
             >
               {emptyLabel}
             </button>
@@ -139,7 +139,7 @@ const Autocomplete: React.FC<AutocompleteProps> = ({
               type="button"
               onClick={() => handleSelect(opt)}
               disabled={opt.disabled}
-              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 disabled:opacity-50 ${value === opt.value ? 'bg-slate-100 font-medium text-[#0D1A63]' : 'text-slate-700'}`}
+              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 disabled:opacity-50 ${value === opt.value ? 'bg-slate-100 font-medium text-[#B78734]' : 'text-slate-700'}`}
             >
               {opt.label}
             </button>

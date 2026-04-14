@@ -24,7 +24,7 @@ import { MenuItem, ROLE_NAMES, normalizeUserRole } from '../types';
 import Dropdown from '../components/common/Dropdown';
 import Badge from '../components/common/Badge';
 import MaintenanceBanner from '../components/MaintenanceBanner';
-import logo from '../assets/logo.png';
+import logo from '../assets/nail-al-khairat-logo.svg';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
 const menuItems: MenuItem[] = [
@@ -188,8 +188,8 @@ const DashboardLayout: React.FC = () => {
                 <img src={logo} alt="Logo" className="w-full h-full object-cover" />
               </div>
               <div>
-                <h1 className="text-base font-bold text-slate-100">Bintang Global</h1>
-                <p className="text-xs text-slate-400">Umroh & Travel</p>
+                <h1 className="text-base font-bold text-amber-50">Nail Al-Khairat</h1>
+                <p className="text-xs text-amber-200/80">Umroh & Travel</p>
               </div>
             </div>
           )}
@@ -201,7 +201,7 @@ const DashboardLayout: React.FC = () => {
           {mobile && (
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-slate-400 hover:text-white p-2 hover:bg-white/10 rounded-xl transition-colors"
+              className="lg:hidden text-amber-200/80 hover:text-white p-2 hover:bg-white/10 rounded-xl transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -222,11 +222,11 @@ const DashboardLayout: React.FC = () => {
                     type="button"
                     onClick={() => !isCollapsed && setExpandedMenuPath((p) => (p === item.path ? null : item.path))}
                     className={`w-full flex items-center ${isCollapsed ? 'justify-center px-3' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all ${
-                      isParentActive ? 'bg-white/10 text-slate-200' : 'text-slate-300 hover:bg-white/10 hover:text-slate-200'
+                      isParentActive ? 'bg-white/15 text-amber-50' : 'text-amber-100/90 hover:bg-white/10 hover:text-amber-50'
                     }`}
                     title={isCollapsed ? item.title : ''}
                   >
-                    <span className="text-slate-400">{item.icon}</span>
+                    <span className="text-amber-200/80">{item.icon}</span>
                     {!isCollapsed && (
                       <>
                         <span className="flex-1 text-left">{item.title}</span>
@@ -244,10 +244,10 @@ const DashboardLayout: React.FC = () => {
                             type="button"
                             onClick={() => handleNavigate(child.path)}
                             className={`w-full flex items-center gap-2 py-2 px-2 rounded-lg text-sm transition-all ${
-                              isChildActive ? 'bg-white/20 text-slate-100' : 'text-slate-300 hover:bg-white/10 hover:text-slate-200'
+                              isChildActive ? 'bg-white/20 text-amber-50' : 'text-amber-100/90 hover:bg-white/10 hover:text-amber-50'
                             }`}
                           >
-                            <span className={isChildActive ? 'text-white' : 'text-slate-400'}>{child.icon}</span>
+                            <span className={isChildActive ? 'text-white' : 'text-amber-200/80'}>{child.icon}</span>
                             <span className="flex-1 text-left">{child.title}</span>
                           </button>
                         );
@@ -255,7 +255,7 @@ const DashboardLayout: React.FC = () => {
                     </div>
                   )}
                   {isCollapsed && (
-                    <div className="fixed ml-20 px-3 py-2 bg-slate-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
+                    <div className="fixed ml-20 px-3 py-2 bg-amber-800 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
                       {item.title}
                     </div>
                   )}
@@ -270,11 +270,11 @@ const DashboardLayout: React.FC = () => {
                   type="button"
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center ${isCollapsed ? 'justify-center px-3' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive ? 'bg-white/20 text-slate-100 shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-slate-200'
+                    isActive ? 'bg-white/20 text-amber-50 shadow-sm' : 'text-amber-100/90 hover:bg-white/10 hover:text-amber-50'
                   }`}
                   title={isCollapsed ? item.title : ''}
                 >
-                  <span className={isActive ? 'text-white' : 'text-slate-400'}>{item.icon}</span>
+                  <span className={isActive ? 'text-white' : 'text-amber-200/80'}>{item.icon}</span>
                   {!isCollapsed && (
                     <>
                       <span className="flex-1 text-left">{item.title}</span>
@@ -284,7 +284,7 @@ const DashboardLayout: React.FC = () => {
                   )}
                 </button>
                 {isCollapsed && (
-                  <div className="fixed ml-20 px-3 py-2 bg-slate-600 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
+                  <div className="fixed ml-20 px-3 py-2 bg-amber-800 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap pointer-events-none shadow-xl z-50">
                     {item.title}
                   </div>
                 )}
@@ -297,12 +297,12 @@ const DashboardLayout: React.FC = () => {
         {!isCollapsed && (
           <div className="p-4 border-t border-white/10">
             <div className="flex items-center gap-3 px-3 py-2.5 bg-white/5 rounded-xl border border-white/10">
-              <div className="w-9 h-9 bg-slate-500 rounded-full flex items-center justify-center text-sm font-semibold text-white">
+              <div className="w-9 h-9 bg-amber-900/60 rounded-full flex items-center justify-center text-sm font-semibold text-white">
                 {user?.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-100 truncate">{user?.name}</p>
-                <p className="text-xs text-slate-400 truncate">{user ? ROLE_NAMES[user.role] : ''}</p>
+                <p className="text-sm font-semibold text-amber-50 truncate">{user?.name}</p>
+                <p className="text-xs text-amber-200/80 truncate">{user ? ROLE_NAMES[user.role] : ''}</p>
               </div>
             </div>
           </div>
@@ -310,7 +310,7 @@ const DashboardLayout: React.FC = () => {
 
         {isCollapsed && (
           <div className="p-3 border-t border-white/10 flex justify-center">
-            <div className="w-9 h-9 bg-slate-500 rounded-full flex items-center justify-center text-sm font-semibold text-white">
+            <div className="w-9 h-9 bg-amber-900/60 rounded-full flex items-center justify-center text-sm font-semibold text-white">
               {user?.name.charAt(0).toUpperCase()}
             </div>
           </div>
@@ -320,7 +320,7 @@ const DashboardLayout: React.FC = () => {
           <div className="p-3 border-t border-white/10">
             <button
               onClick={toggleSidebar}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:bg-white/10 hover:text-white rounded-xl transition-colors text-sm"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-amber-200/80 hover:bg-white/10 hover:text-white rounded-xl transition-colors text-sm"
             >
               {isCollapsed ? (
                 <ChevronRight className="w-5 h-5" />
@@ -384,7 +384,7 @@ const DashboardLayout: React.FC = () => {
                 <h2 className="text-lg sm:text-xl font-bold text-stone-900 truncate">
                   {currentPage?.title || 'Dashboard'}
                 </h2>
-                <p className="text-xs text-stone-500 hidden sm:block">Bintang Global Travel</p>
+                <p className="text-xs text-stone-500 hidden sm:block">Nail Al-Khairat Travel</p>
               </div>
             </div>
 
@@ -469,7 +469,7 @@ const DashboardLayout: React.FC = () => {
 
         {/* Mobile Bottom Navigation - Travel app style (green) */}
         {showBottomNav && (
-          <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-primary-100 shadow-travel-lg lg:hidden pb-safe" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <nav className="fixed bottom-0 left-0 right-0 z-30 sidebar-login-bg border-t border-white/10 shadow-travel-lg lg:hidden pb-safe" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             <div className="flex items-center justify-around h-16 px-2">
               {bottomNavItems.map((item) => {
                 const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
@@ -480,7 +480,7 @@ const DashboardLayout: React.FC = () => {
                     type="button"
                     onClick={() => handleNavigate(item.path)}
                     className={`flex flex-col items-center justify-center flex-1 gap-0.5 py-2 rounded-xl transition-colors min-w-0 touch-manipulation ${
-                      isActive ? 'text-primary-600 bg-primary-50 font-semibold' : 'text-stone-500 active:bg-primary-50/50'
+                      isActive ? 'text-amber-50 bg-white/15 font-semibold' : 'text-amber-100/90 active:bg-white/10'
                     }`}
                   >
                     <Icon className="w-6 h-6 flex-shrink-0" />
@@ -491,7 +491,7 @@ const DashboardLayout: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="flex flex-col items-center justify-center flex-1 gap-0.5 py-2 rounded-xl text-stone-500 active:bg-stone-100 transition-colors min-w-0 touch-manipulation"
+                className="flex flex-col items-center justify-center flex-1 gap-0.5 py-2 rounded-xl text-amber-100/90 active:bg-white/10 transition-colors min-w-0 touch-manipulation"
               >
                 <Menu className="w-6 h-6 flex-shrink-0" />
                 <span className="text-[11px] font-medium">Menu</span>

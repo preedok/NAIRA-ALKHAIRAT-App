@@ -4,7 +4,7 @@ import { publicApi } from '../services/api';
 export type LocaleCode = 'en' | 'id' | 'ar';
 
 const defaultTranslations: Record<string, string> = {
-  app_name: 'Bintang Global',
+  app_name: 'Nail Al-Khairat',
   dashboard: 'Dashboard',
   orders: 'Orders',
   invoices: 'Invoices',

@@ -92,10 +92,10 @@ body {
 
 /* Sidebar background – sama seperti halaman login (dark + grid) */
 .sidebar-login-bg {
-  background-color: #0a0f1e;
+  background-color: #8f6828;
   background-image:
-    linear-gradient(rgba(56, 189, 248, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(255, 239, 207, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 239, 207, 0.12) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 

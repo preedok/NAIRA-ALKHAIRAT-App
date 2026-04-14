@@ -9,15 +9,15 @@ import {
   Lock, Layers, Search, Target,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/nail-al-khairat-logo.svg';
 
 /* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
 const C = {
-  navy:       '#0B1D51',
-  navyMed:    '#1a3280',
-  navyLt:     '#2d4fa6',
-  navyGhost:  '#EEF1FA',
-  navyFaint:  '#F5F7FE',
+  navy:       '#C9A04B',
+  navyMed:    '#B78734',
+  navyLt:     '#9D6F29',
+  navyGhost:  '#FCF6EA',
+  navyFaint:  '#FFF9EF',
   white:      '#FFFFFF',
   offWhite:   '#F8F9FC',
   border:     '#E2E6F0',
@@ -26,12 +26,12 @@ const C = {
   textMd:     '#2D3748',
   muted:      '#64748B',
   dim:        '#94A3B8',
-  accent:     '#1645C8',
-  accentLt:   '#EBF0FF',
-  gold:       '#C9A84C',
-  goldLt:     '#FDF6E3',
-  shadow:     'rgba(11,29,81,0.10)',
-  shadowMd:   'rgba(11,29,81,0.18)',
+  accent:     '#B78734',
+  accentLt:   '#FCF6EA',
+  gold:       '#C9A04B',
+  goldLt:     '#FFF5DF',
+  shadow:     'rgba(183,135,52,0.12)',
+  shadowMd:   'rgba(183,135,52,0.20)',
 };
 
 /* ─── DATA ───────────────────────────────────────────────────────── */
@@ -133,17 +133,17 @@ const STYLES = `
   }
   .l-nav-link::after {
     content:''; position:absolute; bottom:-2px; left:0;
-    width:0; height:1.5px; background:#0B1D51;
+    width:0; height:1.5px; background:#C9A04B;
     transition:width .25s ease;
   }
-  .l-nav-link:hover { color:#0B1D51; }
+  .l-nav-link:hover { color:#B78734; }
   .l-nav-link:hover::after { width:100%; }
 
   /* BUTTONS */
   .btn-primary {
     display:inline-flex; align-items:center; gap:8px;
     padding:13px 26px; border-radius:8px; border:none; cursor:pointer;
-    background:#0B1D51; color:white;
+    background:#C9A04B; color:white;
     font-family:'DM Sans',system-ui,sans-serif;
     font-size:14px; font-weight:600; letter-spacing:.01em;
     text-decoration:none;
@@ -155,14 +155,14 @@ const STYLES = `
     background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent);
     transform:translateX(-100%); transition:transform .5s;
   }
-  .btn-primary:hover { background:#1a3280; transform:translateY(-1px); box-shadow:0 8px 28px rgba(11,29,81,0.36); }
+  .btn-primary:hover { background:#B78734; transform:translateY(-1px); box-shadow:0 8px 28px rgba(183,135,52,0.36); }
   .btn-primary:hover::after { transform:translateX(100%); }
 
   .btn-outline {
     display:inline-flex; align-items:center; gap:8px;
     padding:12px 24px; border-radius:8px; cursor:pointer;
-    background:transparent; color:#0B1D51;
-    border:1.5px solid #0B1D51;
+    background:transparent; color:#B78734;
+    border:1.5px solid #B78734;
     font-family:'DM Sans',system-ui,sans-serif;
     font-size:14px; font-weight:600; text-decoration:none;
     transition:all .2s;
@@ -200,7 +200,7 @@ const STYLES = `
     font-size:15px; font-weight:600; color:#0B1120;
     transition:color .2s; line-height:1.5;
   }
-  .l-faq-q:hover { color:#0B1D51; }
+  .l-faq-q:hover { color:#B78734; }
   .l-faq-a {
     overflow:hidden; transition:max-height .35s ease, opacity .3s;
     font-size:14px; color:#64748B; line-height:1.8;
@@ -216,17 +216,17 @@ const STYLES = `
   .hero-search-wrap .search-box > div:first-child { padding:16px 20px 0; }
   .hero-search-wrap .search-box form { padding:24px 24px 28px; }
   .search-tab { display:flex; align-items:center; gap:6px; padding:10px 16px; border:none; background:transparent; cursor:pointer; font-family:'DM Sans',system-ui,sans-serif; font-size:13px; font-weight:500; color:#64748B; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .2s; border-radius:0; }
-  .search-tab:hover { color:#0B1D51; }
-  .search-tab.active { color:#0B1D51; border-bottom-color:#0B1D51; font-weight:600; }
+  .search-tab:hover { color:#B78734; }
+  .search-tab.active { color:#B78734; border-bottom-color:#B78734; font-weight:600; }
   .search-input { width:100%; height:42px; padding:0 12px; border-radius:8px; border:1.5px solid #E2E6F0; background:#F8F9FC; color:#0B1120; font-size:14px; font-family:'DM Sans',system-ui,sans-serif; outline:none; transition:border-color .2s, box-shadow .2s; }
   .search-input::placeholder { color:#94A3B8; }
-  .search-input:focus { border-color:#0B1D51; box-shadow:0 0 0 3px rgba(11,29,81,0.08); background:white; }
+  .search-input:focus { border-color:#B78734; box-shadow:0 0 0 3px rgba(183,135,52,0.12); background:white; }
   select.search-input { cursor:pointer; }
 
   /* PKG TAB */
   .pkg-tab { padding:9px 20px; border-radius:999px; font-size:13px; font-weight:500; cursor:pointer; border:1.5px solid #E2E6F0; background:white; color:#64748B; font-family:'DM Sans',system-ui,sans-serif; transition:all .2s; }
-  .pkg-tab:hover { border-color:#0B1D51; color:#0B1D51; }
-  .pkg-tab.active { background:#0B1D51; border-color:#0B1D51; color:white; }
+  .pkg-tab:hover { border-color:#B78734; color:#B78734; }
+  .pkg-tab.active { background:#B78734; border-color:#B78734; color:white; }
 
   /* MISC */
   .l-section { padding:96px 24px; }
@@ -261,7 +261,7 @@ const STYLES = `
   ::-webkit-scrollbar { width:5px; }
   ::-webkit-scrollbar-track { background:#F8F9FC; }
   ::-webkit-scrollbar-thumb { background:#C8D0E8; border-radius:3px; }
-  ::-webkit-scrollbar-thumb:hover { background:#0B1D51; }
+  ::-webkit-scrollbar-thumb:hover { background:#B78734; }
 `;
 
 /* ─── SUB-COMPONENTS ─────────────────────────────────────────────── */
@@ -402,9 +402,9 @@ const LandingPage: React.FC = () => {
         <div style={{ ...W, display: 'flex', alignItems: 'center', gap: 20, minHeight: 68, padding: '10px 24px' }}>
           {/* Brand */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
+            <img src={logo} alt="Nail Al-Khairat" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.navy, lineHeight: 1.1, fontFamily: "'DM Sans',sans-serif" }}>Bintang Global</div>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.navy, lineHeight: 1.1, fontFamily: "'DM Sans',sans-serif" }}>Nail Al-Khairat</div>
               <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: '.18em', color: C.muted, textTransform: 'uppercase' }}>Platform Umroh</div>
             </div>
           </div>
@@ -443,8 +443,8 @@ const LandingPage: React.FC = () => {
       {/* ══ HERO ══ */}
       <section style={{ background: 'white', paddingTop: 68, position: 'relative', overflow: 'hidden' }}>
         {/* Geometric accent — wider behind search card */}
-        <div style={{ position: 'absolute', top: 0, right: 0, width: 'min(58%, 920px)', height: '100%', minHeight: 560, background: `linear-gradient(135deg, ${C.navyFaint} 0%, #e8eeff 100%)`, clipPath: 'polygon(10% 0, 100% 0, 100% 100%, 0 100%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: -100, right: '6%', width: 420, height: 420, borderRadius: '50%', background: `radial-gradient(circle, rgba(11,29,81,0.07) 0%, transparent 70%)`, pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: 0, right: 0, width: 'min(58%, 920px)', height: '100%', minHeight: 560, background: `linear-gradient(135deg, ${C.navyFaint} 0%, #fff2dc 100%)`, clipPath: 'polygon(10% 0, 100% 0, 100% 100%, 0 100%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -100, right: '6%', width: 420, height: 420, borderRadius: '50%', background: `radial-gradient(circle, rgba(183,135,52,0.10) 0%, transparent 70%)`, pointerEvents: 'none' }} />
 
         <div style={{ ...W, width: '100%', padding: 'clamp(48px,6vw,88px) 24px 28px', position: 'relative', zIndex: 1 }}>
           <div className="l-hero-grid">
@@ -640,7 +640,7 @@ const LandingPage: React.FC = () => {
                 15 Tahun Membangun<br /><em style={{ color: C.navyMed }}>Kepercayaan</em>
               </h2>
               <p style={{ color: C.muted, fontSize: 15, lineHeight: 1.8, margin: '0 0 32px', maxWidth: 440 }}>
-                Bintang Global membantu jamaah dan admin travel menjalankan proses umroh secara lebih mudah, terstruktur, dan transparan.
+                Nail Al-Khairat membantu jamaah dan admin travel menjalankan proses umroh secara lebih mudah, terstruktur, dan transparan.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {[
@@ -849,7 +849,7 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* ══ CTA ══ */}
-      <section style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMed} 50%, #0a1438 100%)`, padding: '96px 24px', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMed} 50%, #8f6828 100%)`, padding: '96px 24px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, backgroundImage: `radial-gradient(circle at 20% 50%, rgba(255,255,255,0.04) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.04) 0%, transparent 40%)`, pointerEvents: 'none' }} />
         <div style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
           <div className="l-reveal">
@@ -887,10 +887,10 @@ const LandingPage: React.FC = () => {
           <div className="l-footer-grid" style={{ marginBottom: 44 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
+                <img src={logo} alt="Nail Al-Khairat" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Bintang Global</div>
-                  <div style={{ fontSize: 9, color: '#6B7FCC', letterSpacing: '.18em', textTransform: 'uppercase' }}>Platform Umroh</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Nail Al-Khairat</div>
+                  <div style={{ fontSize: 9, color: '#F4D8A6', letterSpacing: '.18em', textTransform: 'uppercase' }}>Platform Umroh</div>
                 </div>
               </div>
               <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.75, margin: '0 0 20px', maxWidth: 220 }}>Platform travel umroh terintegrasi untuk admin travel dan jamaah di seluruh Indonesia.</p>
@@ -925,7 +925,7 @@ const LandingPage: React.FC = () => {
           </div>
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 22 }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>© {new Date().getFullYear()} Bintang Global. All rights reserved.</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>© {new Date().getFullYear()} Nail Al-Khairat. All rights reserved.</span>
             <div style={{ display: 'flex', gap: 20 }}>
               {['Privasi', 'Syarat & Ketentuan', 'Cookie'].map(l => (
                 <a key={l} href="#" style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', textDecoration: 'none' }}>{l}</a>

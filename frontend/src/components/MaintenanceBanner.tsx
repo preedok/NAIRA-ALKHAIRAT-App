@@ -33,7 +33,7 @@ export const MaintenanceBanner: React.FC = () => {
   const bg = (type: string) => {
     if (type === 'error' || type === 'bug') return 'bg-red-100 border-red-300 text-red-900';
     if (type === 'warning') return 'bg-yellow-100 border-yellow-300 text-yellow-900';
-    return 'bg-blue-100 border-blue-300 text-blue-900';
+    return 'bg-amber-100 border-amber-300 text-amber-900';
   };
 
   const selected = visible.find((n) => n.id === detailId);

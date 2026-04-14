@@ -1,11 +1,14 @@
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
+const { OAuth2Client } = require('google-auth-library');
 const { User, OtpVerification } = require('../models');
 const { signToken } = require('../middleware/auth');
 const { ROLES, normalizeRole } = require('../constants');
 
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_RESEND = 3;
+const googleClient = new OAuth2Client();
 
 function generateOtpCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -13,6 +16,31 @@ function generateOtpCode() {
 
 function getOtpExpiryDate() {
   return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+}
+
+function buildMailer() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASSWORD;
+  const secure = String(process.env.SMTP_SECURE || 'false') === 'true';
+  if (!host || !user || !pass) return null;
+  return nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+}
+
+async function sendOtpEmail(email, otpCode) {
+  const transporter = buildMailer();
+  if (!transporter) return { sent: false, reason: 'SMTP_NOT_CONFIGURED' };
+  const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+  const fromName = process.env.EMAIL_FROM_NAME || 'Bintang Global';
+  await transporter.sendMail({
+    from: `"${fromName}" <${from}>`,
+    to: email,
+    subject: 'Kode OTP Verifikasi Akun',
+    text: `Kode OTP Anda: ${otpCode}. Berlaku ${OTP_EXPIRY_MINUTES} menit.`,
+    html: `<p>Assalamu'alaikum,</p><p>Kode OTP verifikasi akun Anda adalah:</p><h2 style="letter-spacing:4px;">${otpCode}</h2><p>Kode berlaku selama ${OTP_EXPIRY_MINUTES} menit.</p>`
+  });
+  return { sent: true };
 }
 
 const register = asyncHandler(async (req, res) => {
@@ -37,17 +65,36 @@ const register = asyncHandler(async (req, res) => {
     is_active: false
   });
 
+  const otpCode = generateOtpCode();
   await OtpVerification.create({
     user_id: user.id,
-    otp_code: generateOtpCode(),
-    channel: 'whatsapp',
+    otp_code: otpCode,
+    channel: 'email',
     expires_at: getOtpExpiryDate()
   });
 
+  let emailSent = false;
+  let emailStatus = 'SMTP_NOT_CONFIGURED';
+  try {
+    const result = await sendOtpEmail(normalizedEmail, otpCode);
+    emailSent = result.sent;
+    emailStatus = result.reason || 'SENT';
+  } catch (_e) {
+    emailSent = false;
+    emailStatus = 'SEND_FAILED';
+  }
+
   res.status(201).json({
     success: true,
-    message: 'Registrasi berhasil. OTP telah dikirim ke WhatsApp.',
-    data: { user_id: user.id, otp_expiry_minutes: OTP_EXPIRY_MINUTES, max_resend: OTP_MAX_RESEND }
+    message: emailSent
+      ? 'Registrasi berhasil. OTP telah dikirim ke email Anda.'
+      : 'Registrasi berhasil. OTP dibuat, tetapi email belum terkirim. Periksa konfigurasi SMTP.',
+    data: {
+      user_id: user.id,
+      otp_expiry_minutes: OTP_EXPIRY_MINUTES,
+      max_resend: OTP_MAX_RESEND,
+      otp_delivery: { channel: 'email', sent: emailSent, status: emailStatus }
+    }
   });
 });
 
@@ -67,15 +114,36 @@ const resendOtp = asyncHandler(async (req, res) => {
   }
 
   const nextResendCount = latestOtp ? Number(latestOtp.resend_count || 0) + 1 : 1;
+  const otpCode = generateOtpCode();
   await OtpVerification.create({
     user_id: user.id,
-    otp_code: generateOtpCode(),
-    channel: 'whatsapp',
+    otp_code: otpCode,
+    channel: 'email',
     expires_at: getOtpExpiryDate(),
     resend_count: nextResendCount
   });
 
-  res.json({ success: true, message: 'OTP berhasil dikirim ulang', data: { resend_count: nextResendCount } });
+  let emailSent = false;
+  let emailStatus = 'SMTP_NOT_CONFIGURED';
+  try {
+    const result = await sendOtpEmail(user.email, otpCode);
+    emailSent = result.sent;
+    emailStatus = result.reason || 'SENT';
+  } catch (_e) {
+    emailSent = false;
+    emailStatus = 'SEND_FAILED';
+  }
+
+  res.json({
+    success: true,
+    message: emailSent
+      ? 'OTP berhasil dikirim ulang ke email Anda.'
+      : 'OTP dibuat, tetapi email belum terkirim. Periksa konfigurasi SMTP.',
+    data: {
+      resend_count: nextResendCount,
+      otp_delivery: { channel: 'email', sent: emailSent, status: emailStatus }
+    }
+  });
 });
 
 const verifyOtp = asyncHandler(async (req, res) => {
@@ -130,6 +198,64 @@ const login = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Login berhasil', data: { user: u, token } });
 });
 
+const loginWithGoogle = asyncHandler(async (req, res) => {
+  const { id_token } = req.body;
+  if (!id_token) {
+    return res.status(400).json({ success: false, message: 'Google token wajib diisi' });
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  if (!googleClientId) {
+    return res.status(500).json({
+      success: false,
+      message: 'Google Login belum dikonfigurasi. Set GOOGLE_CLIENT_ID pada backend.'
+    });
+  }
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: String(id_token),
+      audience: googleClientId
+    });
+    payload = ticket.getPayload();
+  } catch (_e) {
+    return res.status(401).json({ success: false, message: 'Token Google tidak valid' });
+  }
+
+  const email = String(payload?.email || '').trim().toLowerCase();
+  const name = String(payload?.name || '').trim();
+  if (!email || !name || payload?.email_verified !== true) {
+    return res.status(400).json({
+      success: false,
+      message: 'Akun Google tidak valid atau email belum terverifikasi'
+    });
+  }
+
+  let user = await User.findOne({ where: { email } });
+  if (!user) {
+    user = await User.create({
+      name,
+      email,
+      role: ROLES.USER,
+      is_active: true,
+      phone: null,
+      password_hash: null
+    });
+  } else if (!user.is_active) {
+    await user.update({ is_active: true });
+  }
+
+  await user.update({ last_login_at: new Date() });
+  const canonicalRole = normalizeRole(user.role);
+  const token = signToken(user.id, user.email, canonicalRole);
+  const u = user.toJSON();
+  delete u.password_hash;
+  u.role = canonicalRole;
+
+  res.json({ success: true, message: 'Login Google berhasil', data: { user: u, token } });
+});
+
 const me = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id, { attributes: { exclude: ['password_hash'] } });
   if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
@@ -163,4 +289,4 @@ const activity = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { last_login_at: user.last_login_at ? user.last_login_at.toISOString() : null } });
 });
 
-module.exports = { login, me, changePassword, activity, register, resendOtp, verifyOtp };
+module.exports = { login, loginWithGoogle, me, changePassword, activity, register, resendOtp, verifyOtp };

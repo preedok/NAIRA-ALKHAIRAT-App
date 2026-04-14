@@ -37,6 +37,10 @@ async function uploadJamaahData(_req, res) {
   res.json({ success: true, message: 'Upload data jamaah tersimpan' });
 }
 
+async function getJamaahFile(_req, res) {
+  res.status(404).json({ success: false, message: 'File jamaah belum tersedia' });
+}
+
 async function createOrderCancellationRequest(_req, res) {
   res.json({ success: true, message: 'Permintaan pembatalan diterima' });
 }
@@ -52,6 +56,7 @@ module.exports = {
   update,
   destroy,
   uploadJamaahData,
+  getJamaahFile,
   createOrderCancellationRequest,
   sendOrderResult
 };

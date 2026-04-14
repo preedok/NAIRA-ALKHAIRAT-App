@@ -7,6 +7,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; message?: string }>;
+  googleLogin: (idToken: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   hasRole: (role: UserRole | UserRole[]) => boolean;
   refreshUser: () => Promise<void>;
@@ -91,6 +92,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const googleLogin = async (idToken: string): Promise<{ success: boolean; message?: string }> => {
+    setIsLoading(true);
+    try {
+      const res = await authApi.loginGoogle(idToken);
+      const data = res.data;
+      if (!data.success || !data.data?.token) {
+        setIsLoading(false);
+        return { success: false, message: data.message || 'Login Google gagal' };
+      }
+      localStorage.setItem('bintang_global_token', data.data.token);
+      setUser(mapUser(data.data.user));
+      setIsLoading(false);
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      const message = err.response?.data?.message || 'Gagal login dengan Google';
+      setIsLoading(false);
+      return { success: false, message };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('bintang_global_user');
     localStorage.removeItem('bintang_global_token');
@@ -108,6 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated: !!user,
     isLoading,
     login,
+    googleLogin,
     logout,
     hasRole,
     refreshUser

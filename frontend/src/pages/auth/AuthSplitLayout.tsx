@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Star, LayoutDashboard, Users, Plane } from 'lucide-react';
+import { LayoutDashboard, Users, Plane } from 'lucide-react';
+import logo from '../../assets/nail-al-khairat-logo.svg';
 
-const BRAND_NAVY = '#0D1A63';
-const BRAND_NAVY_SOFT = '#152a7a';
+const BRAND_GOLD = '#C9A04B';
+const BRAND_GOLD_SOFT = '#B78734';
 
 type AuthSplitLayoutProps = {
   /** Konten kolom kiri (form) */
@@ -63,7 +64,7 @@ export function AuthSplitLayout({
         {/* Kolom kanan — panel merek (sembunyi di layar sempit) */}
         <div
           className="hidden md:flex md:w-[min(44%,420px)] flex-shrink-0 flex-col justify-between p-10 lg:p-12 text-white relative overflow-hidden"
-          style={{ background: `linear-gradient(165deg, ${BRAND_NAVY} 0%, ${BRAND_NAVY_SOFT} 48%, #0a1447 100%)` }}
+          style={{ background: `linear-gradient(165deg, ${BRAND_GOLD} 0%, ${BRAND_GOLD_SOFT} 48%, #8f6828 100%)` }}
         >
           <div className="absolute inset-0 opacity-[0.07] pointer-events-none">
             <div
@@ -119,21 +120,14 @@ export function AuthSplitLayout({
   );
 }
 
-/** Baris logo teks Bintang Global (kolom form). */
+/** Baris logo teks Nail Al-Khairat (kolom form). */
 export function AuthBrandLogoRow() {
   return (
     <div className="flex items-center gap-3 mb-8">
-      <div
-        className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md shrink-0"
-        style={{
-          background: 'linear-gradient(135deg, #0D1A63 0%, #152a7a 55%, #1e3a8a 100%)',
-        }}
-      >
-        <Star className="w-6 h-6 text-white" fill="white" strokeWidth={1.5} />
-      </div>
+      <img src={logo} alt="Nail Al-Khairat" className="w-11 h-11 rounded-xl object-contain shrink-0" />
       <div>
-        <p className="text-lg font-extrabold tracking-tight" style={{ color: BRAND_NAVY }}>
-          Bintang Global
+        <p className="text-lg font-extrabold tracking-tight" style={{ color: BRAND_GOLD_SOFT }}>
+          Nail Al-Khairat
         </p>
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Umroh & Travel</p>
       </div>

@@ -32,16 +32,11 @@ const User = sequelize.define('User', {
   branch_id: {
     type: DataTypes.UUID,
     field: 'kota_id',
-    references: { model: 'kotas', key: 'id' },
-    onUpdate: 'CASCADE',
-    onDelete: 'SET NULL'
+    allowNull: true
   },
   wilayah_id: {
     type: DataTypes.UUID,
     allowNull: true,
-    references: { model: 'wilayah', key: 'id' },
-    onUpdate: 'CASCADE',
-    onDelete: 'SET NULL',
     comment: 'For koordinator roles: scope to this wilayah (and its provinsi/cabang)'
   },
   region: {
