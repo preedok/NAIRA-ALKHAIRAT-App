@@ -11,6 +11,13 @@ const Kloter = sequelize.define('Kloter', {
     onUpdate: 'CASCADE',
     onDelete: 'SET NULL'
   },
+  branch_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'branches', key: 'id' },
+    onUpdate: 'CASCADE',
+    onDelete: 'SET NULL'
+  },
   departure_date: { type: DataTypes.DATEONLY, allowNull: false },
   return_date: { type: DataTypes.DATEONLY, allowNull: false },
   departure_airport: { type: DataTypes.STRING(120), allowNull: false },

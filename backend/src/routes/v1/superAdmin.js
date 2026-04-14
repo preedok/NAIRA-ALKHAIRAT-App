@@ -14,6 +14,10 @@ router.use(requireRole(ROLES.ADMIN));
 
 router.get('/monitoring', superAdminController.getMonitoring);
 router.get('/users-status', superAdminController.getUsersStatus);
+router.post('/users', superAdminController.createUser);
+router.get('/branches', superAdminController.listBranches);
+router.post('/branches', superAdminController.createBranch);
+router.patch('/branches/:id', superAdminController.updateBranch);
 router.get('/logs', superAdminController.getLogs);
 router.post('/logs', superAdminController.createLog);
 router.get('/maintenance', superAdminController.listMaintenance);

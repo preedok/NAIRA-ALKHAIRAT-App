@@ -43,5 +43,9 @@ export const notificationsApi = {
 export const publicApi = {
   getI18n: (locale: string) => api.get(`/i18n/${locale}`),
   getPublicSettings: () => api.get('/settings/public'),
-  getActiveMaintenance: () => api.get('/settings/maintenance/active')
+  getActiveMaintenance: () => api.get('/settings/maintenance/active'),
+  getBranches: () => api.get('/public/branches'),
+  getProvinces: () => api.get('/public/provinces'),
+  getWilayahs: (provinceId: string) =>
+    api.get('/public/wilayahs', { params: { province_id: provinceId } })
 };

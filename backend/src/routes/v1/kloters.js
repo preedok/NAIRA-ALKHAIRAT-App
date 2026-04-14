@@ -1,19 +1,30 @@
 const express = require('express');
 const asyncHandler = require('express-async-handler');
 const { auth, requireRole } = require('../../middleware/auth');
-const { ROLES } = require('../../constants');
+const { ROLES, normalizeRole } = require('../../constants');
 const { Kloter, KloterAssignment } = require('../../models');
 
 const router = express.Router();
 router.use(auth);
 
 router.get('/', asyncHandler(async (_req, res) => {
-  const kloters = await Kloter.findAll({ order: [['departure_date', 'ASC']] });
+  const where = {};
+  const myRole = normalizeRole(_req.user?.role);
+  if (myRole === ROLES.ADMIN_CABANG || myRole === ROLES.JAMAAH) {
+    where.branch_id = _req.user.branch_id || null;
+  }
+  const kloters = await Kloter.findAll({ where, order: [['departure_date', 'ASC']] });
   res.json({ success: true, data: kloters });
 }));
 
 router.post('/', requireRole(ROLES.ADMIN), asyncHandler(async (req, res) => {
-  const kloter = await Kloter.create({ ...req.body, created_by: req.user.id });
+  const myRole = normalizeRole(req.user?.role);
+  const payload = { ...req.body, created_by: req.user.id };
+  if (myRole === ROLES.ADMIN_CABANG) payload.branch_id = req.user.branch_id || null;
+  if (!payload.branch_id) {
+    return res.status(400).json({ success: false, message: 'branch_id wajib diisi untuk kloter' });
+  }
+  const kloter = await Kloter.create(payload);
   res.status(201).json({ success: true, data: kloter });
 }));
 

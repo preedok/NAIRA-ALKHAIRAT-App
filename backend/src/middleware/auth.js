@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
-const { normalizeRole, isAdminRole } = require('../constants');
+const { normalizeRole, isAdminRole, ROLES } = require('../constants');
 const logger = require('../config/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bintang-global-secret-change-in-production';
@@ -59,8 +59,11 @@ const requireRole = (...allowedRoles) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     const userRole = normalizeRole(req.user.role);
-    const normalizedAllowed = allowedRoles.map((role) => normalizeRole(role));
-    if (normalizedAllowed.includes(userRole)) {
+    const allowed = allowedRoles.map((r) => String(r || '').toLowerCase());
+    const allowAdminGroup = allowed.includes(ROLES.ADMIN);
+    const allowJamaahGroup = allowed.includes('user') || allowed.includes(ROLES.USER) || allowed.includes(ROLES.JAMAAH);
+    const allowExact = allowed.includes(userRole);
+    if (allowExact || (allowAdminGroup && isAdminRole(userRole)) || (allowJamaahGroup && userRole === ROLES.JAMAAH)) {
       return next();
     }
     return res.status(403).json({ success: false, message: 'Akses ditolak untuk role ini' });

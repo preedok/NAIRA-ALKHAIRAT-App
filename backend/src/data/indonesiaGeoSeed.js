@@ -1,0 +1,40 @@
+/**
+ * Master provinsi + wilayah (kota/kabupaten contoh) untuk seed database.
+ * Wilayah dapat ditambah sesuai kebutuhan operasional.
+ */
+module.exports = [
+  { province: 'Aceh', wilayahs: ['Kota Banda Aceh', 'Kota Lhokseumawe', 'Kota Sabang'] },
+  { province: 'Sumatera Utara', wilayahs: ['Kota Medan', 'Kota Binjai', 'Kota Pematang Siantar'] },
+  { province: 'Sumatera Barat', wilayahs: ['Kota Padang', 'Kota Bukittinggi', 'Kota Padang Panjang'] },
+  { province: 'Riau', wilayahs: ['Kota Pekanbaru', 'Kota Dumai'] },
+  { province: 'Jambi', wilayahs: ['Kota Jambi', 'Kota Sungai Penuh'] },
+  { province: 'Sumatera Selatan', wilayahs: ['Kota Palembang', 'Kota Prabumulih'] },
+  { province: 'Bengkulu', wilayahs: ['Kota Bengkulu'] },
+  { province: 'Lampung', wilayahs: ['Kota Bandar Lampung', 'Kota Metro'] },
+  { province: 'Kepulauan Bangka Belitung', wilayahs: ['Kota Pangkal Pinang'] },
+  { province: 'Kepulauan Riau', wilayahs: ['Kota Batam', 'Kota Tanjung Pinang'] },
+  { province: 'DKI Jakarta', wilayahs: ['Jakarta Pusat', 'Jakarta Selatan', 'Jakarta Timur', 'Jakarta Barat', 'Jakarta Utara'] },
+  { province: 'Jawa Barat', wilayahs: ['Kota Bandung', 'Kota Bogor', 'Kota Bekasi', 'Kota Depok', 'Kota Cimahi'] },
+  { province: 'Jawa Tengah', wilayahs: ['Kota Semarang', 'Kota Surakarta', 'Kota Magelang', 'Kota Salatiga'] },
+  { province: 'DI Yogyakarta', wilayahs: ['Kota Yogyakarta', 'Kabupaten Sleman', 'Kabupaten Bantul'] },
+  { province: 'Jawa Timur', wilayahs: ['Kota Surabaya', 'Kota Malang', 'Kota Batu', 'Kota Madiun'] },
+  { province: 'Banten', wilayahs: ['Kota Tangerang', 'Kota Tangerang Selatan', 'Kota Serang', 'Kota Cilegon'] },
+  { province: 'Bali', wilayahs: ['Kota Denpasar', 'Kabupaten Badung', 'Kabupaten Gianyar'] },
+  { province: 'Nusa Tenggara Barat', wilayahs: ['Kota Mataram', 'Kota Bima'] },
+  { province: 'Nusa Tenggara Timur', wilayahs: ['Kota Kupang', 'Kabupaten Manggarai Barat'] },
+  { province: 'Kalimantan Barat', wilayahs: ['Kota Pontianak', 'Kota Singkawang'] },
+  { province: 'Kalimantan Tengah', wilayahs: ['Kota Palangka Raya'] },
+  { province: 'Kalimantan Selatan', wilayahs: ['Kota Banjarmasin', 'Kota Banjarbaru'] },
+  { province: 'Kalimantan Timur', wilayahs: ['Kota Samarinda', 'Kota Balikpapan', 'Kota Bontang'] },
+  { province: 'Kalimantan Utara', wilayahs: ['Kota Tarakan', 'Kabupaten Nunukan'] },
+  { province: 'Sulawesi Utara', wilayahs: ['Kota Manado', 'Kota Bitung', 'Kota Tomohon'] },
+  { province: 'Sulawesi Tengah', wilayahs: ['Kota Palu'] },
+  { province: 'Sulawesi Selatan', wilayahs: ['Kota Makassar', 'Kota Parepare', 'Kota Palopo'] },
+  { province: 'Sulawesi Tenggara', wilayahs: ['Kota Kendari', 'Kota Baubau'] },
+  { province: 'Gorontalo', wilayahs: ['Kota Gorontalo'] },
+  { province: 'Sulawesi Barat', wilayahs: ['Kabupaten Polewali Mandar', 'Kabupaten Mamuju'] },
+  { province: 'Maluku', wilayahs: ['Kota Ambon', 'Kota Tual'] },
+  { province: 'Maluku Utara', wilayahs: ['Kota Ternate', 'Kota Tidore Kepulauan'] },
+  { province: 'Papua Barat', wilayahs: ['Kota Sorong', 'Manokwari'] },
+  { province: 'Papua', wilayahs: ['Kota Jayapura', 'Kabupaten Merauke'] }
+];

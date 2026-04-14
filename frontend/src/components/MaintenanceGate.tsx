@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { publicApi } from '../services/api';
+import { normalizeUserRole } from '../types';
 
 interface Notice {
   id: string;
@@ -18,12 +19,13 @@ interface Notice {
  */
 const MaintenanceGate: React.FC = () => {
   const { user } = useAuth();
+  const role = normalizeUserRole(user?.role || 'jamaah');
   const [loading, setLoading] = useState(true);
   const [blockApp, setBlockApp] = useState(false);
   const [notices, setNotices] = useState<Notice[]>([]);
 
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (role === 'admin_pusat' || role === 'admin_cabang') {
       setLoading(false);
       return;
     }
@@ -49,9 +51,9 @@ const MaintenanceGate: React.FC = () => {
       cancelled = true;
       clearInterval(t);
     };
-  }, [user?.role]);
+  }, [role]);
 
-  if (user?.role === 'admin') {
+  if (role === 'admin_pusat' || role === 'admin_cabang') {
     return <Outlet />;
   }
 

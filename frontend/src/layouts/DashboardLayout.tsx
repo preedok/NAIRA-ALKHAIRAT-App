@@ -32,22 +32,22 @@ const menuItems: MenuItem[] = [
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['admin', 'user']
+    roles: ['admin_pusat', 'admin_cabang', 'jamaah']
   },
-  { title: 'Paket Umroh', icon: <Package className="w-5 h-5" />, path: '/dashboard/packages', roles: ['admin', 'user'] },
+  { title: 'Paket Umroh', icon: <Package className="w-5 h-5" />, path: '/dashboard/packages', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] },
   {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin', 'user']
+    roles: ['admin_pusat', 'admin_cabang', 'jamaah']
   },
-  { title: 'Cicilan', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/installments', roles: ['admin', 'user'] },
-  { title: 'Kloter', icon: <Plane className="w-5 h-5" />, path: '/dashboard/kloters', roles: ['admin'] },
-  { title: 'Flyer', icon: <FileText className="w-5 h-5" />, path: '/dashboard/flyers', roles: ['admin', 'user'] },
-  { title: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users', roles: ['admin'] },
-  { title: 'Reports', icon: <BarChart3 className="w-5 h-5" />, path: '/dashboard/reports', roles: ['admin'] },
-  { title: 'Settings', icon: <Settings className="w-5 h-5" />, path: '/dashboard/settings', roles: ['admin'] },
-  { title: 'Profile', icon: <User className="w-5 h-5" />, path: '/dashboard/profile', roles: ['admin', 'user'] }
+  { title: 'Cicilan', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/installments', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] },
+  { title: 'Kloter', icon: <Plane className="w-5 h-5" />, path: '/dashboard/kloters', roles: ['admin_pusat', 'admin_cabang'] },
+  { title: 'Flyer', icon: <FileText className="w-5 h-5" />, path: '/dashboard/flyers', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] },
+  { title: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users', roles: ['admin_pusat', 'admin_cabang'] },
+  { title: 'Reports', icon: <BarChart3 className="w-5 h-5" />, path: '/dashboard/reports', roles: ['admin_pusat', 'admin_cabang'] },
+  { title: 'Settings', icon: <Settings className="w-5 h-5" />, path: '/dashboard/settings', roles: ['admin_pusat', 'admin_cabang'] },
+  { title: 'Profile', icon: <User className="w-5 h-5" />, path: '/dashboard/profile', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] }
 ];
 
 const DashboardLayout: React.FC = () => {
@@ -62,7 +62,7 @@ const DashboardLayout: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
-  const effectiveRole = normalizeUserRole(user?.role || 'user');
+  const effectiveRole = normalizeUserRole(user?.role || 'jamaah');
 
   const fetchUnreadCount = () => {
     notificationsApi.unreadCount()
@@ -164,7 +164,9 @@ const DashboardLayout: React.FC = () => {
 
   const userMenuItems = [
     { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" />, onClick: () => navigate('/dashboard/profile') },
-    ...(effectiveRole === 'admin' ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }] : []),
+    ...((effectiveRole === 'admin_pusat' || effectiveRole === 'admin_cabang')
+      ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }]
+      : []),
     {
       id: 'logout',
       label: 'Logout',
@@ -338,12 +340,12 @@ const DashboardLayout: React.FC = () => {
   };
 
   /* Mobile bottom nav: key actions; owner bisa akses Profile (berisi MoU & ubah password) */
-  const isOwner = effectiveRole === 'user';
+  const isOwner = effectiveRole === 'jamaah';
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
     ...(!isOwner ? [{ path: '/dashboard/packages', label: 'Paket', icon: Package }] : []),
-    ...(effectiveRole === 'user' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
+    ...(effectiveRole === 'jamaah' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
   const showBottomNav = !!user && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices');
 

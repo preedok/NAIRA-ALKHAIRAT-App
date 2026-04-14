@@ -1,25 +1,41 @@
 const ROLES = {
   ADMIN: 'admin',
-  USER: 'user'
+  USER: 'jamaah',
+  ADMIN_PUSAT: 'admin_pusat',
+  ADMIN_CABANG: 'admin_cabang',
+  JAMAAH: 'jamaah'
 };
 
 function normalizeRole(role) {
-  return role === ROLES.ADMIN ? ROLES.ADMIN : ROLES.USER;
+  const raw = String(role || '').toLowerCase();
+  if (raw === 'admin' || raw === ROLES.ADMIN_PUSAT) return ROLES.ADMIN_PUSAT;
+  if (raw === ROLES.ADMIN_CABANG) return ROLES.ADMIN_CABANG;
+  if (raw === 'user' || raw === ROLES.USER || raw === ROLES.JAMAAH) return ROLES.JAMAAH;
+  return ROLES.JAMAAH;
 }
 
 function isAdminRole(role) {
-  return normalizeRole(role) === ROLES.ADMIN;
+  const normalized = normalizeRole(role);
+  return normalized === ROLES.ADMIN_PUSAT || normalized === ROLES.ADMIN_CABANG;
+}
+
+function isAdminPusatRole(role) {
+  return normalizeRole(role) === ROLES.ADMIN_PUSAT;
+}
+
+function isAdminCabangRole(role) {
+  return normalizeRole(role) === ROLES.ADMIN_CABANG;
 }
 
 function isUserRole(role) {
-  return normalizeRole(role) === ROLES.USER;
+  return normalizeRole(role) === ROLES.JAMAAH;
 }
 
 function isOwnerRole(role) {
   return normalizeRole(role) === ROLES.USER;
 }
 
-const OWNER_ROLES = [ROLES.USER];
+const OWNER_ROLES = [ROLES.JAMAAH];
 
 const OWNER_STATUS = {
   DRAFT: 'draft',
@@ -77,6 +93,8 @@ module.exports = {
   ROLES,
   normalizeRole,
   isAdminRole,
+  isAdminPusatRole,
+  isAdminCabangRole,
   isUserRole,
   isOwnerRole,
   OWNER_ROLES,

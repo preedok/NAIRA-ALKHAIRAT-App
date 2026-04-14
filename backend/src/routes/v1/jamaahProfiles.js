@@ -1,8 +1,8 @@
 const express = require('express');
 const asyncHandler = require('express-async-handler');
 const { auth, requireRole } = require('../../middleware/auth');
-const { ROLES } = require('../../constants');
-const { JamaahProfile, JamaahDocument } = require('../../models');
+const { ROLES, normalizeRole } = require('../../constants');
+const { JamaahProfile, JamaahDocument, User } = require('../../models');
 
 const router = express.Router();
 router.use(auth);
@@ -44,9 +44,15 @@ router.post('/me/documents', requireRole(ROLES.USER), asyncHandler(async (req, r
 }));
 
 router.get('/admin/pending', requireRole(ROLES.ADMIN), asyncHandler(async (_req, res) => {
+  const myRole = normalizeRole(_req.user?.role);
+  const userWhere = {};
+  if (myRole === ROLES.ADMIN_CABANG) userWhere.branch_id = _req.user.branch_id || null;
   const profiles = await JamaahProfile.findAll({
     where: { profile_status: 'under_review' },
-    include: [{ model: JamaahDocument, as: 'Documents' }]
+    include: [
+      { model: JamaahDocument, as: 'Documents' },
+      { model: User, as: 'User', attributes: ['id', 'name', 'email', 'branch_id'], where: userWhere, required: true }
+    ]
   });
   res.json({ success: true, data: profiles });
 }));
@@ -74,8 +80,12 @@ router.patch('/admin/:profileId/finalize', requireRole(ROLES.ADMIN), asyncHandle
   if (!['verified', 'rejected'].includes(status)) {
     return res.status(400).json({ success: false, message: 'Status final tidak valid' });
   }
-  const profile = await JamaahProfile.findByPk(req.params.profileId);
+  const profile = await JamaahProfile.findByPk(req.params.profileId, { include: [{ model: User, as: 'User', attributes: ['id', 'branch_id'] }] });
   if (!profile) return res.status(404).json({ success: false, message: 'Profil tidak ditemukan' });
+  const myRole = normalizeRole(req.user?.role);
+  if (myRole === ROLES.ADMIN_CABANG && profile.User?.branch_id !== req.user.branch_id) {
+    return res.status(403).json({ success: false, message: 'Anda hanya bisa memverifikasi profil jamaah cabang Anda' });
+  }
   await profile.update({ profile_status: status, reviewed_by: req.user.id, reviewed_at: new Date() });
   res.json({ success: true, data: profile });
 }));

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, User, Phone, MessageCircle, AlertCircle, ArrowRight } from 'lucide-react';
-import { authApi } from '../../services/api';
+import { authApi, publicApi } from '../../services/api';
 import Input from '../../components/common/Input';
 import { AuthSplitLayout, AuthBrandLogoRow } from './AuthSplitLayout';
 
@@ -9,7 +9,15 @@ const PRIMARY = '#C9A04B';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', whatsapp: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', whatsapp: '', password: '', branch_id: '' });
+  const [branches, setBranches] = useState<
+    Array<{
+      id: string;
+      name: string;
+      Province?: { id: string; name: string } | null;
+      Wilayah?: { id: string; name: string } | null;
+    }>
+  >([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
@@ -19,11 +27,13 @@ const RegisterPage: React.FC = () => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const selectedBranch = branches.find((b) => b.id === form.branch_id);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!form.name || !form.email || !form.whatsapp || !form.password) {
-      setError('Nama, email, WhatsApp, dan password wajib diisi.');
+    if (!form.name || !form.email || !form.whatsapp || !form.password || !form.branch_id) {
+      setError('Nama, email, cabang, WhatsApp, dan password wajib diisi.');
       return;
     }
     setLoading(true);
@@ -36,6 +46,15 @@ const RegisterPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    publicApi.getBranches()
+      .then((res) => {
+        const data = Array.isArray(res?.data?.data) ? res.data.data : [];
+        setBranches(data);
+      })
+      .catch(() => setBranches([]));
+  }, []);
 
   return (
     <AuthSplitLayout
@@ -69,6 +88,36 @@ const RegisterPage: React.FC = () => {
           autoComplete="name"
           error={undefined}
         />
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Cabang</label>
+          <select
+            name="branch_id"
+            value={form.branch_id}
+            onChange={(e) => setForm((prev) => ({ ...prev, branch_id: e.target.value }))}
+            className="w-full h-11 px-3 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A04B]/30 focus:border-[#C9A04B]"
+          >
+            <option value="">Pilih cabang</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>{branch.name}</option>
+            ))}
+          </select>
+        </div>
+        {form.branch_id && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Provinsi</label>
+              <div className="h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 flex items-center">
+                {selectedBranch?.Province?.name || '—'}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Wilayah</label>
+              <div className="h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 flex items-center">
+                {selectedBranch?.Wilayah?.name || '—'}
+              </div>
+            </div>
+          </div>
+        )}
         <Input
           name="email"
           type="email"

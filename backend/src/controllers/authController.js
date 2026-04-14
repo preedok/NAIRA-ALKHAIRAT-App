@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { OAuth2Client } = require('google-auth-library');
-const { User, OtpVerification } = require('../models');
+const { User, OtpVerification, Branch } = require('../models');
 const { signToken } = require('../middleware/auth');
 const { ROLES, normalizeRole } = require('../constants');
 
@@ -44,7 +44,7 @@ async function sendOtpEmail(email, otpCode) {
 }
 
 const register = asyncHandler(async (req, res) => {
-  const { name, email, phone, whatsapp, password } = req.body;
+  const { name, email, phone, whatsapp, password, branch_id } = req.body;
   if (!name || !email || !password || !(phone || whatsapp)) {
     return res.status(400).json({ success: false, message: 'Nama, email, password, dan nomor WhatsApp wajib diisi' });
   }
@@ -60,6 +60,7 @@ const register = asyncHandler(async (req, res) => {
     name: String(name).trim(),
     email: normalizedEmail,
     phone: normalizedPhone,
+    branch_id: branch_id || null,
     password_hash: passwordHash,
     role: ROLES.USER,
     is_active: false
@@ -199,7 +200,7 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const loginWithGoogle = asyncHandler(async (req, res) => {
-  const { id_token } = req.body;
+  const { id_token, branch_id } = req.body;
   if (!id_token) {
     return res.status(400).json({ success: false, message: 'Google token wajib diisi' });
   }
@@ -234,12 +235,19 @@ const loginWithGoogle = asyncHandler(async (req, res) => {
 
   let user = await User.findOne({ where: { email } });
   if (!user) {
+    let wilayah_id = null;
+    if (branch_id) {
+      const b = await Branch.findByPk(branch_id);
+      if (b) wilayah_id = b.wilayah_id;
+    }
     user = await User.create({
       name,
       email,
       role: ROLES.USER,
       is_active: true,
       phone: null,
+      branch_id: branch_id || null,
+      wilayah_id,
       password_hash: null
     });
   } else if (!user.is_active) {

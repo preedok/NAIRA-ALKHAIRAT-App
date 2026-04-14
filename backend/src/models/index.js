@@ -1,6 +1,9 @@
 const sequelize = require('../config/sequelize');
 
 const User = require('./User');
+const Branch = require('./Branch');
+const Province = require('./Province');
+const Wilayah = require('./Wilayah');
 const Order = require('./Order');
 const OrderItem = require('./OrderItem');
 const Invoice = require('./Invoice');
@@ -23,6 +26,15 @@ const KloterAssignment = require('./KloterAssignment');
 
 // Core relations
 Order.belongsTo(User, { foreignKey: 'owner_id', as: 'User' });
+User.belongsTo(Branch, { foreignKey: 'branch_id', as: 'Branch' });
+Branch.hasMany(User, { foreignKey: 'branch_id', as: 'Users' });
+
+Province.hasMany(Wilayah, { foreignKey: 'province_id', as: 'Wilayahs' });
+Wilayah.belongsTo(Province, { foreignKey: 'province_id', as: 'Province' });
+Branch.belongsTo(Province, { foreignKey: 'province_id', as: 'Province' });
+Branch.belongsTo(Wilayah, { foreignKey: 'wilayah_id', as: 'Wilayah' });
+Province.hasMany(Branch, { foreignKey: 'province_id', as: 'Branches' });
+Wilayah.hasMany(Branch, { foreignKey: 'wilayah_id', as: 'Branches' });
 Order.hasMany(OrderItem, { foreignKey: 'order_id', as: 'OrderItems' });
 OrderItem.belongsTo(Order, { foreignKey: 'order_id', as: 'Order' });
 
@@ -82,6 +94,9 @@ module.exports = {
   sequelize,
   Sequelize: require('sequelize'),
   User,
+  Branch,
+  Province,
+  Wilayah,
   Order,
   OrderItem,
   Invoice,

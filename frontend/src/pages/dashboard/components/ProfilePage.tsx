@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { normalizeUserRole } from '../../../types';
 import Card from '../../../components/common/Card';
 import PageHeader from '../../../components/common/PageHeader';
 import Input from '../../../components/common/Input';
 
 const ProfilePage: React.FC = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const role = normalizeUserRole(user?.role || 'jamaah');
+  const isAdmin = role === 'admin_pusat' || role === 'admin_cabang';
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

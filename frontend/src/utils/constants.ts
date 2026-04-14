@@ -196,8 +196,9 @@ export const PAYMENT_METHOD_LABELS = {
 // ============================================
 
 export const USER_ROLES = {
-  ADMIN: 'admin',
-  USER: 'user'
+  ADMIN_PUSAT: 'admin_pusat',
+  ADMIN_CABANG: 'admin_cabang',
+  JAMAAH: 'jamaah'
 } as const;
 
 // ============================================
