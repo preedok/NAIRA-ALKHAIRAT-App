@@ -14,8 +14,7 @@ interface Notice {
 }
 
 /**
- * Jika maintenance block aktif (block_app), semua role kecuali super_admin hanya melihat halaman maintenance full-screen.
- * Super Admin tetap bisa akses aplikasi.
+ * Jika maintenance block aktif (block_app), hanya admin yang tetap bisa akses aplikasi.
  */
 const MaintenanceGate: React.FC = () => {
   const { user } = useAuth();
@@ -24,7 +23,7 @@ const MaintenanceGate: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
 
   useEffect(() => {
-    if (user?.role === 'super_admin') {
+    if (user?.role === 'admin') {
       setLoading(false);
       return;
     }
@@ -52,7 +51,7 @@ const MaintenanceGate: React.FC = () => {
     };
   }, [user?.role]);
 
-  if (user?.role === 'super_admin') {
+  if (user?.role === 'admin') {
     return <Outlet />;
   }
 

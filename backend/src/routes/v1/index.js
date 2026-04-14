@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { auth, requireRole } = require('../../middleware/auth');
 const { ROLES } = require('../../constants');
-const adminPusatController = require('../../controllers/adminPusatController');
 
 router.get('/', (req, res) => {
   res.json({
@@ -10,12 +9,14 @@ router.get('/', (req, res) => {
     version: '1.0.0',
     docs: '/docs/MASTER_BUSINESS_PROCESS.md',
     endpoints: {
-      auth: '/api/v1/auth (POST /login, GET /me)',
-      owners: '/api/v1/owners (register, upload-mou, list, verify-mou, verify-deposit, assign-branch, activate)',
-      branches: '/api/v1/branches',
-      kotas: '/api/v1/kotas',
+      auth: '/api/v1/auth (register, otp, login, me)',
+      jamaah_profiles: '/api/v1/jamaah-profiles',
+      products: '/api/v1/products',
       orders: '/api/v1/orders',
-      invoices: '/api/v1/invoices'
+      invoices: '/api/v1/invoices',
+      installments: '/api/v1/installments',
+      kloters: '/api/v1/kloters',
+      flyers: '/api/v1/flyers'
     }
   });
 });
@@ -27,29 +28,15 @@ router.get('/i18n/:locale', (req, res, next) => {
 router.use('/auth', require('./auth'));
 router.use('/public', require('./public'));
 router.use('/notifications', require('./notifications'));
-router.use('/owners', require('./owners'));
-router.use('/ai-chat', require('./aiChat'));
-router.use('/branches', require('./branches'));
-router.use('/kotas', require('./branches'));
 router.use('/orders', require('./orders'));
-router.use('/order-cancellation-requests', require('./orderCancellationRequests'));
 router.use('/invoices', require('./invoices'));
-router.use('/refunds', require('./refunds'));
 router.use('/products', require('./products'));
+router.use('/jamaah-profiles', require('./jamaahProfiles'));
+router.use('/installments', require('./installments'));
+router.use('/kloters', require('./kloters'));
+router.use('/flyers', require('./flyers'));
 router.use('/business-rules', require('./businessRules'));
-router.use('/hotel', require('./hotel'));
-router.use('/ticket', require('./ticket'));
-router.use('/visa', require('./visa'));
-router.use('/bus', require('./bus'));
-router.use('/maskapai', require('./maskapai'));
-router.use('/handling', require('./handling'));
-router.use('/siskopatuh', require('./siskopatuh'));
-router.use('/haji-dakhili', require('./hajiDakhili'));
-router.use('/koordinator', require('./koordinator'));
-router.delete('/admin-pusat/users/:id', auth, requireRole(ROLES.SUPER_ADMIN, ROLES.ADMIN_PUSAT), adminPusatController.deleteUser);
-router.use('/admin-pusat', require('./adminPusat'));
-router.use('/accounting', require('./accounting'));
 router.use('/reports', require('./reports'));
-router.use('/super-admin', require('./superAdmin'));
+router.use('/settings', auth, requireRole(ROLES.ADMIN), require('./superAdmin'));
 
 module.exports = router;

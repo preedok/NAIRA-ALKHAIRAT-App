@@ -26,7 +26,7 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(50)
   },
   role: {
-    type: DataTypes.ENUM(Object.values(ROLES)),
+    type: DataTypes.ENUM(ROLES.ADMIN, ROLES.USER),
     allowNull: false
   },
   branch_id: {

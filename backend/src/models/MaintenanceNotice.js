@@ -38,7 +38,7 @@ const MaintenanceNotice = sequelize.define('MaintenanceNotice', {
   block_app: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
-    comment: 'When true and notice is active, all roles except super_admin see full maintenance page'
+    comment: 'When true and notice is active, only admin bypasses maintenance page'
   },
   created_by: {
     type: DataTypes.UUID,

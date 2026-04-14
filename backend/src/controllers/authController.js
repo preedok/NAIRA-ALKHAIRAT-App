@@ -1,206 +1,143 @@
 const asyncHandler = require('express-async-handler');
-const { User, OwnerProfile, Branch, Provinsi, Wilayah } = require('../models');
+const bcrypt = require('bcryptjs');
+const { User, OtpVerification } = require('../models');
 const { signToken } = require('../middleware/auth');
-const { OWNER_STATUS, isOwnerRole } = require('../constants');
-const { fillLocationFromKotaCode } = require('../utils/locationMaster');
-const logger = require('../config/logger');
+const { ROLES, normalizeRole } = require('../constants');
 
-/** Hindari login menggantung jika query master kabupaten lambat (DB jauh / lock). */
-function withTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('LOCATION_LOOKUP_TIMEOUT')), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      }
-    );
-  });
+const OTP_EXPIRY_MINUTES = 5;
+const OTP_MAX_RESEND = 3;
+
+function generateOtpCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-/**
- * POST /api/v1/auth/login
- * Query user tanpa join cabang dulu (lebih cepat + kurangi beban pool), lalu load Branch terpisah setelah password valid.
- */
-const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ success: false, message: 'Email dan password wajib' });
-  }
+function getOtpExpiryDate() {
+  return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+}
 
-  let user;
-  try {
-    user = await User.findOne({
-      where: { email: email.toLowerCase() }
-    });
-  } catch (err) {
-    const dbMessage = (err && err.original && err.original.message) ? err.original.message : (err && err.message) ? String(err.message) : String(err);
-    logger.error('Login DB error:', dbMessage);
-    return res.status(500).json({
-      success: false,
-      message: process.env.NODE_ENV === 'production' ? 'Kesalahan server' : dbMessage
-    });
+const register = asyncHandler(async (req, res) => {
+  const { name, email, phone, whatsapp, password } = req.body;
+  if (!name || !email || !password || !(phone || whatsapp)) {
+    return res.status(400).json({ success: false, message: 'Nama, email, password, dan nomor WhatsApp wajib diisi' });
   }
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const normalizedPhone = String(whatsapp || phone).trim();
 
-  if (!user) {
-    return res.status(401).json({ success: false, message: 'Email tidak ditemukan' });
-  }
+  const existing = await User.findOne({ where: { email: normalizedEmail } });
+  if (existing) return res.status(409).json({ success: false, message: 'Email sudah terdaftar' });
 
-  const valid = await user.comparePassword(password);
-  if (!valid) {
-    return res.status(401).json({ success: false, message: 'Password salah' });
-  }
+  const salt = await bcrypt.genSalt(10);
+  const passwordHash = await bcrypt.hash(String(password), salt);
+  const user = await User.create({
+    name: String(name).trim(),
+    email: normalizedEmail,
+    phone: normalizedPhone,
+    password_hash: passwordHash,
+    role: ROLES.USER,
+    is_active: false
+  });
 
-  if (!user.is_active) {
-    return res.status(403).json({ success: false, message: 'Akun tidak aktif' });
-  }
+  await OtpVerification.create({
+    user_id: user.id,
+    otp_code: generateOtpCode(),
+    channel: 'whatsapp',
+    expires_at: getOtpExpiryDate()
+  });
 
-  if (isOwnerRole(user.role)) {
-    const profile = await OwnerProfile.findOne({ where: { user_id: user.id } });
-    if (profile) {
-      const status = profile.status;
-      const allowedStatuses = [OWNER_STATUS.PENDING_REGISTRATION_PAYMENT, OWNER_STATUS.PENDING_REGISTRATION_VERIFICATION, OWNER_STATUS.DEPOSIT_VERIFIED, OWNER_STATUS.ASSIGNED_TO_BRANCH, OWNER_STATUS.ACTIVE];
-      if (!allowedStatuses.includes(status)) {
-        return res.status(403).json({
-          success: false,
-          message: status === 'rejected' ? 'Akun ditolak. Hubungi admin.' : 'Akun Owner belum dapat digunakan.',
-          owner_status: status
-        });
-      }
-      user.owner_status = status;
-    }
-  }
-
-  try {
-    await user.update({ last_login_at: new Date() });
-  } catch (e) {
-    logger.warn('Login: update last_login_at failed (non-fatal):', e && e.message);
-  }
-
-  let branch = null;
-  if (user.branch_id) {
-    try {
-      branch = await Branch.findByPk(user.branch_id, {
-        attributes: ['id', 'code', 'name', 'city'],
-        include: [{
-          model: Provinsi,
-          as: 'Provinsi',
-          attributes: ['id', 'name'],
-          required: false,
-          include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }]
-        }]
-      });
-    } catch (e) {
-      logger.warn('Login: load Branch failed (non-fatal):', e && e.message);
-    }
-  }
-
-  const token = signToken(user.id, user.email, user.role);
-  const u = user.toJSON();
-  delete u.password_hash;
-  let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
-  let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
-  if (branch && !provinsiName && branch.code) {
-    try {
-      const filled = await withTimeout(fillLocationFromKotaCode(branch.code), 2500);
-      if (filled) {
-        provinsiName = filled.provinsi_name || null;
-        wilayahName = filled.wilayah_name || null;
-      }
-    } catch (e) {
-      if (e && e.message === 'LOCATION_LOOKUP_TIMEOUT') {
-        logger.warn('Login: fillLocationFromKotaCode skipped (timeout)');
-      } else {
-        logger.warn('Login: locationMaster fill failed (non-fatal):', e && e.message);
-      }
-    }
-  }
-  const payload = {
-    ...u,
-    branch_name: branch ? branch.name : null,
-    branch_code: branch ? branch.code : null,
-    city: branch ? branch.city : null,
-    provinsi_name: provinsiName,
-    wilayah_name: wilayahName
-  };
-  if (isOwnerRole(user.role) && user.owner_status) {
-    payload.owner_status = user.owner_status;
-  }
-
-  res.json({
+  res.status(201).json({
     success: true,
-    message: 'Login berhasil',
-    data: {
-      user: payload,
-      token
-    }
+    message: 'Registrasi berhasil. OTP telah dikirim ke WhatsApp.',
+    data: { user_id: user.id, otp_expiry_minutes: OTP_EXPIRY_MINUTES, max_resend: OTP_MAX_RESEND }
   });
 });
 
-/**
- * GET /api/v1/auth/me
- */
-const me = asyncHandler(async (req, res) => {
-  const user = await User.findByPk(req.user.id, {
-    attributes: { exclude: ['password_hash'] },
-    include: [{
-      model: Branch,
-      as: 'Branch',
-      attributes: ['id', 'code', 'name', 'city'],
-      required: false,
-      include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-    }]
+const resendOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, message: 'Email wajib diisi' });
+
+  const user = await User.findOne({ where: { email: String(email).trim().toLowerCase() } });
+  if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
+
+  const latestOtp = await OtpVerification.findOne({
+    where: { user_id: user.id, verified_at: null },
+    order: [['created_at', 'DESC']]
   });
-  if (!user) {
-    return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
+  if (latestOtp && Number(latestOtp.resend_count || 0) >= OTP_MAX_RESEND) {
+    return res.status(429).json({ success: false, message: 'Batas kirim ulang OTP telah tercapai' });
   }
+
+  const nextResendCount = latestOtp ? Number(latestOtp.resend_count || 0) + 1 : 1;
+  await OtpVerification.create({
+    user_id: user.id,
+    otp_code: generateOtpCode(),
+    channel: 'whatsapp',
+    expires_at: getOtpExpiryDate(),
+    resend_count: nextResendCount
+  });
+
+  res.json({ success: true, message: 'OTP berhasil dikirim ulang', data: { resend_count: nextResendCount } });
+});
+
+const verifyOtp = asyncHandler(async (req, res) => {
+  const { email, otp_code } = req.body;
+  if (!email || !otp_code) return res.status(400).json({ success: false, message: 'Email dan OTP wajib diisi' });
+
+  const user = await User.findOne({ where: { email: String(email).trim().toLowerCase() } });
+  if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
+
+  const otp = await OtpVerification.findOne({
+    where: { user_id: user.id, verified_at: null },
+    order: [['created_at', 'DESC']]
+  });
+  if (!otp) return res.status(400).json({ success: false, message: 'OTP tidak ditemukan. Silakan kirim ulang OTP.' });
+  if (otp.expires_at && new Date(otp.expires_at).getTime() < Date.now()) {
+    return res.status(400).json({ success: false, message: 'OTP sudah kedaluwarsa. Silakan kirim ulang OTP.' });
+  }
+  if (String(otp_code).trim() !== String(otp.otp_code)) {
+    return res.status(400).json({ success: false, message: 'Kode OTP tidak valid' });
+  }
+
+  await otp.update({ verified_at: new Date() });
+  await user.update({ is_active: true });
+
+  const canonicalRole = normalizeRole(user.role);
+  const token = signToken(user.id, user.email, canonicalRole);
   const u = user.toJSON();
-  let branch = user.Branch;
-  let ownerProfile = null;
-  if (isOwnerRole(user.role)) {
-    ownerProfile = await OwnerProfile.findOne({
-      where: { user_id: user.id },
-      include: [{
-        model: Branch,
-        as: 'AssignedBranch',
-        attributes: ['id', 'code', 'name', 'city'],
-        required: false,
-        include: [{ model: Provinsi, as: 'Provinsi', attributes: ['id', 'name'], required: false, include: [{ model: Wilayah, as: 'Wilayah', attributes: ['id', 'name'], required: false }] }]
-      }]
-    });
-    u.owner_status = ownerProfile ? ownerProfile.status : null;
-    u.has_special_price = ownerProfile ? ownerProfile.has_special_price : false;
-    if (!branch && ownerProfile?.AssignedBranch) branch = ownerProfile.AssignedBranch;
-  }
-  u.branch_name = branch ? branch.name : null;
-  u.branch_code = branch ? branch.code : null;
-  u.city = branch ? branch.city : null;
-  let provinsiName = branch?.Provinsi ? (branch.Provinsi.name || branch.Provinsi.nama) : null;
-  let wilayahName = branch?.Provinsi?.Wilayah ? branch.Provinsi.Wilayah.name : null;
-  if (branch && !provinsiName && branch.code) {
-    try {
-      const filled = await fillLocationFromKotaCode(branch.code);
-      if (filled) {
-        provinsiName = filled.provinsi_name || null;
-        wilayahName = filled.wilayah_name || null;
-      }
-    } catch (e) {
-      logger.warn('me: locationMaster fill failed (non-fatal):', e && e.message);
-    }
-  }
-  u.provinsi_name = provinsiName;
-  u.wilayah_name = wilayahName;
+  delete u.password_hash;
+  u.role = canonicalRole;
+
+  res.json({ success: true, message: 'OTP berhasil diverifikasi. Akun telah aktif.', data: { user: u, token } });
+});
+
+const login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ success: false, message: 'Email dan password wajib' });
+
+  const user = await User.findOne({ where: { email: String(email).trim().toLowerCase() } });
+  if (!user) return res.status(401).json({ success: false, message: 'Email tidak ditemukan' });
+
+  const valid = await user.comparePassword(password);
+  if (!valid) return res.status(401).json({ success: false, message: 'Password salah' });
+  if (!user.is_active) return res.status(403).json({ success: false, message: 'Akun tidak aktif' });
+
+  await user.update({ last_login_at: new Date() });
+  const canonicalRole = normalizeRole(user.role);
+  const token = signToken(user.id, user.email, canonicalRole);
+  const u = user.toJSON();
+  delete u.password_hash;
+  u.role = canonicalRole;
+
+  res.json({ success: true, message: 'Login berhasil', data: { user: u, token } });
+});
+
+const me = asyncHandler(async (req, res) => {
+  const user = await User.findByPk(req.user.id, { attributes: { exclude: ['password_hash'] } });
+  if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
+  const u = user.toJSON();
+  u.role = normalizeRole(u.role);
   res.json({ success: true, data: u });
 });
 
-/**
- * POST /api/v1/auth/change-password
- * Ubah password (untuk owner atau user lain). Wajib: current_password, new_password.
- */
 const changePassword = asyncHandler(async (req, res) => {
   const { current_password, new_password } = req.body;
   if (!current_password || !new_password) {
@@ -212,33 +149,18 @@ const changePassword = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id);
   if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
   const valid = await user.comparePassword(current_password);
-  if (!valid) {
-    return res.status(401).json({ success: false, message: 'Password lama salah' });
-  }
-  const bcrypt = require('bcryptjs');
+  if (!valid) return res.status(401).json({ success: false, message: 'Password lama salah' });
+
   const salt = await bcrypt.genSalt(10);
   user.password_hash = await bcrypt.hash(new_password, salt);
   await user.save();
   res.json({ success: true, message: 'Password berhasil diubah' });
 });
 
-/**
- * GET /api/v1/auth/activity
- * Mengembalikan last_login_at user saat ini (untuk tampilan "terakhir aktif" / online).
- */
 const activity = asyncHandler(async (req, res) => {
-  const user = await User.findByPk(req.user.id, {
-    attributes: ['id', 'last_login_at']
-  });
-  if (!user) {
-    return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
-  }
-  res.json({
-    success: true,
-    data: {
-      last_login_at: user.last_login_at ? user.last_login_at.toISOString() : null
-    }
-  });
+  const user = await User.findByPk(req.user.id, { attributes: ['id', 'last_login_at'] });
+  if (!user) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
+  res.json({ success: true, data: { last_login_at: user.last_login_at ? user.last_login_at.toISOString() : null } });
 });
 
-module.exports = { login, me, changePassword, activity };
+module.exports = { login, me, changePassword, activity, register, resendOtp, verifyOtp };

@@ -34,13 +34,7 @@ const OrderItem = sequelize.define('OrderItem', {
   unit_price: {
     type: DataTypes.DECIMAL(18, 2),
     allowNull: false,
-    comment: 'Harga satuan (unit_price_currency). Export daftar invoice: kolom Harga per item.'
-  },
-  unit_price_currency: {
-    type: DataTypes.STRING(3),
-    allowNull: false,
-    defaultValue: 'IDR',
-    comment: 'Mata uang unit_price; dasar konversi IDR/SAR/USD di laporan export.'
+    comment: 'Harga satuan dalam IDR.'
   },
   subtotal: {
     type: DataTypes.DECIMAL(18, 2),
@@ -76,11 +70,6 @@ const OrderItem = sequelize.define('OrderItem', {
     type: DataTypes.JSONB,
     defaultValue: {},
     comment: 'room_type, check_in, check_out, flight_number, dll'
-  },
-  currency_rates_override: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: 'Kurs untuk item ini (jika ditambah setelah DP). Kosong = pakai kurs order.'
   },
   notes: {
     type: DataTypes.TEXT

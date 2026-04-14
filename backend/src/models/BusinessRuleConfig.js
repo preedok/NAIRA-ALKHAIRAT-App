@@ -4,7 +4,7 @@ const { BUSINESS_RULE_KEYS } = require('../constants');
 
 /**
  * Business rules: global (kota_id null) atau per kota (kolom DB: kota_id, atribut Sequelize: branch_id).
- * Keys: bus_min_pack, bus_penalty_idr, handling_default_sar, require_hotel_with_visa, dp_grace_hours, dp_due_days (legacy, tidak memakai untuk jatuh tempo invoice), currency_rates.
+ * Keys: require_hotel_with_visa, dp_grace_hours, dp_due_days (legacy, tidak memakai untuk jatuh tempo invoice).
  */
 const BusinessRuleConfig = sequelize.define('BusinessRuleConfig', {
   id: {

@@ -69,10 +69,6 @@ const Order = sequelize.define('Order', {
     allowNull: false,
     defaultValue: 0
   },
-  currency: {
-    type: DataTypes.STRING(3),
-    defaultValue: 'IDR'
-  },
   status: {
     type: DataTypes.ENUM('draft', 'tentative', 'confirmed', 'processing', 'completed', 'cancelled', 'blocked'),
     defaultValue: 'draft'
@@ -93,11 +89,6 @@ const Order = sequelize.define('Order', {
     allowNull: true,
     comment: 'Keterangan invoice (textarea form); disalin ke invoices.notes saat diterbitkan / update'
   },
-  currency_rates_override: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: 'Kurs khusus order (SAR_TO_IDR, USD_TO_IDR). Kosong = pakai kurs global.'
-  },
   dp_payment_status: {
     type: DataTypes.STRING(20),
     allowNull: true,
@@ -109,7 +100,6 @@ const Order = sequelize.define('Order', {
     comment: 'Persen pembayaran DP dari total tagihan terbaru (0-100)'
   },
   total_amount_idr: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
-  total_amount_sar: { type: DataTypes.DECIMAL(18, 2), allowNull: true },
   order_updated_at: { type: DataTypes.DATE, allowNull: true },
   waive_bus_penalty: {
     type: DataTypes.BOOLEAN,

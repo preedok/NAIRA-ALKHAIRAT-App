@@ -40,31 +40,6 @@ export const API_BASE_URL = process.env.REACT_APP_API_URL || '/api/v1';
 export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 // ============================================
-// CURRENCY
-// ============================================
-
-export const CURRENCIES = {
-  IDR: 'IDR',
-  SAR: 'SAR',
-  USD: 'USD'
-} as const;
-
-/** Satu sumber untuk opsi mata uang (dropdown + format). Dipakai di seluruh app (product, order, invoice). */
-export const CURRENCY_OPTIONS = [
-  { id: 'IDR' as const, label: 'Rupiah (IDR)', symbol: 'Rp', locale: 'id-ID' },
-  { id: 'SAR' as const, label: 'Riyal Saudi (SAR)', symbol: 'SAR', locale: 'en-US' },
-  { id: 'USD' as const, label: 'US Dollar (USD)', symbol: '$', locale: 'en-US' }
-] as const;
-
-export type CurrencyId = typeof CURRENCY_OPTIONS[number]['id'];
-
-export const EXCHANGE_RATES = {
-  SAR_TO_IDR: 4200, // 1 SAR = 4,200 IDR (example rate)
-  USD_TO_IDR: 15800, // 1 USD = 15,800 IDR (example rate)
-  USD_TO_SAR: 3.75 // 1 USD = 3.75 SAR (example rate)
-};
-
-// ============================================
 // ORDER STATUS
 // ============================================
 
@@ -151,9 +126,9 @@ export const PROGRESS_INVOICE_TABLE_COLUMNS = [
   { id: 'owner_type', label: 'Tipe Owner', align: 'left' as const },
   { id: 'company_wilayah', label: 'Perusahaan', align: 'left' as const },
   { id: 'pic_name', label: 'PIC', align: 'left' as const },
-  { id: 'total', label: 'Total (IDR·SAR·USD)', align: 'right' as const },
-  { id: 'paid', label: 'Status · Dibayar (IDR·SAR·USD)', align: 'right' as const },
-  { id: 'remaining', label: 'Sisa (IDR·SAR·USD)', align: 'right' as const },
+  { id: 'total', label: 'Total (IDR)', align: 'right' as const },
+  { id: 'paid', label: 'Status · Dibayar (IDR)', align: 'right' as const },
+  { id: 'remaining', label: 'Sisa (IDR)', align: 'right' as const },
   { id: 'status_progress', label: 'Status Progress', align: 'left' as const },
   INVOICE_TABLE_COLUMN_PROOF,
   { id: 'date', label: 'Tgl', align: 'left' as const },
@@ -221,13 +196,8 @@ export const PAYMENT_METHOD_LABELS = {
 // ============================================
 
 export const USER_ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  ADMIN_PUSAT: 'admin_pusat',
-  ROLE_HOTEL: 'role_hotel',
-  ROLE_BUS: 'role_bus',
-  ROLE_ACCOUNTING: 'role_accounting',
-  OWNER_MOU: 'owner_mou',
-  OWNER_NON_MOU: 'owner_non_mou'
+  ADMIN: 'admin',
+  USER: 'user'
 } as const;
 
 // ============================================
@@ -244,8 +214,8 @@ export const HOTEL_LOCATION_LABELS = {
   madinah: 'Madinah'
 };
 
-/** Urutan tampilan item order / progress: Hotel Madinah → Hotel Mekkah → Visa → Tiket → Bus → Handling → Paket. */
-export const ORDER_ITEM_DISPLAY_ORDER = ['hotel_madinah', 'hotel_makkah', 'visa', 'ticket', 'bus', 'handling', 'siskopatuh', 'haji_dakhili', 'package', 'bus_include'] as const;
+/** Urutan tampilan item order / progress B2C. */
+export const ORDER_ITEM_DISPLAY_ORDER = ['hotel_madinah', 'hotel_makkah', 'visa', 'ticket', 'bus', 'package', 'bus_include'] as const;
 
 /** Index untuk sort: semakin kecil semakin dulu. Hotel Madinah=0, Hotel Mekkah=1, Visa=2, Tiket=3, Bus=4, ... */
 export function getOrderItemSortIndex(type: string, hotelLocation?: string | null): number {

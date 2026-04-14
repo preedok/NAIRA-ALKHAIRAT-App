@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
-const { ROLES } = require('../constants');
+const { normalizeRole, isAdminRole } = require('../constants');
 const logger = require('../config/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bintang-global-secret-change-in-production';
@@ -36,6 +36,7 @@ const auth = async (req, res, next) => {
     }
 
     req.user = user;
+    req.user.canonical_role = normalizeRole(user.role);
     next();
   } catch (err) {
     if (err.name === 'JsonWebTokenError') {
@@ -57,7 +58,9 @@ const requireRole = (...allowedRoles) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-    if (allowedRoles.includes(req.user.role)) {
+    const userRole = normalizeRole(req.user.role);
+    const normalizedAllowed = allowedRoles.map((role) => normalizeRole(role));
+    if (normalizedAllowed.includes(userRole)) {
       return next();
     }
     return res.status(403).json({ success: false, message: 'Akses ditolak untuk role ini' });
@@ -65,11 +68,11 @@ const requireRole = (...allowedRoles) => {
 };
 
 /**
- * Branch restriction: user can only access data of their branch (or all for super_admin/admin_pusat)
+ * Branch restriction: user can only access data of their branch.
  */
 const branchRestriction = (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Unauthorized' });
-  if (req.user.role === ROLES.SUPER_ADMIN || req.user.role === ROLES.ADMIN_PUSAT) {
+  if (isAdminRole(req.user.role)) {
     return next();
   }
   req.branchFilter = { branch_id: req.user.branch_id };

@@ -1,16 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Hotel, FileCheck, Bus, Package, BarChart3,
+  Package, BarChart3,
   Shield, Headphones, Zap, ChevronRight, ChevronDown,
   Menu, X, ArrowRight, Star, Building2, Users,
   CheckCircle, Award, TrendingUp, MessageCircle,
   Phone, Mail, Instagram, Twitter, Youtube, Sparkles,
-  Lock, Layers, Search, Landmark,
-  PlaneTakeoff, Target,
+  Lock, Layers, Search, Target,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { publicApi } from '../../services/api';
 import logo from '../../assets/logo.png';
 
 /* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
@@ -46,49 +44,41 @@ const NAV_LINKS = [
 ];
 
 const SERVICES = [
-  { id: 'hotel',   label: 'Akomodasi Hotel',   desc: 'Ribuan hotel bintang 3–5 di Makkah, Madinah, dan seluruh destinasi haji & umroh.',  icon: Hotel,     num: '01' },
-  { id: 'visa',    label: 'Pengurusan Visa',    desc: 'Proses visa Saudi resmi dan cepat. Tim kami menangani dokumen dari awal hingga selesai.', icon: FileCheck, num: '02' },
-  { id: 'tiket',   label: 'Tiket Penerbangan', desc: 'Penerbangan langsung dan transit ke Arab Saudi dari seluruh bandara di Indonesia.',   icon: PlaneTakeoff, num: '03' },
-  { id: 'bus',     label: 'Transportasi Bus',  desc: 'Armada ber-AC khusus jamaah, melayani rute bandara, hotel, dan ziarah.',            icon: Bus,       num: '04' },
-  { id: 'paket',   label: 'Paket Umroh & Halal', desc: 'Paket lengkap umroh dan wisata halal — satu harga transparan, tanpa kejutan biaya tambahan.', icon: Package, num: '05' },
-  { id: 'haji',    label: 'Produk Haji',       desc: 'Dukungan mitra untuk layanan jamaah haji: paket sesuai kuota PPIU, manajemen dokumen, dan koordinasi ground handling di Arab Saudi.', icon: Landmark, num: '06' },
-  { id: 'report',  label: 'Dashboard Mitra',   desc: 'Kelola order, invoice otomatis, dan laporan real-time dari satu dashboard terintegrasi.', icon: BarChart3, num: '07' },
+  { id: 'paket',   label: 'Paket Umroh', desc: 'Pilih paket umroh yang sesuai kebutuhan: itinerary jelas, fasilitas transparan, dan kuota real-time.', icon: Package, num: '01' },
+  { id: 'profil',  label: 'Profil & Dokumen', desc: 'Lengkapi profil jamaah, upload dokumen wajib, lalu kirim verifikasi ke admin travel.', icon: Users, num: '02' },
+  { id: 'order',   label: 'Pemesanan Online', desc: 'Pesan paket langsung dari dashboard user setelah profil terverifikasi.', icon: Zap, num: '03' },
+  { id: 'invoice', label: 'Invoice & Pembayaran', desc: 'Terima invoice otomatis, bayar via transfer/manual, dan pantau status pembayaran.', icon: CheckCircle, num: '04' },
+  { id: 'kloter',  label: 'Kloter Keberangkatan', desc: 'Lihat informasi kloter, status proses, hingga jadwal keberangkatan secara terpusat.', icon: Target, num: '05' },
+  { id: 'report',  label: 'Dashboard Admin',   desc: 'Admin travel memantau jamaah, pesanan, cicilan, dan performa operasional harian.', icon: BarChart3, num: '06' },
 ];
 
 const STEPS = [
-  { num: '01', icon: Users,       title: 'Daftar Akun Mitra',   desc: 'Isi formulir sederhana dengan data perusahaan dan dokumen legalitas. Proses hanya 2 menit.' },
-  { num: '02', icon: CheckCircle, title: 'Verifikasi Dokumen',  desc: 'Tim kami memverifikasi dokumen dalam 1×24 jam kerja dan mengirim notifikasi via email & WhatsApp.' },
-  { num: '03', icon: Layers,      title: 'Akses Dashboard',     desc: 'Dapatkan akses penuh ke dashboard: kelola order, invoice otomatis, manajemen produk & laporan.' },
-  { num: '04', icon: TrendingUp,  title: 'Kembangkan Bisnis',   desc: 'Nikmati komisi hingga 8%, harga khusus mitra, dan dukungan 24/7 dari tim kami.' },
+  { num: '01', icon: Users,       title: 'Daftar Akun Jamaah',   desc: 'Buat akun dengan nomor WhatsApp dan email aktif, lalu verifikasi OTP.' },
+  { num: '02', icon: CheckCircle, title: 'Lengkapi Profil',      desc: 'Isi data diri dan unggah dokumen jamaah untuk proses verifikasi admin.' },
+  { num: '03', icon: Layers,      title: 'Pilih Paket Umroh',    desc: 'Bandingkan paket, fasilitas, harga kamar, dan kuota yang tersedia.' },
+  { num: '04', icon: TrendingUp,  title: 'Bayar & Pantau',       desc: 'Lakukan pembayaran, pantau invoice/cicilan, dan ikuti status keberangkatan.' },
 ];
 
 const TESTIMONIAL_HENDRA = {
-  name: 'Bapak Hendra G.',
-  role: 'CEO · Firdaus Travel',
+  name: 'Ibu Siti A.',
+  role: 'Jamaah Umroh',
   city: 'Bandung',
   rating: 5 as const,
-  text: 'Fitur laporan otomatis menghemat waktu admin kami 80%. Sekarang tim saya bisa fokus penuh pada pelayanan jamaah. Sangat direkomendasikan untuk agen travel manapun.',
-  avatar: 'HG',
+  text: 'Proses dari daftar sampai pembayaran sangat jelas. Status dokumen, invoice, dan jadwal keberangkatan semuanya bisa dipantau dari satu aplikasi.',
+  avatar: 'SA',
 };
 
 const DESTINATIONS_TICKER = [
-  '🕋 Haji', '✈ Makkah', '🕌 Madinah', '🇹🇷 Istanbul', '🇦🇪 Dubai', '🇪🇬 Cairo', '🇯🇴 Amman',
-  '🇲🇾 Kuala Lumpur', '🇫🇷 Paris', '🇬🇧 London', '🇮🇹 Roma', '🇩🇪 Frankfurt', '🇲🇦 Marrakech',
+  '🕋 Umroh', '✈ Makkah', '🕌 Madinah', '🛫 Jeddah', '📍 Miqat', '🕓 Jadwal Keberangkatan', '🧾 Invoice',
 ];
 
 const FAQS = [
-  { q: 'Apakah platform mendukung produk haji selain umroh?', a: 'Ya. Mitra dapat mengelola penawaran dan order terkait layanan haji (sesuai kebijakan PPIU dan kuota) bersama produk umroh, hotel, visa, dan tiket — dari satu dashboard.' },
-  { q: 'Bagaimana cara mendaftar sebagai partner?', a: 'Klik tombol "Daftar Partner", isi formulir dengan data perusahaan dan dokumen legalitas (SIUP, NPWP, SK Kemenkumham). Tim kami akan memverifikasi dalam 1×24 jam kerja.' },
-  { q: 'Berapa biaya untuk menjadi partner?', a: 'Pendaftaran sepenuhnya GRATIS. Tidak ada biaya bulanan atau tahunan. Anda hanya membayar saat melakukan transaksi dengan harga khusus mitra.' },
-  { q: 'Apa keuntungan menjadi partner Bintang Global?', a: 'Akses harga grosir untuk semua produk, komisi kompetitif hingga 8%, dashboard gratis, invoice otomatis, dukungan 24/7, dan materi marketing siap pakai.' },
-  { q: 'Berapa lama proses verifikasi akun partner?', a: 'Proses verifikasi berlangsung 1×24 jam di hari kerja. Anda akan mendapat notifikasi via email dan WhatsApp begitu akun diaktifkan.' },
-  { q: 'Apakah ada minimum transaksi setiap bulan?', a: 'Tidak ada minimum transaksi. Akun tetap aktif selama tidak ada pelanggaran ketentuan. Partner aktif mendapat bonus komisi kuartalan.' },
-  { q: 'Apakah bisa diakses dari perangkat mobile?', a: 'Ya! Dashboard kami fully-responsive dan optimal di semua perangkat. Tersedia juga PWA yang bisa diinstall di smartphone Anda.' },
-];
-
-const BANDARA_FALLBACK = [
-  { code: 'CGK', name: 'Jakarta (CGK)' }, { code: 'SBY', name: 'Surabaya (SBY)' },
-  { code: 'BTH', name: 'Batam (BTH)' },  { code: 'UPG', name: 'Makassar (UPG)' },
+  { q: 'Apakah saya bisa memesan sebelum profil diverifikasi?', a: 'Belum. Anda tetap bisa melihat katalog paket, tetapi pemesanan aktif setelah profil dan dokumen disetujui admin.' },
+  { q: 'Bagaimana cara daftar akun?', a: 'Klik "Daftar", isi data dasar, lalu verifikasi OTP yang dikirim ke WhatsApp Anda.' },
+  { q: 'Dokumen apa saja yang wajib diunggah?', a: 'Dokumen utama meliputi paspor, KTP, KK, pas foto, dan vaksin meningitis. Dokumen tambahan mengikuti kondisi jamaah.' },
+  { q: 'Apakah tersedia pembayaran cicilan?', a: 'Ya. Jika paket mengaktifkan cicilan, Anda bisa memilih tenor dan melihat jadwal jatuh tempo di dashboard.' },
+  { q: 'Bagaimana jika bukti transfer ditolak?', a: 'Admin akan memberikan alasan penolakan, lalu Anda dapat unggah ulang bukti pembayaran tanpa mengulang dari awal.' },
+  { q: 'Apakah bisa diakses dari HP?', a: 'Ya. Platform dapat diakses dengan nyaman melalui ponsel maupun desktop.' },
 ];
 
 /* ─── GLOBAL STYLES ──────────────────────────────────────────────── */
@@ -299,34 +289,20 @@ const SectionLabel: React.FC<{ text: string }> = ({ text }) => (
 
 /* ─── SEARCH WIDGET ──────────────────────────────────────────────── */
 const TABS = [
-  { id: 'hotel',  label: 'Hotel',  icon: Hotel },
-  { id: 'tiket',  label: 'Tiket',  icon: PlaneTakeoff },
-  { id: 'visa',   label: 'Visa',   icon: FileCheck },
-  { id: 'bus',    label: 'Bus',    icon: Bus },
   { id: 'paket',  label: 'Paket',  icon: Package },
 ] as const;
 type TabId = typeof TABS[number]['id'];
 
 const SearchWidget: React.FC<{
-  searchData: { bandara: { code: string; name: string }[] } | null;
   onSearch: (p: Record<string, string>) => void;
-}> = ({ searchData, onSearch }) => {
-  const [tab, setTab] = useState<TabId>('hotel');
-  const [hotel, setHotel] = useState({ dest: '', cin: '', cout: '', guests: '2' });
-  const [ticket, setTicket] = useState({ from: '', to: '', date: '' });
-  const [visa, setVisa] = useState({ type: 'Visa Saudi', date: '' });
-  const [bus, setBus] = useState({ route: '', date: '' });
+}> = ({ onSearch }) => {
+  const [tab, setTab] = useState<TabId>('paket');
   const [pkg, setPkg] = useState({ dest: '', date: '' });
-  const bandara = searchData?.bandara?.length ? searchData.bandara : BANDARA_FALLBACK;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const p: Record<string, string> = { product: tab };
-    if (tab === 'hotel') { if (hotel.dest) p.destination = hotel.dest; if (hotel.cin) p.checkin = hotel.cin; if (hotel.cout) p.checkout = hotel.cout; p.guests = hotel.guests; }
-    else if (tab === 'tiket') { if (ticket.from) p.from = ticket.from; if (ticket.to) p.to = ticket.to; if (ticket.date) p.date = ticket.date; }
-    else if (tab === 'visa') { p.destination = visa.type; if (visa.date) p.date = visa.date; }
-    else if (tab === 'bus') { if (bus.route) p.route = bus.route; if (bus.date) p.date = bus.date; }
-    else if (tab === 'paket') { if (pkg.dest) p.destination = pkg.dest; if (pkg.date) p.date = pkg.date; }
+    if (tab === 'paket') { if (pkg.dest) p.destination = pkg.dest; if (pkg.date) p.date = pkg.date; }
     onSearch(p);
   };
 
@@ -344,45 +320,10 @@ const SearchWidget: React.FC<{
         ))}
       </div>
       <form onSubmit={handleSubmit} style={{ padding: '20px 20px 24px' }}>
-        {tab === 'hotel' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <Label text="Destinasi" />
-              <div style={{ position: 'relative' }}>
-                <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.dim, pointerEvents: 'none' }} />
-                <input className="search-input" style={{ paddingLeft: 36 }} type="text" placeholder="Kota, Makkah, Madinah, atau nama hotel..." value={hotel.dest} onChange={e => setHotel(h => ({ ...h, dest: e.target.value }))} />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              <div><Label text="Check-In" /><input className="search-input" type="date" value={hotel.cin} onChange={e => setHotel(h => ({ ...h, cin: e.target.value }))} /></div>
-              <div><Label text="Check-Out" /><input className="search-input" type="date" value={hotel.cout} onChange={e => setHotel(h => ({ ...h, cout: e.target.value }))} /></div>
-              <div><Label text="Tamu" /><input className="search-input" type="number" min={1} max={20} value={hotel.guests} onChange={e => setHotel(h => ({ ...h, guests: e.target.value }))} /></div>
-            </div>
-          </div>
-        )}
-        {tab === 'tiket' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <div><Label text="Dari" /><select className="search-input" value={ticket.from} onChange={e => setTicket(t => ({ ...t, from: e.target.value }))}><option value="">Bandara asal</option>{bandara.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}</select></div>
-            <div><Label text="Ke" /><select className="search-input" value={ticket.to} onChange={e => setTicket(t => ({ ...t, to: e.target.value }))}><option value="">Bandara tujuan</option>{bandara.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}</select></div>
-            <div><Label text="Tanggal" /><input className="search-input" type="date" value={ticket.date} onChange={e => setTicket(t => ({ ...t, date: e.target.value }))} /></div>
-          </div>
-        )}
-        {tab === 'visa' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><Label text="Jenis Visa" /><input className="search-input" type="text" placeholder="Visa Saudi, Schengen..." value={visa.type} onChange={e => setVisa(v => ({ ...v, type: e.target.value }))} /></div>
-            <div><Label text="Tanggal Perjalanan" /><input className="search-input" type="date" value={visa.date} onChange={e => setVisa(v => ({ ...v, date: e.target.value }))} /></div>
-          </div>
-        )}
-        {tab === 'bus' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><Label text="Rute" /><input className="search-input" type="text" placeholder="Jeddah – Makkah, Bandara – Hotel..." value={bus.route} onChange={e => setBus(b => ({ ...b, route: e.target.value }))} /></div>
-            <div><Label text="Tanggal" /><input className="search-input" type="date" value={bus.date} onChange={e => setBus(b => ({ ...b, date: e.target.value }))} /></div>
-          </div>
-        )}
         {tab === 'paket' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><Label text="Paket / Destinasi" /><input className="search-input" type="text" placeholder="Paket Umroh Reguler, Wisata Halal..." value={pkg.dest} onChange={e => setPkg(p => ({ ...p, dest: e.target.value }))} /></div>
-            <div><Label text="Tanggal" /><input className="search-input" type="date" value={pkg.date} onChange={e => setPkg(p => ({ ...p, date: e.target.value }))} /></div>
+            <div><Label text="Paket Umroh" /><input className="search-input" type="text" placeholder="Contoh: Umroh Reguler 12 Hari" value={pkg.dest} onChange={e => setPkg(p => ({ ...p, dest: e.target.value }))} /></div>
+            <div><Label text="Perkiraan Berangkat" /><input className="search-input" type="date" value={pkg.date} onChange={e => setPkg(p => ({ ...p, date: e.target.value }))} /></div>
           </div>
         )}
         <div style={{ marginTop: 18 }}>
@@ -403,14 +344,7 @@ const LandingPage: React.FC = () => {
   const [mobile, setMobile]       = useState(false);
   const [form, setForm]           = useState({ nama: '', email: '', telepon: '', pesan: '' });
   const [sent, setSent]           = useState(false);
-  const [searchData, setSearchData] = useState<{ bandara: { code: string; name: string }[] } | null>(null);
   const injected = useRef(false);
-
-  useEffect(() => {
-    publicApi.getProductsForSearch()
-      .then(r => r.data?.data && setSearchData({ bandara: r.data.data.bandara || [] }))
-      .catch(() => setSearchData({ bandara: BANDARA_FALLBACK }));
-  }, []);
 
   useEffect(() => {
     if (injected.current) return;
@@ -471,7 +405,7 @@ const LandingPage: React.FC = () => {
             <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.navy, lineHeight: 1.1, fontFamily: "'DM Sans',sans-serif" }}>Bintang Global</div>
-              <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: '.18em', color: C.muted, textTransform: 'uppercase' }}>Haji & Umroh</div>
+              <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: '.18em', color: C.muted, textTransform: 'uppercase' }}>Platform Umroh</div>
             </div>
           </div>
 
@@ -483,8 +417,8 @@ const LandingPage: React.FC = () => {
           {/* Auth */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <Link to="/login" className="l-hide-mob l-nav-link" style={{ fontSize: 13, textDecoration: 'none' }}>Masuk</Link>
-            <Link to="/register-owner-type" className="btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
-              Daftar Partner <ArrowRight size={13} />
+            <Link to="/register" className="btn-primary l-hide-mob" style={{ padding: '9px 18px', fontSize: 13 }}>
+              Daftar Akun <ArrowRight size={13} />
             </Link>
             <button type="button" className="l-show-mob" onClick={() => setMobile(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, alignItems: 'center' }}>
               {mobile ? <X size={22} color={C.text} /> : <Menu size={22} color={C.text} />}
@@ -500,7 +434,7 @@ const LandingPage: React.FC = () => {
             ))}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <Link to="/login" className="btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobile(false)}>Masuk</Link>
-              <Link to="/register-owner-type" className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobile(false)}>Daftar</Link>
+              <Link to="/register" className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMobile(false)}>Daftar</Link>
             </div>
           </div>
         )}
@@ -518,7 +452,7 @@ const LandingPage: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="l-fu l-d0" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 8px', borderRadius: 100, background: C.navyFaint, border: `1px solid ${C.borderMd}`, width: 'fit-content', marginBottom: 24 }}>
                 <span style={{ background: C.navy, borderRadius: 100, padding: '2px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', color: 'white', textTransform: 'uppercase' }}>BARU</span>
-                <span style={{ fontSize: 12, color: C.navyMed, fontWeight: 500 }}>Dashboard mitra · Invoice & analitik real-time</span>
+                <span style={{ fontSize: 12, color: C.navyMed, fontWeight: 500 }}>Dashboard jamaah · invoice & status real-time</span>
               </div>
 
               <h1
@@ -538,22 +472,20 @@ const LandingPage: React.FC = () => {
                 }}
               >
                 <span style={{ whiteSpace: 'nowrap' }}>Platform Terpercaya</span>
-                <span style={{ color: C.navyMed, whiteSpace: 'nowrap' }}>Haji &amp; Umroh</span>
+                <span style={{ color: C.navyMed, whiteSpace: 'nowrap' }}>Umroh B2C</span>
                 <span style={{ fontSize: 'clamp(22px,2.8vw,38px)', fontWeight: 600, color: C.muted }}>untuk Seluruh Indonesia</span>
               </h1>
 
               <p className="l-fu l-d2" style={{ fontSize: 'clamp(15px,1.35vw,17px)', color: C.muted, lineHeight: 1.8, margin: '0 0 26px', maxWidth: 540 }}>
-                Hotel, visa, tiket, bus, paket <strong style={{ color: C.textMd, fontWeight: 600 }}>umroh dan haji</strong>, serta layanan pendukung lainnya dalam satu platform terintegrasi — untuk agen travel dan penyelenggara haji &amp; umroh profesional.
+                Platform manajemen perjalanan <strong style={{ color: C.textMd, fontWeight: 600 }}>umroh untuk jamaah</strong>, mulai dari profil, dokumen, pemesanan paket, invoice, pembayaran, sampai kloter keberangkatan.
               </p>
 
               <div className="l-fu l-d2" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 28 }}>
                 {[
-                  { icon: Hotel,        label: 'Hotel' },
-                  { icon: FileCheck,    label: 'Visa' },
-                  { icon: PlaneTakeoff, label: 'Tiket' },
-                  { icon: Bus,          label: 'Bus' },
-                  { icon: Package,      label: 'Umroh' },
-                  { icon: Landmark,     label: 'Haji' },
+                  { icon: Package,      label: 'Paket Umroh' },
+                  { icon: Users,        label: 'Profil Jamaah' },
+                  { icon: CheckCircle,  label: 'Invoice' },
+                  { icon: Target,       label: 'Kloter' },
                 ].map(({ icon: Icon, label }) => (
                   <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 100, fontSize: 12, fontWeight: 500, background: C.navyFaint, border: `1px solid ${C.borderMd}`, color: C.navyMed }}>
                     <Icon size={12} /> {label}
@@ -563,7 +495,7 @@ const LandingPage: React.FC = () => {
 
               <div className="l-fu l-d3" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <button type="button" className="btn-primary" onClick={() => scrollTo('layanan')} style={{ fontSize: 14, padding: '14px 28px' }}>
-                  Mulai Daftar Mitra <Sparkles size={14} />
+                  Mulai Daftar Jamaah <Sparkles size={14} />
                 </button>
                 <Link to="/login" className="btn-outline" style={{ fontSize: 14, padding: '13px 24px' }}>Sudah Punya Akun</Link>
               </div>
@@ -571,7 +503,7 @@ const LandingPage: React.FC = () => {
               <div className="l-fu l-d4" style={{ display: 'flex', gap: 22, marginTop: 28, flexWrap: 'wrap' }}>
                 {[
                   { icon: Shield,   label: 'Berlisensi resmi' },
-                  { icon: Headphones, label: 'Dukungan mitra' },
+                  { icon: Headphones, label: 'Dukungan jamaah' },
                   { icon: Lock,     label: 'Data aman' },
                 ].map(({ icon: Icon, label }) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, fontWeight: 500 }}>
@@ -583,8 +515,8 @@ const LandingPage: React.FC = () => {
 
             {/* Right: larger search card */}
             <div className="l-fu l-d2 hero-search-wrap" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-              <SearchWidget searchData={searchData} onSearch={p => navigate(`/register?${new URLSearchParams(p)}`)} />
-              <p style={{ fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 14 }}>Cari produk lalu lanjutkan ke pendaftaran mitra</p>
+              <SearchWidget onSearch={p => navigate(`/register?${new URLSearchParams(p)}`)} />
+              <p style={{ fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 14 }}>Pilih paket lalu lanjutkan ke pendaftaran jamaah</p>
             </div>
           </div>
         </div>
@@ -610,14 +542,14 @@ const LandingPage: React.FC = () => {
               Semua yang Anda Butuhkan,<br />
               <em style={{ color: C.navyMed }}>Dalam Satu Platform</em>
             </h2>
-            <p style={{ fontSize: 15, color: C.muted, maxWidth: 480, margin: '0 auto', lineHeight: 1.8 }}>Ekosistem travel terintegrasi untuk memenuhi seluruh kebutuhan perjalanan haji, umroh, dan wisata halal.</p>
+            <p style={{ fontSize: 15, color: C.muted, maxWidth: 480, margin: '0 auto', lineHeight: 1.8 }}>Ekosistem digital terintegrasi untuk kebutuhan proses perjalanan umroh end-to-end.</p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 20 }}>
             {SERVICES.map((svc, i) => {
               const Icon = svc.icon;
               return (
-                <div key={svc.id} className="l-card l-reveal" style={{ padding: '28px 28px 24px', cursor: 'pointer', animationDelay: `${i * 0.07}s` }} onClick={() => navigate('/register-owner-type')}>
+                <div key={svc.id} className="l-card l-reveal" style={{ padding: '28px 28px 24px', cursor: 'pointer', animationDelay: `${i * 0.07}s` }} onClick={() => navigate('/register')}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 12, background: C.navyFaint, border: `1px solid ${C.borderMd}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Icon size={22} color={C.navy} />
@@ -669,7 +601,7 @@ const LandingPage: React.FC = () => {
           </div>
 
           <div className="l-reveal" style={{ textAlign: 'center', marginTop: 52 }}>
-            <Link to="/register-owner-type" className="btn-primary" style={{ fontSize: 15, padding: '14px 36px' }}>
+            <Link to="/register" className="btn-primary" style={{ fontSize: 15, padding: '14px 36px' }}>
               <Zap size={16} /> Daftar Sekarang — Gratis
             </Link>
           </div>
@@ -708,11 +640,11 @@ const LandingPage: React.FC = () => {
                 15 Tahun Membangun<br /><em style={{ color: C.navyMed }}>Kepercayaan</em>
               </h2>
               <p style={{ color: C.muted, fontSize: 15, lineHeight: 1.8, margin: '0 0 32px', maxWidth: 440 }}>
-                Bintang Global adalah mitra bisnis jangka panjang yang benar-benar memahami kebutuhan agen travel dan umroh profesional di seluruh Indonesia.
+                Bintang Global membantu jamaah dan admin travel menjalankan proses umroh secara lebih mudah, terstruktur, dan transparan.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {[
-                  { icon: Target,        title: 'Fokus pada Hasil',        desc: 'Setiap fitur dirancang untuk meningkatkan penjualan dan efisiensi mitra.' },
+                  { icon: Target,        title: 'Fokus pada Kemudahan',    desc: 'Setiap fitur dirancang agar proses jamaah lebih cepat dan minim kendala.' },
                   { icon: MessageCircle, title: 'Komunikasi Transparan',   desc: 'Notifikasi real-time dan laporan lengkap untuk setiap transaksi.' },
                   { icon: Award,         title: 'Penghargaan Industri',    desc: 'Diakui sebagai platform travel umroh terbaik selama 5 tahun berturut-turut.' },
                 ].map(({ icon: Icon, title, desc }) => (
@@ -733,7 +665,7 @@ const LandingPage: React.FC = () => {
             <div className="l-reveal">
               <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 20, padding: 26, boxShadow: `0 20px 60px ${C.shadow}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.textMd }}>Aktivitas Partner — Minggu Ini</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.textMd }}>Aktivitas Jamaah — Minggu Ini</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '3px 10px', borderRadius: 100, border: '1px solid #bbf7d0' }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} /> LIVE
                   </span>
@@ -776,9 +708,9 @@ const LandingPage: React.FC = () => {
       <section className="l-section" style={{ background: 'white' }}>
         <div style={W}>
           <div className="l-reveal" style={{ textAlign: 'center', marginBottom: 40 }}>
-            <SectionLabel text="Testimoni Mitra" />
+            <SectionLabel text="Testimoni Jamaah" />
             <h2 className="display-font" style={{ fontSize: 'clamp(28px,4vw,46px)', fontWeight: 700, lineHeight: 1.1, margin: 0, color: C.text }}>
-              Apa Kata <em style={{ color: C.navyMed }}>Partner Kami</em>
+              Apa Kata <em style={{ color: C.navyMed }}>Jamaah Kami</em>
             </h2>
           </div>
 
@@ -846,7 +778,7 @@ const LandingPage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginBottom: 48 }}>
             {[
               { icon: Phone,         label: 'Telepon',  value: '021-XXXX-XXXX',           desc: 'Senin–Sabtu, 08:00–17:00 WIB' },
-              { icon: Mail,          label: 'Email',    value: 'partner@bintangglobal.id', desc: 'Balasan dalam 1×24 jam' },
+              { icon: Mail,          label: 'Email',    value: 'support@bintangglobal.id', desc: 'Balasan dalam 1×24 jam' },
               { icon: MessageCircle, label: 'WhatsApp', value: '08xx-xxxx-xxxx',           desc: 'Support cepat via chat' },
               { icon: Building2,     label: 'Kantor',   value: '50+ Kota',                 desc: 'Jaringan seluruh Indonesia' },
             ].map(({ icon: Icon, label, value, desc }) => (
@@ -933,10 +865,10 @@ const LandingPage: React.FC = () => {
               Daftar gratis dalam 2 menit. Verifikasi instan. Akses penuh ke semua fitur platform.
             </p>
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Link to="/register-owner-type" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 34px', borderRadius: 9, background: 'white', color: C.navy, fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', transition: 'all .2s', fontFamily: "'DM Sans',system-ui,sans-serif" }}
+              <Link to="/register" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 34px', borderRadius: 9, background: 'white', color: C.navy, fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', transition: 'all .2s', fontFamily: "'DM Sans',system-ui,sans-serif" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'none'; }}>
-                <Zap size={16} /> Daftar Partner — GRATIS
+                <Zap size={16} /> Daftar Akun — GRATIS
               </Link>
               <Link to="/login" className="btn-ghost" style={{ fontSize: 15, padding: '13px 28px' }}>Sudah Punya Akun</Link>
             </div>
@@ -958,10 +890,10 @@ const LandingPage: React.FC = () => {
                 <img src={logo} alt="Bintang Global" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'contain' }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'white', fontFamily: "'DM Sans',sans-serif" }}>Bintang Global</div>
-                  <div style={{ fontSize: 9, color: '#6B7FCC', letterSpacing: '.18em', textTransform: 'uppercase' }}>Haji & Umroh</div>
+                  <div style={{ fontSize: 9, color: '#6B7FCC', letterSpacing: '.18em', textTransform: 'uppercase' }}>Platform Umroh</div>
                 </div>
               </div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.75, margin: '0 0 20px', maxWidth: 220 }}>Platform travel dan umroh terintegrasi untuk partner dan jamaah di seluruh Indonesia.</p>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.75, margin: '0 0 20px', maxWidth: 220 }}>Platform travel umroh terintegrasi untuk admin travel dan jamaah di seluruh Indonesia.</p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {[Instagram, Twitter, Youtube].map((Icon, i) => (
                   <button key={i} style={{ width: 34, height: 34, borderRadius: 9, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s' }}
@@ -974,8 +906,8 @@ const LandingPage: React.FC = () => {
             </div>
             {[
               { title: 'Platform', links: [['Layanan', '#layanan'], ['Cara Kerja', '#proses'], ['Tentang Kami', '#tentang'], ['FAQ', '#faq']] },
-              { title: 'Partner',  links: [['Daftar Partner', '/register-owner-type'], ['Masuk Dashboard', '/login'], ['Kebijakan Privasi', '#'], ['Syarat & Ketentuan', '#']] },
-              { title: 'Kontak',   links: [['021-XXXX-XXXX', '#'], ['partner@bintangglobal.id', '#'], ['Senin–Sabtu 08–17', '#'], ['Support 24/7', '#']] },
+              { title: 'Jamaah',  links: [['Daftar Jamaah', '/register'], ['Masuk Dashboard', '/login'], ['Kebijakan Privasi', '#'], ['Syarat & Ketentuan', '#']] },
+              { title: 'Kontak',   links: [['021-XXXX-XXXX', '#'], ['support@bintangglobal.id', '#'], ['Senin–Sabtu 08–17', '#'], ['Support 24/7', '#']] },
             ].map(({ title, links }) => (
               <div key={title}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.16em', color: '#6B7FCC', textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>

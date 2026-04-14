@@ -1,15 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Menu,
   X,
-  Globe,
   LayoutDashboard,
-  Hotel,
   FileText,
   Plane,
-  Bus,
-  HandHelping,
   Package,
   Receipt,
   Users,
@@ -21,179 +17,37 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Rocket,
-  Calendar,
-  DollarSign,
-  Wallet,
-  Sparkles,
-  Landmark
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { OrderDraftProvider } from '../contexts/OrderDraftContext';
-import { MenuItem, UserRole, ROLE_NAMES } from '../types';
-import ProductDraftBar from '../components/ProductDraftBar';
+import { MenuItem, ROLE_NAMES, normalizeUserRole } from '../types';
 import Dropdown from '../components/common/Dropdown';
 import Badge from '../components/common/Badge';
 import MaintenanceBanner from '../components/MaintenanceBanner';
 import logo from '../assets/logo.png';
 import { notificationsApi, type NotificationItem } from '../services/api';
 
-// Produk umum: operasional internal (owner tidak perlu melihat menu Products).
-const productMenuRoles: UserRole[] = [
-  'super_admin',
-  'admin_pusat',
-  'role_accounting',
-  'invoice_koordinator',
-  'tiket_koordinator',
-  'visa_koordinator',
-  'role_hotel',
-  'role_bus',
-  'invoice_saudi',
-  'handling',
-  'role_siskopatuh',
-  'role_haji_dakhili'
-];
-// Siskopatuh: subset invoice + divisi siskopatuh.
-const siskopatuhMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'role_siskopatuh'];
-const hajiDakhiliMenuRoles: UserRole[] = ['super_admin', 'admin_pusat', 'role_accounting', 'invoice_koordinator', 'invoice_saudi', 'role_haji_dakhili'];
-
 const menuItems: MenuItem[] = [
   {
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['super_admin', 'admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'invoice_saudi', 'role_hotel', 'role_bus', 'role_accounting', 'owner_mou', 'owner_non_mou', 'handling', 'role_siskopatuh', 'role_haji_dakhili']
+    roles: ['admin', 'user']
   },
-  {
-    title: 'Asisten AI',
-    icon: <Sparkles className="w-5 h-5" />,
-    path: '/dashboard/ai-chat',
-    roles: ['owner_mou', 'owner_non_mou']
-  },
-  {
-    title: 'Owners Wilayah',
-    icon: <Users className="w-5 h-5" />,
-    path: '/dashboard/koordinator/owners',
-    roles: ['super_admin', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator']
-  },
-  {
-    title: 'Products',
-    icon: <Package className="w-5 h-5" />,
-    path: '/dashboard/products',
-    roles: Array.from(new Set<UserRole>([...productMenuRoles, ...siskopatuhMenuRoles, ...hajiDakhiliMenuRoles])),
-    children: [
-      { title: 'Hotel', icon: <Hotel className="w-4 h-4" />, path: '/dashboard/products/hotel', roles: productMenuRoles },
-      { title: 'Visa', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/visa', roles: productMenuRoles },
-      { title: 'Tiket', icon: <Plane className="w-4 h-4" />, path: '/dashboard/products/tickets', roles: productMenuRoles },
-      { title: 'Bus Saudi', icon: <Bus className="w-4 h-4" />, path: '/dashboard/products/bus', roles: productMenuRoles },
-      { title: 'Siskopatuh', icon: <FileText className="w-4 h-4" />, path: '/dashboard/products/siskopatuh', roles: siskopatuhMenuRoles },
-      { title: 'Haji Dakhili', icon: <Landmark className="w-4 h-4" />, path: '/dashboard/products/haji-dakhili', roles: hajiDakhiliMenuRoles },
-      { title: 'Handling', icon: <HandHelping className="w-4 h-4" />, path: '/dashboard/products/handling', roles: productMenuRoles },
-      { title: 'Paket', icon: <Package className="w-4 h-4" />, path: '/dashboard/products/packages', roles: productMenuRoles },
-    ]
-  },
-  {
-    title: 'Progress Hotel',
-    icon: <Hotel className="w-5 h-5" />,
-    path: '/dashboard/progress-hotel',
-    roles: ['super_admin', 'role_hotel']
-  },
-  {
-    title: 'Progress Tiket',
-    icon: <Plane className="w-5 h-5" />,
-    path: '/dashboard/progress-tiket',
-    roles: ['super_admin', 'tiket_koordinator']
-  },
-  {
-    title: 'Progress Visa',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/progress-visa',
-    roles: ['super_admin', 'visa_koordinator'] as UserRole[]
-  },
-  {
-    title: 'Progress Bus',
-    icon: <Bus className="w-5 h-5" />,
-    path: '/dashboard/progress-bus',
-    roles: ['super_admin', 'role_bus']
-  },
-  {
-    title: 'Progress Handling',
-    icon: <HandHelping className="w-5 h-5" />,
-    path: '/dashboard/progress-handling',
-    roles: ['super_admin', 'handling']
-  },
-  {
-    title: 'Progress Siskopatuh',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/progress-siskopatuh',
-    roles: ['super_admin', 'role_siskopatuh']
-  },
-  {
-    title: 'Progress Haji Dakhili',
-    icon: <Landmark className="w-5 h-5" />,
-    path: '/dashboard/progress-haji-dakhili',
-    roles: ['super_admin', 'role_haji_dakhili']
-  },
+  { title: 'Paket Umroh', icon: <Package className="w-5 h-5" />, path: '/dashboard/packages', roles: ['admin', 'user'] },
   {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
     path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'invoice_koordinator', 'tiket_koordinator', 'visa_koordinator', 'role_accounting', 'owner_mou', 'owner_non_mou', 'super_admin', 'invoice_saudi', 'handling', 'role_hotel', 'role_bus', 'role_siskopatuh', 'role_haji_dakhili']
+    roles: ['admin', 'user']
   },
-  {
-    title: 'Refund',
-    icon: <Receipt className="w-5 h-5" />,
-    path: '/dashboard/refunds',
-    roles: ['admin_pusat', 'super_admin', 'role_accounting', 'owner_mou', 'owner_non_mou']
-  },
-  {
-    title: 'Users',
-    icon: <Users className="w-5 h-5" />,
-    path: '/dashboard/users',
-    roles: ['super_admin', 'admin_pusat']
-  },
-  {
-    title: 'Reports',
-    icon: <BarChart3 className="w-5 h-5" />,
-    path: '/dashboard/reports',
-    roles: ['super_admin', 'admin_pusat', 'role_accounting']
-  },
-  {
-    title: 'Settings',
-    icon: <Settings className="w-5 h-5" />,
-    path: '/dashboard/settings',
-    roles: ['super_admin', 'admin_pusat', 'role_accounting']
-  },
-  {
-    title: 'Data Rekening Bank',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/accounting/chart-of-accounts',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Laporan Keuangan',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/accounting/financial-report',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'Piutang (AR)',
-    icon: <BarChart3 className="w-5 h-5" />,
-    path: '/dashboard/accounting/aging',
-    roles: ['role_accounting']
-  },
-  {
-    title: 'System Logs',
-    icon: <FileText className="w-5 h-5" />,
-    path: '/dashboard/super-admin/logs',
-    roles: ['super_admin']
-  },
-  {
-    title: 'Maintenance',
-    icon: <Bell className="w-5 h-5" />,
-    path: '/dashboard/super-admin/maintenance',
-    roles: ['super_admin']
-  }
+  { title: 'Cicilan', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/installments', roles: ['admin', 'user'] },
+  { title: 'Kloter', icon: <Plane className="w-5 h-5" />, path: '/dashboard/kloters', roles: ['admin'] },
+  { title: 'Flyer', icon: <FileText className="w-5 h-5" />, path: '/dashboard/flyers', roles: ['admin', 'user'] },
+  { title: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users', roles: ['admin'] },
+  { title: 'Reports', icon: <BarChart3 className="w-5 h-5" />, path: '/dashboard/reports', roles: ['admin'] },
+  { title: 'Settings', icon: <Settings className="w-5 h-5" />, path: '/dashboard/settings', roles: ['admin'] },
+  { title: 'Profile', icon: <User className="w-5 h-5" />, path: '/dashboard/profile', roles: ['admin', 'user'] }
 ];
 
 const DashboardLayout: React.FC = () => {
@@ -208,6 +62,7 @@ const DashboardLayout: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const effectiveRole = normalizeUserRole(user?.role || 'user');
 
   const fetchUnreadCount = () => {
     notificationsApi.unreadCount()
@@ -297,41 +152,19 @@ const DashboardLayout: React.FC = () => {
 
   // Filter menu based on user role. For items with children, filter children by role and show parent if any child visible.
   // Super Admin: hak akses sama seperti Admin Pusat (Dashboard, Invoice, Refund, Users, Settings, Products, Reports) + menu super-admin (Logs, Maintenance)
-  const superAdminAllowedPaths = ['/dashboard', '/dashboard/reports', '/dashboard/orders-invoices', '/dashboard/refunds', '/dashboard/users', '/dashboard/settings', '/dashboard/products'];
   const filteredMenuItems = user
-    ? user.role === 'super_admin'
-      ? menuItems.filter(item => item.roles.includes('super_admin') && (superAdminAllowedPaths.includes(item.path) || item.path.startsWith('/dashboard/super-admin')))
-      : menuItems.filter((item) => {
-          if (item.children?.length) {
-            const visibleChildren = item.children.filter(c => c.roles.includes(user.role));
-            return visibleChildren.length > 0 || item.roles.includes(user.role);
-          }
-          return item.roles.includes(user.role);
-        }).map((item) => {
-          if (item.children?.length) {
-            return { ...item, children: item.children.filter(c => user && c.roles.includes(user.role)) };
-          }
-          return item;
-        })
+    ? menuItems.filter((item) => item.roles.some((r) => normalizeUserRole(r) === effectiveRole))
     : [];
 
   const currentPage = filteredMenuItems.find(item => item.path === location.pathname)
     || filteredMenuItems.flatMap(item => item.children || []).find(c => c.path === location.pathname);
 
   // Auto-expand menu when on a sub-path
-  useEffect(() => {
-    if (location.pathname.startsWith('/dashboard/products')) {
-      setExpandedMenuPath('/dashboard/products');
-    }
-  }, [location.pathname]);
+  useEffect(() => {}, [location.pathname]);
 
   const userMenuItems = [
-    ...(user?.role !== 'super_admin'
-      ? [
-          { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" />, onClick: () => navigate('/dashboard/profile') },
-          ...((user?.role !== 'owner_mou' && user?.role !== 'owner_non_mou') ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }] : [])
-        ]
-      : []),
+    { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" />, onClick: () => navigate('/dashboard/profile') },
+    ...(effectiveRole === 'admin' ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }] : []),
     {
       id: 'logout',
       label: 'Logout',
@@ -505,17 +338,14 @@ const DashboardLayout: React.FC = () => {
   };
 
   /* Mobile bottom nav: key actions; owner bisa akses Profile (berisi MoU & ubah password) */
-  const isOwner = user?.role === 'owner_mou' || user?.role === 'owner_non_mou';
+  const isOwner = effectiveRole === 'user';
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
     { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
-    ...(!isOwner ? [{ path: '/dashboard/products/packages', label: 'Paket', icon: Package }] : []),
-    ...((user?.role === 'owner_mou' || user?.role === 'owner_non_mou') ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
+    ...(!isOwner ? [{ path: '/dashboard/packages', label: 'Paket', icon: Package }] : []),
+    ...(effectiveRole === 'user' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
-  const showBottomNav = user && !['super_admin'].includes(user.role) && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices');
-  if (isOwner && user?.owner_status && user.owner_status !== 'active' && location.pathname !== '/dashboard/owner-activation') {
-    return <Navigate to="/dashboard/owner-activation" replace />;
-  }
+  const showBottomNav = !!user && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices');
 
   return (
     <div className="min-h-screen app-bg flex overflow-x-hidden">
@@ -634,14 +464,7 @@ const DashboardLayout: React.FC = () => {
           <div className="mb-4">
             <MaintenanceBanner />
           </div>
-          {user?.role === 'super_admin' && location.pathname !== '/dashboard' && !location.pathname.startsWith('/dashboard/super-admin') && location.pathname !== '/dashboard/reports' && location.pathname !== '/dashboard/orders-invoices' && location.pathname !== '/dashboard/refunds' && location.pathname !== '/dashboard/users' && location.pathname !== '/dashboard/settings' && !location.pathname.startsWith('/dashboard/products') ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <OrderDraftProvider>
-              <ProductDraftBar />
-              <Outlet />
-            </OrderDraftProvider>
-          )}
+          <Outlet />
         </main>
 
         {/* Mobile Bottom Navigation - Travel app style (green) */}

@@ -6,11 +6,11 @@ const superAdminController = require('../../controllers/superAdminController');
 
 // Public (for banner and theme)
 router.get('/maintenance/active', superAdminController.getActiveMaintenance);
-router.get('/settings/public', superAdminController.getSettings);
+router.get('/public', superAdminController.getSettings);
 
-// All below: Super Admin only
+// All below: Admin travel only (B2C canonical role)
 router.use(auth);
-router.use(requireRole(ROLES.SUPER_ADMIN));
+router.use(requireRole(ROLES.ADMIN));
 
 router.get('/monitoring', superAdminController.getMonitoring);
 router.get('/users-status', superAdminController.getUsersStatus);

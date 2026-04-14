@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, LoginCredentials, UserRole } from '../types';
+import { User, LoginCredentials, UserRole, normalizeUserRole } from '../types';
 import { authApi } from '../services/api';
 
 interface AuthContextType {
@@ -27,7 +27,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     name: raw.name,
     email: raw.email,
     phone: raw.phone,
-    role: raw.role,
+    role: normalizeUserRole(raw.role),
     branch_id: raw.branch_id,
     branch_name: raw.branch_name ?? raw.Branch?.name,
     wilayah_id: raw.wilayah_id,
@@ -99,9 +99,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const hasRole = (role: UserRole | UserRole[]): boolean => {
     if (!user) return false;
-    const isOwner = () => ['owner_mou', 'owner_non_mou'].includes(user!.role);
-    if (Array.isArray(role)) return role.some(r => user.role === r || (r === 'owner_mou' || r === 'owner_non_mou') && isOwner());
-    return user.role === role || ((role === 'owner_mou' || role === 'owner_non_mou') && isOwner());
+    if (Array.isArray(role)) return role.includes(user.role);
+    return user.role === role;
   };
 
   const value: AuthContextType = {

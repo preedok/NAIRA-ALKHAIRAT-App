@@ -72,7 +72,7 @@ const LoginPage: React.FC = () => {
     <AuthSplitLayout
       panelTitle="Terhubung dengan layanan mitra Anda."
       panelSubtitle="Satu dasbor untuk order, invoice, visa, tiket, hotel, dan paket umroh — mudah disesuaikan kebutuhan travel Anda."
-      panelFooterLink={{ to: '/register-owner-type', label: 'Daftar sebagai partner →' }}
+      panelFooterLink={{ to: '/register', label: 'Daftar sebagai jamaah →' }}
     >
       <AuthBrandLogoRow />
 
@@ -157,7 +157,7 @@ const LoginPage: React.FC = () => {
 
       <p className="text-center text-sm text-slate-600 mt-8">
         Belum punya akun?{' '}
-        <Link to="/register-owner-type" className="font-semibold hover:underline" style={{ color: PRIMARY }}>
+        <Link to="/register" className="font-semibold hover:underline" style={{ color: PRIMARY }}>
           Buat akun
         </Link>
       </p>

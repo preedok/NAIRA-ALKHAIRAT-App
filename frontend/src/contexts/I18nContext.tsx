@@ -17,7 +17,6 @@ const defaultTranslations: Record<string, string> = {
   tickets: 'Tickets',
   bus: 'Bus',
   packages: 'Packages',
-  super_admin: 'Super Admin',
   monitoring: 'Monitoring',
   order_statistics: 'Order Statistics',
   system_logs: 'System Logs',
