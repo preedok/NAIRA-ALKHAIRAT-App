@@ -147,7 +147,7 @@ const STYLES = `
     font-family:'DM Sans',system-ui,sans-serif;
     font-size:14px; font-weight:600; letter-spacing:.01em;
     text-decoration:none;
-    box-shadow:0 4px 16px rgba(11,29,81,0.28);
+    box-shadow:0 4px 16px rgba(183,135,52,0.28);
     transition:all .2s; position:relative; overflow:hidden;
   }
   .btn-primary::after {
@@ -167,7 +167,7 @@ const STYLES = `
     font-size:14px; font-weight:600; text-decoration:none;
     transition:all .2s;
   }
-  .btn-outline:hover { background:#EEF1FA; }
+  .btn-outline:hover { background:#FFF5DF; }
 
   .btn-ghost {
     display:inline-flex; align-items:center; gap:7px;
@@ -187,7 +187,7 @@ const STYLES = `
   }
   .l-card:hover {
     border-color:#C8D0E8; transform:translateY(-4px);
-    box-shadow:0 20px 50px rgba(11,29,81,0.10);
+    box-shadow:0 20px 50px rgba(183,135,52,0.14);
   }
 
   /* FAQ */
@@ -208,8 +208,8 @@ const STYLES = `
   }
 
   /* SEARCH */
-  .search-box { background:white; border:1px solid #E2E6F0; border-radius:16px; overflow:hidden; box-shadow:0 24px 64px rgba(11,29,81,0.12); }
-  .hero-search-wrap .search-box { border-radius:20px; box-shadow:0 32px 80px rgba(11,29,81,0.16); min-height:420px; display:flex; flex-direction:column; }
+  .search-box { background:white; border:1px solid #E2E6F0; border-radius:16px; overflow:hidden; box-shadow:0 24px 64px rgba(183,135,52,0.16); }
+  .hero-search-wrap .search-box { border-radius:20px; box-shadow:0 32px 80px rgba(183,135,52,0.22); min-height:420px; display:flex; flex-direction:column; }
   .hero-search-wrap .search-box > form { flex:1; display:flex; flex-direction:column; }
   .hero-search-wrap .search-tab { padding:12px 18px; font-size:14px; gap:8px; }
   .hero-search-wrap .search-input { height:48px; font-size:15px; }
@@ -271,7 +271,7 @@ const FaqItem: React.FC<{ q: string; a: string; open?: boolean }> = ({ q, a, ope
     <div className="l-faq-item">
       <button className="l-faq-q" onClick={() => setOpen(v => !v)}>
         <span>{q}</span>
-        <span style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, background: open ? '#EEF1FA' : '#F8F9FC', border: `1.5px solid ${open ? C.navy : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .25s', transform: open ? 'rotate(180deg)' : 'none' }}>
+        <span style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, background: open ? '#FFF5DF' : '#FCF6EA', border: `1.5px solid ${open ? C.navy : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .25s', transform: open ? 'rotate(180deg)' : 'none' }}>
           <ChevronDown size={13} color={open ? C.navy : C.muted} />
         </span>
       </button>
@@ -859,7 +859,7 @@ const LandingPage: React.FC = () => {
             </div>
             <h2 className="display-font" style={{ fontSize: 'clamp(28px,5vw,54px)', fontWeight: 700, lineHeight: 1.1, color: 'white', margin: '0 0 18px' }}>
               Siap Tingkatkan Bisnis<br />
-              <em style={{ color: '#A5B4FC' }}>Travel Anda?</em>
+              <em style={{ color: '#F4D8A6' }}>Travel Anda?</em>
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 16, margin: '0 auto 40px', lineHeight: 1.75, maxWidth: 440 }}>
               Daftar gratis dalam 2 menit. Verifikasi instan. Akses penuh ke semua fitur platform.
@@ -882,7 +882,7 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* ══ FOOTER ══ */}
-      <footer style={{ background: '#05091a', padding: '56px 24px 32px', borderTop: `3px solid ${C.navyMed}` }}>
+      <footer style={{ background: '#6F4E1E', padding: '56px 24px 32px', borderTop: `3px solid ${C.navyMed}` }}>
         <div style={W}>
           <div className="l-footer-grid" style={{ marginBottom: 44 }}>
             <div>
@@ -910,7 +910,7 @@ const LandingPage: React.FC = () => {
               { title: 'Kontak',   links: [['021-XXXX-XXXX', '#'], ['support@bintangglobal.id', '#'], ['Senin–Sabtu 08–17', '#'], ['Support 24/7', '#']] },
             ].map(({ title, links }) => (
               <div key={title}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.16em', color: '#6B7FCC', textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.16em', color: '#F4D8A6', textTransform: 'uppercase', marginBottom: 16 }}>{title}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {links.map(([label, href]) => (
                     <a key={label} href={href} style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', textDecoration: 'none', transition: 'color .2s' }}

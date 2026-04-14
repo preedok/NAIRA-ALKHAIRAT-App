@@ -14,7 +14,7 @@ const defaults: AppSettingsState = {
   locale: 'id',
   primary_color: '#059669',
   background_color: '#f8fafc',
-  text_color: '#0f172a',
+  text_color: '#1C1917',
   font_size: '14',
   ui_template: 'default'
 };
