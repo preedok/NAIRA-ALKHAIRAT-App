@@ -21,6 +21,7 @@
     "migrate:undo": "cd backend && npm run migrate:undo",
     "seed": "cd backend && npm run seed",
     "seed:undo": "cd backend && npm run seed:undo",
+    "seed:dev-accounts": "cd backend && npm run seed:dev-accounts",
     "db:migrate": "cd backend && npm run migrate",
     "db:update": "cd backend && npm run db:update",
     "generate:payment-proofs": "cd backend && npm run generate:payment-proofs",

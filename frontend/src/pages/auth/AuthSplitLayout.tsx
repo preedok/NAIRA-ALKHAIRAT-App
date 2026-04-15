@@ -17,6 +17,8 @@ type AuthSplitLayoutProps = {
   panelFooterLink?: { to: string; label: string };
   /** Hanya kartu form putih, tanpa panel biru (mis. halaman daftar) */
   singleColumn?: boolean;
+  /** Tanpa background abu penuh layar (mis. login di atas ilustrasi) — hanya berpengaruh jika `singleColumn` */
+  overlay?: boolean;
   /** Kelas lebar kartu saat singleColumn, contoh: max-w-3xl w-full */
   singleColumnClassName?: string;
   /** Lebar maks kartu mode dua kolom (tailwind), default max-w-[960px] */
