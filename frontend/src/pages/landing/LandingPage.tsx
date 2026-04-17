@@ -43,7 +43,7 @@ const LandingPage = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-10">
-            {['Home', 'About', 'Services', 'Packages', 'FAQ'].map((item) => (
+            {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'FAQ'].map((item) => (
               <a key={item} href={`#${item.toLowerCase()}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
                 {item}
               </a>
