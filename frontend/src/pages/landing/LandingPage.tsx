@@ -3,7 +3,7 @@ import {
   Menu, X, ArrowRight, Star, Shield, Headphones,
   CheckCircle, Zap, Package, Users, Target,
   MessageCircle, Phone, Mail, Instagram, Twitter, Youtube,
-  Search, Calendar, MapPin, ChevronRight, Award, Hotel, Clock, Home, LogIn, UserPlus
+  Search, Calendar, MapPin, ChevronRight, Award, Hotel, Clock
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/nail-al-khairat-logo.svg'
@@ -12,7 +12,7 @@ import logo from '../../assets/nail-al-khairat-logo.svg'
 const COLORS = {
   bg: '#0A0A0A',
   bgSecondary: '#141414',
-  accent: '#C9A04B', 
+  accent: '#C9A04B', // Your specific Gold color
   accentHover: '#B38D3E',
   textPrimary: '#FFFFFF',
   textSecondary: '#A1A1AA',
@@ -31,19 +31,18 @@ const LandingPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen font-sans antialiased text-white selection:bg-[#C9A04B] selection:text-black pb-20 md:pb-0" style={{ backgroundColor: COLORS.bg }}>
+    <div className="min-h-screen font-sans antialiased text-white selection:bg-[#C9A04B] selection:text-black" style={{ backgroundColor: COLORS.bg }}>
 
-      {/* ─── TOP NAVIGATION (Cleaned up for Mobile) ──────────────────── */}
+      {/* ─── NAVIGATION ─────────────────────────────────────────────── */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-black/80 backdrop-blur-md border-b border-white/10 py-3' : 'bg-transparent py-5'}`}>
         <div className="container mx-auto px-6 flex items-center justify-between text-left">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg" >
-              <img src={logo} alt="Logo" />
+              <img src={logo} alt="" />
             </div>
             <span className="text-xl font-bold tracking-tight uppercase" style={{ color: COLORS.accent }}>Nail Al-Khairat</span>
           </div>
 
-          {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-10">
             {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'Galeri', 'FAQ'].map((item) => (
               <a key={item} href={`#${item.toLowerCase().replace(/ /g, '-')}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
@@ -52,105 +51,70 @@ const LandingPage = () => {
             ))}
           </div>
 
-          {/* Desktop Actions Only */}
-          <div className="hidden md:flex items-center gap-4">
-            <Link to="/login" className="text-sm font-medium hover:text-[#C9A04B] transition-colors">Log In</Link>
-            <Link style={{ backgroundColor: COLORS.accent }} to="/register" className="text-black px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-white transition-all transform hover:scale-105 active:scale-95">
+          <div className="flex items-center gap-4">
+            <Link to="/login" className="hidden md:block text-sm font-medium hover:text-lime-400 transition-colors">Log In</Link>
+            <Link style={{ backgroundColor: COLORS.accent }} to="/register" className="bg-lime-400 text-black px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-white transition-all transform hover:scale-105 active:scale-95">
               Daftar <ArrowRight size={16} />
             </Link>
+            <button className="md:hidden text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              {mobileMenuOpen ? <X /> : <Menu />}
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* ─── MOBILE OVERLAY MENU (Triggered by Bottom Nav) ───────────── */}
-      <div className={`fixed inset-0 z-[60] bg-black transition-transform duration-500 ${mobileMenuOpen ? 'translate-y-0' : 'translate-y-full'} md:hidden`}>
-        <div className="p-8 flex flex-col h-full">
-          <div className="flex justify-between items-center mb-12">
-            <span className="text-xl font-bold uppercase" style={{ color: COLORS.accent }}>Menu</span>
-            <button onClick={() => setMobileMenuOpen(false)} className="p-2 bg-white/5 rounded-full"><X /></button>
-          </div>
-          
-          <div className="flex flex-col gap-6 text-2xl font-bold mb-12">
-             {['Home', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'Galeri'].map((item) => (
-              <a key={item} onClick={() => setMobileMenuOpen(false)} href={`#${item.toLowerCase().replace(/ /g, '-')}`} className="hover:text-[#C9A04B]">
-                {item}
-              </a>
-            ))}
-          </div>
-
-          <div className="mt-auto flex flex-col gap-4">
-            <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="w-full py-4 rounded-2xl bg-zinc-900 flex items-center justify-center gap-3 font-bold border border-white/10">
-              <LogIn size={20} /> Masuk Ke Akun
-            </Link>
-            <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold text-black" style={{ backgroundColor: COLORS.accent }}>
-              <UserPlus size={20} /> Daftar Sekarang
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── BOTTOM NAVIGATION (MOBILE) ─────────────────────────────── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-xl border-t border-white/10 px-8 py-4 flex justify-between items-center text-zinc-400">
-        <a href="#" className="flex flex-col items-center gap-1 text-[#C9A04B]">
-          <Home size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-tighter">Home</span>
-        </a>
-        <a href="#layanan" className="flex flex-col items-center gap-1">
-          <Zap size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-tighter">Layanan</span>
-        </a>
-        <a href="#paket-umroh-&-haji" className="flex flex-col items-center gap-1">
-          <Package size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-tighter">Paket</span>
-        </a>
-        <button onClick={() => setMobileMenuOpen(true)} className="flex flex-col items-center gap-1">
-          <Menu size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-tighter">Menu</span>
-        </button>
-      </div>
-
       {/* ─── HERO SECTION ────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex items-center pt-20 overflow-hidden text-left px-6">
+      <section className="relative min-h-screen flex items-center pt-20 overflow-hidden text-left">
         <div className="absolute inset-0 z-0">
           <img
-            src="https://images.unsplash.com/photo-1511652019870-fbd8713560bf?q=80&w=1946&auto=format&fit=crop"
+            src="https://images.unsplash.com/photo-1511652019870-fbd8713560bf?q=80&w=1946&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
             alt="Mekkah View"
             className="w-full h-full object-cover object-center"
+            loading="eager"
           />
+          {/* Overlay hitam agar teks terbaca */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/60 to-black/20" />
           <div className="absolute inset-0 bg-black/40" />
         </div>
 
-        <div className="container mx-auto relative z-10">
+        <div className="container mx-auto px-6 relative z-10">
           <div className="max-w-4xl">
-            <h1 className="text-4xl md:text-8xl font-bold leading-tight tracking-tighter mb-6">
-              Haji & <span className="italic" style={{ color: COLORS.accent }}>Umrah</span> Nyaman dan Terpercaya
+            <h1 className="text-6xl md:text-8xl font-bold leading-tight tracking-tighter mb-6">
+              Haji & <span className="italic" style={{ color: COLORS.accent }}>Umrah</span>  Nyaman dan Terpercaya
             </h1>
-            <p className="text-lg md:text-xl text-zinc-300 max-w-xl mb-10 leading-relaxed">
-              Wujudkan perjalanan ibadah Anda dengan layanan profesional, bimbingan berpengalaman, dan fasilitas terbaik.
+            <p className="text-xl text-zinc-300 max-w-xl mb-10 leading-relaxed">
+              Wujudkan perjalanan ibadah Anda dengan layanan profesional, bimbingan berpengalaman, dan fasilitas terbaik untuk kenyamanan di Tanah Suci.
             </p>
 
             {/* Search Widget */}
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-4 rounded-[32px] md:rounded-full flex flex-col md:flex-row items-center gap-4 max-w-5xl">
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full px-4">
-                <div className="flex flex-col border-b md:border-b-0 md:border-r border-white/10 pb-3 md:pb-0">
-                  <span className="text-[10px] uppercase font-bold mb-1 text-[#C9A04B]">Tanggal Keberangkatan</span>
-                  <div className="flex items-center gap-2 text-sm font-semibold truncate"><Calendar size={14} /> Mar 01 - Apr 04</div>
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-2 md:p-4 rounded-3xl md:rounded-full flex flex-col md:flex-row items-center gap-4 max-w-5xl">
+              <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-4">
+                <div className="flex flex-col border-r border-white/10">
+                  <span className="text-[10px] uppercase font-bold mb-1" style={{ color: COLORS.accent }}>Tanggal Keberangkatan</span>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Calendar size={14} /> Mar 01 - Apr 04
+                  </div>
                 </div>
-                <div className="flex flex-col border-b md:border-b-0 md:border-r border-white/10 pb-3 md:pb-0">
-                  <span className="text-[10px] uppercase font-bold mb-1 text-[#C9A04B]">Durasi Perjalanan</span>
-                  <div className="flex items-center gap-2 text-sm font-semibold"><MapPin size={14} /> 12 - 15 Hari</div>
+                <div className="flex flex-col border-r border-white/10">
+                  <span className="text-[10px] uppercase font-bold mb-1" style={{ color: COLORS.accent }}>Durasi Perjalanan</span>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <MapPin size={14} /> 1500km - 2000km
+                  </div>
                 </div>
-                <div className="flex flex-col border-b md:border-b-0 md:border-r border-white/10 pb-3 md:pb-0">
-                  <span className="text-[10px] uppercase font-bold mb-1 text-[#C9A04B]">Jenis Paket</span>
-                  <div className="flex items-center gap-2 text-sm font-semibold"><Package size={14} /> Economy</div>
+                <div className="flex flex-col border-r border-white/10">
+                  <span className="text-[10px] uppercase font-bold mb-1" style={{ color: COLORS.accent }}>Jenis Paket</span>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Package size={14} /> Economy
+                  </div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold mb-1 text-[#C9A04B]">Harga (Mulai dari...)</span>
-                  <div className="flex items-center gap-2 text-sm font-semibold font-black">23 Jt - 35 Jt</div>
+                  <span className="text-[10px] uppercase font-bold mb-1" style={{ color: COLORS.accent }}>Harga (Mulai dari...)</span>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    23 Jt - 35 Jt
+                  </div>
                 </div>
               </div>
-              <button className="text-black w-full md:w-auto px-10 py-4 rounded-full font-bold flex items-center justify-center gap-2 transition-all active:scale-95" style={{ backgroundColor: COLORS.accent }}>
+              <button className="text-black w-full md:w-auto px-10 py-4 rounded-full font-bold flex items-center justify-center gap-2 hover:bg-white transition-colors shadow-lg" style={{ backgroundColor: COLORS.accent }}>
                 Search <Search size={18} />
               </button>
             </div>
@@ -159,39 +123,62 @@ const LandingPage = () => {
       </section>
 
       {/* ─── VALUE PROP SECTION ──────────────────────────────────────── */}
-      <section className="py-24 bg-[#0A0A0A] text-left px-6">
-        <div className="container mx-auto grid md:grid-cols-2 gap-16 items-center">
+      <section className="py-24 bg-[#0A0A0A] text-left">
+        <div className="container mx-auto px-6 grid md:grid-cols-2 gap-20 items-center">
           <div>
-            <h2 className="text-3xl md:text-5xl font-bold leading-tight mb-8">
-              Perjalanan <span className="text-zinc-500">ibadah Anda,</span> direncanakan dengan baik.
+            <h2 className="text-4xl md:text-5xl font-bold leading-tight mb-8 text-left">
+              Perjalanan <span className="text-zinc-500">ibadah Anda,</span> direncanakan dengan baik dan
+              <span className="text-zinc-500 text-3xl italic block">dibimbing oleh tim berpengalaman.</span>
             </h2>
-            <button className="bg-white text-black px-8 py-4 rounded-full font-bold flex items-center gap-2 mb-12">
+
+            <button className="bg-white text-black px-8 py-4 rounded-full font-bold flex items-center gap-2 hover:opacity-80 transition-all">
               Konsultasi Sekarang <ArrowRight size={18} />
             </button>
 
-            <div className="text-black p-6 rounded-3xl inline-block shadow-2xl w-full md:w-auto" style={{ backgroundColor: COLORS.accent }}>
+            <div className="mt-16 text-black p-6 rounded-3xl inline-block shadow-2xl" style={{ backgroundColor: COLORS.accent }}>
               <div className="text-4xl font-black mb-1">3000++</div>
               <div className="flex items-center gap-3">
                 <div className="flex -space-x-3">
-                  {[1,2,3,4].map(i => <div key={i} className="w-10 h-10 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center overflow-hidden"><img src={`https://i.pravatar.cc/150?u=${i}`} alt=""/></div>)}
+                  {[
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&auto=format&fit=crop"
+                  ].map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`Jamaah ${i}`}
+                      className="w-10 h-10 rounded-full border-2 object-cover shadow-md"
+                      style={{ borderColor: COLORS.accent }}
+                    />
+                  ))}
+                  <div
+                    className="w-10 h-10 rounded-full border-2 flex items-center justify-center bg-zinc-900 text-[10px] font-bold text-white"
+                    style={{ borderColor: COLORS.accent }}
+                  >
+                    +99
+                  </div>
                 </div>
-                <span className="text-xs font-bold uppercase">Jamaah Dilayani</span>
+                <span className="text-xs font-bold uppercase tracking-wider leading-tight">
+                  Jamaah<br />Dilayani
+                </span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="aspect-[3/5] rounded-[40px] overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1607596797957-74f502d89d1c?q=80&w=1974&auto=format&fit=crop" className="w-full h-full object-cover" alt="" />
+              <img src="https://images.unsplash.com/photo-1607596797957-74f502d89d1c?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Medina" className="w-full h-full object-cover" />
             </div>
             <div className="flex flex-col gap-4">
               <div className="bg-zinc-900 border border-white/5 p-8 rounded-[40px] flex-1 flex flex-col justify-center text-center">
-                <div className="text-4xl md:text-5xl font-bold mb-2 text-[#C9A04B]">95%</div>
-                <div className="text-[10px] text-zinc-500 uppercase font-bold">Jamaah Puas</div>
+                <div className="text-5xl font-bold mb-2" style={{ color: COLORS.accent }}>95%</div>
+                <div className="text-xs text-zinc-500 uppercase font-bold tracking-widest">Jamaah Puas</div>
               </div>
               <div className="bg-zinc-900 border border-white/5 p-8 rounded-[40px] flex-1 flex flex-col justify-center text-center">
-                <div className="text-4xl md:text-5xl font-bold text-white mb-2">20+</div>
-                <div className="text-[10px] text-zinc-500 uppercase font-bold">Tahun Pengalaman</div>
+                <div className="text-5xl font-bold text-white mb-2">20+</div>
+                <div className="text-xs text-zinc-500 uppercase font-bold tracking-widest">Tahun Pengalaman</div>
               </div>
             </div>
           </div>
@@ -199,23 +186,81 @@ const LandingPage = () => {
       </section>
 
       {/* ─── SERVICES GRID ────────────────────────────────────────────── */}
-      <section id="layanan" className="py-24 bg-zinc-950 px-6">
-        <div className="container mx-auto">
-          <h2 className="text-3xl md:text-5xl font-bold mb-12 text-left">Layanan Umroh<span style={{ color: COLORS.accent }}> & Haji </span></h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      <section id="layanan" className="py-24 bg-zinc-950 text-left">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-2xl">
+              <h2 className="text-5xl font-bold mb-6">Layanan Umroh<span style={{ color: COLORS.accent }}> & Haji Terpadu </span></h2>
+              <p className="text-zinc-400 text-lg">Kami menyediakan layanan menyeluruh mulai dari pendaftaran, pengurusan dokumen, hingga pendampingan ibadah di Tanah Suci.</p>
+            </div>
+            <div className="flex gap-2">
+              <button className="p-4 rounded-full border border-white/10 hover:border-[#C9A04B] transition-colors"><X className="rotate-45" /></button>
+              <button className="p-4 rounded-full text-black hover:bg-white transition-colors" style={{ backgroundColor: COLORS.accent }}><ArrowRight /></button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 text-left">
             {[
-              { icon: Package, title: 'Paket Terbaik', img: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=600' },
-              { icon: Users, title: 'Manajemen Jamaah', img: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?q=80&w=600' },
-              { icon: Headphones, title: 'Bimbingan 24/7', img: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=600' }
+              {
+                icon: Package,
+                title: 'Paket Umroh & Haji',
+                desc: 'Pilihan paket reguler hingga VIP dengan fasilitas lengkap dan nyaman.',
+                bgImg: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=600&auto=format&fit=crop'
+              },
+              {
+                icon: Users,
+                title: 'Manajemen Jamaah',
+                desc: 'Pendataan jamaah dan pengelolaan dokumen secara aman dan terintegrasi.',
+                bgImg: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?q=80&w=600&auto=format&fit=crop'
+              },
+              {
+                icon: Zap,
+                title: 'Pendaftaran Cepat',
+                desc: 'Proses booking mudah, cepat, dan transparan secara online.',
+                bgImg: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=600&auto=format&fit=crop'
+              },
+              {
+                icon: Target,
+                title: 'Koordinasi Perjalanan',
+                desc: 'Pengaturan jadwal, grup, dan bimbingan selama ibadah.',
+                bgImg: 'https://images.unsplash.com/photo-1542332213-9b5a5a3fad35?q=80&w=600&auto=format&fit=crop'
+              },
+              {
+                icon: Award,
+                title: 'Legalitas Resmi',
+                desc: 'Terdaftar dan diawasi oleh Kementerian Haji & Umroh RI.',
+                bgImg: 'https://images.unsplash.com/photo-1589216532372-1c2a367900d9?q=80&w=600&auto=format&fit=crop'
+              },
+              {
+                icon: Headphones,
+                title: 'Pendampingan 24/7',
+                desc: 'Tim siap membantu Anda di Makkah & Madinah selama perjalanan.',
+                bgImg: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=600&auto=format&fit=crop'
+              }
             ].map((svc, i) => (
-              <div key={i} className="group relative p-10 rounded-[40px] bg-zinc-900 overflow-hidden border border-white/5 h-[320px] flex flex-col justify-end">
-                <img src={svc.img} className="absolute inset-0 w-full h-full object-cover opacity-10 group-hover:opacity-30 transition-all duration-700" alt="" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+              <div key={i} className="group relative p-10 rounded-[40px] bg-zinc-900 overflow-hidden border border-white/5 hover:border-[#C9A04B]/50 transition-all duration-500">
+
+                {/* Background Image Layer */}
+                <div className="absolute inset-0 z-0">
+                  <img
+                    src={svc.bgImg}
+                    alt={svc.title}
+                    className="w-full h-full object-cover opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-700"
+                  />
+                  {/* Gradient Overlay untuk memastikan teks tetap kontras */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-950/90 to-transparent" />
+                </div>
+
+                {/* Content Layer (Relative Z-10) */}
                 <div className="relative z-10">
-                  <div className="w-12 h-12 bg-[#C9A04B] rounded-xl flex items-center justify-center mb-6 text-black">
-                    <svc.icon size={24} />
+                  <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-colors group-hover:bg-[#C9A04B]">
+                    <svc.icon size={28} className="text-[#C9A04B] group-hover:text-black transition-colors" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-2">{svc.title}</h3>
+                  <h3 className="text-2xl font-bold mb-4">{svc.title}</h3>
+                  <p className="text-zinc-500 leading-relaxed mb-8 group-hover:text-zinc-300 transition-colors">{svc.desc}</p>
+                  <button className="flex items-center gap-2 text-sm font-bold opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all" style={{ color: COLORS.accent }}>
+                    Learn More <ChevronRight size={16} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -223,68 +268,108 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ─── PAKET SECTION ────────────────────────────────────────────── */}
-      <section id="paket-umroh-&-haji" className="py-24 bg-[#0A0A0A] px-6">
-        <div className="container mx-auto text-left">
-          <h2 className="text-3xl md:text-5xl font-bold mb-12">Pilihan <span style={{ color: COLORS.accent }}>Paket Terbaik</span></h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+      {/* ─── PAKET UMROH & HAJI SECTION ──────────────────────────────── */}
+      <section id="paket-umroh-&-haji" className="py-24 bg-[#0A0A0A] text-left">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-2xl">
+              <h2 className="text-5xl font-bold mb-6">Pilihan <span style={{ color: COLORS.accent }}>Paket Terbaik</span> Kami</h2>
+              <p className="text-zinc-400 text-lg">Pilih paket yang sesuai dengan kebutuhan Anda. Semua paket sudah termasuk perlengkapan, asuransi, dan bimbingan ibadah.</p>
+            </div>
+            <button className="text-sm font-bold border-b-2 border-[#C9A04B] pb-1 hover:text-[#C9A04B] transition-colors">Lihat Semua Paket</button>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
             {[
-              { title: 'Umroh Reguler', price: '28.5', img: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=600' },
-              { title: 'Umroh Plus Turki', price: '38.9', img: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=600' },
-              { title: 'Haji Premium', price: '250', img: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=600' }
+              {
+                title: 'Umroh Reguler (12 Hari)',
+                price: '28.5',
+                img: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=2070&auto=format&fit=crop',
+                tag: 'Best Seller',
+                hotel: 'Bintang 4',
+                date: 'Keberangkatan: Okt - Des 2025'
+              },
+              {
+                title: 'Umroh Plus Turki',
+                price: '38.9',
+                img: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=1962&auto=format&fit=crop',
+                tag: 'Favorit',
+                hotel: 'Bintang 5',
+                date: 'Keberangkatan: Nov 2025'
+              },
+              {
+                title: 'Haji Dakhili Premium',
+                price: '250',
+                img: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=1974&auto=format&fit=crop',
+                tag: 'VIP Access',
+                hotel: 'Masyair VIP',
+                date: 'Keberangkatan: Zulkaidah 1446H'
+              }
             ].map((pkg, i) => (
-              <div key={i} className="group bg-zinc-900 border border-white/5 rounded-[40px] overflow-hidden">
-                <div className="h-64 overflow-hidden relative">
-                   <img src={pkg.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="" />
+              <div key={i} className="group bg-zinc-900 border border-white/5 rounded-[40px] overflow-hidden hover:border-[#C9A04B]/50 transition-all duration-500">
+                <div className="relative h-64 overflow-hidden">
+                  <img src={pkg.img} alt={pkg.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <div className="absolute top-6 left-6 bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
+                    {pkg.tag}
+                  </div>
                 </div>
                 <div className="p-8">
+                  <div className="flex items-center gap-2 mb-4 text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.accent }}>
+                    <Calendar size={14} /> {pkg.date}
+                  </div>
                   <h3 className="text-2xl font-bold mb-4">{pkg.title}</h3>
-                  <div className="text-3xl font-black mb-8">Rp {pkg.price}jt</div>
-                  <button className="w-full py-4 rounded-full border border-white/10 hover:bg-[#C9A04B] hover:text-black transition-all font-bold">Pilih Paket</button>
+                  <div className="flex flex-col gap-3 mb-8">
+                    <div className="flex items-center gap-3 text-zinc-400 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center">
+                        <CheckCircle size={12} style={{ color: COLORS.accent }} />
+                      </div>
+                      Pesawat Direct Jakarta - Jeddah
+                    </div>
+                    <div className="flex items-center gap-3 text-zinc-400 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center">
+                        <CheckCircle size={12} style={{ color: COLORS.accent }} />
+                      </div>
+                      Hotel {pkg.hotel} (Dekat Masjid)
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-6 border-t border-white/5">
+                    <div>
+                      <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Mulai Dari</div>
+                      <div className="text-3xl font-black">Rp {pkg.price}jt</div>
+                    </div>
+                    <button className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-[#C9A04B] group-hover:text-black transition-all">
+                      <ArrowRight size={20} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── GALLERY BENTO ───────────────────────────────────────────── */}
-      <section id="galeri" className="py-24 bg-[#0A0A0A] px-6">
-        <div className="container mx-auto">
-          <h2 className="text-3xl md:text-5xl font-bold mb-12 text-left">Momen <span style={{ color: COLORS.accent }}>Suci Kami</span></h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:h-[600px]">
-            <div className="col-span-2 row-span-2 rounded-[40px] overflow-hidden h-[300px] md:h-auto border border-white/5">
-              <img src="https://images.unsplash.com/photo-1610448721566-47369c768e70?q=80&w=800" className="w-full h-full object-cover" alt="" />
-            </div>
-            <div className="col-span-2 md:col-span-2 rounded-[30px] md:rounded-[40px] overflow-hidden h-[200px] md:h-auto border border-white/5">
-              <img src="https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=800" className="w-full h-full object-cover" alt="" />
-            </div>
-            <div className="rounded-[30px] md:rounded-[40px] overflow-hidden h-[200px] md:h-auto border border-white/5">
-              <img src="https://images.unsplash.com/photo-1565019053020-008316682705?q=80&w=800" className="w-full h-full object-cover" alt="" />
-            </div>
-            <div className="bg-[#C9A04B] rounded-[30px] md:rounded-[40px] flex flex-col items-center justify-center text-center p-6 h-[200px] md:h-auto text-black">
-              <Star size={32} fill="black" />
-              <div className="text-3xl font-black mt-2">500+</div>
-              <div className="text-[10px] font-bold uppercase tracking-widest">Momen Terabadikan</div>
-            </div>
           </div>
         </div>
       </section>
 
       {/* ─── TESTIMONIALS ────────────────────────────────────────────── */}
-      <section id="testimoni" className="py-24 bg-[#0A0A0A] px-6">
-        <div className="container mx-auto">
-          <div className="max-w-5xl mx-auto bg-zinc-900 border border-white/5 rounded-[40px] md:rounded-[50px] overflow-hidden flex flex-col md:flex-row text-left">
-            <div className="md:w-2/5 h-72 md:h-auto">
-              <img src="https://plus.unsplash.com/premium_photo-1661964242329-1d711f99a504?q=80&w=1000" className="w-full h-full object-cover" alt="" />
+      <section id="testimoni" className="py-24 bg-[#0A0A0A] text-left">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-16">
+            <span className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Testimoni</span>
+            <h2 className="text-4xl md:text-5xl font-bold mt-4">Testimoni <span style={{ color: COLORS.accent }}>Jamaah Kami</span></h2>
+          </div>
+
+          <div className="max-w-5xl mx-auto bg-zinc-900 border border-white/5 rounded-[50px] overflow-hidden flex flex-col md:flex-row">
+            <div className="md:w-2/5 h-80 md:h-auto">
+              <img src="https://plus.unsplash.com/premium_photo-1661964242329-1d711f99a504?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Pilgrim" className="w-full h-full object-cover" />
             </div>
-            <div className="md:w-3/5 p-8 md:p-20 flex flex-col justify-center">
-              <div className="flex gap-1 mb-6 text-[#C9A04B]">
+            <div className="md:w-3/5 p-12 md:p-20 flex flex-col justify-center">
+              <div className="flex gap-1 mb-8" style={{ color: COLORS.accent }}>
                 {[...Array(5)].map((_, i) => <Star key={i} size={20} fill="currentColor" />)}
               </div>
-              <p className="text-xl md:text-2xl font-medium italic mb-8">"Perjalanan ibadah yang sangat luar biasa. Semua terorganisir dengan rapi dari keberangkatan sampai pulang."</p>
+              <p className="text-2xl md:text-3xl font-medium leading-relaxed mb-10 italic">
+                "Alhamdulillah, perjalanan umroh saya sangat lancar. Mulai dari pendaftaran,
+                keberangkatan, hingga ibadah di Tanah Suci semuanya dibimbing dengan baik dan profesional."
+              </p>
               <div>
-                <div className="text-lg font-bold">Bapak Ahmad</div>
+                <div className="text-xl font-bold text-white">Bapak Ahmad</div>
                 <div className="text-zinc-500">Jamaah Umroh 2025</div>
               </div>
             </div>
@@ -292,38 +377,154 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── GALLERY SECTION ────────────────────────────────────────────── */}
+      <section id="galeri" className="py-24 bg-[#0A0A0A] text-left">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-2xl">
+              <h2 className="text-5xl font-bold mb-6">Momen Suci <span style={{ color: COLORS.accent }}>Jamaah Kami</span></h2>
+              <p className="text-zinc-400 text-lg">Dokumentasi perjalanan ibadah dan kegiatan para jamaah Nail Al-Khairat selama di Tanah Suci.</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden md:block">
+                <div className="text-sm font-bold text-white">Ikuti Perjalanan Kami</div>
+                <div className="text-xs text-zinc-500 text-zinc-400">@nailalkhairat.id</div>
+              </div>
+              <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-[#C9A04B]">
+                <Instagram size={20} />
+              </div>
+            </div>
+          </div>
+
+          {/* Bento Grid Gallery */}
+          <div className="grid grid-cols-2 md:grid-cols-4 md:grid-rows-2 gap-4 h-[600 md:h-[800px]">
+            {/* Main Large Image */}
+            <div className="col-span-2 row-span-2 relative group overflow-hidden rounded-[40px]">
+              <img
+                src="https://images.unsplash.com/photo-1610448721566-47369c768e70?q=80&w=1000&auto=format&fit=crop"
+                alt="Jamaah at Kaaba"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
+                <div>
+                  <p className="text-white font-bold text-xl">Thawaf Wadah</p>
+                  <p className="text-zinc-300 text-sm">Masjidil Haram, Makkah</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid Item 2 */}
+            <div className="col-span-2 row-span-1 relative group overflow-hidden rounded-[40px]">
+              <img
+                src="https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=1000&auto=format&fit=crop"
+                alt="Nabawi Mosque"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500" />
+            </div>
+
+            {/* Grid Item 3 */}
+            <div className="col-span-1 row-span-1 relative group overflow-hidden rounded-[40px]">
+              <img
+                src="https://images.unsplash.com/photo-1610448721566-47369c768e70?q=80&w=1000&auto=format&fit=crop"
+                alt="Pilgrim Praying"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+            </div>
+
+            {/* Grid Item 4 (CTA / Info) */}
+            <div className="col-span-1 row-span-1 bg-zinc-900 border border-white/5 rounded-[40px] flex flex-col items-center justify-center text-center p-6 hover:border-[#C9A04B]/50 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-[#C9A04B]/10 flex items-center justify-center mb-4">
+                <Star className="text-[#C9A04B]" size={24} fill="#C9A04B" />
+              </div>
+              <h4 className="text-white font-bold text-lg mb-1">500+ Momen</h4>
+              <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold">Telah Terabadikan</p>
+            </div>
+          </div>
+        </div>
+      </section>
       {/* ─── CTA SECTION ─────────────────────────────────────────────── */}
-      <section className="py-24 px-6 text-center">
-        <div className="container mx-auto">
-          <div className="rounded-[40px] md:rounded-[60px] p-12 md:p-24 text-black relative overflow-hidden bg-[#C9A04B] shadow-2xl">
-            <h2 className="text-4xl md:text-8xl font-black tracking-tighter mb-8 leading-none uppercase">Siap Ke<br/>Tanah Suci?</h2>
-            <Link to="/register" className="bg-zinc-900 text-white px-12 py-5 rounded-full text-lg font-bold inline-block hover:scale-105 transition-all">Daftar Sekarang</Link>
+      <section className="py-24 text-center">
+        <div className="container mx-auto px-6">
+          <div className="rounded-[60px] p-12 md:p-24 text-black relative overflow-hidden shadow-2xl" style={{ backgroundColor: COLORS.accent }}>
+            <div className="relative z-10">
+              <h2 className="text-5xl md:text-8xl font-black tracking-tighter mb-8 leading-none uppercase text-zinc-900">
+                Siap Berangkat<br />Ke Tanah Suci?
+              </h2>
+              <div className="flex flex-col md:flex-row items-center justify-center gap-6">
+                <Link to="/register" className="bg-zinc-900 text-white px-12 py-5 rounded-full text-lg font-bold hover:bg-black transition-all transform hover:scale-105">
+                  Daftar Sekarang — Gratis
+                </Link>
+                <div className="flex items-center gap-4 text-left">
+                  <div className="w-12 h-12 rounded-full border-2 border-black/20 flex items-center justify-center">
+                    <Phone size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold uppercase opacity-60">Hubungi Kami</div>
+                    <div className="font-bold">+62 21-XXXX-XXXX</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ─── FOOTER ──────────────────────────────────────────────────── */}
-      <footer className="py-20 bg-black border-t border-white/5 text-left px-6">
-        <div className="container mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12">
-          <div className="col-span-1 md:col-span-2">
-            <span className="text-2xl font-bold uppercase tracking-tight text-[#C9A04B]">Nail Al-Khairat</span>
-            <p className="mt-6 text-zinc-500 max-w-sm">Partner resmi perjalanan ibadah Haji & Umrah dengan standar pelayanan bintang lima.</p>
+      <footer className="py-20 bg-black border-t border-white/5 text-left">
+        <div className="container mx-auto px-6">
+          <div className="grid md:grid-cols-4 gap-16 mb-20">
+            <div className="col-span-2">
+              <div className="flex items-center gap-2 mb-8">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg" >
+                    <img src={logo} alt="" />
+                  </div>
+                </div>
+                <span className="text-2xl font-bold tracking-tight uppercase" style={{ color: COLORS.accent }}>Nail Al-Khairat</span>
+              </div>
+              <h3 className="text-6xl font-black mb-10 text-white tracking-tighter"> Konsultasi Sekarang</h3>
+              <div className="flex gap-4">
+                {[Instagram, Twitter, Youtube].map((Icon, i) => (
+                  <a
+                    key={i}
+                    href="#"
+                    className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center transition-all hover:text-black group"
+                    style={{ '--hover-accent': COLORS.accent } as React.CSSProperties}
+                  >
+                    <div className="absolute inset-0 rounded-full scale-0 group-hover:scale-100 transition-transform duration-300" style={{ backgroundColor: COLORS.accent }} />
+                    <Icon size={20} className="relative z-10" />
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-bold uppercase tracking-widest text-xs mb-8" style={{ color: COLORS.accent }}>Quick Links</h4>
+              <ul className="space-y-4 text-zinc-500">
+                {['Tentang Kami', 'Layanan', 'Paket Umroh', 'Testimoni', 'FAQ'].map(item => (
+                  <li key={item}><a href="#" className="hover:text-white transition-colors">{item}</a></li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold uppercase tracking-widest text-xs mb-8" style={{ color: COLORS.accent }}>Support</h4>
+              <ul className="space-y-4 text-zinc-500">
+                <li><a href="#" className="hover:text-white transition-colors underline">Kebijakan Privasi</a></li>
+                <li><a href="#" className="hover:text-white transition-colors underline">Syarat & Ketentuan</a></li>
+                <li><a href="#" className="hover:text-white transition-colors underline">Kebijakan Cookie</a></li>
+                <li className="pt-4 flex items-center gap-2 text-white">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  Status Sistem: Online
+                </li>
+              </ul>
+            </div>
           </div>
-          <div>
-            <h4 className="font-bold mb-6 text-[#C9A04B] uppercase tracking-[0.2em] text-xs">Link Cepat</h4>
-            <ul className="space-y-4 text-zinc-500 text-sm">
-              <li>Tentang Kami</li>
-              <li>Layanan</li>
-              <li>Paket Umroh</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold mb-6 text-[#C9A04B] uppercase tracking-[0.2em] text-xs">Bantuan</h4>
-            <ul className="space-y-4 text-zinc-500 text-sm">
-              <li>Kebijakan Privasi</li>
-              <li>Syarat & Ketentuan</li>
-              <li>Hubungi Kami</li>
-            </ul>
+
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-10 border-t border-white/5 text-zinc-600 text-xs">
+            <p>© {new Date().getFullYear()} Nail Al-Khairat. Built with excellence.</p>
+            <p>Licensed Umroh Platform — Insan Cita Integrasi</p>
           </div>
         </div>
       </footer>
