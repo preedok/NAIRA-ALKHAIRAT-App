@@ -3,10 +3,11 @@ import {
   Menu, X, ArrowRight, Star, Shield, Headphones,
   CheckCircle, Zap, Package, Users, Target,
   MessageCircle, Phone, Mail, Instagram, Twitter, Youtube,
-  Search, Calendar, MapPin, ChevronRight, Award
+  Search, Calendar, MapPin, ChevronRight, Award, Hotel, Clock
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/nail-al-khairat-logo.svg'
+
 /* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
 const COLORS = {
   bg: '#0A0A0A',
@@ -44,7 +45,7 @@ const LandingPage = () => {
 
           <div className="hidden md:flex items-center gap-10">
             {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'FAQ'].map((item) => (
-              <a key={item} href={`#${item.toLowerCase()}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
+              <a key={item} href={`#${item.toLowerCase().replace(/ /g, '-')}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
                 {item}
               </a>
             ))}
@@ -166,7 +167,7 @@ const LandingPage = () => {
       </section>
 
       {/* ─── SERVICES GRID ────────────────────────────────────────────── */}
-      <section className="py-24 bg-zinc-950 text-left">
+      <section id="layanan" className="py-24 bg-zinc-950 text-left">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
             <div className="max-w-2xl">
@@ -227,8 +228,88 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── PAKET UMROH & HAJI SECTION ──────────────────────────────── */}
+      <section id="paket-umroh-&-haji" className="py-24 bg-[#0A0A0A] text-left">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-2xl">
+              <h2 className="text-5xl font-bold mb-6">Pilihan <span style={{ color: COLORS.accent }}>Paket Terbaik</span> Kami</h2>
+              <p className="text-zinc-400 text-lg">Pilih paket yang sesuai dengan kebutuhan Anda. Semua paket sudah termasuk perlengkapan, asuransi, dan bimbingan ibadah.</p>
+            </div>
+            <button className="text-sm font-bold border-b-2 border-[#C9A04B] pb-1 hover:text-[#C9A04B] transition-colors">Lihat Semua Paket</button>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                title: 'Umroh Reguler (12 Hari)',
+                price: '28.5',
+                img: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=2070&auto=format&fit=crop', 
+                tag: 'Best Seller',
+                hotel: 'Bintang 4',
+                date: 'Keberangkatan: Okt - Des 2025'
+              },
+              {
+                title: 'Umroh Plus Turki',
+                price: '38.9',
+                img: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=1962&auto=format&fit=crop',
+                tag: 'Favorit',
+                hotel: 'Bintang 5',
+                date: 'Keberangkatan: Nov 2025'
+              },
+              {
+                title: 'Haji Dakhili Premium',
+                price: '250',
+                img: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=1974&auto=format&fit=crop',
+                tag: 'VIP Access',
+                hotel: 'Masyair VIP',
+                date: 'Keberangkatan: Zulkaidah 1446H'
+              }
+            ].map((pkg, i) => (
+              <div key={i} className="group bg-zinc-900 border border-white/5 rounded-[40px] overflow-hidden hover:border-[#C9A04B]/50 transition-all duration-500">
+                <div className="relative h-64 overflow-hidden">
+                  <img src={pkg.img} alt={pkg.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <div className="absolute top-6 left-6 bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
+                    {pkg.tag}
+                  </div>
+                </div>
+                <div className="p-8">
+                  <div className="flex items-center gap-2 mb-4 text-xs font-bold uppercase tracking-wider" style={{ color: COLORS.accent }}>
+                    <Calendar size={14} /> {pkg.date}
+                  </div>
+                  <h3 className="text-2xl font-bold mb-4">{pkg.title}</h3>
+                  <div className="flex flex-col gap-3 mb-8">
+                    <div className="flex items-center gap-3 text-zinc-400 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center">
+                        <CheckCircle size={12} style={{ color: COLORS.accent }} />
+                      </div>
+                      Pesawat Direct Jakarta - Jeddah
+                    </div>
+                    <div className="flex items-center gap-3 text-zinc-400 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center">
+                        <CheckCircle size={12} style={{ color: COLORS.accent }} />
+                      </div>
+                      Hotel {pkg.hotel} (Dekat Masjid)
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-6 border-t border-white/5">
+                    <div>
+                      <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Mulai Dari</div>
+                      <div className="text-3xl font-black">Rp {pkg.price}jt</div>
+                    </div>
+                    <button className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-[#C9A04B] group-hover:text-black transition-all">
+                      <ArrowRight size={20} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ─── TESTIMONIALS ────────────────────────────────────────────── */}
-      <section className="py-24 bg-[#0A0A0A] text-left">
+      <section id="testimoni" className="py-24 bg-[#0A0A0A] text-left">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
             <span className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Testimoni</span>
