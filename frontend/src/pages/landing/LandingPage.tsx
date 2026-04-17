@@ -3,7 +3,8 @@ import {
   Menu, X, ArrowRight, Star, Shield, Headphones,
   CheckCircle, Zap, Package, Users, Target,
   MessageCircle, Phone, Mail, Instagram, Twitter, Youtube,
-  Search, Calendar, MapPin, ChevronRight, Award, Hotel, Clock
+  Search, Calendar, MapPin, ChevronRight, Award, Hotel, Clock,
+  Home, Image as ImageIcon // Tambahan icon untuk bottom nav
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/nail-al-khairat-logo.svg'
@@ -43,6 +44,7 @@ const LandingPage = () => {
             <span className="text-xl font-bold tracking-tight uppercase" style={{ color: COLORS.accent }}>Nail Al-Khairat</span>
           </div>
 
+          {/* Navigasi Desktop (Hidden on Mobile) */}
           <div className="hidden md:flex items-center gap-10">
             {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'Galeri', 'FAQ'].map((item) => (
               <a key={item} href={`#${item.toLowerCase().replace(/ /g, '-')}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
@@ -53,16 +55,35 @@ const LandingPage = () => {
 
           <div className="flex items-center gap-4">
             <Link to="/login" className="hidden md:block text-sm font-medium hover:text-lime-400 transition-colors">Log In</Link>
-            <Link style={{ backgroundColor: COLORS.accent }} to="/register" className="bg-lime-400 text-black px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-white transition-all transform hover:scale-105 active:scale-95">
-              Daftar <ArrowRight size={16} />
+            <Link style={{ backgroundColor: COLORS.accent }} to="/register" className="text-black px-4 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-bold flex items-center gap-2 hover:bg-white transition-all transform hover:scale-105 active:scale-95">
+              Daftar <ArrowRight size={16} className="hidden md:block" />
             </Link>
-            <button className="md:hidden text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X /> : <Menu />}
-            </button>
           </div>
         </div>
       </nav>
-
+      {/* ─── BOTTOM NAVIGATION (MOBILE ONLY) ────────────────────────── */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-lg border-t border-white/10 px-6 py-3 flex justify-between items-center text-zinc-400">
+        <a href="#" className="flex flex-col items-center gap-1 text-[#C9A04B]">
+          <Home size={20} />
+          <span className="text-[10px] font-medium">Home</span>
+        </a>
+        <a href="#layanan" className="flex flex-col items-center gap-1 hover:text-white">
+          <Zap size={20} />
+          <span className="text-[10px] font-medium">Layanan</span>
+        </a>
+        <a href="#paket-umroh-&-haji" className="flex flex-col items-center gap-1 hover:text-white">
+          <Package size={20} />
+          <span className="text-[10px] font-medium">Paket</span>
+        </a>
+        <a href="#galeri" className="flex flex-col items-center gap-1 hover:text-white">
+          <ImageIcon size={20} />
+          <span className="text-[10px] font-medium">Galeri</span>
+        </a>
+        <Link to="/login" className="flex flex-col items-center gap-1 hover:text-white">
+          <Users size={20} />
+          <span className="text-[10px] font-medium">Akun</span>
+        </Link>
+      </div>
       {/* ─── HERO SECTION ────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center pt-20 overflow-hidden text-left">
         <div className="absolute inset-0 z-0">
