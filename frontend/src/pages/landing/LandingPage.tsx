@@ -44,7 +44,7 @@ const LandingPage = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-10">
-            {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji','Testimoni', 'Galeri', 'FAQ'].map((item) => (
+            {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'Galeri', 'FAQ'].map((item) => (
               <a key={item} href={`#${item.toLowerCase().replace(/ /g, '-')}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
                 {item}
               </a>
@@ -136,14 +136,33 @@ const LandingPage = () => {
             </button>
 
             <div className="mt-16 text-black p-6 rounded-3xl inline-block shadow-2xl" style={{ backgroundColor: COLORS.accent }}>
-              <div className="text-4xl font-black mb-1">3k+</div>
-              <div className="flex items-center gap-2">
-                <div className="flex -space-x-2">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="w-8 h-8 rounded-full border-2 border-zinc-900 bg-zinc-800" style={{ borderColor: COLORS.accent }} />
+              <div className="text-4xl font-black mb-1">3000++</div>
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-3">
+                  {[
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=100&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=100&auto=format&fit=crop"
+                  ].map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`Jamaah ${i}`}
+                      className="w-10 h-10 rounded-full border-2 object-cover shadow-md"
+                      style={{ borderColor: COLORS.accent }}
+                    />
                   ))}
+                  <div
+                    className="w-10 h-10 rounded-full border-2 flex items-center justify-center bg-zinc-900 text-[10px] font-bold text-white"
+                    style={{ borderColor: COLORS.accent }}
+                  >
+                    +99
+                  </div>
                 </div>
-                <span className="text-xs font-bold uppercase tracking-wider">Jamaah Telah Dilayani</span>
+                <span className="text-xs font-bold uppercase tracking-wider leading-tight">
+                  Jamaah<br />Dilayani
+                </span>
               </div>
             </div>
           </div>
