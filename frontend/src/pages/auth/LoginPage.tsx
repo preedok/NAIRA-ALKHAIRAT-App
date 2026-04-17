@@ -203,7 +203,7 @@ const LoginPage: React.FC = () => {
             <div className="space-y-5">
               {[
                 { icon: ShieldCheck, text: "Data jamaah terenkripsi & aman" },
-                { icon: Globe, text: "Update kloter secara real-time" }
+                { icon: Globe, text: "Update Keberangkatan secara real-time" }
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-4 text-sm font-medium text-zinc-300">
                   <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center">
