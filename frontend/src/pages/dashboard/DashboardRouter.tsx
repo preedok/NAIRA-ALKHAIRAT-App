@@ -13,7 +13,7 @@ import { normalizeUserRole } from '../../types';
 const DashboardRouter: React.FC = () => {
   const { user } = useAuth();
   const role = normalizeUserRole(user?.role || 'jamaah');
-  if (role === 'admin_pusat' || role === 'admin_cabang') return <AdminDashboard />;
+  if (role === 'admin') return <AdminDashboard />;
   return <UserDashboard />;
 };
 

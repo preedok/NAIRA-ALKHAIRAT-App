@@ -25,7 +25,7 @@ const MaintenanceGate: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
 
   useEffect(() => {
-    if (role === 'admin_pusat' || role === 'admin_cabang') {
+    if (role === 'admin') {
       setLoading(false);
       return;
     }
@@ -53,7 +53,7 @@ const MaintenanceGate: React.FC = () => {
     };
   }, [role]);
 
-  if (role === 'admin_pusat' || role === 'admin_cabang') {
+  if (role === 'admin') {
     return <Outlet />;
   }
 

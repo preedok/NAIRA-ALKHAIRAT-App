@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type UserRole = 'admin_pusat' | 'admin_cabang' | 'jamaah';
+export type UserRole = 'admin' | 'jamaah';
 export type CanonicalUserRole = UserRole;
 
 export interface User {
@@ -26,15 +26,13 @@ export interface LoginCredentials {
 }
 
 export const ROLE_NAMES: Record<UserRole, string> = {
-  admin_pusat: 'Admin Pusat',
-  admin_cabang: 'Admin Cabang',
+  admin: 'Admin',
   jamaah: 'Jamaah'
 };
 
 export function normalizeUserRole(role: string): CanonicalUserRole {
   const raw = String(role || '').toLowerCase();
-  if (raw === 'admin' || raw === 'admin_pusat') return 'admin_pusat';
-  if (raw === 'admin_cabang') return 'admin_cabang';
+  if (raw === 'admin' || raw === 'admin_pusat' || raw === 'admin_cabang') return 'admin';
   return 'jamaah';
 }
 

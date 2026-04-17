@@ -73,10 +73,10 @@ module.exports = {
         },
         /** Warna tombol seragam (sama seperti background sidebar) — tidak pakai biru/hijau */
         btn: {
-          DEFAULT: '#0D1A63',
-          hover:   '#0a1449',
-          light:   '#e8eaf0',
-          border:  '#0D1A63',
+          DEFAULT: '#8f6828',
+          hover:   '#7c591f',
+          light:   '#f7f1e4',
+          border:  '#8f6828',
         },
       },
       spacing: {

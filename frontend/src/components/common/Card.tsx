@@ -14,7 +14,7 @@ const Card: React.FC<CardProps> = ({
   hover = false,
   className = ''
 }) => {
-  const baseStyles = 'bg-white rounded-travel border border-stone-200/80 shadow-card transition-all duration-300';
+  const baseStyles = 'bg-white rounded-travel border border-stone-200/90 shadow-card transition-all duration-300 relative overflow-hidden';
   
   const paddingStyles: Record<CardPadding, string> = {
     none: '',
@@ -27,6 +27,7 @@ const Card: React.FC<CardProps> = ({
 
   return (
     <div className={`${baseStyles} ${paddingStyles[padding]} ${hoverStyles} ${className}`}>
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#8f6828]/70 via-[#b78734]/70 to-[#d3b274]/70" />
       {children}
     </div>
   );

@@ -4,12 +4,15 @@ import {
   Menu,
   X,
   LayoutDashboard,
-  FileText,
   Plane,
   Package,
+  PlaneTakeoff,
   Receipt,
   Users,
   BarChart3,
+  Landmark,
+  GitCompareArrows,
+  ArrowLeftRight,
   Settings,
   Bell,
   User,
@@ -32,22 +35,22 @@ const menuItems: MenuItem[] = [
     title: 'Dashboard',
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: '/dashboard',
-    roles: ['admin_pusat', 'admin_cabang', 'jamaah']
+    roles: ['admin', 'jamaah']
   },
-  { title: 'Paket Umroh', icon: <Package className="w-5 h-5" />, path: '/dashboard/packages', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] },
+  { title: 'Paket Umroh', icon: <Package className="w-5 h-5" />, path: '/dashboard/packages', roles: ['admin', 'jamaah'] },
   {
     title: 'Invoice',
     icon: <Receipt className="w-5 h-5" />,
-    path: '/dashboard/orders-invoices',
-    roles: ['admin_pusat', 'admin_cabang', 'jamaah']
+    path: '/dashboard/orders',
+    roles: ['admin', 'jamaah']
   },
-  { title: 'Cicilan', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/installments', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] },
-  { title: 'Kloter', icon: <Plane className="w-5 h-5" />, path: '/dashboard/kloters', roles: ['admin_pusat', 'admin_cabang'] },
-  { title: 'Flyer', icon: <FileText className="w-5 h-5" />, path: '/dashboard/flyers', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] },
-  { title: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users', roles: ['admin_pusat', 'admin_cabang'] },
-  { title: 'Reports', icon: <BarChart3 className="w-5 h-5" />, path: '/dashboard/reports', roles: ['admin_pusat', 'admin_cabang'] },
-  { title: 'Settings', icon: <Settings className="w-5 h-5" />, path: '/dashboard/settings', roles: ['admin_pusat', 'admin_cabang'] },
-  { title: 'Profile', icon: <User className="w-5 h-5" />, path: '/dashboard/profile', roles: ['admin_pusat', 'admin_cabang', 'jamaah'] }
+  { title: 'Cicilan', icon: <Calendar className="w-5 h-5" />, path: '/dashboard/installments', roles: ['admin', 'jamaah'] },
+  { title: 'Keberangkatan', icon: <PlaneTakeoff className="w-5 h-5" />, path: '/dashboard/kloters', roles: ['admin', 'jamaah'] },
+  { title: 'Users', icon: <Users className="w-5 h-5" />, path: '/dashboard/users', roles: ['admin'] },
+  { title: 'Bank', icon: <Landmark className="w-5 h-5" />, path: '/dashboard/bank', roles: ['admin'] },
+  { title: 'Rekon Bank', icon: <GitCompareArrows className="w-5 h-5" />, path: '/dashboard/bank-reconciliation', roles: ['admin'] },
+  { title: 'Transaksi', icon: <ArrowLeftRight className="w-5 h-5" />, path: '/dashboard/transactions', roles: ['admin'] },
+  { title: 'Reports', icon: <BarChart3 className="w-5 h-5" />, path: '/dashboard/reports', roles: ['admin'] }
 ];
 
 const DashboardLayout: React.FC = () => {
@@ -111,7 +114,7 @@ const DashboardLayout: React.FC = () => {
     setNotificationOpen(false);
     const d = n.data as { invoice_id?: string; order_id?: string } | undefined;
     if (d?.invoice_id || d?.order_id) {
-      navigate('/dashboard/orders-invoices');
+      navigate('/dashboard/orders');
     } else {
       navigate('/dashboard');
     }
@@ -152,9 +155,14 @@ const DashboardLayout: React.FC = () => {
 
   // Filter menu based on user role. For items with children, filter children by role and show parent if any child visible.
   // Super Admin: hak akses sama seperti Admin Pusat (Dashboard, Invoice, Refund, Users, Settings, Products, Reports) + menu super-admin (Logs, Maintenance)
-  const filteredMenuItems = user
+  const filteredMenuItemsRaw = user
     ? menuItems.filter((item) => item.roles.some((r) => normalizeUserRole(r) === effectiveRole))
     : [];
+  const filteredMenuItems = filteredMenuItemsRaw.map((item) =>
+    effectiveRole === 'jamaah' && item.path === '/dashboard/orders'
+      ? { ...item, title: 'Order' }
+      : item
+  );
 
   const currentPage = filteredMenuItems.find(item => item.path === location.pathname)
     || filteredMenuItems.flatMap(item => item.children || []).find(c => c.path === location.pathname);
@@ -164,7 +172,7 @@ const DashboardLayout: React.FC = () => {
 
   const userMenuItems = [
     { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" />, onClick: () => navigate('/dashboard/profile') },
-    ...((effectiveRole === 'admin_pusat' || effectiveRole === 'admin_cabang')
+    ...((effectiveRole === 'admin')
       ? [{ id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => navigate('/dashboard/settings') }]
       : []),
     {
@@ -343,11 +351,11 @@ const DashboardLayout: React.FC = () => {
   const isOwner = effectiveRole === 'jamaah';
   const bottomNavItems = [
     { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
-    { path: '/dashboard/orders-invoices', label: 'Trip Saya', icon: Receipt },
+    { path: '/dashboard/orders', label: 'Trip Saya', icon: Receipt },
     ...(!isOwner ? [{ path: '/dashboard/packages', label: 'Paket', icon: Package }] : []),
     ...(effectiveRole === 'jamaah' ? [{ path: '/dashboard/profile', label: 'Profil', icon: User }] : []),
   ];
-  const showBottomNav = !!user && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders-invoices');
+  const showBottomNav = !!user && filteredMenuItems.some(m => m.path === '/dashboard' || m.path === '/dashboard/orders');
 
   return (
     <div className="min-h-screen app-bg flex overflow-x-hidden">

@@ -11,19 +11,19 @@ import { normalizeUserRole } from '../types';
 /** Role Invoice tidak boleh download dokumen penerbitan visa, tiket, hotel */
 export function canDownloadVisaTicketHotel(role: UserRole): boolean {
   const r = normalizeUserRole(role);
-  return r === 'admin_pusat' || r === 'admin_cabang';
+  return r === 'admin';
 }
 
 /** Bisa buat order: Owner, Invoice, Admin per kota, Admin Pusat, Super Admin */
 export function canCreateOrder(role: UserRole): boolean {
   const r = normalizeUserRole(role);
-  return r === 'jamaah' || r === 'admin_pusat' || r === 'admin_cabang';
+  return r === 'jamaah' || r === 'admin';
 }
 
 /** Bisa verifikasi pembayaran & aktifkan invoice overdue: Role Invoice + Admin */
 export function canManageInvoicePayment(role: UserRole): boolean {
   const r = normalizeUserRole(role);
-  return r === 'admin_pusat' || r === 'admin_cabang';
+  return r === 'admin';
 }
 
 /** Owner hanya bisa akses penuh transaksi jika status ACTIVE */
@@ -33,11 +33,11 @@ export function ownerCanTransact(ownerStatus: string | undefined): boolean {
 
 /** Bisa kelola harga general / produk: Super Admin, Admin Pusat */
 export function canManageGeneralPricing(role: UserRole): boolean {
-  return normalizeUserRole(role) === 'admin_pusat';
+  return normalizeUserRole(role) === 'admin';
 }
 
 /** Bisa set harga khusus owner / kurs per kota: Admin pusat/koordinator, (Hotel/Bus jika diizinkan) */
 export function canManageSpecialPricing(role: UserRole): boolean {
   const r = normalizeUserRole(role);
-  return r === 'admin_pusat' || r === 'admin_cabang';
+  return r === 'admin';
 }

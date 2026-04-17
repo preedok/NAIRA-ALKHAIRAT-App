@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
-import { TableColumn } from '../../types';
+import { SelectOption, TableColumn } from '../../types';
+import Autocomplete from './Autocomplete';
 
 export interface TablePagination {
   total: number;
@@ -16,8 +17,8 @@ export interface TableSort {
   order: 'asc' | 'desc';
 }
 
-const STICKY_ACTIONS_CLASS = 'sticky right-0 z-10 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]';
-const STICKY_ACTIONS_TH_CLASS = 'sticky right-0 z-10 bg-slate-50/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]';
+const STICKY_ACTIONS_CLASS = 'sticky right-0 bg-white shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]';
+const STICKY_ACTIONS_TH_CLASS = 'sticky right-0 z-20 bg-slate-50/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]';
 
 interface TableProps<T> {
   columns: TableColumn[];
@@ -36,7 +37,11 @@ interface TableProps<T> {
   stickyActionsColumn?: boolean;
 }
 
-const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500];
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200, 500];
+const PAGE_SIZE_SELECT_OPTIONS: SelectOption[] = PAGE_SIZE_OPTIONS.map((n) => ({
+  value: String(n),
+  label: `${n} per halaman`
+}));
 
 function Table<T>({
   columns,
@@ -51,9 +56,57 @@ function Table<T>({
   onSortChange,
   stickyActionsColumn = false
 }: TableProps<T>) {
-  const pag = pagination;
-  const startItem = pag ? (pag.page - 1) * pag.limit + 1 : 1;
-  const endItem = pag ? Math.min(pag.page * pag.limit, pag.total) : data.length;
+  const [internalPage, setInternalPage] = useState(1);
+  const [internalLimit, setInternalLimit] = useState(10);
+
+  const isControlledPagination = Boolean(pagination);
+  const total = pagination?.total ?? data.length;
+  const limit = pagination?.limit ?? internalLimit;
+  const totalPagesRaw = isControlledPagination
+    ? (pagination?.totalPages ?? 1)
+    : Math.ceil(Math.max(1, total) / Math.max(1, limit));
+  const totalPages = Math.max(1, totalPagesRaw);
+  const pageRaw = pagination?.page ?? internalPage;
+  const page = Math.min(Math.max(1, pageRaw), totalPages);
+
+  useEffect(() => {
+    if (isControlledPagination) return;
+    if (internalPage > totalPages) setInternalPage(totalPages);
+  }, [isControlledPagination, internalPage, totalPages]);
+
+  const pagedData = useMemo(() => {
+    if (isControlledPagination) return data;
+    const start = (page - 1) * limit;
+    return data.slice(start, start + limit);
+  }, [isControlledPagination, data, page, limit]);
+
+  const startItem = total === 0 ? 0 : (page - 1) * limit + 1;
+  const endItem = total === 0 ? 0 : Math.min(page * limit, total);
+
+  const onPageChange = (nextPage: number) => {
+    const safePage = Math.min(Math.max(1, nextPage), totalPages);
+    if (isControlledPagination) {
+      pagination?.onPageChange(safePage);
+      return;
+    }
+    setInternalPage(safePage);
+  };
+
+  const onLimitChange = (nextLimit: number) => {
+    if (isControlledPagination) {
+      pagination?.onLimitChange?.(nextLimit);
+      return;
+    }
+    setInternalLimit(nextLimit);
+    setInternalPage(1);
+  };
+
+  const pageButtons = useMemo(() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (page <= 4) return [1, 2, 3, 4, 5, -1, totalPages];
+    if (page >= totalPages - 3) return [1, -1, totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, -1, page - 1, page, page + 1, -1, totalPages];
+  }, [page, totalPages]);
 
   return (
     <div className={className}>
@@ -75,7 +128,7 @@ function Table<T>({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {data.length === 0 ? (
+            {pagedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="p-0 align-top">
                   <div className="flex flex-col items-center justify-center min-h-[280px] px-6 py-14 bg-gradient-to-b from-slate-50/80 to-white border-b border-slate-100">
@@ -90,8 +143,9 @@ function Table<T>({
                 </td>
               </tr>
             ) : (
-              data.map((item, index) => {
-                const row = renderRow(item, index);
+              pagedData.map((item, index) => {
+                const absoluteIndex = (page - 1) * limit + index;
+                const row = renderRow(item, absoluteIndex);
                 if (!stickyActionsColumn || !React.isValidElement(row) || row.type !== 'tr') return row;
                 const children = React.Children.toArray(row.props.children);
                 if (children.length === 0) return row;
@@ -109,41 +163,53 @@ function Table<T>({
           </tbody>
         </table>
       </div>
-      {pag && pag.total > 0 && (
+      {total > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200">
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <span>
-              Menampilkan {startItem}-{endItem} dari {pag.total}
+              Menampilkan {startItem}-{endItem} dari {total}
             </span>
-            {pag.onLimitChange && (
-              <select
-                value={pag.limit}
-                onChange={(e) => pag.onLimitChange?.(Number(e.target.value))}
-                className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white"
-              >
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <option key={n} value={n}>{n} per halaman</option>
-                ))}
-              </select>
-            )}
+            <div className="w-[170px]">
+              <Autocomplete
+                value={String(limit)}
+                onChange={(value) => onLimitChange(Number(value) || PAGE_SIZE_OPTIONS[0])}
+                options={PAGE_SIZE_SELECT_OPTIONS}
+                size="sm"
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <button
               type="button"
-              onClick={() => pag.onPageChange(pag.page - 1)}
-              disabled={pag.page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>Sebelumnya</span>
             </button>
-            <span className="px-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg">
-              Halaman {pag.page} dari {pag.totalPages}
-            </span>
+            {pageButtons.map((pageNo, idx) =>
+              pageNo === -1 ? (
+                <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">...</span>
+              ) : (
+                <button
+                  key={pageNo}
+                  type="button"
+                  onClick={() => onPageChange(pageNo)}
+                  className={`min-w-9 px-2.5 py-2 rounded-lg border text-sm font-medium ${
+                    pageNo === page
+                      ? 'border-btn bg-btn text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {pageNo}
+                </button>
+              )
+            )}
             <button
               type="button"
-              onClick={() => pag.onPageChange(pag.page + 1)}
-              disabled={pag.page >= pag.totalPages}
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
             >
               <span>Selanjutnya</span>
