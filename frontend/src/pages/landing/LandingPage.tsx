@@ -204,43 +204,64 @@ const LandingPage = () => {
               {
                 icon: Package,
                 title: 'Paket Umroh & Haji',
-                desc: 'Pilihan paket reguler hingga VIP dengan fasilitas lengkap dan nyaman.'
+                desc: 'Pilihan paket reguler hingga VIP dengan fasilitas lengkap dan nyaman.',
+                bgImg: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=600&auto=format&fit=crop'
               },
               {
                 icon: Users,
                 title: 'Manajemen Jamaah',
-                desc: 'Pendataan jamaah dan pengelolaan dokumen secara aman dan terintegrasi.'
+                desc: 'Pendataan jamaah dan pengelolaan dokumen secara aman dan terintegrasi.',
+                bgImg: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?q=80&w=600&auto=format&fit=crop'
               },
               {
                 icon: Zap,
                 title: 'Pendaftaran Cepat',
-                desc: 'Proses booking mudah, cepat, dan transparan secara online.'
+                desc: 'Proses booking mudah, cepat, dan transparan secara online.',
+                bgImg: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=600&auto=format&fit=crop'
               },
               {
                 icon: Target,
                 title: 'Koordinasi Perjalanan',
-                desc: 'Pengaturan jadwal, grup, dan bimbingan selama ibadah.'
+                desc: 'Pengaturan jadwal, grup, dan bimbingan selama ibadah.',
+                bgImg: 'https://images.unsplash.com/photo-1542332213-9b5a5a3fad35?q=80&w=600&auto=format&fit=crop'
               },
               {
                 icon: Award,
                 title: 'Legalitas Resmi',
-                desc: 'Terdaftar dan diawasi oleh Kementerian Agama RI.'
+                desc: 'Terdaftar dan diawasi oleh Kementerian Haji & Umroh RI.',
+                bgImg: 'https://images.unsplash.com/photo-1589216532372-1c2a367900d9?q=80&w=600&auto=format&fit=crop'
               },
               {
                 icon: Headphones,
                 title: 'Pendampingan 24/7',
-                desc: 'Tim siap membantu Anda di Makkah & Madinah selama perjalanan.'
+                desc: 'Tim siap membantu Anda di Makkah & Madinah selama perjalanan.',
+                bgImg: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=600&auto=format&fit=crop'
               }
             ].map((svc, i) => (
-              <div key={i} className="group p-10 rounded-[40px] bg-zinc-900/50 border border-white/5 hover:border-[#C9A04B]/50 transition-all duration-500">
-                <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-colors group-hover:bg-[#C9A04B]">
-                  <svc.icon size={28} className="text-[#C9A04B] group-hover:text-black transition-colors" />
+              <div key={i} className="group relative p-10 rounded-[40px] bg-zinc-900 overflow-hidden border border-white/5 hover:border-[#C9A04B]/50 transition-all duration-500">
+
+                {/* Background Image Layer */}
+                <div className="absolute inset-0 z-0">
+                  <img
+                    src={svc.bgImg}
+                    alt={svc.title}
+                    className="w-full h-full object-cover opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-700"
+                  />
+                  {/* Gradient Overlay untuk memastikan teks tetap kontras */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-950/90 to-transparent" />
                 </div>
-                <h3 className="text-2xl font-bold mb-4">{svc.title}</h3>
-                <p className="text-zinc-500 leading-relaxed mb-8">{svc.desc}</p>
-                <button className="flex items-center gap-2 text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: COLORS.accent }}>
-                  Learn More <ChevronRight size={16} />
-                </button>
+
+                {/* Content Layer (Relative Z-10) */}
+                <div className="relative z-10">
+                  <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-colors group-hover:bg-[#C9A04B]">
+                    <svc.icon size={28} className="text-[#C9A04B] group-hover:text-black transition-colors" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-4">{svc.title}</h3>
+                  <p className="text-zinc-500 leading-relaxed mb-8 group-hover:text-zinc-300 transition-colors">{svc.desc}</p>
+                  <button className="flex items-center gap-2 text-sm font-bold opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all" style={{ color: COLORS.accent }}>
+                    Learn More <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
