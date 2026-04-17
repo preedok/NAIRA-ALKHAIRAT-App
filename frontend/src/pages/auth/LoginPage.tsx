@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle } from 'lucide-react';
+import {
+  Mail, Lock, Eye, EyeOff, AlertCircle,
+  ArrowRight, CheckCircle, ChevronLeft, Sparkles,
+  ShieldCheck, Globe
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { validateEmail } from '../../utils';
-import Input from '../../components/common/Input';
-import { checkboxClass } from '../../components/common/formStyles';
-import { AuthSplitLayout, AuthBrandLogoRow } from './AuthSplitLayout';
-
-const PRIMARY = '#C9A04B';
-const GOOGLE_SCRIPT_ID = 'google-identity-services';
-
+import logo from '../../assets/nail-al-khairat-logo.svg'
+/* ─── TYPES FOR GOOGLE IDENTITY SERVICES ────────────────────────── */
 declare global {
   interface Window {
     google?: {
@@ -36,6 +35,24 @@ declare global {
   }
 }
 
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
+const C = {
+  bg: '#0A0A0A',
+  accent: '#C9A04B',
+  accentHover: '#B38D3E',
+  border: '#27272A',
+};
+
+const GOOGLE_SCRIPT_ID = 'google-identity-services';
+const COLORS = {
+  bg: '#0A0A0A',
+  bgSecondary: '#141414',
+  accent: '#C9A04B', // Your specific Gold color
+  accentHover: '#B38D3E',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  border: '#27272A',
+};
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login, googleLogin } = useAuth();
@@ -46,6 +63,7 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const googleLoginRef = useRef(googleLogin);
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -61,9 +79,7 @@ const LoginPage: React.FC = () => {
         setFormData((p) => ({ ...p, email: saved }));
         setRemember(true);
       }
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -74,7 +90,7 @@ const LoginPage: React.FC = () => {
       googleButtonRef.current.innerHTML = '';
       window.google.accounts.id.initialize({
         client_id: googleClientId,
-        callback: async (response) => {
+        callback: async (response: { credential?: string }) => {
           if (!response.credential) {
             setError('Gagal mengambil kredensial Google');
             return;
@@ -93,11 +109,11 @@ const LoginPage: React.FC = () => {
       });
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         type: 'standard',
-        theme: 'outline',
+        theme: 'filled_black',
         size: 'large',
-        shape: 'rectangular',
+        shape: 'pill',
         text: 'continue_with',
-        width: '100%'
+        width: googleButtonRef.current.offsetWidth
       });
     };
 
@@ -142,9 +158,7 @@ const LoginPage: React.FC = () => {
         try {
           if (remember) localStorage.setItem('bgg_login_remember_email', formData.email.trim().toLowerCase());
           else localStorage.removeItem('bgg_login_remember_email');
-        } catch {
-          /* ignore */
-        }
+        } catch { /* ignore */ }
         setSuccess(true);
         setTimeout(() => navigate('/dashboard'), 900);
       } else setError(result.message || 'Email atau password salah');
@@ -155,130 +169,181 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleGoogleFallbackClick = () => {
-    setError('Login Google belum dikonfigurasi. Silakan hubungi admin untuk mengisi Google Client ID.');
-  };
-
   return (
-    <AuthSplitLayout
-      panelTitle="Wujudkan perjalanan ibadah umroh yang lebih tenang."
-      panelSubtitle="Satu aplikasi untuk pilih paket, kelola pendaftaran, pantau invoice, dan update jadwal keberangkatan jamaah secara mudah."
-      panelFooterLink={{ to: '/register', label: 'Daftar sebagai jamaah →' }}
-    >
-      <AuthBrandLogoRow />
+    <div className="min-h-screen flex text-white font-sans antialiased" style={{ backgroundColor: C.bg }}>
 
-      <h1 className="text-2xl sm:text-[1.65rem] font-bold text-slate-900 tracking-tight">Masuk ke akun</h1>
-      <p className="text-sm text-slate-500 mt-1.5 mb-6">Selamat datang kembali. Masuk dengan email dan password Anda.</p>
-
-      {error && (
-        <div
-          className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4 text-sm text-red-700 bg-red-50 border border-red-100"
-          role="alert"
-        >
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} noValidate className="space-y-4 mt-2">
-        <Input
-          name="email"
-          type="email"
-          label="Email"
-          value={formData.email}
-          onChange={handleChange}
-          icon={<Mail className="w-4 h-4 shrink-0 text-slate-400" />}
-          placeholder="nama@perusahaan.com"
-          autoComplete="email"
-          error={undefined}
-        />
-        <Input
-          name="password"
-          type={showPass ? 'text' : 'password'}
-          label="Password"
-          value={formData.password}
-          onChange={handleChange}
-          icon={<Lock className="w-4 h-4 shrink-0 text-slate-400" />}
-          placeholder="••••••••"
-          autoComplete="current-password"
-          error={undefined}
-          suffix={
-            <button
-              type="button"
-              onClick={() => setShowPass((p) => !p)}
-              aria-label={showPass ? 'Sembunyikan password' : 'Tampilkan password'}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-            >
-              {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          }
-        />
-
-        <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className={checkboxClass}
+      {/* ─── LEFT SIDE ─── */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-zinc-900">
+        <div className="absolute inset-0 z-0 text-left">
+          <img
+            src="https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=1000"
+            alt="Kaaba"
+            className="w-full h-full object-cover opacity-40"
           />
-          Ingat saya
-        </label>
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-black/80 to-transparent" />
+        </div>
 
-        <button
-          type="submit"
-          disabled={loading || success}
-          className="w-full py-3 rounded-xl font-bold text-sm text-white shadow-md transition-all disabled:opacity-70 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99]"
-          style={{ backgroundColor: PRIMARY, boxShadow: '0 8px 24px rgba(183,135,52,0.28)' }}
-        >
-          {loading ? (
-            'Memverifikasi…'
-          ) : success ? (
-            <span className="inline-flex items-center justify-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              Berhasil! Mengalihkan…
-            </span>
-          ) : (
-            <span className="inline-flex items-center justify-center gap-2">
-              Masuk
-              <ArrowRight className="w-4 h-4" />
-            </span>
-          )}
-        </button>
-      </form>
+        <div className="relative z-10 w-full p-16 flex flex-col justify-between text-left">
 
-      <div className="my-5 flex items-center gap-3">
-        <div className="h-px flex-1 bg-stone-200" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">atau</span>
-        <div className="h-px flex-1 bg-stone-200" />
+
+          <div className="max-w-md">
+            <div className="flex items-center gap-2 mb-9 mt-8">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg" >
+                <img src={logo} alt="" />
+              </div>
+              <span className="text-xl font-bold tracking-tight uppercase" style={{ color: COLORS.accent }}>Nail Al-Khairat</span>
+            </div>
+            <h1 className="text-5xl font-bold leading-tight tracking-tighter mb-6">
+              Ibadah Umroh <span style={{ color: C.accent }}>Lebih Tenang</span> & Terorganisir.
+            </h1>
+            <p className="text-lg text-zinc-400 leading-relaxed mb-10">
+              Kelola pendaftaran, pantau pembayaran, dan update jadwal keberangkatan dalam satu platform terpadu.
+            </p>
+
+            <div className="space-y-5">
+              {[
+                { icon: ShieldCheck, text: "Data jamaah terenkripsi & aman" },
+                { icon: Globe, text: "Update kloter secara real-time" }
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-4 text-sm font-medium text-zinc-300">
+                  <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center">
+                    <item.icon size={16} style={{ color: C.accent }} />
+                  </div>
+                  {item.text}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <div className="w-8 h-1 rounded-full" style={{ backgroundColor: C.accent }} />
+            <div className="w-4 h-1 rounded-full bg-zinc-800" />
+            <div className="w-4 h-1 rounded-full bg-zinc-800" />
+          </div>
+        </div>
       </div>
 
-      {!googleClientId ? (
-        <button
-          type="button"
-          onClick={handleGoogleFallbackClick}
-          className="w-full h-11 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 transition-colors px-4 flex items-center justify-center gap-2.5 text-sm font-semibold text-stone-700"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true">
-            <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.195 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.84 1.154 7.955 3.045l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
-            <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.84 1.154 7.955 3.045l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.41 4.337-17.694 10.691z" />
-            <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.149 35.091 26.715 36 24 36c-5.176 0-9.625-3.327-11.283-7.946l-6.522 5.025C9.438 39.556 16.618 44 24 44z" />
-            <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
-          </svg>
-          Masuk dengan Google
-        </button>
-      ) : (
-        <div className={`${googleLoading || loading ? 'opacity-60 pointer-events-none' : ''}`}>
-          <div ref={googleButtonRef} className="w-full min-h-[44px]" />
-        </div>
-      )}
+      {/* ─── RIGHT SIDE ─── */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 md:p-16">
+        <div className="w-full max-w-md text-left">
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg">
+              <img src={logo} alt="" />
+            </div>
+            <span className="text-xl font-bold tracking-tight uppercase">Nail Al-Khairat</span>
+          </div>
+          <div className="mb-10">
+            <h2 className="text-4xl font-bold tracking-tight mb-3">Masuk ke akun</h2>
+            <p className="text-zinc-500">Selamat datang kembali. Masuk dengan email Anda.</p>
+          </div>
 
-      <p className="text-center text-sm text-slate-600 mt-8">
-        Belum punya akun?{' '}
-        <Link to="/register" className="font-semibold hover:underline" style={{ color: PRIMARY }}>
-          Buat akun
-        </Link>
-      </p>
-    </AuthSplitLayout>
+          {error && (
+            <div className="flex items-start gap-3 p-4 mb-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-bold tracking-[0.2em] text-zinc-500 ml-1">Email Address</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-600 group-focus-within:text-[#C9A04B] transition-colors">
+                  <Mail size={18} />
+                </div>
+                <input
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="nama@perusahaan.com"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-zinc-700 outline-none focus:border-[#C9A04B] transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-end px-1">
+                <label className="text-[10px] uppercase font-bold tracking-[0.2em] text-zinc-500">Password</label>
+                <Link to="/forgot-password" style={{ color: C.accent }} className="text-xs font-bold hover:underline transition-all">Lupa Password?</Link>
+              </div>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-600 group-focus-within:text-[#C9A04B] transition-colors">
+                  <Lock size={18} />
+                </div>
+                <input
+                  name="password"
+                  type={showPass ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl py-4 pl-12 pr-12 text-white placeholder:text-zinc-700 outline-none focus:border-[#C9A04B] transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-600 hover:text-white transition-colors"
+                >
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-3 cursor-pointer group w-fit select-none">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                <div className="h-5 w-5 rounded-md border border-zinc-800 bg-zinc-900 transition-all peer-checked:bg-[#C9A04B] peer-checked:border-[#C9A04B]" />
+                <CheckCircle className="absolute left-1 top-1 h-3 w-3 text-black opacity-0 peer-checked:opacity-100 transition-opacity" />
+              </div>
+              <span className="text-sm text-zinc-500 group-hover:text-zinc-300 transition-colors">Ingat saya</span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading || success}
+              style={{ backgroundColor: C.accent }}
+              className="w-full py-4 rounded-2xl font-bold text-black flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50 shadow-[0_8px_30px_rgba(201,160,75,0.2)]"
+            >
+              {loading ? "Memverifikasi..." : success ? (
+                <><CheckCircle size={18} /> Berhasil! Mengalihkan...</>
+              ) : (
+                <><span className="mt-0.5">Masuk Sekarang</span> <ArrowRight size={18} /></>
+              )}
+            </button>
+          </form>
+
+          <div className="relative my-10">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800"></div></div>
+            <div className="relative flex justify-center text-[10px] uppercase tracking-[0.2em] font-bold">
+              <span className="bg-[#0A0A0A] px-4 text-zinc-600">Atau masuk dengan</span>
+            </div>
+          </div>
+
+          <div className="w-full min-h-[44px]">
+            {!googleClientId ? (
+              <button className="w-full py-4 border border-zinc-800 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-zinc-900 transition-colors">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+                Masuk dengan Google
+              </button>
+            ) : (
+              <div ref={googleButtonRef} className={`w-full ${googleLoading ? 'opacity-50 pointer-events-none' : ''}`} />
+            )}
+          </div>
+
+          <p className="text-center text-sm text-zinc-500 mt-10">
+            Belum punya akun?{' '}
+            <Link to="/register" style={{ color: C.accent }} className="font-bold hover:underline transition-all">
+              Daftar Jamaah Gratis →
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 
